@@ -50,8 +50,9 @@ Full onboarding & reference docs live in [`docs/`](./docs/README.md):
 - [Database & Migrations](./docs/database-and-migrations.md)
 - [Auth](./docs/auth.md) · [Conventions](./docs/conventions.md) · [Troubleshooting](./docs/troubleshooting.md)
 
-**AI coding agents:** rules live in [`CLAUDE.md`](./CLAUDE.md) (canonical), mirrored
-for [Cursor](./.cursor/rules/homefolio.mdc) and [Copilot](./.github/copilot-instructions.md).
+**AI coding agents:** a single source of truth — [`AGENTS.md`](./AGENTS.md) +
+modular [`rules/`](./rules/README.md), read by every tool (Claude Code, Cursor,
+Copilot, Codex).
 
 ## Getting started
 

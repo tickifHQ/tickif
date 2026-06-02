@@ -31,3 +31,11 @@ pnpm-debug.log*
 # misc
 coverage/
 *.local
+
+# playwright artifacts
+e2e/test-results/
+e2e/playwright-report/
+**/.playwright/
+
+# source proposal doc (kept locally, not tracked)
+Homefolio_Proposal.docx

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppError } from '../../../src/lib/errors.js';
+import type { ProjectRecord } from '../../../src/modules/projects/repository.js';
 
 // Replace the Drizzle-backed repository with a fake. This is what makes the
 // service unit-testable with NO database — the payoff of the layering rule.
@@ -26,9 +27,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
 
-const row = (over: Partial<Record<string, unknown>> = {}) => ({
-  id: '11111111-1111-1111-1111-111111111111',
-  designerId: '22222222-2222-2222-2222-222222222222',
+const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
+  id: '11111111-1111-4111-8111-111111111111',
+  designerId: '22222222-2222-4222-8222-222222222222',
   title: 'Sunlit Bandra Apartment',
   slug: 'sunlit-bandra-apartment',
   description: null,

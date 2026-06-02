@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization } from 'better-auth/plugins';
 import { db, schema } from '@repo/db';
-import { config, isDevelopment } from '@repo/config';
+import { config, isProduction } from '@repo/config';
 
 /**
  * Homefolio auth — better-auth instance.
@@ -41,8 +41,8 @@ export const auth = betterAuth({
   plugins: [
     phoneNumber({
       sendOTP: async ({ phoneNumber: phone, code }) => {
-        if (isDevelopment) {
-          // Dev: log the OTP. Production wires this to MSG91.
+        if (!isProduction) {
+          // Dev/test: log the OTP. Production wires this to MSG91.
           console.log(`[auth] OTP for ${phone}: ${code}`);
           return;
         }

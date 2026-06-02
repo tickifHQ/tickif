@@ -220,6 +220,16 @@ the web app via `api.api.leads.$post(...)` with full type safety — no codegen.
 
 ---
 
+## 5. Tests (TDD — write these alongside, ideally first)
+
+Mirror the projects module (see [testing.md](./testing.md)):
+
+- `tests/modules/leads/service.test.ts` — **unit**, `vi.mock` the repository; cover
+  the business rules and error paths (`AppError`). No DB.
+- `tests/modules/leads/routes.integration.test.ts` — **integration** via
+  `testClient(app)` + test DB: happy path, validation (422), the `401` guard, and
+  the authed path with `createAuthedSession()`.
+
 ## Checklist before you open a PR
 
 - [ ] `repository.ts` is the only file importing `@repo/db`.
@@ -227,5 +237,6 @@ the web app via `api.api.leads.$post(...)` with full type safety — no codegen.
 - [ ] Request/response shapes live in `@repo/contracts`, not inline in routes.
 - [ ] Domain errors use `AppError`, not ad-hoc `c.json(..., 4xx)`.
 - [ ] Migration generated **and** committed (`packages/db/migrations/`).
+- [ ] **`service.test.ts` + `routes.integration.test.ts` added; `pnpm test` green.**
 - [ ] `pnpm typecheck && pnpm lint` pass.
 - [ ] New route shows up correctly at `/docs`.

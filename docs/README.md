@@ -10,6 +10,7 @@ work down; the first two get you running, the rest are reference.
 | [adding-a-module.md](./adding-a-module.md) | You're about to build a new domain (leads, media, search…). The most-used guide. |
 | [database-and-migrations.md](./database-and-migrations.md) | You're changing the schema or running migrations. |
 | [auth.md](./auth.md) | You're protecting a route, working on login, or touching RBAC. |
+| [testing.md](./testing.md) | You're writing tests or practicing TDD (you should be). |
 | [conventions.md](./conventions.md) | Anytime — coding standards, env config, shared contracts. |
 | [troubleshooting.md](./troubleshooting.md) | Something broke, or you hit a pnpm/build oddity. |
 

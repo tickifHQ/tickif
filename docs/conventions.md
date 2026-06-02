@@ -85,6 +85,13 @@ error envelope (`{ error: { code, message, details } }`). Don't scatter
   `@repo/tsconfig/nextjs.json` for the web app.
 - Prefer `import type { ... }` for type-only imports (lint enforces this).
 
+## Testing
+
+TDD is the norm: new use-cases and bug fixes ship with tests; for a bug, write the
+failing reproduction first. Vitest for unit/integration, Playwright for E2E. Unit
+tests use fake repositories (`vi.mock`); integration tests use the **test DB only**
+(`DATABASE_URL_TEST`, guarded). Full guide: [testing.md](./testing.md).
+
 ## Formatting & linting
 
 - **Prettier** for formatting (`pnpm format`). Config in `.prettierrc.json`.

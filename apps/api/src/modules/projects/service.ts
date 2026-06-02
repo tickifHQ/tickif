@@ -52,6 +52,7 @@ export const projectsService = {
     return toResponse(row);
   },
 
+
   async create(input: CreateProjectInput): Promise<ProjectResponse> {
     // Ensure a unique slug; append a short suffix on collision.
     const base = projectsRepository.slugify(input.title);

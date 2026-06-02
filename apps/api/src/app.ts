@@ -15,7 +15,7 @@ import { projectsRoutes } from './modules/projects/routes.js';
  * each domain module is mounted under /api. New modules (designers, media,
  * leads, search, billing, ...) plug in with a single `.route()` call.
  */
-const app = new OpenAPIHono<{ Variables: AuthVariables }>({
+const base = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: (result, c) => {
     if (!result.success) {
       return c.json(
@@ -32,40 +32,40 @@ const app = new OpenAPIHono<{ Variables: AuthVariables }>({
   },
 });
 
-app.onError(onError);
+base.onError(onError);
 
-app.use('*', logger());
-app.use(
+base.use('*', logger());
+base.use(
   '*',
   cors({
     origin: [config.NEXT_PUBLIC_API_URL, 'http://localhost:3000'],
     credentials: true,
   }),
 );
-app.use('*', withSession);
+base.use('*', withSession);
 
 // better-auth owns everything under /api/auth/* (sign-in, OTP, OAuth, session).
-app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+base.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
 // OpenAPI security scheme: better-auth issues a session cookie.
-app.openAPIRegistry.registerComponent('securitySchemes', 'cookieAuth', {
+base.openAPIRegistry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',
   in: 'cookie',
   name: 'better-auth.session_token',
 });
 
-// Domain modules.
-const routes = app
-  .route('/api/projects', projectsRoutes)
-  .get('/health', (c) => c.json({ status: 'ok', service: 'homefolio-api' }));
-
-// OpenAPI document + Scalar reference UI.
-app.doc('/openapi.json', {
+// OpenAPI document + Scalar reference UI (generated lazily from the registry).
+base.doc('/openapi.json', {
   openapi: '3.1.0',
   info: { title: 'Homefolio API', version: '0.1.0' },
 });
-app.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Homefolio API' }));
+base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Homefolio API' }));
 
-export { app };
+// Domain modules. `app` is the chained (fully-typed) value — exported so both
+// the server and the web app's `hc<AppType>` client see every route.
+export const app = base
+  .route('/api/projects', projectsRoutes)
+  .get('/health', (c) => c.json({ status: 'ok', service: 'homefolio-api' }));
+
 /** Exported for the web app's type-safe `hc<AppType>` client. */
-export type AppType = typeof routes;
+export type AppType = typeof app;

@@ -48,6 +48,7 @@ describe('POST /api/projects', () => {
     );
 
     expect(res.status).toBe(201);
+    if (res.status !== 201) throw new Error('expected 201'); // narrows the union
     const body = await res.json();
     expect(body).toMatchObject({ title: 'Authenticated Project', status: 'draft' });
     expect(body.slug).toBe('authenticated-project');

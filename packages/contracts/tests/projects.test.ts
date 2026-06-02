@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { createProjectSchema, listProjectsQuerySchema } from '../src/projects.js';
 
+// A valid RFC-4122 UUID (version + variant nibbles correct).
+const VALID_UUID = '11111111-1111-4111-8111-111111111111';
+
 describe('createProjectSchema', () => {
   it('accepts a valid payload', () => {
     const result = createProjectSchema.safeParse({
-      designerId: '22222222-2222-2222-2222-222222222222',
+      designerId: VALID_UUID,
       title: 'Sunlit Bandra Apartment',
     });
     expect(result.success).toBe(true);

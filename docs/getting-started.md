@@ -100,6 +100,16 @@ pnpm --filter @repo/worker enqueue:demo
 
 Open <http://localhost:3001/docs> for the interactive Scalar API reference.
 
+## 8. Run the tests
+
+```bash
+docker exec homefolio-postgres createdb -U homefolio homefolio_test   # once
+pnpm test          # unit + integration (Vitest)
+pnpm test:e2e      # Playwright (first run: pnpm --filter @repo/e2e test:e2e:install)
+```
+
+We practice TDD — see [testing.md](./testing.md).
+
 ## Everyday scripts
 
 Run from the repo root:
