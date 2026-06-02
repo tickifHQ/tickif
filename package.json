@@ -1,0 +1,34 @@
+{
+  "name": "homefolio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Homefolio — discovery & portfolio platform for interior design projects in India",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "test:coverage": "turbo run test -- --coverage",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yaml,yml}\"",
+    "db:generate": "pnpm --filter @repo/db generate",
+    "db:migrate": "pnpm --filter @repo/db migrate",
+    "db:studio": "pnpm --filter @repo/db studio",
+    "auth:generate": "pnpm --filter @repo/auth generate",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "turbo": "^2.9.16",
+    "typescript": "catalog:"
+  }
+}

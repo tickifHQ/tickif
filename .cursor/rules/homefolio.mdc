@@ -1,0 +1,44 @@
+---
+description: Homefolio monorepo engineering rules for all AI-assisted edits
+alwaysApply: true
+---
+
+# Homefolio Rules (Cursor)
+
+The canonical, full ruleset lives in [`CLAUDE.md`](../../CLAUDE.md) with
+explanations in [`docs/`](../../docs/README.md). **Follow it.** The essentials:
+
+## Non-negotiable
+
+- **Layering:** `routes.ts` (only Hono) → `service.ts` (no Hono, no Drizzle) →
+  `repository.ts` (only Drizzle / `@repo/db`). Business logic lives in services.
+- **Contracts:** all request/response shapes are Zod schemas in `@repo/contracts`.
+  Import them; never inline or re-declare a shape. Keep contracts framework-free.
+- **Config:** never read `process.env` directly — add to the Zod schema in
+  `packages/config` + `.env.example`, import typed `config` from `@repo/config`.
+- **pnpm only;** versions via the catalog in `pnpm-workspace.yaml` (`"catalog:"`).
+- **Migrations:** `pnpm db:generate` → review → `pnpm db:migrate`, commit them.
+  Never `db:push` to a shared DB.
+- **Types:** no `any`; `import type` for types; keep new routes in the `routes`
+  chain in `app.ts` so `AppType` (the web `hc` client) stays correct.
+
+## Stack specifics
+
+- **Hono:** add auth via the route `middleware: [requireAuth]` field — NOT a
+  chained `.use()` (it breaks `.openapi()` typing). Throw `AppError` for domain
+  errors. Validate with `c.req.valid(...)`.
+- **Zod v4:** module-level schemas, `safeParse` in app code, `.meta({id})`,
+  `z.coerce.*` for query/params.
+- **Drizzle:** only repos import it; index FKs; `pgEnum` for closed sets;
+  `.$type<T>()` for JSONB; camelCase keys → snake_case columns (don't change the
+  casing option).
+- **better-auth:** secret/URL from env; regenerate + migrate after plugin changes;
+  prod = secure cookies, trustedOrigins, CSRF on, Redis secondaryStorage.
+- **BullMQ:** idempotent jobs, exponential backoff, bounded removeOnComplete/Fail,
+  small payloads (IDs not blobs), pass connection **options** not an ioredis
+  instance, graceful shutdown on SIGINT/SIGTERM.
+- **Next.js 16:** Server Components by default; `params`/`searchParams` are
+  Promises (await them); `'use client'` only at interactive leaves; call the API
+  via the typed `hc` client.
+
+Before finishing: `pnpm typecheck && pnpm lint` must pass.

@@ -1,0 +1,51 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "e2e"
+
+# Centralized dependency versions (pnpm catalog).
+# Reference in package.json as "catalog:".
+catalog:
+  # Language / tooling
+  typescript: ^5.9.2
+  tsx: ^4.20.3
+  "@types/node": ^22.10.0
+
+  # Validation (zod v4 — required by @hono/zod-openapi v1)
+  zod: ^4.4.3
+
+  # Hono stack
+  hono: ^4.12.23
+  "@hono/node-server": ^2.0.4
+  "@hono/zod-openapi": ^1.4.0
+  "@scalar/hono-api-reference": ^0.10.20
+
+  # Auth
+  better-auth: ^1.6.13
+
+  # Data layer
+  drizzle-orm: ^0.45.2
+  drizzle-kit: ^0.31.10
+  pg: ^8.21.0
+  "@types/pg": ^8.11.10
+
+  # Queue
+  bullmq: ^5.78.0
+  ioredis: ^5.11.0
+
+  # Frontend
+  next: ^16.2.7
+  react: ^19.0.0
+  react-dom: ^19.0.0
+  "@types/react": ^19.0.0
+  "@types/react-dom": ^19.0.0
+
+  # Testing
+  vitest: ^4.1.8
+  "@vitest/coverage-v8": ^4.1.8
+  "@testing-library/react": ^16.3.2
+  "@testing-library/user-event": ^14.6.1
+  "@testing-library/jest-dom": ^6.9.1
+  happy-dom: ^20.9.0
+  "@vitejs/plugin-react": ^6.0.2
+  "@playwright/test": ^1.60.0

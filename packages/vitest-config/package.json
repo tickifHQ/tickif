@@ -1,0 +1,18 @@
+{
+  "name": "@repo/vitest-config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./node": "./node.ts",
+    "./react": "./react.ts"
+  },
+  "dependencies": {
+    "@vitest/coverage-v8": "catalog:",
+    "dotenv": "^16.4.7",
+    "vitest": "catalog:"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "catalog:"
+  }
+}
