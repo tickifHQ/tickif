@@ -37,5 +37,5 @@ e2e/test-results/
 e2e/playwright-report/
 **/.playwright/
 
-# source proposal doc (kept locally, not tracked)
-Homefolio_Proposal.docx
+# source proposal docs (kept locally, not tracked)
+*.docx

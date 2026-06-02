@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Homefolio',
+  title: 'Tickif',
   description: 'Discover real interior design projects across India.',
 };
 

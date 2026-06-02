@@ -7,7 +7,7 @@ const WEB_URL = 'http://localhost:3000';
 // Preconditions: `pnpm infra:up` and the test DB migrated.
 const testDbUrl =
   process.env.DATABASE_URL_TEST ??
-  'postgresql://homefolio:homefolio@localhost:5432/homefolio_test';
+  'postgresql://tickif:tickif@localhost:5432/tickif_test';
 
 export default defineConfig({
   testDir: './tests',

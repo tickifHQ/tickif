@@ -8,7 +8,7 @@ const API_URL = 'http://localhost:3001';
 
 test('home page renders', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Homefolio' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tickif' })).toBeVisible();
   await expect(page.getByText(/Published projects/)).toBeVisible();
 });
 

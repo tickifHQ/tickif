@@ -1,6 +1,6 @@
 # Rules
 
-Modular, tool-agnostic engineering rules for Homefolio. Each file is a focused
+Modular, tool-agnostic engineering rules for Tickif. Each file is a focused
 topic so an AI agent (or human) can **load only what's relevant** to the files
 being edited. The entry point is [`../AGENTS.md`](../AGENTS.md).
 

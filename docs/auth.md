@@ -71,7 +71,7 @@ curl -s -X POST http://localhost:3001/api/auth/phone-number/verify \
 
 On verify, better-auth creates rows in `user` and `session` (and consumes the
 `verification` row). On first sign-up it derives a placeholder email
-(`<phone>@phone.homefolio.local`) until the designer completes their profile —
+(`<phone>@phone.tickif.local`) until the designer completes their profile —
 configured via `signUpOnVerification` in the plugin options.
 
 ## better-auth tables & the schema

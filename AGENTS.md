@@ -1,4 +1,4 @@
-# AGENTS.md — Homefolio
+# AGENTS.md — Tickif
 
 **Single source of truth** for all AI coding agents (Claude Code, Cursor, Copilot,
 Codex, …). There are no tool-specific rule files — every agent reads this file and

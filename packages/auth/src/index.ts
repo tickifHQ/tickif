@@ -5,7 +5,7 @@ import { db, schema } from '@repo/db';
 import { config, isProduction } from '@repo/config';
 
 /**
- * Homefolio auth — better-auth instance.
+ * Tickif auth — better-auth instance.
  *
  * - Phone OTP is primary (Indian market) via the phoneNumber plugin.
  * - Gmail SSO for designers via the Google social provider.
@@ -51,7 +51,7 @@ export const auth = betterAuth({
       },
       signUpOnVerification: {
         // Derive a placeholder email until the designer completes their profile.
-        getTempEmail: (phone) => `${phone}@phone.homefolio.local`,
+        getTempEmail: (phone) => `${phone}@phone.tickif.local`,
         getTempName: (phone) => phone,
       },
     }),

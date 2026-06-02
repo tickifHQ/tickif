@@ -92,7 +92,7 @@ const res = await client.api.projects.$post({ json: {...} }, { headers: { cookie
 
 ```bash
 pnpm infra:up
-docker exec homefolio-postgres createdb -U homefolio homefolio_test   # once
+docker exec tickif-postgres createdb -U tickif tickif_test   # once
 # Optionally set DATABASE_URL_TEST in .env (defaults to the line above).
 pnpm test
 ```

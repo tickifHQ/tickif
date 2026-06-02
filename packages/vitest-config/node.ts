@@ -47,7 +47,7 @@ export function testDatabaseUrl(): string {
   }
   return (
     process.env.DATABASE_URL_TEST ??
-    'postgresql://homefolio:homefolio@localhost:5432/homefolio_test'
+    'postgresql://tickif:tickif@localhost:5432/tickif_test'
   );
 }
 

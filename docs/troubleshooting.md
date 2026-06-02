@@ -25,7 +25,7 @@ The default `DATABASE_URL`/`REDIS_URL` in `.env.example` match the compose file.
 
 **Fix:** `pnpm db:migrate`. If local data is wedged, reset it:
 ```bash
-pnpm infra:down && docker volume rm homefolio_postgres_data
+pnpm infra:down && docker volume rm tickif_postgres_data
 pnpm infra:up && pnpm db:migrate
 ```
 

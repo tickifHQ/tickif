@@ -1,6 +1,6 @@
-# Homefolio — Engineering Docs
+# Tickif — Engineering Docs
 
-Onboarding and reference docs for the Homefolio platform. Start at the top and
+Onboarding and reference docs for the Tickif platform. Start at the top and
 work down; the first two get you running, the rest are reference.
 
 | Doc | Read it when |

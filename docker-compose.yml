@@ -1,25 +1,27 @@
+name: tickif
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: homefolio-postgres
+    container_name: tickif-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: homefolio
-      POSTGRES_PASSWORD: homefolio
-      POSTGRES_DB: homefolio
+      POSTGRES_USER: tickif
+      POSTGRES_PASSWORD: tickif
+      POSTGRES_DB: tickif
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U homefolio"]
+      test: ["CMD-SHELL", "pg_isready -U tickif"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: homefolio-redis
+    container_name: tickif-redis
     restart: unless-stopped
     ports:
       - "6379:6379"

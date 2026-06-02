@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 /**
- * Shared flat ESLint config for the Homefolio monorepo.
+ * Shared flat ESLint config for the Tickif monorepo.
  * @type {import('eslint').Linter.Config[]}
  */
 export default [

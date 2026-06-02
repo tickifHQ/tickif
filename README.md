@@ -1,4 +1,4 @@
-# Homefolio
+# Tickif
 
 Discovery + portfolio platform for real interior design projects in India.
 pnpm + Turborepo monorepo. **Modular monolith** backend (Hono) — clean internal

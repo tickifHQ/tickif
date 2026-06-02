@@ -212,7 +212,7 @@ import { leadsRoutes } from './modules/leads/routes.js';
 const routes = app
   .route('/api/projects', projectsRoutes)
   .route('/api/leads', leadsRoutes)        // ← add here
-  .get('/health', (c) => c.json({ status: 'ok', service: 'homefolio-api' }));
+  .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
 ```
 
 That's it. The new endpoints are live, appear in `/docs`, and are callable from

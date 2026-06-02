@@ -19,4 +19,4 @@ A module is mounted in `../app.ts` with a single `.route('/api/<name>', <name>Ro
 - ✅ `projects` — fully implemented reference slice (route → service → repo → Drizzle).
 - ⬜ `designers`, `media`, `leads`, `search`, `billing`, `reviews`, `bookings`,
   `taxonomy`, `reports` — folders reserved; built in later phases per the
-  Homefolio blueprint.
+  Tickif blueprint.

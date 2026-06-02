@@ -22,7 +22,7 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Homefolio</h1>
+      <h1 className="text-3xl font-semibold tracking-tight">Tickif</h1>
       <p className="mt-2 text-neutral-600">
         Discover real interior design projects across India.
       </p>

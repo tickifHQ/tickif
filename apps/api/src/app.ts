@@ -57,15 +57,15 @@ base.openAPIRegistry.registerComponent('securitySchemes', 'cookieAuth', {
 // OpenAPI document + Scalar reference UI (generated lazily from the registry).
 base.doc('/openapi.json', {
   openapi: '3.1.0',
-  info: { title: 'Homefolio API', version: '0.1.0' },
+  info: { title: 'Tickif API', version: '0.1.0' },
 });
-base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Homefolio API' }));
+base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
   .route('/api/projects', projectsRoutes)
-  .get('/health', (c) => c.json({ status: 'ok', service: 'homefolio-api' }));
+  .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
 
 /** Exported for the web app's type-safe `hc<AppType>` client. */
 export type AppType = typeof app;

@@ -88,14 +88,14 @@ Remember: **only repository files** should import `@repo/db`. See
 ## Inspecting the local DB directly
 
 ```bash
-docker exec -it homefolio-postgres psql -U homefolio -d homefolio
+docker exec -it tickif-postgres psql -U tickif -d tickif
 # then: \dt   (list tables)   \d project   (describe a table)
 ```
 
 ## Connection
 
 The connection string is `DATABASE_URL` in `.env`. The local default
-(`postgresql://homefolio:homefolio@localhost:5432/homefolio`) matches
+(`postgresql://tickif:tickif@localhost:5432/tickif`) matches
 `docker-compose.yml`. The pool lives in `src/client.ts` and is shared across the
 app — don't create ad-hoc connections.
 
@@ -103,6 +103,6 @@ app — don't create ad-hoc connections.
 
 ```bash
 pnpm infra:down            # stops containers
-docker volume rm homefolio_postgres_data   # wipes Postgres data
+docker volume rm tickif_postgres_data   # wipes Postgres data
 pnpm infra:up && pnpm db:migrate
 ```
