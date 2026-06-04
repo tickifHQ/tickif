@@ -1,6 +1,7 @@
 import type { ProjectResponse } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { ProjectCard } from '@/components/project-card';
+import { Container } from '@/components/container';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function HomePage() {
   const data = await getProjects();
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-16">
+    <Container className="py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Tickif</h1>
       <p className="mt-2 text-neutral-600">
         Discover real interior design projects across India.
@@ -47,6 +48,6 @@ export default async function HomePage() {
           </ul>
         )}
       </section>
-    </main>
+    </Container>
   );
 }

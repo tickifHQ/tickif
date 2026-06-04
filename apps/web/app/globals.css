@@ -1,1 +1,41 @@
 @import 'tailwindcss';
+
+/*
+ * Scaffold-only theme tokens (Tailwind v4 `@theme`). These are additive on top
+ * of Tailwind's defaults, so existing `neutral-*` / `white` / `amber-*`
+ * utilities keep working unchanged. Intentionally sober and neutral — the brand
+ * / design handoff (E-13) is not confirmed yet, so this only establishes a
+ * semantic surface (background/foreground/muted/border/primary), a spacing
+ * scale, a type scale, and breakpoints to build against.
+ */
+@theme {
+  /* Semantic neutral palette */
+  --color-background: #fafafa;
+  --color-foreground: #171717;
+  --color-muted: #737373;
+  --color-border: #e5e5e5;
+  --color-primary: #171717;
+  --color-primary-foreground: #fafafa;
+
+  /* Spacing scale (mobile-first rhythm) */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2.5rem;
+  --spacing-2xl: 4rem;
+
+  /* Type scale */
+  --text-caption: 0.75rem;
+  --text-body: 1rem;
+  --text-lead: 1.125rem;
+  --text-title: 1.5rem;
+  --text-display: 2.25rem;
+
+  /* Breakpoints (mobile-first) */
+  --breakpoint-xs: 24rem;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+}
