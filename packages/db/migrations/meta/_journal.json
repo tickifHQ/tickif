@@ -15,6 +15,13 @@
       "when": 1780603767845,
       "tag": "0001_high_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780604264993,
+      "tag": "0002_naive_owl",
+      "breakpoints": true
     }
   ]
 }

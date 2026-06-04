@@ -1,0 +1,1 @@
+CREATE INDEX "invitation_inviterId_idx" ON "invitation" USING btree ("inviter_id");
