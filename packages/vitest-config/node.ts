@@ -30,8 +30,12 @@ export function nodePreset(overrides: ViteUserConfig['test'] = {}): ViteUserConf
 
 /**
  * Resolve the test database URL at config-eval time. Loads the repo-root `.env`
- * (so `DATABASE_URL_TEST` is picked up if set), falling back to the docker
- * default. The name must end in `_test` — repository test helpers guard on this.
+ * then builds the URL from the POSTGRES_* parts (with a `_test` database name),
+ * honouring an explicit `DATABASE_URL_TEST` override if one is set. The name
+ * must end in `_test` — repository test helpers guard on this.
+ *
+ * Note: this intentionally rebuilds the URL from parts rather than importing
+ * @repo/config, so loading the Vitest config never triggers full env validation.
  */
 export function testDatabaseUrl(): string {
   let dir = process.cwd();
@@ -45,10 +49,13 @@ export function testDatabaseUrl(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  return (
-    process.env.DATABASE_URL_TEST ??
-    'postgresql://tickif:tickif@localhost:5432/tickif_test'
-  );
+  if (process.env.DATABASE_URL_TEST) return process.env.DATABASE_URL_TEST;
+  const host = process.env.POSTGRES_HOST ?? 'localhost';
+  const port = process.env.POSTGRES_PORT ?? '5432';
+  const user = encodeURIComponent(process.env.POSTGRES_USER ?? 'tickif');
+  const password = encodeURIComponent(process.env.POSTGRES_PASSWORD ?? 'tickif');
+  const database = process.env.POSTGRES_DB ?? 'tickif';
+  return `postgresql://${user}:${password}@${host}:${port}/${database}_test`;
 }
 
 /**

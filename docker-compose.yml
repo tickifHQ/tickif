@@ -6,15 +6,15 @@ services:
     container_name: tickif-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: tickif
-      POSTGRES_PASSWORD: tickif
-      POSTGRES_DB: tickif
+      POSTGRES_USER: ${POSTGRES_USER:-tickif}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tickif}
+      POSTGRES_DB: ${POSTGRES_DB:-tickif}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tickif"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tickif}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     container_name: tickif-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
