@@ -19,6 +19,19 @@ export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
 
+  user: {
+    additionalFields: {
+      // App-owned account lifecycle. input:false → clients can't set it on signup;
+      // defaultValue keeps it present on the session user object.
+      status: {
+        type: 'string',
+        required: false,
+        input: false,
+        defaultValue: 'pending',
+      },
+    },
+  },
+
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: { ...schema },
