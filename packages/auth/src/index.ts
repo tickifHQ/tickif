@@ -66,3 +66,11 @@ export const auth = betterAuth({
 
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
+
+/**
+ * Resolve the current better-auth session (user + session) from request headers.
+ * Returns null when unauthenticated. The one place app code should read sessions.
+ */
+export function getSession(headers: Headers) {
+  return auth.api.getSession({ headers });
+}
