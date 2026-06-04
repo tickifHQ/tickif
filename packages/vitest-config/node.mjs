@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
-import { defineConfig, type ViteUserConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
 /**
  * Shared Vitest base for Node packages/apps. Extend per package:
@@ -10,8 +10,11 @@ import { defineConfig, type ViteUserConfig } from 'vitest/config';
  *   export default nodePreset();
  *
  * Pass overrides (e.g. globalSetup, setupFiles, env for integration tests).
+ *
+ * Authored as plain ESM (.mjs) so it loads on the project's minimum Node (20),
+ * which cannot import `.ts` natively. Types live in node.d.ts.
  */
-export function nodePreset(overrides: ViteUserConfig['test'] = {}): ViteUserConfig {
+export function nodePreset(overrides = {}) {
   return defineConfig({
     test: {
       globals: true,
@@ -37,7 +40,7 @@ export function nodePreset(overrides: ViteUserConfig['test'] = {}): ViteUserConf
  * Note: this intentionally rebuilds the URL from parts rather than importing
  * @repo/config, so loading the Vitest config never triggers full env validation.
  */
-export function testDatabaseUrl(): string {
+export function testDatabaseUrl() {
   let dir = process.cwd();
   for (let i = 0; i < 8; i++) {
     const candidate = join(dir, '.env');
@@ -63,6 +66,6 @@ export function testDatabaseUrl(): string {
  * singletons to the test DB before @repo/config loads (dotenv won't override
  * these because real process env wins).
  */
-export function integrationEnv(): Record<string, string> {
+export function integrationEnv() {
   return { NODE_ENV: 'test', DATABASE_URL: testDatabaseUrl() };
 }
