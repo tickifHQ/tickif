@@ -28,6 +28,9 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 
+# kiro
+.kiro/
+
 # misc
 coverage/
 *.local
