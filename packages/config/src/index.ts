@@ -45,9 +45,10 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(16, 'BETTER_AUTH_SECRET must be at least 16 chars'),
   BETTER_AUTH_URL: z.string().url(),
 
-  // Google / Gmail SSO — optional in dev, required for the social flow
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Google / Gmail SSO — optional in dev, required for the social flow.
+  // Both must be provided together or both omitted.
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
   // API
   PORT: z.coerce.number().int().positive().default(3001),
@@ -64,10 +65,28 @@ const envSchema = z.object({
   R2_BUCKET: z.string().optional(),
 });
 
+/**
+ * Cross-field refinement: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both
+ * be provided or both omitted. A single value without its pair is a
+ * misconfiguration that should fail fast.
+ */
+const refinedEnvSchema = envSchema.refine(
+  (env) => {
+    const hasId = Boolean(env.GOOGLE_CLIENT_ID);
+    const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
+    return hasId === hasSecret;
+  },
+  {
+    message:
+      'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
+    path: ['GOOGLE_CLIENT_ID'],
+  },
+);
+
 export type Config = z.infer<typeof envSchema>;
 
 function loadConfig(): Config {
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = refinedEnvSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)

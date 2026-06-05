@@ -4,17 +4,15 @@ import { phoneNumber, admin, organization } from 'better-auth/plugins';
 import { db, schema } from '@repo/db';
 import { config, isProduction } from '@repo/config';
 
-/**
- * Tickif auth — better-auth instance.
- *
- * - Phone OTP is primary (Indian market) via the phoneNumber plugin.
- * - Gmail SSO for designers via the Google social provider.
- * - The 4-role RBAC rides on the admin + organization plugins rather than a
- *   hand-rolled layer.
- *
- * Tables live in @repo/db's Drizzle schema so auth + domain data share a single
- * migration set. The adapter auto-discovers them from the shared `db` instance.
- */
+
+const googleEnabled = Boolean(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET);
+
+if (!googleEnabled && (config.GOOGLE_CLIENT_ID || config.GOOGLE_CLIENT_SECRET)) {
+  console.warn(
+    '[auth] Incomplete Google OAuth configuration — both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required. Google provider disabled.',
+  );
+}
+
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
@@ -28,15 +26,23 @@ export const auth = betterAuth({
     enabled: false,
   },
 
-  socialProviders:
-    config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET
-      ? {
-          google: {
-            clientId: config.GOOGLE_CLIENT_ID,
-            clientSecret: config.GOOGLE_CLIENT_SECRET,
-          },
-        }
-      : undefined,
+  socialProviders: googleEnabled
+    ? {
+        google: {
+          clientId: config.GOOGLE_CLIENT_ID!,
+          clientSecret: config.GOOGLE_CLIENT_SECRET!,
+        },
+      }
+    : undefined,
+
+  // Account linking: when a Google sign-in email matches an existing phone
+  // user's email, link the accounts rather than creating a duplicate.
+  // `trustedProviders` marks Google as a trusted email source so automatic
+  // linking proceeds without an explicit user confirmation step.
+  accountLinking: {
+    enabled: true,
+    trustedProviders: ['google'],
+  },
 
   plugins: [
     phoneNumber({
