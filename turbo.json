@@ -31,8 +31,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "tests/**", "vitest.config.ts"],
-      "outputs": ["coverage/**"]
+      "inputs": ["src/**", "tests/**", "vitest.config.ts"]
     },
     "test:watch": {
       "cache": false,
