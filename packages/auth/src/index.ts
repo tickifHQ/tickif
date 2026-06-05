@@ -24,7 +24,7 @@ export const auth = betterAuth({
       // App-owned account lifecycle. input:false → clients can't set it on signup;
       // defaultValue keeps it present on the session user object.
       status: {
-        type: 'string',
+        type: ['pending', 'active', 'suspended', 'deleted'],
         required: false,
         input: false,
         defaultValue: 'pending',
