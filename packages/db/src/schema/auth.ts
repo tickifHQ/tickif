@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  index,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 
 /**
  * better-auth tables (the committed source of truth).
@@ -117,18 +110,14 @@ export const verification = pgTable(
 );
 
 // --- organization plugin (kept wired; Epic-3 RBAC builds on these — see plan note) ---
-export const organization = pgTable(
-  'organization',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    slug: text('slug').notNull().unique(),
-    logo: text('logo'),
-    createdAt: timestamp('created_at').notNull(),
-    metadata: text('metadata'),
-  },
-  (t) => [uniqueIndex('organization_slug_uidx').on(t.slug)],
-);
+export const organization = pgTable('organization', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logo: text('logo'),
+  createdAt: timestamp('created_at').notNull(),
+  metadata: text('metadata'),
+});
 
 export const member = pgTable(
   'member',
