@@ -96,6 +96,22 @@ Two things to know:
   installing it as a dependency caused a version conflict; see
   [troubleshooting.md](./troubleshooting.md).)
 
+### `user.status` (account lifecycle)
+
+`user.status` is an app-owned column (not a better-auth protocol field): one of
+`pending | active | suspended | deleted`, defaulting to `pending`. New phone/SSO
+sign-ups start `pending` (placeholder profile) and move to `active` on profile
+completion; `suspended` is reserved for Epic-3 moderation/bans. It is registered as
+a better-auth `additionalField` (`input: false`) so it appears on the session user,
+and stored as `text().$type<UserStatus>()` (not a `pgEnum`) to keep the committed
+schema drift-free against `pnpm auth:generate`.
+
+> **Scope note (E-80 ↔ Epic 3):** the `admin` + `organization` plugins and their
+> `organization/member/invitation` tables are wired today because the configured
+> auth instance depends on them. E-80's text scopes role/org work to Epic 3 (E-86/
+> E-87); we kept the tables in place and only reconciled/indexed them. Ratify this
+> split with the Epic owner before Epic-3 RBAC work begins.
+
 ## RBAC — current state and the plan
 
 The product needs four roles: **superadmin, admin, designer, visitor**. Today the

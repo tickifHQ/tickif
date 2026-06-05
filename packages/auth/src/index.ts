@@ -19,6 +19,19 @@ export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
 
+  user: {
+    additionalFields: {
+      // App-owned account lifecycle. input:false → clients can't set it on signup;
+      // defaultValue keeps it present on the session user object.
+      status: {
+        type: ['pending', 'active', 'suspended', 'deleted'],
+        required: false,
+        input: false,
+        defaultValue: 'pending',
+      },
+    },
+  },
+
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: { ...schema },
@@ -66,3 +79,11 @@ export const auth = betterAuth({
 
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
+
+/**
+ * Resolve the current better-auth session (user + session) from request headers.
+ * Returns null when unauthenticated. The one place app code should read sessions.
+ */
+export function getSession(headers: Headers) {
+  return auth.api.getSession({ headers });
+}

@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import { auth, type Session } from '@repo/auth';
+import { getSession, type Session } from '@repo/auth';
 import { AppError } from './errors.js';
 
 export type AuthVariables = {
@@ -12,7 +12,7 @@ export type AuthVariables = {
  * `user` / `session` to the Hono context. Always runs; does not block.
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  const result = await auth.api.getSession({ headers: c.req.raw.headers });
+  const result = await getSession(c.req.raw.headers);
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
   await next();

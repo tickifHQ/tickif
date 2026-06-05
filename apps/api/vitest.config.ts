@@ -28,6 +28,7 @@ export default defineConfig({
       {
         test: {
           name: 'integration',
+          fileParallelism: false,
           globals: true,
           environment: 'node',
           include: ['tests/**/*.integration.test.ts'],
