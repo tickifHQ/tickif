@@ -42,3 +42,6 @@ e2e/playwright-report/
 
 # source proposal docs (kept locally, not tracked)
 *.docx
+
+# better-auth CLI reference output — regenerate with `pnpm auth:generate`; SOT is schema/auth.ts
+packages/auth/auth-schema.generated.ts
