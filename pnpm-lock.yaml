@@ -455,12 +455,9 @@ importers:
       lucide-react:
         specifier: 'catalog:'
         version: 0.552.0(react@19.2.7)
-      react:
+      shadcn:
         specifier: 'catalog:'
-        version: 19.2.7
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.7(react@19.2.7)
+        version: 3.8.5(@types/node@22.19.19)(typescript@5.9.3)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -498,9 +495,12 @@ importers:
       happy-dom:
         specifier: 'catalog:'
         version: 20.9.0
-      shadcn:
+      react:
         specifier: 'catalog:'
-        version: 3.8.5(@types/node@22.19.19)(typescript@5.9.3)
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
