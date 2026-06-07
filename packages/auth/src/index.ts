@@ -16,6 +16,7 @@ if (!googleEnabled && (config.GOOGLE_CLIENT_ID || config.GOOGLE_CLIENT_SECRET)) 
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
+  trustedOrigins: ['http://localhost:3000'],
 
   user: {
     additionalFields: {
