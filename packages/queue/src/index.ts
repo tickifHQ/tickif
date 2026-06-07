@@ -50,8 +50,14 @@ function getSmsQueue(): Queue<SmsJob> {
   return smsQueue;
 }
 
+/** Normalize a phone number to bare digits — for stable dedupe keys and provider APIs. */
+export function normalizePhone(phoneNumber: string): string {
+  return phoneNumber.replace(/\D/g, '');
+}
+
+/** Build a dedupe jobId from an already-normalized job so identical double-fires collapse. */
 function smsJobId(job: SmsJob): string {
-  const phone = job.phoneNumber.replace(/\D/g, '') || 'unknown';
+  const phone = job.phoneNumber || 'unknown';
   const digest = createHash('sha256')
     .update(`${job.phoneNumber}:${job.code}`)
     .digest('hex')
@@ -60,9 +66,12 @@ function smsJobId(job: SmsJob): string {
 }
 
 export async function enqueueSms(job: SmsJob): Promise<void> {
-  await getSmsQueue().add(JOBS.sendSms, job, {
+  // Normalize the phone once, up front, so the stored job, the dedupe key, and the
+  // provider all agree — identical requests with different formatting now collapse.
+  const normalized: SmsJob = { phoneNumber: normalizePhone(job.phoneNumber), code: job.code };
+  await getSmsQueue().add(JOBS.sendSms, normalized, {
     ...defaultJobOptions,
-    jobId: smsJobId(job),
+    jobId: smsJobId(normalized),
   });
 }
 
