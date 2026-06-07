@@ -19,6 +19,27 @@ export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
 
+  // Allow the web app (different port in dev) to call auth endpoints.
+  // Production: replace with the real domain(s).
+  trustedOrigins: isProduction ? [] : ['http://localhost:3000'],
+
+  // ─── Session management ───────────────────────────────────────────────────
+  // Rolling refresh: session lives 7 days; after 1 day of activity the expiry
+  // is extended without requiring re-login.
+  session: {
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
+    updateAge: 60 * 60 * 24, // refresh expiry every 1 day of use
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 min — avoids a DB hit on every getSession call
+    },
+  },
+
+  // ─── Cookie attributes ────────────────────────────────────────────────────
+  // httpOnly + sameSite=lax by default in better-auth.
+  // In production: secure:true so cookies only travel over HTTPS.
+  ...(isProduction && { useSecureCookies: true }),
+
   user: {
     additionalFields: {
       // App-owned account lifecycle. input:false → clients can't set it on signup;
