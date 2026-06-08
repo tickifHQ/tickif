@@ -15,6 +15,7 @@
   "dependencies": {
     "@repo/contracts": "workspace:*",
     "@repo/ui": "workspace:*",
+    "better-auth": "catalog:",
     "hono": "catalog:",
     "next": "catalog:",
     "react": "catalog:",

@@ -16,9 +16,22 @@ import { enqueueSms } from '@repo/queue';
  * Tables live in @repo/db's Drizzle schema so auth + domain data share a single
  * migration set. The adapter auto-discovers them from the shared `db` instance.
  */
+
+const googleClientId = config.GOOGLE_CLIENT_ID;
+const googleClientSecret = config.GOOGLE_CLIENT_SECRET;
+const googleEnabled = !!(googleClientId && googleClientSecret);
+
+const socialProviders = googleEnabled
+  ? { google: { clientId: googleClientId, clientSecret: googleClientSecret } }
+  : undefined;
+
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
+
+  // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
+  // Dev: "http://localhost:3000". Prod same-origin: leave empty.
+  trustedOrigins: config.TRUSTED_ORIGINS,
 
   user: {
     additionalFields: {
@@ -42,15 +55,21 @@ export const auth = betterAuth({
     enabled: false,
   },
 
-  socialProviders:
-    config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET
-      ? {
-          google: {
-            clientId: config.GOOGLE_CLIENT_ID,
-            clientSecret: config.GOOGLE_CLIENT_SECRET,
-          },
-        }
-      : undefined,
+  socialProviders,
+
+  // Account linking: when a Google sign-in resolves a verified email that matches
+  // an existing user, link rather than duplicate. Nested under `account` per the
+  // better-auth options reference.
+  //
+  // We do NOT set trustedProviders — default verified-email linking is sufficient
+  // since Google always verifies emails. trustedProviders would bypass the
+  // emailVerified gate, which is unnecessary and a security risk (see better-auth
+  // docs: "use with caution").
+  account: {
+    accountLinking: {
+      enabled: true,
+    },
+  },
 
   plugins: [
     phoneNumber({
