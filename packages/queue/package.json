@@ -1,13 +1,15 @@
 {
-  "name": "@repo/worker",
+  "name": "@repo/queue",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsup",
-    "start": "node dist/index.js",
-    "enqueue:demo": "tsx src/enqueue-demo.ts",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -15,9 +17,7 @@
   },
   "dependencies": {
     "@repo/config": "workspace:*",
-    "@repo/queue": "workspace:*",
-    "bullmq": "catalog:",
-    "dotenv": "^16.4.7"
+    "bullmq": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -25,8 +25,6 @@
     "@repo/vitest-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "^9.18.0",
-    "tsup": "^8.5.1",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -2,7 +2,8 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization } from 'better-auth/plugins';
 import { db, schema } from '@repo/db';
-import { config, isProduction } from '@repo/config';
+import { config } from '@repo/config';
+import { enqueueSms } from '@repo/queue';
 
 /**
  * Tickif auth — better-auth instance.
@@ -73,14 +74,11 @@ export const auth = betterAuth({
   plugins: [
     phoneNumber({
       sendOTP: async ({ phoneNumber: phone, code }) => {
-        if (!isProduction) {
-          // Dev/test: log the OTP. Production wires this to MSG91.
-          console.log(`[auth] OTP for ${phone}: ${code}`);
-          return;
-        }
-        // TODO(phase-1): integrate MSG91 (config.MSG91_AUTH_KEY / SENDER_ID).
-        throw new Error('SMS provider not configured');
+        await enqueueSms({ phoneNumber: phone, code });
       },
+      otpLength: 6,
+      expiresIn: 300,
+      allowedAttempts: 3,
       signUpOnVerification: {
         // Derive a placeholder email until the designer completes their profile.
         getTempEmail: (phone) => `${phone}@phone.tickif.local`,
