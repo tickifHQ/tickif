@@ -40,6 +40,8 @@ const envSchema = z.object({
 
   // Redis (cache + BullMQ)
   REDIS_URL: z.string().url(),
+  // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
+  REDIS_URL_TEST: z.string().url().optional(),
 
   // better-auth
   BETTER_AUTH_SECRET: z.string().min(16, 'BETTER_AUTH_SECRET must be at least 16 chars'),
@@ -53,7 +55,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:3001'),
 
-  // SMS / OTP provider (MSG91) — optional; stubbed in dev
+  // SMS / OTP provider. Selection is explicit; creds are per-provider.
+  SMS_PROVIDER: z.enum(['console', 'msg91']).default('console'),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_SENDER_ID: z.string().optional(),
 
