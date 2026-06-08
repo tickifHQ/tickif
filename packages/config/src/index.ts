@@ -45,6 +45,14 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(16, 'BETTER_AUTH_SECRET must be at least 16 chars'),
   BETTER_AUTH_URL: z.string().url(),
 
+  // Comma-separated list of trusted origins for cross-origin auth requests.
+  // In dev: the web app origin (e.g. "http://localhost:3000").
+  // In prod same-origin: leave empty. Cross-origin: add the web app domain.
+  TRUSTED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((s) => s.trim()) : [])),
+
   // Google / Gmail SSO — optional in dev, required for the social flow
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
