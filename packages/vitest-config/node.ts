@@ -28,27 +28,42 @@ export function nodePreset(overrides: ViteUserConfig['test'] = {}): ViteUserConf
   });
 }
 
+/** Load the repo-root `.env` (walking up from cwd) so *_TEST vars are available. */
+function loadRootEnv(): void {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    const candidate = join(dir, '.env');
+    if (existsSync(candidate)) {
+      loadDotenv({ path: candidate });
+      return;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+}
+
 /**
  * Resolve the test database URL at config-eval time. Loads the repo-root `.env`
  * (so `DATABASE_URL_TEST` is picked up if set), falling back to the docker
  * default. The name must end in `_test` — repository test helpers guard on this.
  */
 export function testDatabaseUrl(): string {
-  let dir = process.cwd();
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, '.env');
-    if (existsSync(candidate)) {
-      loadDotenv({ path: candidate });
-      break;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+  loadRootEnv();
   return (
     process.env.DATABASE_URL_TEST ??
     'postgresql://tickif:tickif@localhost:5432/tickif_test'
   );
+}
+
+/**
+ * Resolve the test Redis URL. Mirrors the Postgres `_test` convention so
+ * destructive queue cleanup targets a throwaway DB index, never the dev
+ * default (`/0`). Defaults to a dedicated DB index.
+ */
+export function testRedisUrl(): string {
+  loadRootEnv();
+  return process.env.REDIS_URL_TEST ?? 'redis://localhost:6379/15';
 }
 
 /**
@@ -57,5 +72,9 @@ export function testDatabaseUrl(): string {
  * these because real process env wins).
  */
 export function integrationEnv(): Record<string, string> {
-  return { NODE_ENV: 'test', DATABASE_URL: testDatabaseUrl() };
+  return {
+    NODE_ENV: 'test',
+    DATABASE_URL: testDatabaseUrl(),
+    REDIS_URL: testRedisUrl(),
+  };
 }
