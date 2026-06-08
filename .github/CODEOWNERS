@@ -1,0 +1,12 @@
+# Code owners are auto-requested for review on matching PRs.
+# NOTE: on the free GitHub plan this only *requests* reviewers — it cannot
+# *require* their approval (that needs branch protection on a paid plan).
+# Order matters: the last matching pattern wins. Adjust owners below.
+
+# Global fallback — every PR requests these reviewers.
+*                       @shikharx06 @Vedant1147
+
+# Path-based ownership — uncomment / refine as the team settles areas.
+# /packages/db/          @shikharx06
+# /apps/web/             @Vedant1147
+# /.github/              @shikharx06
