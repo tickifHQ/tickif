@@ -102,11 +102,11 @@ export const auth = betterAuth({
         getTempName: (phone) => phone,
       },
     }),
-    // RBAC. Defaults give `admin` + `user` roles; the full 4-role model
-    // (superadmin / admin / designer / visitor) is layered on via better-auth's
-    // access-control (createAccessControl) in a later phase. The user.role
-    // column already exists to store them.
-    admin(),
+    // Platform RBAC: 4 roles (visitor/designer/admin/superadmin) live on user.role.
+    // defaultRole keeps better-auth writing only our values. Marking which roles are
+    // privileged (adminRoles) needs the createAccessControl role definitions, which
+    // land in E-87 — so it is intentionally not set here.
+    admin({ defaultRole: 'visitor' }),
     organization(),
   ],
 });
