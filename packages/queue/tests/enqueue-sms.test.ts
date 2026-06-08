@@ -40,10 +40,8 @@ describe('enqueueSms', () => {
       JOBS.sendSms,
       // phone is normalized to digits once, up front, before enqueue
       { phoneNumber: '919876543210', code: '123456' },
-      {
-        ...defaultJobOptions,
-        jobId: expect.stringMatching(/^otp-919876543210-[a-f0-9]{16}$/),
-      },
+      // defaultJobOptions lives on the Queue now, so add() only carries the dedupe id
+      { jobId: expect.stringMatching(/^otp-919876543210-[a-f0-9]{16}$/) },
     );
   });
 

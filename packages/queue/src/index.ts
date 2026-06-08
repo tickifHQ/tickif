@@ -69,10 +69,8 @@ export async function enqueueSms(job: SmsJob): Promise<void> {
   // Normalize the phone once, up front, so the stored job, the dedupe key, and the
   // provider all agree — identical requests with different formatting now collapse.
   const normalized: SmsJob = { phoneNumber: normalizePhone(job.phoneNumber), code: job.code };
-  await getSmsQueue().add(JOBS.sendSms, normalized, {
-    ...defaultJobOptions,
-    jobId: smsJobId(normalized),
-  });
+  // defaultJobOptions is set on the Queue itself; only the per-job dedupe id here.
+  await getSmsQueue().add(JOBS.sendSms, normalized, { jobId: smsJobId(normalized) });
 }
 
 export async function closeQueues(): Promise<void> {

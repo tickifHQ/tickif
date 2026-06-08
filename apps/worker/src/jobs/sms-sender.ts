@@ -35,7 +35,8 @@ export class Msg91SmsSender implements SmsSender {
       message: `Your Tickif verification code is ${code}`,
       sender: this.senderId,
       route: '4',
-      country: '91',
+      // `mobiles` already carries the country code (normalized digits include 91),
+      // so we don't pass a separate `country` param — avoids a double prefix.
     });
 
     let response: Response;
@@ -94,7 +95,8 @@ export function selectSmsSender(options: SelectSmsSenderOptions): SmsSender {
     case 'console':
       // Console must never deliver in production (it would log the OTP) — fail closed.
       return options.isProduction ? new MissingSmsSender() : new ConsoleSmsSender();
-    default:
-      return options.isProduction ? new MissingSmsSender() : new ConsoleSmsSender();
   }
+  // Exhaustive over SmsProvider — this guards any new enum value at compile time.
+  const unreachable: never = options.provider;
+  throw new Error(`Unsupported SMS provider: ${String(unreachable)}`);
 }
