@@ -12,8 +12,8 @@ export function GoogleLoginButton() {
     setLoading(true);
     setError('');
     try {
-      const data = await authClient.signIn.social({ provider: 'google' });
-      if (data && 'error' in data) {
+      const result = await authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin });
+      if (result?.error) {
         setError('Google sign-in is not configured');
         setLoading(false);
       }

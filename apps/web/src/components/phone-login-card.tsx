@@ -10,6 +10,7 @@ import { Card } from '@repo/ui/components/card';
 type Step = 'phone' | 'otp';
 type OtpDigits = string[];
 
+const COUNTRY_CODE = '+91';
 const COOLDOWN_SECONDS = 30;
 
 function formatTimer(seconds: number): string {
@@ -63,7 +64,7 @@ export function PhoneLoginCard() {
   }, []);
 
   async function handleSendOtp() {
-    const fullPhone = `+91${phone.replace(/\D/g, '')}`;
+    const fullPhone = `${COUNTRY_CODE}${phone.replace(/\D/g, '')}`;
     const validationError = validatePhone(phone);
     if (validationError) {
       setError(validationError);
@@ -85,7 +86,7 @@ export function PhoneLoginCard() {
   }
 
   async function handleVerify() {
-    const fullPhone = `+91${phone.replace(/\D/g, '')}`;
+    const fullPhone = `${COUNTRY_CODE}${phone.replace(/\D/g, '')}`;
     const otp = code.join('');
     if (otp.length !== 6) {
       setError('Enter the full 6-digit OTP');
@@ -110,7 +111,7 @@ export function PhoneLoginCard() {
     if (cooldown > 0) return;
     setError('');
     setCode(['', '', '', '', '', '']);
-    const fullPhone = `+91${phone.replace(/\D/g, '')}`;
+    const fullPhone = `${COUNTRY_CODE}${phone.replace(/\D/g, '')}`;
     try {
       await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
       setCooldown(COOLDOWN_SECONDS);
@@ -150,6 +151,9 @@ export function PhoneLoginCard() {
       next[index - 1] = '';
       setCode(next);
       inputRefs.current[index - 1]?.focus();
+    }
+    if (e.key === 'Enter' && code.every((d) => d)) {
+      handleVerify();
     }
   }
 
@@ -210,8 +214,8 @@ export function PhoneLoginCard() {
           </Button>
         </>
       ) : (
-        <>
-          <div>
+        <div className="flex flex-col items-center justify-center min-h-[260px]">
+          <div className="flex flex-col items-center">
             <label className="text-sm font-medium text-neutral-700">
               Enter OTP
             </label>
@@ -219,7 +223,7 @@ export function PhoneLoginCard() {
               Sent to +91 {phone}
             </p>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex justify-center gap-2">
               {code.map((digit, i) => (
                 <Input
                   key={i}
@@ -260,24 +264,24 @@ export function PhoneLoginCard() {
             type="button"
             onClick={handleVerify}
             disabled={loading || code.some((d) => !d)}
-            className="w-full"
+            className="w-full mt-6"
           >
             {loading ? 'Verifying…' : 'Verify OTP'}
           </Button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setStep('phone');
-              setError('');
-              setCode(['', '', '', '', '', '']);
-            }}
-            className="w-full text-center text-xs text-neutral-500 underline-offset-2 hover:underline"
-          >
-            Change phone number
-          </button>
-        </>
-        )}
+            <button
+              type="button"
+              onClick={() => {
+                setStep('phone');
+                setError('');
+                setCode(['', '', '', '', '', '']);
+              }}
+              className="w-full text-center text-xs text-neutral-500 underline-offset-2 hover:underline mt-4"
+            >
+              Change phone number
+            </button>
+          </div>
+          )}
       </div>
     </Card>
   );

@@ -18,7 +18,7 @@ export function AccountMenu() {
   const [open, setOpen] = useState(false);
 
   if (isPending) {
-    return <div className="size-8 animate-pulse rounded-full bg-neutral-200" />;
+    return <div role="status" className="size-8 animate-pulse rounded-full bg-neutral-200" />;
   }
 
   if (!session) {
@@ -57,7 +57,7 @@ export function AccountMenu() {
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut}>
+        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>

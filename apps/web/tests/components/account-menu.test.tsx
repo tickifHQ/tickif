@@ -25,8 +25,8 @@ describe('AccountMenu', () => {
 
   it('renders a skeleton when session is loading', () => {
     mock.isPending = true;
-    const { container } = render(<AccountMenu />);
-    expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+    render(<AccountMenu />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('renders a sign-in link when not authenticated', () => {
