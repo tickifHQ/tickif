@@ -74,7 +74,11 @@ export function PhoneLoginCard() {
     setError('');
     setLoading(true);
     try {
-      await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
+      const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
+      if (error) {
+        setError(error.message || 'Failed to send OTP');
+        return;
+      }
       setStep('otp');
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
@@ -96,7 +100,12 @@ export function PhoneLoginCard() {
     setError('');
     setLoading(true);
     try {
-      await authClient.phoneNumber.verify({ phoneNumber: fullPhone, code: otp });
+      const { error } = await authClient.phoneNumber.verify({ phoneNumber: fullPhone, code: otp });
+      if (error) {
+        setError(error.message || 'Invalid or expired OTP');
+        setCode(['', '', '', '', '', '']);
+        return;
+      }
       setSuccess(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid or expired OTP';
@@ -113,7 +122,11 @@ export function PhoneLoginCard() {
     setCode(['', '', '', '', '', '']);
     const fullPhone = `${COUNTRY_CODE}${phone.replace(/\D/g, '')}`;
     try {
-      await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
+      const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
+      if (error) {
+        setError(error.message || 'Failed to resend OTP');
+        return;
+      }
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to resend OTP';

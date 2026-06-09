@@ -38,7 +38,7 @@ describe('PhoneLoginCard', () => {
   });
 
   it('transitions to OTP step after successful send', async () => {
-    mock.sendOtp.mockResolvedValueOnce(undefined);
+    mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
     const user = userEvent.setup();
     render(<PhoneLoginCard />);
     await user.type(screen.getByLabelText('Phone number'), '9876543210');
@@ -55,9 +55,18 @@ describe('PhoneLoginCard', () => {
     expect(screen.getByText('Rate limited')).toBeInTheDocument();
   });
 
+  it('shows error when sendOtp returns an error', async () => {
+    mock.sendOtp.mockResolvedValueOnce({ data: null, error: { message: 'Invalid phone number' } });
+    const user = userEvent.setup();
+    render(<PhoneLoginCard />);
+    await user.type(screen.getByLabelText('Phone number'), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    expect(screen.getByText('Invalid phone number')).toBeInTheDocument();
+  });
+
   describe('OTP step', () => {
     async function goToOtpStep(user: ReturnType<typeof userEvent.setup>) {
-      mock.sendOtp.mockResolvedValueOnce(undefined);
+      mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
       await user.type(screen.getByLabelText('Phone number'), '9876543210');
       await user.click(screen.getByRole('button', { name: 'Send OTP' }));
       await screen.findByText(/Enter OTP/);
@@ -92,7 +101,7 @@ describe('PhoneLoginCard', () => {
     });
 
     it('shows success message on verify', async () => {
-      mock.verify.mockResolvedValueOnce(undefined);
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
       const user = userEvent.setup();
       render(<PhoneLoginCard />);
       await goToOtpStep(user);
@@ -102,7 +111,7 @@ describe('PhoneLoginCard', () => {
     });
 
     it('shows error and clears code on verify failure', async () => {
-      mock.verify.mockRejectedValueOnce(new Error('Invalid or expired OTP'));
+      mock.verify.mockResolvedValueOnce({ data: null, error: { message: 'Invalid or expired OTP' } });
       const user = userEvent.setup();
       render(<PhoneLoginCard />);
       await goToOtpStep(user);
@@ -112,7 +121,7 @@ describe('PhoneLoginCard', () => {
     });
 
     it('shows resend button with cooldown timer', async () => {
-      mock.sendOtp.mockResolvedValueOnce(undefined);
+      mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
       const user = userEvent.setup();
       render(<PhoneLoginCard />);
       await goToOtpStep(user);
