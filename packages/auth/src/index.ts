@@ -117,7 +117,14 @@ export type Session = Auth['$Infer']['Session'];
 /**
  * Resolve the current better-auth session (user + session) from request headers.
  * Returns null when unauthenticated. The one place app code should read sessions.
+ *
+ * `disableCookieCache` forces a fresh DB read instead of the ≤5-min cookie cache, so callers
+ * that must see server-side revocation/expiry immediately (e.g. after logout) aren't served a
+ * stale cached copy.
  */
-export function getSession(headers: Headers) {
-  return auth.api.getSession({ headers });
+export function getSession(headers: Headers, opts?: { disableCookieCache?: boolean }) {
+  return auth.api.getSession({
+    headers,
+    query: opts?.disableCookieCache ? { disableCookieCache: true } : undefined,
+  });
 }
