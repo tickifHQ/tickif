@@ -4,8 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./node": "./node.ts",
-    "./react": "./react.ts"
+    "./node": {
+      "types": "./node.d.ts",
+      "default": "./node.mjs"
+    },
+    "./react": {
+      "types": "./react.d.ts",
+      "default": "./react.mjs"
+    }
   },
   "dependencies": {
     "@vitest/coverage-v8": "catalog:",
