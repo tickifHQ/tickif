@@ -50,8 +50,6 @@ export const auth = betterAuth({
   // better-auth automatically sets Secure when baseURL is HTTPS.
   // Production MUST use an HTTPS BETTER_AUTH_URL — no explicit flag needed.
   // httpOnly: true and sameSite: lax are better-auth defaults.
-
-
   user: {
     additionalFields: {
       // App-owned account lifecycle. input:false → clients can't set it on signup;
