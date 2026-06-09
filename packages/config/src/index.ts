@@ -33,13 +33,23 @@ loadRootEnv();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
-  // Database
-  DATABASE_URL: z.string().url(),
-  // Separate DB for integration tests (only required in test runs).
+  // Postgres — the connection string is built from these parts (see below).
+  POSTGRES_HOST: z.string().default('localhost'),
+  POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
+  POSTGRES_USER: z.string().default('tickif'),
+  POSTGRES_PASSWORD: z.string().default('tickif'),
+  POSTGRES_DB: z.string().default('tickif'),
+  // Optional explicit overrides. Used by managed DBs (a single connection
+  // string) and by the test harness, which injects DATABASE_URL to point
+  // integration tests at the `_test` database. When unset, the URL is built
+  // from the POSTGRES_* parts above.
+  DATABASE_URL: z.string().url().optional(),
   DATABASE_URL_TEST: z.string().url().optional(),
 
-  // Redis (cache + BullMQ)
-  REDIS_URL: z.string().url(),
+  // Redis (cache + BullMQ) — connection string built from these parts.
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.coerce.number().int().positive().default(6379),
+  REDIS_URL: z.string().url().optional(),
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
 
@@ -94,7 +104,23 @@ const refinedEnvSchema = envSchema.refine(
   },
 );
 
-export type Config = z.infer<typeof envSchema>;
+type RawEnv = z.infer<typeof envSchema>;
+
+/**
+ * Public config: the raw env plus the connection strings, which are always
+ * present (built from parts when not explicitly provided).
+ */
+export type Config = Omit<RawEnv, 'DATABASE_URL' | 'DATABASE_URL_TEST' | 'REDIS_URL'> & {
+  DATABASE_URL: string;
+  DATABASE_URL_TEST: string;
+  REDIS_URL: string;
+};
+
+function postgresUrl(env: RawEnv, database: string): string {
+  const user = encodeURIComponent(env.POSTGRES_USER);
+  const password = encodeURIComponent(env.POSTGRES_PASSWORD);
+  return `postgresql://${user}:${password}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${database}`;
+}
 
 function loadConfig(): Config {
   const parsed = refinedEnvSchema.safeParse(process.env);
@@ -104,7 +130,13 @@ function loadConfig(): Config {
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  return parsed.data;
+  const env = parsed.data;
+  return {
+    ...env,
+    DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
+    DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
+    REDIS_URL: env.REDIS_URL ?? `redis://${env.REDIS_HOST}:${env.REDIS_PORT}`,
+  };
 }
 
 export const config: Config = loadConfig();

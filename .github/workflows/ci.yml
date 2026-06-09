@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: typecheck / lint / test / build
+    runs-on: ubuntu-latest
+
+    # Job-level env satisfies BOTH consumers:
+    #  - `pnpm db:migrate` / `db:generate` run via `pnpm --filter` (outside Turbo,
+    #    so they read raw shell env). They import @repo/config, which fails fast
+    #    without BETTER_AUTH_SECRET/BETTER_AUTH_URL and builds DATABASE_URL from
+    #    the POSTGRES_* parts (-> the `tickif` database).
+    #  - `pnpm test` / `pnpm build` run through Turbo, which strips any env var not
+    #    listed in turbo.json `globalEnv`. DATABASE_URL_TEST and BETTER_AUTH_* are
+    #    in globalEnv, so they reach the integration tests; POSTGRES_* need not be.
+    env:
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-dummy-secret-0123456789
+      BETTER_AUTH_URL: http://localhost:3001
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: tickif
+      POSTGRES_PASSWORD: tickif
+      POSTGRES_DB: tickif
+      DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_test
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      TURBO_TELEMETRY_DISABLED: "1"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tickif
+          POSTGRES_PASSWORD: tickif
+          POSTGRES_DB: tickif
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tickif"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm must be installed BEFORE setup-node, otherwise `cache: pnpm` fails
+      # (it shells out to pnpm to locate the store path).
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Cache Turbo's local task cache across runs for faster typecheck/build/test.
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      # The postgres service only creates POSTGRES_DB (=tickif). The integration
+      # tests target a separate `tickif_test` database that must pre-exist
+      # (migrateTestDb creates tables, not the database). Create it here.
+      - name: Create test database
+        run: |
+          PGPASSWORD=tickif psql -h localhost -p 5432 -U tickif -d tickif \
+            -c "CREATE DATABASE tickif_test;"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # Migration gating (blueprint §9): migrate the empty `tickif` DB, then
+      # regenerate SQL from the schema and fail if the committed migrations drift
+      # from the schema.
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Check migration drift
+        run: |
+          pnpm db:generate
+          # --intent-to-add makes any brand-new (untracked) generated migration
+          # files visible to `git diff`, so drift that emits only new files
+          # (e.g. a new 0001_*.sql / meta snapshot) still fails the gate.
+          git add --intent-to-add packages/db/migrations
+          git diff --exit-code packages/db/migrations
