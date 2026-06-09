@@ -29,10 +29,27 @@ export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
 
+  // Trusted origins for cross-origin auth requests (web app on a different port/domain).
   // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
 
+  // ─── Session management ───────────────────────────────────────────────────
+  // Rolling refresh: session lives 7 days; after 1 day of activity the expiry
+  // is extended without requiring re-login.
+  session: {
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
+    updateAge: 60 * 60 * 24, // refresh expiry every 1 day of use
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 min — avoids a DB hit on every getSession call
+    },
+  },
+
+  // ─── Cookie attributes ────────────────────────────────────────────────────
+  // better-auth automatically sets Secure when baseURL is HTTPS.
+  // Production MUST use an HTTPS BETTER_AUTH_URL — no explicit flag needed.
+  // httpOnly: true and sameSite: lax are better-auth defaults.
   user: {
     additionalFields: {
       // App-owned account lifecycle. input:false → clients can't set it on signup;
