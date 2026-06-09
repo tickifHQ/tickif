@@ -249,7 +249,7 @@ export function PhoneLoginCard() {
                 type="button"
                 onClick={handleResend}
                 disabled={cooldown > 0 || loading}
-                className="text-xs text-neutral-500 underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
+                className="text-xs text-neutral-500 underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50 py-2"
               >
                 {cooldown > 0
                   ? `Resend in ${formatTimer(cooldown)}`
@@ -276,7 +276,7 @@ export function PhoneLoginCard() {
                 setError('');
                 setCode(['', '', '', '', '', '']);
               }}
-              className="w-full text-center text-xs text-neutral-500 underline-offset-2 hover:underline mt-4"
+              className="w-full text-center text-xs text-neutral-500 underline-offset-2 hover:underline mt-4 py-2"
             >
               Change phone number
             </button>
