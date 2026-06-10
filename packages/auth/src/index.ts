@@ -4,6 +4,7 @@ import { phoneNumber, admin, organization } from 'better-auth/plugins';
 import { db, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
+import { ac, roles } from './permissions.js';
 
 /**
  * Tickif auth — better-auth instance.
@@ -103,16 +104,12 @@ export const auth = betterAuth({
       },
     }),
     // Platform RBAC: 4 roles (visitor/designer/admin/superadmin) live on user.role.
-    // defaultRole keeps better-auth writing only our values. Marking which roles are
-    // privileged (adminRoles) needs the createAccessControl role definitions, which
-    // land in E-87 — so it is intentionally not set here.
-    //
-    // Note this mounts the /admin/* endpoints NOW, with adminRoles defaulting to
-    // ['admin']: until E-87, superadmin does not pass admin checks, and set-role does
-    // no role-value validation upstream — the user_role pgEnum is the write backstop
-    // (pinned by set-role.integration.test.ts). No account becomes 'admin' in this
-    // window without a deliberate manual DB promotion.
-    admin({ defaultRole: 'visitor' }),
+    // defaultRole keeps better-auth writing only our values; ac/roles define the four
+    // roles so adminRoles validates at startup (rules/auth.md: adminRoles entries MUST
+    // exist in roles). admin and superadmin both pass the /admin/* permission checks.
+    // set-role still does no role-value validation upstream — the user_role pgEnum is
+    // the write backstop (pinned by set-role.integration.test.ts).
+    admin({ defaultRole: 'visitor', ac, roles, adminRoles: ['admin', 'superadmin'] }),
     organization(),
   ],
 });
