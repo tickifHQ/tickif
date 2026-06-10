@@ -32,7 +32,15 @@ export default defineConfig({
           globals: true,
           environment: 'node',
           include: ['tests/**/*.integration.test.ts'],
-          env: integrationEnv(),
+          // Dummy Google creds so socialProviders.google is configured for SSO tests.
+          // vitest `env` sets real process.env, so dotenv won't override these — the suite
+          // never uses the real .env creds and the token endpoint is mocked. CI-safe.
+          env: {
+            ...integrationEnv(),
+            GOOGLE_CLIENT_ID: 'test-google-client-id',
+            GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
+            BETTER_AUTH_URL: 'http://localhost:3000',
+          },
           globalSetup: ['./tests/global-setup.ts'],
           setupFiles: ['./tests/setup.ts'],
         },
