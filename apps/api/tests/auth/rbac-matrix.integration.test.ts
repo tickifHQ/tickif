@@ -39,6 +39,10 @@ const ROLES = ['visitor', 'designer', 'admin', 'superadmin'] as const;
  * Mint one session per role (+ an expired and a banned one). Sequential on purpose:
  * createAuthedSession reads the globally-latest OTP, so concurrent flows would
  * steal each other's codes. Phones are unique per call-site block.
+ *
+ * Phone-block registry for this file (avoid collisions when adding tests):
+ * 10 + 12 = mintActors call sites; 11 + 13 = hardcoded +919800011xxx/013xxx
+ * literals below. Pick an unused block for anything new.
  */
 async function mintActors(phoneBlock: number): Promise<Actors> {
   const phone = (n: number) => `+9198000${phoneBlock}${String(n).padStart(3, '0')}`;
@@ -222,6 +226,36 @@ describe('RBAC matrix: real app routes (E-89)', () => {
     for (const role of ROLES) {
       expect((await post(role, actors[role])).status, `${role} → POST /api/projects`).toBe(201);
     }
+  });
+});
+
+describe('RBAC matrix: cookie-cache revocation window (E-89)', () => {
+  it('a warm session_data cookie keeps passing until the 5-min cache expires (accepted E-83 tradeoff)', async () => {
+    // createAuthedSession returns the FULL cookie, including the cached session_data
+    // blob — unlike createRoleSession, which strips it. This pins the production
+    // behavior: a ban flips the DB instantly, but a client holding a warm cookie
+    // keeps passing guards until the cookie cache (5 min) expires. Documented in
+    // withSession + ADR 0001; if that tradeoff is ever closed, this row must flip.
+    const { cookie } = await createAuthedSession('+919800013001');
+    const me = await getSession(new Headers({ cookie }));
+
+    const sample = new Hono<{ Variables: AuthVariables }>();
+    sample.onError(onError);
+    sample.use('*', withSession);
+    sample.get('/authed', requireAuth, (c) => c.json({ ok: true }));
+
+    expect((await request(sample, '/authed', cookie)).status).toBe(200);
+
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, me!.user.id));
+
+    // warm cached blob: still 200 inside the window
+    expect((await request(sample, '/authed', cookie)).status).toBe(200);
+    // fresh read (cached blob stripped): the ban bites immediately
+    const fresh = cookie
+      .split('; ')
+      .filter((c) => !c.startsWith('better-auth.session_data'))
+      .join('; ');
+    expect((await request(sample, '/authed', fresh)).status).toBe(403);
   });
 });
 
