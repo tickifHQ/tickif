@@ -12,7 +12,7 @@ describe('Google SSO (E-85)', () => {
       name: 'Alice',
     });
 
-    expect(cookie).toMatch(/session/);
+    expect(cookie).toMatch(/session_token/);
     const session = await getSession(new Headers({ cookie }));
     expect(session).not.toBeNull();
     expect(session!.user.email).toBe('alice@gmail.com');

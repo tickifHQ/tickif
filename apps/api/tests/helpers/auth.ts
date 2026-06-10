@@ -68,7 +68,7 @@ export function makeGoogleIdToken(claims: {
   const header = { alg: 'RS256', kid: 'test', typ: 'JWT' };
   const payload = {
     iss: 'https://accounts.google.com',
-    aud: 'test-google-client-id',
+    aud: process.env.GOOGLE_CLIENT_ID ?? 'test-google-client-id',
     sub: claims.sub,
     email: claims.email,
     email_verified: true,
@@ -137,7 +137,7 @@ export async function signInWithGoogle(profile: {
       .join('; ');
     return { response, cookie };
   } finally {
-    vi.unstubAllGlobals();
+    globalThis.fetch = realFetch;
   }
 }
 
