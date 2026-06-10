@@ -58,11 +58,16 @@ without hand-rolling tables.
   not "fix" the committed enum back to text.
 - Adding a future platform role means editing the `user_role` enum (a migration) and the
   `admin` plugin config together.
-- Installing the `admin` plugin mounts the `/admin/*` endpoints immediately, with
-  `adminRoles` defaulting to `['admin']`. Two interim behaviors hold until E-87 sets
-  `adminRoles`: a `superadmin` does not pass admin checks, and `set-role` performs no
-  role-value validation upstream (it even comma-joins array input) — the `user_role`
-  enum is the only write backstop, pinned by `set-role.integration.test.ts` (an
-  out-of-enum value surfaces as a DB error, not a 400; E-87 should add proper request
-  validation). Exposure in this window is limited: no account becomes `admin` without
-  a deliberate manual DB promotion.
+- Installing the `admin` plugin mounts the `/admin/*` endpoints immediately. As of E-87
+  the four roles are defined via `createAccessControl` and `adminRoles: ['admin',
+  'superadmin']` is set, so both privileged roles pass the admin checks. `set-role`
+  still performs no role-value validation upstream (it even comma-joins array input) —
+  the `user_role` enum remains the write backstop, pinned by
+  `set-role.integration.test.ts` (an out-of-enum value surfaces as a DB error, not a
+  400; proper request validation is a follow-up when role assignment gets a real
+  admin UI).
+- E-87 guard semantics: `requireRole`/`requireAnyRole` are exact-match (no hierarchy —
+  `admin` does not pass a designer-only gate); `superadmin` implicitly passes every
+  role and ownership gate; `requireOwnership` grants owner OR org-member OR superadmin,
+  and platform `admin` gets no implicit ownership pass (moderation routes declare
+  `requireAnyRole(['admin'])` instead).
