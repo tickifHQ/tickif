@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { getSession, type Session } from '@repo/auth';
-import { schema } from '@repo/db';
+import type { schema } from '@repo/db';
 import { AppError } from './errors.js';
 import { isOrgMember } from '../modules/orgs/repository.js';
 

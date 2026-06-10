@@ -25,6 +25,8 @@ function sampleApp() {
   app.get(
     '/projects/:id/manage',
     requireOwnership(async (c) => {
+      const id = c.req.param('id');
+      if (!id) return null;
       const [row] = await db
         .select({ ownerUserId: schema.designerProfile.userId })
         .from(schema.project)
@@ -32,7 +34,7 @@ function sampleApp() {
           schema.designerProfile,
           eq(schema.project.designerId, schema.designerProfile.id),
         )
-        .where(eq(schema.project.id, c.req.param('id')))
+        .where(eq(schema.project.id, id))
         .limit(1);
       return row ?? null;
     }),
