@@ -11,7 +11,14 @@ import { onError } from '../../src/lib/errors.js';
 const { isOrgMemberMock } = vi.hoisted(() => ({ isOrgMemberMock: vi.fn() }));
 vi.mock('../../src/modules/orgs/repository.js', () => ({ isOrgMember: isOrgMemberMock }));
 
-function appWithUser(user: { id: string; role: string } | null, ownership?: Ownership | null) {
+type StubUser = {
+  id: string;
+  role?: string | null;
+  banned?: boolean | null;
+  banExpires?: Date | null;
+} | null;
+
+function appWithUser(user: StubUser, ownership?: Ownership | null) {
   const app = new Hono<{ Variables: AuthVariables }>();
   app.onError(onError);
   app.use('*', async (c, next) => {
@@ -22,7 +29,15 @@ function appWithUser(user: { id: string; role: string } | null, ownership?: Owne
   app.get('/admin', requireAnyRole(['admin']), (c) => c.json({ ok: true }));
   app.get('/designer', requireRole('designer'), (c) => c.json({ ok: true }));
   app.get('/staff', requireAnyRole(['admin', 'designer']), (c) => c.json({ ok: true }));
+  app.get('/none', requireAnyRole([]), (c) => c.json({ ok: true }));
   app.get('/owned', requireOwnership(async () => ownership ?? null), (c) => c.json({ ok: true }));
+  app.get(
+    '/owned-throws',
+    requireOwnership(async () => {
+      throw new Error('resolver boom');
+    }),
+    (c) => c.json({ ok: true }),
+  );
   return app;
 }
 
@@ -86,5 +101,39 @@ describe('RBAC guards (unit)', () => {
     const u = { id: 'u1', role: 'designer' };
     await appWithUser(u, { ownerUserId: 'u1', organizationId: 'org1' }).request('/owned');
     expect(isOrgMemberMock).not.toHaveBeenCalled();
+  });
+
+  it('ownership: platform admin gets no implicit pass', async () => {
+    const admin = { id: 'a1', role: 'admin' };
+    expect((await appWithUser(admin, { ownerUserId: 'u2' }).request('/owned')).status).toBe(403);
+  });
+
+  it('fails closed on degenerate input: ownerless resource, empty role list, missing role', async () => {
+    const u = { id: 'u1', role: 'designer' };
+    // no owner, no org → nobody but superadmin
+    expect((await appWithUser(u, { ownerUserId: null }).request('/owned')).status).toBe(403);
+    // empty allow-list → only superadmin
+    expect((await appWithUser(u).request('/none')).status).toBe(403);
+    expect((await appWithUser({ id: 's', role: 'superadmin' }).request('/none')).status).toBe(200);
+    // missing/unknown role → 403, not a crash
+    expect((await appWithUser({ id: 'u2', role: null }).request('/staff')).status).toBe(403);
+    expect((await appWithUser({ id: 'u3', role: 'banana' }).request('/staff')).status).toBe(403);
+  });
+
+  it('denies banned accounts on every gate, honoring banExpires', async () => {
+    const banned = { id: 'b1', role: 'admin', banned: true };
+    expect((await appWithUser(banned).request('/admin')).status).toBe(403);
+    expect((await appWithUser(banned, { ownerUserId: 'b1' }).request('/owned')).status).toBe(403);
+    // lapsed ban no longer blocks
+    const lapsed = { id: 'b2', role: 'admin', banned: true, banExpires: new Date(Date.now() - 1000) };
+    expect((await appWithUser(lapsed).request('/admin')).status).toBe(200);
+    // banned superadmin is still banned
+    const bannedSu = { id: 'b3', role: 'superadmin', banned: true };
+    expect((await appWithUser(bannedSu).request('/admin')).status).toBe(403);
+  });
+
+  it('ownership: a throwing resolver surfaces as 500, never a pass', async () => {
+    const u = { id: 'u1', role: 'designer' };
+    expect((await appWithUser(u).request('/owned-throws')).status).toBe(500);
   });
 });

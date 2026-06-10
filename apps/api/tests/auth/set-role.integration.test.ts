@@ -39,6 +39,15 @@ describe('admin set-role vs user_role enum (E-86)', () => {
     expect(row!.role).toBe('visitor');
   });
 
+  it('lets a superadmin call set-role (adminRoles includes superadmin, E-87)', async () => {
+    const { cookie: suCookie } = await createRoleSession('+919800000046', 'superadmin');
+    const { cookie: targetCookie } = await createAuthedSession('+919800000047');
+    const target = await getSession(new Headers({ cookie: targetCookie }));
+
+    const res = await postSetRole(suCookie, { userId: target!.user.id, role: 'designer' });
+    expect(res.ok).toBe(true);
+  });
+
   it('sets a valid enum role', async () => {
     const { cookie: adminCookie } = await createRoleSession('+919800000042', 'admin');
     const { cookie: targetCookie } = await createAuthedSession('+919800000043');

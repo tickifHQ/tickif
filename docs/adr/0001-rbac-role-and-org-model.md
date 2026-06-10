@@ -51,9 +51,9 @@ without hand-rolling tables.
 
 ## Consequences
 
-- The fine-grained permission matrix (`createAccessControl` statements) and the guards
-  that enforce these roles are E-87, not this ticket. E-86 only establishes the model +
-  default.
+- E-86 established the model + default; E-87 delivered the enforcement on top of it:
+  the `createAccessControl` role definitions, `adminRoles`, and the Hono guards
+  (`requireAuth` / `requireRole` / `requireAnyRole` / `requireOwnership`).
 - `auth:generate` will report `user.role` as `text`; reviewers should expect that and
   not "fix" the committed enum back to text.
 - Adding a future platform role means editing the `user_role` enum (a migration) and the

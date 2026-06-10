@@ -132,13 +132,24 @@ describe('RBAC guards (integration, E-87)', () => {
     ).toBe(404);
   });
 
-  it('ownership via org membership: member 200, non-member 403', async () => {
+  it('ownership via org membership: member 200, member of a DIFFERENT org 403', async () => {
     const app = sampleApp();
     const member = await createRoleSession('+919800000057', 'designer');
     const outsider = await createRoleSession('+919800000058', 'designer');
-    const orgId = await seedOrgWithMember(member.userId);
+    const orgA = await seedOrgWithMember(member.userId);
+    // tenant isolation: the outsider IS a member somewhere — just not of org A
+    await seedOrgWithMember(outsider.userId);
 
-    expect((await get(app, `/org-resources/${orgId}/manage`, member.cookie)).status).toBe(200);
-    expect((await get(app, `/org-resources/${orgId}/manage`, outsider.cookie)).status).toBe(403);
+    expect((await get(app, `/org-resources/${orgA}/manage`, member.cookie)).status).toBe(200);
+    expect((await get(app, `/org-resources/${orgA}/manage`, outsider.cookie)).status).toBe(403);
+  });
+
+  it('denies a banned account on a live session', async () => {
+    const app = sampleApp();
+    const { cookie, userId } = await createRoleSession('+919800000059', 'admin');
+    expect((await get(app, '/admin-area', cookie)).status).toBe(200);
+
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+    expect((await get(app, '/admin-area', cookie)).status).toBe(403);
   });
 });

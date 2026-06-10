@@ -35,29 +35,43 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   await next();
 };
 
-/** Guard: require an authenticated user. Throws AppError(401) otherwise. */
-export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  if (!c.get('user')) {
+/**
+ * Shared guard precondition: an authenticated, non-banned account.
+ * 401 when unauthenticated; 403 when banned (until banExpires, if set).
+ * Bans only block new sign-ins in better-auth itself, so the guard layer must
+ * enforce them for already-issued sessions.
+ */
+function assertActiveUser(
+  user: AuthVariables['user'],
+): asserts user is NonNullable<AuthVariables['user']> {
+  if (!user) {
     throw AppError.unauthorized();
   }
+  if (user.banned && (!user.banExpires || user.banExpires > new Date())) {
+    throw AppError.forbidden('Account suspended');
+  }
+}
+
+/** Guard: require an authenticated, non-banned user. 401 / 403 otherwise. */
+export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
+  assertActiveUser(c.get('user'));
   await next();
 };
 
 /**
  * Guard: the user's platform role must be one of `roles` (exact match — no
  * hierarchy, so `admin` does NOT pass a designer-only gate). `superadmin`
- * implicitly passes every role gate. 401 unauthenticated, 403 otherwise.
+ * implicitly passes every role gate. 401 unauthenticated, 403 otherwise
+ * (including banned accounts and unknown/missing roles — fail closed).
  */
 export function requireAnyRole(
   roles: readonly UserRole[],
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
     const user = c.get('user');
-    if (!user) {
-      throw AppError.unauthorized();
-    }
-    const role = user.role as UserRole;
-    if (role !== 'superadmin' && !roles.includes(role)) {
+    assertActiveUser(user);
+    const { role } = user;
+    if (role !== 'superadmin' && !roles.some((r) => r === role)) {
       throw AppError.forbidden();
     }
     await next();
@@ -74,27 +88,31 @@ export function requireRole(role: UserRole): MiddlewareHandler<{ Variables: Auth
  * (company-team access, E-66 model), or be superadmin. Platform `admin` gets NO
  * implicit pass — admin moderation routes should declare requireAnyRole(['admin']).
  *
- * 401 unauthenticated; 404 when the resolver finds no resource (don't leak
- * existence); 403 otherwise.
+ * 401 unauthenticated; 403 banned; 404 when the resolver finds no resource (don't
+ * leak existence); 403 otherwise. Resolver errors propagate to onError (500) —
+ * resolvers should validate their own params (e.g. UUID shape) when a malformed
+ * value must read as 404 instead.
  */
 export function requireOwnership(
   resolve: OwnershipResolver,
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
     const user = c.get('user');
-    if (!user) {
-      throw AppError.unauthorized();
-    }
+    assertActiveUser(user);
     const ownership = await resolve(c);
     if (!ownership) {
       throw AppError.notFound();
+    }
+    if (user.role === 'superadmin') {
+      await next();
+      return;
     }
     const isOwner = !!ownership.ownerUserId && ownership.ownerUserId === user.id;
     const isMember =
       !isOwner && ownership.organizationId
         ? await isOrgMember(user.id, ownership.organizationId)
         : false;
-    if (!isOwner && !isMember && (user.role as UserRole) !== 'superadmin') {
+    if (!isOwner && !isMember) {
       throw AppError.forbidden();
     }
     await next();
