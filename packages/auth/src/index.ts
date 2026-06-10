@@ -106,6 +106,12 @@ export const auth = betterAuth({
     // defaultRole keeps better-auth writing only our values. Marking which roles are
     // privileged (adminRoles) needs the createAccessControl role definitions, which
     // land in E-87 — so it is intentionally not set here.
+    //
+    // Note this mounts the /admin/* endpoints NOW, with adminRoles defaulting to
+    // ['admin']: until E-87, superadmin does not pass admin checks, and set-role does
+    // no role-value validation upstream — the user_role pgEnum is the write backstop
+    // (pinned by set-role.integration.test.ts). No account becomes 'admin' in this
+    // window without a deliberate manual DB promotion.
     admin({ defaultRole: 'visitor' }),
     organization(),
   ],

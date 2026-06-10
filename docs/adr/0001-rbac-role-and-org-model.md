@@ -30,6 +30,11 @@ without hand-rolling tables.
    generated" refinement (same posture as `user.status` in E-80). The `admin` plugin is
    configured with `defaultRole: 'visitor'` so better-auth only ever writes values inside
    the enum.
+   The same security argument applies to `member.role`, but it deliberately stays plain
+   `text`: the organization plugin owns that column, supports custom org roles, and
+   comma-joins multi-role arrays into the single string — a DB enum would fight the
+   plugin's storage format. Org-role integrity is instead enforced at the application
+   layer by the E-87 access-control guards.
 
 3. **`adminRoles` and the fine-grained permission framework are deferred to E-87.** We do
    NOT set `adminRoles` here: better-auth validates every `adminRoles` entry against the
@@ -53,7 +58,11 @@ without hand-rolling tables.
   not "fix" the committed enum back to text.
 - Adding a future platform role means editing the `user_role` enum (a migration) and the
   `admin` plugin config together.
-- E-87 note: better-auth's admin `setRole` accepts an array that it comma-joins into the
-  role string; against the `pgEnum` column a multi-role value would now raise a DB error
-  rather than store silently. That API is admin-only and unwired until E-87, where role
-  assignment should be constrained to single enum values.
+- Installing the `admin` plugin mounts the `/admin/*` endpoints immediately, with
+  `adminRoles` defaulting to `['admin']`. Two interim behaviors hold until E-87 sets
+  `adminRoles`: a `superadmin` does not pass admin checks, and `set-role` performs no
+  role-value validation upstream (it even comma-joins array input) — the `user_role`
+  enum is the only write backstop, pinned by `set-role.integration.test.ts` (an
+  out-of-enum value surfaces as a DB error, not a 400; E-87 should add proper request
+  validation). Exposure in this window is limited: no account becomes `admin` without
+  a deliberate manual DB promotion.

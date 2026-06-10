@@ -23,7 +23,7 @@ import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg
 /** Account lifecycle. 'pending' until profile completion; 'suspended' reserved for Epic-3 bans. */
 export type UserStatus = 'pending' | 'active' | 'suspended' | 'deleted';
 
-/** Platform authorization roles (E-86). Order is load-bearing for the unit test. */
+/** Platform authorization roles (E-86). Postgres enum order is part of the schema contract — append new roles, never reorder (pinned by role.test.ts). */
 export const userRole = pgEnum('user_role', ['visitor', 'designer', 'admin', 'superadmin']);
 
 export const user = pgTable('user', {
