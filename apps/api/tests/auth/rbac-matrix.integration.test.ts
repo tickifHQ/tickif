@@ -23,13 +23,20 @@ import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
  * are data — changing who may do what MUST show up as a diff in these tables.
  */
 
-type ActorName = 'anon' | 'expired' | 'visitor' | 'designer' | 'admin' | 'superadmin';
+type ActorName =
+  | 'anon'
+  | 'expired'
+  | 'banned'
+  | 'visitor'
+  | 'designer'
+  | 'admin'
+  | 'superadmin';
 type Actors = Record<ActorName, string | undefined>;
 
 const ROLES = ['visitor', 'designer', 'admin', 'superadmin'] as const;
 
 /**
- * Mint one session per role (+ an expired one). Sequential on purpose:
+ * Mint one session per role (+ an expired and a banned one). Sequential on purpose:
  * createAuthedSession reads the globally-latest OTP, so concurrent flows would
  * steal each other's codes. Phones are unique per call-site block.
  */
@@ -40,11 +47,14 @@ async function mintActors(phoneBlock: number): Promise<Actors> {
     const { cookie } = await createRoleSession(phone(i), role);
     sessions.push(cookie);
   }
-  const expired = await createRoleSession(phone(9), 'admin');
+  const expired = await createRoleSession(phone(8), 'admin');
   await backdateSession(expired.userId, { expiresAt: new Date(Date.now() - 60_000) });
+  const banned = await createRoleSession(phone(9), 'admin');
+  await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, banned.userId));
   return {
     anon: undefined,
     expired: expired.cookie,
+    banned: banned.cookie,
     visitor: sessions[0],
     designer: sessions[1],
     admin: sessions[2],
@@ -68,16 +78,25 @@ function request(target: Hono<{ Variables: AuthVariables }>, path: string, cooki
   return target.request(path, { headers: cookie ? { cookie } : {} });
 }
 
-// The gate-class matrix: expected status per actor per gate.
+// The gate-class matrix: expected status per actor per gate. The banned actor holds
+// the admin role — a ban beats any role (403 everywhere except public routes).
 const GATE_MATRIX: Array<{ path: string } & Record<ActorName, number>> = [
-  { path: '/public', anon: 200, expired: 200, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
-  { path: '/authed', anon: 401, expired: 401, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
-  { path: '/designer-only', anon: 401, expired: 401, visitor: 403, designer: 200, admin: 403, superadmin: 200 },
-  { path: '/admin-only', anon: 401, expired: 401, visitor: 403, designer: 403, admin: 200, superadmin: 200 },
-  { path: '/staff', anon: 401, expired: 401, visitor: 403, designer: 200, admin: 200, superadmin: 200 },
+  { path: '/public', anon: 200, expired: 200, banned: 200, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
+  { path: '/authed', anon: 401, expired: 401, banned: 403, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
+  { path: '/designer-only', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 200, admin: 403, superadmin: 200 },
+  { path: '/admin-only', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 403, admin: 200, superadmin: 200 },
+  { path: '/staff', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 200, admin: 200, superadmin: 200 },
 ];
 
-const ACTOR_NAMES: ActorName[] = ['anon', 'expired', 'visitor', 'designer', 'admin', 'superadmin'];
+const ACTOR_NAMES: ActorName[] = [
+  'anon',
+  'expired',
+  'banned',
+  'visitor',
+  'designer',
+  'admin',
+  'superadmin',
+];
 
 describe('RBAC matrix: gate classes × actors (E-89)', () => {
   it('matches the full gate matrix', async () => {
@@ -87,7 +106,8 @@ describe('RBAC matrix: gate classes × actors (E-89)', () => {
     for (const row of GATE_MATRIX) {
       for (const actor of ACTOR_NAMES) {
         const res = await request(sample, row.path, actors[actor]);
-        expect(res.status, `${actor} → GET ${row.path}`).toBe(row[actor]);
+        // soft: report every broken cell in one run, not just the first
+        expect.soft(res.status, `${actor} → GET ${row.path}`).toBe(row[actor]);
       }
     }
   });
@@ -188,18 +208,19 @@ describe('RBAC matrix: real app routes (E-89)', () => {
       ).toBe(200);
     }
 
-    // POST /api/projects is requireAuth-only TODAY: anon/expired 401, every role 201.
-    // When project creation gets role-gated, this table must be edited deliberately.
-    const post = (cookie?: string) =>
+    // POST /api/projects is requireAuth-only TODAY: anon/expired 401, banned 403,
+    // every role 201. When project creation gets role-gated, edit this table deliberately.
+    const post = (label: string, cookie?: string) =>
       app.request('/api/projects', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-        body: JSON.stringify({ designerId: designer.id, title: `M ${cookie?.length ?? 0}` }),
+        body: JSON.stringify({ designerId: designer.id, title: `Matrix ${label}` }),
       });
-    expect((await post(actors.anon)).status, 'anon → POST /api/projects').toBe(401);
-    expect((await post(actors.expired)).status, 'expired → POST /api/projects').toBe(401);
+    expect((await post('anon', actors.anon)).status, 'anon → POST /api/projects').toBe(401);
+    expect((await post('expired', actors.expired)).status, 'expired → POST /api/projects').toBe(401);
+    expect((await post('banned', actors.banned)).status, 'banned → POST /api/projects').toBe(403);
     for (const role of ROLES) {
-      expect((await post(actors[role])).status, `${role} → POST /api/projects`).toBe(201);
+      expect((await post(role, actors[role])).status, `${role} → POST /api/projects`).toBe(201);
     }
   });
 });
@@ -231,23 +252,45 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     },
   );
 
+  it('an admin CAN currently mint a superadmin via set-role (deliberate policy lock)', async () => {
+    // adminRoles is ['admin', 'superadmin'] with the full set-role permission, so today an
+    // admin can self-promote to superadmin. This row LOCKS that policy: restricting
+    // superadmin minting to superadmins is a deliberate future change that must edit this.
+    const { cookie, userId } = await createRoleSession('+919800011024', 'admin');
+
+    const res = await postSetRole(cookie, { userId, role: 'superadmin' });
+    expect(res.ok).toBe(true);
+
+    const [row] = await db.select().from(schema.user).where(eq(schema.user.id, userId));
+    expect(row!.role).toBe('superadmin');
+  });
+
   it('update-user cannot smuggle a role change', async () => {
     const { cookie } = await createAuthedSession('+919800011023');
     const me = await getSession(new Headers({ cookie }));
 
-    const res = await auth.handler(
-      new Request('http://localhost:3000/api/auth/update-user', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ name: 'Innocent Rename', role: 'superadmin' }),
-      }),
-    );
-    // whether better-auth ignores or rejects the extra field, the role must not change
-    expect(res.status).toBeLessThan(500);
+    const update = (body: Record<string, string>) =>
+      auth.handler(
+        new Request('http://localhost:3000/api/auth/update-user', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    // better-auth rejects the non-updatable field outright (FIELD_NOT_ALLOWED)
+    const smuggle = await update({ name: 'Innocent Rename', role: 'superadmin' });
+    expect(smuggle.status, 'smuggled role must be rejected').toBe(400);
+
+    // positive control: a legitimate update succeeds and still cannot carry role
+    const ok = await update({ name: 'Innocent Rename' });
+    expect(ok.status, 'name-only update must work').toBe(200);
+
     const [row] = await db
       .select()
       .from(schema.user)
       .where(eq(schema.user.id, me!.user.id));
+    expect(row!.name).toBe('Innocent Rename');
     expect(row!.role).toBe('visitor');
   });
 });
