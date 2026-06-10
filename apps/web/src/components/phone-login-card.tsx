@@ -30,6 +30,8 @@ export function PhoneLoginCard() {
   const [success, setSuccess] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const cooldownRef = useRef(cooldown);
+  cooldownRef.current = cooldown;
 
   useEffect(() => {
     if (success) {
@@ -46,16 +48,15 @@ export function PhoneLoginCard() {
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(id);
-          return 0;
-        }
-        return prev - 1;
-      });
+      if (cooldownRef.current <= 1) {
+        clearInterval(id);
+        setCooldown(0);
+      } else {
+        setCooldown((prev) => prev - 1);
+      }
     }, 1000);
     return () => clearInterval(id);
-  }, [cooldown]);
+  }, [cooldown > 0]);
 
   const validatePhone = useCallback((value: string): string | null => {
     const digits = value.replace(/\D/g, '');
@@ -120,6 +121,7 @@ export function PhoneLoginCard() {
     if (cooldown > 0) return;
     setError('');
     setCode(['', '', '', '', '', '']);
+    setLoading(true);
     const fullPhone = `${COUNTRY_CODE}${phone.replace(/\D/g, '')}`;
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
@@ -131,6 +133,8 @@ export function PhoneLoginCard() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to resend OTP';
       setError(message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -159,11 +163,18 @@ export function PhoneLoginCard() {
   }
 
   function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
       const next = [...code] as OtpDigits;
-      next[index - 1] = '';
-      setCode(next);
-      inputRefs.current[index - 1]?.focus();
+      if (code[index]) {
+        next[index] = '';
+        setCode(next);
+      } else if (index > 0) {
+        next[index - 1] = '';
+        setCode(next);
+        inputRefs.current[index - 1]?.focus();
+      }
+      return;
     }
     if (e.key === 'Enter' && code.every((d) => d)) {
       handleVerify();
@@ -178,7 +189,7 @@ export function PhoneLoginCard() {
 
   if (success) {
     return (
-      <Card className="p-8 text-center">
+      <Card className="bg-white p-8 text-center">
         <p className="text-lg font-medium text-green-700">Signed in</p>
         <p className="mt-1 text-sm text-neutral-500">Redirecting…</p>
       </Card>
@@ -186,7 +197,7 @@ export function PhoneLoginCard() {
   }
 
   return (
-    <Card className="p-6">
+    <Card className="bg-white p-6">
       <div className="space-y-4">
         {step === 'phone' ? (
         <>
@@ -247,6 +258,7 @@ export function PhoneLoginCard() {
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
+                  aria-label={`OTP digit ${i + 1}`}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onFocus={(e) => e.target.select()}

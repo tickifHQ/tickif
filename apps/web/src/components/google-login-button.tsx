@@ -14,11 +14,11 @@ export function GoogleLoginButton() {
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin });
       if (result?.error) {
-        setError('Google sign-in is not configured');
-        setLoading(false);
+        setError('Couldn\'t sign in with Google');
       }
     } catch {
-      setError('Google sign-in is not available');
+      setError('Couldn\'t sign in with Google');
+    } finally {
       setLoading(false);
     }
   }

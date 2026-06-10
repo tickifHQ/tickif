@@ -32,7 +32,7 @@ describe('GoogleLoginButton', () => {
     const user = userEvent.setup();
     render(<GoogleLoginButton />);
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(screen.getByText('Google sign-in is not configured')).toBeInTheDocument();
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('does not show error when signIn returns null error', async () => {
@@ -40,7 +40,7 @@ describe('GoogleLoginButton', () => {
     const user = userEvent.setup();
     render(<GoogleLoginButton />);
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(screen.queryByText('Google sign-in is not configured')).not.toBeInTheDocument();
+    expect(screen.queryByText('Couldn\'t sign in with Google')).not.toBeInTheDocument();
   });
 
   it('shows error when signIn throws', async () => {
@@ -48,6 +48,6 @@ describe('GoogleLoginButton', () => {
     const user = userEvent.setup();
     render(<GoogleLoginButton />);
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(screen.getByText('Google sign-in is not available')).toBeInTheDocument();
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 });

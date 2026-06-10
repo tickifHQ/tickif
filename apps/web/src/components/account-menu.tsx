@@ -36,8 +36,12 @@ export function AccountMenu() {
   const initial = (user.name ?? user.email ?? '?').charAt(0).toUpperCase();
 
   async function handleSignOut() {
-    await authClient.signOut();
-    setOpen(false);
+    try {
+      await authClient.signOut();
+      setOpen(false);
+    } catch {
+      setOpen(false);
+    }
   }
 
   return (
@@ -49,15 +53,15 @@ export function AccountMenu() {
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-48" style={{ backgroundColor: '#ffffff' }}>
         <DropdownMenuLabel className="truncate">
           <p className="font-medium">{user.name}</p>
           {user.email && (
             <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
           )}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+        <DropdownMenuSeparator className="my-2" />
+        <DropdownMenuItem onSelect={handleSignOut} className="cursor-pointer px-3 py-2.5">
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
