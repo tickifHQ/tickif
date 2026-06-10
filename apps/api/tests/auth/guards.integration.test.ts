@@ -62,13 +62,14 @@ async function seedProjectOwnedBy(userId: string): Promise<string> {
     .returning({ id: schema.designerProfile.id });
   const [project] = await db
     .insert(schema.project)
-    .values({ designerId: profile!.id, title: 'P', slug: `p-${userId.slice(0, 8)}` })
+    .values({ designerId: profile!.id, title: 'P', slug: `p-${userId}` })
     .returning({ id: schema.project.id });
   return project!.id;
 }
 
 async function seedOrgWithMember(userId: string): Promise<string> {
-  const orgId = `org-${userId.slice(0, 8)}`;
+  // full userId in the ids — prefix-derived ids could collide between test users
+  const orgId = `org-${userId}`;
   await db.insert(schema.organization).values({
     id: orgId,
     name: 'Acme Studio',
@@ -76,7 +77,7 @@ async function seedOrgWithMember(userId: string): Promise<string> {
     createdAt: new Date(),
   });
   await db.insert(schema.member).values({
-    id: `mem-${userId.slice(0, 8)}`,
+    id: `mem-${userId}`,
     organizationId: orgId,
     userId,
     role: 'member',

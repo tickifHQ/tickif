@@ -127,6 +127,9 @@ describe('RBAC guards (unit)', () => {
     // lapsed ban no longer blocks
     const lapsed = { id: 'b2', role: 'admin', banned: true, banExpires: new Date(Date.now() - 1000) };
     expect((await appWithUser(lapsed).request('/admin')).status).toBe(200);
+    // future-dated ban still blocks
+    const active = { id: 'b4', role: 'admin', banned: true, banExpires: new Date(Date.now() + 60_000) };
+    expect((await appWithUser(active).request('/admin')).status).toBe(403);
     // banned superadmin is still banned
     const bannedSu = { id: 'b3', role: 'superadmin', banned: true };
     expect((await appWithUser(bannedSu).request('/admin')).status).toBe(403);
