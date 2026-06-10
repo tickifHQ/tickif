@@ -31,6 +31,21 @@ export function nodePreset(overrides = {}) {
   });
 }
 
+/** Load the repo-root `.env` (walking up from cwd) so *_TEST vars are available. */
+function loadRootEnv() {
+  let dir = process.cwd();
+  for (let i = 0; i < 8; i++) {
+    const candidate = join(dir, '.env');
+    if (existsSync(candidate)) {
+      loadDotenv({ path: candidate });
+      return;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+}
+
 /**
  * Resolve the test database URL at config-eval time. Loads the repo-root `.env`
  * then builds the URL from the POSTGRES_* parts (with a `_test` database name),
@@ -41,17 +56,7 @@ export function nodePreset(overrides = {}) {
  * @repo/config, so loading the Vitest config never triggers full env validation.
  */
 export function testDatabaseUrl() {
-  let dir = process.cwd();
-  for (let i = 0; i < 8; i++) {
-    const candidate = join(dir, '.env');
-    if (existsSync(candidate)) {
-      loadDotenv({ path: candidate });
-      break;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+  loadRootEnv();
   if (process.env.DATABASE_URL_TEST) return process.env.DATABASE_URL_TEST;
   const host = process.env.POSTGRES_HOST ?? 'localhost';
   const port = process.env.POSTGRES_PORT ?? '5432';
@@ -62,10 +67,24 @@ export function testDatabaseUrl() {
 }
 
 /**
+ * Resolve the test Redis URL. Mirrors the Postgres `_test` convention so
+ * destructive queue cleanup targets a throwaway DB index, never the dev
+ * default (`/0`). Defaults to a dedicated DB index.
+ */
+export function testRedisUrl() {
+  loadRootEnv();
+  return process.env.REDIS_URL_TEST ?? 'redis://localhost:6379/15';
+}
+
+/**
  * `test.env` block for integration suites: binds the @repo/db / @repo/auth
  * singletons to the test DB before @repo/config loads (dotenv won't override
  * these because real process env wins).
  */
 export function integrationEnv() {
-  return { NODE_ENV: 'test', DATABASE_URL: testDatabaseUrl() };
+  return {
+    NODE_ENV: 'test',
+    DATABASE_URL: testDatabaseUrl(),
+    REDIS_URL: testRedisUrl(),
+  };
 }
