@@ -50,11 +50,15 @@ export const taxonomy = pgTable(
   (t) => [index('taxonomy_kind_slug_idx').on(t.kind, t.slug)],
 );
 
+// Designer entity type: individual freelancer or registered company.
+export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
+
 export const designerProfile = pgTable('designer_profile', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
+  entityType: entityTypeEnum('entity_type').default('individual').notNull(),
   studioName: text('studio_name').notNull(),
   bio: text('bio'),
   citySlug: text('city_slug'),
