@@ -25,4 +25,12 @@ describe('getSession helper (E-80)', () => {
     expect(result).not.toBeNull();
     expect(result!.user.status).toBe('pending');
   });
+
+  it('defaults a newly signed-up user to role "visitor"', async () => {
+    const { cookie } = await createAuthedSession();
+    const result = await getSession(new Headers({ cookie }));
+
+    expect(result).not.toBeNull();
+    expect(result!.user.role).toBe('visitor');
+  });
 });
