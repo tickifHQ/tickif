@@ -23,23 +23,23 @@ export default async function HomePage() {
 
   return (
     <Container className="py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Tickif</h1>
-      <p className="mt-2 text-neutral-600">
+      <h1 className="font-display text-3xl font-semibold tracking-tight">Tickif</h1>
+      <p className="mt-2 text-muted-foreground">
         Discover real interior design projects across India.
       </p>
 
       <section className="mt-10">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
           Published projects {data ? `(${data.total})` : ''}
         </h2>
 
         {data === null ? (
-          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
             Could not reach the API. Start it with <code>pnpm dev</code> and ensure the database
             is migrated.
           </p>
         ) : data.items.length === 0 ? (
-          <p className="mt-4 text-neutral-500">No projects yet.</p>
+          <p className="mt-4 text-muted-foreground">No projects yet.</p>
         ) : (
           <ul className="mt-4 grid gap-3">
             {data.items.map((project) => (

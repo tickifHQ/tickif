@@ -9,6 +9,7 @@ seams that can be split into services later, not premature microservices.
 | Layer        | Tech                                                              |
 | ------------ | ---------------------------------------------------------------- |
 | Frontend     | Next.js 16 (App Router), Tailwind v4, TypeScript                 |
+| UI           | `@repo/ui` — token-based design system (Radix + shadcn-style)     |
 | Backend API  | Hono (`@hono/node-server`) + `@hono/zod-openapi`                 |
 | Auth         | better-auth (Phone OTP + Gmail SSO, admin/organization RBAC)      |
 | DB           | PostgreSQL 16 + Drizzle ORM (`casing: snake_case`)               |
@@ -31,6 +32,24 @@ packages/
   tsconfig/   Shared TS configs
   eslint-config/  Shared flat ESLint config
 ```
+
+## Design system
+
+[`packages/ui`](./packages/ui/README.md) is a themeable, token-based design system
+(Tailwind v4 + Radix, shadcn-style). Components consume **semantic tokens only**
+(`bg-primary`, `font-display`, `rounded-lg`) — theme values (colors, fonts, radius)
+live in `packages/ui/src/styles/themes/` and are switchable via `data-theme`,
+with dark mode via `next-themes`. Type: Fraunces (display) · Hanken Grotesk
+(body) · IBM Plex Mono (code).
+
+Live showcase of every token and component: **`/design-system`** in the web app.
+
+| Light                                          | Dark                                         |
+| ---------------------------------------------- | -------------------------------------------- |
+| ![Design system — light](docs/assets/design-system-light.png) | ![Design system — dark](docs/assets/design-system-dark.png) |
+
+Rules for agents and humans: [`rules/frontend.md`](./rules/frontend.md) — reuse
+existing components, create new ones in `@repo/ui` only if missing and reusable.
 
 ## Architectural rule (enforced by convention + review)
 
