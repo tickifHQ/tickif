@@ -21,6 +21,7 @@ files you're editing. Prose explanations live in [`docs/`](./docs/README.md).
 | --- | --- |
 | `apps/api/**` | [api](./rules/api.md) + [validation](./rules/validation.md) + [database](./rules/database.md) + [auth](./rules/auth.md) |
 | `apps/web/**` | [frontend](./rules/frontend.md) + [validation](./rules/validation.md) |
+| `packages/ui/**` | [frontend](./rules/frontend.md) |
 | `apps/worker/**` | [background-jobs](./rules/background-jobs.md) |
 | `packages/db/**`, any `repository.ts` | [database](./rules/database.md) |
 | `packages/auth/**` | [auth](./rules/auth.md) |

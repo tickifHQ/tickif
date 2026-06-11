@@ -13,7 +13,7 @@ being edited. The entry point is [`../AGENTS.md`](../AGENTS.md).
 | [database.md](./database.md) | schema, migrations, repositories | `packages/db/**`, `**/repository.ts` |
 | [auth.md](./auth.md) | login, sessions, RBAC, route guards | `packages/auth/**` |
 | [background-jobs.md](./background-jobs.md) | queues / workers | `apps/worker/**` |
-| [frontend.md](./frontend.md) | the web app | `apps/web/**` |
+| [frontend.md](./frontend.md) | the web app + design system | `apps/web/**`, `packages/ui/**` |
 | [monorepo.md](./monorepo.md) | deps, workspace, build config | root, `package.json`, `turbo.json` |
 | [security.md](./security.md) | **always** | `**` |
 | [testing.md](./testing.md) | tests / TDD | `**/tests/**`, `**/*.test.*`, `e2e/**` |
