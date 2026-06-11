@@ -25,9 +25,9 @@ export function SiteNav({
   links?: NavLink[];
 }) {
   return (
-    <header className="border-b border-neutral-200 bg-white">
+    <header className="border-b bg-background">
       <Container as="nav" className="flex items-center justify-between py-4">
-        <Link href={brandHref} className="text-lg font-semibold tracking-tight text-neutral-900">
+        <Link href={brandHref} className="text-lg font-semibold tracking-tight text-foreground">
           {brand}
         </Link>
 
@@ -38,7 +38,7 @@ export function SiteNav({
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="text-sm text-neutral-600 transition-colors hover:text-neutral-900"
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {link.label}
                 </Link>
@@ -53,17 +53,17 @@ export function SiteNav({
           <AccountMenu />
           <details className="relative">
             <summary
-              className="flex cursor-pointer list-none items-center rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-700"
+              className="flex cursor-pointer list-none items-center rounded-md border px-3 py-2 text-sm text-muted-foreground"
               aria-label="Toggle navigation menu"
             >
               Menu
             </summary>
-            <ul className="absolute right-0 z-10 mt-2 w-44 rounded-md border border-neutral-200 bg-white py-1 shadow-lg">
+            <ul className="absolute right-0 z-10 mt-2 w-44 rounded-md border bg-card py-1 shadow-lg">
               {links.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="block px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                    className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     {link.label}
                   </Link>

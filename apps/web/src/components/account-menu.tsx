@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@repo/ui/components/dropdown-menu';
+import { Skeleton } from '@repo/ui/components/skeleton';
 import Link from 'next/link';
 
 export function AccountMenu() {
@@ -18,14 +19,14 @@ export function AccountMenu() {
   const [open, setOpen] = useState(false);
 
   if (isPending) {
-    return <div role="status" className="size-8 animate-pulse rounded-full bg-neutral-200" />;
+    return <Skeleton role="status" className="size-8 rounded-full" />;
   }
 
   if (!session) {
     return (
       <Link
         href="/login"
-        className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
       >
         Sign in
       </Link>
@@ -53,15 +54,15 @@ export function AccountMenu() {
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48" style={{ backgroundColor: '#ffffff' }}>
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="truncate">
           <p className="font-medium">{user.name}</p>
           {user.email && (
             <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
           )}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator className="my-2" />
-        <DropdownMenuItem onSelect={handleSignOut} className="cursor-pointer px-3 py-2.5">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={handleSignOut} variant="destructive" className="cursor-pointer">
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
