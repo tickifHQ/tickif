@@ -148,3 +148,28 @@ export async function backdateSession(
 ): Promise<void> {
   await db.update(schema.session).set(patch).where(eq(schema.session.userId, userId));
 }
+
+/**
+ * Mint a real session, promote the user's platform role via the DB (the bootstrap
+ * path for admin/superadmin), and return a cookie whose cached session_data blob is
+ * stripped so guards read the fresh role from the DB.
+ */
+export async function createRoleSession(
+  phoneNumber: string,
+  role: 'visitor' | 'designer' | 'admin' | 'superadmin',
+): Promise<{ cookie: string; userId: string }> {
+  const { cookie } = await createAuthedSession(phoneNumber);
+  const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
+  if (!session) {
+    throw new Error('createRoleSession: could not resolve the freshly minted session');
+  }
+  const userId = session.user.id;
+  if (role !== 'visitor') {
+    await db.update(schema.user).set({ role }).where(eq(schema.user.id, userId));
+  }
+  const fresh = cookie
+    .split('; ')
+    .filter((c) => !c.startsWith('better-auth.session_data'))
+    .join('; ');
+  return { cookie: fresh, userId };
+}
