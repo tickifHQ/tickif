@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
+import { requireAuth } from '@/lib/auth-guard';
 
 const designerLinks = [
   { href: '/designer/dashboard', label: 'Dashboard' },
   { href: '/', label: 'View site' },
 ];
 
-/** Designer workspace chrome. */
-export default function DesignerLayout({ children }: { children: ReactNode }) {
+/** Designer workspace chrome. Requires role: designer, admin, or superadmin. */
+export default async function DesignerLayout({ children }: { children: ReactNode }) {
+  await requireAuth({ requiredRole: 'designer' });
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav brand="Tickif · Designer" brandHref="/designer/dashboard" links={designerLinks} />
