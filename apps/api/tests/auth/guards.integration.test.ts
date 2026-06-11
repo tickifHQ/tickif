@@ -11,6 +11,7 @@ import {
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
 import { createRoleSession, backdateSession } from '../helpers/auth.js';
+import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
 
 /**
  * E-87: the guards proven on sample routes with REAL sessions, roles, projects, and
@@ -53,37 +54,6 @@ function sampleApp() {
 
 function get(app: ReturnType<typeof sampleApp>, path: string, cookie?: string) {
   return app.request(path, { headers: cookie ? { cookie } : {} });
-}
-
-async function seedProjectOwnedBy(userId: string): Promise<string> {
-  const [profile] = await db
-    .insert(schema.designerProfile)
-    .values({ userId, studioName: 'Studio X' })
-    .returning({ id: schema.designerProfile.id });
-  const [project] = await db
-    .insert(schema.project)
-    .values({ designerId: profile!.id, title: 'P', slug: `p-${userId}` })
-    .returning({ id: schema.project.id });
-  return project!.id;
-}
-
-async function seedOrgWithMember(userId: string): Promise<string> {
-  // full userId in the ids — prefix-derived ids could collide between test users
-  const orgId = `org-${userId}`;
-  await db.insert(schema.organization).values({
-    id: orgId,
-    name: 'Acme Studio',
-    slug: orgId,
-    createdAt: new Date(),
-  });
-  await db.insert(schema.member).values({
-    id: `mem-${userId}`,
-    organizationId: orgId,
-    userId,
-    role: 'member',
-    createdAt: new Date(),
-  });
-  return orgId;
 }
 
 describe('RBAC guards (integration, E-87)', () => {
