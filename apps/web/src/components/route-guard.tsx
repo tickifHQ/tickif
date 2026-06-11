@@ -10,6 +10,11 @@ interface RouteGuardProps {
   children: React.ReactNode;
 }
 
+// role is added by the better-auth admin plugin — not in the base session type.
+function getUserRole(user: unknown): string | null {
+  return ((user as Record<string, unknown>).role as string | null) ?? null;
+}
+
 /**
  * Client-side route guard for pages where server redirect isn't sufficient
  * (e.g. client-navigated routes).
@@ -35,9 +40,7 @@ export function RouteGuard({ requiredRole, children }: RouteGuardProps) {
       return;
     }
 
-    // role is added by the admin plugin — access via index signature
-    const userRole = (session.user as Record<string, unknown>).role as string | null;
-    if (requiredRole && !rolePassesCheck(userRole, requiredRole)) {
+    if (requiredRole && !rolePassesCheck(getUserRole(session.user), requiredRole)) {
       router.replace('/unauthorized');
     }
   }, [isPending, session, requiredRole, router]);
@@ -52,8 +55,7 @@ export function RouteGuard({ requiredRole, children }: RouteGuardProps) {
 
   if (!session?.user) return null;
 
-  const userRole = (session.user as Record<string, unknown>).role as string | null;
-  if (requiredRole && !rolePassesCheck(userRole, requiredRole)) return null;
+  if (requiredRole && !rolePassesCheck(getUserRole(session.user), requiredRole)) return null;
 
   return <>{children}</>;
 }
