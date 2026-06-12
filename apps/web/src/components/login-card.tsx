@@ -15,6 +15,11 @@ import {
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
+import { OtpInput } from '@/components/otp-input';
+
+interface LoginCardProps {
+  onSuccess?: () => void;
+}
 
 type Step = 'phone' | 'otp';
 type OtpDigits = string[];
@@ -44,7 +49,7 @@ function formatTimer(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function LoginCard() {
+export function LoginCard({ onSuccess }: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -55,22 +60,20 @@ export function LoginCard() {
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
 
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
 
   useEffect(() => {
-    if (success) {
+    if (!success) return;
+    if (onSuccess) {
+      onSuccess();
+    } else {
       router.push('/');
     }
-  }, [success, router]);
+  }, [success, router, onSuccess]);
 
-  useEffect(() => {
-    if (step === 'otp') {
-      inputRefs.current[0]?.focus();
-    }
-  }, [step]);
-
+  // re-arm the interval only when the timer starts/stops (boolean flip),
+  // not every tick — the live tick value is read from cooldownRef
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => {
@@ -161,49 +164,6 @@ export function LoginCard() {
       setError(message);
     } finally {
       setLoading(false);
-    }
-  }
-
-  function handleOtpChange(index: number, value: string) {
-    if (value.length > 1) {
-      const pasted = value.replace(/\D/g, '').split('').slice(0, 6);
-      const next = [...code] as OtpDigits;
-      for (let i = 0; i < 6; i++) {
-        next[i] = pasted[i] ?? '';
-      }
-      setCode(next);
-      const lastIndex = Math.min(pasted.length, 5);
-      inputRefs.current[lastIndex]?.focus();
-      return;
-    }
-
-    const digit = value.replace(/\D/g, '');
-    if (digit && digit !== code[index]) {
-      const next = [...code] as OtpDigits;
-      next[index] = digit;
-      setCode(next);
-      if (index < 5) {
-        inputRefs.current[index + 1]?.focus();
-      }
-    }
-  }
-
-  function handleOtpKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      const next = [...code] as OtpDigits;
-      if (code[index]) {
-        next[index] = '';
-        setCode(next);
-      } else if (index > 0) {
-        next[index - 1] = '';
-        setCode(next);
-        inputRefs.current[index - 1]?.focus();
-      }
-      return;
-    }
-    if (e.key === 'Enter' && code.every((d) => d)) {
-      handleVerify();
     }
   }
 
@@ -323,26 +283,13 @@ export function LoginCard() {
                   Sent to {selectedCountry.code} {phone}
                 </p>
 
-                <div className="mt-3 flex justify-center gap-2">
-                  {code.map((digit, i) => (
-                    <Input
-                      key={i}
-                      ref={(el) => {
-                        inputRefs.current[i] = el;
-                      }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      aria-label={`OTP digit ${i + 1}`}
-                      onChange={(e) => handleOtpChange(i, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                      onFocus={(e) => e.target.select()}
-                      className="size-10 text-center"
-                      disabled={loading}
-                      autoComplete="one-time-code"
-                    />
-                  ))}
+                <div className="mt-3">
+                  <OtpInput
+                    value={code}
+                    onChange={setCode}
+                    onComplete={handleVerify}
+                    disabled={loading}
+                  />
                 </div>
 
                 <div className="mt-3">

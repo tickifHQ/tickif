@@ -160,5 +160,16 @@ describe('LoginCard', () => {
       await user.click(screen.getByText('Change phone number'));
       expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
     });
+
+    it('calls onSuccess callback on verify instead of router.push', async () => {
+      const onSuccess = vi.fn();
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
+      const user = userEvent.setup();
+      render(<LoginCard onSuccess={onSuccess} />);
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      await user.click(screen.getByRole('button', { name: 'Verify OTP' }));
+      expect(onSuccess).toHaveBeenCalled();
+    });
   });
 });
