@@ -10,7 +10,7 @@ import { SmsService } from './jobs/sms-service.js';
  */
 const mediaWorker = new Worker<MediaProcessJob>(QUEUES.media, processMedia, {
   connection,
-  concurrency: config.MEDIA_WORKER_CONCURRENCY,
+  concurrency: 4,
 });
 
 // Provider strategy is selected once here, then injected into the service.
