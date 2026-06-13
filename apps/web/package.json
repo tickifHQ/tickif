@@ -16,6 +16,7 @@
     "@repo/contracts": "workspace:*",
     "@repo/ui": "workspace:*",
     "better-auth": "catalog:",
+    "country-codes-flags-phone-codes": "^1.1.1",
     "hono": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
