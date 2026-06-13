@@ -7,13 +7,10 @@ export const dynamic = 'force-dynamic';
 
 async function getProjects(): Promise<{ items: ProjectResponse[]; total: number } | null> {
   try {
-    // Fully typed call against the Hono app — params, response shape, and
-    // status are all checked at compile time via hc<AppType>.
     const res = await api.api.projects.$get({ query: {} });
     if (!res.ok) return null;
     return await res.json();
   } catch {
-    // API not running (e.g. during a static probe) — render the empty state.
     return null;
   }
 }

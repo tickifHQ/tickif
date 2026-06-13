@@ -1,0 +1,92 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { Input } from '@repo/ui/components/input';
+
+interface OtpInputProps {
+  value: string[];
+  onChange: (value: string[]) => void;
+  onComplete?: () => void;
+  disabled?: boolean;
+  length?: number;
+}
+
+export function OtpInput({
+  value,
+  onChange,
+  onComplete,
+  disabled = false,
+  length = 6,
+}: OtpInputProps) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
+
+  function handleChange(index: number, inputValue: string) {
+    if (inputValue.length > 1) {
+      const pasted = inputValue.replace(/\D/g, '').split('').slice(0, length);
+      const next = [...value];
+      for (let i = 0; i < length; i++) {
+        next[i] = pasted[i] ?? '';
+      }
+      onChange(next);
+      inputRefs.current[Math.min(pasted.length, length - 1)]?.focus();
+      return;
+    }
+
+    const digit = inputValue.replace(/\D/g, '');
+    if (digit && digit !== value[index]) {
+      const next = [...value];
+      next[index] = digit;
+      onChange(next);
+      if (index < length - 1) {
+        inputRefs.current[index + 1]?.focus();
+      }
+    }
+  }
+
+  function handleKeyDown(index: number, e: React.KeyboardEvent) {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      const next = [...value];
+      if (value[index]) {
+        next[index] = '';
+        onChange(next);
+      } else if (index > 0) {
+        next[index - 1] = '';
+        onChange(next);
+        inputRefs.current[index - 1]?.focus();
+      }
+      return;
+    }
+    if (e.key === 'Enter' && value.every((d) => d)) {
+      onComplete?.();
+    }
+  }
+
+  return (
+    <div className="flex justify-center gap-2">
+      {Array.from({ length }, (_, i) => (
+        <Input
+          key={i}
+          ref={(el) => {
+            inputRefs.current[i] = el;
+          }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[i] ?? ''}
+          aria-label={`OTP digit ${i + 1}`}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onFocus={(e) => e.target.select()}
+          className="size-10 text-center"
+          disabled={disabled}
+          autoComplete="one-time-code"
+        />
+      ))}
+    </div>
+  );
+}
