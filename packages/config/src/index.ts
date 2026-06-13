@@ -79,35 +79,11 @@ const envSchema = z.object({
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_SENDER_ID: z.string().optional(),
 
-  // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
-  // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
+  // Cloudflare R2 (media — later phases)
   R2_ACCOUNT_ID: z.string().optional(),
-  R2_ENDPOINT: z.string().url().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
-  R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
-
-  // Media upload limits (E-107). MAX_IMAGE_PIXELS is the decompression-bomb
-  // budget — checked from header dims before any pixel decode.
-  MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15_000_000),
-  MEDIA_MAX_IMAGE_DIMENSION: z.coerce.number().int().positive().default(12_000),
-  MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
-  // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.
-  MEDIA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
-
-  // Watermark on public derivatives only (E-109); originals stay clean.
-  WATERMARK_ENABLED: z
-    .stringbool()
-    .optional()
-    .default(true),
-  WATERMARK_TEXT: z.string().default('Tickif'),
-  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.6),
-
-  // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
-  // Action on a duplicate: reject (status=failed) or flag for moderation.
-  MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
-  MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
 });
 
 /**
