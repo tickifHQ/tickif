@@ -331,6 +331,9 @@ importers:
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@repo/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       bullmq:
         specifier: 'catalog:'
         version: 5.78.0

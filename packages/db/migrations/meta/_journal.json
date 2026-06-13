@@ -43,6 +43,13 @@
       "when": 1781367411052,
       "tag": "0005_productive_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781369575068,
+      "tag": "0006_moaning_the_renegades",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,26 @@
-import type { UploadUrlRequest, UploadUrlResponse } from '@repo/contracts';
+import type {
+  UploadUrlRequest,
+  UploadUrlResponse,
+  ListProjectImagesResponse,
+  CommitUploadResponse,
+  ProjectImageDto,
+} from '@repo/contracts';
 import { config } from '@repo/config';
 import { buildOriginalKey, presignUpload } from '@repo/storage';
+import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
-import { mediaRepository } from './repository.js';
+import { mediaRepository, type ProjectImageRecord } from './repository.js';
+
+function toImageDto(row: ProjectImageRecord): ProjectImageDto {
+  return {
+    id: row.id,
+    status: row.status,
+    sortOrder: row.sortOrder,
+    width: row.width,
+    height: row.height,
+    derivatives: row.derivatives ?? [],
+  };
+}
 
 /**
  * Media use-cases. Framework-free: imports the repository and the storage
@@ -29,9 +47,32 @@ export const mediaService = {
     const image = await mediaRepository.createProcessing({
       projectId: input.projectId,
       originalKey: key,
+      contentType: input.contentType,
     });
     const uploadUrl = await presignUpload({ key, contentType: input.contentType });
 
     return { imageId: image.id, uploadUrl, key };
+  },
+
+  /** Called after the client has PUT the bytes to R2; enqueues async processing. */
+  async commitUpload(input: { imageId: string; userId: string }): Promise<CommitUploadResponse> {
+    const image = await mediaRepository.findImageWithOwner(input.imageId);
+    if (!image) throw AppError.notFound('Image not found');
+    if (image.ownerUserId !== input.userId) throw AppError.forbidden();
+
+    await enqueueMedia({ imageId: image.id, storageKey: image.originalKey });
+    return { imageId: image.id, status: 'processing' };
+  },
+
+  async listProjectImages(input: {
+    projectId: string;
+    userId: string;
+  }): Promise<ListProjectImagesResponse> {
+    const owner = await mediaRepository.findProjectOwner(input.projectId);
+    if (!owner) throw AppError.notFound('Project not found');
+    if (owner.ownerUserId !== input.userId) throw AppError.forbidden();
+
+    const rows = await mediaRepository.listByProject(input.projectId);
+    return { items: rows.map(toImageDto) };
   },
 };

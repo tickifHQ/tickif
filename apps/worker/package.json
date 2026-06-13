@@ -18,6 +18,7 @@
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
     "sharp": "catalog:"
