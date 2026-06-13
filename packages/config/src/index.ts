@@ -103,6 +103,11 @@ const envSchema = z.object({
     .default(true),
   WATERMARK_TEXT: z.string().default('Tickif'),
   WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.6),
+
+  // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
+  // Action on a duplicate: reject (status=failed) or flag for moderation.
+  MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
+  MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
 });
 
 /**
