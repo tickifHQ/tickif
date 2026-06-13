@@ -79,11 +79,14 @@ const envSchema = z.object({
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_SENDER_ID: z.string().optional(),
 
-  // Cloudflare R2 (media — later phases)
+  // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
+  // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
   R2_ACCOUNT_ID: z.string().optional(),
+  R2_ENDPOINT: z.string().url().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
+  R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
 });
 
 /**

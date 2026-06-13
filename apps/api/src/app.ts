@@ -7,6 +7,7 @@ import { config } from '@repo/config';
 import { onError } from './lib/errors.js';
 import { withSession, type AuthVariables } from './lib/auth-middleware.js';
 import { projectsRoutes } from './modules/projects/routes.js';
+import { mediaRoutes } from './modules/media/routes.js';
 
 /**
  * App composition — the modular monolith.
@@ -65,6 +66,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
   .route('/api/projects', projectsRoutes)
+  .route('/api/media', mediaRoutes)
   .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
 
 /** Exported for the web app's type-safe `hc<AppType>` client. */
