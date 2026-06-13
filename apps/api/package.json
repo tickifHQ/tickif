@@ -25,6 +25,7 @@
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/storage": "workspace:*",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
     "bullmq": "catalog:",
