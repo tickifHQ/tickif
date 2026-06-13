@@ -87,6 +87,12 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
+
+  // Media upload limits (E-107). MAX_IMAGE_PIXELS is the decompression-bomb
+  // budget — checked from header dims before any pixel decode.
+  MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  MEDIA_MAX_IMAGE_DIMENSION: z.coerce.number().int().positive().default(12_000),
+  MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
 });
 
 /**

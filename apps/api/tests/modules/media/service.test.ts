@@ -27,6 +27,13 @@ describe('mediaService.createUploadUrl', () => {
     userId: 'user-1',
   };
 
+  it('422s when the declared size exceeds the cap, before any DB lookup', async () => {
+    await expect(
+      mediaService.createUploadUrl({ ...input, size: 10 ** 12 }),
+    ).rejects.toMatchObject({ status: 422, code: 'file_too_large' });
+    expect(repo.findProjectOwner).not.toHaveBeenCalled();
+  });
+
   it('404s when the project does not exist', async () => {
     repo.findProjectOwner.mockResolvedValue(null);
     await expect(mediaService.createUploadUrl(input)).rejects.toMatchObject({

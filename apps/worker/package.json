@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@repo/config": "workspace:*",
+    "@repo/contracts": "workspace:*",
     "@repo/queue": "workspace:*",
     "bullmq": "catalog:",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "sharp": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
