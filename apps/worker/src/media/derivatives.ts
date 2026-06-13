@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { buildWatermarkSvg, type WatermarkConfig } from './watermark.js';
 
 export type DerivativeFormat = 'webp' | 'avif';
 
@@ -31,6 +32,8 @@ export type GeneratedDerivative = {
 export type GenerateOptions = {
   variants?: readonly VariantSpec[];
   formats?: readonly DerivativeFormat[];
+  /** When set, public derivatives are watermarked (E-109); the original is never touched. */
+  watermark?: WatermarkConfig | null;
 };
 
 function encode(pipeline: sharp.Sharp, format: DerivativeFormat): sharp.Sharp {
@@ -49,14 +52,24 @@ export async function generateDerivatives(
 ): Promise<GeneratedDerivative[]> {
   const variants = options.variants ?? MEDIA_VARIANTS;
   const formats = options.formats ?? MEDIA_FORMATS;
+  const watermark = options.watermark;
   const results: GeneratedDerivative[] = [];
 
   for (const spec of variants) {
-    const base = sharp(input)
+    const { data: resized, info } = await sharp(input)
       .rotate()
-      .resize({ width: spec.width, withoutEnlargement: true });
+      .resize({ width: spec.width, withoutEnlargement: true })
+      .toBuffer({ resolveWithObject: true });
+
+    const shouldWatermark = !!watermark && info.width >= watermark.minImageWidth;
+    const base = shouldWatermark
+      ? sharp(resized).composite([
+          { input: buildWatermarkSvg(info.width, watermark), gravity: watermark.gravity },
+        ])
+      : sharp(resized);
+
     for (const format of formats) {
-      const { data, info } = await encode(base.clone(), format).toBuffer({
+      const { data, info: out } = await encode(base.clone(), format).toBuffer({
         resolveWithObject: true,
       });
       results.push({
@@ -64,8 +77,8 @@ export async function generateDerivatives(
         format,
         contentType: FORMAT_CONTENT_TYPE[format],
         buffer: data,
-        width: info.width,
-        height: info.height,
+        width: out.width,
+        height: out.height,
       });
     }
   }
