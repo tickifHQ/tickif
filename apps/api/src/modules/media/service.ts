@@ -6,12 +6,12 @@ import type {
   ProjectImageDto,
 } from '@repo/contracts';
 import { config } from '@repo/config';
-import { buildOriginalKey, presignUpload } from '@repo/storage';
+import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
-import { mediaRepository, type ProjectImageRecord } from './repository.js';
+import { mediaRepository, type ProjectImageListItem } from './repository.js';
 
-function toImageDto(row: ProjectImageRecord): ProjectImageDto {
+function toImageDto(row: ProjectImageListItem): ProjectImageDto {
   return {
     id: row.id,
     status: row.status,
@@ -59,6 +59,14 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     if (image.ownerUserId !== input.userId) throw AppError.forbidden();
+    // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
+    if (image.status !== 'processing') {
+      throw AppError.conflict('Image has already been committed');
+    }
+    // Don't enqueue work for an object the client never actually uploaded.
+    if (!(await objectExists(image.originalKey))) {
+      throw AppError.badRequest('No uploaded object found for this image');
+    }
 
     await enqueueMedia({ imageId: image.id, storageKey: image.originalKey });
     return { imageId: image.id, status: 'processing' };
@@ -67,12 +75,17 @@ export const mediaService = {
   async listProjectImages(input: {
     projectId: string;
     userId: string;
+    limit: number;
+    offset: number;
   }): Promise<ListProjectImagesResponse> {
     const owner = await mediaRepository.findProjectOwner(input.projectId);
     if (!owner) throw AppError.notFound('Project not found');
     if (owner.ownerUserId !== input.userId) throw AppError.forbidden();
 
-    const rows = await mediaRepository.listByProject(input.projectId);
+    const rows = await mediaRepository.listByProject(input.projectId, {
+      limit: input.limit,
+      offset: input.offset,
+    });
     return { items: rows.map(toImageDto) };
   },
 };

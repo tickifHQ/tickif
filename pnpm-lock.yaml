@@ -164,6 +164,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 'catalog:'
+        version: 3.1068.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: 'catalog:'
+        version: 3.1068.0
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.0.4(hono@4.12.23)
@@ -239,7 +245,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   apps/web:
     dependencies:
@@ -322,6 +328,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 'catalog:'
+        version: 3.1068.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: 'catalog:'
+        version: 3.1068.0
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -373,7 +385,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   e2e:
     devDependencies:
@@ -7761,7 +7773,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   '@vitest/expect@4.1.8':
     dependencies:
@@ -7924,7 +7936,7 @@ snapshots:
       pg: 8.21.0
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-      vitest: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.8(@types/node@22.19.19)(@vitest/coverage-v8@4.1.8)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.19.19)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'

@@ -3,7 +3,7 @@ import { config } from '@repo/config';
 import { getObject, putObject, buildDerivativeKey } from '@repo/storage';
 import type { MediaProcessJob } from '../connection.js';
 import { validateImageBytes } from '../media/validate.js';
-import { generateDerivatives } from '../media/derivatives.js';
+import { eachDerivative } from '../media/derivatives.js';
 import { defaultWatermarkConfig } from '../media/watermark.js';
 import { computePhash, findNearestDuplicate } from '../media/phash.js';
 import {
@@ -42,19 +42,24 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
     const phash = await computePhash(original);
     const candidates = await findProjectPhashes(image.projectId, imageId);
     const duplicate = findNearestDuplicate(phash, candidates, config.MEDIA_DEDUP_HAMMING_THRESHOLD);
-    if (duplicate) {
+    if (duplicate && config.MEDIA_DEDUP_ACTION === 'reject') {
       await markFailed(imageId);
       return { ok: false, reason: 'duplicate' };
     }
+    if (duplicate) {
+      // 'flag': keep the image for human moderation rather than reject it.
+      console.warn(
+        `[worker] media ${imageId} flagged as near-duplicate of ${duplicate.imageId} (distance ${duplicate.distance})`,
+      );
+    }
 
-    const generated = await generateDerivatives(original, { watermark: defaultWatermarkConfig });
-    const derivatives = await Promise.all(
-      generated.map(async (d) => {
-        const key = buildDerivativeKey(image.projectId, imageId, d.variant, d.format);
-        await putObject({ key, body: d.buffer, contentType: d.contentType });
-        return { variant: d.variant, format: d.format, key, width: d.width, height: d.height };
-      }),
-    );
+    // Upload-and-release per derivative so a job never holds all buffers at once.
+    const derivatives = [];
+    for await (const d of eachDerivative(original, { watermark: defaultWatermarkConfig })) {
+      const key = buildDerivativeKey(image.projectId, imageId, d.variant, d.format);
+      await putObject({ key, body: d.buffer, contentType: d.contentType });
+      derivatives.push({ variant: d.variant, format: d.format, key, width: d.width, height: d.height });
+    }
 
     await markReady(imageId, {
       derivatives,

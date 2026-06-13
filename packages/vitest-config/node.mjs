@@ -67,6 +67,14 @@ export function testDatabaseUrl() {
 }
 
 /**
+ * A test database distinct from the api's, so the worker's integration suite never
+ * shares (migrate/truncate) state with the api's when turbo runs both in parallel.
+ */
+export function workerTestDatabaseUrl() {
+  return testDatabaseUrl().replace(/_test$/, '_worker_test');
+}
+
+/**
  * Resolve the test Redis URL. Mirrors the Postgres `_test` convention so
  * destructive queue cleanup targets a throwaway DB index, never the dev
  * default (`/0`). Defaults to a dedicated DB index.

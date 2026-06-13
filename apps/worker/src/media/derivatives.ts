@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { config } from '@repo/config';
 import { buildWatermarkSvg, type WatermarkConfig } from './watermark.js';
 
 export type DerivativeFormat = 'webp' | 'avif';
@@ -34,6 +35,8 @@ export type GenerateOptions = {
   formats?: readonly DerivativeFormat[];
   /** When set, public derivatives are watermarked (E-109); the original is never touched. */
   watermark?: WatermarkConfig | null;
+  /** Decompression-bomb guard at decode time; defaults to the configured pixel budget. */
+  limitInputPixels?: number;
 };
 
 function encode(pipeline: sharp.Sharp, format: DerivativeFormat): sharp.Sharp {
@@ -41,47 +44,60 @@ function encode(pipeline: sharp.Sharp, format: DerivativeFormat): sharp.Sharp {
 }
 
 /**
- * Generate EXIF-stripped WebP + AVIF derivatives at the configured sizes.
- * `rotate()` bakes EXIF orientation into pixels; sharp drops all other metadata
- * (EXIF/GPS/ICC) on output by default, so derivatives carry no original metadata.
- * `withoutEnlargement` keeps small originals from being upscaled.
+ * Stream EXIF-stripped WebP + AVIF derivatives one at a time. Decodes the original
+ * ONCE to rotated raw pixels (variants resize from raw, never re-decoding full-res),
+ * so peak memory is one derivative at a time rather than all of them.
  */
-export async function generateDerivatives(
+export async function* eachDerivative(
   input: Buffer,
   options: GenerateOptions = {},
-): Promise<GeneratedDerivative[]> {
+): AsyncGenerator<GeneratedDerivative> {
   const variants = options.variants ?? MEDIA_VARIANTS;
   const formats = options.formats ?? MEDIA_FORMATS;
   const watermark = options.watermark;
-  const results: GeneratedDerivative[] = [];
+  const limitInputPixels = options.limitInputPixels ?? config.MEDIA_MAX_IMAGE_PIXELS;
+
+  const { data: raw, info } = await sharp(input, { limitInputPixels, failOn: 'error' })
+    .rotate()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const rawInput = {
+    raw: { width: info.width, height: info.height, channels: info.channels },
+    limitInputPixels,
+  };
 
   for (const spec of variants) {
-    const { data: resized, info } = await sharp(input)
-      .rotate()
-      .resize({ width: spec.width, withoutEnlargement: true })
-      .toBuffer({ resolveWithObject: true });
-
-    const shouldWatermark = !!watermark && info.width >= watermark.minImageWidth;
-    const base = shouldWatermark
-      ? sharp(resized).composite([
-          { input: buildWatermarkSvg(info.width, watermark), gravity: watermark.gravity },
-        ])
-      : sharp(resized);
+    const outWidth = Math.min(spec.width, info.width);
+    const resized = sharp(raw, rawInput).resize({ width: spec.width, withoutEnlargement: true });
+    const base =
+      watermark && outWidth >= watermark.minImageWidth
+        ? resized.composite([
+            { input: buildWatermarkSvg(outWidth, watermark), gravity: watermark.gravity },
+          ])
+        : resized;
 
     for (const format of formats) {
       const { data, info: out } = await encode(base.clone(), format).toBuffer({
         resolveWithObject: true,
       });
-      results.push({
+      yield {
         variant: spec.variant,
         format,
         contentType: FORMAT_CONTENT_TYPE[format],
         buffer: data,
         width: out.width,
         height: out.height,
-      });
+      };
     }
   }
+}
 
+/** Eager wrapper: collects {@link eachDerivative} into an array (tests/non-streaming callers). */
+export async function generateDerivatives(
+  input: Buffer,
+  options: GenerateOptions = {},
+): Promise<GeneratedDerivative[]> {
+  const results: GeneratedDerivative[] = [];
+  for await (const derivative of eachDerivative(input, options)) results.push(derivative);
   return results;
 }

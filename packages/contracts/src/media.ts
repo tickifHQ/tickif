@@ -70,3 +70,12 @@ export const imageIdParamSchema = z.object({ imageId: z.uuid() }).meta({ id: 'Im
 export const projectImagesParamSchema = z
   .object({ id: z.uuid() })
   .meta({ id: 'ProjectImagesParam' });
+
+// Query strings arrive as text, so coerce; bounds keep an unbounded scan off the table.
+export const listProjectImagesQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .meta({ id: 'ListProjectImagesQuery' });
+export type ListProjectImagesQuery = z.infer<typeof listProjectImagesQuerySchema>;

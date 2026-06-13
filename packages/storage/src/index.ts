@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '@repo/config';
 
@@ -69,6 +69,32 @@ export async function putObject(params: {
       ContentType: params.contentType,
     }),
   );
+}
+
+/** Fail fast at boot if R2 is misconfigured, instead of letting every job fail later. */
+export function assertMediaStorageConfig(): void {
+  resolveEndpoint();
+  requireEnv('R2_ACCESS_KEY_ID', config.R2_ACCESS_KEY_ID);
+  requireEnv('R2_SECRET_ACCESS_KEY', config.R2_SECRET_ACCESS_KEY);
+  requireEnv('R2_BUCKET', config.R2_BUCKET);
+}
+
+function isNotFound(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === 'NotFound' || e?.$metadata?.httpStatusCode === 404;
+}
+
+/** Whether an object exists in the bucket. Used to confirm a client actually PUT its bytes. */
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await r2Client().send(
+      new HeadObjectCommand({ Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET), Key: key }),
+    );
+    return true;
+  } catch (err) {
+    if (isNotFound(err)) return false;
+    throw err;
+  }
 }
 
 /** ContentType is pinned into the signature so the client can't upload a different type. */

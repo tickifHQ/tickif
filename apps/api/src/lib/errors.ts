@@ -32,6 +32,10 @@ export class AppError extends Error {
   static forbidden(message = 'Insufficient permissions') {
     return new AppError('forbidden', message, 403);
   }
+
+  static conflict(message: string, details?: unknown) {
+    return new AppError('conflict', message, 409, details);
+  }
 }
 
 /** Central error handler — single place that converts errors to the API envelope. */

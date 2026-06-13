@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import type { Job } from 'bullmq';
 import sharp from 'sharp';
 
+vi.mock('@repo/config', () => ({
+  config: {
+    MEDIA_DEDUP_HAMMING_THRESHOLD: 10,
+    MEDIA_DEDUP_ACTION: 'reject',
+    MEDIA_MAX_IMAGE_PIXELS: 40_000_000,
+    MEDIA_MAX_UPLOAD_BYTES: 15_000_000,
+    MEDIA_MAX_IMAGE_DIMENSION: 12_000,
+    WATERMARK_ENABLED: true,
+    WATERMARK_TEXT: 'Tickif',
+    WATERMARK_OPACITY: 0.6,
+  },
+  isProduction: false,
+  isDevelopment: false,
+  isTest: true,
+}));
 vi.mock('@repo/storage', () => ({
   getObject: vi.fn(),
   putObject: vi.fn(async () => {}),
@@ -17,6 +32,7 @@ vi.mock('../../src/media/repository.js', () => ({
 
 import { processMedia } from '../../src/jobs/media-process.js';
 import { getObject, putObject } from '@repo/storage';
+import { config } from '@repo/config';
 import * as repo from '../../src/media/repository.js';
 import { computePhash } from '../../src/media/phash.js';
 
@@ -45,7 +61,10 @@ beforeAll(async () => {
     .toBuffer();
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  config.MEDIA_DEDUP_ACTION = 'reject';
+});
 
 describe('processMedia', () => {
   it('skips when the image row is gone', async () => {
@@ -102,6 +121,21 @@ describe('processMedia', () => {
     expect(result).toEqual({ ok: false, reason: 'duplicate' });
     expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
     expect(repoMock.markReady).not.toHaveBeenCalled();
+  });
+
+  it('keeps and processes a near-duplicate when the action is "flag"', async () => {
+    config.MEDIA_DEDUP_ACTION = 'flag';
+    repoMock.getImageForProcessing.mockResolvedValue(processing);
+    getObjectMock.mockResolvedValue(jpeg);
+    repoMock.findProjectPhashes.mockResolvedValue([
+      { imageId: 'other', phash: await computePhash(jpeg) },
+    ]);
+
+    const result = await processMedia(job('img-1'));
+
+    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(repoMock.markReady).toHaveBeenCalledTimes(1);
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
   });
 
   it('marks failed and rethrows on an unexpected (transient) error', async () => {

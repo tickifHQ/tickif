@@ -11,16 +11,18 @@ vi.mock('../../../src/modules/media/repository.js', () => ({
 vi.mock('@repo/storage', () => ({
   buildOriginalKey: vi.fn(() => 'originals/p/uuid'),
   presignUpload: vi.fn(async () => 'https://r2.example/originals/p/uuid?X-Amz-Signature=abc'),
+  objectExists: vi.fn(async () => true),
 }));
 vi.mock('@repo/queue', () => ({ enqueueMedia: vi.fn(async () => {}) }));
 
 import { mediaService } from '../../../src/modules/media/service.js';
 import { mediaRepository } from '../../../src/modules/media/repository.js';
-import { buildOriginalKey, presignUpload } from '@repo/storage';
+import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../../src/lib/errors.js';
 
 const repo = vi.mocked(mediaRepository);
+const objectExistsMock = vi.mocked(objectExists);
 
 describe('mediaService.createUploadUrl', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -93,6 +95,7 @@ describe('mediaService.commitUpload', () => {
       id: 'img-1',
       projectId: 'p',
       originalKey: 'originals/p/abc',
+      status: 'processing',
       ownerUserId: 'someone-else',
     });
     await expect(
@@ -101,14 +104,47 @@ describe('mediaService.commitUpload', () => {
     expect(enqueueMedia).not.toHaveBeenCalled();
   });
 
-  it('enqueues processing for the owner', async () => {
+  it('409s on replay when the image is no longer processing', async () => {
     repo.findImageWithOwner.mockResolvedValue({
       id: 'img-1',
       projectId: 'p',
       originalKey: 'originals/p/abc',
+      status: 'ready',
       ownerUserId: 'user-1',
     });
+    await expect(
+      mediaService.commitUpload({ imageId: 'img-1', userId: 'user-1' }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(objectExistsMock).not.toHaveBeenCalled();
+    expect(enqueueMedia).not.toHaveBeenCalled();
+  });
+
+  it('400s when the object was never uploaded', async () => {
+    repo.findImageWithOwner.mockResolvedValue({
+      id: 'img-1',
+      projectId: 'p',
+      originalKey: 'originals/p/abc',
+      status: 'processing',
+      ownerUserId: 'user-1',
+    });
+    objectExistsMock.mockResolvedValueOnce(false);
+    await expect(
+      mediaService.commitUpload({ imageId: 'img-1', userId: 'user-1' }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(enqueueMedia).not.toHaveBeenCalled();
+  });
+
+  it('enqueues processing for the owner after confirming the upload', async () => {
+    repo.findImageWithOwner.mockResolvedValue({
+      id: 'img-1',
+      projectId: 'p',
+      originalKey: 'originals/p/abc',
+      status: 'processing',
+      ownerUserId: 'user-1',
+    });
+    objectExistsMock.mockResolvedValueOnce(true);
     const result = await mediaService.commitUpload({ imageId: 'img-1', userId: 'user-1' });
+    expect(objectExistsMock).toHaveBeenCalledWith('originals/p/abc');
     expect(enqueueMedia).toHaveBeenCalledWith({ imageId: 'img-1', storageKey: 'originals/p/abc' });
     expect(result).toEqual({ imageId: 'img-1', status: 'processing' });
   });
@@ -130,7 +166,12 @@ describe('mediaService.listProjectImages', () => {
       },
     ] as never);
 
-    const result = await mediaService.listProjectImages({ projectId: 'p', userId: 'user-1' });
+    const result = await mediaService.listProjectImages({
+      projectId: 'p',
+      userId: 'user-1',
+      limit: 50,
+      offset: 0,
+    });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ id: 'img-1', status: 'ready', sortOrder: 0 });
     expect(result.items[0]!.derivatives).toHaveLength(1);
@@ -139,7 +180,7 @@ describe('mediaService.listProjectImages', () => {
   it('403s for a non-owner', async () => {
     repo.findProjectOwner.mockResolvedValue({ ownerUserId: 'other' });
     await expect(
-      mediaService.listProjectImages({ projectId: 'p', userId: 'user-1' }),
+      mediaService.listProjectImages({ projectId: 'p', userId: 'user-1', limit: 50, offset: 0 }),
     ).rejects.toMatchObject({ status: 403 });
   });
 });

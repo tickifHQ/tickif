@@ -4,6 +4,10 @@ import { db, schema, eq, asc } from '@repo/db';
  * Data-access for media. The ONLY media layer that imports Drizzle.
  */
 export type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
+export type ProjectImageListItem = Pick<
+  ProjectImageRecord,
+  'id' | 'status' | 'sortOrder' | 'width' | 'height' | 'derivatives'
+>;
 
 export const mediaRepository = {
   /** Owning user of a project, via its designer profile. Null when the project is missing. */
@@ -35,14 +39,19 @@ export const mediaRepository = {
   },
 
   /** Image joined to its owning user (via project → designer). Null when the image is missing. */
-  async findImageWithOwner(
-    imageId: string,
-  ): Promise<{ id: string; projectId: string; originalKey: string; ownerUserId: string } | null> {
+  async findImageWithOwner(imageId: string): Promise<{
+    id: string;
+    projectId: string;
+    originalKey: string;
+    status: ProjectImageRecord['status'];
+    ownerUserId: string;
+  } | null> {
     const [row] = await db
       .select({
         id: schema.projectImage.id,
         projectId: schema.projectImage.projectId,
         originalKey: schema.projectImage.originalKey,
+        status: schema.projectImage.status,
         ownerUserId: schema.designerProfile.userId,
       })
       .from(schema.projectImage)
@@ -53,11 +62,23 @@ export const mediaRepository = {
     return row ?? null;
   },
 
-  async listByProject(projectId: string): Promise<ProjectImageRecord[]> {
+  async listByProject(
+    projectId: string,
+    page: { limit: number; offset: number },
+  ): Promise<ProjectImageListItem[]> {
     return db
-      .select()
+      .select({
+        id: schema.projectImage.id,
+        status: schema.projectImage.status,
+        sortOrder: schema.projectImage.sortOrder,
+        width: schema.projectImage.width,
+        height: schema.projectImage.height,
+        derivatives: schema.projectImage.derivatives,
+      })
       .from(schema.projectImage)
       .where(eq(schema.projectImage.projectId, projectId))
-      .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
+      .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt))
+      .limit(page.limit)
+      .offset(page.offset);
   },
 };

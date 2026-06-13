@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { config } from '@repo/config';
 
 const GRID = 32;
 const LOW = 8;
@@ -15,7 +16,7 @@ const COS: number[][] = Array.from({ length: LOW }, (_, k) =>
  * from the block's median — robust to resize/recompress, sensitive to content.
  */
 export async function computePhash(input: Buffer): Promise<string> {
-  const pixels = await sharp(input)
+  const pixels = await sharp(input, { limitInputPixels: config.MEDIA_MAX_IMAGE_PIXELS, failOn: 'error' })
     .removeAlpha()
     .grayscale()
     .resize(GRID, GRID, { fit: 'fill' })
@@ -70,7 +71,7 @@ export function hammingDistance(a: string, b: string): number {
 
 export type PhashCandidate = { imageId: string; phash: string };
 
-/** Closest candidate within `threshold`, or null. Candidate set is bounded per-project (E-110). */
+/** Closest candidate within `threshold`, or null. Linear scan; caller bounds the candidate set (E-110). */
 export function findNearestDuplicate(
   phash: string,
   candidates: readonly PhashCandidate[],

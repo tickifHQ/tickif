@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { integrationEnv } from '@repo/vitest-config/node';
+import { integrationEnv, workerTestDatabaseUrl } from '@repo/vitest-config/node';
 
 /**
  * Two projects:
@@ -34,6 +34,8 @@ export default defineConfig({
           include: ['tests/**/*.integration.test.ts'],
           env: {
             ...integrationEnv(),
+            // Own DB so api + worker integration suites don't truncate each other under turbo.
+            DATABASE_URL: workerTestDatabaseUrl(),
             GOOGLE_CLIENT_ID: 'test-google-client-id',
             GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
             BETTER_AUTH_URL: 'http://localhost:3000',

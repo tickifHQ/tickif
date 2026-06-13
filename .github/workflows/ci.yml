@@ -91,13 +91,15 @@ jobs:
           restore-keys: |
             turbo-${{ runner.os }}-
 
-      # The postgres service only creates POSTGRES_DB (=tickif). The integration
-      # tests target a separate `tickif_test` database that must pre-exist
-      # (migrateTestDb creates tables, not the database). Create it here.
-      - name: Create test database
+      # The postgres service only creates POSTGRES_DB (=tickif). Integration tests
+      # target separate databases that must pre-exist (migrateTestDb creates tables,
+      # not the database): tickif_test for the api, tickif_worker_test for the worker
+      # so the two suites never truncate each other when turbo runs them in parallel.
+      - name: Create test databases
         run: |
           PGPASSWORD=tickif psql -h localhost -p 5432 -U tickif -d tickif \
-            -c "CREATE DATABASE tickif_test;"
+            -c "CREATE DATABASE tickif_test;" \
+            -c "CREATE DATABASE tickif_worker_test;"
 
       - name: Typecheck
         run: pnpm typecheck

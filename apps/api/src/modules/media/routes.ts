@@ -4,6 +4,7 @@ import {
   uploadUrlResponseSchema,
   commitUploadResponseSchema,
   listProjectImagesResponseSchema,
+  listProjectImagesQuerySchema,
   imageIdParamSchema,
   projectImagesParamSchema,
   errorResponseSchema,
@@ -78,9 +79,11 @@ const commitRoute = createRoute({
       description: 'Accepted for processing',
       content: { 'application/json': { schema: commitUploadResponseSchema } },
     },
+    400: errorJson('No uploaded object found for this image'),
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the image'),
     404: errorJson('Image not found'),
+    409: errorJson('Image has already been committed'),
   },
 });
 
@@ -105,7 +108,7 @@ const listImagesRoute = createRoute({
   summary: "List a project's images with status + derivatives",
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
-  request: { params: projectImagesParamSchema },
+  request: { params: projectImagesParamSchema, query: listProjectImagesQuerySchema },
   responses: {
     200: {
       description: 'Images ordered by sortOrder',
@@ -120,7 +123,13 @@ const listImagesRoute = createRoute({
 /** Mounted under /api/projects so the path reads /api/projects/:id/images (E-111 contract). */
 export const projectImagesRoutes = mediaApp().openapi(listImagesRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const result = await mediaService.listProjectImages({ projectId: id, userId: authedUserId(c) });
+  const { limit, offset } = c.req.valid('query');
+  const result = await mediaService.listProjectImages({
+    projectId: id,
+    userId: authedUserId(c),
+    limit,
+    offset,
+  });
   return c.json(result, 200);
 });
 

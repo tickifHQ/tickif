@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
 import { config, isProduction } from '@repo/config';
+import { assertMediaStorageConfig } from '@repo/storage';
 import { connection, QUEUES, type MediaProcessJob, type SmsJob } from './connection.js';
 import { processMedia } from './jobs/media-process.js';
 import { selectSmsSender } from './jobs/sms-sender.js';
@@ -8,6 +9,8 @@ import { SmsService } from './jobs/sms-service.js';
 /**
  * Worker process. Each queue gets a Worker; handlers live under ./jobs.
  */
+assertMediaStorageConfig();
+
 const mediaWorker = new Worker<MediaProcessJob>(QUEUES.media, processMedia, {
   connection,
   concurrency: config.MEDIA_WORKER_CONCURRENCY,

@@ -47,9 +47,9 @@ export async function markFailed(imageId: string): Promise<void> {
 }
 
 /**
- * Ready images in the same project that already carry a phash — the bounded,
- * indexed candidate set for dedup (never a full-table Hamming scan). Excludes
- * the image being processed.
+ * Ready, phash-bearing images in the same project — the dedup candidate set.
+ * The (project_id) index serves this filter; the Hamming comparison itself is an
+ * in-memory O(N) scan over the project's images, bounded by per-project image count.
  */
 export async function findProjectPhashes(
   projectId: string,

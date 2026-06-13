@@ -12,6 +12,12 @@ vi.mock('@repo/queue', async (orig) => ({
   enqueueSms: vi.fn(async () => {}),
 }));
 
+// Real presign (local signing), but commit's existence check never hits R2.
+vi.mock('@repo/storage', async (orig) => ({
+  ...(await orig<typeof import('@repo/storage')>()),
+  objectExists: vi.fn(async () => true),
+}));
+
 const client = testClient(app);
 
 /** The user id behind the most recent session (one exists per test after truncateAll). */
@@ -125,7 +131,10 @@ describe('POST /api/media/:imageId/commit', () => {
 
 describe('GET /api/projects/:id/images', () => {
   it('rejects unauthenticated requests with 401', async () => {
-    const res = await client.api.projects[':id'].images.$get({ param: { id: RANDOM_UUID } });
+    const res = await client.api.projects[':id'].images.$get({
+      param: { id: RANDOM_UUID },
+      query: {},
+    });
     expect(res.status).toBe(401);
   });
 
@@ -134,7 +143,7 @@ describe('GET /api/projects/:id/images', () => {
     const other = await makeDesigner();
     const project = await makeProject({ designerId: other.id });
     const res = await client.api.projects[':id'].images.$get(
-      { param: { id: project.id } },
+      { param: { id: project.id }, query: {} },
       { headers: { cookie } },
     );
     expect(res.status).toBe(403);
@@ -155,7 +164,7 @@ describe('GET /api/projects/:id/images', () => {
     });
 
     const res = await client.api.projects[':id'].images.$get(
-      { param: { id: project.id } },
+      { param: { id: project.id }, query: {} },
       { headers: { cookie } },
     );
     expect(res.status).toBe(200);
