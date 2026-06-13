@@ -1,27 +1,24 @@
 {
-  "name": "@repo/worker",
+  "name": "@repo/storage",
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsup",
-    "start": "node dist/index.js",
-    "enqueue:demo": "tsx src/enqueue-demo.ts",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@repo/config": "workspace:*",
-    "@repo/contracts": "workspace:*",
-    "@repo/db": "workspace:*",
-    "@repo/queue": "workspace:*",
-    "@repo/storage": "workspace:*",
-    "bullmq": "catalog:",
-    "dotenv": "^16.4.7",
-    "sharp": "catalog:"
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
+    "@repo/config": "workspace:*"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -29,8 +26,6 @@
     "@repo/vitest-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "^9.18.0",
-    "tsup": "^8.5.1",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
