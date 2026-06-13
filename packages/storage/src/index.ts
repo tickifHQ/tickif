@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '@repo/config';
 
@@ -36,6 +36,39 @@ export function r2Client(): S3Client {
 /** Non-sequential private key for an original: `originals/{projectId}/{uuid}` (§11/§12). */
 export function buildOriginalKey(projectId: string): string {
   return `${ORIGINALS_PREFIX}/${projectId}/${randomUUID()}`;
+}
+
+/** Deterministic key for a derivative so re-runs overwrite rather than orphan (idempotent, E-112). */
+export function buildDerivativeKey(
+  projectId: string,
+  imageId: string,
+  variant: string,
+  format: string,
+): string {
+  return `${DERIVATIVES_PREFIX}/${projectId}/${imageId}/${variant}.${format}`;
+}
+
+export async function getObject(key: string): Promise<Buffer> {
+  const res = await r2Client().send(
+    new GetObjectCommand({ Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET), Key: key }),
+  );
+  if (!res.Body) throw new Error(`R2 object ${key} has no body`);
+  return Buffer.from(await res.Body.transformToByteArray());
+}
+
+export async function putObject(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+}): Promise<void> {
+  await r2Client().send(
+    new PutObjectCommand({
+      Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET),
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+    }),
+  );
 }
 
 /** ContentType is pinned into the signature so the client can't upload a different type. */

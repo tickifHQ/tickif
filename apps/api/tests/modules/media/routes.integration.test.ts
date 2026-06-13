@@ -1,9 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { testClient } from 'hono/testing';
 import { db, schema, desc, eq } from '@repo/db';
-import { makeDesigner, makeProject } from '@repo/db/testing';
+import { makeDesigner, makeProject, makeProjectImage } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createAuthedSession } from '../../helpers/auth.js';
+
+// Keep the lazy queue real but never touch Redis from these HTTP tests.
+vi.mock('@repo/queue', async (orig) => ({
+  ...(await orig<typeof import('@repo/queue')>()),
+  enqueueMedia: vi.fn(async () => {}),
+  enqueueSms: vi.fn(async () => {}),
+}));
 
 const client = testClient(app);
 
@@ -82,5 +89,82 @@ describe('POST /api/media/upload-url', () => {
     expect(row!.status).toBe('processing');
     expect(row!.originalKey).toBe(body.key);
     expect(row!.projectId).toBe(project.id);
+  });
+});
+
+describe('POST /api/media/:imageId/commit', () => {
+  it('rejects unauthenticated requests with 401', async () => {
+    const res = await client.api.media[':imageId'].commit.$post({ param: { imageId: RANDOM_UUID } });
+    expect(res.status).toBe(401);
+  });
+
+  it('404s for a missing image', async () => {
+    const { cookie } = await createAuthedSession();
+    const res = await client.api.media[':imageId'].commit.$post(
+      { param: { imageId: RANDOM_UUID } },
+      { headers: { cookie } },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('accepts (202) and reports processing for the owner', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id });
+    const image = await makeProjectImage({ projectId: project.id });
+
+    const res = await client.api.media[':imageId'].commit.$post(
+      { param: { imageId: image.id } },
+      { headers: { cookie } },
+    );
+    expect(res.status).toBe(202);
+    if (res.status !== 202) throw new Error('expected 202');
+    expect(await res.json()).toEqual({ imageId: image.id, status: 'processing' });
+  });
+});
+
+describe('GET /api/projects/:id/images', () => {
+  it('rejects unauthenticated requests with 401', async () => {
+    const res = await client.api.projects[':id'].images.$get({ param: { id: RANDOM_UUID } });
+    expect(res.status).toBe(401);
+  });
+
+  it('403s for a non-owner', async () => {
+    const { cookie } = await createAuthedSession();
+    const other = await makeDesigner();
+    const project = await makeProject({ designerId: other.id });
+    const res = await client.api.projects[':id'].images.$get(
+      { param: { id: project.id } },
+      { headers: { cookie } },
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('returns the owner’s images ordered by sortOrder with status + derivatives', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id });
+    await makeProjectImage({ projectId: project.id, sortOrder: 1, status: 'processing' });
+    await makeProjectImage({
+      projectId: project.id,
+      sortOrder: 0,
+      status: 'ready',
+      width: 1600,
+      height: 1200,
+      derivatives: [{ variant: 'thumb', format: 'webp', key: 'd/t.webp', width: 320, height: 240 }],
+    });
+
+    const res = await client.api.projects[':id'].images.$get(
+      { param: { id: project.id } },
+      { headers: { cookie } },
+    );
+    expect(res.status).toBe(200);
+    if (res.status !== 200) throw new Error('expected 200');
+    const body = await res.json();
+    expect(body.items).toHaveLength(2);
+    expect(body.items[0]!.sortOrder).toBe(0);
+    expect(body.items[0]!.status).toBe('ready');
+    expect(body.items[0]!.derivatives).toHaveLength(1);
+    expect(body.items[1]!.status).toBe('processing');
   });
 });

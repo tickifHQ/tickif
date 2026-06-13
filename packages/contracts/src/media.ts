@@ -31,3 +31,42 @@ export const uploadUrlResponseSchema = z
   })
   .meta({ id: 'UploadUrlResponse' });
 export type UploadUrlResponse = z.infer<typeof uploadUrlResponseSchema>;
+
+export const imageStatus = z.enum(['processing', 'ready', 'failed']);
+export type ImageStatus = z.infer<typeof imageStatus>;
+
+export const derivativeSchema = z.object({
+  variant: z.string(),
+  format: z.string(),
+  key: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+});
+export type Derivative = z.infer<typeof derivativeSchema>;
+
+export const projectImageSchema = z
+  .object({
+    id: z.uuid(),
+    status: imageStatus,
+    sortOrder: z.number().int(),
+    width: z.number().int().nullable(),
+    height: z.number().int().nullable(),
+    derivatives: z.array(derivativeSchema),
+  })
+  .meta({ id: 'ProjectImage' });
+export type ProjectImageDto = z.infer<typeof projectImageSchema>;
+
+export const listProjectImagesResponseSchema = z
+  .object({ items: z.array(projectImageSchema) })
+  .meta({ id: 'ListProjectImages' });
+export type ListProjectImagesResponse = z.infer<typeof listProjectImagesResponseSchema>;
+
+export const commitUploadResponseSchema = z
+  .object({ imageId: z.uuid(), status: imageStatus })
+  .meta({ id: 'CommitUpload' });
+export type CommitUploadResponse = z.infer<typeof commitUploadResponseSchema>;
+
+export const imageIdParamSchema = z.object({ imageId: z.uuid() }).meta({ id: 'ImageIdParam' });
+export const projectImagesParamSchema = z
+  .object({ id: z.uuid() })
+  .meta({ id: 'ProjectImagesParam' });

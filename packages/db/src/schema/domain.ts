@@ -114,6 +114,8 @@ export const projectImage = pgTable(
     // FK to project_room (E-69) added when the rooms table lands; nullable until then.
     roomId: uuid('room_id'),
     originalKey: text('original_key').notNull(),
+    // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
+    contentType: text('content_type'),
     derivatives: jsonb('derivatives').$type<ProjectImageDerivative[]>().default([]).notNull(),
     width: integer('width'),
     height: integer('height'),
