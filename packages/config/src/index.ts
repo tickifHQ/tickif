@@ -95,6 +95,14 @@ const envSchema = z.object({
   MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
   // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.
   MEDIA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+
+  // Watermark on public derivatives only (E-109); originals stay clean.
+  WATERMARK_ENABLED: z
+    .stringbool()
+    .optional()
+    .default(true),
+  WATERMARK_TEXT: z.string().default('Tickif'),
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.6),
 });
 
 /**
