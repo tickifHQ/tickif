@@ -25,6 +25,8 @@ packages/
   auth/           better-auth instance + plugins
   contracts/      Shared Zod schemas + inferred types (the FE/BE contract)
   config/         Zod-validated env loader
+  storage/        R2 (S3 API) wrapper — presign, get/put/delete, key builders
+  queue/          BullMQ queues + typed enqueue helpers (the API↔worker contract)
   tsconfig/       Shared TypeScript base configs
   eslint-config/  Shared flat ESLint config
 ```
@@ -41,6 +43,8 @@ Tooling: **pnpm workspaces** (package management + the version catalog) and
 | `@repo/contracts` | Zod schemas = the single source of truth for request/response shapes. Plain zod, no framework deps, so the web app can import it too. | api, web |
 | `@repo/db` | Drizzle client + the full schema (domain **and** better-auth tables) + migrations. | api, auth, worker |
 | `@repo/auth` | The configured better-auth instance (plugins, adapters). | api |
+| `@repo/storage` | R2 (S3-compatible) wrapper: presigned PUTs (content-type + length pinned), get/put/delete, deterministic key builders. | api, worker |
+| `@repo/queue` | BullMQ queue definitions + typed `enqueue*` helpers. Owns job ids (`media-{imageId}`) and default retry/backoff. | api, worker |
 
 Keeping these as packages (not folders in `apps/api`) means the web app and
 worker can share exactly the same contracts, env rules, and DB types without
@@ -100,13 +104,44 @@ The same route definitions that serve traffic also generate the OpenAPI spec
 (`/openapi.json`) and the Scalar docs (`/docs`), and export `AppType` — which the
 web app consumes for compile-time-safe calls with **no code generation step**.
 
+## How an upload flows (the media slice)
+
+Image bytes never pass through the API — the client uploads straight to R2:
+
+```
+Web app
+   │  POST /api/media/upload-url  { projectId, contentType, size }
+   ▼
+media/service.ts → @repo/storage.presignUpload   creates a 'processing' row,
+   │                                              returns a presigned PUT URL
+   │                                              (content-type + length pinned)
+   ▼
+Client PUT bytes ───────────────────────────────────────────────►  R2 (originals/, private)
+   │
+   │  POST /api/media/{imageId}/commit
+   ▼
+media/service.ts → @repo/queue.enqueueMedia      HEAD-checks the object exists,
+   │  (jobId = media-{imageId})                   then enqueues; returns 202
+   ▼
+apps/worker  media-process.ts                    download → validate → pHash dedup →
+   │                                              strip EXIF + derive watermarked
+   │                                              webp/avif → write derivatives →
+   ▼                                              compare-and-swap status to 'ready'
+R2 (derivatives/, public)  +  project_image row updated
+```
+
+Permanent failures (oversize/invalid/duplicate) flip the row to `failed` and delete
+the orphan original; transient errors retry via BullMQ. See
+[ADR 0002](./adr/0002-media-pipeline.md).
+
 ## Async work: the worker
 
 Anything slow or retryable (image processing, search indexing, notifications)
 goes on a **BullMQ** queue backed by Redis, processed by `apps/worker`. The API
-enqueues; the worker consumes. Queue names are the contract between them
-(`apps/worker/src/connection.ts`). Today there's one proving job (`media`); the
-real Sharp media pipeline lands in a later phase.
+enqueues; the worker consumes. Queue names + typed enqueue helpers are the contract
+between them (`@repo/queue`). Two queues run today: `media` (the Sharp image
+pipeline) and `sms` (OTP delivery). The worker exposes `/livez` + `/readyz` on
+`WORKER_HEALTH_PORT` (default 3002) and drains gracefully on SIGTERM.
 
 ## Build & deploy model
 
@@ -119,6 +154,7 @@ real Sharp media pipeline lands in a later phase.
 
 ## What's built vs. planned
 
-Built end-to-end as the reference slice: **auth** + **projects** + one worker job.
-Reserved (empty module folders, built in later phases): designers, media, leads,
-search, billing, reviews, bookings, taxonomy, reports.
+Built end-to-end: **auth**, **projects**, and the **media pipeline** (upload →
+commit → queue → worker → derive, see [ADR 0002](./adr/0002-media-pipeline.md)).
+Reserved (empty module folders, built in later phases): designers, leads, search,
+billing, reviews, bookings, taxonomy, reports.

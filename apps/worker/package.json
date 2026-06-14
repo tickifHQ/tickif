@@ -14,10 +14,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@repo/config": "workspace:*",
+    "@repo/contracts": "workspace:*",
+    "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "sharp": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

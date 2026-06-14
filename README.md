@@ -29,6 +29,8 @@ packages/
   auth/       better-auth instance + plugins
   contracts/  Shared Zod schemas + inferred types (single source of truth FE/BE)
   config/     Zod-validated env loader
+  storage/    Cloudflare R2 (S3 API) wrapper — presign, get/put/delete, key builders
+  queue/      BullMQ queues + typed enqueue helpers (the API↔worker contract)
   tsconfig/   Shared TS configs
   eslint-config/  Shared flat ESLint config
 ```
@@ -78,7 +80,7 @@ Copilot, Codex).
 ```bash
 pnpm install
 cp .env.example .env          # set BETTER_AUTH_SECRET (openssl rand -base64 32)
-pnpm infra:up                 # Postgres + Redis via docker compose
+pnpm infra:up                 # Postgres + Redis + MinIO via docker compose
 pnpm db:generate && pnpm db:migrate
 pnpm dev                      # api :3001, web :3000, worker
 ```
@@ -99,6 +101,7 @@ pnpm --filter @repo/worker enqueue:demo   # prove the queue path
 
 ## Status
 
-`auth` + `projects` are wired end-to-end as the proving vertical slice. Remaining
-blueprint domains (designers, media, leads, search, billing, reviews, bookings,
-taxonomy, reports) have reserved module folders and land in later phases.
+`auth`, `projects`, and the `media` pipeline (direct-to-R2 upload → commit → BullMQ
+worker → watermarked webp/avif derivatives) are wired end-to-end. Remaining blueprint
+domains (designers, leads, search, billing, reviews, bookings, taxonomy, reports) have
+reserved module folders and land in later phases.

@@ -10,7 +10,16 @@ import * as schema from './schema/index.js';
  * better-auth's drizzleAdapter can auto-discover its tables from the same
  * instance — keeping auth and domain data in a single migration set.
  */
-const pool = new Pool({ connectionString: config.DATABASE_URL });
+// Timeouts bound a stuck client/query so a slow consumer (e.g. the CPU-bound worker
+// sharing this pool) can't pin a connection indefinitely.
+const pool = new Pool({
+  connectionString: config.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+  statement_timeout: 30_000,
+  query_timeout: 30_000,
+});
 
 export const db = drizzle(pool, { schema, casing: 'snake_case' });
 

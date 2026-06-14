@@ -79,11 +79,37 @@ const envSchema = z.object({
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_SENDER_ID: z.string().optional(),
 
-  // Cloudflare R2 (media — later phases)
+  // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
+  // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
   R2_ACCOUNT_ID: z.string().optional(),
+  R2_ENDPOINT: z.string().url().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
+  R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
+
+  // Media upload limits (E-107). MAX_IMAGE_PIXELS is the decompression-bomb
+  // budget — checked from header dims before any pixel decode.
+  MEDIA_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  MEDIA_MAX_IMAGE_DIMENSION: z.coerce.number().int().positive().default(12_000),
+  MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
+  // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.
+  // Peak worker memory ≈ MEDIA_WORKER_CONCURRENCY × MEDIA_MAX_IMAGE_PIXELS × 4 bytes; size the container to match.
+  MEDIA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(3002),
+
+  // Watermark on public derivatives only (E-109); originals stay clean.
+  WATERMARK_ENABLED: z
+    .stringbool()
+    .optional()
+    .default(true),
+  WATERMARK_TEXT: z.string().default('Tickif'),
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.6),
+
+  // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
+  // Action on a duplicate: reject (status=failed) or flag for moderation.
+  MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
+  MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
 });
 
 /**
@@ -122,6 +148,24 @@ function postgresUrl(env: RawEnv, database: string): string {
   return `postgresql://${user}:${password}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${database}`;
 }
 
+/**
+ * R2 vars are optional in the schema (dev/test can run without media), but a
+ * production process that mints presigned URLs or processes media must have them
+ * — fail fast at boot rather than at first upload.
+ */
+function assertProductionMediaConfig(env: RawEnv): void {
+  if (env.NODE_ENV !== 'production') return;
+  const missing: string[] = [];
+  if (!env.R2_ACCESS_KEY_ID) missing.push('R2_ACCESS_KEY_ID');
+  if (!env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
+  if (!env.R2_BUCKET) missing.push('R2_BUCKET');
+  if (!env.R2_ENDPOINT && !env.R2_ACCOUNT_ID) missing.push('R2_ENDPOINT or R2_ACCOUNT_ID');
+  if (missing.length > 0) {
+    const lines = missing.map((m) => `  - ${m}: required when NODE_ENV=production`).join('\n');
+    throw new Error(`Invalid environment configuration:\n${lines}`);
+  }
+}
+
 function loadConfig(): Config {
   const parsed = refinedEnvSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -131,6 +175,7 @@ function loadConfig(): Config {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
+  assertProductionMediaConfig(env);
   return {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),

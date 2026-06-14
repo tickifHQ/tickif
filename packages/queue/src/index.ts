@@ -18,11 +18,11 @@ export const QUEUES = {
 
 export const JOBS = {
   sendSms: 'send-sms',
+  processMedia: 'process-media',
 } as const;
 
 export type MediaProcessJob = {
   imageId: string;
-  storageKey: string;
 };
 
 export type SmsJob = {
@@ -37,10 +37,12 @@ export const defaultJobOptions = {
     delay: 1_000,
   },
   removeOnComplete: true,
-  removeOnFail: 100,
+  // Keep failed jobs for a week (not a fixed count) so a failure spike can't silently evict evidence.
+  removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
 } satisfies JobsOptions;
 
 let smsQueue: Queue<SmsJob> | undefined;
+let mediaQueue: Queue<MediaProcessJob> | undefined;
 
 function getSmsQueue(): Queue<SmsJob> {
   smsQueue ??= new Queue<SmsJob>(QUEUES.sms, {
@@ -48,6 +50,23 @@ function getSmsQueue(): Queue<SmsJob> {
     defaultJobOptions,
   });
   return smsQueue;
+}
+
+function getMediaQueue(): Queue<MediaProcessJob> {
+  mediaQueue ??= new Queue<MediaProcessJob>(QUEUES.media, {
+    connection,
+    defaultJobOptions,
+  });
+  return mediaQueue;
+}
+
+/** jobId keyed on imageId so at-least-once re-delivery of the same image collapses. */
+function mediaJobId(imageId: string): string {
+  return `media-${imageId}`;
+}
+
+export async function enqueueMedia(job: MediaProcessJob): Promise<void> {
+  await getMediaQueue().add(JOBS.processMedia, job, { jobId: mediaJobId(job.imageId) });
 }
 
 /** Normalize a phone number to bare digits — for stable dedupe keys and provider APIs. */
@@ -74,6 +93,7 @@ export async function enqueueSms(job: SmsJob): Promise<void> {
 }
 
 export async function closeQueues(): Promise<void> {
-  await smsQueue?.close();
+  await Promise.all([smsQueue?.close(), mediaQueue?.close()]);
   smsQueue = undefined;
+  mediaQueue = undefined;
 }

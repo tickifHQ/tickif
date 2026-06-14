@@ -18,6 +18,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@hono/node-server": "catalog:",
     "@hono/zod-openapi": "catalog:",
     "@repo/auth": "workspace:*",
@@ -25,6 +27,7 @@
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/storage": "workspace:*",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
     "bullmq": "catalog:",

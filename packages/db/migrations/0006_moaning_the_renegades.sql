@@ -1,0 +1,1 @@
+ALTER TABLE "project_image" ADD COLUMN "content_type" text;

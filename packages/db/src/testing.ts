@@ -103,3 +103,19 @@ export async function makeProject(overrides: Partial<typeof schema.project.$infe
     .returning();
   return row!;
 }
+
+export async function makeProjectImage(
+  overrides: Partial<typeof schema.projectImage.$inferInsert> = {},
+) {
+  const projectId = overrides.projectId ?? (await makeProject()).id;
+  const [row] = await db
+    .insert(schema.projectImage)
+    .values({
+      projectId,
+      originalKey: overrides.originalKey ?? `orig/${uid('img')}.jpg`,
+      contentType: overrides.contentType ?? 'image/jpeg',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}

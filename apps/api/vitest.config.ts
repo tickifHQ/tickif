@@ -40,6 +40,11 @@ export default defineConfig({
             GOOGLE_CLIENT_ID: 'test-google-client-id',
             GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
             BETTER_AUTH_URL: 'http://localhost:3000',
+            // Stub R2 so presignUpload can sign locally (no real bucket/network).
+            R2_ENDPOINT: 'http://localhost:9000',
+            R2_ACCESS_KEY_ID: 'test-access-key',
+            R2_SECRET_ACCESS_KEY: 'test-secret-key',
+            R2_BUCKET: 'test-bucket',
           },
           globalSetup: ['./tests/global-setup.ts'],
           setupFiles: ['./tests/setup.ts'],
