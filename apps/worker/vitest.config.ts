@@ -32,6 +32,9 @@ export default defineConfig({
           globals: true,
           environment: 'node',
           include: ['tests/**/*.integration.test.ts'],
+          // Real sharp/AVIF encoding is CPU-bound and overruns the 5s default on slow CI runners.
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
           env: {
             ...integrationEnv(),
             // Own DB so api + worker integration suites don't truncate each other under turbo.
