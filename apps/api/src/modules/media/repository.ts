@@ -11,7 +11,7 @@ export type ProjectImageListItem = Pick<
 
 export const mediaRepository = {
   /** Owning user of a project, via its designer profile. Null when the project is missing. */
-  async findProjectOwner(projectId: string): Promise<{ ownerUserId: string } | null> {
+  async findProjectOwner(projectId: string): Promise<{ ownerUserId: string | null } | null> {
     const [row] = await db
       .select({ ownerUserId: schema.designerProfile.userId })
       .from(schema.project)
@@ -44,7 +44,7 @@ export const mediaRepository = {
     projectId: string;
     originalKey: string;
     status: ProjectImageRecord['status'];
-    ownerUserId: string;
+    ownerUserId: string | null;
   } | null> {
     const [row] = await db
       .select({

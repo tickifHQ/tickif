@@ -3,13 +3,15 @@ import {
   uuid,
   text,
   integer,
+  numeric,
   timestamp,
   boolean,
   pgEnum,
   jsonb,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { user } from './auth.js';
+import { user, organization } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -50,18 +52,74 @@ export const taxonomy = pgTable(
   (t) => [index('taxonomy_kind_slug_idx').on(t.kind, t.slug)],
 );
 
-export const designerProfile = pgTable('designer_profile', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  studioName: text('studio_name').notNull(),
-  bio: text('bio'),
-  citySlug: text('city_slug'),
-  isVerified: boolean('is_verified').default(false).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+// Entity type: individual freelancer vs registered company
+export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
+
+// Profile lifecycle
+export const profileStatusEnum = pgEnum('profile_status', [
+  'draft',
+  'active',
+  'suspended',
+]);
+
+export const designerProfile = pgTable(
+  'designer_profile',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Owning organization (unique — 1 profile per org)
+    orgId: text('org_id')
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    // Creator/audit trail (not the ownership key)
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    entityType: entityTypeEnum('entity_type').notNull().default('individual'),
+    displayName: text('display_name').notNull(),
+    bio: text('bio'),
+    logoImageId: text('logo_image_id'), // R2 media key (FK deferred to media epic)
+    status: profileStatusEnum('status').notNull().default('draft'),
+    // Proof/reputation counters (owned by their respective services)
+    yearsExperience: integer('years_experience').default(0).notNull(),
+    projectCount: integer('project_count').default(0).notNull(),
+    shareCount: integer('share_count').default(0).notNull(),
+    avgRating: numeric('avg_rating', { precision: 3, scale: 2 })
+      .default('0')
+      .notNull(),
+    reviewCount: integer('review_count').default(0).notNull(),
+    // Corporate display fields (gated by entitlement at read time)
+    websiteUrl: text('website_url'),
+    testimonialBannerEnabled: boolean('testimonial_banner_enabled')
+      .default(false)
+      .notNull(),
+    staffCount: integer('staff_count'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('designer_profile_org_idx').on(t.orgId),
+    index('designer_profile_status_idx').on(t.status),
+  ],
+);
+
+// Footprint: links designer profile to taxonomy terms (city, scope, theme, etc.)
+// Queryable/facetable — replaces array columns for filter/search.
+export const designerProfileFootprint = pgTable(
+  'designer_profile_footprint',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    taxonomyId: uuid('taxonomy_id')
+      .notNull()
+      .references(() => taxonomy.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    index('dpf_profile_idx').on(t.profileId),
+    index('dpf_taxonomy_idx').on(t.taxonomyId),
+    uniqueIndex('dpf_profile_taxonomy_uniq').on(t.profileId, t.taxonomyId),
+  ],
+);
 
 export const project = pgTable(
   'project',
