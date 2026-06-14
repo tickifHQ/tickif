@@ -123,7 +123,13 @@ describe('E-34 migration safety on populated designer_profile', () => {
     // Apply the REAL expand migration statements
     const statements = readMigrationStatements('0008_e34_expand_designer_profile.sql');
     for (const stmt of statements) {
-      await pool.query(stmt);
+      try {
+        await pool.query(stmt);
+      } catch (err) {
+        // Log the failing statement for CI debugging
+        console.error('FAILED STATEMENT:', stmt);
+        throw err;
+      }
     }
 
     // Verify: row survived, data backfilled
