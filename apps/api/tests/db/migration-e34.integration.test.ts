@@ -32,10 +32,15 @@ function readMigrationStatements(filename: string): string[] {
   const raw = readFileSync(join(migrationsDir, filename), 'utf-8');
   return raw
     .split('--> statement-breakpoint')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith('--'))
+    .map((s) =>
+      s
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('--'))
+        .join('\n')
+        .trim(),
+    )
+    .filter((s) => s.length > 0)
     // Skip CREATE TYPE statements — enums already exist from the global migration setup.
-    // The test validates data migration (backfill), not enum creation.
     .filter((s) => !s.startsWith('CREATE TYPE'));
 }
 
