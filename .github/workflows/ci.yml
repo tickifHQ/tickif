@@ -14,6 +14,12 @@ jobs:
   security:
     name: security / audit / codeql
     runs-on: ubuntu-latest
+    # CodeQL's analyze step uploads SARIF; without security-events:write it fails with
+    # "Resource not accessible by integration". actions:read is needed on private repos.
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
