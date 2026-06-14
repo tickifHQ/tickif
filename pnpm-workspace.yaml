@@ -9,7 +9,7 @@ catalog:
   # Language / tooling
   typescript: ^5.9.2
   tsx: ^4.20.3
-  "@types/node": ^22.10.0
+  "@types/node": ^25.9.3
 
   # Validation (zod v4 — required by @hono/zod-openapi v1)
   zod: ^4.4.3
