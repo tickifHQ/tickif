@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const TEST_SCHEMA = 'e34_migration_test';
 const migrationsDir = join(
   dirname(fileURLToPath(import.meta.url)),
-  '..', '..', '..', 'packages', 'db', 'migrations',
+  '..', '..', '..', '..', 'packages', 'db', 'migrations',
 );
 
 /**
