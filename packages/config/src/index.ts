@@ -94,7 +94,9 @@ const envSchema = z.object({
   MEDIA_MAX_IMAGE_DIMENSION: z.coerce.number().int().positive().default(12_000),
   MEDIA_MAX_IMAGE_PIXELS: z.coerce.number().int().positive().default(40_000_000),
   // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.
+  // Peak worker memory ≈ MEDIA_WORKER_CONCURRENCY × MEDIA_MAX_IMAGE_PIXELS × 4 bytes; size the container to match.
   MEDIA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(3002),
 
   // Watermark on public derivatives only (E-109); originals stay clean.
   WATERMARK_ENABLED: z
@@ -146,6 +148,24 @@ function postgresUrl(env: RawEnv, database: string): string {
   return `postgresql://${user}:${password}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${database}`;
 }
 
+/**
+ * R2 vars are optional in the schema (dev/test can run without media), but a
+ * production process that mints presigned URLs or processes media must have them
+ * — fail fast at boot rather than at first upload.
+ */
+function assertProductionMediaConfig(env: RawEnv): void {
+  if (env.NODE_ENV !== 'production') return;
+  const missing: string[] = [];
+  if (!env.R2_ACCESS_KEY_ID) missing.push('R2_ACCESS_KEY_ID');
+  if (!env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
+  if (!env.R2_BUCKET) missing.push('R2_BUCKET');
+  if (!env.R2_ENDPOINT && !env.R2_ACCOUNT_ID) missing.push('R2_ENDPOINT or R2_ACCOUNT_ID');
+  if (missing.length > 0) {
+    const lines = missing.map((m) => `  - ${m}: required when NODE_ENV=production`).join('\n');
+    throw new Error(`Invalid environment configuration:\n${lines}`);
+  }
+}
+
 function loadConfig(): Config {
   const parsed = refinedEnvSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -155,6 +175,7 @@ function loadConfig(): Config {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
+  assertProductionMediaConfig(env);
   return {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),

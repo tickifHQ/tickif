@@ -17,8 +17,8 @@ export const uploadUrlRequestSchema = z
   .object({
     projectId: z.uuid(),
     contentType: allowedImageContentType,
-    // Declared byte size; the absolute cap (server policy) is enforced in the service.
-    size: z.number().int().positive().optional(),
+    // Required: pinned into the presigned URL's ContentLength so the upload can't exceed it.
+    size: z.number().int().positive(),
   })
   .meta({ id: 'UploadUrlRequest' });
 export type UploadUrlRequest = z.infer<typeof uploadUrlRequestSchema>;

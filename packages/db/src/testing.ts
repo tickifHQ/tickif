@@ -113,6 +113,7 @@ export async function makeProjectImage(
     .values({
       projectId,
       originalKey: overrides.originalKey ?? `orig/${uid('img')}.jpg`,
+      contentType: overrides.contentType ?? 'image/jpeg',
       ...overrides,
     })
     .returning();

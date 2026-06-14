@@ -6,7 +6,6 @@ const queue = new Queue<MediaProcessJob>(QUEUES.media, { connection });
 
 await queue.add('media:process', {
   imageId: 'demo-' + Date.now(),
-  storageKey: 'demo/original.jpg',
 });
 
 console.log('[worker] enqueued demo media:process job');

@@ -32,7 +32,7 @@ describe('enqueueMedia', () => {
       attempts: 3,
       backoff: { type: 'exponential', delay: 1_000 },
       removeOnComplete: true,
-      removeOnFail: 100,
+      removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
     });
   });
 
@@ -40,7 +40,7 @@ describe('enqueueMedia', () => {
     const { enqueueMedia, JOBS, QUEUES, defaultJobOptions } = await import('../src/index.js');
     const { Queue } = await import('bullmq');
 
-    await enqueueMedia({ imageId: 'img-1', storageKey: 'originals/p/abc' });
+    await enqueueMedia({ imageId: 'img-1' });
 
     expect(Queue).toHaveBeenCalledWith(
       QUEUES.media,
@@ -48,7 +48,7 @@ describe('enqueueMedia', () => {
     );
     expect(addMock).toHaveBeenCalledWith(
       JOBS.processMedia,
-      { imageId: 'img-1', storageKey: 'originals/p/abc' },
+      { imageId: 'img-1' },
       { jobId: 'media-img-1' },
     );
   });
@@ -56,8 +56,8 @@ describe('enqueueMedia', () => {
   it('produces a stable jobId per imageId so duplicate delivery collapses', async () => {
     const { enqueueMedia } = await import('../src/index.js');
 
-    await enqueueMedia({ imageId: 'img-9', storageKey: 'originals/p/a' });
-    await enqueueMedia({ imageId: 'img-9', storageKey: 'originals/p/b' });
+    await enqueueMedia({ imageId: 'img-9' });
+    await enqueueMedia({ imageId: 'img-9' });
 
     expect(addMock.mock.calls[0]?.[2]?.jobId).toBe('media-img-9');
     expect(addMock.mock.calls[1]?.[2]?.jobId).toBe('media-img-9');

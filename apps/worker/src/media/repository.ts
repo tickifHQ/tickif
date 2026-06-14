@@ -1,11 +1,11 @@
-import { db, schema, eq, and } from '@repo/db';
-import type { PhashCandidate } from './phash.js';
+import { db, schema, eq, and, ne, isNotNull } from '@repo/db';
+import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
 export type ProcessingImage = {
   id: string;
   projectId: string;
   originalKey: string;
-  contentType: string | null;
+  contentType: string;
   status: (typeof schema.projectImageStatusEnum.enumValues)[number];
 };
 
@@ -24,6 +24,7 @@ export async function getImageForProcessing(imageId: string): Promise<Processing
   return row ?? null;
 }
 
+/** Compare-and-swap: only the run that still owns `processing` flips to ready. Returns false if it lost the race. */
 export async function markReady(
   imageId: string,
   data: {
@@ -32,18 +33,20 @@ export async function markReady(
     height: number;
     phash: string;
   },
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const rows = await db
     .update(schema.projectImage)
     .set({ ...data, status: 'ready', updatedAt: new Date() })
-    .where(eq(schema.projectImage.id, imageId));
+    .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
+    .returning({ id: schema.projectImage.id });
+  return rows.length > 0;
 }
 
 export async function markFailed(imageId: string): Promise<void> {
   await db
     .update(schema.projectImage)
     .set({ status: 'failed', updatedAt: new Date() })
-    .where(eq(schema.projectImage.id, imageId));
+    .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')));
 }
 
 /**
@@ -59,10 +62,16 @@ export async function findProjectPhashes(
     .select({ imageId: schema.projectImage.id, phash: schema.projectImage.phash })
     .from(schema.projectImage)
     .where(
-      and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
+      and(
+        eq(schema.projectImage.projectId, projectId),
+        eq(schema.projectImage.status, 'ready'),
+        isNotNull(schema.projectImage.phash),
+        ne(schema.projectImage.id, excludeImageId),
+      ),
     );
 
+  // Skip malformed hashes so one bad row can't make hammingDistance throw and fail every later upload.
   return rows.flatMap((r) =>
-    r.phash && r.imageId !== excludeImageId ? [{ imageId: r.imageId, phash: r.phash }] : [],
+    r.phash && r.phash.length === PHASH_HEX_LEN ? [{ imageId: r.imageId, phash: r.phash }] : [],
   );
 }

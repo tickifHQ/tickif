@@ -36,7 +36,7 @@ const RANDOM_UUID = '99999999-9999-4999-8999-999999999999';
 describe('POST /api/media/upload-url', () => {
   it('rejects unauthenticated requests with 401', async () => {
     const res = await client.api.media['upload-url'].$post({
-      json: { projectId: RANDOM_UUID, contentType: 'image/jpeg' },
+      json: { projectId: RANDOM_UUID, contentType: 'image/jpeg', size: 1000 },
     });
     expect(res.status).toBe(401);
   });
@@ -53,7 +53,7 @@ describe('POST /api/media/upload-url', () => {
   it('404s when the project does not exist', async () => {
     const { cookie } = await createAuthedSession();
     const res = await client.api.media['upload-url'].$post(
-      { json: { projectId: RANDOM_UUID, contentType: 'image/jpeg' } },
+      { json: { projectId: RANDOM_UUID, contentType: 'image/jpeg', size: 1000 } },
       { headers: { cookie } },
     );
     expect(res.status).toBe(404);
@@ -65,7 +65,7 @@ describe('POST /api/media/upload-url', () => {
     const project = await makeProject({ designerId: otherDesigner.id });
 
     const res = await client.api.media['upload-url'].$post(
-      { json: { projectId: project.id, contentType: 'image/jpeg' } },
+      { json: { projectId: project.id, contentType: 'image/jpeg', size: 1000 } },
       { headers: { cookie } },
     );
     expect(res.status).toBe(403);
@@ -77,7 +77,7 @@ describe('POST /api/media/upload-url', () => {
     const project = await makeProject({ designerId: designer.id });
 
     const res = await client.api.media['upload-url'].$post(
-      { json: { projectId: project.id, contentType: 'image/jpeg' } },
+      { json: { projectId: project.id, contentType: 'image/jpeg', size: 1000 } },
       { headers: { cookie } },
     );
 

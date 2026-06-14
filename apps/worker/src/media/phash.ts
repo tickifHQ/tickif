@@ -4,7 +4,12 @@ import { config } from '@repo/config';
 const GRID = 32;
 const LOW = 8;
 
-const ALPHA = (k: number): number => (k === 0 ? Math.sqrt(1 / GRID) : Math.sqrt(2 / GRID));
+/** Length of a well-formed pHash hex string (64 bits / 4 bits per hex char). */
+export const PHASH_HEX_LEN = 16;
+
+const ALPHA: readonly number[] = Array.from({ length: LOW }, (_, k) =>
+  k === 0 ? Math.sqrt(1 / GRID) : Math.sqrt(2 / GRID),
+);
 
 const COS: number[][] = Array.from({ length: LOW }, (_, k) =>
   Array.from({ length: GRID }, (_, x) => Math.cos(((2 * x + 1) * k * Math.PI) / (2 * GRID))),
@@ -34,7 +39,7 @@ export async function computePhash(input: Buffer): Promise<string> {
         }
         sum += COS[u]![x]! * rowSum;
       }
-      coeffs.push(ALPHA(u) * ALPHA(v) * sum);
+      coeffs.push(ALPHA[u]! * ALPHA[v]! * sum);
     }
   }
 

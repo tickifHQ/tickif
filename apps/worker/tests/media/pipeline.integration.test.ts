@@ -12,8 +12,12 @@ vi.mock('@repo/storage', () => ({
   putObject: vi.fn(async ({ key, body }: { key: string; body: Buffer }) => {
     r2.set(key, body);
   }),
+  deleteObject: vi.fn(async (key: string) => {
+    r2.delete(key);
+  }),
   buildDerivativeKey: (p: string, i: string, v: string, f: string) =>
     `derivatives/${p}/${i}/${v}.${f}`,
+  ObjectTooLargeError: class ObjectTooLargeError extends Error {},
 }));
 
 import { db, schema, eq } from '@repo/db';
@@ -21,11 +25,8 @@ import { makeProject, makeProjectImage } from '@repo/db/testing';
 import { processMedia } from '../../src/jobs/media-process.js';
 import { computePhash } from '../../src/media/phash.js';
 
-const job = (imageId: string): Job<{ imageId: string; storageKey: string }> =>
-  ({ id: 'j', data: { imageId, storageKey: 'k' } }) as Job<{
-    imageId: string;
-    storageKey: string;
-  }>;
+const job = (imageId: string): Job<{ imageId: string }> =>
+  ({ id: 'j', data: { imageId } }) as Job<{ imageId: string }>;
 
 async function seedProcessing(bytes: Buffer) {
   const project = await makeProject();
@@ -115,6 +116,23 @@ describe('media pipeline (integration)', () => {
     expect([...r2.keys()].some((k) => k.startsWith(`derivatives/${projectId}/${imageId}`))).toBe(
       false,
     );
+  });
+
+  it('ignores a malformed phash on a sibling row instead of failing the new upload', async () => {
+    const project = await makeProject();
+    const originalKey = `originals/${project.id}/ok`;
+    await makeProjectImage({ projectId: project.id, status: 'ready', phash: 'not-a-valid-phash' });
+    const image = await makeProjectImage({
+      projectId: project.id,
+      originalKey,
+      contentType: 'image/jpeg',
+      status: 'processing',
+    });
+    r2.set(originalKey, representative);
+
+    const result = await processMedia(job(image.id));
+    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(await reload(image.id).then((r) => r.status)).toBe('ready');
   });
 
   it('rejects a duplicate of an existing ready image in the same project', async () => {
