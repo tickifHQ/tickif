@@ -33,7 +33,10 @@ function readMigrationStatements(filename: string): string[] {
   return raw
     .split('--> statement-breakpoint')
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith('--'));
+    .filter((s) => s.length > 0 && !s.startsWith('--'))
+    // Skip CREATE TYPE statements — enums already exist from the global migration setup.
+    // The test validates data migration (backfill), not enum creation.
+    .filter((s) => !s.startsWith('CREATE TYPE'));
 }
 
 describe('E-34 migration safety on populated designer_profile', () => {
