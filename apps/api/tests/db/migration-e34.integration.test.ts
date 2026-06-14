@@ -56,7 +56,7 @@ describe('E-34 migration safety on populated designer_profile', () => {
   });
 
   it('applies 0008 expand on a populated table — preserves and backfills data', async () => {
-    await pool.query(`SET search_path TO "${TEST_SCHEMA}"`);
+    await pool.query(`SET search_path TO "${TEST_SCHEMA}", public`);
 
     // Create pre-E34 tables (matching 0000–0007 state)
     await pool.query(`
