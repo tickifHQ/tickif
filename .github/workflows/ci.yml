@@ -103,7 +103,9 @@ jobs:
           --health-retries 10
 
       minio:
-        image: bitnami/minio:latest
+        # Bitnami relocated their public images to the bitnamilegacy org; bitnami/minio:latest
+        # no longer resolves. This image keeps MINIO_DEFAULT_BUCKETS auto-creation + server entrypoint.
+        image: bitnamilegacy/minio:latest
         env:
           MINIO_DEFAULT_BUCKETS: test-bucket
           MINIO_ROOT_USER: minioadmin
