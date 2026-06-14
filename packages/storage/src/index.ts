@@ -1,10 +1,28 @@
 import { randomUUID } from 'node:crypto';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '@repo/config';
 
 export const ORIGINALS_PREFIX = 'originals';
 export const DERIVATIVES_PREFIX = 'derivatives';
+
+/** Thrown when an object exceeds the byte budget — a permanent failure, never retried. */
+export class ObjectTooLargeError extends Error {
+  constructor(
+    public readonly key: string,
+    public readonly size: number,
+    public readonly maxBytes: number,
+  ) {
+    super(`object ${key} is ${size}B, exceeds the ${maxBytes}B limit`);
+    this.name = 'ObjectTooLargeError';
+  }
+}
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) throw new Error(`${name} is required for media storage`);
@@ -52,10 +70,17 @@ export function buildDerivativeKey(
   return `${DERIVATIVES_PREFIX}/${projectId}/${imageId}/${variant}.${format}`;
 }
 
-export async function getObject(key: string): Promise<Buffer> {
-  const res = await r2Client().send(
-    new GetObjectCommand({ Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET), Key: key }),
-  );
+/** HEAD before download so an oversize object is rejected without buffering it into memory. */
+export async function getObject(
+  key: string,
+  maxBytes: number = config.MEDIA_MAX_UPLOAD_BYTES,
+): Promise<Buffer> {
+  const bucket = requireEnv('R2_BUCKET', config.R2_BUCKET);
+  const head = await r2Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  const size = head.ContentLength ?? 0;
+  if (size > maxBytes) throw new ObjectTooLargeError(key, size, maxBytes);
+
+  const res = await r2Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   if (!res.Body) throw new Error(`R2 object ${key} has no body`);
   return Buffer.from(await res.Body.transformToByteArray());
 }
@@ -64,6 +89,7 @@ export async function putObject(params: {
   key: string;
   body: Buffer;
   contentType: string;
+  cacheControl?: string;
 }): Promise<void> {
   await r2Client().send(
     new PutObjectCommand({
@@ -71,7 +97,14 @@ export async function putObject(params: {
       Key: params.key,
       Body: params.body,
       ContentType: params.contentType,
+      CacheControl: params.cacheControl,
     }),
+  );
+}
+
+export async function deleteObject(key: string): Promise<void> {
+  await r2Client().send(
+    new DeleteObjectCommand({ Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET), Key: key }),
   );
 }
 
@@ -101,18 +134,23 @@ export async function objectExists(key: string): Promise<boolean> {
   }
 }
 
-/** ContentType is pinned into the signature so the client can't upload a different type. */
+/** ContentType and ContentLength are pinned into the signature so the client can't upload a different type or a larger body. */
 export async function presignUpload(params: {
   key: string;
   contentType: string;
+  contentLength: number;
   expiresIn?: number;
 }): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET),
     Key: params.key,
     ContentType: params.contentType,
+    ContentLength: params.contentLength,
   });
   return getSignedUrl(r2Client(), command, {
     expiresIn: params.expiresIn ?? config.R2_UPLOAD_URL_EXPIRY_SECONDS,
+    // Force both into SignedHeaders; the SDK doesn't sign content-type by default, so without
+    // this the client could PUT a different type than was declared at mint.
+    signableHeaders: new Set(['content-type', 'content-length']),
   });
 }

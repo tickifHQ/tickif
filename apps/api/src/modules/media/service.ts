@@ -11,6 +11,9 @@ import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
 import { mediaRepository, type ProjectImageListItem } from './repository.js';
 
+/** The authenticated caller, as resolved by the route from the session. */
+export type Caller = { userId: string; userRole: string };
+
 function toImageDto(row: ProjectImageListItem): ProjectImageDto {
   return {
     id: row.id,
@@ -18,8 +21,19 @@ function toImageDto(row: ProjectImageListItem): ProjectImageDto {
     sortOrder: row.sortOrder,
     width: row.width,
     height: row.height,
-    derivatives: row.derivatives ?? [],
+    derivatives: row.derivatives,
   };
+}
+
+/**
+ * Single authorization gate for every media use-case. Matches the canonical
+ * requireOwnership policy: the resource owner or a superadmin (moderation) may act.
+ * Org-member access lands when designer_profile ↔ organization is modeled (E-66).
+ */
+function assertAccess(ownerUserId: string, caller: Caller): void {
+  if (caller.userRole === 'superadmin') return;
+  if (ownerUserId === caller.userId) return;
+  throw AppError.forbidden();
 }
 
 /**
@@ -27,10 +41,8 @@ function toImageDto(row: ProjectImageListItem): ProjectImageDto {
  * wrapper, never Hono or Drizzle.
  */
 export const mediaService = {
-  async createUploadUrl(
-    input: UploadUrlRequest & { userId: string },
-  ): Promise<UploadUrlResponse> {
-    if (input.size !== undefined && input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
+  async createUploadUrl(input: UploadUrlRequest & Caller): Promise<UploadUrlResponse> {
+    if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw new AppError(
         'file_too_large',
         `Declared size exceeds the ${config.MEDIA_MAX_UPLOAD_BYTES}-byte limit`,
@@ -41,7 +53,7 @@ export const mediaService = {
     const owner = await mediaRepository.findProjectOwner(input.projectId);
     // 404 (not 403) when missing so we don't leak which project ids exist.
     if (!owner) throw AppError.notFound('Project not found');
-    if (owner.ownerUserId !== input.userId) throw AppError.forbidden();
+    assertAccess(owner.ownerUserId, input);
 
     const key = buildOriginalKey(input.projectId);
     const image = await mediaRepository.createProcessing({
@@ -49,16 +61,20 @@ export const mediaService = {
       originalKey: key,
       contentType: input.contentType,
     });
-    const uploadUrl = await presignUpload({ key, contentType: input.contentType });
+    const uploadUrl = await presignUpload({
+      key,
+      contentType: input.contentType,
+      contentLength: input.size,
+    });
 
     return { imageId: image.id, uploadUrl, key };
   },
 
   /** Called after the client has PUT the bytes to R2; enqueues async processing. */
-  async commitUpload(input: { imageId: string; userId: string }): Promise<CommitUploadResponse> {
+  async commitUpload(input: { imageId: string } & Caller): Promise<CommitUploadResponse> {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
-    if (image.ownerUserId !== input.userId) throw AppError.forbidden();
+    assertAccess(image.ownerUserId, input);
     // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
     if (image.status !== 'processing') {
       throw AppError.conflict('Image has already been committed');
@@ -68,19 +84,16 @@ export const mediaService = {
       throw AppError.badRequest('No uploaded object found for this image');
     }
 
-    await enqueueMedia({ imageId: image.id, storageKey: image.originalKey });
+    await enqueueMedia({ imageId: image.id });
     return { imageId: image.id, status: 'processing' };
   },
 
-  async listProjectImages(input: {
-    projectId: string;
-    userId: string;
-    limit: number;
-    offset: number;
-  }): Promise<ListProjectImagesResponse> {
+  async listProjectImages(
+    input: { projectId: string; limit: number; offset: number } & Caller,
+  ): Promise<ListProjectImagesResponse> {
     const owner = await mediaRepository.findProjectOwner(input.projectId);
     if (!owner) throw AppError.notFound('Project not found');
-    if (owner.ownerUserId !== input.userId) throw AppError.forbidden();
+    assertAccess(owner.ownerUserId, input);
 
     const rows = await mediaRepository.listByProject(input.projectId, {
       limit: input.limit,

@@ -50,6 +50,13 @@
       "when": 1781369575068,
       "tag": "0006_moaning_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781395306206,
+      "tag": "0007_regular_queen_noir",
+      "breakpoints": true
     }
   ]
 }

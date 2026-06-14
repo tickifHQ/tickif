@@ -12,34 +12,22 @@ import {
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
+import { validationHook } from '../../lib/validation.js';
 import { mediaService } from './service.js';
 
 type Env = { Variables: AuthVariables };
 
-// Mounted sub-apps don't inherit the base defaultHook; reuse the same {error} envelope (422).
 function mediaApp() {
-  return new OpenAPIHono<Env>({
-    defaultHook: (result, c) => {
-      if (!result.success) {
-        return c.json(
-          {
-            error: {
-              code: 'validation_error',
-              message: 'Request validation failed',
-              details: result.error.issues,
-            },
-          },
-          422,
-        );
-      }
-    },
-  });
+  return new OpenAPIHono<Env>({ defaultHook: validationHook });
 }
 
-function authedUserId(c: Parameters<RouteHandler<RouteConfig, Env>>[0]): string {
+function caller(c: Parameters<RouteHandler<RouteConfig, Env>>[0]): {
+  userId: string;
+  userRole: string;
+} {
   const user = c.get('user');
   if (!user) throw AppError.unauthorized();
-  return user.id;
+  return { userId: user.id, userRole: user.role ?? '' };
 }
 
 const errorJson = (description: string) => ({
@@ -91,13 +79,13 @@ export const mediaRoutes = mediaApp()
   .openapi(uploadUrlRoute, async (c) => {
     const result = await mediaService.createUploadUrl({
       ...c.req.valid('json'),
-      userId: authedUserId(c),
+      ...caller(c),
     });
     return c.json(result, 201);
   })
   .openapi(commitRoute, async (c) => {
     const { imageId } = c.req.valid('param');
-    const result = await mediaService.commitUpload({ imageId, userId: authedUserId(c) });
+    const result = await mediaService.commitUpload({ imageId, ...caller(c) });
     return c.json(result, 202);
   });
 
@@ -126,7 +114,7 @@ export const projectImagesRoutes = mediaApp().openapi(listImagesRoute, async (c)
   const { limit, offset } = c.req.valid('query');
   const result = await mediaService.listProjectImages({
     projectId: id,
-    userId: authedUserId(c),
+    ...caller(c),
     limit,
     offset,
   });

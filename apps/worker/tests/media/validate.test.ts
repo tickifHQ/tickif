@@ -39,6 +39,19 @@ describe('validateImageBytes', () => {
     expect(res).toEqual({ ok: false, reason: 'content_type_mismatch' });
   });
 
+  it('treats an empty declared content-type as a mismatch', async () => {
+    const res = await validateImageBytes(pngBuf, '', limits);
+    expect(res).toEqual({ ok: false, reason: 'content_type_mismatch' });
+  });
+
+  it('reports unsupported_format for a real but disallowed format (tiff)', async () => {
+    const tiff = await sharp({ create: { width: 10, height: 10, channels: 3, background: 'red' } })
+      .tiff()
+      .toBuffer();
+    const res = await validateImageBytes(tiff, 'image/tiff', limits);
+    expect(res).toEqual({ ok: false, reason: 'unsupported_format' });
+  });
+
   it('accepts a real JPEG declared as JPEG', async () => {
     const res = await validateImageBytes(jpegBuf, 'image/jpeg', limits);
     expect(res).toMatchObject({ ok: true, format: 'image/jpeg' });

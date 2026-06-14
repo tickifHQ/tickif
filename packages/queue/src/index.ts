@@ -23,7 +23,6 @@ export const JOBS = {
 
 export type MediaProcessJob = {
   imageId: string;
-  storageKey: string;
 };
 
 export type SmsJob = {
@@ -38,7 +37,8 @@ export const defaultJobOptions = {
     delay: 1_000,
   },
   removeOnComplete: true,
-  removeOnFail: 100,
+  // Keep failed jobs for a week (not a fixed count) so a failure spike can't silently evict evidence.
+  removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
 } satisfies JobsOptions;
 
 let smsQueue: Queue<SmsJob> | undefined;

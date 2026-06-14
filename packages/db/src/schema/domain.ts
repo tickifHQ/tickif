@@ -115,7 +115,7 @@ export const projectImage = pgTable(
     roomId: uuid('room_id'),
     originalKey: text('original_key').notNull(),
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
-    contentType: text('content_type'),
+    contentType: text('content_type').notNull(),
     derivatives: jsonb('derivatives').$type<ProjectImageDerivative[]>().default([]).notNull(),
     width: integer('width'),
     height: integer('height'),
@@ -127,6 +127,7 @@ export const projectImage = pgTable(
   },
   (t) => [
     index('project_image_project_idx').on(t.projectId),
-    index('project_image_project_phash_idx').on(t.projectId, t.phash),
+    // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
+    index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
   ],
 );

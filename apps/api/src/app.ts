@@ -3,11 +3,17 @@ import { Scalar } from '@scalar/hono-api-reference';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { auth } from '@repo/auth';
-import { config } from '@repo/config';
+import { config, isProduction } from '@repo/config';
 import { onError } from './lib/errors.js';
+import { validationHook } from './lib/validation.js';
 import { withSession, type AuthVariables } from './lib/auth-middleware.js';
 import { projectsRoutes } from './modules/projects/routes.js';
 import { mediaRoutes, projectImagesRoutes } from './modules/media/routes.js';
+
+// Prod: only the configured trusted origins. Dev: also allow the local web app.
+const corsOrigins = isProduction
+  ? config.TRUSTED_ORIGINS
+  : [config.NEXT_PUBLIC_API_URL, 'http://localhost:3000', ...config.TRUSTED_ORIGINS];
 
 /**
  * App composition — the modular monolith.
@@ -16,33 +22,12 @@ import { mediaRoutes, projectImagesRoutes } from './modules/media/routes.js';
  * each domain module is mounted under /api. New modules (designers, media,
  * leads, search, billing, ...) plug in with a single `.route()` call.
  */
-const base = new OpenAPIHono<{ Variables: AuthVariables }>({
-  defaultHook: (result, c) => {
-    if (!result.success) {
-      return c.json(
-        {
-          error: {
-            code: 'validation_error',
-            message: 'Request validation failed',
-            details: result.error.issues,
-          },
-        },
-        422,
-      );
-    }
-  },
-});
+const base = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook });
 
 base.onError(onError);
 
 base.use('*', logger());
-base.use(
-  '*',
-  cors({
-    origin: [config.NEXT_PUBLIC_API_URL, 'http://localhost:3000'],
-    credentials: true,
-  }),
-);
+base.use('*', cors({ origin: corsOrigins, credentials: true }));
 base.use('*', withSession);
 
 // better-auth owns everything under /api/auth/* (sign-in, OTP, OAuth, session).

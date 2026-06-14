@@ -9,7 +9,7 @@ five minutes.
 | --- | --- | --- |
 | Node.js | >= 20 (22 LTS recommended) | `node -v` |
 | pnpm | >= 10 | `corepack enable && corepack prepare pnpm@latest --activate`, or `npm i -g pnpm` |
-| Docker | any recent | For local Postgres + Redis via `docker compose` |
+| Docker | any recent | For local Postgres + Redis + MinIO via `docker compose` |
 
 This repo is a **pnpm workspace**. Do not use `npm` or `yarn` here — it will
 break the lockfile and the `workspace:*` / `catalog:` references.
@@ -50,8 +50,11 @@ needed if you're working on Gmail SSO; phone-OTP login works without them.
 ## 4. Start infrastructure
 
 ```bash
-pnpm infra:up      # docker compose up -d  (Postgres 16 + Redis 7)
+pnpm infra:up      # docker compose up -d  (Postgres 16 + Redis 7 + MinIO)
 ```
+
+This also starts **MinIO**, a local S3-compatible store standing in for Cloudflare
+R2 (API on `:9000`, console on `:9001`).
 
 Check they're healthy:
 
@@ -61,15 +64,40 @@ docker compose ps
 
 Stop them later with `pnpm infra:down` (data persists in Docker volumes).
 
+### Point storage at MinIO and create the bucket
+
+The media pipeline talks to R2 over the S3 API. Locally, point it at MinIO by
+setting these in `.env` (the defaults match `docker-compose.yml`'s `minio` service):
+
+```bash
+R2_ENDPOINT=http://localhost:9000
+R2_ACCESS_KEY_ID=minioadmin
+R2_SECRET_ACCESS_KEY=minioadmin
+R2_BUCKET=tickif-media
+```
+
+Create the bucket once — either in the console at <http://localhost:9001> (login
+with the keys above) or with `mc`:
+
+```bash
+mc alias set local http://localhost:9000 minioadmin minioadmin
+mc mb local/tickif-media
+```
+
+`R2_*` are only required in production (`@repo/config` enforces them when
+`NODE_ENV=production`); locally the pipeline simply can't run until they're set.
+
 ## 5. Apply the database schema
 
 ```bash
 pnpm db:migrate
 ```
 
-This applies the committed migrations in `packages/db/migrations/`. You should
-see 11 tables created (7 better-auth + 4 domain). See
-[database-and-migrations.md](./database-and-migrations.md).
+This applies the committed migrations in `packages/db/migrations/`. It creates the
+better-auth tables plus the domain tables (project, designer_profile, taxonomy,
+project_image, ...). See
+[database-and-migrations.md](./database-and-migrations.md) — including the
+**destructive migrations** to know about before running against real data.
 
 ## 6. Run everything
 
@@ -100,6 +128,34 @@ pnpm --filter @repo/worker enqueue:demo
 
 Open <http://localhost:3001/docs> for the interactive Scalar API reference.
 
+### Media smoke-test (mint → PUT → commit → watch)
+
+Needs MinIO running and `R2_*` set (above), plus an authenticated session cookie
+and a project you own. With those in hand:
+
+```bash
+# 1. Mint a presigned upload URL (capture imageId, uploadUrl, key)
+curl -s -b cookies.txt http://localhost:3001/api/media/upload-url \
+  -H 'content-type: application/json' \
+  -d '{"projectId":"<PROJECT_ID>","contentType":"image/jpeg","size":2400000}'
+
+# 2. PUT the bytes straight to storage. content-type + length are pinned into the
+#    signature, so they MUST match what you declared above.
+curl -s -X PUT "<uploadUrl>" \
+  -H 'content-type: image/jpeg' \
+  --data-binary @photo.jpg
+
+# 3. Commit — enqueues processing, returns 202 { status: 'processing' }
+curl -s -b cookies.txt -X POST http://localhost:3001/api/media/<imageId>/commit
+
+# 4. Watch the worker log derive + flip to ready, then list the project's images
+curl -s -b cookies.txt http://localhost:3001/api/projects/<PROJECT_ID>/images
+```
+
+The worker log shows `media completed job media-<imageId>`; the listed image moves
+to `status: 'ready'` with `derivatives` populated. If it goes to `failed`, see the
+[media pipeline runbook](./runbooks/media-pipeline.md).
+
 ## 8. Run the tests
 
 ```bash
@@ -124,6 +180,6 @@ Run from the repo root:
 | `pnpm db:generate` | Generate a new migration from schema changes |
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:studio` | Open Drizzle Studio (DB browser) |
-| `pnpm infra:up` / `infra:down` | Start / stop Postgres + Redis |
+| `pnpm infra:up` / `infra:down` | Start / stop Postgres + Redis + MinIO |
 
 Stuck? See [troubleshooting.md](./troubleshooting.md).

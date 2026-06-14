@@ -20,31 +20,40 @@ vi.mock('@repo/config', () => ({
 vi.mock('@repo/storage', () => ({
   getObject: vi.fn(),
   putObject: vi.fn(async () => {}),
+  deleteObject: vi.fn(async () => {}),
   buildDerivativeKey: (p: string, i: string, v: string, f: string) =>
     `derivatives/${p}/${i}/${v}.${f}`,
+  ObjectTooLargeError: class ObjectTooLargeError extends Error {
+    constructor(
+      public key: string,
+      public size: number,
+      public maxBytes: number,
+    ) {
+      super(`object ${key} too large`);
+      this.name = 'ObjectTooLargeError';
+    }
+  },
 }));
 vi.mock('../../src/media/repository.js', () => ({
   getImageForProcessing: vi.fn(),
-  markReady: vi.fn(async () => {}),
+  markReady: vi.fn(async () => true),
   markFailed: vi.fn(async () => {}),
   findProjectPhashes: vi.fn(async () => []),
 }));
 
 import { processMedia } from '../../src/jobs/media-process.js';
-import { getObject, putObject } from '@repo/storage';
+import { getObject, putObject, deleteObject, ObjectTooLargeError } from '@repo/storage';
 import { config } from '@repo/config';
 import * as repo from '../../src/media/repository.js';
 import { computePhash } from '../../src/media/phash.js';
 
 const getObjectMock = vi.mocked(getObject);
 const putObjectMock = vi.mocked(putObject);
+const deleteObjectMock = vi.mocked(deleteObject);
 const repoMock = vi.mocked(repo);
 
-const job = (imageId: string): Job<{ imageId: string; storageKey: string }> =>
-  ({ id: 'j1', data: { imageId, storageKey: 'k' } }) as Job<{
-    imageId: string;
-    storageKey: string;
-  }>;
+const job = (imageId: string): Job<{ imageId: string }> =>
+  ({ id: 'j1', data: { imageId } }) as Job<{ imageId: string }>;
 
 const processing = {
   id: 'img-1',
@@ -64,6 +73,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   config.MEDIA_DEDUP_ACTION = 'reject';
+  repoMock.markReady.mockResolvedValue(true);
 });
 
 describe('processMedia', () => {
@@ -77,6 +87,13 @@ describe('processMedia', () => {
     repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
     expect(await processMedia(job('img-1'))).toEqual({ ok: true, skipped: 'already-ready' });
     expect(getObjectMock).not.toHaveBeenCalled();
+  });
+
+  it('does not reprocess an already-failed image (no flapping on re-enqueue)', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'failed' });
+    expect(await processMedia(job('img-1'))).toEqual({ ok: true, skipped: 'already-failed' });
+    expect(getObjectMock).not.toHaveBeenCalled();
+    expect(repoMock.markReady).not.toHaveBeenCalled();
   });
 
   it('processes, stores derivatives, and flips status to ready', async () => {
@@ -97,7 +114,15 @@ describe('processMedia', () => {
     expect(repoMock.markFailed).not.toHaveBeenCalled();
   });
 
-  it('fails the image when the bytes are not a valid image', async () => {
+  it('reports lost-race when another run already finished the image', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue(processing);
+    getObjectMock.mockResolvedValue(jpeg);
+    repoMock.markReady.mockResolvedValue(false);
+
+    expect(await processMedia(job('img-1'))).toEqual({ ok: true, skipped: 'lost-race' });
+  });
+
+  it('permanently fails + deletes the original when the bytes are not a valid image', async () => {
     repoMock.getImageForProcessing.mockResolvedValue(processing);
     getObjectMock.mockResolvedValue(Buffer.from('definitely not an image'));
 
@@ -105,11 +130,23 @@ describe('processMedia', () => {
 
     expect(result).toEqual({ ok: false, reason: 'corrupt' });
     expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
     expect(repoMock.markReady).not.toHaveBeenCalled();
     expect(putObjectMock).not.toHaveBeenCalled();
   });
 
-  it('fails the image when a near-duplicate exists in the project', async () => {
+  it('treats an oversize object as a permanent failure (no retry)', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue(processing);
+    getObjectMock.mockRejectedValue(new ObjectTooLargeError(processing.originalKey, 99, 1));
+
+    const result = await processMedia(job('img-1'));
+
+    expect(result).toEqual({ ok: false, reason: 'too_large' });
+    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
+  });
+
+  it('permanently fails + deletes when a near-duplicate exists in the project', async () => {
     repoMock.getImageForProcessing.mockResolvedValue(processing);
     getObjectMock.mockResolvedValue(jpeg);
     repoMock.findProjectPhashes.mockResolvedValue([
@@ -120,6 +157,7 @@ describe('processMedia', () => {
 
     expect(result).toEqual({ ok: false, reason: 'duplicate' });
     expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
     expect(repoMock.markReady).not.toHaveBeenCalled();
   });
 
@@ -138,11 +176,12 @@ describe('processMedia', () => {
     expect(repoMock.markFailed).not.toHaveBeenCalled();
   });
 
-  it('marks failed and rethrows on an unexpected (transient) error', async () => {
+  it('rethrows a transient error WITHOUT marking the row failed (let BullMQ retry)', async () => {
     repoMock.getImageForProcessing.mockResolvedValue(processing);
     getObjectMock.mockRejectedValue(new Error('R2 timeout'));
 
     await expect(processMedia(job('img-1'))).rejects.toThrow('R2 timeout');
-    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
+    expect(deleteObjectMock).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { isProduction } from '@repo/config';
 
 /**
  * Domain-level error thrown by the service layer. Services stay framework-free
@@ -41,10 +42,9 @@ export class AppError extends Error {
 /** Central error handler — single place that converts errors to the API envelope. */
 export function onError(err: Error, c: Context) {
   if (err instanceof AppError) {
-    return c.json(
-      { error: { code: err.code, message: err.message, details: err.details } },
-      err.status,
-    );
+    // Don't leak internal error details (raw values, schema shape) to prod clients.
+    const details = isProduction ? undefined : err.details;
+    return c.json({ error: { code: err.code, message: err.message, details } }, err.status);
   }
   if (err instanceof HTTPException) {
     return c.json({ error: { code: 'http_error', message: err.message } }, err.status);
