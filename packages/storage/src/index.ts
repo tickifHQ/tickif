@@ -47,6 +47,10 @@ export function r2Client(): S3Client {
       secretAccessKey: requireEnv('R2_SECRET_ACCESS_KEY', config.R2_SECRET_ACCESS_KEY),
     },
     forcePathStyle: true,
+    // R2 (and MinIO) reject the SDK's default CRC32 trailer; baking it into a presigned
+    // PUT makes the browser upload fail. Only sign a checksum when explicitly set.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   return client;
 }

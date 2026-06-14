@@ -56,4 +56,18 @@ describe('presignUpload', () => {
       bigger.searchParams.get('X-Amz-Signature'),
     );
   });
+
+  // Regression: a default CRC32 trailer signed into the URL makes R2/MinIO reject the
+  // browser PUT (NotImplemented). The presigned URL must carry no checksum params.
+  it('does not sign a checksum into the URL', async () => {
+    const url = await presignUpload({
+      key: 'originals/p/ghi',
+      contentType: 'image/webp',
+      contentLength: 1000,
+    });
+    const parsed = new URL(url);
+    expect(parsed.searchParams.has('x-amz-sdk-checksum-algorithm')).toBe(false);
+    expect(parsed.searchParams.has('x-amz-checksum-crc32')).toBe(false);
+    expect(url.toLowerCase()).not.toContain('x-amz-checksum');
+  });
 });
