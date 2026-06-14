@@ -1,22 +1,22 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 // @ts-expect-error — @types/pg lives in @repo/db devDeps
 import { Pool } from 'pg';
+import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 
 /**
  * E-34 Migration safety test (reviewer requirement).
  *
- * Uses a DEDICATED temporary database to avoid conflicts with the main
- * integration test DB. This allows us to:
- * 1. Migrate to pre-E34 state (0000–0007)
- * 2. Seed a designer_profile row
- * 3. Apply 0008 (expand)
- * 4. Verify data preservation and backfill correctness
+ * Uses a DEDICATED temporary database to prove that migration 0008 (expand)
+ * succeeds on a populated designer_profile table and backfills data correctly.
  *
- * The temporary DB is created and dropped within this test.
+ * Flow:
+ * 1. Create temp DB
+ * 2. Apply migrations 0000–0007 (pre-E34 state)
+ * 3. Seed a designer_profile row with old schema columns
+ * 4. Apply 0008 (expand) — verify backfill + preservation
+ * 5. Apply 0009 (contract) — verify old columns removed
  */
 
 const TEMP_DB = 'tickif_migration_e34_test';
@@ -25,29 +25,55 @@ const migrationsDir = join(
   '..', '..', '..', '..', 'packages', 'db', 'migrations',
 );
 
+/** Read a migration file, strip comments, split on breakpoints, return executable statements. */
+function readStatements(filename: string): string[] {
+  const raw = readFileSync(join(migrationsDir, filename), 'utf-8');
+  return raw
+    .split('--> statement-breakpoint')
+    .map((s) =>
+      s.split('\n').filter((line) => !line.trimStart().startsWith('--')).join('\n').trim(),
+    )
+    .filter((s) => s.length > 0);
+}
+
+/** Execute a list of SQL statements sequentially. Logs the failing statement on error. */
+async function execStatements(pool: Pool, statements: string[]): Promise<void> {
+  for (const stmt of statements) {
+    try {
+      await pool.query(stmt);
+    } catch (err) {
+      console.error('FAILED STATEMENT:', stmt.substring(0, 200));
+      throw err;
+    }
+  }
+}
+
+/** Get the list of migration files for indices 0..N (inclusive). */
+function getMigrationFiles(upTo: number): string[] {
+  const files: string[] = [];
+  const allFiles = readFileSync(join(migrationsDir, 'meta', '_journal.json'), 'utf-8');
+  const journal = JSON.parse(allFiles);
+  for (const entry of journal.entries) {
+    if (entry.idx > upTo) break;
+    files.push(`${entry.tag}.sql`);
+  }
+  return files;
+}
+
 describe('E-34 migration safety on populated designer_profile', () => {
-  let adminPool: Pool; // connects to default DB to create/drop temp DB
-  let testPool: Pool; // connects to the temp DB
+  let adminPool: Pool;
+  let testPool: Pool;
 
   beforeAll(async () => {
     const baseUrl = process.env.DATABASE_URL;
     if (!baseUrl) throw new Error('DATABASE_URL must be set');
 
-    // Connect to default DB to create the temp database
     adminPool = new Pool({ connectionString: baseUrl });
     await adminPool.query(`DROP DATABASE IF EXISTS "${TEMP_DB}"`);
     await adminPool.query(`CREATE DATABASE "${TEMP_DB}"`);
 
-    // Connect to the temp DB
     const tempUrl = baseUrl.replace(/\/[^/]+$/, `/${TEMP_DB}`);
     testPool = new Pool({ connectionString: tempUrl });
-
-    // Apply migrations 0000–0007 (pre-E34 state) using Drizzle's migrator.
-    // We temporarily write a journal that stops at 0007, apply, then restore.
-    // Actually — Drizzle's migrate() applies ALL migrations in the folder.
-    // So we apply all and the test verifies the full chain works on populated data.
-    const db = drizzle(testPool, { casing: 'snake_case' });
-    await migrate(db, { migrationsFolder: migrationsDir });
   }, 30000);
 
   afterAll(async () => {
@@ -56,59 +82,71 @@ describe('E-34 migration safety on populated designer_profile', () => {
     await adminPool?.end();
   });
 
-  it('migration 0008 preserves and backfills existing data', async () => {
-    // Since migrate() ran ALL migrations (0000–0009), we verify:
-    // - The migration chain completed without error on a fresh DB ✅
-    // - We can now seed data and verify the schema is correct.
+  it('preserves and backfills existing data through expand (0008) + contract (0009)', async () => {
+    // 1. Apply migrations 0000–0007 (pre-E34 state)
+    const preE34Files = getMigrationFiles(7);
+    for (const file of preE34Files) {
+      await execStatements(testPool, readStatements(file));
+    }
 
-    // Seed a user + org + member + profile using the FINAL schema
+    // 2. Seed pre-E34 data (old schema: studio_name, city_slug, is_verified)
     await testPool.query(`
-      INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at, role, status)
-      VALUES ('user-1', 'Test Designer', 'test@example.com', true, NOW(), NOW(), 'visitor', 'pending');
+      INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at, role, banned, status)
+      VALUES ('user-1', 'Test Designer', 'test@example.com', true, NOW(), NOW(), 'visitor', false, 'pending');
     `);
     await testPool.query(`
       INSERT INTO "organization" (id, name, slug, created_at)
-      VALUES ('org-1', 'Test Org', 'test-org', NOW());
+      VALUES ('org-1', 'Test Org', 'test-org', '2026-01-01');
     `);
     await testPool.query(`
       INSERT INTO "member" (id, organization_id, user_id, role, created_at)
-      VALUES ('mem-1', 'org-1', 'user-1', 'owner', NOW());
+      VALUES ('mem-1', 'org-1', 'user-1', 'owner', '2026-01-01');
     `);
     await testPool.query(`
-      INSERT INTO "designer_profile" (org_id, user_id, display_name, entity_type, status, created_at, updated_at)
-      VALUES ('org-1', 'user-1', 'My Studio', 'individual', 'draft', NOW(), NOW());
+      INSERT INTO "designer_profile" (user_id, studio_name, bio, city_slug, is_verified, created_at, updated_at)
+      VALUES ('user-1', 'My Studio', 'A great bio', 'mumbai', true, NOW(), NOW());
     `);
 
-    // Verify row exists with new schema columns
-    const result = await testPool.query('SELECT * FROM designer_profile');
-    expect(result.rows).toHaveLength(1);
+    // Verify pre-migration state
+    const before = await testPool.query('SELECT * FROM designer_profile');
+    expect(before.rows).toHaveLength(1);
+    expect(before.rows[0].studio_name).toBe('My Studio');
 
-    const row = result.rows[0];
-    expect(row.display_name).toBe('My Studio');
-    expect(row.org_id).toBe('org-1');
-    expect(row.user_id).toBe('user-1');
-    expect(row.entity_type).toBe('individual');
-    expect(row.status).toBe('draft');
-    expect(row.years_experience).toBe(0);
+    // 3. Apply migration 0008 (expand)
+    const [expand] = getMigrationFiles(8).slice(-1);
+    await execStatements(testPool, readStatements(expand!));
 
-    // Verify old columns are gone (contract migration ran)
-    expect(row).not.toHaveProperty('studio_name');
-    expect(row).not.toHaveProperty('city_slug');
-    expect(row).not.toHaveProperty('is_verified');
+    // 4. Verify: row survived, data backfilled
+    const afterExpand = await testPool.query('SELECT * FROM designer_profile');
+    expect(afterExpand.rows).toHaveLength(1);
 
-    // Verify footprint table exists and is functional
-    const fpResult = await testPool.query(`
-      SELECT count(*) as cnt FROM information_schema.tables
-      WHERE table_name = 'designer_profile_footprint'
-    `);
-    expect(fpResult.rows[0].cnt).toBe('1');
+    const row = afterExpand.rows[0];
+    expect(row.display_name).toBe('My Studio'); // backfilled from studio_name
+    expect(row.org_id).toBe('org-1'); // backfilled from membership (deterministic)
+    expect(row.user_id).toBe('user-1'); // preserved (now nullable)
+    expect(row.entity_type).toBe('individual'); // default
+    expect(row.status).toBe('draft'); // default
+    expect(row.bio).toBe('A great bio'); // untouched
+    expect(row.years_experience).toBe(0); // default
 
-    // Verify unique constraint on org_id
-    await expect(
-      testPool.query(`
-        INSERT INTO "designer_profile" (org_id, user_id, display_name, entity_type, status, created_at, updated_at)
-        VALUES ('org-1', 'user-1', 'Duplicate', 'individual', 'draft', NOW(), NOW());
-      `),
-    ).rejects.toThrow(/unique/i);
+    // Old columns still present after expand (not dropped until contract)
+    expect(row.studio_name).toBe('My Studio');
+    expect(row.city_slug).toBe('mumbai');
+    expect(row.is_verified).toBe(true);
+
+    // 5. Apply migration 0009 (contract)
+    const [contract] = getMigrationFiles(9).slice(-1);
+    await execStatements(testPool, readStatements(contract!));
+
+    // 6. Verify: old columns removed
+    const afterContract = await testPool.query('SELECT * FROM designer_profile');
+    const finalRow = afterContract.rows[0];
+    expect(finalRow).not.toHaveProperty('studio_name');
+    expect(finalRow).not.toHaveProperty('city_slug');
+    expect(finalRow).not.toHaveProperty('is_verified');
+
+    // Data still intact
+    expect(finalRow.display_name).toBe('My Studio');
+    expect(finalRow.org_id).toBe('org-1');
   });
 });
