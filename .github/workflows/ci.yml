@@ -11,9 +11,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security:
+    name: security / audit / codeql
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
   ci:
     name: typecheck / lint / test / build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     # Job-level env satisfies BOTH consumers:
     #  - `pnpm db:migrate` / `db:generate` run via `pnpm --filter` (outside Turbo,
@@ -35,6 +71,10 @@ jobs:
       DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_test
       REDIS_HOST: localhost
       REDIS_PORT: "6379"
+      R2_ENDPOINT: http://localhost:9000
+      R2_ACCESS_KEY_ID: minioadmin
+      R2_SECRET_ACCESS_KEY: minioadmin
+      R2_BUCKET: test-bucket
       TURBO_TELEMETRY_DISABLED: "1"
 
     services:
@@ -58,6 +98,20 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_DEFAULT_BUCKETS: test-bucket
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10

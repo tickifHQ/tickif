@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill in with your Cloudflare credentials.
+# See https://dash.cloudflare.com/account/api-tokens for API token generation.
+
+cloudflare_api_token   = "your-cloudflare-api-token-here"
+cloudflare_account_id  = "your-account-id-here"
+r2_bucket_name         = "tickif-media"
+r2_location            = "nam"
+
+cors_allowed_origins = [
+  "https://tickif.co",
+  "https://www.tickif.co",
+  "http://localhost:3000"
+]
+
+lifecycle_expiry_days = 7

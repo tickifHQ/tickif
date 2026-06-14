@@ -1,0 +1,16 @@
+.git
+.gitignore
+.github
+.env
+.env.*.local
+node_modules
+dist
+.turbo
+.next
+coverage
+.vitest
+*.test.ts
+*.test.tsx
+docs
+CONTRIBUTING.md
+README.md

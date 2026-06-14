@@ -66,6 +66,37 @@ together. This is intentional — see [auth.md](./auth.md).
 | `pnpm db:studio` | Open Drizzle Studio — a browser UI for the DB |
 | `pnpm --filter @repo/db push` | Push schema directly without a migration (**dev/prototyping only**, never prod) |
 
+## Destructive migrations
+
+Most migrations are additive and reversible enough. A few are not — read these before
+applying against a populated database.
+
+### 0005 — `project_image` reshape for the media pipeline
+
+One-way, expand/contract migration that rebuilds `project_image` for the media pipeline
+(adds `original_key`, `derivatives`, `phash`, `status`, `sort_order`; drops `storage_key`,
+`content_hash`, `room_slug`, `position`).
+
+- **`room_slug` is unrecoverable.** It is dropped with no replacement column to copy into,
+  so its data is gone — there is **no clean rollback**. `original_key`/`phash`/`sort_order`
+  only restore if the forward backfill ran.
+- **Take a logical backup of `project_image` first** on any populated apply, and recover by
+  **forward-fix, not rollback**.
+- **Indexes are built non-concurrently** because drizzle wraps each migration in a
+  transaction. On a large/persistent table this locks the table — instead skip the index
+  statements and **build them `CONCURRENTLY` out-of-band** after the migration. See the
+  [media pipeline runbook](./runbooks/media-pipeline.md).
+
+### 0007 — `content_type` NOT NULL + index swap
+
+- Backfills any pre-pipeline `NULL` `content_type` to `application/octet-stream` (so the
+  worker rejects those rows on validation rather than the migration aborting on the NOT
+  NULL), then sets the column `NOT NULL`.
+- Drops the dead `(project_id, phash)` index (a btree can't serve fuzzy/Hamming dedup) and
+  adds the covering `(project_id, sort_order, created_at)` index for the list query's
+  `ORDER BY`. On a large table, run the DROP/CREATE INDEX `CONCURRENTLY` out-of-band for the
+  same reason as 0005.
+
 ## Querying
 
 Import `db`, `schema`, and the common operators from `@repo/db` (re-exported so
