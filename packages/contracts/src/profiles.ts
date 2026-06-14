@@ -62,3 +62,77 @@ export const onboardDesignerResponseSchema = z
   })
   .meta({ id: 'OnboardDesignerResponse' });
 export type OnboardDesignerResponse = z.infer<typeof onboardDesignerResponseSchema>;
+
+// --- Profile Read/Update (E-37) ---
+
+/** Footprint entry in profile responses. */
+const footprintEntrySchema = z.object({
+  id: z.string().uuid(),
+  kind: z.string(),
+  slug: z.string(),
+  label: z.string(),
+});
+
+/**
+ * Base profile fields — single source of truth for both projections.
+ * Public and owner projections are derived via .omit/.extend to prevent drift.
+ */
+const profileBaseSchema = z.object({
+  id: z.string().uuid(),
+  orgId: z.string(),
+  displayName: z.string(),
+  entityType: z.enum(['individual', 'company']),
+  bio: z.string().nullable(),
+  logoImageId: z.string().nullable(),
+  status: z.string(),
+  yearsExperience: z.number(),
+  projectCount: z.number(),
+  shareCount: z.number(),
+  avgRating: z.string(),
+  reviewCount: z.number(),
+  websiteUrl: z.string().nullable(),
+  staffCount: z.number().nullable(),
+  testimonialBannerEnabled: z.boolean(),
+  footprint: z.array(footprintEntrySchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+/** Public profile projection — excludes private/corporate fields. */
+export const profilePublicResponseSchema = profileBaseSchema
+  .omit({
+    orgId: true,
+    updatedAt: true,
+    websiteUrl: true,
+    staffCount: true,
+    testimonialBannerEnabled: true,
+  })
+  .meta({ id: 'ProfilePublic' });
+export type ProfilePublicResponse = z.infer<typeof profilePublicResponseSchema>;
+
+/** Owner profile projection — full fields including corporate. */
+export const profileOwnerResponseSchema = profileBaseSchema.meta({ id: 'ProfileOwner' });
+export type ProfileOwnerResponse = z.infer<typeof profileOwnerResponseSchema>;
+
+/** Profile ID path parameter. */
+export const profileIdParamSchema = z.object({
+  id: z.string().uuid(),
+});
+
+/**
+ * PATCH /api/profiles/me — partial update.
+ * Taxonomy arrays use replace semantics: present → replace, absent → untouched.
+ */
+export const updateProfileSchema = z.object({
+  displayName: z.string().trim().min(2).max(100).optional(),
+  bio: z.string().max(500).optional().nullable(),
+  logoImageId: z.string().optional().nullable(),
+  entityType: z.enum(['individual', 'company']).optional(),
+  websiteUrl: z.string().url().max(200).optional().nullable(),
+  staffCount: z.number().int().min(0).optional().nullable(),
+  testimonialBannerEnabled: z.boolean().optional(),
+  cityIds: z.array(z.string().uuid()).max(5).optional(),
+  scopeIds: z.array(z.string().uuid()).max(10).optional(),
+  themeIds: z.array(z.string().uuid()).max(10).optional(),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

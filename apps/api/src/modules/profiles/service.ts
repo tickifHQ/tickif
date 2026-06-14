@@ -4,9 +4,13 @@ import type {
   ProfileCompletionResponse,
   OnboardDesignerInput,
   OnboardDesignerResponse,
+  ProfilePublicResponse,
+  ProfileOwnerResponse,
+  UpdateProfileInput,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
+import { isOrgWriter } from '../orgs/repository.js';
 
 /**
  * Profile completion use-cases. Business logic lives here — no Hono, no Drizzle.
@@ -278,5 +282,115 @@ export const profilesService = {
     else missing.push('contact');
 
     return { filled, missing };
+  },
+
+  // --- Read/Update (E-37) ---
+
+  /** Public read — only active profiles, no private/corporate fields. */
+  async getPublicProfile(profileId: string): Promise<ProfilePublicResponse> {
+    const profile = await profilesRepository.findById(profileId);
+    if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
+
+    const footprint = await profilesRepository.getFootprint(profileId);
+
+    return {
+      id: profile.id,
+      displayName: profile.displayName,
+      entityType: profile.entityType,
+      bio: profile.bio,
+      logoImageId: profile.logoImageId,
+      status: profile.status,
+      yearsExperience: profile.yearsExperience,
+      projectCount: profile.projectCount,
+      shareCount: profile.shareCount,
+      avgRating: profile.avgRating,
+      reviewCount: profile.reviewCount,
+      footprint,
+      createdAt: profile.createdAt.toISOString(),
+    };
+  },
+
+  /**
+   * Owner update — requires write-capable org role.
+   *
+   * Access policy: uses isOrgWriter (owner/admin on the org membership) rather than
+   * the platform requireOwnership guard. This is intentionally more restrictive —
+   * superadmin does NOT have implicit write access to designer profiles. Superadmin
+   * moderation should use a dedicated admin endpoint if needed (not this self-service path).
+   *
+   * Authz runs BEFORE the profile lookup to avoid leaking existence to non-writers.
+   */
+  async updateProfile(
+    userId: string,
+    activeOrgId: string | null,
+    input: UpdateProfileInput,
+  ): Promise<ProfileOwnerResponse> {
+    if (!activeOrgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+
+    // Authz FIRST — don't leak profile existence to non-writers
+    const canWrite = await isOrgWriter(userId, activeOrgId);
+    if (!canWrite) {
+      throw AppError.forbidden('Insufficient org role to update this profile');
+    }
+
+    const profile = await profilesRepository.findByOrgId(activeOrgId);
+    if (!profile) {
+      throw AppError.notFound('No profile found for the active organization');
+    }
+
+    // Validate taxonomy IDs (shared helper — single round-trip, consistent reporting)
+    const { cityIds, scopeIds, themeIds, ...profileFields } = input;
+    const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
+      cityIds,
+      scopeIds,
+      themeIds,
+    });
+    if (taxonomyErrors.length > 0) {
+      throw AppError.unprocessable(taxonomyErrors.join('; '));
+    }
+
+    // Update profile fields
+    const hasProfileUpdates = Object.keys(profileFields).length > 0;
+    let updated = profile;
+    if (hasProfileUpdates) {
+      updated = await profilesRepository.updateProfile(profile.id, profileFields);
+    }
+
+    // Replace taxonomy footprints atomically (only for provided arrays)
+    if (cityIds !== undefined) {
+      await profilesRepository.replaceFootprintByKind(profile.id, 'city', cityIds);
+    }
+    if (scopeIds !== undefined) {
+      await profilesRepository.replaceFootprintByKind(profile.id, 'scope', scopeIds);
+    }
+    if (themeIds !== undefined) {
+      await profilesRepository.replaceFootprintByKind(profile.id, 'theme', themeIds);
+    }
+
+    // Return owner projection
+    const footprint = await profilesRepository.getFootprint(profile.id);
+
+    return {
+      id: updated.id,
+      orgId: updated.orgId,
+      displayName: updated.displayName,
+      entityType: updated.entityType,
+      bio: updated.bio,
+      logoImageId: updated.logoImageId,
+      status: updated.status,
+      yearsExperience: updated.yearsExperience,
+      projectCount: updated.projectCount,
+      shareCount: updated.shareCount,
+      avgRating: updated.avgRating,
+      reviewCount: updated.reviewCount,
+      websiteUrl: updated.websiteUrl,
+      staffCount: updated.staffCount,
+      testimonialBannerEnabled: updated.testimonialBannerEnabled,
+      footprint,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
   },
 };
