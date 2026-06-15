@@ -6,13 +6,9 @@ import { z } from 'zod';
  * the Next.js web app (typed fetch). Plain zod, no framework deps.
  */
 
-export const projectStatus = z.enum([
-  'draft',
-  'submitted',
-  'in_review',
-  'published',
-  'rejected',
-]);
+export const projectStatus = z
+  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected'])
+  .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
 
 export const createProjectSchema = z
@@ -27,6 +23,43 @@ export const createProjectSchema = z
   .meta({ id: 'CreateProject' });
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
+export const projectRoomMetadataSchema = z
+  .object({
+    labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+    attributeLabels: z
+      .record(z.string(), z.array(z.string().trim().min(1).max(80)).max(20))
+      .optional(),
+  })
+  .catchall(z.unknown())
+  .meta({ id: 'ProjectRoomMetadata' });
+export type ProjectRoomMetadata = z.infer<typeof projectRoomMetadataSchema>;
+
+export const projectRoomSchema = z
+  .object({
+    id: z.uuid(),
+    projectId: z.uuid(),
+    roomTypeId: z.uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    sortOrder: z.number().int(),
+    metadata: projectRoomMetadataSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .meta({ id: 'ProjectRoom' });
+export type ProjectRoom = z.infer<typeof projectRoomSchema>;
+
+export const createProjectRoomSchema = z
+  .object({
+    roomTypeId: z.uuid(),
+    name: z.string().trim().min(2).max(120),
+    description: z.string().max(2000).optional(),
+    sortOrder: z.number().int().min(0).optional(),
+    metadata: projectRoomMetadataSchema.optional(),
+  })
+  .meta({ id: 'CreateProjectRoom' });
+export type CreateProjectRoomInput = z.infer<typeof createProjectRoomSchema>;
+
 export const projectResponseSchema = z
   .object({
     id: z.uuid(),
@@ -37,6 +70,7 @@ export const projectResponseSchema = z
     status: projectStatus,
     citySlug: z.string().nullable(),
     budgetBandSlug: z.string().nullable(),
+    coverImageId: z.uuid().nullable(),
     metadata: z.record(z.string(), z.unknown()).nullable(),
     publishedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
@@ -45,12 +79,14 @@ export const projectResponseSchema = z
   .meta({ id: 'Project' });
 export type ProjectResponse = z.infer<typeof projectResponseSchema>;
 
-export const listProjectsQuerySchema = z.object({
-  status: projectStatus.optional(),
-  citySlug: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+export const listProjectsQuerySchema = z
+  .object({
+    status: projectStatus.optional(),
+    citySlug: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .meta({ id: 'ListProjectsQuery' });
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
 export const listProjectsResponseSchema = z
@@ -63,6 +99,4 @@ export const listProjectsResponseSchema = z
   .meta({ id: 'ProjectList' });
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
 
-export const projectIdParamSchema = z.object({
-  id: z.uuid(),
-});
+export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });

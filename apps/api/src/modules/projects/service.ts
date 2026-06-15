@@ -23,6 +23,7 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     status: row.status,
     citySlug: row.citySlug,
     budgetBandSlug: row.budgetBandSlug,
+    coverImageId: row.coverImageId,
     metadata: row.metadata ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -51,7 +52,6 @@ export const projectsService = {
     if (!row) throw AppError.notFound(`Project ${id} not found`);
     return toResponse(row);
   },
-
 
   async create(input: CreateProjectInput): Promise<ProjectResponse> {
     // Ensure a unique slug; append a short suffix on collision.
