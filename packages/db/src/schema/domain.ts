@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { user, organization } from './auth.js';
 
 /**
@@ -98,6 +99,9 @@ export const designerProfile = pgTable(
   (t) => [
     index('designer_profile_org_idx').on(t.orgId),
     index('designer_profile_status_idx').on(t.status),
+    uniqueIndex('designer_profile_user_id_unique')
+      .on(t.userId)
+      .where(sql`${t.userId} IS NOT NULL`),
   ],
 );
 

@@ -875,6 +875,22 @@
           "with": {},
           "method": "btree",
           "concurrently": false
+        },
+        "designer_profile_user_id_unique": {
+          "name": "designer_profile_user_id_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"designer_profile\".\"user_id\" IS NOT NULL",
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
