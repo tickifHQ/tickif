@@ -210,4 +210,102 @@ export const profilesRepository = {
       return { profile: profile!, org: org! };
     });
   },
+
+  // --- Read/Update (E-37) ---
+
+  /** Find a profile by ID (for public read). */
+  async findById(profileId: string): Promise<DesignerProfileRecord | null> {
+    const [row] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, profileId))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** Get all footprint taxonomy terms for a profile. */
+  async getFootprint(
+    profileId: string,
+  ): Promise<{ id: string; kind: string; slug: string; label: string }[]> {
+    return db
+      .select({
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+      )
+      .where(eq(schema.designerProfileFootprint.profileId, profileId));
+  },
+
+  /** Update profile fields (partial). */
+  async updateProfile(
+    profileId: string,
+    data: Partial<{
+      displayName: string;
+      bio: string | null;
+      logoImageId: string | null;
+      entityType: 'individual' | 'company';
+      websiteUrl: string | null;
+      staffCount: number | null;
+      testimonialBannerEnabled: boolean;
+    }>,
+  ): Promise<DesignerProfileRecord> {
+    const [row] = await db
+      .update(schema.designerProfile)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.designerProfile.id, profileId))
+      .returning();
+    return row!;
+  },
+
+  /**
+   * Atomically replace footprint entries for a specific taxonomy kind.
+   * Uses a transaction: SELECT existing IDs → DELETE → INSERT with onConflictDoNothing.
+   */
+  async replaceFootprintByKind(
+    profileId: string,
+    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    taxonomyIds: string[],
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Find existing entries of this kind
+      const existingIds = await tx
+        .select({ id: schema.designerProfileFootprint.id })
+        .from(schema.designerProfileFootprint)
+        .innerJoin(
+          schema.taxonomy,
+          eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+        )
+        .where(
+          and(
+            eq(schema.designerProfileFootprint.profileId, profileId),
+            eq(schema.taxonomy.kind, kind),
+          ),
+        );
+
+      if (existingIds.length > 0) {
+        await tx
+          .delete(schema.designerProfileFootprint)
+          .where(
+            inArray(
+              schema.designerProfileFootprint.id,
+              existingIds.map((e) => e.id),
+            ),
+          );
+      }
+
+      // Insert new entries with conflict guard
+      if (taxonomyIds.length > 0) {
+        await tx
+          .insert(schema.designerProfileFootprint)
+          .values(taxonomyIds.map((taxonomyId) => ({ profileId, taxonomyId })))
+          .onConflictDoNothing();
+      }
+    });
+  },
 };

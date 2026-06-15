@@ -3,6 +3,10 @@ import {
   profileCompletionResponseSchema,
   onboardDesignerSchema,
   onboardDesignerResponseSchema,
+  profilePublicResponseSchema,
+  profileOwnerResponseSchema,
+  profileIdParamSchema,
+  updateProfileSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -69,6 +73,30 @@ const onboardRoute = createRoute({
 });
 
 export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/{id}',
+      tags: ['Profiles'],
+      summary: 'Get a public profile by ID (active only)',
+      request: { params: profileIdParamSchema },
+      responses: {
+        200: {
+          description: 'Public profile projection',
+          content: { 'application/json': { schema: profilePublicResponseSchema } },
+        },
+        404: {
+          description: 'Profile not found or not active',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const result = await profilesService.getPublicProfile(id);
+      return c.json(result, 200);
+    },
+  )
   .openapi(completionRoute, async (c) => {
     const user = c.get('user')!;
     const session = c.get('session');
@@ -83,6 +111,42 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
     const input = c.req.valid('json');
     const { data, created } = await profilesService.onboardDesigner(user.id, input);
     return c.json(data, created ? 201 : 200);
-  });
+  })
+  .openapi(
+    createRoute({
+      method: 'patch',
+      path: '/me',
+      tags: ['Profiles'],
+      summary: 'Update own profile (org writer role required)',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: updateProfileSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Updated profile (owner projection)',
+          content: { 'application/json': { schema: profileOwnerResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden — not a writer in the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile for the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'No active organization or invalid taxonomy IDs', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const input = c.req.valid('json');
+      const result = await profilesService.updateProfile(
+        user.id,
+        session?.activeOrganizationId ?? null,
+        input,
+      );
+      return c.json(result, 200);
+    },
+  );
 
 export type ProfilesRoutes = typeof profilesRoutes;
