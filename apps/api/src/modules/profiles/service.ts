@@ -1,4 +1,11 @@
-import type { CompletionStep, ProfileCompletionResponse } from '@repo/contracts';
+import crypto from 'node:crypto';
+import type {
+  CompletionStep,
+  ProfileCompletionResponse,
+  OnboardDesignerInput,
+  OnboardDesignerResponse,
+} from '@repo/contracts';
+import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
 
 /**
@@ -29,7 +36,146 @@ type FieldCheckResult = {
   missing: RequiredField[];
 };
 
+function slugify(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'org'
+  );
+}
+
 export const profilesService = {
+  // --- Onboarding (E-35) ---
+
+  async onboardDesigner(
+    userId: string,
+    input: OnboardDesignerInput,
+  ): Promise<{ data: OnboardDesignerResponse; created: boolean }> {
+    // 1. Idempotency: check if user already onboarded
+    const existing = await profilesRepository.findByUserId(userId);
+    if (existing) {
+      return {
+        data: {
+          profile: {
+            id: existing.profile.id,
+            orgId: existing.profile.orgId,
+            displayName: existing.profile.displayName,
+            entityType: existing.profile.entityType,
+            status: existing.profile.status,
+            createdAt: existing.profile.createdAt.toISOString(),
+          },
+          organization: {
+            id: existing.org.id,
+            name: existing.org.name,
+            slug: existing.org.slug,
+          },
+        },
+        created: false,
+      };
+    }
+
+    // 2. Google SSO check
+    const hasGoogle = await profilesRepository.hasGoogleAccount(userId);
+    if (!hasGoogle) {
+      throw AppError.forbidden('Google SSO required for designer onboarding');
+    }
+
+    // 3. Validate taxonomy IDs (single round-trip, deduped)
+    const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
+      cityIds: input.cityIds.length > 0 ? input.cityIds : undefined,
+      scopeIds: input.scopeIds.length > 0 ? input.scopeIds : undefined,
+      themeIds: input.themeIds.length > 0 ? input.themeIds : undefined,
+    });
+    if (taxonomyErrors.length > 0) {
+      throw AppError.unprocessable(taxonomyErrors.join('; '));
+    }
+
+    // 4. Derive org and profile fields
+    const orgName =
+      input.entityType === 'company' ? input.companyName! : input.userName;
+    const displayName = orgName;
+    const orgSlug = `${slugify(orgName)}-${crypto.randomUUID().slice(0, 6)}`;
+    const orgId = crypto.randomUUID();
+    const memberId = crypto.randomUUID();
+
+    const footprintIds = [
+      ...new Set([...input.cityIds, ...input.scopeIds, ...input.themeIds]),
+    ].map((id) => ({ taxonomyId: id }));
+
+    // 5. Execute transaction — catch unique violation for race-safe idempotency
+    try {
+      const { profile, org } = await profilesRepository.onboard({
+        orgId,
+        orgName,
+        orgSlug,
+        memberId,
+        userId,
+        displayName,
+        entityType: input.entityType,
+        bio: input.bio ?? null,
+        footprintIds,
+      });
+
+      return {
+        data: {
+          profile: {
+            id: profile.id,
+            orgId: profile.orgId,
+            displayName: profile.displayName,
+            entityType: profile.entityType,
+            status: profile.status,
+            createdAt: profile.createdAt.toISOString(),
+          },
+          organization: {
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+          },
+        },
+        created: true,
+      };
+    } catch (err: unknown) {
+      // Race condition: concurrent request already created the profile.
+      // Partial unique index designer_profile_user_id_unique catches this.
+      const isUniqueViolation =
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        err.code === '23505' &&
+        'constraint' in err &&
+        err.constraint === 'designer_profile_user_id_unique';
+      if (isUniqueViolation) {
+        const existing = await profilesRepository.findByUserId(userId);
+        if (existing) {
+          return {
+            data: {
+              profile: {
+                id: existing.profile.id,
+                orgId: existing.profile.orgId,
+                displayName: existing.profile.displayName,
+                entityType: existing.profile.entityType,
+                status: existing.profile.status,
+                createdAt: existing.profile.createdAt.toISOString(),
+              },
+              organization: {
+                id: existing.org.id,
+                name: existing.org.name,
+                slug: existing.org.slug,
+              },
+            },
+            created: false,
+          };
+        }
+      }
+      throw err;
+    }
+  },
+
+  // --- Completion (E-36) ---
+
   async getCompletion(input: CompletionInput): Promise<ProfileCompletionResponse> {
     // Resolve orgId if not provided
     const orgId = input.orgId ?? (await profilesRepository.hasOrganization(input.userId));
