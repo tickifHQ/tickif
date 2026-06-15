@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   createProjectRoomSchema,
   createProjectSchema,
+  linkProjectImageSchema,
   listProjectsQuerySchema,
   projectRoomSchema,
+  reorderProjectRoomsSchema,
+  updateProjectSchema,
 } from '../src/projects.js';
 
 // A valid RFC-4122 UUID (version + variant nibbles correct).
@@ -12,7 +15,6 @@ const VALID_UUID = '11111111-1111-4111-8111-111111111111';
 describe('createProjectSchema', () => {
   it('accepts a valid payload', () => {
     const result = createProjectSchema.safeParse({
-      designerId: VALID_UUID,
       title: 'Sunlit Bandra Apartment',
     });
     expect(result.success).toBe(true);
@@ -20,15 +22,32 @@ describe('createProjectSchema', () => {
 
   it('rejects a too-short title', () => {
     const result = createProjectSchema.safeParse({
-      designerId: '22222222-2222-2222-2222-222222222222',
       title: 'x',
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects a non-uuid designerId', () => {
-    const result = createProjectSchema.safeParse({ designerId: 'nope', title: 'Valid Title' });
-    expect(result.success).toBe(false);
+  it('allows taxonomy refs and metadata without a client-supplied designer id', () => {
+    const result = createProjectSchema.safeParse({
+      title: 'Valid Title',
+      citySlug: 'mumbai',
+      budgetBandSlug: 'premium',
+      metadata: { scopeLabels: ['full-home'] },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('updateProjectSchema', () => {
+  it('accepts a partial draft update including a nullable cover image', () => {
+    const result = updateProjectSchema.safeParse({
+      description: null,
+      coverImageId: null,
+      metadata: { source: 'draft-builder' },
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 
@@ -103,6 +122,23 @@ describe('project room contracts', () => {
       createdAt: '2026-06-15T00:00:00.000Z',
       updatedAt: '2026-06-15T00:00:00.000Z',
     });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects duplicate room ids in reorder payloads', () => {
+    const result = reorderProjectRoomsSchema.safeParse({
+      rooms: [
+        { id: VALID_UUID, sortOrder: 0 },
+        { id: VALID_UUID, sortOrder: 1 },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts image linking payloads with room clearing', () => {
+    const result = linkProjectImageSchema.safeParse({ roomId: null, sortOrder: 2 });
 
     expect(result.success).toBe(true);
   });
