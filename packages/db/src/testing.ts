@@ -71,16 +71,34 @@ export async function makeUser(overrides: Partial<typeof schema.user.$inferInser
   return row!;
 }
 
+export async function makeOrganization(
+  overrides: Partial<typeof schema.organization.$inferInsert> = {},
+) {
+  const id = overrides.id ?? uid('org');
+  const [row] = await db
+    .insert(schema.organization)
+    .values({
+      id,
+      name: overrides.name ?? 'Test Org',
+      slug: overrides.slug ?? `test-org-${id}`,
+      createdAt: overrides.createdAt ?? new Date(),
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 export async function makeDesigner(
   overrides: Partial<typeof schema.designerProfile.$inferInsert> = {},
 ) {
   const userId = overrides.userId ?? (await makeUser()).id;
+  const orgId = overrides.orgId ?? (await makeOrganization()).id;
   const [row] = await db
     .insert(schema.designerProfile)
     .values({
       userId,
-      studioName: overrides.studioName ?? 'Test Studio',
-      citySlug: overrides.citySlug ?? 'mumbai',
+      orgId,
+      displayName: overrides.displayName ?? 'Test Studio',
       ...overrides,
     })
     .returning();
