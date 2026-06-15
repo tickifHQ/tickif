@@ -21,7 +21,7 @@ catalog:
   "@scalar/hono-api-reference": ^0.10.20
 
   # Auth
-  better-auth: ^1.6.13
+  better-auth: ^1.6.18
 
   # Data layer
   drizzle-orm: ^0.45.2
