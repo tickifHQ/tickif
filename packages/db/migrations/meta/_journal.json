@@ -57,6 +57,20 @@
       "when": 1781395306206,
       "tag": "0007_regular_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781429510857,
+      "tag": "0008_e34_expand_designer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781429576969,
+      "tag": "0009_e34_contract_drop_legacy",
+      "breakpoints": true
     }
   ]
 }
