@@ -9,6 +9,7 @@ import { validationHook } from './lib/validation.js';
 import { withSession, type AuthVariables } from './lib/auth-middleware.js';
 import { projectsRoutes } from './modules/projects/routes.js';
 import { mediaRoutes, projectImagesRoutes } from './modules/media/routes.js';
+import { profilesRoutes } from './modules/profiles/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -53,6 +54,7 @@ export const app = base
   .route('/api/projects', projectsRoutes)
   .route('/api/projects', projectImagesRoutes)
   .route('/api/media', mediaRoutes)
+  .route('/api/profiles', profilesRoutes)
   .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
 
 /** Exported for the web app's type-safe `hc<AppType>` client. */
