@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import { listTaxonomyResponseSchema, listTaxonomyQuerySchema, errorResponseSchema } from '@repo/contracts';
 import { taxonomyService } from './service.js';
+import { validationHook } from '../../lib/validation.js';
 
 /**
  * Taxonomy public read routes.
@@ -28,7 +29,7 @@ const listRoute = createRoute({
   },
 });
 
-export const taxonomyRoutes = new OpenAPIHono().openapi(listRoute, async (c) => {
+export const taxonomyRoutes = new OpenAPIHono({ defaultHook: validationHook }).openapi(listRoute, async (c) => {
   const { kind, parentId } = c.req.valid('query');
   const result = await taxonomyService.list(kind, parentId);
   c.header('Cache-Control', CACHE_CONTROL);
