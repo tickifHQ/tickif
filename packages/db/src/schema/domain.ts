@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { user, organization } from './auth.js';
@@ -54,7 +55,7 @@ export const taxonomy = pgTable(
     slug: text('slug').notNull(),
     // Self-referencing FK for hierarchy. Only locality uses this (city → locality).
     // v0 policy: parentId is immutable after creation.
-    parentId: uuid('parent_id').references((): any => taxonomy.id, { onDelete: 'restrict' }),
+    parentId: uuid('parent_id').references((): AnyPgColumn => taxonomy.id, { onDelete: 'restrict' }),
     sortOrder: integer('sort_order').default(0).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Kind-specific data. budget_band stores { min: number, max: number }.
