@@ -11,6 +11,56 @@ import { db, schema, eq } from '@repo/db';
  * - Slug format CHECK
  */
 
+/**
+ * Extract the PostgreSQL error from a Drizzle error.
+ * Drizzle wraps PG errors — the constraint/code live on the cause or nested error.
+ */
+function pgError(err: unknown): { code?: string; constraint?: string } {
+  if (!err || typeof err !== 'object') return {};
+  // Drizzle may expose it directly or on .cause
+  const e = err as Record<string, unknown>;
+  if ('code' in e && typeof e.code === 'string') return e as { code: string; constraint?: string };
+  if ('cause' in e && e.cause && typeof e.cause === 'object') {
+    const cause = e.cause as Record<string, unknown>;
+    if ('code' in cause) return cause as { code: string; constraint?: string };
+  }
+  return {};
+}
+
+/** Assert a DB operation fails with a specific constraint violation. */
+async function expectConstraintViolation(
+  operation: Promise<unknown>,
+  expectedConstraint: string,
+): Promise<void> {
+  try {
+    await operation;
+    expect.fail(`Expected constraint violation (${expectedConstraint}) but operation succeeded`);
+  } catch (err) {
+    const pg = pgError(err);
+    expect(
+      pg.constraint,
+      `Expected constraint '${expectedConstraint}' but got: ${JSON.stringify(pg)}`,
+    ).toBe(expectedConstraint);
+  }
+}
+
+/** Assert a DB operation fails with a specific PG error code. */
+async function expectPgError(
+  operation: Promise<unknown>,
+  expectedCode: string,
+): Promise<void> {
+  try {
+    await operation;
+    expect.fail(`Expected PG error (${expectedCode}) but operation succeeded`);
+  } catch (err) {
+    const pg = pgError(err);
+    expect(
+      pg.code,
+      `Expected code '${expectedCode}' but got: ${JSON.stringify(pg)}`,
+    ).toBe(expectedCode);
+  }
+}
+
 describe('Taxonomy model constraints (E-29)', () => {
   // --- Hierarchy enforcement ---
 
@@ -31,9 +81,10 @@ describe('Taxonomy model constraints (E-29)', () => {
     });
 
     it('rejects locality without a parent', async () => {
-      await expect(
+      await expectConstraintViolation(
         db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Orphan', slug: 'orphan' }),
-      ).rejects.toThrow(/taxonomy_hierarchy_check/);
+        'taxonomy_hierarchy_check',
+      );
     });
 
     it('rejects city with a parent', async () => {
@@ -42,11 +93,10 @@ describe('Taxonomy model constraints (E-29)', () => {
         .values({ kind: 'city', label: 'Delhi', slug: 'delhi' })
         .returning();
 
-      await expect(
-        db
-          .insert(schema.taxonomy)
-          .values({ kind: 'city', label: 'Bad City', slug: 'bad-city', parentId: city!.id }),
-      ).rejects.toThrow(/taxonomy_hierarchy_check/);
+      await expectConstraintViolation(
+        db.insert(schema.taxonomy).values({ kind: 'city', label: 'Bad City', slug: 'bad-city', parentId: city!.id }),
+        'taxonomy_hierarchy_check',
+      );
     });
 
     it('rejects room with a parent', async () => {
@@ -55,11 +105,10 @@ describe('Taxonomy model constraints (E-29)', () => {
         .values({ kind: 'city', label: 'Pune', slug: 'pune' })
         .returning();
 
-      await expect(
-        db
-          .insert(schema.taxonomy)
-          .values({ kind: 'room', label: 'Kitchen', slug: 'kitchen', parentId: city!.id }),
-      ).rejects.toThrow(/taxonomy_hierarchy_check/);
+      await expectConstraintViolation(
+        db.insert(schema.taxonomy).values({ kind: 'room', label: 'Kitchen', slug: 'kitchen', parentId: city!.id }),
+        'taxonomy_hierarchy_check',
+      );
     });
   });
 
@@ -69,17 +118,15 @@ describe('Taxonomy model constraints (E-29)', () => {
     it('rejects duplicate (kind, slug) for non-locality kinds', async () => {
       await db.insert(schema.taxonomy).values({ kind: 'theme', label: 'Modern', slug: 'modern' });
 
-      await expect(
+      await expectConstraintViolation(
         db.insert(schema.taxonomy).values({ kind: 'theme', label: 'Modern 2', slug: 'modern' }),
-      ).rejects.toThrow(/taxonomy_kind_slug_uniq/);
+        'taxonomy_kind_slug_uniq',
+      );
     });
 
     it('allows same slug in different kinds', async () => {
-      await db
-        .insert(schema.taxonomy)
-        .values({ kind: 'scope', label: 'Premium', slug: 'premium' });
+      await db.insert(schema.taxonomy).values({ kind: 'scope', label: 'Premium', slug: 'premium' });
 
-      // Same slug, different kind — should succeed
       const [row] = await db
         .insert(schema.taxonomy)
         .values({ kind: 'budget_band', label: 'Premium', slug: 'premium' })
@@ -99,12 +146,8 @@ describe('Taxonomy model constraints (E-29)', () => {
         .values({ kind: 'city', label: 'Pune', slug: 'pune-uniq' })
         .returning();
 
-      // Andheri under Mumbai
-      await db
-        .insert(schema.taxonomy)
-        .values({ kind: 'locality', label: 'Andheri', slug: 'andheri', parentId: mumbai!.id });
+      await db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Andheri', slug: 'andheri', parentId: mumbai!.id });
 
-      // Andheri under Pune — different city, should succeed
       const [puneAndheri] = await db
         .insert(schema.taxonomy)
         .values({ kind: 'locality', label: 'Andheri', slug: 'andheri', parentId: pune!.id })
@@ -119,15 +162,12 @@ describe('Taxonomy model constraints (E-29)', () => {
         .values({ kind: 'city', label: 'Bangalore', slug: 'bangalore' })
         .returning();
 
-      await db
-        .insert(schema.taxonomy)
-        .values({ kind: 'locality', label: 'Koramangala', slug: 'koramangala', parentId: city!.id });
+      await db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Koramangala', slug: 'koramangala', parentId: city!.id });
 
-      await expect(
-        db
-          .insert(schema.taxonomy)
-          .values({ kind: 'locality', label: 'Koramangala 2', slug: 'koramangala', parentId: city!.id }),
-      ).rejects.toThrow(/taxonomy_parent_slug_uniq/);
+      await expectConstraintViolation(
+        db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Koramangala 2', slug: 'koramangala', parentId: city!.id }),
+        'taxonomy_parent_slug_uniq',
+      );
     });
   });
 
@@ -135,17 +175,17 @@ describe('Taxonomy model constraints (E-29)', () => {
 
   describe('slug format CHECK', () => {
     it('rejects uppercase slugs', async () => {
-      await expect(
+      await expectConstraintViolation(
         db.insert(schema.taxonomy).values({ kind: 'city', label: 'Test', slug: 'Mumbai' }),
-      ).rejects.toThrow(/taxonomy_slug_format_check/);
+        'taxonomy_slug_format_check',
+      );
     });
 
     it('rejects slugs with spaces', async () => {
-      await expect(
-        db
-          .insert(schema.taxonomy)
-          .values({ kind: 'city', label: 'Test', slug: 'new delhi' }),
-      ).rejects.toThrow(/taxonomy_slug_format_check/);
+      await expectConstraintViolation(
+        db.insert(schema.taxonomy).values({ kind: 'city', label: 'Test', slug: 'new delhi' }),
+        'taxonomy_slug_format_check',
+      );
     });
 
     it('accepts valid lowercase hyphenated slugs', async () => {
@@ -162,13 +202,11 @@ describe('Taxonomy model constraints (E-29)', () => {
 
   describe('ON DELETE RESTRICT (referenced terms cannot be deleted)', () => {
     it('prevents deleting a taxonomy term referenced by a footprint', async () => {
-      // Create a term
       const [term] = await db
         .insert(schema.taxonomy)
         .values({ kind: 'scope', label: 'Full Home', slug: 'full-home-restrict-test' })
         .returning();
 
-      // Create a designer profile + footprint referencing the term
       const { makeDesigner } = await import('@repo/db/testing');
       const designer = await makeDesigner();
 
@@ -177,10 +215,11 @@ describe('Taxonomy model constraints (E-29)', () => {
         taxonomyId: term!.id,
       });
 
-      // Attempting to delete the referenced term should fail with RESTRICT
-      await expect(
+      // 23503 = foreign_key_violation
+      await expectPgError(
         db.delete(schema.taxonomy).where(eq(schema.taxonomy.id, term!.id)),
-      ).rejects.toMatchObject({ code: '23503' }); // foreign_key_violation
+        '23503',
+      );
     });
   });
 
@@ -193,13 +232,13 @@ describe('Taxonomy model constraints (E-29)', () => {
         .values({ kind: 'city', label: 'Hyderabad', slug: 'hyderabad' })
         .returning();
 
-      await db
-        .insert(schema.taxonomy)
-        .values({ kind: 'locality', label: 'Banjara Hills', slug: 'banjara-hills', parentId: city!.id });
+      await db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Banjara Hills', slug: 'banjara-hills', parentId: city!.id });
 
-      await expect(
+      // 23503 = foreign_key_violation
+      await expectPgError(
         db.delete(schema.taxonomy).where(eq(schema.taxonomy.id, city!.id)),
-      ).rejects.toMatchObject({ code: '23503' }); // foreign_key_violation
+        '23503',
+      );
     });
   });
 
