@@ -15,7 +15,7 @@ catalog:
   zod: ^4.4.3
 
   # Hono stack
-  hono: ^4.12.23
+  hono: ^4.12.25
   "@hono/node-server": ^2.0.4
   "@hono/zod-openapi": ^1.4.0
   "@scalar/hono-api-reference": ^0.10.20
