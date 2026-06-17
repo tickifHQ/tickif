@@ -162,11 +162,17 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
 
   // --- Cache header ---
 
-  it('includes Cache-Control header with 7-day max-age', async () => {
+  it('includes 7-day Cache-Control for non-empty results', async () => {
+    await seed('city', 'CacheCity', 'cache-city');
     const res = await get('/api/taxonomy/terms?kind=city');
     expect(res.headers.get('cache-control')).toBe(
       'public, max-age=604800, stale-while-revalidate=86400',
     );
+  });
+
+  it('includes short Cache-Control for empty results', async () => {
+    const res = await get('/api/taxonomy/terms?kind=garbage');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=60');
   });
 
   // --- Slug returned correctly ---
