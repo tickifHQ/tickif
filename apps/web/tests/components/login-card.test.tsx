@@ -24,53 +24,53 @@ describe('LoginCard', () => {
   it('renders trusted-by badge, welcome title, and phone input', () => {
     render(<LoginCard />);
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
-    expect(screen.getByText('Welcome to Tickif')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send OTP' })).toBeInTheDocument();
   });
 
   it('renders segmented control with browsing and designer tabs', () => {
     render(<LoginCard />);
-    expect(screen.getByText("I'm browsing")).toBeInTheDocument();
-    expect(screen.getByText('Interior designer')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /i'm browsing/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /interior designer/i })).toBeInTheDocument();
   });
 
   it('shows browsing features by default', () => {
     render(<LoginCard />);
-    expect(screen.getByText('Save what you love')).toBeInTheDocument();
-    expect(screen.getByText('Message designers')).toBeInTheDocument();
-    expect(screen.getByText('Book free consultations')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-save-what-you-love')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-message-designers')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-book-free-consultations')).toBeInTheDocument();
   });
 
   it('shows designer features when designer tab is selected', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Interior designer'));
-    expect(screen.getByText('Share your work anywhere')).toBeInTheDocument();
-    expect(screen.getByText('Get bookings from home owners')).toBeInTheDocument();
-    expect(screen.getByText('Turn visitors into clients')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-get-bookings-from-home-owners')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-turn-visitors-into-clients')).toBeInTheDocument();
   });
 
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Interior designer'));
+    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
     expect(screen.getByText(/One link to share your work/)).toBeInTheDocument();
   });
 
   it('shows Google sign-in in browsing mode', () => {
     render(<LoginCard />);
-    expect(screen.getByText('Continue with Google')).toBeInTheDocument();
-    expect(screen.getAllByText(/Tickif's Terms & Privacy/)).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
+    expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
   it('shows Google sign-in, email input, and button in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Interior designer'));
-    expect(screen.getByText('Login with Google')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
     expect(screen.getAllByText('OR')).toHaveLength(2);
-    expect(screen.getByPlaceholderText('hello@alignui.com')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Login' })).toBeDisabled();
   });
 
@@ -78,7 +78,7 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Continue with Google'));
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
     expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
   });
 
@@ -86,8 +86,8 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Interior designer'));
-    await user.click(screen.getByText('Login with Google'));
+    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('button', { name: /login with google/i }));
     expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
   });
 
@@ -95,17 +95,17 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Continue with Google'));
-    expect(screen.getAllByText('Couldn\'t sign in with Google')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByText('Interior designer'));
-    await user.click(screen.getByText('Login with Google'));
-    expect(screen.getAllByText('Couldn\'t sign in with Google')).toHaveLength(2);
+    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('disables Send OTP button when phone is empty', () => {
@@ -135,7 +135,7 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
     await user.click(screen.getByRole('button', { name: 'Send OTP' }));
-    expect(screen.getAllByText('Invalid phone number')).toHaveLength(2);
+    expect(screen.getByText('Invalid phone number')).toBeInTheDocument();
   });
 
   it('shows error when sendOtp rejects', async () => {
@@ -144,7 +144,7 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
     await user.click(screen.getByRole('button', { name: 'Send OTP' }));
-    expect(screen.getAllByText('Rate limited')).toHaveLength(2);
+    expect(screen.getByText('Rate limited')).toBeInTheDocument();
   });
 
   describe('OTP step', () => {
@@ -207,7 +207,7 @@ describe('LoginCard', () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
     });
 
     it('returns to phone step on Cancel click', async () => {
