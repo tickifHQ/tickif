@@ -80,12 +80,12 @@ function toImageAttachment(row: ProjectImageAttachmentRecord): ProjectImageAttac
 }
 
 /** The authenticated caller, as resolved by the route from the session. */
-export type Caller = { userId: string; userRole: string };
+export type Caller = { userId: string; userRole: string; isBanned: boolean };
 
-async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promise<void> {
+function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
+  if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
   if (ownership.ownerUserId && ownership.ownerUserId === caller.userId) return;
-  if (await projectsRepository.isOrgMember(caller.userId, ownership.organizationId)) return;
   throw AppError.forbidden();
 }
 
@@ -262,13 +262,13 @@ export const projectsService = {
   ): Promise<ProjectImageAttachment> {
     await requireMutableDraft(projectId, caller);
 
+    const image = await projectsRepository.findImage(projectId, imageId);
+    if (!image) throw AppError.notFound('Image not found');
+
     if (input.roomId) {
       const room = await projectsRepository.findRoom(projectId, input.roomId);
       if (!room) throw AppError.unprocessable('Room must belong to the project');
     }
-
-    const image = await projectsRepository.findImage(projectId, imageId);
-    if (!image) throw AppError.notFound('Image not found');
 
     const row = await projectsRepository.updateImageLink(projectId, imageId, input);
     if (!row) throw AppError.notFound('Image not found');

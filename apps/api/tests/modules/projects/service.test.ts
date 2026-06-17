@@ -20,7 +20,6 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteProject: vi.fn(),
       findDesignerByUserId: vi.fn(),
       findOwnership: vi.fn(),
-      isOrgMember: vi.fn(),
       taxonomyExists: vi.fn(),
       listRooms: vi.fn(),
       findRoom: vi.fn(),
@@ -88,6 +87,7 @@ const imageRow = (over: Partial<ProjectImageAttachmentRecord> = {}): ProjectImag
 const caller = {
   userId: '99999999-9999-4999-8999-999999999999',
   userRole: 'designer',
+  isBanned: false,
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -166,7 +166,6 @@ describe('projectsService.update', () => {
       designerId: row().designerId,
       status: 'draft',
       ownerUserId: caller.userId,
-      organizationId: 'org_1',
     });
     vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
 
@@ -183,7 +182,6 @@ describe('projectsService.reorderRooms', () => {
       designerId: row().designerId,
       status: 'draft',
       ownerUserId: caller.userId,
-      organizationId: 'org_1',
     });
     vi.mocked(projectsRepository.reorderRooms).mockResolvedValue(null);
 
@@ -194,5 +192,27 @@ describe('projectsService.reorderRooms', () => {
         caller,
       ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+});
+
+describe('projectsService.linkImage', () => {
+  it('returns image not found before validating a bad room id', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
+
+    await expect(
+      projectsService.linkImage(
+        row().id,
+        imageRow().id,
+        { roomId: roomRow().id },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(projectsRepository.findRoom).not.toHaveBeenCalled();
   });
 });

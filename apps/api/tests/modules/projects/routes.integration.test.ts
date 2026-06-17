@@ -209,6 +209,25 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(403);
   });
 
+  it('forbids same-organization members from mutating an owner draft', async () => {
+    const { designer } = await makeDesignerSession('+919800002011');
+    const sameOrgMember = await createRoleSession('+919800002012', 'visitor');
+    await db.insert(schema.member).values({
+      id: `mem-${sameOrgMember.userId}`,
+      organizationId: designer.orgId,
+      userId: sameOrgMember.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+
+    const res = await requestJson(`/api/projects/${project.id}`, 'PATCH', sameOrgMember.cookie, {
+      title: 'Nope',
+    });
+
+    expect(res.status).toBe(403);
+  });
+
   it('does not mutate published projects through draft routes', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002009');
     const project = await makeProject({ designerId: designer.id, status: 'published' });
@@ -230,5 +249,17 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it('allows banned users to read published projects through the public route', async () => {
+    const { cookie, designer, userId } = await makeDesignerSession('+919800002013');
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+
+    const res = await app.request(`/api/projects/${project.id}`, {
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(200);
   });
 });

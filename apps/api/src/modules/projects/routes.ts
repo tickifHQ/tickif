@@ -52,10 +52,8 @@ const errorJson = (description: string) => ({
 
 function caller(user: AuthVariables['user']) {
   if (!user) throw AppError.unauthorized();
-  if (user.banned && (!user.banExpires || user.banExpires > new Date())) {
-    throw AppError.forbidden('Account suspended');
-  }
-  return { userId: user.id, userRole: user.role ?? '' };
+  const isBanned = !!user.banned && (!user.banExpires || user.banExpires > new Date());
+  return { userId: user.id, userRole: user.role ?? '', isBanned };
 }
 
 const getRoute = createRoute({

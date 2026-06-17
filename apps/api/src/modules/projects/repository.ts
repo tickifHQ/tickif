@@ -27,7 +27,6 @@ export type ProjectOwnership = {
   designerId: string;
   status: ProjectStatus;
   ownerUserId: string | null;
-  organizationId: string;
 };
 
 export type ListProjectsParams = {
@@ -155,22 +154,12 @@ export const projectsRepository = {
         designerId: schema.project.designerId,
         status: schema.project.status,
         ownerUserId: schema.designerProfile.userId,
-        organizationId: schema.designerProfile.orgId,
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, projectId))
       .limit(1);
     return row ?? null;
-  },
-
-  async isOrgMember(userId: string, organizationId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: schema.member.id })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)))
-      .limit(1);
-    return !!row;
   },
 
   async taxonomyExists(
