@@ -157,6 +157,8 @@ export const projectRoom = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
+    // Taxonomy terms are controlled vocabulary: deleting an in-use room type should be blocked.
+    // E-102 validates that referenced terms have kind = 'room' at the service boundary.
     roomTypeId: uuid('room_type_id')
       .notNull()
       .references(() => taxonomy.id),

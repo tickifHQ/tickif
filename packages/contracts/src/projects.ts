@@ -27,7 +27,13 @@ export const projectRoomMetadataSchema = z
   .object({
     labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     attributeLabels: z
-      .record(z.string(), z.array(z.string().trim().min(1).max(80)).max(20))
+      .record(
+        z.string().trim().min(1).max(80),
+        z.array(z.string().trim().min(1).max(80)).max(20),
+      )
+      .refine((value) => Object.keys(value).length <= 20, {
+        message: 'attributeLabels can contain at most 20 entries',
+      })
       .optional(),
   })
   .catchall(z.unknown())
@@ -42,7 +48,7 @@ export const projectRoomSchema = z
     name: z.string(),
     description: z.string().nullable(),
     sortOrder: z.number().int(),
-    metadata: projectRoomMetadataSchema,
+    metadata: z.record(z.string(), z.unknown()),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

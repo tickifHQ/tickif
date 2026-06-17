@@ -69,6 +69,28 @@ describe('project room contracts', () => {
     expect(result.success).toBe(false);
   });
 
+  it('bounds provisional attribute label keys and entry count', () => {
+    const longKey = 'x'.repeat(81);
+    const tooManyKeys = Object.fromEntries(
+      Array.from({ length: 21 }, (_, i) => [`finish-${i}`, ['veneer']]),
+    );
+
+    expect(
+      createProjectRoomSchema.safeParse({
+        roomTypeId: VALID_UUID,
+        name: 'Living Room',
+        metadata: { attributeLabels: { [longKey]: ['veneer'] } },
+      }).success,
+    ).toBe(false);
+    expect(
+      createProjectRoomSchema.safeParse({
+        roomTypeId: VALID_UUID,
+        name: 'Living Room',
+        metadata: { attributeLabels: tooManyKeys },
+      }).success,
+    ).toBe(false);
+  });
+
   it('serializes project room responses with timestamps', () => {
     const result = projectRoomSchema.safeParse({
       id: VALID_UUID,
@@ -77,7 +99,7 @@ describe('project room contracts', () => {
       name: 'Kitchen',
       description: null,
       sortOrder: 1,
-      metadata: {},
+      metadata: { labels: [''], attributeLabels: { ['x'.repeat(90)]: Array(25).fill('veneer') } },
       createdAt: '2026-06-15T00:00:00.000Z',
       updatedAt: '2026-06-15T00:00:00.000Z',
     });
