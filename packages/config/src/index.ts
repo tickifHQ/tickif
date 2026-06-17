@@ -75,9 +75,10 @@ const envSchema = z.object({
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:3001'),
 
   // SMS / OTP provider. Selection is explicit; creds are per-provider.
-  SMS_PROVIDER: z.enum(['console', 'msg91']).default('console'),
-  MSG91_AUTH_KEY: z.string().optional(),
-  MSG91_SENDER_ID: z.string().optional(),
+  SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
+  NOVU_SECRET_KEY: z.string().optional(),
+  NOVU_OTP_WORKFLOW_ID: z.string().optional(),
+  NOVU_API_URL: z.string().url().default('https://api.novu.co'),
 
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
   // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
