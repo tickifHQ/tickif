@@ -9,7 +9,10 @@
 --   DB does NOT enforce: parent.kind = 'city'.
 --   That validation will be implemented in E-30 service/admin CRUD.
 
--- 1. Recreate enum with all 8 values (safe: taxonomy table is empty on this branch)
+-- 1. Recreate enum with all 8 values.
+-- Safe: the new enum is a strict superset of the old {city,room,scope,theme,budget_band},
+-- so the kind::text::taxonomy_kind cast preserves every existing row regardless of table
+-- contents. Precondition: taxonomy.kind is the sole column using this enum type.
 ALTER TABLE "taxonomy" ALTER COLUMN "kind" TYPE text;--> statement-breakpoint
 DROP TYPE "public"."taxonomy_kind";--> statement-breakpoint
 CREATE TYPE "public"."taxonomy_kind" AS ENUM('city','locality','property_type','bhk','room','scope','theme','budget_band');--> statement-breakpoint

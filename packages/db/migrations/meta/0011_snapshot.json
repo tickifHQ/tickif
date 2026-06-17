@@ -1553,7 +1553,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "taxonomy_hierarchy_check": {
+          "name": "taxonomy_hierarchy_check",
+          "value": "(\"taxonomy\".\"kind\" = 'locality' AND \"taxonomy\".\"parent_id\" IS NOT NULL) OR (\"taxonomy\".\"kind\" <> 'locality' AND \"taxonomy\".\"parent_id\" IS NULL)"
+        },
+        "taxonomy_slug_format_check": {
+          "name": "taxonomy_slug_format_check",
+          "value": "\"taxonomy\".\"slug\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$'"
+        }
+      },
       "isRLSEnabled": false
     }
   },

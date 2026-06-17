@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -64,6 +65,10 @@ export const taxonomy = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
+    // Hierarchy: locality MUST have parent, all other kinds MUST NOT.
+    check('taxonomy_hierarchy_check', sql`(${t.kind} = 'locality' AND ${t.parentId} IS NOT NULL) OR (${t.kind} <> 'locality' AND ${t.parentId} IS NULL)`),
+    // Slug format: lowercase, URL-safe, immutable after creation.
+    check('taxonomy_slug_format_check', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     // Non-locality kinds: slug unique within kind
     uniqueIndex('taxonomy_kind_slug_uniq')
       .on(t.kind, t.slug)

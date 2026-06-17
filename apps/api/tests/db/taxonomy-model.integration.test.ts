@@ -138,12 +138,12 @@ describe('Taxonomy model constraints (E-29)', () => {
     it('allows same locality slug under different cities', async () => {
       const [mumbai] = await db
         .insert(schema.taxonomy)
-        .values({ kind: 'city', label: 'Mumbai', slug: 'mumbai-uniq' })
+        .values({ kind: 'city', label: 'Mumbai', slug: 'mumbai' })
         .returning();
 
       const [pune] = await db
         .insert(schema.taxonomy)
-        .values({ kind: 'city', label: 'Pune', slug: 'pune-uniq' })
+        .values({ kind: 'city', label: 'Pune', slug: 'pune' })
         .returning();
 
       await db.insert(schema.taxonomy).values({ kind: 'locality', label: 'Andheri', slug: 'andheri', parentId: mumbai!.id });
@@ -204,7 +204,7 @@ describe('Taxonomy model constraints (E-29)', () => {
     it('prevents deleting a taxonomy term referenced by a footprint', async () => {
       const [term] = await db
         .insert(schema.taxonomy)
-        .values({ kind: 'scope', label: 'Full Home', slug: 'full-home-restrict-test' })
+        .values({ kind: 'scope', label: 'Full Home', slug: 'full-home' })
         .returning();
 
       const { makeDesigner } = await import('@repo/db/testing');
