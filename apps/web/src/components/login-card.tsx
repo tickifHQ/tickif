@@ -50,39 +50,15 @@ function formatTimer(seconds: number): string {
 }
 
 const browsingFeatures = [
-  {
-    icon: 'bookmark',
-    title: 'Save what you love',
-    desc: 'One shortlist across every studio',
-  },
-  {
-    icon: 'message',
-    title: 'Message designers',
-    desc: 'Start a conversation in one tap',
-  },
-  {
-    icon: 'calendar',
-    title: 'Book free consultations',
-    desc: 'No pressure, no commitment',
-  },
+  { icon: 'bookmark', title: 'Save what you love' },
+  { icon: 'message', title: 'Message designers' },
+  { icon: 'calendar', title: 'Book free consultations' },
 ] as const;
 
 const designerFeatures = [
-  {
-    icon: 'bookmark',
-    title: 'Share your work anywhere',
-    desc: 'One shortlist across every studio',
-  },
-  {
-    icon: 'message',
-    title: 'Get bookings from home owners',
-    desc: 'Start a conversation in one tap',
-  },
-  {
-    icon: 'calendar',
-    title: 'Turn visitors into clients',
-    desc: 'No pressure, no commitment',
-  },
+  { icon: 'bookmark', title: 'Share your work anywhere' },
+  { icon: 'message', title: 'Get bookings from home owners' },
+  { icon: 'calendar', title: 'Turn visitors into clients' },
 ] as const;
 
 function FeatureIcon({ icon }: { icon: string }) {
@@ -267,7 +243,7 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
     return (
       <div className="flex flex-col overflow-hidden md:flex-row">
         {/* Left: Brand / Promo Panel */}
-        <div className="flex w-full flex-col justify-between bg-muted px-6 py-8 md:w-[315px] md:shrink-0">
+        <div className="flex w-full flex-col justify-between rounded-xl bg-muted px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0">
           <div className="flex flex-col gap-5">
             <div className="flex items-center gap-1.5 rounded-md border border-muted-foreground/20 px-2.5 py-1 w-fit">
               <svg className="size-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -280,21 +256,18 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
             </div>
 
             <div className="flex flex-col gap-2">
-              <h2 className="font-display text-lg font-semibold text-foreground">
+              <h2 className="font-display text-2xl font-semibold text-foreground">
                 Welcome to Tickif
               </h2>
               <p className="text-xs text-muted-foreground">{promoSubtitle}</p>
 
-              <div className="mt-1 flex flex-col gap-3">
+              <div className="mt-6 flex flex-col gap-3">
                 {features.map((f) => (
-                  <div key={f.title} className="flex items-start gap-2.5">
-                    <svg className="mt-0.5 size-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <div key={f.title} className="flex items-center gap-2.5">
+                    <svg className="size-4 shrink-0 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <FeatureIcon icon={f.icon} />
                     </svg>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{f.title}</p>
-                      <p className="text-xs text-muted-foreground">{f.desc}</p>
-                    </div>
+                    <p className="text-sm font-medium text-foreground">{f.title}</p>
                   </div>
                 ))}
               </div>
@@ -353,10 +326,9 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                   </TabsTrigger>
                   <TabsTrigger value="designer" className="flex-1 gap-1.5">
                     <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 2v20" />
-                      <path d="M2 12h20" />
-                      <path d="M4.93 4.93l14.14 14.14" />
-                      <path d="M19.07 4.93L4.93 19.07" />
+                      <path d="M12 2L12 22" />
+                      <path d="M3.34 7L20.66 17" />
+                      <path d="M20.66 7L3.34 17" />
                     </svg>
                     Interior designer
                   </TabsTrigger>
@@ -460,7 +432,7 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                         {loading ? 'Sending…' : 'Send OTP'}
                       </Button>
 
-                      <div className="relative my-2">
+                      <div className="relative my-5">
                         <Separator />
                         <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
                           OR
