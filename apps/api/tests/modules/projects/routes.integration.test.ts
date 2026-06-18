@@ -177,6 +177,19 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(del.status).toBe(200);
   });
 
+  it('rejects non-room taxonomy terms when creating rooms', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002014');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+
+    const res = await requestJson(`/api/projects/${project.id}/rooms`, 'POST', cookie, {
+      roomTypeId: city.id,
+      name: 'Living Room',
+    });
+
+    expect(res.status).toBe(422);
+  });
+
   it('links a project image to a same-project room', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002006');
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
@@ -195,6 +208,44 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       roomId: room.id,
       sortOrder: 3,
     });
+  });
+
+  it('rejects linking an image to a room from another project', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002015');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id });
+    const otherProject = await makeProject({ designerId: designer.id, status: 'draft' });
+    const otherRoom = await makeProjectRoom({ projectId: otherProject.id });
+
+    const res = await requestJson(`/api/projects/${project.id}/images/${image.id}`, 'PATCH', cookie, {
+      roomId: otherRoom.id,
+    });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('deletes owned draft projects and cascades rooms and images', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002016');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    await makeProjectRoom({ projectId: project.id });
+    await makeProjectImage({ projectId: project.id });
+
+    const res = await app.request(`/api/projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: project.id, deleted: true });
+
+    const [projectRows, roomRows, imageRows] = await Promise.all([
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      db.select().from(schema.projectRoom).where(eq(schema.projectRoom.projectId, project.id)),
+      db.select().from(schema.projectImage).where(eq(schema.projectImage.projectId, project.id)),
+    ]);
+    expect(projectRows).toHaveLength(0);
+    expect(roomRows).toHaveLength(0);
+    expect(imageRows).toHaveLength(0);
   });
 
   it('forbids non-owners from mutating another designer project', async () => {
