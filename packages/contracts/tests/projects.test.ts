@@ -110,7 +110,7 @@ describe('project room contracts', () => {
     ).toBe(false);
   });
 
-  it('serializes project room responses with timestamps', () => {
+  it('rejects project room responses with out-of-bounds metadata', () => {
     const result = projectRoomSchema.safeParse({
       id: VALID_UUID,
       projectId: '22222222-2222-4222-8222-222222222222',
@@ -123,7 +123,7 @@ describe('project room contracts', () => {
       updatedAt: '2026-06-15T00:00:00.000Z',
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it('rejects duplicate room ids in reorder payloads', () => {

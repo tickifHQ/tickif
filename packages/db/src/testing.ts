@@ -123,21 +123,20 @@ export async function makeProject(overrides: Partial<typeof schema.project.$infe
 }
 
 export async function makeTaxonomy(overrides: Partial<typeof schema.taxonomy.$inferInsert> = {}) {
-  const kind = overrides.kind ?? 'room';
-  const label = overrides.label ?? 'Living Room';
+  const { kind = 'room', label = 'Living Room', slug, ...rest } = overrides;
   const [row] = await db
     .insert(schema.taxonomy)
     .values({
       kind,
       slug:
-        overrides.slug ??
+        slug ??
         `${label
           .toLowerCase()
           .trim()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '')}-${uid('tax')}`,
       label,
-      ...overrides,
+      ...rest,
     })
     .returning();
   return row!;

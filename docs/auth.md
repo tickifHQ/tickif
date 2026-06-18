@@ -51,8 +51,9 @@ Inside a handler you can read the caller with `c.get('user')`.
 
 ## The phone-OTP flow (and how to test it)
 
-The dev `sendOTP` hook in `packages/auth/src/index.ts` **logs the code to the
-console** instead of sending an SMS (production wires this to MSG91). So to test
+In dev, the SMS worker can use the `console` sender, which **logs the code to the
+worker console** instead of sending an SMS. Production should use the `novu`
+provider with `NOVU_SECRET_KEY` and `NOVU_OTP_WORKFLOW_ID` configured. So to test
 end-to-end locally:
 
 ```bash
@@ -62,7 +63,7 @@ PHONE="+919812345678"
 curl -s -X POST http://localhost:3001/api/auth/phone-number/send-otp \
   -H 'content-type: application/json' -d "{\"phoneNumber\":\"$PHONE\"}"
 
-# 2. Find the code in the running `pnpm dev` output: "[auth] OTP for +91...: 123456"
+# 2. Find the code in the running worker output: "[sms] OTP for 91...: 123456"
 
 # 3. Verify — creates the user + session, returns a session token/cookie
 curl -s -X POST http://localhost:3001/api/auth/phone-number/verify \

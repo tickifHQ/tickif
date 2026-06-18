@@ -59,7 +59,7 @@ export const projectRoomSchema = z
     name: z.string(),
     description: z.string().nullable(),
     sortOrder: z.number().int(),
-    metadata: z.record(z.string(), z.unknown()),
+    metadata: projectRoomMetadataSchema,
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
