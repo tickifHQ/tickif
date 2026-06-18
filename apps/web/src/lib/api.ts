@@ -8,4 +8,7 @@ import type { AppType } from '@repo/api';
  */
 const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
-export const api = hc<AppType>(baseUrl);
+export const api = hc<AppType>(baseUrl, {
+  fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+    fetch(input, { ...init, credentials: 'include' }),
+});
