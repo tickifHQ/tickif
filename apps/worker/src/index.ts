@@ -29,8 +29,9 @@ const mediaWorker = new Worker<MediaProcessJob>(QUEUES.media, processMedia, {
 const smsService = new SmsService(
   selectSmsSender({
     provider: config.SMS_PROVIDER,
-    authKey: config.MSG91_AUTH_KEY,
-    senderId: config.MSG91_SENDER_ID,
+    novuSecretKey: config.NOVU_SECRET_KEY,
+    novuWorkflowId: config.NOVU_OTP_WORKFLOW_ID,
+    novuApiUrl: config.NOVU_API_URL,
     isProduction,
   }),
 );
