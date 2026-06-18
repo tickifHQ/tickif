@@ -1,7 +1,6 @@
 import type { Config } from '@repo/config';
 
-const MSG91_ENDPOINT = 'https://control.msg91.com/api/sendhttp.php';
-const MSG91_TIMEOUT_MS = 10_000;
+const NOVU_TIMEOUT_MS = 10_000;
 
 /** A delivery strategy. Phone numbers arrive already normalized to digits (see @repo/queue). */
 export type SmsSender = {
@@ -22,49 +21,47 @@ export class MissingSmsSender implements SmsSender {
   }
 }
 
-export class Msg91SmsSender implements SmsSender {
+export class NovuSmsSender implements SmsSender {
   constructor(
-    private readonly authKey: string,
-    private readonly senderId: string,
+    private readonly secretKey: string,
+    private readonly workflowId: string,
+    private readonly apiUrl: string,
   ) {}
 
   async send(phoneNumber: string, code: string): Promise<void> {
-    const body = new URLSearchParams({
-      authkey: this.authKey,
-      mobiles: phoneNumber, // already digits-only (normalized at enqueue)
-      message: `Your Tickif verification code is ${code}`,
-      sender: this.senderId,
-      route: '4',
-      // `mobiles` already carries the country code (normalized digits include 91),
-      // so we don't pass a separate `country` param — avoids a double prefix.
-    });
+    const endpoint = new URL('/v1/events/trigger', this.apiUrl);
+    const e164Phone = `+${phoneNumber}`;
+    const body = {
+      name: this.workflowId,
+      to: {
+        subscriberId: `phone:${phoneNumber}`,
+        phone: e164Phone,
+      },
+      payload: {
+        code,
+      },
+    };
 
     let response: Response;
     try {
-      response = await fetch(MSG91_ENDPOINT, {
+      response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body,
-        // fetch has no default timeout and BullMQ imposes no job timeout, so a hung
-        // request would pin a concurrency slot forever. Bound it; BullMQ retries.
-        signal: AbortSignal.timeout(MSG91_TIMEOUT_MS),
+        headers: {
+          authorization: `ApiKey ${this.secretKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(NOVU_TIMEOUT_MS),
       });
     } catch (err) {
-      throw new Error(`MSG91 SMS request failed: ${(err as Error).message}`);
+      throw new Error(`Novu SMS trigger failed: ${(err as Error).message}`);
     }
 
     if (!response.ok) {
-      throw new Error(`MSG91 SMS request failed with status ${response.status}`);
-    }
-
-    // The legacy sendhttp.php endpoint returns HTTP 200 even on logical failures
-    // (e.g. bad authkey), with the error in the body — so treat an error-shaped
-    // body as a failure instead of silently completing (which would skip retries).
-    // TODO(phase-0): confirm the exact success/error contract against MSG91 docs, or
-    // move to the v5 flow API which has cleaner status semantics (E-14 / E-16).
-    const text = (await response.text()).trim();
-    if (/"type"\s*:\s*"error"|^error\b|\bfailure\b/i.test(text)) {
-      throw new Error(`MSG91 SMS rejected: ${text.slice(0, 200)}`);
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `Novu SMS trigger failed with status ${response.status}: ${text.slice(0, 200)}`,
+      );
     }
   }
 }
@@ -73,8 +70,9 @@ export type SmsProvider = Config['SMS_PROVIDER'];
 
 export type SelectSmsSenderOptions = {
   provider: SmsProvider;
-  authKey?: string;
-  senderId?: string;
+  novuSecretKey?: string;
+  novuWorkflowId?: string;
+  novuApiUrl: string;
   isProduction: boolean;
 };
 
@@ -86,15 +84,15 @@ export type SelectSmsSenderOptions = {
  */
 export function selectSmsSender(options: SelectSmsSenderOptions): SmsSender {
   switch (options.provider) {
-    case 'msg91':
-      return options.authKey && options.senderId
-        ? new Msg91SmsSender(options.authKey, options.senderId)
-        : options.isProduction
-          ? new MissingSmsSender()
-          : new ConsoleSmsSender();
     case 'console':
       // Console must never deliver in production (it would log the OTP) — fail closed.
       return options.isProduction ? new MissingSmsSender() : new ConsoleSmsSender();
+    case 'novu':
+      return options.novuSecretKey && options.novuWorkflowId
+        ? new NovuSmsSender(options.novuSecretKey, options.novuWorkflowId, options.novuApiUrl)
+        : options.isProduction
+          ? new MissingSmsSender()
+          : new ConsoleSmsSender();
   }
   // Exhaustive over SmsProvider — this guards any new enum value at compile time.
   const unreachable: never = options.provider;
