@@ -130,6 +130,7 @@ export const project = pgTable(
     status: projectStatusEnum('status').default('draft').notNull(),
     citySlug: text('city_slug'),
     budgetBandSlug: text('budget_band_slug'),
+    // Points at project_image; FK deferred because project_image already owns project_id.
     coverImageId: uuid('cover_image_id'),
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
@@ -214,6 +215,7 @@ export const projectImage = pgTable(
   },
   (t) => [
     index('project_image_project_idx').on(t.projectId),
+    index('project_image_room_idx').on(t.roomId),
     // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
   ],
