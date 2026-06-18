@@ -82,7 +82,7 @@ export function OtpInput({
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onFocus={(e) => e.target.select()}
-          className="size-10 text-center"
+          className="h-14 w-[clamp(42px,11vw,56px)] rounded-lg text-center text-2xl font-medium"
           disabled={disabled}
           autoComplete="one-time-code"
         />
