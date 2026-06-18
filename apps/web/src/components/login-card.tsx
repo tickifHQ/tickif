@@ -17,6 +17,7 @@ import {
 import { authClient } from '@/lib/auth-client';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
+import { cn } from '@repo/ui/lib/utils';
 import { Card } from '@repo/ui/components/card';
 import {
   DropdownMenu,
@@ -63,6 +64,34 @@ function GoogleIcon({ className }: { className?: string }) {
       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
     </svg>
+  );
+}
+
+function GoogleSignInButton({
+  label,
+  loading,
+  onClick,
+}: {
+  label: string;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button variant="outline" className="w-full cursor-pointer" disabled={loading} onClick={onClick}>
+      <GoogleIcon className="size-5 shrink-0" />
+      {label}
+    </Button>
+  );
+}
+
+function OrSeparator({ className }: { className?: string }) {
+  return (
+    <div className={cn('relative', className)}>
+      <Separator />
+      <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+        OR
+      </span>
+    </div>
   );
 }
 
@@ -286,23 +315,23 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
           <div className="mt-6 flex flex-col gap-3">
             <div className="flex -space-x-2">
               <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-blue-100 text-xs font-medium text-blue-700">PK</AvatarFallback>
+                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">PK</AvatarFallback>
               </Avatar>
               <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-amber-100 text-xs font-medium text-amber-700">RV</AvatarFallback>
+                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">RV</AvatarFallback>
               </Avatar>
               <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-emerald-100 text-xs font-medium text-emerald-700">AM</AvatarFallback>
+                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">AM</AvatarFallback>
               </Avatar>
               <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-violet-100 text-xs font-medium text-violet-700">SN</AvatarFallback>
+                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">SN</AvatarFallback>
               </Avatar>
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">12,400+ homeowners</p>
               <p className="text-xs text-muted-foreground">
                 trust Tickif
-                <span className="ml-1.5 inline-flex items-center gap-1 text-amber-600">
+                <span className="ml-1.5 inline-flex items-center gap-1 text-warning">
                   <Star className="size-3" fill="currentColor" aria-hidden="true" />
                   4.9 (1.5k)
                 </span>
@@ -339,7 +368,7 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                     className="flex transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-100%'})` }}
                   >
-                    <div className="flex w-full shrink-0 flex-col gap-3">
+                    <div className="flex w-full shrink-0 flex-col gap-3" inert={loginMode !== 'browsing'} aria-hidden={loginMode !== 'browsing'}>
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="phone">
                           Phone Number <span className="text-destructive">*</span>
@@ -424,48 +453,22 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                         type="button"
                         onClick={handleSendOtp}
                         disabled={loading || phone.length < 10}
-                        className="w-full"
+                        className="w-full cursor-pointer"
                       >
                         {loading ? 'Sending…' : 'Send OTP'}
                       </Button>
 
-                      <div className="relative my-5">
-                        <Separator />
-                        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-                          OR
-                        </span>
-                      </div>
+                      <OrSeparator className="my-5" />
 
                       <div className="flex flex-col items-center gap-2">
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          disabled={loading}
-                          onClick={handleGoogleLogin}
-                        >
-                          <GoogleIcon className="size-5 shrink-0" />
-                          Continue with Google
-                        </Button>
+                        <GoogleSignInButton label="Continue with Google" loading={loading} onClick={handleGoogleLogin} />
                       </div>
                     </div>
 
-                    <div className="flex w-full shrink-0 flex-col gap-4">
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        disabled={loading}
-                        onClick={handleGoogleLogin}
-                      >
-                        <GoogleIcon className="size-5 shrink-0" />
-                        Login with Google
-                      </Button>
+                    <div className="flex w-full shrink-0 flex-col gap-4" inert={loginMode !== 'designer'} aria-hidden={loginMode !== 'designer'}>
+                      <GoogleSignInButton label="Login with Google" loading={loading} onClick={handleGoogleLogin} />
 
-                      <div className="relative my-2">
-                        <Separator />
-                        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
-                          OR
-                        </span>
-                      </div>
+                      <OrSeparator className="my-2" />
 
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="designer-email">

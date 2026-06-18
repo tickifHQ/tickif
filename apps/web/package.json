@@ -17,8 +17,8 @@
     "@repo/ui": "workspace:*",
     "better-auth": "catalog:",
     "country-codes-flags-phone-codes": "^1.1.1",
-    "lucide-react": "catalog:",
     "hono": "catalog:",
+    "lucide-react": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
