@@ -1625,7 +1625,12 @@
         "room",
         "scope",
         "theme",
-        "budget_band"
+        "budget_band",
+        "material",
+        "finish",
+        "layout",
+        "palette",
+        "size_band"
       ]
     }
   },
