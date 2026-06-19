@@ -89,10 +89,20 @@ export const designerProfile = pgTable(
     reviewCount: integer('review_count').default(0).notNull(),
     // Corporate display fields (gated by entitlement at read time)
     websiteUrl: text('website_url'),
+    googleBusinessUrl: text('google_business_url'),
     testimonialBannerEnabled: boolean('testimonial_banner_enabled')
       .default(false)
       .notNull(),
     staffCount: integer('staff_count'),
+    // Contact & social presence
+    phone: text('phone'),
+    address: text('address'),
+    instagramHandle: text('instagram_handle'),
+    linkedinHandle: text('linkedin_handle'),
+    youtubeHandle: text('youtube_handle'),
+    // Company metadata
+    firmType: text('firm_type'),
+    foundedYear: integer('founded_year'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
