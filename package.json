@@ -5,7 +5,7 @@
   "description": "Tickif — discovery & portfolio platform for interior design projects in India",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.13.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {

@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent, ReactNode } from 'react';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,10 +13,9 @@ import {
   Linkedin,
   Loader2,
   UserRound,
-  X,
   Youtube,
 } from 'lucide-react';
-import type { OnboardDesignerInput, OnboardDesignerResponse } from '@repo/contracts';
+import type { ListTaxonomyResponse, OnboardDesignerInput, OnboardDesignerResponse, TaxonomyTerm } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -31,6 +30,7 @@ import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries } from '@/components/phone-number-input';
 
 type EntityType = OnboardDesignerInput['entityType'];
@@ -74,21 +74,9 @@ const onboardingIllustrations = {
   panel: '/illustrations/onboarding-living-room.svg',
 } as const;
 
-const cityOptions = [
-  'Ahmedabad',
-  'Bengaluru',
-  'Chandigarh',
-  'Chennai',
-  'Delhi NCR',
-  'Hyderabad',
-  'Jaipur',
-  'Kochi',
-  'Kolkata',
-  'Mumbai',
-  'Pune',
-] as const;
-
 type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
+type TaxonomyKind = 'city' | 'scope' | 'theme';
+type TaxonomyOptions = Record<TaxonomyKind, TaxonomyTerm[]>;
 
 const firmTypeOptions = [
   'Private Limited',
@@ -98,17 +86,43 @@ const firmTypeOptions = [
   'Studio',
 ] as const;
 
-const serviceOptions = [
-  'Full Home Interiors',
-  'Modular Kitchen',
-  'Renovation',
-  'Commercial Interiors',
-  'Styling & Decor',
-] as const;
-
 const foundedOptions = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018'] as const;
 
 const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
+
+const emptyTaxonomyOptions: TaxonomyOptions = {
+  city: [],
+  scope: [],
+  theme: [],
+};
+
+function optionalTrimmed(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function formatOptionalPhone(countryCode: string, phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length > 0 ? `${countryCode}${digits}` : undefined;
+}
+
+function teamSizeToStaffCount(teamSize: string) {
+  if (teamSize === 'Just me') return 1;
+  if (teamSize === '50+') return 51;
+  const upperBound = teamSize.split('-')[1];
+  return upperBound ? Number.parseInt(upperBound, 10) : undefined;
+}
+
+async function fetchTaxonomyTerms(kind: TaxonomyKind) {
+  const res = await api.api.taxonomy.terms.$get({ query: { kind } });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`Could not load ${kind} options.`);
+  }
+
+  return (data as ListTaxonomyResponse).terms;
+}
 
 async function submitWithApi(input: OnboardDesignerInput) {
   const res = await api.api.profiles.me.$post({ json: input });
@@ -125,6 +139,11 @@ async function submitWithApi(input: OnboardDesignerInput) {
   return { data: data as OnboardDesignerResponse, created: res.status === 201 };
 }
 
+async function signOutToLogin() {
+  await authClient.signOut();
+  window.location.href = '/login?mode=designer';
+}
+
 export function DesignerOnboarding({
   signedInName,
   signedInAs,
@@ -136,7 +155,7 @@ export function DesignerOnboarding({
   const [entityType, setEntityType] = useState<EntityType>('individual');
   const [userName, setUserName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [city, setCity] = useState('Chennai');
+  const [selectedCityId, setSelectedCityId] = useState('');
   const [citySearch, setCitySearch] = useState('');
   const [firmType, setFirmType] = useState('Private Limited');
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -146,9 +165,13 @@ export function DesignerOnboarding({
   const [instagramHandle, setInstagramHandle] = useState('');
   const [linkedinHandle, setLinkedinHandle] = useState('');
   const [youtubeHandle, setYoutubeHandle] = useState('');
-  const [servicesOffered, setServicesOffered] = useState<string[]>(['Full Home Interiors']);
+  const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>([]);
+  const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>([]);
   const [foundedYear, setFoundedYear] = useState('2021');
   const [teamSize, setTeamSize] = useState('2-10');
+  const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOptions>(emptyTaxonomyOptions);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(true);
+  const [taxonomyError, setTaxonomyError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<OnboardDesignerResponse | null>(null);
@@ -160,24 +183,64 @@ export function DesignerOnboarding({
     ? `@${companyName.trim().toLowerCase().replaceAll(/\s+/g, '')}`
     : '@yourstudio';
   const filteredCities = citySearch
-    ? cityOptions.filter((option) => option.toLowerCase().includes(citySearch.toLowerCase()))
-    : cityOptions;
+    ? taxonomyOptions.city.filter((option) => option.label.toLowerCase().includes(citySearch.toLowerCase()))
+    : taxonomyOptions.city;
   const canSubmit = useMemo(() => {
     const hasIndividualName = entityType === 'company' || userName.trim().length >= 2;
     const hasCompany = entityType === 'individual' || companyName.trim().length >= 2;
     return hasIndividualName && hasCompany && !submitting;
   }, [companyName, entityType, submitting, userName]);
 
-  function handleBack() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTaxonomy() {
+      setTaxonomyLoading(true);
+      setTaxonomyError('');
+
+      try {
+        const [city, scope, theme] = await Promise.all([
+          fetchTaxonomyTerms('city'),
+          fetchTaxonomyTerms('scope'),
+          fetchTaxonomyTerms('theme'),
+        ]);
+
+        if (!cancelled) {
+          setTaxonomyOptions({ city, scope, theme });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setTaxonomyError(err instanceof Error ? err.message : 'Could not load profile options.');
+        }
+      } finally {
+        if (!cancelled) {
+          setTaxonomyLoading(false);
+        }
+      }
+    }
+
+    void loadTaxonomy();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleBack() {
     if (step === 'entity') {
-      router.push('/');
+      await signOutToLogin();
       return;
     }
     if (step === 'services') {
       setStep('presence');
       return;
     }
-    setStep(step === 'presence' ? 'details' : 'entity');
+    setStep('entity');
+  }
+
+  function handleCompletionBack() {
+    setResult(null);
+    setStep(entityType === 'company' ? 'services' : 'presence');
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -212,13 +275,25 @@ export function DesignerOnboarding({
 
     setSubmitting(true);
     try {
+      const phone = formatOptionalPhone(whatsappCountry.code, whatsappNumber);
+      const foundedYearValue = Number.parseInt(foundedYear, 10);
+      const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
         entityType,
         userName: effectiveUserName,
-        companyName: entityType === 'company' ? trimmedCompanyName : undefined,
-        cityIds: [],
-        scopeIds: [],
-        themeIds: [],
+        cityIds: selectedCityId ? [selectedCityId] : [],
+        scopeIds: selectedScopeIds,
+        themeIds: selectedThemeIds,
+        ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
+        ...(phone ? { phone } : {}),
+        ...(optionalTrimmed(websiteUrl) ? { websiteUrl: optionalTrimmed(websiteUrl) } : {}),
+        ...(optionalTrimmed(googleBusinessUrl) ? { googleBusinessUrl: optionalTrimmed(googleBusinessUrl) } : {}),
+        ...(optionalTrimmed(instagramHandle) ? { instagramHandle: optionalTrimmed(instagramHandle) } : {}),
+        ...(optionalTrimmed(linkedinHandle) ? { linkedinHandle: optionalTrimmed(linkedinHandle) } : {}),
+        ...(optionalTrimmed(youtubeHandle) ? { youtubeHandle: optionalTrimmed(youtubeHandle) } : {}),
+        ...(entityType === 'company' && optionalTrimmed(firmType) ? { firmType: optionalTrimmed(firmType) } : {}),
+        ...(entityType === 'company' && Number.isFinite(foundedYearValue) ? { foundedYear: foundedYearValue } : {}),
+        ...(entityType === 'company' && staffCount ? { staffCount } : {}),
       };
       const response = await onSubmitOnboarding(payload);
       setResult(response.data);
@@ -231,7 +306,7 @@ export function DesignerOnboarding({
 
   if (result) {
     return (
-      <OnboardingShell signedInAs={displayEmail} onBack={() => router.push('/designer/dashboard')}>
+      <OnboardingShell signedInAs={displayEmail} onBack={handleCompletionBack}>
         <CompletionStep onAddProjects={() => router.push('/designer/dashboard')} onSkip={() => router.push('/designer/dashboard')} />
       </OnboardingShell>
     );
@@ -294,15 +369,12 @@ export function DesignerOnboarding({
             <div className="flex items-start gap-6">
               <div className="relative shrink-0">
                 <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
-                  <UserRound className="size-9 text-muted-foreground" aria-hidden="true" />
+                  <InitialsAvatar
+                    seed={userName}
+                    fallbackSeed={displayNamePlaceholder}
+                    alt="Generated profile initials"
+                  />
                 </div>
-                <button
-                  type="button"
-                  aria-label="Remove profile image"
-                  className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border bg-background"
-                >
-                  <X className="size-3 text-muted-foreground" aria-hidden="true" />
-                </button>
               </div>
 
               <div className="grid flex-1 gap-1 self-stretch">
@@ -326,12 +398,16 @@ export function DesignerOnboarding({
               </Label>
               <CitySelect
                 id={`${formId}-city`}
-                city={city}
                 citySearch={citySearch}
+                emptyLabel={taxonomyLoading ? 'Loading cities...' : 'No cities available'}
                 options={filteredCities}
-                onCityChange={setCity}
+                selectedCityId={selectedCityId}
+                onCityChange={setSelectedCityId}
                 onSearchChange={setCitySearch}
               />
+              {taxonomyError ? (
+                <p className="text-xs text-destructive">{taxonomyError}</p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -368,13 +444,15 @@ export function DesignerOnboarding({
           />
         ) : entityType === 'company' && step === 'details' ? (
           <CompanyBasicsFields
-            city={city}
             citySearch={citySearch}
             companyName={companyName}
             firmType={firmType}
             formId={formId}
             filteredCities={filteredCities}
-            onCityChange={setCity}
+            taxonomyError={taxonomyError}
+            taxonomyLoading={taxonomyLoading}
+            selectedCityId={selectedCityId}
+            onCityChange={setSelectedCityId}
             onCitySearchChange={setCitySearch}
             onCompanyNameChange={setCompanyName}
             onFirmTypeChange={setFirmType}
@@ -402,10 +480,15 @@ export function DesignerOnboarding({
           <CompanyServicesFields
             formId={formId}
             foundedYear={foundedYear}
-            servicesOffered={servicesOffered}
+            scopeOptions={taxonomyOptions.scope}
+            selectedScopeIds={selectedScopeIds}
+            selectedThemeIds={selectedThemeIds}
+            taxonomyLoading={taxonomyLoading}
+            themeOptions={taxonomyOptions.theme}
             teamSize={teamSize}
             onFoundedYearChange={setFoundedYear}
-            onServicesOfferedChange={setServicesOffered}
+            onScopeIdsChange={setSelectedScopeIds}
+            onThemeIdsChange={setSelectedThemeIds}
             onTeamSizeChange={setTeamSize}
           />
         ) : (
@@ -475,23 +558,27 @@ function CompletionStep({
 }
 
 function CompanyBasicsFields({
-  city,
   citySearch,
   companyName,
   filteredCities,
   firmType,
   formId,
+  selectedCityId,
+  taxonomyError,
+  taxonomyLoading,
   onCityChange,
   onCitySearchChange,
   onCompanyNameChange,
   onFirmTypeChange,
 }: {
-  city: string;
   citySearch: string;
   companyName: string;
-  filteredCities: readonly string[];
+  filteredCities: readonly TaxonomyTerm[];
   firmType: string;
   formId: string;
+  selectedCityId: string;
+  taxonomyError: string;
+  taxonomyLoading: boolean;
   onCityChange: (value: string) => void;
   onCitySearchChange: (value: string) => void;
   onCompanyNameChange: (value: string) => void;
@@ -502,15 +589,12 @@ function CompanyBasicsFields({
       <div className="flex items-start gap-6">
         <div className="relative shrink-0">
           <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
-            <BriefcaseBusiness className="size-8 text-muted-foreground" aria-hidden="true" />
+            <InitialsAvatar
+              seed={companyName}
+              fallbackSeed="Livspace Interiors"
+              alt="Generated company logo initials"
+            />
           </div>
-          <button
-            type="button"
-            aria-label="Remove company logo"
-            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border bg-background"
-          >
-            <X className="size-3 text-muted-foreground" aria-hidden="true" />
-          </button>
         </div>
 
         <div className="grid flex-1 gap-1 self-stretch">
@@ -542,12 +626,16 @@ function CompanyBasicsFields({
         </Label>
         <CitySelect
           id={`${formId}-city`}
-          city={city}
           citySearch={citySearch}
+          emptyLabel={taxonomyLoading ? 'Loading cities...' : 'No cities available'}
           options={filteredCities}
+          selectedCityId={selectedCityId}
           onCityChange={onCityChange}
           onSearchChange={onCitySearchChange}
         />
+        {taxonomyError ? (
+          <p className="text-xs text-destructive">{taxonomyError}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -630,28 +718,49 @@ function CompanyServicesFields({
   formId,
   foundedYear,
   onFoundedYearChange,
-  onServicesOfferedChange,
+  onScopeIdsChange,
+  onThemeIdsChange,
   onTeamSizeChange,
-  servicesOffered,
+  scopeOptions,
+  selectedScopeIds,
+  selectedThemeIds,
+  taxonomyLoading,
+  themeOptions,
   teamSize,
 }: {
   formId: string;
   foundedYear: string;
-  servicesOffered: string[];
+  scopeOptions: readonly TaxonomyTerm[];
+  selectedScopeIds: string[];
+  selectedThemeIds: string[];
+  taxonomyLoading: boolean;
+  themeOptions: readonly TaxonomyTerm[];
   teamSize: string;
   onFoundedYearChange: (value: string) => void;
-  onServicesOfferedChange: (value: string[]) => void;
+  onScopeIdsChange: (value: string[]) => void;
+  onThemeIdsChange: (value: string[]) => void;
   onTeamSizeChange: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <CompactMultiSelect
+      <TaxonomyMultiSelect
         id={`${formId}-services`}
         label="Services offered"
         labelHint="Select all that apply"
-        options={serviceOptions}
-        values={servicesOffered}
-        onValuesChange={onServicesOfferedChange}
+        emptyLabel={taxonomyLoading ? 'Loading services...' : 'No services available'}
+        options={scopeOptions}
+        values={selectedScopeIds}
+        onValuesChange={onScopeIdsChange}
+      />
+
+      <TaxonomyMultiSelect
+        id={`${formId}-themes`}
+        label="Design themes"
+        labelHint="Select all that apply"
+        emptyLabel={taxonomyLoading ? 'Loading themes...' : 'No themes available'}
+        options={themeOptions}
+        values={selectedThemeIds}
+        onValuesChange={onThemeIdsChange}
       />
 
       <div className="grid grid-cols-2 gap-5">
@@ -674,7 +783,8 @@ function CompanyServicesFields({
   );
 }
 
-function CompactMultiSelect({
+function TaxonomyMultiSelect({
+  emptyLabel,
   id,
   label,
   labelHint,
@@ -686,17 +796,21 @@ function CompactMultiSelect({
   label: string;
   labelHint?: string;
   values: string[];
-  options: readonly string[];
+  options: readonly TaxonomyTerm[];
+  emptyLabel: string;
   onValuesChange: (values: string[]) => void;
 }) {
-  const displayValue = values.length > 0 ? values.join(', ') : 'Select services';
+  const selectedLabels = options
+    .filter((option) => values.includes(option.id))
+    .map((option) => option.label);
+  const displayValue = selectedLabels.length > 0 ? selectedLabels.join(', ') : 'Select options';
 
-  function toggleOption(option: string) {
-    if (values.includes(option)) {
-      onValuesChange(values.filter((value) => value !== option));
+  function toggleOption(optionId: string) {
+    if (values.includes(optionId)) {
+      onValuesChange(values.filter((value) => value !== optionId));
       return;
     }
-    onValuesChange([...values, option]);
+    onValuesChange([...values, optionId]);
   }
 
   return (
@@ -722,17 +836,23 @@ function CompactMultiSelect({
           collisionPadding={8}
           className="w-[var(--radix-dropdown-menu-trigger-width)]"
         >
-          {options.map((option) => (
-            <DropdownMenuCheckboxItem
-              key={option}
-              checked={values.includes(option)}
-              onCheckedChange={() => toggleOption(option)}
-              onSelect={(event) => event.preventDefault()}
-              className="text-[13px]"
-            >
-              {option}
-            </DropdownMenuCheckboxItem>
-          ))}
+          {options.length > 0 ? (
+            options.map((option) => (
+              <DropdownMenuCheckboxItem
+                key={option.id}
+                checked={values.includes(option.id)}
+                onCheckedChange={() => toggleOption(option.id)}
+                onSelect={(event) => event.preventDefault()}
+                className="text-[13px]"
+              >
+                {option.label}
+              </DropdownMenuCheckboxItem>
+            ))
+          ) : (
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+              {emptyLabel}
+            </div>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -922,20 +1042,24 @@ function SocialInput({
 }
 
 function CitySelect({
-  city,
   citySearch,
+  emptyLabel,
   id,
   onCityChange,
   onSearchChange,
   options,
+  selectedCityId,
 }: {
-  city: string;
   citySearch: string;
+  emptyLabel: string;
   id: string;
   onCityChange: (city: string) => void;
   onSearchChange: (search: string) => void;
-  options: readonly string[];
+  options: readonly TaxonomyTerm[];
+  selectedCityId: string;
 }) {
+  const selectedCity = options.find((option) => option.id === selectedCityId);
+
   return (
     <DropdownMenu
       onOpenChange={(open) => {
@@ -948,7 +1072,7 @@ function CitySelect({
           type="button"
           className="flex h-8 w-full items-center justify-between rounded-md border bg-background px-2 text-left text-[13px] font-medium shadow-xs outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <span>{city || 'Select your city'}</span>
+          <span>{selectedCity?.label || 'Select your city'}</span>
           <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
@@ -979,16 +1103,16 @@ function CitySelect({
         {options.length > 0 ? (
           options.map((option) => (
             <DropdownMenuItem
-              key={option}
-              onSelect={() => onCityChange(option)}
+              key={option.id}
+              onSelect={() => onCityChange(option.id)}
               className="text-[13px]"
             >
-              {option}
+              {option.label}
             </DropdownMenuItem>
           ))
         ) : (
           <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-            No cities found
+            {emptyLabel}
           </div>
         )}
       </DropdownMenuContent>
@@ -1053,11 +1177,6 @@ function EntityChoiceCard({
 }
 
 function OnboardingSecondaryActions() {
-  async function handleSignOut() {
-    await authClient.signOut();
-    window.location.href = '/login';
-  }
-
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
       <button type="button" className="cursor-pointer font-medium text-foreground hover:underline">
@@ -1066,7 +1185,7 @@ function OnboardingSecondaryActions() {
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
       <button
         type="button"
-        onClick={handleSignOut}
+        onClick={signOutToLogin}
         className="cursor-pointer font-medium text-foreground hover:underline"
       >
         Sign out

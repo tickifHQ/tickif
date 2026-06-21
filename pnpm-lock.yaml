@@ -12,6 +12,12 @@ catalogs:
     '@aws-sdk/s3-request-presigner':
       specifier: ^3.700.0
       version: 3.1068.0
+    '@dicebear/core':
+      specifier: ^10.3.0
+      version: 10.3.0
+    '@dicebear/styles':
+      specifier: ^10.2.0
+      version: 10.2.0
     '@hono/node-server':
       specifier: ^2.0.4
       version: 2.0.4
@@ -250,6 +256,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@dicebear/core':
+        specifier: 'catalog:'
+        version: 10.3.0
+      '@dicebear/styles':
+        specifier: 'catalog:'
+        version: 10.2.0
       '@repo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -1046,6 +1058,13 @@ packages:
 
   '@better-fetch/fetch@1.3.0':
     resolution: {integrity: sha512-Lgkl18IrUURFqa1nE38GNDWXf7XGzfxXQDCE/alCQV0yZ98YrPGtlmW61ch1T4YRt3lxrSAGA+Ft73FzuWWb3A==}
+
+  '@dicebear/core@10.3.0':
+    resolution: {integrity: sha512-HbzHvYY/E0m3B7BfBjs8SO7JyqJnORJgQhM2YM7VoN/EQzrqJ3Z0j4+op+WfEWXWzZj75tQqBU5SZpUssi5m/Q==}
+    engines: {node: '>=22.0.0'}
+
+  '@dicebear/styles@10.2.0':
+    resolution: {integrity: sha512-o4rw0+7Q7sSAyr9YxYrUe3jCxlOAzEcBvbQvl4hQKQ+9WNmBK4p7wGYvsmGeJbxFh8y/Ux6ltrCPyXBIDV6qYA==}
 
   '@dotenvx/dotenvx@1.71.0':
     resolution: {integrity: sha512-KEUw/mGu+EDRhYWRTNGHIimVCs9NvMFaIXOGrHSXoCteKLE5EsJnmPjOPpYorjXVg/0xG0fbdVw720azw1z4ag==}
@@ -5704,6 +5723,10 @@ snapshots:
       '@noble/hashes': 2.2.0
 
   '@better-fetch/fetch@1.3.0': {}
+
+  '@dicebear/core@10.3.0': {}
+
+  '@dicebear/styles@10.2.0': {}
 
   '@dotenvx/dotenvx@1.71.0':
     dependencies:

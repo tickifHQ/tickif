@@ -10,7 +10,7 @@ export default defineConfig({
   entry: ['src/server.ts'],
   format: ['esm'],
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   bundle: true,
   noExternal: [/^@repo\//],
   clean: true,

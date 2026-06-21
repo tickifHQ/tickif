@@ -23,6 +23,10 @@ type SessionData = {
   user: SessionUser;
 };
 
+type GetServerSessionOptions = {
+  disableCookieCache?: boolean;
+};
+
 /**
  * Role hierarchy:
  * - superadmin passes all checks
@@ -52,13 +56,18 @@ export function rolePassesCheck(
  * Non-throwing variant — returns session or null.
  * Used in (public)/layout.tsx to decide whether to render the scroll-gate.
  */
-export async function getServerSession(): Promise<SessionData | null> {
+export async function getServerSession(options?: GetServerSessionOptions): Promise<SessionData | null> {
   const reqHeaders = await headers();
   const cookie = reqHeaders.get('cookie');
   if (!cookie) return null;
 
   try {
-    const res = await fetch(`${API_URL}/api/auth/get-session`, {
+    const url = new URL('/api/auth/get-session', API_URL);
+    if (options?.disableCookieCache) {
+      url.searchParams.set('disableCookieCache', 'true');
+    }
+
+    const res = await fetch(url.toString(), {
       headers: { cookie },
       cache: 'no-store',
     });
@@ -79,7 +88,9 @@ export async function getServerSession(): Promise<SessionData | null> {
 export async function requireAuth(options?: {
   requiredRole?: 'designer' | 'admin' | 'superadmin';
 }): Promise<SessionData> {
-  const session = await getServerSession();
+  const session = await getServerSession({
+    disableCookieCache: Boolean(options?.requiredRole),
+  });
 
   if (!session) {
     redirect('/login');
