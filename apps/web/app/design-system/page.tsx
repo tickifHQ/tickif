@@ -116,7 +116,7 @@ export default function DesignSystemPage() {
               A 3BHK in Indiranagar, <em>reimagined</em>
             </p>
             <p className="max-w-xl text-base leading-relaxed">
-              Body — Hanken Grotesk. Discover real interior design projects across India, told
+              Body — Inter. Discover real interior design projects across India, told
               through the homes people actually live in.
             </p>
             <p className="font-mono text-sm text-muted-foreground">
