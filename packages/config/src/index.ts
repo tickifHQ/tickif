@@ -71,8 +71,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
   // API
-  PORT: z.coerce.number().int().positive().default(3001),
-  NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:3001'),
+  PORT: z.coerce.number().int().positive().default(8008),
+  NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8008'),
 
   // SMS / OTP provider. Selection is explicit; creds are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
