@@ -122,6 +122,43 @@ export async function makeProject(overrides: Partial<typeof schema.project.$infe
   return row!;
 }
 
+export async function makeTaxonomy(overrides: Partial<typeof schema.taxonomy.$inferInsert> = {}) {
+  const { kind = 'room', label = 'Living Room', slug, ...rest } = overrides;
+  const [row] = await db
+    .insert(schema.taxonomy)
+    .values({
+      kind,
+      slug:
+        slug ??
+        `${label
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')}-${uid('tax')}`,
+      label,
+      ...rest,
+    })
+    .returning();
+  return row!;
+}
+
+export async function makeProjectRoom(
+  overrides: Partial<typeof schema.projectRoom.$inferInsert> = {},
+) {
+  const projectId = overrides.projectId ?? (await makeProject()).id;
+  const roomTypeId = overrides.roomTypeId ?? (await makeTaxonomy({ kind: 'room' })).id;
+  const [row] = await db
+    .insert(schema.projectRoom)
+    .values({
+      projectId,
+      roomTypeId,
+      name: overrides.name ?? 'Living Room',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 export async function makeProjectImage(
   overrides: Partial<typeof schema.projectImage.$inferInsert> = {},
 ) {
