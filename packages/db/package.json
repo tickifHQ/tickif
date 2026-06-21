@@ -22,6 +22,7 @@
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
+    "seed": "tsx src/seeds/index.ts",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit"
   },
