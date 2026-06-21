@@ -26,13 +26,13 @@ describe('LoginCard', () => {
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
   });
 
   it('renders segmented control with browsing and designer tabs', () => {
     render(<LoginCard />);
     expect(screen.getByRole('tab', { name: /i'm browsing/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /interior designer/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /i'm a designer/i })).toBeInTheDocument();
   });
 
   it('shows browsing features by default', () => {
@@ -45,7 +45,7 @@ describe('LoginCard', () => {
   it('shows designer features when designer tab is selected', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
     expect(screen.getByTestId('feature-get-bookings-from-home-owners')).toBeInTheDocument();
     expect(screen.getByTestId('feature-turn-visitors-into-clients')).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('LoginCard', () => {
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByText(/One link to share your work/)).toBeInTheDocument();
   });
 
@@ -67,7 +67,7 @@ describe('LoginCard', () => {
   it('shows Google sign-in, email input, and button in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
     expect(screen.getAllByText('OR')).toHaveLength(2);
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     await user.click(screen.getByRole('button', { name: /login with google/i }));
     expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
   });
@@ -103,21 +103,21 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /interior designer/i }));
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     await user.click(screen.getByRole('button', { name: /login with google/i }));
     expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('disables Send OTP button when phone is empty', () => {
     render(<LoginCard />);
-    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
   });
 
   it('disables Send OTP button when phone has fewer than 10 digits', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '12345');
-    expect(screen.getByRole('button', { name: 'Send OTP' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
   });
 
   it('transitions to OTP step after successful send', async () => {
@@ -125,7 +125,7 @@ describe('LoginCard', () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByText('Enter verification code')).toBeInTheDocument();
   });
 
@@ -134,7 +134,7 @@ describe('LoginCard', () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByText('Invalid phone number')).toBeInTheDocument();
   });
 
@@ -143,7 +143,7 @@ describe('LoginCard', () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByText('Rate limited')).toBeInTheDocument();
   });
 
@@ -151,7 +151,7 @@ describe('LoginCard', () => {
     async function goToOtpStep(user: ReturnType<typeof userEvent.setup>) {
       mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
       await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
-      await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+      await user.click(screen.getByRole('button', { name: 'Get OTP' }));
       await screen.findByText('Enter verification code');
     }
 
@@ -215,7 +215,7 @@ describe('LoginCard', () => {
       render(<LoginCard />);
       await goToOtpStep(user);
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.getByRole('button', { name: 'Send OTP' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
     });
 
     it('calls onSuccess callback on verify instead of router.push', async () => {
