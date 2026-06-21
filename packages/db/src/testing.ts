@@ -137,3 +137,7 @@ export async function makeProjectImage(
     .returning();
   return row!;
 }
+
+// --- seed helpers (test-only) -------------------------------------------------
+
+export { seedTaxonomy } from './seeds/taxonomy.js';
