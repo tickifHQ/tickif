@@ -12,6 +12,7 @@ const project: ProjectResponse = {
   status: 'published',
   citySlug: 'mumbai',
   budgetBandSlug: null,
+  coverImageId: null,
   metadata: null,
   publishedAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',

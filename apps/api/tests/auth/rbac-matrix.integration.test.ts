@@ -193,7 +193,9 @@ describe('RBAC matrix: ownership triangle (E-89)', () => {
 describe('RBAC matrix: real app routes (E-89)', () => {
   it('locks the current production gating', async () => {
     const actors = await mintActors(12);
-    const designer = await makeDesigner();
+    const designerSession = await getSession(new Headers({ cookie: actors.designer! }));
+    if (!designerSession) throw new Error('expected designer session');
+    await makeDesigner({ userId: designerSession.user.id });
 
     // public routes: everyone, including anon
     for (const actor of ACTOR_NAMES) {
@@ -212,20 +214,20 @@ describe('RBAC matrix: real app routes (E-89)', () => {
       ).toBe(200);
     }
 
-    // POST /api/projects is requireAuth-only TODAY: anon/expired 401, banned 403,
-    // every role 201. When project creation gets role-gated, edit this table deliberately.
+    // POST /api/projects is authenticated and requires a designer profile owned by the caller.
     const post = (label: string, cookie?: string) =>
       app.request('/api/projects', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
-        body: JSON.stringify({ designerId: designer.id, title: `Matrix ${label}` }),
+        body: JSON.stringify({ title: `Matrix ${label}` }),
       });
     expect((await post('anon', actors.anon)).status, 'anon → POST /api/projects').toBe(401);
     expect((await post('expired', actors.expired)).status, 'expired → POST /api/projects').toBe(401);
     expect((await post('banned', actors.banned)).status, 'banned → POST /api/projects').toBe(403);
-    for (const role of ROLES) {
-      expect((await post(role, actors[role])).status, `${role} → POST /api/projects`).toBe(201);
-    }
+    expect((await post('visitor', actors.visitor)).status, 'visitor → POST /api/projects').toBe(403);
+    expect((await post('designer', actors.designer)).status, 'designer → POST /api/projects').toBe(201);
+    expect((await post('admin', actors.admin)).status, 'admin → POST /api/projects').toBe(403);
+    expect((await post('superadmin', actors.superadmin)).status, 'superadmin → POST /api/projects').toBe(403);
   });
 });
 
