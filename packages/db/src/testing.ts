@@ -134,7 +134,7 @@ export async function makeTaxonomy(overrides: Partial<typeof schema.taxonomy.$in
           .toLowerCase()
           .trim()
           .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')}-${uid('tax')}`,
+          .replace(/^-+|-+$/g, '')}-${Date.now().toString(36)}-${seq++}`,
       label,
       ...rest,
     })
@@ -174,3 +174,7 @@ export async function makeProjectImage(
     .returning();
   return row!;
 }
+
+// --- seed helpers (test-only) -------------------------------------------------
+
+export { seedTaxonomy } from './seeds/taxonomy.js';

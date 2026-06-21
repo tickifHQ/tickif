@@ -21,6 +21,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yaml,yml}\"",
     "db:generate": "pnpm --filter @repo/db generate",
     "db:migrate": "pnpm --filter @repo/db migrate",
+    "db:seed": "pnpm --filter @repo/db seed",
     "db:studio": "pnpm --filter @repo/db studio",
     "auth:generate": "pnpm --filter @repo/auth generate",
     "infra:up": "docker compose up -d",

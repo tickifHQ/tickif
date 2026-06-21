@@ -10,6 +10,8 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  check,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { user, organization } from './auth.js';
@@ -32,13 +34,24 @@ export const projectStatusEnum = pgEnum('project_status', [
   'rejected',
 ]);
 
-// Admin-managed taxonomy: city, room, scope, theme, budget band
+// Admin-managed taxonomy: 13 kinds covering geography, property, design, budget,
+// and per-room attribute axes (E-124).
+// v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
 export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
   'city',
+  'locality',
+  'property_type',
+  'bhk',
   'room',
   'scope',
   'theme',
   'budget_band',
+  // E-124: per-room attribute vocabularies
+  'material',
+  'finish',
+  'layout',
+  'palette',
+  'size_band',
 ]);
 
 export const taxonomy = pgTable(
@@ -46,11 +59,40 @@ export const taxonomy = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     kind: taxonomyKindEnum('kind').notNull(),
-    slug: text('slug').notNull(),
     label: text('label').notNull(),
+    slug: text('slug').notNull(),
+    // Self-referencing FK for hierarchy. Only locality uses this (city → locality).
+    // v0 policy: parentId is immutable after creation.
+    parentId: uuid('parent_id').references((): AnyPgColumn => taxonomy.id, { onDelete: 'restrict' }),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    // Kind-specific data. budget_band stores { min: number, max: number }.
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (t) => [index('taxonomy_kind_slug_idx').on(t.kind, t.slug)],
+  (t) => [
+    // Hierarchy: locality MUST have parent, all other kinds MUST NOT.
+    check('taxonomy_hierarchy_check', sql`(${t.kind} = 'locality' AND ${t.parentId} IS NOT NULL) OR (${t.kind} <> 'locality' AND ${t.parentId} IS NULL)`),
+    // Slug format: lowercase, URL-safe, immutable after creation.
+    check('taxonomy_slug_format_check', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
+    // Non-locality kinds: slug unique within kind
+    uniqueIndex('taxonomy_kind_slug_uniq')
+      .on(t.kind, t.slug)
+      .where(sql`${t.parentId} IS NULL`),
+    // Locality: slug unique within parent city
+    // Assumes locality URLs are city-scoped (e.g., /mumbai/andheri, /pune/andheri).
+    // If product later requires globally unique locality URLs, this constraint must change.
+    uniqueIndex('taxonomy_parent_slug_uniq')
+      .on(t.parentId, t.slug)
+      .where(sql`${t.parentId} IS NOT NULL`),
+    // Public reads: filter active terms by kind
+    index('taxonomy_kind_active_idx').on(t.kind, t.isActive),
+    // Locality lookup by parent
+    index('taxonomy_parent_idx').on(t.parentId),
+    // Ordered listing
+    index('taxonomy_kind_sort_idx').on(t.kind, t.sortOrder),
+  ],
 );
 
 // Entity type: individual freelancer vs registered company
@@ -119,7 +161,7 @@ export const designerProfileFootprint = pgTable(
       .references(() => designerProfile.id, { onDelete: 'cascade' }),
     taxonomyId: uuid('taxonomy_id')
       .notNull()
-      .references(() => taxonomy.id, { onDelete: 'cascade' }),
+      .references(() => taxonomy.id, { onDelete: 'restrict' }),
   },
   (t) => [
     index('dpf_profile_idx').on(t.profileId),
