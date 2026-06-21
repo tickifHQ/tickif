@@ -163,6 +163,72 @@ const budgetBands: TermSeed[] = [
   { kind: 'budget_band', slug: 'luxury', label: 'Luxury', sortOrder: 4, metadata: { min: 3500001, max: null } },
 ];
 
+// ─── E-124: PER-ROOM ATTRIBUTE VOCABULARIES ────────────────────────────────────
+
+// --- MATERIALS (surface-scoped: cabinet, countertop, wall/floor) ---
+const materials: TermSeed[] = [
+  { kind: 'material', slug: 'plywood-bwp', label: 'Plywood (BWP/Marine)', sortOrder: 1 },
+  { kind: 'material', slug: 'plywood-bwr', label: 'Plywood (BWR)', sortOrder: 2 },
+  { kind: 'material', slug: 'mdf', label: 'MDF', sortOrder: 3 },
+  { kind: 'material', slug: 'hdhmr', label: 'HDHMR', sortOrder: 4 },
+  { kind: 'material', slug: 'particleboard', label: 'Particleboard', sortOrder: 5 },
+  { kind: 'material', slug: 'acrylic', label: 'Acrylic', sortOrder: 6 },
+  { kind: 'material', slug: 'laminate', label: 'Laminate', sortOrder: 7 },
+  { kind: 'material', slug: 'veneer', label: 'Veneer', sortOrder: 8 },
+  { kind: 'material', slug: 'solid-wood', label: 'Solid Wood', sortOrder: 9 },
+  { kind: 'material', slug: 'pvc', label: 'PVC', sortOrder: 10 },
+  { kind: 'material', slug: 'quartz', label: 'Quartz', sortOrder: 11 },
+  { kind: 'material', slug: 'granite', label: 'Granite', sortOrder: 12 },
+  { kind: 'material', slug: 'marble', label: 'Marble', sortOrder: 13 },
+];
+
+// --- FINISHES ---
+const finishes: TermSeed[] = [
+  { kind: 'finish', slug: 'laminate', label: 'Laminate', sortOrder: 1 },
+  { kind: 'finish', slug: 'acrylic-gloss', label: 'Acrylic (Gloss)', sortOrder: 2 },
+  { kind: 'finish', slug: 'acrylic-matte', label: 'Acrylic (Matte)', sortOrder: 3 },
+  { kind: 'finish', slug: 'pu', label: 'PU (Polyurethane)', sortOrder: 4 },
+  { kind: 'finish', slug: 'membrane', label: 'Membrane', sortOrder: 5 },
+  { kind: 'finish', slug: 'veneer', label: 'Veneer', sortOrder: 6 },
+  { kind: 'finish', slug: 'glass', label: 'Glass', sortOrder: 7 },
+  { kind: 'finish', slug: 'fabric', label: 'Fabric', sortOrder: 8 },
+];
+
+// --- LAYOUTS (per-room) ---
+const layouts: TermSeed[] = [
+  // Kitchen layouts
+  { kind: 'layout', slug: 'straight', label: 'Straight', sortOrder: 1, metadata: { room: 'kitchen' } },
+  { kind: 'layout', slug: 'l-shaped', label: 'L-Shaped', sortOrder: 2, metadata: { room: 'kitchen' } },
+  { kind: 'layout', slug: 'u-shaped', label: 'U-Shaped', sortOrder: 3, metadata: { room: 'kitchen' } },
+  { kind: 'layout', slug: 'parallel', label: 'Parallel / Galley', sortOrder: 4, metadata: { room: 'kitchen' } },
+  { kind: 'layout', slug: 'island', label: 'Island', sortOrder: 5, metadata: { room: 'kitchen' } },
+  { kind: 'layout', slug: 'g-shaped', label: 'G-Shaped', sortOrder: 6, metadata: { room: 'kitchen' } },
+  // Wardrobe layouts
+  { kind: 'layout', slug: 'sliding', label: 'Sliding', sortOrder: 7, metadata: { room: 'wardrobe' } },
+  { kind: 'layout', slug: 'hinged', label: 'Hinged', sortOrder: 8, metadata: { room: 'wardrobe' } },
+  { kind: 'layout', slug: 'walk-in', label: 'Walk-in', sortOrder: 9, metadata: { room: 'wardrobe' } },
+  { kind: 'layout', slug: 'corner-l', label: 'Corner / L-Shaped', sortOrder: 10, metadata: { room: 'wardrobe' } },
+  { kind: 'layout', slug: 'loft', label: 'Loft', sortOrder: 11, metadata: { room: 'wardrobe' } },
+];
+
+// --- PALETTES (color groupings) ---
+const palettes: TermSeed[] = [
+  { kind: 'palette', slug: 'blues', label: 'Blues', sortOrder: 1 },
+  { kind: 'palette', slug: 'greens', label: 'Greens', sortOrder: 2 },
+  { kind: 'palette', slug: 'greys', label: 'Greys', sortOrder: 3 },
+  { kind: 'palette', slug: 'neutrals', label: 'Neutrals', sortOrder: 4 },
+  { kind: 'palette', slug: 'warm-tones', label: 'Warm Tones', sortOrder: 5 },
+  { kind: 'palette', slug: 'wood-tones', label: 'Wood Tones', sortOrder: 6 },
+];
+
+// --- SIZE BANDS ---
+const sizeBands: TermSeed[] = [
+  { kind: 'size_band', slug: 'compact', label: 'Compact', sortOrder: 1 },
+  { kind: 'size_band', slug: 'medium', label: 'Medium', sortOrder: 2 },
+  { kind: 'size_band', slug: 'large', label: 'Large', sortOrder: 3 },
+  { kind: 'size_band', slug: 'expansive', label: 'Expansive', sortOrder: 4 },
+];
+
 // ─── UPSERT LOGIC ──────────────────────────────────────────────────────────────
 
 /**
@@ -228,7 +294,7 @@ async function upsertLocality(term: TermSeed, cityIdMap: Map<string, string>): P
 // ─── MAIN ──────────────────────────────────────────────────────────────────────
 
 export async function seedTaxonomy(): Promise<void> {
-  console.log('[seed] Taxonomy: seeding 8 kinds...');
+  console.log('[seed] Taxonomy: seeding 13 kinds...');
 
   // 1. Cities first (localities depend on them)
   const cityIdMap = new Map<string, string>();
@@ -263,8 +329,25 @@ export async function seedTaxonomy(): Promise<void> {
   for (const term of budgetBands) await upsertTerm(term);
   console.log(`  ✓ ${budgetBands.length} budget bands`);
 
+  // 4. E-124: Per-room attribute vocabularies
+  for (const term of materials) await upsertTerm(term);
+  console.log(`  ✓ ${materials.length} materials`);
+
+  for (const term of finishes) await upsertTerm(term);
+  console.log(`  ✓ ${finishes.length} finishes`);
+
+  for (const term of layouts) await upsertTerm(term);
+  console.log(`  ✓ ${layouts.length} layouts`);
+
+  for (const term of palettes) await upsertTerm(term);
+  console.log(`  ✓ ${palettes.length} palettes`);
+
+  for (const term of sizeBands) await upsertTerm(term);
+  console.log(`  ✓ ${sizeBands.length} size bands`);
+
   const total =
     cities.length + localities.length + propertyTypes.length +
-    bhkTypes.length + rooms.length + scopes.length + themes.length + budgetBands.length;
+    bhkTypes.length + rooms.length + scopes.length + themes.length + budgetBands.length +
+    materials.length + finishes.length + layouts.length + palettes.length + sizeBands.length;
   console.log(`[seed] Taxonomy: ${total} terms seeded successfully.`);
 }
