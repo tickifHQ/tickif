@@ -382,9 +382,16 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
                     className="flex transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-100%'})` }}
                   >
-                    <div className="flex w-full shrink-0 flex-col gap-3" inert={loginMode !== 'browsing'} aria-hidden={loginMode !== 'browsing'}>
+                    <div
+                      className={cn(
+                        'flex w-full shrink-0 flex-col gap-3 transition-opacity duration-300',
+                        loginMode === 'browsing' ? 'opacity-100' : 'opacity-0',
+                      )}
+                      inert={loginMode !== 'browsing'}
+                      aria-hidden={loginMode !== 'browsing'}
+                    >
                       <div className="flex flex-col gap-1.5">
-                        <div className="flex">
+                        <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
                           <DropdownMenu
                             onOpenChange={(open) => {
                               if (!open) setCountrySearch('');
@@ -393,7 +400,7 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
                             <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-2 rounded-l-md border border-r-0 border-input bg-muted px-2.5 py-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
                                 disabled={loading}
                               >
                                 <span className="text-base leading-none">{selectedCountry.flag}</span>
@@ -453,7 +460,7 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleSendOtp();
                             }}
-                            className="-ml-px rounded-l-none"
+                            className="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                             disabled={loading}
                             autoComplete="tel"
                           />
@@ -476,7 +483,14 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
                       </div>
                     </div>
 
-                    <div className="flex w-full shrink-0 flex-col gap-4" inert={loginMode !== 'designer'} aria-hidden={loginMode !== 'designer'}>
+                    <div
+                      className={cn(
+                        'flex w-full shrink-0 flex-col gap-4 transition-opacity duration-300',
+                        loginMode === 'designer' ? 'opacity-100' : 'opacity-0',
+                      )}
+                      inert={loginMode !== 'designer'}
+                      aria-hidden={loginMode !== 'designer'}
+                    >
                       <GoogleSignInButton label="Login with Google" loading={loading} onClick={handleGoogleLogin} />
 
                       <OrSeparator className="my-2" />
@@ -494,7 +508,7 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
                             id="designer-email"
                             type="email"
                             placeholder="you@example.com"
-                            className="pl-10"
+                            className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
                             disabled
                           />
                         </div>
