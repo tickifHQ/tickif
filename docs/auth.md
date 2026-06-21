@@ -60,13 +60,13 @@ end-to-end locally:
 PHONE="+919812345678"
 
 # 1. Request an OTP — the code is printed in the API log
-curl -s -X POST http://localhost:3001/api/auth/phone-number/send-otp \
+curl -s -X POST http://localhost:8008/api/auth/phone-number/send-otp \
   -H 'content-type: application/json' -d "{\"phoneNumber\":\"$PHONE\"}"
 
 # 2. Find the code in the running worker output: "[sms] OTP for 91...: 123456"
 
 # 3. Verify — creates the user + session, returns a session token/cookie
-curl -s -X POST http://localhost:3001/api/auth/phone-number/verify \
+curl -s -X POST http://localhost:8008/api/auth/phone-number/verify \
   -H 'content-type: application/json' -d "{\"phoneNumber\":\"$PHONE\",\"code\":\"123456\"}"
 ```
 
