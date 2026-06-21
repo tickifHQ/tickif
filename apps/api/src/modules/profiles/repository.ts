@@ -160,6 +160,15 @@ export const profilesRepository = {
     displayName: string;
     entityType: 'individual' | 'company';
     bio: string | null;
+    phone: string | null;
+    websiteUrl: string | null;
+    googleBusinessUrl: string | null;
+    instagramHandle: string | null;
+    linkedinHandle: string | null;
+    youtubeHandle: string | null;
+    firmType: string | null;
+    foundedYear: number | null;
+    staffCount: number | null;
     footprintIds: { taxonomyId: string }[];
   }): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect }> {
     return await db.transaction(async (tx) => {
@@ -189,6 +198,15 @@ export const profilesRepository = {
           displayName: data.displayName,
           entityType: data.entityType,
           bio: data.bio ?? undefined,
+          phone: data.phone ?? undefined,
+          websiteUrl: data.websiteUrl ?? undefined,
+          googleBusinessUrl: data.googleBusinessUrl ?? undefined,
+          instagramHandle: data.instagramHandle ?? undefined,
+          linkedinHandle: data.linkedinHandle ?? undefined,
+          youtubeHandle: data.youtubeHandle ?? undefined,
+          firmType: data.firmType ?? undefined,
+          foundedYear: data.foundedYear ?? undefined,
+          staffCount: data.staffCount ?? undefined,
         })
         .returning();
 
@@ -251,6 +269,13 @@ export const profilesRepository = {
       logoImageId: string | null;
       entityType: 'individual' | 'company';
       websiteUrl: string | null;
+      googleBusinessUrl: string | null;
+      phone: string | null;
+      instagramHandle: string | null;
+      linkedinHandle: string | null;
+      youtubeHandle: string | null;
+      firmType: string | null;
+      foundedYear: number | null;
       staffCount: number | null;
       testimonialBannerEnabled: boolean;
     }>,

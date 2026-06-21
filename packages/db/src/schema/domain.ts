@@ -99,11 +99,7 @@ export const taxonomy = pgTable(
 export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
 
 // Profile lifecycle
-export const profileStatusEnum = pgEnum('profile_status', [
-  'draft',
-  'active',
-  'suspended',
-]);
+export const profileStatusEnum = pgEnum('profile_status', ['draft', 'active', 'suspended']);
 
 export const designerProfile = pgTable(
   'designer_profile',
@@ -125,16 +121,23 @@ export const designerProfile = pgTable(
     yearsExperience: integer('years_experience').default(0).notNull(),
     projectCount: integer('project_count').default(0).notNull(),
     shareCount: integer('share_count').default(0).notNull(),
-    avgRating: numeric('avg_rating', { precision: 3, scale: 2 })
-      .default('0')
-      .notNull(),
+    avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
     reviewCount: integer('review_count').default(0).notNull(),
     // Corporate display fields (gated by entitlement at read time)
     websiteUrl: text('website_url'),
+    googleBusinessUrl: text('google_business_url'),
     testimonialBannerEnabled: boolean('testimonial_banner_enabled')
       .default(false)
       .notNull(),
     staffCount: integer('staff_count'),
+    // Contact & social presence
+    phone: text('phone'),
+    instagramHandle: text('instagram_handle'),
+    linkedinHandle: text('linkedin_handle'),
+    youtubeHandle: text('youtube_handle'),
+    // Company metadata
+    firmType: text('firm_type'),
+    foundedYear: integer('founded_year'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -180,6 +183,8 @@ export const project = pgTable(
     status: projectStatusEnum('status').default('draft').notNull(),
     citySlug: text('city_slug'),
     budgetBandSlug: text('budget_band_slug'),
+    // Points at project_image; FK deferred because project_image already owns project_id.
+    coverImageId: uuid('cover_image_id'),
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
@@ -190,6 +195,39 @@ export const project = pgTable(
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
     index('project_city_idx').on(t.citySlug),
+  ],
+);
+
+export type ProjectRoomMetadata = {
+  labels?: string[];
+  attributeLabels?: Record<string, string[]>;
+  [key: string]: unknown;
+};
+
+export const projectRoom = pgTable(
+  'project_room',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    // Taxonomy terms are controlled vocabulary: deleting an in-use room type should be blocked.
+    // E-102 validates that referenced terms have kind = 'room' at the service boundary.
+    roomTypeId: uuid('room_type_id')
+      .notNull()
+      .references(() => taxonomy.id),
+    name: text('name').notNull(),
+    description: text('description'),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    // Provisional labels until the taxonomy service exposes room attribute vocabularies (E-132).
+    metadata: jsonb('metadata').$type<ProjectRoomMetadata>().default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('project_room_project_idx').on(t.projectId),
+    index('project_room_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
+    index('project_room_type_idx').on(t.roomTypeId),
   ],
 );
 
@@ -215,8 +253,7 @@ export const projectImage = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
-    // FK to project_room (E-69) added when the rooms table lands; nullable until then.
-    roomId: uuid('room_id'),
+    roomId: uuid('room_id').references(() => projectRoom.id, { onDelete: 'set null' }),
     originalKey: text('original_key').notNull(),
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
     contentType: text('content_type').notNull(),
@@ -231,6 +268,7 @@ export const projectImage = pgTable(
   },
   (t) => [
     index('project_image_project_idx').on(t.projectId),
+    index('project_image_room_idx').on(t.roomId),
     // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
   ],

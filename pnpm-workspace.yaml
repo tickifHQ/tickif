@@ -3,10 +3,6 @@ packages:
   - "packages/*"
   - "e2e"
 
-overrides:
-  esbuild: "0.28.1"
-  hono: "^4.12.25"
-
 # Centralized dependency versions (pnpm catalog).
 # Reference in package.json as "catalog:".
 catalog:

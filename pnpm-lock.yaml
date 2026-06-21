@@ -265,6 +265,9 @@ importers:
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.552.0(react@19.2.7)
       next:
         specifier: 'catalog:'
         version: 16.2.7(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
