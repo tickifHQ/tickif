@@ -38,7 +38,7 @@
     "@vitejs/plugin-react": "catalog:",
     "eslint": "^9.18.0",
     "happy-dom": "catalog:",
-    "tailwindcss": "^4.3.0",
+    "tailwindcss": "^4.3.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

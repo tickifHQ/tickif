@@ -40,9 +40,9 @@ packages/
 [`packages/ui`](./packages/ui/README.md) is a themeable, token-based design system
 (Tailwind v4 + Radix, shadcn-style). Components consume **semantic tokens only**
 (`bg-primary`, `font-display`, `rounded-lg`) — theme values (colors, fonts, radius)
-live in `packages/ui/src/styles/themes/` and are switchable via `data-theme`,
-with dark mode via `next-themes`. Type: Fraunces (display) · Hanken Grotesk
-(body) · IBM Plex Mono (code).
+live in `packages/ui/src/styles/themes/` and are switchable via `data-theme`;
+light by default with a dark toggle via `next-themes`. Type: Inter (body) ·
+JetBrains Mono (code).
 
 Live showcase of every token and component: **`/design-system`** in the web app.
 
@@ -82,11 +82,11 @@ pnpm install
 cp .env.example .env          # set BETTER_AUTH_SECRET (openssl rand -base64 32)
 pnpm infra:up                 # Postgres + Redis + MinIO via docker compose
 pnpm db:generate && pnpm db:migrate
-pnpm dev                      # api :3001, web :3000, worker
+pnpm dev                      # api :8008, web :3000, worker
 ```
 
-- API docs (Scalar): http://localhost:3001/docs
-- OpenAPI spec: http://localhost:3001/openapi.json
+- API docs (Scalar): http://localhost:8008/docs
+- OpenAPI spec: http://localhost:8008/openapi.json
 - Web: http://localhost:3000
 
 ### Useful scripts
