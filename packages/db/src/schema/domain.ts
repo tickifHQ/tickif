@@ -3,13 +3,18 @@ import {
   uuid,
   text,
   integer,
+  numeric,
   timestamp,
   boolean,
   pgEnum,
   jsonb,
   index,
+  uniqueIndex,
+  check,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { user } from './auth.js';
+import { sql } from 'drizzle-orm';
+import { user, organization } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -29,13 +34,24 @@ export const projectStatusEnum = pgEnum('project_status', [
   'rejected',
 ]);
 
-// Admin-managed taxonomy: city, room, scope, theme, budget band
+// Admin-managed taxonomy: 13 kinds covering geography, property, design, budget,
+// and per-room attribute axes (E-124).
+// v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
 export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
   'city',
+  'locality',
+  'property_type',
+  'bhk',
   'room',
   'scope',
   'theme',
   'budget_band',
+  // E-124: per-room attribute vocabularies
+  'material',
+  'finish',
+  'layout',
+  'palette',
+  'size_band',
 ]);
 
 export const taxonomy = pgTable(
@@ -43,25 +59,116 @@ export const taxonomy = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     kind: taxonomyKindEnum('kind').notNull(),
-    slug: text('slug').notNull(),
     label: text('label').notNull(),
+    slug: text('slug').notNull(),
+    // Self-referencing FK for hierarchy. Only locality uses this (city → locality).
+    // v0 policy: parentId is immutable after creation.
+    parentId: uuid('parent_id').references((): AnyPgColumn => taxonomy.id, { onDelete: 'restrict' }),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    // Kind-specific data. budget_band stores { min: number, max: number }.
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (t) => [index('taxonomy_kind_slug_idx').on(t.kind, t.slug)],
+  (t) => [
+    // Hierarchy: locality MUST have parent, all other kinds MUST NOT.
+    check('taxonomy_hierarchy_check', sql`(${t.kind} = 'locality' AND ${t.parentId} IS NOT NULL) OR (${t.kind} <> 'locality' AND ${t.parentId} IS NULL)`),
+    // Slug format: lowercase, URL-safe, immutable after creation.
+    check('taxonomy_slug_format_check', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
+    // Non-locality kinds: slug unique within kind
+    uniqueIndex('taxonomy_kind_slug_uniq')
+      .on(t.kind, t.slug)
+      .where(sql`${t.parentId} IS NULL`),
+    // Locality: slug unique within parent city
+    // Assumes locality URLs are city-scoped (e.g., /mumbai/andheri, /pune/andheri).
+    // If product later requires globally unique locality URLs, this constraint must change.
+    uniqueIndex('taxonomy_parent_slug_uniq')
+      .on(t.parentId, t.slug)
+      .where(sql`${t.parentId} IS NOT NULL`),
+    // Public reads: filter active terms by kind
+    index('taxonomy_kind_active_idx').on(t.kind, t.isActive),
+    // Locality lookup by parent
+    index('taxonomy_parent_idx').on(t.parentId),
+    // Ordered listing
+    index('taxonomy_kind_sort_idx').on(t.kind, t.sortOrder),
+  ],
 );
 
-export const designerProfile = pgTable('designer_profile', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  studioName: text('studio_name').notNull(),
-  bio: text('bio'),
-  citySlug: text('city_slug'),
-  isVerified: boolean('is_verified').default(false).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+// Entity type: individual freelancer vs registered company
+export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
+
+// Profile lifecycle
+export const profileStatusEnum = pgEnum('profile_status', ['draft', 'active', 'suspended']);
+
+export const designerProfile = pgTable(
+  'designer_profile',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Owning organization (unique — 1 profile per org)
+    orgId: text('org_id')
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    // Creator/audit trail (not the ownership key)
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    entityType: entityTypeEnum('entity_type').notNull().default('individual'),
+    displayName: text('display_name').notNull(),
+    bio: text('bio'),
+    logoImageId: text('logo_image_id'), // R2 media key (FK deferred to media epic)
+    status: profileStatusEnum('status').notNull().default('draft'),
+    // Proof/reputation counters (owned by their respective services)
+    yearsExperience: integer('years_experience').default(0).notNull(),
+    projectCount: integer('project_count').default(0).notNull(),
+    shareCount: integer('share_count').default(0).notNull(),
+    avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
+    reviewCount: integer('review_count').default(0).notNull(),
+    // Corporate display fields (gated by entitlement at read time)
+    websiteUrl: text('website_url'),
+    googleBusinessUrl: text('google_business_url'),
+    testimonialBannerEnabled: boolean('testimonial_banner_enabled')
+      .default(false)
+      .notNull(),
+    staffCount: integer('staff_count'),
+    // Contact & social presence
+    phone: text('phone'),
+    instagramHandle: text('instagram_handle'),
+    linkedinHandle: text('linkedin_handle'),
+    youtubeHandle: text('youtube_handle'),
+    // Company metadata
+    firmType: text('firm_type'),
+    foundedYear: integer('founded_year'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('designer_profile_org_idx').on(t.orgId),
+    index('designer_profile_status_idx').on(t.status),
+    uniqueIndex('designer_profile_user_id_unique')
+      .on(t.userId)
+      .where(sql`${t.userId} IS NOT NULL`),
+  ],
+);
+
+// Footprint: links designer profile to taxonomy terms (city, scope, theme, etc.)
+// Queryable/facetable — replaces array columns for filter/search.
+export const designerProfileFootprint = pgTable(
+  'designer_profile_footprint',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    taxonomyId: uuid('taxonomy_id')
+      .notNull()
+      .references(() => taxonomy.id, { onDelete: 'restrict' }),
+  },
+  (t) => [
+    index('dpf_profile_idx').on(t.profileId),
+    index('dpf_taxonomy_idx').on(t.taxonomyId),
+    uniqueIndex('dpf_profile_taxonomy_uniq').on(t.profileId, t.taxonomyId),
+  ],
+);
 
 export const project = pgTable(
   'project',
@@ -76,6 +183,8 @@ export const project = pgTable(
     status: projectStatusEnum('status').default('draft').notNull(),
     citySlug: text('city_slug'),
     budgetBandSlug: text('budget_band_slug'),
+    // Points at project_image; FK deferred because project_image already owns project_id.
+    coverImageId: uuid('cover_image_id'),
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
@@ -86,6 +195,39 @@ export const project = pgTable(
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
     index('project_city_idx').on(t.citySlug),
+  ],
+);
+
+export type ProjectRoomMetadata = {
+  labels?: string[];
+  attributeLabels?: Record<string, string[]>;
+  [key: string]: unknown;
+};
+
+export const projectRoom = pgTable(
+  'project_room',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    // Taxonomy terms are controlled vocabulary: deleting an in-use room type should be blocked.
+    // E-102 validates that referenced terms have kind = 'room' at the service boundary.
+    roomTypeId: uuid('room_type_id')
+      .notNull()
+      .references(() => taxonomy.id),
+    name: text('name').notNull(),
+    description: text('description'),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    // Provisional labels until the taxonomy service exposes room attribute vocabularies (E-132).
+    metadata: jsonb('metadata').$type<ProjectRoomMetadata>().default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('project_room_project_idx').on(t.projectId),
+    index('project_room_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
+    index('project_room_type_idx').on(t.roomTypeId),
   ],
 );
 
@@ -111,8 +253,7 @@ export const projectImage = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
-    // FK to project_room (E-69) added when the rooms table lands; nullable until then.
-    roomId: uuid('room_id'),
+    roomId: uuid('room_id').references(() => projectRoom.id, { onDelete: 'set null' }),
     originalKey: text('original_key').notNull(),
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
     contentType: text('content_type').notNull(),
@@ -127,6 +268,7 @@ export const projectImage = pgTable(
   },
   (t) => [
     index('project_image_project_idx').on(t.projectId),
+    index('project_image_room_idx').on(t.roomId),
     // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
   ],

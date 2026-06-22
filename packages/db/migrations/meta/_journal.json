@@ -57,6 +57,48 @@
       "when": 1781395306206,
       "tag": "0007_regular_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781429510857,
+      "tag": "0008_e34_expand_designer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781429576969,
+      "tag": "0009_e34_contract_drop_legacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781434636469,
+      "tag": "0010_e35_unique_userid",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781886071443,
+      "tag": "0011_profile_onboarding_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782045463982,
+      "tag": "0012_project_room",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782047654011,
+      "tag": "0013_e29_taxonomy_model",
+      "breakpoints": true
     }
   ]
 }
