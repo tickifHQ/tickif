@@ -131,7 +131,7 @@ describe('POST /api/profiles/me — onboarding', () => {
       body: {
         entityType: 'individual',
         userName: 'User',
-        cityIds: ['11111111-1111-4111-8111-111111111111'],
+        scopeIds: ['11111111-1111-4111-8111-111111111111'],
       },
     });
     expect(res.status).toBe(422);
@@ -153,6 +153,29 @@ describe('POST /api/profiles/me — onboarding', () => {
       .where(eq(schema.user.id, session!.user.id));
     expect(user!.role).toBe('designer');
     expect(user!.status).toBe('active');
+  });
+
+  it('persists address during onboarding', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-onboard-addr',
+      email: 'onboard-addr@test.com',
+    });
+    const res = await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Address User',
+        address: 'Koramangala, Bengaluru',
+      },
+    });
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    // Verify address persisted by reading from DB
+    const [profile] = await db
+      .select({ address: schema.designerProfile.address })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, body.profile.id));
+    expect(profile!.address).toBe('Koramangala, Bengaluru');
   });
 });
 
@@ -298,6 +321,17 @@ describe('PATCH /api/profiles/me — update', () => {
     const body = await json(res);
     expect(body.bio).toBe('Updated bio');
     expect(body.displayName).toBe('Patch User');
+  });
+
+  it('updates and returns address field', async () => {
+    const { cookie } = await setupDesignerWithSession();
+    const res = await request('PATCH', '/api/profiles/me', {
+      cookie,
+      body: { address: 'HSR Layout, Bengaluru 560102' },
+    });
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.address).toBe('HSR Layout, Bengaluru 560102');
   });
 
   it('rejects when no active organization set (422)', async () => {

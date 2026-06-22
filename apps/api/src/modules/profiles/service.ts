@@ -89,7 +89,6 @@ export const profilesService = {
 
     // 3. Validate taxonomy IDs (single round-trip, deduped)
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
-      cityIds: input.cityIds.length > 0 ? input.cityIds : undefined,
       scopeIds: input.scopeIds.length > 0 ? input.scopeIds : undefined,
       themeIds: input.themeIds.length > 0 ? input.themeIds : undefined,
     });
@@ -106,7 +105,7 @@ export const profilesService = {
     const memberId = crypto.randomUUID();
 
     const footprintIds = [
-      ...new Set([...input.cityIds, ...input.scopeIds, ...input.themeIds]),
+      ...new Set([...input.scopeIds, ...input.themeIds]),
     ].map((id) => ({ taxonomyId: id }));
 
     // 5. Execute transaction — catch unique violation for race-safe idempotency
@@ -120,6 +119,7 @@ export const profilesService = {
         displayName,
         entityType: input.entityType,
         bio: input.bio ?? null,
+        address: input.address ?? null,
         phone: input.phone ?? null,
         websiteUrl: input.websiteUrl ?? null,
         googleBusinessUrl: input.googleBusinessUrl ?? null,
@@ -397,6 +397,7 @@ export const profilesService = {
       websiteUrl: updated.websiteUrl,
       googleBusinessUrl: updated.googleBusinessUrl,
       phone: updated.phone,
+      address: updated.address,
       instagramHandle: updated.instagramHandle,
       linkedinHandle: updated.linkedinHandle,
       youtubeHandle: updated.youtubeHandle,

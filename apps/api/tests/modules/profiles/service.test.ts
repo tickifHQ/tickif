@@ -36,6 +36,7 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
   websiteUrl: null,
   googleBusinessUrl: null,
   phone: null,
+  address: null,
   instagramHandle: null,
   linkedinHandle: null,
   youtubeHandle: null,

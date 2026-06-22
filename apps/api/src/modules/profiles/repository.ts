@@ -160,6 +160,7 @@ export const profilesRepository = {
     displayName: string;
     entityType: 'individual' | 'company';
     bio: string | null;
+    address: string | null;
     phone: string | null;
     websiteUrl: string | null;
     googleBusinessUrl: string | null;
@@ -198,6 +199,7 @@ export const profilesRepository = {
           displayName: data.displayName,
           entityType: data.entityType,
           bio: data.bio ?? undefined,
+          address: data.address ?? undefined,
           phone: data.phone ?? undefined,
           websiteUrl: data.websiteUrl ?? undefined,
           googleBusinessUrl: data.googleBusinessUrl ?? undefined,
@@ -268,6 +270,7 @@ export const profilesRepository = {
       bio: string | null;
       logoImageId: string | null;
       entityType: 'individual' | 'company';
+      address: string | null;
       websiteUrl: string | null;
       googleBusinessUrl: string | null;
       phone: string | null;
