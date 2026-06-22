@@ -248,6 +248,35 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(imageRows).toHaveLength(0);
   });
 
+  it('allows a superadmin to update a draft they do not own', async () => {
+    const { designer } = await makeDesignerSession('+919800002017');
+    const superadmin = await createRoleSession('+919800002018', 'superadmin');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+
+    const res = await requestJson(`/api/projects/${project.id}`, 'PATCH', superadmin.cookie, {
+      title: 'Curated by Admin',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: project.id, title: 'Curated by Admin' });
+  });
+
+  it('rejects unknown city and budget taxonomy slugs on create', async () => {
+    const { cookie } = await makeDesignerSession('+919800002019');
+
+    const badCity = await requestJson('/api/projects', 'POST', cookie, {
+      title: 'Bad City',
+      citySlug: 'atlantis',
+    });
+    expect(badCity.status).toBe(422);
+
+    const badBudget = await requestJson('/api/projects', 'POST', cookie, {
+      title: 'Bad Budget',
+      budgetBandSlug: 'gazillion',
+    });
+    expect(badBudget.status).toBe(422);
+  });
+
   it('forbids non-owners from mutating another designer project', async () => {
     const { designer } = await makeDesignerSession('+919800002007');
     const stranger = await makeDesignerSession('+919800002008');
