@@ -64,6 +64,14 @@ describe('LoginCard', () => {
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
+  it('renders a close button and calls onClose when provided', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<LoginCard onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('shows Google sign-in, email input, and button in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);

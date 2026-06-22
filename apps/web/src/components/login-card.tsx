@@ -348,14 +348,15 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-base font-medium text-foreground">Login to continue</h3>
               {onClose && (
-                <button
-                  type="button"
+                <Button
                   onClick={onClose}
                   aria-label="Close"
-                  className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <X className="size-4" aria-hidden="true" />
-                </button>
+                </Button>
               )}
             </div>
 
