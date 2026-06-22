@@ -1,86 +1,86 @@
 /*
  * Tickif theme — default brand theme.
- * Warm editorial palette (plaster, espresso, terracotta) pending sync with
- * the Figma design system (tickif- DS). Only edit values here; token names
- * are the contract.
+ * Synced from the Figma design system (tickif- DS): teal-green brand primary
+ * (#1a9b7a) on a Zinc neutral scale. Only edit values here; token names are
+ * the contract.
  *
  * Fonts: the app injects `--font-sans-base` / `--font-display-base` /
  * `--font-mono-base` (e.g. via next/font). The theme decides how they map
- * to the semantic font roles below.
+ * to the semantic font roles below. DS uses Inter (body) / JetBrains Mono (code).
  */
 
 :root,
 [data-theme='tickif'] {
   --font-body: var(--font-sans-base, ui-sans-serif, system-ui, sans-serif);
-  --font-heading: var(--font-display-base, ui-serif, Georgia, serif);
+  --font-heading: var(--font-display-base, var(--font-sans-base, ui-sans-serif, system-ui, sans-serif));
   --font-code: var(--font-mono-base, ui-monospace, 'SF Mono', monospace);
 
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 
-  --background: oklch(0.977 0.009 80);
-  --foreground: oklch(0.28 0.027 45);
-  --card: oklch(0.995 0.004 85);
-  --card-foreground: oklch(0.28 0.027 45);
-  --popover: oklch(0.995 0.004 85);
-  --popover-foreground: oklch(0.28 0.027 45);
-  --primary: oklch(0.55 0.15 40);
-  --primary-foreground: oklch(0.982 0.01 75);
-  --secondary: oklch(0.93 0.022 75);
-  --secondary-foreground: oklch(0.33 0.035 45);
-  --muted: oklch(0.943 0.013 80);
-  --muted-foreground: oklch(0.5 0.026 55);
-  --accent: oklch(0.917 0.028 65);
-  --accent-foreground: oklch(0.31 0.04 45);
-  --destructive: oklch(0.565 0.21 28);
-  --destructive-foreground: oklch(0.982 0.01 30);
-  --success: oklch(0.575 0.115 150);
-  --success-foreground: oklch(0.985 0.01 150);
-  --warning: oklch(0.76 0.14 75);
-  --warning-foreground: oklch(0.3 0.055 60);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.006 286);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.006 286);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.006 286);
+  --primary: oklch(0.616 0.116 170);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286);
+  --secondary-foreground: oklch(0.21 0.006 286);
+  --muted: oklch(0.967 0.001 286);
+  --muted-foreground: oklch(0.552 0.014 286);
+  --accent: oklch(0.967 0.001 286);
+  --accent-foreground: oklch(0.21 0.006 286);
+  --destructive: oklch(0.577 0.245 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.696 0.149 162);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.758 0.159 56);
+  --warning-foreground: oklch(0.3 0.04 56);
   --info: oklch(0.58 0.11 245);
   --info-foreground: oklch(0.985 0.01 245);
-  --border: oklch(0.893 0.016 75);
-  --input: oklch(0.88 0.018 75);
-  --ring: oklch(0.55 0.15 40);
+  --border: oklch(0.92 0.004 286);
+  --input: oklch(0.92 0.004 286);
+  --ring: oklch(0.616 0.116 170);
 
-  --chart-1: oklch(0.55 0.15 40);
-  --chart-2: oklch(0.575 0.115 150);
+  --chart-1: oklch(0.616 0.116 170);
+  --chart-2: oklch(0.508 0.105 166);
   --chart-3: oklch(0.58 0.11 245);
-  --chart-4: oklch(0.76 0.14 75);
+  --chart-4: oklch(0.758 0.159 56);
   --chart-5: oklch(0.55 0.13 320);
 }
 
 .dark,
 [data-theme='tickif'].dark {
-  --background: oklch(0.208 0.016 45);
-  --foreground: oklch(0.94 0.013 75);
-  --card: oklch(0.248 0.018 45);
-  --card-foreground: oklch(0.94 0.013 75);
-  --popover: oklch(0.248 0.018 45);
-  --popover-foreground: oklch(0.94 0.013 75);
-  --primary: oklch(0.72 0.135 48);
-  --primary-foreground: oklch(0.21 0.035 45);
-  --secondary: oklch(0.295 0.02 48);
-  --secondary-foreground: oklch(0.92 0.015 70);
-  --muted: oklch(0.28 0.016 47);
-  --muted-foreground: oklch(0.71 0.02 65);
-  --accent: oklch(0.325 0.024 50);
-  --accent-foreground: oklch(0.93 0.018 70);
-  --destructive: oklch(0.66 0.19 27);
-  --destructive-foreground: oklch(0.975 0.012 27);
-  --success: oklch(0.68 0.115 152);
-  --success-foreground: oklch(0.19 0.035 152);
-  --warning: oklch(0.79 0.135 80);
-  --warning-foreground: oklch(0.25 0.05 65);
-  --info: oklch(0.7 0.105 242);
-  --info-foreground: oklch(0.19 0.035 242);
-  --border: oklch(0.32 0.015 48);
-  --input: oklch(0.345 0.016 48);
-  --ring: oklch(0.72 0.135 48);
+  --background: oklch(0.183 0.02 266);
+  --foreground: oklch(0.985 0.001 286);
+  --card: oklch(0.23 0.012 280);
+  --card-foreground: oklch(0.985 0.001 286);
+  --popover: oklch(0.23 0.012 280);
+  --popover-foreground: oklch(0.985 0.001 286);
+  --primary: oklch(0.72 0.13 168);
+  --primary-foreground: oklch(0.2 0.02 169);
+  --secondary: oklch(0.274 0.005 286);
+  --secondary-foreground: oklch(0.985 0.001 286);
+  --muted: oklch(0.274 0.005 286);
+  --muted-foreground: oklch(0.712 0.013 286);
+  --accent: oklch(0.3 0.006 286);
+  --accent-foreground: oklch(0.985 0.001 286);
+  --destructive: oklch(0.704 0.191 22);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.72 0.15 163);
+  --success-foreground: oklch(0.19 0.04 163);
+  --warning: oklch(0.79 0.15 60);
+  --warning-foreground: oklch(0.25 0.05 60);
+  --info: oklch(0.7 0.105 245);
+  --info-foreground: oklch(0.19 0.035 245);
+  --border: oklch(0.3 0.006 286);
+  --input: oklch(0.33 0.006 286);
+  --ring: oklch(0.72 0.13 168);
 
-  --chart-1: oklch(0.72 0.135 48);
-  --chart-2: oklch(0.68 0.115 152);
-  --chart-3: oklch(0.7 0.105 242);
-  --chart-4: oklch(0.79 0.135 80);
+  --chart-1: oklch(0.72 0.13 168);
+  --chart-2: oklch(0.65 0.12 162);
+  --chart-3: oklch(0.7 0.105 245);
+  --chart-4: oklch(0.78 0.15 60);
   --chart-5: oklch(0.66 0.125 320);
 }

@@ -87,7 +87,7 @@ export default function DesignSystemPage() {
             tickif / design system
           </span>
           <h1 className="font-display text-5xl font-semibold tracking-tight">
-            Warm by <em className="text-primary">design</em>.
+            Cool by <em className="text-primary">design</em>.
           </h1>
           <p className="max-w-md text-balance text-muted-foreground">
             Semantic tokens, themeable via{' '}
@@ -116,7 +116,7 @@ export default function DesignSystemPage() {
               A 3BHK in Indiranagar, <em>reimagined</em>
             </p>
             <p className="max-w-xl text-base leading-relaxed">
-              Body — Hanken Grotesk. Discover real interior design projects across India, told
+              Body — Inter. Discover real interior design projects across India, told
               through the homes people actually live in.
             </p>
             <p className="font-mono text-sm text-muted-foreground">
@@ -270,7 +270,7 @@ export default function DesignSystemPage() {
 
       <footer className="border-t pt-6">
         <p className="font-mono text-xs text-muted-foreground">
-          theme: tickif · switch via data-theme · values pending figma sync
+          theme: tickif · switch via data-theme · values synced from figma
         </p>
       </footer>
     </main>

@@ -30,9 +30,9 @@ function toImageDto(row: ProjectImageListItem): ProjectImageDto {
  * requireOwnership policy: the resource owner or a superadmin (moderation) may act.
  * Org-member access lands when designer_profile ↔ organization is modeled (E-66).
  */
-function assertAccess(ownerUserId: string, caller: Caller): void {
+function assertAccess(ownerUserId: string | null, caller: Caller): void {
   if (caller.userRole === 'superadmin') return;
-  if (ownerUserId === caller.userId) return;
+  if (ownerUserId && ownerUserId === caller.userId) return;
   throw AppError.forbidden();
 }
 

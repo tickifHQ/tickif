@@ -21,47 +21,128 @@ vi.mock('@/lib/auth-client', () => ({
 }));
 
 describe('LoginCard', () => {
-  it('renders badge, title, and phone input', () => {
+  it('renders trusted-by badge, welcome title, and phone input', () => {
     render(<LoginCard />);
-    expect(screen.getByText('Trusted by 50,000+ homeowners')).toBeInTheDocument();
-    expect(screen.getByText('Unlock 12,400+ real homes')).toBeInTheDocument();
-    expect(screen.getByLabelText('Phone Number')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
+    expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
   });
 
-  it('renders Google sign-in option', () => {
+  it('renders segmented control with browsing and designer tabs', () => {
     render(<LoginCard />);
-    expect(screen.getByText('Continue with Google')).toBeInTheDocument();
-    expect(screen.getByText('By continuing you agree to our Terms and Privacy policy.')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /i'm browsing/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /i'm a designer/i })).toBeInTheDocument();
   });
 
-  it('disables Login button when phone is empty', () => {
+  it('shows browsing features by default', () => {
     render(<LoginCard />);
-    expect(screen.getByRole('button', { name: 'Login' })).toBeDisabled();
+    expect(screen.getByTestId('feature-save-what-you-love')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-message-designers')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-book-free-consultations')).toBeInTheDocument();
   });
 
-  it('disables Login button when phone has fewer than 10 digits', async () => {
+  it('shows designer features when designer tab is selected', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.type(screen.getByLabelText('Phone Number'), '12345');
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-get-bookings-from-home-owners')).toBeInTheDocument();
+    expect(screen.getByTestId('feature-turn-visitors-into-clients')).toBeInTheDocument();
+  });
+
+  it('shows designer-specific promo subtitle when designer tab is active', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    expect(screen.getByText(/One link to share your work/)).toBeInTheDocument();
+  });
+
+  it('shows Google sign-in in browsing mode', () => {
+    render(<LoginCard />);
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
+    expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
+  });
+
+  it('renders a close button and calls onClose when provided', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<LoginCard onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows Google sign-in, email input, and button in designer mode', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
+    expect(screen.getAllByText('OR')).toHaveLength(2);
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Login' })).toBeDisabled();
+  });
+
+  it('calls Google signIn with origin callback in browsing mode', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
+  });
+
+  it('calls Google signIn with origin callback in designer mode', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
+  });
+
+  it('shows error when Google signIn fails in browsing mode', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+  });
+
+  it('shows error when Google signIn fails in designer mode', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
+    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+  });
+
+  it('disables Send OTP button when phone is empty', () => {
+    render(<LoginCard />);
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
+  });
+
+  it('disables Send OTP button when phone has fewer than 10 digits', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '12345');
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
   });
 
   it('transitions to OTP step after successful send', async () => {
     mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.type(screen.getByLabelText('Phone Number'), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Login' }));
-    expect(screen.getByText(/Enter OTP/)).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+    expect(screen.getByText('Enter verification code')).toBeInTheDocument();
   });
 
   it('shows error when sendOtp fails', async () => {
     mock.sendOtp.mockResolvedValueOnce({ data: null, error: { message: 'Invalid phone number' } });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.type(screen.getByLabelText('Phone Number'), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Login' }));
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByText('Invalid phone number')).toBeInTheDocument();
   });
 
@@ -69,33 +150,17 @@ describe('LoginCard', () => {
     mock.sendOtp.mockRejectedValueOnce(new Error('Rate limited'));
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.type(screen.getByLabelText('Phone Number'), '9876543210');
-    await user.click(screen.getByRole('button', { name: 'Login' }));
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
     expect(screen.getByText('Rate limited')).toBeInTheDocument();
-  });
-
-  it('calls Google signIn on Google button click', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
-    const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByText('Continue with Google'));
-    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
-  });
-
-  it('shows error when Google signIn fails', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
-    const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByText('Continue with Google'));
-    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   describe('OTP step', () => {
     async function goToOtpStep(user: ReturnType<typeof userEvent.setup>) {
       mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
-      await user.type(screen.getByLabelText('Phone Number'), '9876543210');
-      await user.click(screen.getByRole('button', { name: 'Login' }));
-      await screen.findByText(/Enter OTP/);
+      await user.type(screen.getByRole('textbox', { name: /phone/i }), '9876543210');
+      await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+      await screen.findByText('Enter verification code');
     }
 
     async function fillOtp(user: ReturnType<typeof userEvent.setup>, digits: string) {
@@ -119,11 +184,11 @@ describe('LoginCard', () => {
       expect(screen.getByText(/9876543210/)).toBeInTheDocument();
     });
 
-    it('disables verify when OTP fields are empty', async () => {
+    it('disables Continue when OTP fields are empty', async () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      expect(screen.getByRole('button', { name: 'Verify OTP' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     });
 
     it('shows success message on verify', async () => {
@@ -132,7 +197,7 @@ describe('LoginCard', () => {
       render(<LoginCard />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Verify OTP' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Signed in')).toBeInTheDocument();
     });
 
@@ -142,23 +207,23 @@ describe('LoginCard', () => {
       render(<LoginCard />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Verify OTP' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Invalid or expired OTP')).toBeInTheDocument();
     });
 
-    it('hides Google sign-in during OTP step', async () => {
+    it('hides browsing form during OTP step', async () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
     });
 
-    it('returns to phone step on change phone number click', async () => {
+    it('returns to phone step on Cancel click', async () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      await user.click(screen.getByText('Change phone number'));
-      expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
     });
 
     it('calls onSuccess callback on verify instead of router.push', async () => {
@@ -168,7 +233,7 @@ describe('LoginCard', () => {
       render(<LoginCard onSuccess={onSuccess} />);
       await goToOtpStep(user);
       await fillOtp(user, '123456');
-      await user.click(screen.getByRole('button', { name: 'Verify OTP' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(onSuccess).toHaveBeenCalled();
     });
   });

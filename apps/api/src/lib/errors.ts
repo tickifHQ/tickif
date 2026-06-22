@@ -37,6 +37,10 @@ export class AppError extends Error {
   static conflict(message: string, details?: unknown) {
     return new AppError('conflict', message, 409, details);
   }
+
+  static unprocessable(message: string, details?: unknown) {
+    return new AppError('validation_error', message, 422, details);
+  }
 }
 
 /** Central error handler — single place that converts errors to the API envelope. */

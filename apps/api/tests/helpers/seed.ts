@@ -2,9 +2,10 @@ import { db, schema } from '@repo/db';
 
 /** Insert a designer profile + project owned by the user; returns the project id. */
 export async function seedProjectOwnedBy(userId: string): Promise<string> {
+  const orgId = await seedOrgWithMember(userId);
   const [profile] = await db
     .insert(schema.designerProfile)
-    .values({ userId, studioName: 'Studio X' })
+    .values({ userId, orgId, displayName: 'Studio X' })
     .returning({ id: schema.designerProfile.id });
   const [project] = await db
     .insert(schema.project)
