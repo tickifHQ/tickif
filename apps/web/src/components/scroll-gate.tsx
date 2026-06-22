@@ -76,7 +76,7 @@ export function ScrollGate() {
       aria-label="Sign in required"
     >
       <div className="max-h-[calc(100vh-2rem)] w-full max-w-[760px] overflow-y-auto">
-        <LoginCard onClose={() => setGated(false)} onSuccess={() => window.location.reload()} />
+        <LoginCard onSuccess={() => window.location.reload()} />
       </div>
     </div>
   );
