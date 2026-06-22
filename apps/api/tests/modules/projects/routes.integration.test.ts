@@ -188,6 +188,8 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe('Invalid roomTypeId');
   });
 
   it('links a project image to a same-project room', async () => {
@@ -222,6 +224,8 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe('Room must belong to the project');
   });
 
   it('deletes owned draft projects and cascades rooms and images', async () => {
