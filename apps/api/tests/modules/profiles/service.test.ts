@@ -202,7 +202,7 @@ describe('profilesService.getCompletion', () => {
 
       expect(result.missing).toContain('bio');
       expect(result.missing).toContain('logo');
-      expect(result.missing).toContain('city');
+      expect(result.missing).toContain('location');
       expect(result.missing).toContain('scope');
       expect(result.missing).toContain('contact');
     });

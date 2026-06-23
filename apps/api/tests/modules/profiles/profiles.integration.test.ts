@@ -237,6 +237,29 @@ describe('GET /api/profiles/me/completion', () => {
     expect(body.steps).toHaveLength(4);
     // displayName (filled) + contact via verified email = 2/6 = 33%
     expect(body.score).toBe(33);
+    expect(body.missing).toContain('location');
+  });
+
+  it('address satisfies location requirement in completion score', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-comp-addr',
+      email: 'comp-addr@test.com',
+    });
+    await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Addr User',
+        address: 'Koramangala, Bengaluru',
+      },
+    });
+
+    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // displayName + contact + location (via address) = 3/6 = 50%
+    expect(body.score).toBe(50);
+    expect(body.missing).not.toContain('location');
   });
 
   it('rejects unauthenticated (401)', async () => {
