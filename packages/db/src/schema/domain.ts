@@ -132,6 +132,7 @@ export const designerProfile = pgTable(
     staffCount: integer('staff_count'),
     // Contact & social presence
     phone: text('phone'),
+    address: text('address'),
     instagramHandle: text('instagram_handle'),
     linkedinHandle: text('linkedin_handle'),
     youtubeHandle: text('youtube_handle'),

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { LoginCard } from '@/components/login-card';
 
 /**
  * Scroll-gate component for public feed.
@@ -69,24 +70,13 @@ export function ScrollGate() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral-900/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm"
       aria-modal="true"
       role="dialog"
       aria-label="Sign in required"
     >
-      <div className="mx-4 max-w-sm rounded-xl bg-white p-8 text-center shadow-2xl">
-        <h2 className="text-xl font-semibold text-neutral-900">
-          Sign in to keep browsing
-        </h2>
-        <p className="mt-2 text-sm text-neutral-500">
-          Create a free account to explore all projects and designer profiles.
-        </p>
-        <a
-          href="/login"
-          className="mt-6 inline-block w-full rounded-md bg-neutral-900 px-6 py-3 text-sm font-medium text-white hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2"
-        >
-          Sign in
-        </a>
+      <div className="max-h-[calc(100vh-2rem)] w-full max-w-[760px] overflow-y-auto">
+        <LoginCard onSuccess={() => window.location.reload()} />
       </div>
     </div>
   );

@@ -75,7 +75,7 @@ const onboardingIllustrations = {
 } as const;
 
 type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
-type TaxonomyKind = 'city' | 'scope' | 'theme';
+type TaxonomyKind = 'scope' | 'theme';
 type TaxonomyOptions = Record<TaxonomyKind, TaxonomyTerm[]>;
 
 const firmTypeOptions = [
@@ -91,7 +91,6 @@ const foundedOptions = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', 
 const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
 
 const emptyTaxonomyOptions: TaxonomyOptions = {
-  city: [],
   scope: [],
   theme: [],
 };
@@ -155,8 +154,7 @@ export function DesignerOnboarding({
   const [entityType, setEntityType] = useState<EntityType>('individual');
   const [userName, setUserName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [selectedCityId, setSelectedCityId] = useState('');
-  const [citySearch, setCitySearch] = useState('');
+  const [address, setAddress] = useState('');
   const [firmType, setFirmType] = useState('Private Limited');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappCountry, setWhatsappCountry] = useState(countries[0]!);
@@ -182,9 +180,6 @@ export function DesignerOnboarding({
   const companyHandlePlaceholder = companyName.trim()
     ? `@${companyName.trim().toLowerCase().replaceAll(/\s+/g, '')}`
     : '@yourstudio';
-  const filteredCities = citySearch
-    ? taxonomyOptions.city.filter((option) => option.label.toLowerCase().includes(citySearch.toLowerCase()))
-    : taxonomyOptions.city;
   const canSubmit = useMemo(() => {
     const hasIndividualName = entityType === 'company' || userName.trim().length >= 2;
     const hasCompany = entityType === 'individual' || companyName.trim().length >= 2;
@@ -199,14 +194,13 @@ export function DesignerOnboarding({
       setTaxonomyError('');
 
       try {
-        const [city, scope, theme] = await Promise.all([
-          fetchTaxonomyTerms('city'),
+        const [scope, theme] = await Promise.all([
           fetchTaxonomyTerms('scope'),
           fetchTaxonomyTerms('theme'),
         ]);
 
         if (!cancelled) {
-          setTaxonomyOptions({ city, scope, theme });
+          setTaxonomyOptions({ scope, theme });
         }
       } catch (err) {
         if (!cancelled) {
@@ -281,7 +275,7 @@ export function DesignerOnboarding({
       const payload: OnboardDesignerInput = {
         entityType,
         userName: effectiveUserName,
-        cityIds: selectedCityId ? [selectedCityId] : [],
+        address: address.trim() || undefined,
         scopeIds: selectedScopeIds,
         themeIds: selectedThemeIds,
         ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
@@ -393,21 +387,17 @@ export function DesignerOnboarding({
             </div>
 
             <div className="grid gap-1">
-              <Label htmlFor={`${formId}-city`} className="text-[13px] font-medium leading-relaxed">
-                City
+              <Label htmlFor={`${formId}-address`} className="text-[13px] font-medium leading-relaxed">
+                Address
               </Label>
-              <CitySelect
-                id={`${formId}-city`}
-                citySearch={citySearch}
-                emptyLabel={taxonomyLoading ? 'Loading cities...' : 'No cities available'}
-                options={filteredCities}
-                selectedCityId={selectedCityId}
-                onCityChange={setSelectedCityId}
-                onSearchChange={setCitySearch}
+              <Input
+                id={`${formId}-address`}
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder="Studio address or service location"
+                autoComplete="street-address"
+                className="h-8 rounded-md px-2 text-[13px]"
               />
-              {taxonomyError ? (
-                <p className="text-xs text-destructive">{taxonomyError}</p>
-              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -444,16 +434,11 @@ export function DesignerOnboarding({
           />
         ) : entityType === 'company' && step === 'details' ? (
           <CompanyBasicsFields
-            citySearch={citySearch}
+            address={address}
             companyName={companyName}
             firmType={firmType}
             formId={formId}
-            filteredCities={filteredCities}
-            taxonomyError={taxonomyError}
-            taxonomyLoading={taxonomyLoading}
-            selectedCityId={selectedCityId}
-            onCityChange={setSelectedCityId}
-            onCitySearchChange={setCitySearch}
+            onAddressChange={setAddress}
             onCompanyNameChange={setCompanyName}
             onFirmTypeChange={setFirmType}
           />
@@ -483,6 +468,7 @@ export function DesignerOnboarding({
             scopeOptions={taxonomyOptions.scope}
             selectedScopeIds={selectedScopeIds}
             selectedThemeIds={selectedThemeIds}
+            taxonomyError={taxonomyError}
             taxonomyLoading={taxonomyLoading}
             themeOptions={taxonomyOptions.theme}
             teamSize={teamSize}
@@ -558,29 +544,19 @@ function CompletionStep({
 }
 
 function CompanyBasicsFields({
-  citySearch,
+  address,
   companyName,
-  filteredCities,
   firmType,
   formId,
-  selectedCityId,
-  taxonomyError,
-  taxonomyLoading,
-  onCityChange,
-  onCitySearchChange,
+  onAddressChange,
   onCompanyNameChange,
   onFirmTypeChange,
 }: {
-  citySearch: string;
+  address: string;
   companyName: string;
-  filteredCities: readonly TaxonomyTerm[];
   firmType: string;
   formId: string;
-  selectedCityId: string;
-  taxonomyError: string;
-  taxonomyLoading: boolean;
-  onCityChange: (value: string) => void;
-  onCitySearchChange: (value: string) => void;
+  onAddressChange: (value: string) => void;
   onCompanyNameChange: (value: string) => void;
   onFirmTypeChange: (value: string) => void;
 }) {
@@ -621,21 +597,17 @@ function CompanyBasicsFields({
       />
 
       <div className="grid gap-1">
-        <Label htmlFor={`${formId}-city`} className="text-[13px] font-medium leading-relaxed">
-          Cities you take projects in
+        <Label htmlFor={`${formId}-address`} className="text-[13px] font-medium leading-relaxed">
+          Address
         </Label>
-        <CitySelect
-          id={`${formId}-city`}
-          citySearch={citySearch}
-          emptyLabel={taxonomyLoading ? 'Loading cities...' : 'No cities available'}
-          options={filteredCities}
-          selectedCityId={selectedCityId}
-          onCityChange={onCityChange}
-          onSearchChange={onCitySearchChange}
+        <Input
+          id={`${formId}-address`}
+          value={address}
+          onChange={(event) => onAddressChange(event.target.value)}
+          placeholder="Studio address or service location"
+          autoComplete="street-address"
+          className="h-8 rounded-md px-2 text-[13px]"
         />
-        {taxonomyError ? (
-          <p className="text-xs text-destructive">{taxonomyError}</p>
-        ) : null}
       </div>
     </div>
   );
@@ -724,6 +696,7 @@ function CompanyServicesFields({
   scopeOptions,
   selectedScopeIds,
   selectedThemeIds,
+  taxonomyError,
   taxonomyLoading,
   themeOptions,
   teamSize,
@@ -733,6 +706,7 @@ function CompanyServicesFields({
   scopeOptions: readonly TaxonomyTerm[];
   selectedScopeIds: string[];
   selectedThemeIds: string[];
+  taxonomyError: string;
   taxonomyLoading: boolean;
   themeOptions: readonly TaxonomyTerm[];
   teamSize: string;
@@ -743,6 +717,10 @@ function CompanyServicesFields({
 }) {
   return (
     <div className="flex flex-col gap-5">
+      {taxonomyError ? (
+        <p className="text-xs text-destructive">{taxonomyError}</p>
+      ) : null}
+
       <TaxonomyMultiSelect
         id={`${formId}-services`}
         label="Services offered"
@@ -1038,85 +1016,6 @@ function SocialInput({
         className="h-full border-0 bg-transparent px-3 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
-  );
-}
-
-function CitySelect({
-  citySearch,
-  emptyLabel,
-  id,
-  onCityChange,
-  onSearchChange,
-  options,
-  selectedCityId,
-}: {
-  citySearch: string;
-  emptyLabel: string;
-  id: string;
-  onCityChange: (city: string) => void;
-  onSearchChange: (search: string) => void;
-  options: readonly TaxonomyTerm[];
-  selectedCityId: string;
-}) {
-  const selectedCity = options.find((option) => option.id === selectedCityId);
-
-  return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) onSearchChange('');
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          className="flex h-8 w-full items-center justify-between rounded-md border bg-background px-2 text-left text-[13px] font-medium shadow-xs outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <span>{selectedCity?.label || 'Select your city'}</span>
-          <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={2}
-        collisionPadding={8}
-        className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
-      >
-        <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 bg-popover px-1 pt-1 shadow-sm">
-          <input
-            type="text"
-            value={citySearch}
-            onChange={(event) => onSearchChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && citySearch) {
-                event.preventDefault();
-                onSearchChange('');
-                return;
-              }
-              event.stopPropagation();
-            }}
-            placeholder="Search city..."
-            className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            autoFocus
-          />
-        </div>
-        {options.length > 0 ? (
-          options.map((option) => (
-            <DropdownMenuItem
-              key={option.id}
-              onSelect={() => onCityChange(option.id)}
-              className="text-[13px]"
-            >
-              {option.label}
-            </DropdownMenuItem>
-          ))
-        ) : (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {emptyLabel}
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

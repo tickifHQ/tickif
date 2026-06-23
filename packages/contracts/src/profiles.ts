@@ -42,7 +42,10 @@ export const onboardDesignerSchema = z
     firmType: z.string().trim().max(60).optional(),
     foundedYear: z.number().int().min(1900).max(2100).optional(),
     staffCount: z.number().int().min(0).optional(),
-    cityIds: z.array(z.string().uuid()).max(5).default([]),
+    // Free-text address replaces cityIds in onboarding — city taxonomy linking via profile update.
+    // Note: clients still sending cityIds will have it silently stripped (Zod default behavior).
+    // The web onboarding UI ships in lockstep with this contract change.
+    address: z.string().trim().max(300).optional(),
     scopeIds: z.array(z.string().uuid()).max(10).default([]),
     themeIds: z.array(z.string().uuid()).max(10).default([]),
   })
@@ -102,6 +105,7 @@ const profileBaseSchema = z.object({
   websiteUrl: z.string().nullable(),
   googleBusinessUrl: z.string().nullable(),
   phone: z.string().nullable(),
+  address: z.string().nullable(),
   instagramHandle: z.string().nullable(),
   linkedinHandle: z.string().nullable(),
   youtubeHandle: z.string().nullable(),
@@ -119,6 +123,7 @@ export const profilePublicResponseSchema = profileBaseSchema
   .omit({
     orgId: true,
     updatedAt: true,
+    address: true,
     websiteUrl: true,
     googleBusinessUrl: true,
     phone: true,
@@ -161,6 +166,7 @@ export const updateProfileSchema = z.object({
   foundedYear: z.number().int().min(1900).max(2100).optional().nullable(),
   staffCount: z.number().int().min(0).optional().nullable(),
   testimonialBannerEnabled: z.boolean().optional(),
+  address: z.string().trim().max(300).optional().nullable(),
   cityIds: z.array(z.string().uuid()).max(5).optional(),
   scopeIds: z.array(z.string().uuid()).max(10).optional(),
   themeIds: z.array(z.string().uuid()).max(10).optional(),

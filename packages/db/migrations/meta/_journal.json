@@ -99,6 +99,13 @@
       "when": 1782047654011,
       "tag": "0013_e29_taxonomy_model",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782142032206,
+      "tag": "0014_add_profile_address",
+      "breakpoints": true
     }
   ]
 }

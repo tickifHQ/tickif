@@ -8,7 +8,7 @@ import { headers } from 'next/headers';
  * Does NOT import @repo/auth (that pulls DB deps into the web bundle).
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
 
 type SessionUser = {
   id: string;

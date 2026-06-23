@@ -211,12 +211,10 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
     await user.type(screen.getByLabelText(/company name/i), 'Antika Interiors');
     expect(screen.getByLabelText(/firm type/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/cities you take projects in/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /skip to dashboard/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
-
-    await user.click(screen.getByLabelText(/cities you take projects in/i));
-    await user.click(await screen.findByRole('menuitem', { name: /chennai/i }));
+    await user.type(screen.getByLabelText(/address/i), '12 Studio Lane, Chennai');
 
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -250,7 +248,7 @@ describe('DesignerOnboarding', () => {
         entityType: 'company',
         userName: 'Antika Interiors',
         companyName: 'Antika Interiors',
-        cityIds: ['11111111-1111-4111-8111-111111111111'],
+        address: '12 Studio Lane, Chennai',
         scopeIds: [
           '22222222-2222-4222-8222-222222222222',
           '33333333-3333-4333-8333-333333333333',

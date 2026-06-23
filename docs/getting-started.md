@@ -107,7 +107,7 @@ pnpm dev
 
 Turborepo starts all three apps in parallel:
 
-- **API** → <http://localhost:3001> (`/health`, `/docs`, `/openapi.json`)
+- **API** → <http://localhost:8008> (`/health`, `/docs`, `/openapi.json`)
 - **Web** → <http://localhost:3000>
 - **Worker** → listening on the `media` queue
 
@@ -117,16 +117,16 @@ To run just one app: `pnpm --filter @repo/api dev` (or `@repo/web`, `@repo/worke
 
 ```bash
 # API health
-curl http://localhost:3001/health
+curl http://localhost:8008/health
 
 # List projects (empty until you create some)
-curl http://localhost:3001/api/projects
+curl http://localhost:8008/api/projects
 
 # Prove the queue path: enqueue a demo job, watch the worker log process it
 pnpm --filter @repo/worker enqueue:demo
 ```
 
-Open <http://localhost:3001/docs> for the interactive Scalar API reference.
+Open <http://localhost:8008/docs> for the interactive Scalar API reference.
 
 ### Media smoke-test (mint → PUT → commit → watch)
 
@@ -135,7 +135,7 @@ and a project you own. With those in hand:
 
 ```bash
 # 1. Mint a presigned upload URL (capture imageId, uploadUrl, key)
-curl -s -b cookies.txt http://localhost:3001/api/media/upload-url \
+curl -s -b cookies.txt http://localhost:8008/api/media/upload-url \
   -H 'content-type: application/json' \
   -d '{"projectId":"<PROJECT_ID>","contentType":"image/jpeg","size":2400000}'
 
@@ -146,10 +146,10 @@ curl -s -X PUT "<uploadUrl>" \
   --data-binary @photo.jpg
 
 # 3. Commit — enqueues processing, returns 202 { status: 'processing' }
-curl -s -b cookies.txt -X POST http://localhost:3001/api/media/<imageId>/commit
+curl -s -b cookies.txt -X POST http://localhost:8008/api/media/<imageId>/commit
 
 # 4. Watch the worker log derive + flip to ready, then list the project's images
-curl -s -b cookies.txt http://localhost:3001/api/projects/<PROJECT_ID>/images
+curl -s -b cookies.txt http://localhost:8008/api/projects/<PROJECT_ID>/images
 ```
 
 The worker log shows `media completed job media-<imageId>`; the listed image moves
