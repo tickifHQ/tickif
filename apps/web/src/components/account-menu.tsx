@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import {
@@ -16,6 +17,7 @@ import Link from 'next/link';
 
 export function AccountMenu() {
   const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (isPending) {
@@ -39,9 +41,12 @@ export function AccountMenu() {
   async function handleSignOut() {
     try {
       await authClient.signOut();
-      setOpen(false);
     } catch {
+      // Keep the user moving away from protected UI even if the local sign-out call reports an error.
+    } finally {
       setOpen(false);
+      router.replace('/login');
+      router.refresh();
     }
   }
 

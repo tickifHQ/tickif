@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SiteNav } from '../../src/components/site-nav';
+
+vi.mock('@/components/account-menu', () => ({
+  AccountMenu: () => <div>Account menu</div>,
+}));
 
 describe('SiteNav', () => {
   it('renders the default brand and discovery links', () => {

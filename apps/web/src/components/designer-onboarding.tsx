@@ -1141,10 +1141,13 @@ function OnboardingShell({
         </section>
 
         <aside className="relative hidden overflow-hidden border-l bg-card lg:block">
-          <div className="absolute inset-y-0 left-6 w-44 border-x border-dashed bg-background/20" />
+          <div className="absolute inset-y-0 left-6 z-20 border-l border-dashed border-border" />
+          <div className="absolute inset-y-0 left-50 border-l border-dashed border-border" />
+          <div className="absolute inset-y-0 left-6 w-44 bg-background/20" />
           <div className="absolute left-0 right-0 top-[38%] h-px bg-border" />
           <div className="absolute left-0 right-0 top-[62%] h-px bg-border" />
           <div className="absolute left-6 right-0 top-[38%] h-[24%] bg-background" />
+          <div className="absolute left-6 right-0 top-[38%] z-10 h-px bg-border" />
           <div className="relative flex h-full items-center px-12">
             <div className="max-w-sm">
               <blockquote className="text-xl leading-[25px] tracking-normal">
@@ -1160,6 +1163,7 @@ function OnboardingShell({
               </div>
             </div>
           </div>
+          <div className="absolute bottom-12 left-0 right-0 z-10 h-px bg-border xl:bottom-14" aria-hidden="true" />
           <div className="absolute bottom-3 right-0 w-80 xl:w-96">
             <Image
               src={onboardingIllustrations.panel}
