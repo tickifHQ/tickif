@@ -21,10 +21,14 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findDesignerByUserId: vi.fn(),
       findOwnership: vi.fn(),
       taxonomyExists: vi.fn(),
+      findTaxonomyTermBySlug: vi.fn(),
+      propertySubtypeExists: vi.fn(),
       localityExists: vi.fn(),
       listRooms: vi.fn(),
       findRoom: vi.fn(),
       createRoom: vi.fn(),
+      findRoomTypesBySlugs: vi.fn(),
+      createRooms: vi.fn(),
       updateRoom: vi.fn(),
       reorderRooms: vi.fn(),
       deleteRoom: vi.fn(),
@@ -56,6 +60,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   description: null,
   status: 'published',
   propertyTypeSlug: null,
+  propertySubtypeSlug: null,
   scopeSlug: null,
   bhkSlug: null,
   sizeSqft: null,
@@ -160,6 +165,69 @@ describe('projectsService.create', () => {
 
     expect(created.slug).not.toBe('sunlit-bandra-apartment');
     expect(created.slug).toMatch(/^sunlit-bandra-apartment-/);
+  });
+
+  it('generates a title and room prefill when title is omitted', async () => {
+    vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      orgId: 'org_1',
+    });
+    vi.mocked(projectsRepository.taxonomyExists).mockResolvedValue(true);
+    vi.mocked(projectsRepository.propertySubtypeExists).mockResolvedValue(true);
+    vi.mocked(projectsRepository.findTaxonomyTermBySlug).mockImplementation(async (_kind, slug) => ({
+      id: `term-${slug}`,
+      kind: _kind,
+      slug,
+      label: {
+        bengaluru: 'Bengaluru',
+        apartment: 'Apartment / flat',
+        '2-bhk': '2 BHK',
+        luxury: 'Luxury',
+      }[slug] ?? slug,
+      metadata: {},
+    }));
+    vi.mocked(projectsRepository.createDraft).mockImplementation(async (input, _designerId, slug) =>
+      row({
+        title: input.title,
+        slug,
+        propertyTypeSlug: input.propertyTypeSlug ?? null,
+        propertySubtypeSlug: input.propertySubtypeSlug ?? null,
+        bhkSlug: input.bhkSlug ?? null,
+        citySlug: input.citySlug ?? null,
+        buildingName: input.buildingName ?? null,
+        budgetBandSlug: input.budgetBandSlug ?? null,
+        status: 'draft',
+      }),
+    );
+    vi.mocked(projectsRepository.findRoomTypesBySlugs).mockResolvedValue([
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', kind: 'room', slug: 'kitchen', label: 'Kitchen', metadata: {} },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', kind: 'room', slug: 'bedroom', label: 'Bedroom', metadata: {} },
+      { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', kind: 'room', slug: 'bathroom', label: 'Bathroom', metadata: {} },
+    ]);
+    vi.mocked(projectsRepository.createRooms).mockResolvedValue([
+      roomRow({ name: 'Kitchen', sortOrder: 0 }),
+      roomRow({ name: 'Master Bedroom', sortOrder: 1 }),
+      roomRow({ name: 'Bedroom 2', sortOrder: 2 }),
+      roomRow({ name: 'Bathroom', sortOrder: 3 }),
+    ]);
+
+    const created = await projectsService.create({
+      buildingName: 'Maitri Apartments',
+      propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
+      bhkSlug: '2-bhk',
+      citySlug: 'bengaluru',
+      budgetBandSlug: 'luxury',
+    }, caller);
+
+    expect(created.title).toBe('Maitri Apartments - 2 BHK Luxury Apartment / flat in Bengaluru');
+    expect(created.rooms.map((room) => room.name)).toEqual([
+      'Kitchen',
+      'Master Bedroom',
+      'Bedroom 2',
+      'Bathroom',
+    ]);
   });
 
   it('requires the authenticated user to have a designer profile', async () => {

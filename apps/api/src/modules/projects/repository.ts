@@ -17,6 +17,10 @@ import type {
 export type ProjectRecord = typeof schema.project.$inferSelect;
 export type ProjectRoomRecord = typeof schema.projectRoom.$inferSelect;
 type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
+export type TaxonomyTermRecord = Pick<
+  typeof schema.taxonomy.$inferSelect,
+  'id' | 'kind' | 'slug' | 'label' | 'metadata'
+>;
 export type ProjectImageAttachmentRecord = Pick<
   ProjectImageRecord,
   'id' | 'projectId' | 'roomId' | 'status' | 'sortOrder'
@@ -94,7 +98,7 @@ export const projectsRepository = {
   },
 
   async createDraft(
-    input: CreateProjectInput,
+    input: CreateProjectInput & { title: string },
     designerId: string,
     slug: string,
   ): Promise<ProjectRecord> {
@@ -106,6 +110,7 @@ export const projectsRepository = {
         slug,
         description: input.description ?? null,
         propertyTypeSlug: input.propertyTypeSlug ?? null,
+        propertySubtypeSlug: input.propertySubtypeSlug ?? null,
         scopeSlug: input.scopeSlug ?? null,
         bhkSlug: input.bhkSlug ?? null,
         sizeSqft: input.sizeSqft ?? null,
@@ -127,6 +132,7 @@ export const projectsRepository = {
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
     if (input.propertyTypeSlug !== undefined) patch.propertyTypeSlug = input.propertyTypeSlug;
+    if (input.propertySubtypeSlug !== undefined) patch.propertySubtypeSlug = input.propertySubtypeSlug;
     if (input.scopeSlug !== undefined) patch.scopeSlug = input.scopeSlug;
     if (input.bhkSlug !== undefined) patch.bhkSlug = input.bhkSlug;
     if (input.sizeSqft !== undefined) patch.sizeSqft = input.sizeSqft;
@@ -229,6 +235,44 @@ export const projectsRepository = {
     return !!row;
   },
 
+  async findTaxonomyTermBySlug(
+    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    slug: string,
+  ): Promise<TaxonomyTermRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        metadata: schema.taxonomy.metadata,
+      })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, kind), eq(schema.taxonomy.slug, slug)))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async propertySubtypeExists(input: {
+    subtypeSlug: string;
+    propertyTypeSlug?: string | null;
+  }): Promise<boolean> {
+    const filters = [
+      eq(schema.taxonomy.kind, 'property_subtype'),
+      eq(schema.taxonomy.slug, input.subtypeSlug),
+      input.propertyTypeSlug
+        ? sql`${schema.taxonomy.metadata}->>'propertyTypeSlug' = ${input.propertyTypeSlug}`
+        : undefined,
+    ].filter((f) => f !== undefined);
+
+    const [row] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(and(...filters))
+      .limit(1);
+    return !!row;
+  },
+
   async localityExists(input: { citySlug: string; localitySlug: string }): Promise<boolean> {
     const [city] = await db
       .select({ id: schema.taxonomy.id })
@@ -282,6 +326,45 @@ export const projectsRepository = {
       .returning();
     if (!row) throw new Error('insert returned no row');
     return row;
+  },
+
+  async findRoomTypesBySlugs(slugs: string[]): Promise<TaxonomyTermRecord[]> {
+    if (slugs.length === 0) return [];
+    return db
+      .select({
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        metadata: schema.taxonomy.metadata,
+      })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, 'room'), inArray(schema.taxonomy.slug, slugs)));
+  },
+
+  async createRooms(
+    projectId: string,
+    inputs: CreateProjectRoomInput[],
+  ): Promise<ProjectRoomRecord[]> {
+    if (inputs.length === 0) return [];
+    const now = new Date();
+    return db.transaction(async (tx) =>
+      tx
+        .insert(schema.projectRoom)
+        .values(
+          inputs.map((input) => ({
+            projectId,
+            roomTypeId: input.roomTypeId,
+            name: input.name,
+            description: input.description ?? null,
+            sortOrder: input.sortOrder ?? 0,
+            metadata: input.metadata ?? {},
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .returning(),
+    );
   },
 
   async updateRoom(

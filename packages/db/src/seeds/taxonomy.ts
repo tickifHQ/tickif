@@ -82,11 +82,60 @@ const localities: TermSeed[] = [
 
 // ─── PROPERTY TYPES ────────────────────────────────────────────────────────────
 const propertyTypes: TermSeed[] = [
-  { kind: 'property_type', slug: 'apartment', label: 'Apartment', sortOrder: 1 },
-  { kind: 'property_type', slug: 'villa', label: 'Villa', sortOrder: 2 },
-  { kind: 'property_type', slug: 'independent-house', label: 'Independent House', sortOrder: 3 },
-  { kind: 'property_type', slug: 'duplex', label: 'Duplex', sortOrder: 4 },
-  { kind: 'property_type', slug: 'studio', label: 'Studio', sortOrder: 5 },
+  { kind: 'property_type', slug: 'residential', label: 'Residential', sortOrder: 1 },
+  { kind: 'property_type', slug: 'architecture-construction', label: 'Architecture and construction', sortOrder: 2 },
+  { kind: 'property_type', slug: 'commercial-workspace', label: 'Commercial workspace', sortOrder: 3 },
+  { kind: 'property_type', slug: 'food-hospitality', label: 'Food and hospitality', sortOrder: 4 },
+  { kind: 'property_type', slug: 'retail-showroom', label: 'Retail and showroom', sortOrder: 5 },
+  { kind: 'property_type', slug: 'institutional-public', label: 'Institutional and public', sortOrder: 6 },
+  // Legacy residential terms kept for compatibility with early drafts.
+  { kind: 'property_type', slug: 'apartment', label: 'Apartment', sortOrder: 20 },
+  { kind: 'property_type', slug: 'villa', label: 'Villa', sortOrder: 21 },
+  { kind: 'property_type', slug: 'independent-house', label: 'Independent House', sortOrder: 22 },
+  { kind: 'property_type', slug: 'duplex', label: 'Duplex', sortOrder: 23 },
+  { kind: 'property_type', slug: 'studio', label: 'Studio', sortOrder: 24 },
+];
+
+// ─── PROPERTY SUBTYPES ─────────────────────────────────────────────────────────
+const propertySubtypes: TermSeed[] = [
+  { kind: 'property_subtype', slug: 'apartment', label: 'Apartment / flat', sortOrder: 1, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'villa', label: 'Villa', sortOrder: 2, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'penthouse', label: 'Penthouse', sortOrder: 3, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'row-house-town-house', label: 'Row house / town house', sortOrder: 4, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'studio-apartment', label: 'Studio apartment', sortOrder: 5, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'duplex-triplex', label: 'Duplex / triplex', sortOrder: 6, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'farmhouse', label: 'Farmhouse', sortOrder: 7, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'senior-living', label: 'Senior living', sortOrder: 8, metadata: { propertyTypeSlug: 'residential' } },
+  { kind: 'property_subtype', slug: 'residential-construction', label: 'Residential construction', sortOrder: 20, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'commercial-construction', label: 'Commercial construction', sortOrder: 21, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'facade-exterior', label: 'Facade / exterior', sortOrder: 22, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'landscape-outdoor', label: 'Landscape / outdoor', sortOrder: 23, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'renovation-remodel', label: 'Renovation / remodel', sortOrder: 24, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'mixed-use', label: 'Mixed use', sortOrder: 25, metadata: { propertyTypeSlug: 'architecture-construction' } },
+  { kind: 'property_subtype', slug: 'corporate-office', label: 'Corporate office', sortOrder: 40, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'it-tech-office', label: 'IT / Tech office', sortOrder: 41, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'co-working-space', label: 'Co-working space', sortOrder: 42, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'home-office', label: 'Home office', sortOrder: 43, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'creative-studio', label: 'Creative studio', sortOrder: 44, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'bank-finance', label: 'Bank / Finance', sortOrder: 45, metadata: { propertyTypeSlug: 'commercial-workspace' } },
+  { kind: 'property_subtype', slug: 'cafe-coffee-shop', label: 'Cafe / coffee shop', sortOrder: 60, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'restaurant', label: 'Restaurant', sortOrder: 61, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'bar-lounge', label: 'Bar / Lounge', sortOrder: 62, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'hotel-resort', label: 'Hotel / Resort', sortOrder: 63, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'homestay-airbnb', label: 'Homestay / Airbnb', sortOrder: 64, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'bakery-patisserie', label: 'Bakery / Patisserie', sortOrder: 65, metadata: { propertyTypeSlug: 'food-hospitality' } },
+  { kind: 'property_subtype', slug: 'showroom', label: 'Showroom', sortOrder: 80, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'retail-store', label: 'Retail store', sortOrder: 81, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'jewellery-store', label: 'Jewellery store', sortOrder: 82, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'salon-spa', label: 'Salon / spa', sortOrder: 83, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'pharmacy-clinic-store', label: 'Pharmacy / clinic store', sortOrder: 84, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'pop-up-kiosk', label: 'Pop up / kiosk', sortOrder: 85, metadata: { propertyTypeSlug: 'retail-showroom' } },
+  { kind: 'property_subtype', slug: 'clinic-hospital', label: 'Clinic / hospital', sortOrder: 100, metadata: { propertyTypeSlug: 'institutional-public' } },
+  { kind: 'property_subtype', slug: 'school-college', label: 'School / college', sortOrder: 101, metadata: { propertyTypeSlug: 'institutional-public' } },
+  { kind: 'property_subtype', slug: 'gym-fitness-center', label: 'Gym / Fitness center', sortOrder: 102, metadata: { propertyTypeSlug: 'institutional-public' } },
+  { kind: 'property_subtype', slug: 'religious-spiritual', label: 'Religious / spiritual', sortOrder: 103, metadata: { propertyTypeSlug: 'institutional-public' } },
+  { kind: 'property_subtype', slug: 'event-banquet-hall', label: 'Event / Banquet hall', sortOrder: 104, metadata: { propertyTypeSlug: 'institutional-public' } },
+  { kind: 'property_subtype', slug: 'childcare-playschool', label: 'Childcare / playschool', sortOrder: 105, metadata: { propertyTypeSlug: 'institutional-public' } },
 ];
 
 // ─── BHK ───────────────────────────────────────────────────────────────────────
@@ -104,6 +153,8 @@ const rooms: TermSeed[] = [
   { kind: 'room', slug: 'dining', label: 'Dining', sortOrder: 2 },
   { kind: 'room', slug: 'living-and-dining', label: 'Living & Dining', sortOrder: 3 },
   { kind: 'room', slug: 'modular-kitchen', label: 'Modular Kitchen', sortOrder: 4 },
+  { kind: 'room', slug: 'kitchen', label: 'Kitchen', sortOrder: 5 },
+  { kind: 'room', slug: 'bedroom', label: 'Bedroom', sortOrder: 6 },
   { kind: 'room', slug: 'master-bedroom', label: 'Master Bedroom', sortOrder: 5 },
   { kind: 'room', slug: 'guest-bedroom', label: 'Guest Bedroom', sortOrder: 6 },
   { kind: 'room', slug: 'kids-bedroom', label: 'Kids Bedroom', sortOrder: 7 },
@@ -117,6 +168,33 @@ const rooms: TermSeed[] = [
   { kind: 'room', slug: 'utility', label: 'Utility', sortOrder: 15 },
   { kind: 'room', slug: 'wardrobe-walk-in', label: 'Wardrobe / Walk-in', sortOrder: 16 },
   { kind: 'room', slug: 'home-bar', label: 'Home Bar', sortOrder: 17 },
+  { kind: 'room', slug: 'garden-landscape', label: 'Garden / Landscape', sortOrder: 30 },
+  { kind: 'room', slug: 'terrace-rooftop', label: 'Terrace / Rooftop', sortOrder: 31 },
+  { kind: 'room', slug: 'garage-parking', label: 'Garage / Parking', sortOrder: 32 },
+  { kind: 'room', slug: 'staff-quarters', label: 'Staff Quarters', sortOrder: 33 },
+  { kind: 'room', slug: 'cabin', label: 'Cabin', sortOrder: 50 },
+  { kind: 'room', slug: 'workstation-open-seating', label: 'Workstation / Open Seating Area', sortOrder: 51 },
+  { kind: 'room', slug: 'conference-room', label: 'Conference Room', sortOrder: 52 },
+  { kind: 'room', slug: 'cafeteria-pantry', label: 'Cafeteria / Pantry', sortOrder: 53 },
+  { kind: 'room', slug: 'breakout-lounge', label: 'Breakout / Lounge Area', sortOrder: 54 },
+  { kind: 'room', slug: 'server-room', label: 'Server Room', sortOrder: 55 },
+  { kind: 'room', slug: 'lobby-reception', label: 'Lobby / Reception', sortOrder: 70 },
+  { kind: 'room', slug: 'guest-room', label: 'Guest Room', sortOrder: 71 },
+  { kind: 'room', slug: 'restaurant-dining', label: 'Restaurant / Dining', sortOrder: 72 },
+  { kind: 'room', slug: 'spa-wellness', label: 'Spa / Wellness', sortOrder: 73 },
+  { kind: 'room', slug: 'banquet-event-space', label: 'Banquet / Event Space', sortOrder: 74 },
+  { kind: 'room', slug: 'storefront-facade', label: 'Storefront / Facade', sortOrder: 90 },
+  { kind: 'room', slug: 'display-area', label: 'Display Area', sortOrder: 91 },
+  { kind: 'room', slug: 'billing-counter', label: 'Billing Counter', sortOrder: 92 },
+  { kind: 'room', slug: 'trial-room', label: 'Trial Room', sortOrder: 93 },
+  { kind: 'room', slug: 'storage-back-room', label: 'Storage / Back Room', sortOrder: 94 },
+  { kind: 'room', slug: 'customer-lounge', label: 'Customer Lounge', sortOrder: 95 },
+  { kind: 'room', slug: 'dining-area', label: 'Dining Area', sortOrder: 110 },
+  { kind: 'room', slug: 'bar-counter', label: 'Bar Counter', sortOrder: 111 },
+  { kind: 'room', slug: 'outdoor-seating', label: 'Outdoor Seating', sortOrder: 112 },
+  { kind: 'room', slug: 'private-dining-room', label: 'Private Dining Room', sortOrder: 113 },
+  { kind: 'room', slug: 'billing-takeaway-counter', label: 'Billing / Takeaway Counter', sortOrder: 114 },
+  { kind: 'room', slug: 'packing-station', label: 'Packing Station', sortOrder: 115 },
 ];
 
 // ─── SCOPES ────────────────────────────────────────────────────────────────────
@@ -294,7 +372,7 @@ async function upsertLocality(term: TermSeed, cityIdMap: Map<string, string>): P
 // ─── MAIN ──────────────────────────────────────────────────────────────────────
 
 export async function seedTaxonomy(): Promise<void> {
-  console.log('[seed] Taxonomy: seeding 13 kinds...');
+  console.log('[seed] Taxonomy: seeding 14 kinds...');
 
   // 1. Cities first (localities depend on them)
   const cityIdMap = new Map<string, string>();
@@ -313,6 +391,9 @@ export async function seedTaxonomy(): Promise<void> {
   // 3. Flat vocabularies
   for (const term of propertyTypes) await upsertTerm(term);
   console.log(`  ✓ ${propertyTypes.length} property types`);
+
+  for (const term of propertySubtypes) await upsertTerm(term);
+  console.log(`  ✓ ${propertySubtypes.length} property subtypes`);
 
   for (const term of bhkTypes) await upsertTerm(term);
   console.log(`  ✓ ${bhkTypes.length} BHK types`);
@@ -347,7 +428,7 @@ export async function seedTaxonomy(): Promise<void> {
 
   const total =
     cities.length + localities.length + propertyTypes.length +
-    bhkTypes.length + rooms.length + scopes.length + themes.length + budgetBands.length +
+    propertySubtypes.length + bhkTypes.length + rooms.length + scopes.length + themes.length + budgetBands.length +
     materials.length + finishes.length + layouts.length + palettes.length + sizeBands.length;
   console.log(`[seed] Taxonomy: ${total} terms seeded successfully.`);
 }

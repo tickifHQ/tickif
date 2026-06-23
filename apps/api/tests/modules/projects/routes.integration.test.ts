@@ -82,6 +82,53 @@ describe('POST /api/projects', () => {
     });
     expect(body.slug).toBe('authenticated-project');
   });
+
+  it('generates a title and pre-fills apartment rooms from project metadata', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002020');
+    await makeTaxonomy({ kind: 'city', slug: 'bengaluru', label: 'Bengaluru' });
+    await makeTaxonomy({ kind: 'property_type', slug: 'residential', label: 'Residential' });
+    await makeTaxonomy({
+      kind: 'property_subtype',
+      slug: 'apartment',
+      label: 'Apartment / flat',
+      metadata: { propertyTypeSlug: 'residential' },
+    });
+    await makeTaxonomy({ kind: 'bhk', slug: '2-bhk', label: '2 BHK' });
+    await makeTaxonomy({ kind: 'budget_band', slug: 'luxury', label: 'Luxury' });
+    await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+    await makeTaxonomy({ kind: 'room', slug: 'bedroom', label: 'Bedroom' });
+    await makeTaxonomy({ kind: 'room', slug: 'bathroom', label: 'Bathroom' });
+
+    const res = await client.api.projects.$post(
+      {
+        json: {
+          buildingName: 'Maitri Apartments',
+          propertyTypeSlug: 'residential',
+          propertySubtypeSlug: 'apartment',
+          bhkSlug: '2-bhk',
+          citySlug: 'bengaluru',
+          budgetBandSlug: 'luxury',
+        },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(201);
+    if (res.status !== 201) throw new Error('expected 201');
+    const body = await res.json();
+    expect(body).toMatchObject({
+      designerId: designer.id,
+      title: 'Maitri Apartments - 2 BHK Luxury Apartment / flat in Bengaluru',
+      slug: 'maitri-apartments-2-bhk-luxury-apartment-flat-in-bengaluru',
+      propertySubtypeSlug: 'apartment',
+    });
+    expect(body.rooms.map((room) => room.name)).toEqual([
+      'Kitchen',
+      'Master Bedroom',
+      'Bedroom 2',
+      'Bathroom',
+    ]);
+  });
 });
 
 describe('Project draft CRUD + rooms (E-102)', () => {
@@ -92,6 +139,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
     await makeTaxonomy({ kind: 'locality', slug: 'bandra', label: 'Bandra', parentId: city.id });
     await makeTaxonomy({ kind: 'property_type', slug: 'residential', label: 'Residential' });
+    await makeTaxonomy({
+      kind: 'property_subtype',
+      slug: 'apartment',
+      label: 'Apartment',
+      metadata: { propertyTypeSlug: 'residential' },
+    });
     await makeTaxonomy({ kind: 'scope', slug: 'full-home', label: 'Full Home' });
     await makeTaxonomy({ kind: 'bhk', slug: '3-bhk', label: '3 BHK' });
     await makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' });
@@ -99,6 +152,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const res = await requestJson(`/api/projects/${project.id}`, 'PATCH', cookie, {
       title: 'Updated Draft',
       propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
       scopeSlug: 'full-home',
       bhkSlug: '3-bhk',
       sizeSqft: 1800,
@@ -118,6 +172,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       id: project.id,
       title: 'Updated Draft',
       propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
       scopeSlug: 'full-home',
       bhkSlug: '3-bhk',
       sizeSqft: 1800,

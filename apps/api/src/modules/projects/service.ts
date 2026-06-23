@@ -40,6 +40,7 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     description: row.description,
     status: row.status,
     propertyTypeSlug: row.propertyTypeSlug,
+    propertySubtypeSlug: row.propertySubtypeSlug,
     scopeSlug: row.scopeSlug,
     bhkSlug: row.bhkSlug,
     sizeSqft: row.sizeSqft,
@@ -111,18 +112,38 @@ async function requireMutableDraft(projectId: string, caller: Caller): Promise<P
 
 async function validateProjectTaxonomy(input: {
   propertyTypeSlug?: string | null;
+  propertySubtypeSlug?: string | null;
   scopeSlug?: string | null;
   bhkSlug?: string | null;
   citySlug?: string | null;
   localitySlug?: string | null;
   budgetBandSlug?: string | null;
-}, existing?: Pick<ProjectRecord, 'citySlug' | 'localitySlug'>): Promise<void> {
+}, existing?: Pick<ProjectRecord, 'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'>): Promise<void> {
   if (
     input.propertyTypeSlug !== undefined &&
     input.propertyTypeSlug !== null &&
     !(await projectsRepository.taxonomyExists('property_type', { slug: input.propertyTypeSlug }))
   ) {
     throw AppError.unprocessable('Invalid propertyTypeSlug');
+  }
+
+  const propertySubtypeTouched =
+    input.propertySubtypeSlug !== undefined || input.propertyTypeSlug !== undefined;
+  const nextPropertyTypeSlug =
+    input.propertyTypeSlug === undefined ? existing?.propertyTypeSlug ?? null : input.propertyTypeSlug;
+  const nextPropertySubtypeSlug =
+    input.propertySubtypeSlug === undefined
+      ? existing?.propertySubtypeSlug ?? null
+      : input.propertySubtypeSlug;
+  if (
+    propertySubtypeTouched &&
+    nextPropertySubtypeSlug !== null &&
+    !(await projectsRepository.propertySubtypeExists({
+      subtypeSlug: nextPropertySubtypeSlug,
+      propertyTypeSlug: nextPropertyTypeSlug,
+    }))
+  ) {
+    throw AppError.unprocessable('Invalid propertySubtypeSlug');
   }
 
   if (
@@ -174,6 +195,194 @@ async function validateProjectTaxonomy(input: {
   ) {
     throw AppError.unprocessable('Invalid budgetBandSlug');
   }
+}
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .split('-')
+    .map((part) => (part.toLowerCase() === 'bhk' ? 'BHK' : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(' ');
+}
+
+async function labelFor(
+  kind: Parameters<typeof projectsRepository.findTaxonomyTermBySlug>[0],
+  slug?: string | null,
+): Promise<string | null> {
+  if (!slug) return null;
+  const term = await projectsRepository.findTaxonomyTermBySlug(kind, slug);
+  return term?.label ?? humanizeSlug(slug);
+}
+
+async function buildProjectTitle(input: CreateProjectInput): Promise<string> {
+  const explicit = input.title?.trim();
+  if (explicit) return explicit;
+
+  const [city, locality, propertyType, propertySubtype, bhk, budget] = await Promise.all([
+    labelFor('city', input.citySlug),
+    labelFor('locality', input.localitySlug),
+    labelFor('property_type', input.propertyTypeSlug),
+    labelFor('property_subtype', input.propertySubtypeSlug),
+    labelFor('bhk', input.bhkSlug),
+    labelFor('budget_band', input.budgetBandSlug),
+  ]);
+
+  const subject = input.buildingName?.trim() || locality || city || 'New Project';
+  const descriptor = [bhk, budget, propertySubtype ?? propertyType].filter(
+    (part): part is string => !!part,
+  );
+  const location = city ? ` in ${city}` : '';
+  const title = `${subject}${descriptor.length ? ` - ${descriptor.join(' ')}` : ''}${location}`;
+  return title.slice(0, 160);
+}
+
+function bhkCount(slug?: string | null): number {
+  if (!slug) return 1;
+  const match = /^([1-4])(?:-plus)?-bhk$/.exec(slug);
+  if (!match) return 1;
+  const count = Number(match[1]);
+  return slug.includes('plus') ? Math.max(count, 4) : count;
+}
+
+type RoomPrefillSpec = {
+  slug: string;
+  name?: string;
+  metadata?: CreateProjectRoomInput['metadata'];
+};
+
+const ROOM_PREFILLS: Record<string, RoomPrefillSpec[]> = {
+  villa: [
+    { slug: 'garden-landscape' },
+    { slug: 'terrace-rooftop' },
+    { slug: 'garage-parking' },
+  ],
+  farmhouse: [
+    { slug: 'garden-landscape' },
+    { slug: 'terrace-rooftop' },
+    { slug: 'garage-parking' },
+  ],
+  'commercial-workspace': [
+    { slug: 'cabin', metadata: { labels: ['Cabin 1'] } },
+    { slug: 'workstation-open-seating' },
+    { slug: 'conference-room' },
+  ],
+  'corporate-office': [],
+  'it-tech-office': [],
+  'co-working-space': [],
+  'home-office': [],
+  'creative-studio': [],
+  'bank-finance': [],
+  'institutional-public': [
+    { slug: 'lobby-reception' },
+    { slug: 'guest-room', metadata: { labels: ['Guest Room 1'] } },
+    { slug: 'restaurant-dining' },
+  ],
+  'clinic-hospital': [],
+  'school-college': [],
+  'gym-fitness-center': [],
+  'religious-spiritual': [],
+  'event-banquet-hall': [],
+  'childcare-playschool': [],
+  'retail-showroom': [
+    { slug: 'storefront-facade' },
+    { slug: 'display-area' },
+    { slug: 'billing-counter' },
+  ],
+  showroom: [],
+  'retail-store': [],
+  'jewellery-store': [],
+  'salon-spa': [],
+  'pharmacy-clinic-store': [],
+  'pop-up-kiosk': [],
+  'food-hospitality': [
+    { slug: 'dining-area' },
+    { slug: 'kitchen' },
+    { slug: 'bar-counter' },
+  ],
+  'cafe-coffee-shop': [],
+  restaurant: [],
+  'bar-lounge': [],
+  'hotel-resort': [],
+  'homestay-airbnb': [],
+  'bakery-patisserie': [],
+};
+
+for (const alias of [
+  'corporate-office',
+  'it-tech-office',
+  'co-working-space',
+  'home-office',
+  'creative-studio',
+  'bank-finance',
+]) {
+  ROOM_PREFILLS[alias] = ROOM_PREFILLS['commercial-workspace']!;
+}
+for (const alias of [
+  'clinic-hospital',
+  'school-college',
+  'gym-fitness-center',
+  'religious-spiritual',
+  'event-banquet-hall',
+  'childcare-playschool',
+]) {
+  ROOM_PREFILLS[alias] = ROOM_PREFILLS['institutional-public']!;
+}
+for (const alias of [
+  'showroom',
+  'retail-store',
+  'jewellery-store',
+  'salon-spa',
+  'pharmacy-clinic-store',
+  'pop-up-kiosk',
+]) {
+  ROOM_PREFILLS[alias] = ROOM_PREFILLS['retail-showroom']!;
+}
+for (const alias of [
+  'cafe-coffee-shop',
+  'restaurant',
+  'bar-lounge',
+  'hotel-resort',
+  'homestay-airbnb',
+  'bakery-patisserie',
+]) {
+  ROOM_PREFILLS[alias] = ROOM_PREFILLS['food-hospitality']!;
+}
+
+function buildRoomPrefillSpecs(project: Pick<ProjectRecord, 'propertyTypeSlug' | 'propertySubtypeSlug' | 'bhkSlug'>): RoomPrefillSpec[] {
+  const key = project.propertySubtypeSlug ?? project.propertyTypeSlug;
+  if (key === 'apartment' || key === 'residential' || key === 'penthouse' || key === 'studio-apartment' || key === 'duplex-triplex' || key === 'row-house-town-house') {
+    const bedrooms = Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
+      slug: 'bedroom',
+      name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+      metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+    }));
+    return [{ slug: 'kitchen' }, ...bedrooms, { slug: 'bathroom' }];
+  }
+  return key ? ROOM_PREFILLS[key] ?? [] : [];
+}
+
+async function prefillRoomsIfEmpty(
+  project: Pick<ProjectRecord, 'id' | 'propertyTypeSlug' | 'propertySubtypeSlug' | 'bhkSlug'>,
+  existingRooms?: ProjectRoomRecord[],
+): Promise<ProjectRoomRecord[]> {
+  const rooms = existingRooms ?? (await projectsRepository.listRooms(project.id));
+  if (rooms.length > 0) return rooms;
+
+  const specs = buildRoomPrefillSpecs(project);
+  if (specs.length === 0) return rooms;
+  const roomTypeSlugs = [...new Set(specs.map((spec) => spec.slug))];
+  const roomTypes = await projectsRepository.findRoomTypesBySlugs(roomTypeSlugs);
+  const roomTypeBySlug = new Map(roomTypes.map((term) => [term.slug, term]));
+  const inputs = specs.flatMap((spec, index): CreateProjectRoomInput[] => {
+    const term = roomTypeBySlug.get(spec.slug);
+    if (!term) return [];
+    return [{
+      roomTypeId: term.id,
+      name: spec.name ?? term.label,
+      sortOrder: index,
+      metadata: spec.metadata,
+    }];
+  });
+  return projectsRepository.createRooms(project.id, inputs);
 }
 
 async function validateRoomType(roomTypeId: string): Promise<void> {
@@ -254,14 +463,18 @@ export const projectsService = {
       throw AppError.forbidden('Designer profile required');
     }
 
+    const title = await buildProjectTitle(input);
+    const draftInput = { ...input, title };
+
     // Ensure a unique slug; append a short suffix on collision.
-    const base = projectsRepository.slugify(input.title);
+    const base = projectsRepository.slugify(title);
     let slug = base;
     if (await projectsRepository.findBySlug(slug)) {
       slug = `${base}-${Date.now().toString(36).slice(-4)}`;
     }
-    const row = await projectsRepository.createDraft(input, designer.id, slug);
-    return toDetailResponse(row, []);
+    const row = await projectsRepository.createDraft(draftInput, designer.id, slug);
+    const rooms = await prefillRoomsIfEmpty(row, []);
+    return toDetailResponse(row, rooms);
   },
 
   async update(
@@ -281,7 +494,7 @@ export const projectsService = {
 
     const row = await projectsRepository.updateDraft(projectId, input);
     if (!row) throw AppError.notFound('Project not found');
-    const rooms = await projectsRepository.listRooms(projectId);
+    const rooms = await prefillRoomsIfEmpty(row);
     return toDetailResponse(row, rooms);
   },
 

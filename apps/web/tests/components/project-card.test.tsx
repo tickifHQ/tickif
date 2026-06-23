@@ -11,6 +11,7 @@ const project: ProjectResponse = {
   description: null,
   status: 'published',
   propertyTypeSlug: null,
+  propertySubtypeSlug: null,
   scopeSlug: null,
   bhkSlug: null,
   sizeSqft: null,

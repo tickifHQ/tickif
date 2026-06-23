@@ -34,13 +34,14 @@ export const projectStatusEnum = pgEnum('project_status', [
   'rejected',
 ]);
 
-// Admin-managed taxonomy: 13 kinds covering geography, property, design, budget,
+// Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
 export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
   'city',
   'locality',
   'property_type',
+  'property_subtype',
   'bhk',
   'room',
   'scope',
@@ -183,6 +184,7 @@ export const project = pgTable(
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
     propertyTypeSlug: text('property_type_slug'),
+    propertySubtypeSlug: text('property_subtype_slug'),
     scopeSlug: text('scope_slug'),
     bhkSlug: text('bhk_slug'),
     sizeSqft: integer('size_sqft'),
@@ -207,6 +209,7 @@ export const project = pgTable(
     index('project_city_idx').on(t.citySlug),
     index('project_locality_idx').on(t.localitySlug),
     index('project_property_type_idx').on(t.propertyTypeSlug),
+    index('project_property_subtype_idx').on(t.propertySubtypeSlug),
     index('project_scope_idx').on(t.scopeSlug),
   ],
 );

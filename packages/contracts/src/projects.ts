@@ -25,9 +25,10 @@ const completedMonth = z
 
 export const createProjectSchema = z
   .object({
-    title: z.string().min(3).max(160),
+    title: z.string().trim().min(3).max(160).optional(),
     description: z.string().max(5000).optional(),
     propertyTypeSlug: taxonomySlug.optional(),
+    propertySubtypeSlug: taxonomySlug.optional(),
     scopeSlug: taxonomySlug.optional(),
     bhkSlug: taxonomySlug.optional(),
     sizeSqft: z.number().int().positive().max(100_000).optional(),
@@ -47,6 +48,7 @@ export const updateProjectSchema = z
     title: z.string().trim().min(3).max(160).optional(),
     description: z.string().max(5000).nullable().optional(),
     propertyTypeSlug: taxonomySlug.nullable().optional(),
+    propertySubtypeSlug: taxonomySlug.nullable().optional(),
     scopeSlug: taxonomySlug.nullable().optional(),
     bhkSlug: taxonomySlug.nullable().optional(),
     sizeSqft: z.number().int().positive().max(100_000).nullable().optional(),
@@ -153,6 +155,7 @@ export const projectResponseSchema = z
     description: z.string().nullable(),
     status: projectStatus,
     propertyTypeSlug: z.string().nullable(),
+    propertySubtypeSlug: z.string().nullable(),
     scopeSlug: z.string().nullable(),
     bhkSlug: z.string().nullable(),
     sizeSqft: z.number().int().nullable(),
