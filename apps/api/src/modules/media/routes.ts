@@ -53,7 +53,7 @@ const uploadUrlRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft project media can be edited'),
+    409: errorJson('Only draft or changes-requested project media can be edited'),
   },
 });
 
@@ -74,7 +74,7 @@ const commitRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the image'),
     404: errorJson('Image not found'),
-    409: errorJson('Image has already been committed or project is no longer draft'),
+    409: errorJson('Image has already been committed or project is not editable'),
   },
 });
 
@@ -97,7 +97,7 @@ const updateMetadataRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the image'),
     404: errorJson('Image not found'),
-    409: errorJson('Only draft project media can be edited'),
+    409: errorJson('Only draft or changes-requested project media can be edited'),
     422: errorJson('Room does not belong to this project'),
   },
 });

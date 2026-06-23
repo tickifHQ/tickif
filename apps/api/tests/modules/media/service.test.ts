@@ -145,6 +145,17 @@ describe('mediaService.commitUpload', () => {
     expect(enqueueMedia).not.toHaveBeenCalled();
   });
 
+  it('allows committing media while changes are requested', async () => {
+    repo.findImageWithOwner.mockResolvedValue({ ...processingImage, projectStatus: 'changes_requested' });
+    objectExistsMock.mockResolvedValueOnce(true);
+
+    await expect(mediaService.commitUpload({ imageId: 'img-1', ...OWNER })).resolves.toEqual({
+      imageId: 'img-1',
+      status: 'processing',
+    });
+    expect(enqueueMedia).toHaveBeenCalledWith({ imageId: 'img-1' });
+  });
+
   it('400s when the object was never uploaded', async () => {
     repo.findImageWithOwner.mockResolvedValue(processingImage);
     objectExistsMock.mockResolvedValueOnce(false);
@@ -242,6 +253,31 @@ describe('mediaService.updateImageMetadata', () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
     expect(repo.updateMetadata).not.toHaveBeenCalled();
+  });
+
+  it('allows metadata edits while changes are requested', async () => {
+    repo.findImageWithOwner.mockResolvedValue({ ...image, projectStatus: 'changes_requested' });
+    repo.updateMetadata.mockResolvedValue({
+      id: 'img-1',
+      roomId: null,
+      status: 'ready',
+      sortOrder: 0,
+      themeSlugs: [],
+      materialSlugs: [],
+      finishSlugs: [],
+      tagSlugs: ['hero'],
+      width: null,
+      height: null,
+      derivatives: [],
+    } as never);
+
+    const result = await mediaService.updateImageMetadata({
+      imageId: 'img-1',
+      metadata: { tagSlugs: ['hero'] },
+      ...OWNER,
+    });
+
+    expect(result.tagSlugs).toEqual(['hero']);
   });
 
   it('rejects room ids from another project', async () => {

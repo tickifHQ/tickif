@@ -404,6 +404,22 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(409);
   });
 
+  it('allows changes-requested projects to be edited', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002022');
+    const project = await makeProject({ designerId: designer.id, status: 'changes_requested' });
+
+    const res = await requestJson(`/api/projects/${project.id}`, 'PATCH', cookie, {
+      title: 'Updated After Review',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      id: project.id,
+      title: 'Updated After Review',
+      status: 'changes_requested',
+    });
+  });
+
   it('rejects banned users on draft owner reads', async () => {
     const { cookie, designer, userId } = await makeDesignerSession('+919800002010');
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
@@ -475,6 +491,48 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const body = (await submit.json()) as ProjectDetailResponse;
     expect(body).toMatchObject({ id: project.id, status: 'submitted' });
     expect(body.submittedAt).toEqual(expect.any(String));
+  });
+
+  it('resubmits complete changes-requested projects', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002023');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'changes_requested',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(200);
+    const body = (await submit.json()) as ProjectDetailResponse;
+    expect(body).toMatchObject({ id: project.id, status: 'submitted' });
   });
 
   it('rejects submitting incomplete draft projects with missing keys', async () => {

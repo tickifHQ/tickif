@@ -32,6 +32,7 @@ export const projectStatusEnum = pgEnum('project_status', [
   'in_review',
   'published',
   'rejected',
+  'changes_requested',
 ]);
 
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,

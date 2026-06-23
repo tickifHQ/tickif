@@ -237,6 +237,25 @@ describe('PATCH /api/media/:imageId/metadata', () => {
     expect(res.status).toBe(409);
   });
 
+  it('updates metadata while changes are requested', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'changes_requested' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    if (res.status !== 200) throw new Error('expected 200');
+    expect(await res.json()).toMatchObject({ id: image.id, tagSlugs: ['hero'] });
+  });
+
   it('updates room and taxonomy metadata for an owned image', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });

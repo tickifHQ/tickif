@@ -4,6 +4,7 @@ import {
   createProjectSchema,
   linkProjectImageSchema,
   listProjectsQuerySchema,
+  projectStatus,
   projectRoomSchema,
   reorderProjectRoomsSchema,
   updateProjectSchema,
@@ -65,6 +66,13 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
+  it('accepts changes_requested as a project status filter', () => {
+    expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
+    expect(listProjectsQuerySchema.parse({ status: 'changes_requested' }).status).toBe(
+      'changes_requested',
+    );
+  });
+
   it('applies defaults and coerces string pagination', () => {
     const parsed = listProjectsQuerySchema.parse({ limit: '10', offset: '5' });
     expect(parsed).toMatchObject({ limit: 10, offset: 5 });

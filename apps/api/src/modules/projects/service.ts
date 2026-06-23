@@ -100,12 +100,16 @@ function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
   throw AppError.forbidden();
 }
 
-async function requireMutableDraft(projectId: string, caller: Caller): Promise<ProjectOwnership> {
+function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
+  return status === 'draft' || status === 'changes_requested';
+}
+
+async function requireEditableProject(projectId: string, caller: Caller): Promise<ProjectOwnership> {
   const ownership = await projectsRepository.findOwnership(projectId);
   if (!ownership) throw AppError.notFound('Project not found');
   await assertAccess(ownership, caller);
-  if (ownership.status !== 'draft') {
-    throw AppError.conflict('Only draft projects can be edited');
+  if (!isEditableProjectStatus(ownership.status)) {
+    throw AppError.conflict('Only draft or changes-requested projects can be edited');
   }
   return ownership;
 }
@@ -436,7 +440,7 @@ export const projectsService = {
     input: UpdateProjectInput,
     caller: Caller,
   ): Promise<ProjectDetailResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     const existing = await projectsRepository.findById(projectId);
     if (!existing) throw AppError.notFound('Project not found');
     await validateProjectTaxonomy(input, existing);
@@ -453,7 +457,7 @@ export const projectsService = {
   },
 
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     if (!(await projectsRepository.deleteProject(projectId))) {
       throw AppError.notFound('Project not found');
     }
@@ -461,7 +465,7 @@ export const projectsService = {
   },
 
   async listRooms(projectId: string, caller: Caller): Promise<ListProjectRoomsResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     const rooms = await projectsRepository.listRooms(projectId);
     return { items: rooms.map(toRoomResponse) };
   },
@@ -471,7 +475,7 @@ export const projectsService = {
     input: CreateProjectRoomInput,
     caller: Caller,
   ): Promise<ProjectRoom> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     await validateRoomType(input.roomTypeId);
     const row = await projectsRepository.createRoom(projectId, input);
     return toRoomResponse(row);
@@ -483,7 +487,7 @@ export const projectsService = {
     input: UpdateProjectRoomInput,
     caller: Caller,
   ): Promise<ProjectRoom> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     if (input.roomTypeId) await validateRoomType(input.roomTypeId);
     const row = await projectsRepository.updateRoom(projectId, roomId, input);
     if (!row) throw AppError.notFound('Room not found');
@@ -495,7 +499,7 @@ export const projectsService = {
     input: ReorderProjectRoomsInput,
     caller: Caller,
   ): Promise<ListProjectRoomsResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     const rooms = await projectsRepository.reorderRooms(projectId, input);
     if (!rooms) throw AppError.unprocessable('All reordered rooms must belong to the project');
     return { items: rooms.map(toRoomResponse) };
@@ -506,7 +510,7 @@ export const projectsService = {
     roomId: string,
     caller: Caller,
   ): Promise<DeleteProjectRoomResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     if (!(await projectsRepository.deleteRoom(projectId, roomId))) {
       throw AppError.notFound('Room not found');
     }
@@ -519,7 +523,7 @@ export const projectsService = {
     input: LinkProjectImageInput,
     caller: Caller,
   ): Promise<ProjectImageAttachment> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
 
     const image = await projectsRepository.findImage(projectId, imageId);
     if (!image) throw AppError.notFound('Image not found');
@@ -535,14 +539,14 @@ export const projectsService = {
   },
 
   async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     return buildCompleteness(project, await projectsRepository.getReadyImageCounts(projectId));
   },
 
   async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
-    await requireMutableDraft(projectId, caller);
+    await requireEditableProject(projectId, caller);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
 

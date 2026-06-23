@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const projectStatus = z
-  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected'])
+  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested'])
   .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
 

@@ -260,6 +260,29 @@ describe('projectsService.create', () => {
 });
 
 describe('projectsService.update', () => {
+  it('allows changes-requested projects to be edited', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'changes_requested',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'changes_requested' }));
+    vi.mocked(projectsRepository.updateDraft).mockResolvedValue(
+      row({ status: 'changes_requested', title: 'Updated Requested Changes' }),
+    );
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    const result = await projectsService.update(
+      row().id,
+      { title: 'Updated Requested Changes' },
+      caller,
+    );
+
+    expect(result.status).toBe('changes_requested');
+    expect(result.title).toBe('Updated Requested Changes');
+  });
+
   it('validates that the cover image belongs to the project', async () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
@@ -370,5 +393,39 @@ describe('projectsService.submit', () => {
     expect(result.status).toBe('submitted');
     expect(result.submittedAt).toBe('2026-01-02T00:00:00.000Z');
     expect(result.rooms).toHaveLength(1);
+  });
+
+  it('resubmits a complete changes-requested project', async () => {
+    const requestedChanges = row({
+      status: 'changes_requested',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: requestedChanges.id,
+      designerId: requestedChanges.designerId,
+      status: 'changes_requested',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(requestedChanges);
+    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
+      readyImageCount: 3,
+      taggedReadyImageCount: 3,
+    });
+    vi.mocked(projectsRepository.submit).mockResolvedValue(
+      row({
+        ...requestedChanges,
+        status: 'submitted',
+        submittedAt: new Date('2026-01-02T00:00:00Z'),
+      }),
+    );
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
+
+    const result = await projectsService.submit(requestedChanges.id, caller);
+
+    expect(result.status).toBe('submitted');
+    expect(projectsRepository.submit).toHaveBeenCalledWith(requestedChanges.id);
   });
 });

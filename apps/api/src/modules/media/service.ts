@@ -42,9 +42,9 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
   throw AppError.forbidden();
 }
 
-function assertDraftProject(status: string): void {
-  if (status !== 'draft') {
-    throw AppError.conflict('Only draft project media can be edited');
+function assertEditableProject(status: string): void {
+  if (status !== 'draft' && status !== 'changes_requested') {
+    throw AppError.conflict('Only draft or changes-requested project media can be edited');
   }
 }
 
@@ -66,7 +66,7 @@ export const mediaService = {
     // 404 (not 403) when missing so we don't leak which project ids exist.
     if (!owner) throw AppError.notFound('Project not found');
     assertAccess(owner.ownerUserId, input);
-    assertDraftProject(owner.projectStatus);
+    assertEditableProject(owner.projectStatus);
 
     const key = buildOriginalKey(input.projectId);
     const image = await mediaRepository.createProcessing({
@@ -88,7 +88,7 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     assertAccess(image.ownerUserId, input);
-    assertDraftProject(image.projectStatus);
+    assertEditableProject(image.projectStatus);
     // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
     if (image.status !== 'processing') {
       throw AppError.conflict('Image has already been committed');
@@ -122,7 +122,7 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     assertAccess(image.ownerUserId, input);
-    assertDraftProject(image.projectStatus);
+    assertEditableProject(image.projectStatus);
 
     const [roomValid, themeValid, finishValid, materialValid] = await Promise.all([
       input.metadata.roomId === undefined || input.metadata.roomId === null
