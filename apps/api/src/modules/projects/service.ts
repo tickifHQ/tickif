@@ -6,6 +6,7 @@ import type {
   LinkProjectImageInput,
   ListProjectRoomsResponse,
   ListProjectsQuery,
+  ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectImageAttachment,
   ProjectResponse,
@@ -38,11 +39,20 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     slug: row.slug,
     description: row.description,
     status: row.status,
+    propertyTypeSlug: row.propertyTypeSlug,
+    scopeSlug: row.scopeSlug,
+    bhkSlug: row.bhkSlug,
+    sizeSqft: row.sizeSqft,
     citySlug: row.citySlug,
+    localitySlug: row.localitySlug,
+    buildingName: row.buildingName,
     budgetBandSlug: row.budgetBandSlug,
     coverImageId: row.coverImageId,
+    completedMonth: row.completedMonth,
+    durationMonths: row.durationMonths,
     metadata: row.metadata ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -100,15 +110,61 @@ async function requireMutableDraft(projectId: string, caller: Caller): Promise<P
 }
 
 async function validateProjectTaxonomy(input: {
+  propertyTypeSlug?: string | null;
+  scopeSlug?: string | null;
+  bhkSlug?: string | null;
   citySlug?: string | null;
+  localitySlug?: string | null;
   budgetBandSlug?: string | null;
-}): Promise<void> {
+}, existing?: Pick<ProjectRecord, 'citySlug' | 'localitySlug'>): Promise<void> {
+  if (
+    input.propertyTypeSlug !== undefined &&
+    input.propertyTypeSlug !== null &&
+    !(await projectsRepository.taxonomyExists('property_type', { slug: input.propertyTypeSlug }))
+  ) {
+    throw AppError.unprocessable('Invalid propertyTypeSlug');
+  }
+
+  if (
+    input.scopeSlug !== undefined &&
+    input.scopeSlug !== null &&
+    !(await projectsRepository.taxonomyExists('scope', { slug: input.scopeSlug }))
+  ) {
+    throw AppError.unprocessable('Invalid scopeSlug');
+  }
+
+  if (
+    input.bhkSlug !== undefined &&
+    input.bhkSlug !== null &&
+    !(await projectsRepository.taxonomyExists('bhk', { slug: input.bhkSlug }))
+  ) {
+    throw AppError.unprocessable('Invalid bhkSlug');
+  }
+
   if (
     input.citySlug !== undefined &&
     input.citySlug !== null &&
     !(await projectsRepository.taxonomyExists('city', { slug: input.citySlug }))
   ) {
     throw AppError.unprocessable('Invalid citySlug');
+  }
+
+  const localityTouched = input.localitySlug !== undefined || input.citySlug !== undefined;
+  const nextCitySlug = input.citySlug === undefined ? existing?.citySlug ?? null : input.citySlug;
+  const nextLocalitySlug =
+    input.localitySlug === undefined ? existing?.localitySlug ?? null : input.localitySlug;
+  if (localityTouched && nextLocalitySlug !== null) {
+    if (!nextCitySlug) {
+      throw AppError.unprocessable('citySlug is required with localitySlug');
+    }
+    if (
+      !(await projectsRepository.localityExists({
+        citySlug: nextCitySlug,
+        localitySlug: nextLocalitySlug,
+      }))
+    ) {
+      throw AppError.unprocessable('Invalid localitySlug');
+    }
   }
 
   if (
@@ -124,6 +180,40 @@ async function validateRoomType(roomTypeId: string): Promise<void> {
   if (!(await projectsRepository.taxonomyExists('room', { id: roomTypeId }))) {
     throw AppError.unprocessable('Invalid roomTypeId');
   }
+}
+
+function buildCompleteness(
+  project: ProjectRecord,
+  imageCounts: { readyImageCount: number; taggedReadyImageCount: number },
+): ProjectCompletenessResponse {
+  const requirements = [
+    { key: 'project-name', label: 'Project name', complete: project.title.trim().length > 0 },
+    { key: 'location-city', label: 'Location city', complete: !!project.citySlug },
+    { key: 'property-type', label: 'Property type', complete: !!project.propertyTypeSlug },
+    { key: 'scope', label: 'Scope', complete: !!project.scopeSlug },
+    { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
+    {
+      key: 'at-least-three-photos',
+      label: 'At least 3 ready photos',
+      complete: imageCounts.readyImageCount >= 3,
+    },
+    {
+      key: 'image-metadata',
+      label: 'Room, theme, and finish metadata on each ready photo',
+      complete:
+        imageCounts.readyImageCount >= 3 &&
+        imageCounts.taggedReadyImageCount === imageCounts.readyImageCount,
+    },
+  ];
+  const completeCount = requirements.filter((requirement) => requirement.complete).length;
+  return {
+    complete: completeCount === requirements.length,
+    score: Math.round((completeCount / requirements.length) * 100),
+    missing: requirements
+      .filter((requirement) => !requirement.complete)
+      .map((requirement) => requirement.key),
+    requirements,
+  };
 }
 
 export const projectsService = {
@@ -180,7 +270,9 @@ export const projectsService = {
     caller: Caller,
   ): Promise<ProjectDetailResponse> {
     await requireMutableDraft(projectId, caller);
-    await validateProjectTaxonomy(input);
+    const existing = await projectsRepository.findById(projectId);
+    if (!existing) throw AppError.notFound('Project not found');
+    await validateProjectTaxonomy(input, existing);
 
     if (input.coverImageId) {
       const image = await projectsRepository.findImage(projectId, input.coverImageId);
@@ -273,5 +365,30 @@ export const projectsService = {
     const row = await projectsRepository.updateImageLink(projectId, imageId, input);
     if (!row) throw AppError.notFound('Image not found');
     return toImageAttachment(row);
+  },
+
+  async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {
+    await requireMutableDraft(projectId, caller);
+    const project = await projectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    return buildCompleteness(project, await projectsRepository.getReadyImageCounts(projectId));
+  },
+
+  async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    await requireMutableDraft(projectId, caller);
+    const project = await projectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+
+    const completeness = buildCompleteness(
+      project,
+      await projectsRepository.getReadyImageCounts(projectId),
+    );
+    if (!completeness.complete) {
+      throw AppError.unprocessable('Project is missing required upload information', {
+        missing: completeness.missing,
+      });
+    }
+
+    return toDetailResponse(await projectsRepository.submit(projectId), await projectsRepository.listRooms(projectId));
   },
 };

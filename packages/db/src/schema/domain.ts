@@ -182,13 +182,22 @@ export const project = pgTable(
     slug: text('slug').notNull().unique(),
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
+    propertyTypeSlug: text('property_type_slug'),
+    scopeSlug: text('scope_slug'),
+    bhkSlug: text('bhk_slug'),
+    sizeSqft: integer('size_sqft'),
     citySlug: text('city_slug'),
+    localitySlug: text('locality_slug'),
+    buildingName: text('building_name'),
     budgetBandSlug: text('budget_band_slug'),
     // Points at project_image; FK deferred because project_image already owns project_id.
     coverImageId: uuid('cover_image_id'),
+    completedMonth: text('completed_month'),
+    durationMonths: integer('duration_months'),
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
+    submittedAt: timestamp('submitted_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -196,6 +205,9 @@ export const project = pgTable(
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
     index('project_city_idx').on(t.citySlug),
+    index('project_locality_idx').on(t.localitySlug),
+    index('project_property_type_idx').on(t.propertyTypeSlug),
+    index('project_scope_idx').on(t.scopeSlug),
   ],
 );
 
@@ -259,6 +271,10 @@ export const projectImage = pgTable(
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
     contentType: text('content_type').notNull(),
     derivatives: jsonb('derivatives').$type<ProjectImageDerivative[]>().default([]).notNull(),
+    themeSlugs: jsonb('theme_slugs').$type<string[]>().default([]).notNull(),
+    materialSlugs: jsonb('material_slugs').$type<string[]>().default([]).notNull(),
+    finishSlugs: jsonb('finish_slugs').$type<string[]>().default([]).notNull(),
+    tagSlugs: jsonb('tag_slugs').$type<string[]>().default([]).notNull(),
     width: integer('width'),
     height: integer('height'),
     phash: text('phash'),

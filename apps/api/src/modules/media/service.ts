@@ -4,6 +4,7 @@ import type {
   ListProjectImagesResponse,
   CommitUploadResponse,
   ProjectImageDto,
+  UpdateImageMetadataInput,
 } from '@repo/contracts';
 import { config } from '@repo/config';
 import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
@@ -17,8 +18,13 @@ export type Caller = { userId: string; userRole: string };
 function toImageDto(row: ProjectImageListItem): ProjectImageDto {
   return {
     id: row.id,
+    roomId: row.roomId,
     status: row.status,
     sortOrder: row.sortOrder,
+    themeSlugs: row.themeSlugs,
+    materialSlugs: row.materialSlugs,
+    finishSlugs: row.finishSlugs,
+    tagSlugs: row.tagSlugs,
     width: row.width,
     height: row.height,
     derivatives: row.derivatives,
@@ -100,5 +106,44 @@ export const mediaService = {
       offset: input.offset,
     });
     return { items: rows.map(toImageDto) };
+  },
+
+  async updateImageMetadata(
+    input: { imageId: string; metadata: UpdateImageMetadataInput } & Caller,
+  ): Promise<ProjectImageDto> {
+    const image = await mediaRepository.findImageWithOwner(input.imageId);
+    if (!image) throw AppError.notFound('Image not found');
+    assertAccess(image.ownerUserId, input);
+
+    if (
+      input.metadata.roomId !== undefined &&
+      input.metadata.roomId !== null &&
+      !(await mediaRepository.roomBelongsToProject(input.metadata.roomId, image.projectId))
+    ) {
+      throw AppError.unprocessable('Room does not belong to this project');
+    }
+
+    if (
+      input.metadata.themeSlugs !== undefined &&
+      !(await mediaRepository.taxonomySlugsExist('theme', input.metadata.themeSlugs))
+    ) {
+      throw AppError.unprocessable('Invalid themeSlugs');
+    }
+
+    if (
+      input.metadata.finishSlugs !== undefined &&
+      !(await mediaRepository.taxonomySlugsExist('finish', input.metadata.finishSlugs))
+    ) {
+      throw AppError.unprocessable('Invalid finishSlugs');
+    }
+
+    if (
+      input.metadata.materialSlugs !== undefined &&
+      !(await mediaRepository.taxonomySlugsExist('material', input.metadata.materialSlugs))
+    ) {
+      throw AppError.unprocessable('Invalid materialSlugs');
+    }
+
+    return toImageDto(await mediaRepository.updateMetadata(input.imageId, input.metadata));
   },
 };

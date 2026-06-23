@@ -8,6 +8,7 @@ import {
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
+  projectCompletenessResponseSchema,
   projectDetailResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
@@ -285,6 +286,47 @@ const linkImageRoute = createRoute({
   },
 });
 
+const completenessRoute = createRoute({
+  method: 'get',
+  path: '/{id}/completeness',
+  tags: ['Projects'],
+  summary: 'Get project upload completeness',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Project completeness requirements',
+      content: { 'application/json': { schema: projectCompletenessResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot read this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Only draft project completeness can be checked'),
+  },
+});
+
+const submitRoute = createRoute({
+  method: 'post',
+  path: '/{id}/submit',
+  tags: ['Projects'],
+  summary: 'Submit a complete project draft for review',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Submitted project',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot submit this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Only draft projects can be submitted'),
+    422: errorJson('Project is missing required upload information'),
+  },
+});
+
 export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -350,6 +392,16 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('json'),
       caller(c.get('user')),
     );
+    return c.json(result, 200);
+  })
+  .openapi(completenessRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.getCompleteness(id, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(submitRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.submit(id, caller(c.get('user')));
     return c.json(result, 200);
   });
 

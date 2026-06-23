@@ -7,6 +7,8 @@ import {
   listProjectImagesQuerySchema,
   imageIdParamSchema,
   projectImagesParamSchema,
+  projectImageSchema,
+  updateImageMetadataSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -75,6 +77,29 @@ const commitRoute = createRoute({
   },
 });
 
+const updateMetadataRoute = createRoute({
+  method: 'patch',
+  path: '/{imageId}/metadata',
+  tags: ['Media'],
+  summary: 'Update room and search metadata for an uploaded image',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    params: imageIdParamSchema,
+    body: { content: { 'application/json': { schema: updateImageMetadataSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Updated image metadata',
+      content: { 'application/json': { schema: projectImageSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller does not own the image'),
+    404: errorJson('Image not found'),
+    422: errorJson('Room does not belong to this project'),
+  },
+});
+
 export const mediaRoutes = mediaApp()
   .openapi(uploadUrlRoute, async (c) => {
     const result = await mediaService.createUploadUrl({
@@ -87,6 +112,15 @@ export const mediaRoutes = mediaApp()
     const { imageId } = c.req.valid('param');
     const result = await mediaService.commitUpload({ imageId, ...caller(c) });
     return c.json(result, 202);
+  })
+  .openapi(updateMetadataRoute, async (c) => {
+    const { imageId } = c.req.valid('param');
+    const result = await mediaService.updateImageMetadata({
+      imageId,
+      metadata: c.req.valid('json'),
+      ...caller(c),
+    });
+    return c.json(result, 200);
   });
 
 const listImagesRoute = createRoute({

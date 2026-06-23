@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { testClient } from 'hono/testing';
 import { eq } from 'drizzle-orm';
-import type { ListProjectRoomsResponse, ProjectRoom } from '@repo/contracts';
+import type { ErrorResponse, ListProjectRoomsResponse, ProjectDetailResponse, ProjectRoom } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -89,11 +89,25 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const { cookie, designer } = await makeDesignerSession('+919800002003');
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
     const image = await makeProjectImage({ projectId: project.id });
-    await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+    const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+    await makeTaxonomy({ kind: 'locality', slug: 'bandra', label: 'Bandra', parentId: city.id });
+    await makeTaxonomy({ kind: 'property_type', slug: 'residential', label: 'Residential' });
+    await makeTaxonomy({ kind: 'scope', slug: 'full-home', label: 'Full Home' });
+    await makeTaxonomy({ kind: 'bhk', slug: '3-bhk', label: '3 BHK' });
+    await makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' });
 
     const res = await requestJson(`/api/projects/${project.id}`, 'PATCH', cookie, {
       title: 'Updated Draft',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      bhkSlug: '3-bhk',
+      sizeSqft: 1800,
       citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      buildingName: 'Sea View',
+      budgetBandSlug: 'premium',
+      completedMonth: '2026-05',
+      durationMonths: 7,
       coverImageId: image.id,
       metadata: { source: 'draft-builder' },
     });
@@ -103,7 +117,16 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(body).toMatchObject({
       id: project.id,
       title: 'Updated Draft',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      bhkSlug: '3-bhk',
+      sizeSqft: 1800,
       citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      buildingName: 'Sea View',
+      budgetBandSlug: 'premium',
+      completedMonth: '2026-05',
+      durationMonths: 7,
       coverImageId: image.id,
     });
   });
@@ -345,5 +368,70 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
 
     expect(res.status).toBe(200);
+  });
+
+  it('reports completeness and submits complete draft projects', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002014');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+
+    const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
+      headers: { cookie },
+    });
+    expect(completeness.status).toBe(200);
+    expect(await completeness.json()).toMatchObject({ complete: true, missing: [] });
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(200);
+    const body = (await submit.json()) as ProjectDetailResponse;
+    expect(body).toMatchObject({ id: project.id, status: 'submitted' });
+    expect(body.submittedAt).toEqual(expect.any(String));
+  });
+
+  it('rejects submitting incomplete draft projects with missing keys', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002015');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+
+    const res = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as ErrorResponse;
+    expect(body.error.details).toMatchObject({
+      missing: expect.arrayContaining(['property-type', 'at-least-three-photos']),
+    });
   });
 });

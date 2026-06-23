@@ -21,6 +21,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findDesignerByUserId: vi.fn(),
       findOwnership: vi.fn(),
       taxonomyExists: vi.fn(),
+      localityExists: vi.fn(),
       listRooms: vi.fn(),
       findRoom: vi.fn(),
       createRoom: vi.fn(),
@@ -29,6 +30,8 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteRoom: vi.fn(),
       findImage: vi.fn(),
       updateImageLink: vi.fn(),
+      getReadyImageCounts: vi.fn(),
+      submit: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
       slugify: (t: string) =>
         t
@@ -52,11 +55,20 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   slug: 'sunlit-bandra-apartment',
   description: null,
   status: 'published',
+  propertyTypeSlug: null,
+  scopeSlug: null,
+  bhkSlug: null,
+  sizeSqft: null,
   citySlug: 'mumbai',
+  localitySlug: null,
+  buildingName: null,
   budgetBandSlug: null,
   coverImageId: null,
+  completedMonth: null,
+  durationMonths: null,
   metadata: {},
   publishedAt: null,
+  submittedAt: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   ...over,
@@ -167,6 +179,7 @@ describe('projectsService.update', () => {
       status: 'draft',
       ownerUserId: caller.userId,
     });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
     vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
 
     await expect(
@@ -214,5 +227,60 @@ describe('projectsService.linkImage', () => {
       ),
     ).rejects.toMatchObject({ status: 404 });
     expect(projectsRepository.findRoom).not.toHaveBeenCalled();
+  });
+});
+
+describe('projectsService.getCompleteness', () => {
+  it('reports missing dashboard upload requirements', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
+    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
+      readyImageCount: 1,
+      taggedReadyImageCount: 0,
+    });
+
+    const result = await projectsService.getCompleteness(row().id, caller);
+
+    expect(result.complete).toBe(false);
+    expect(result.missing).toContain('property-type');
+    expect(result.missing).toContain('at-least-three-photos');
+  });
+});
+
+describe('projectsService.submit', () => {
+  it('submits a complete draft and returns detail response', async () => {
+    const complete = row({
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: complete.id,
+      designerId: complete.designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
+    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
+      readyImageCount: 3,
+      taggedReadyImageCount: 3,
+    });
+    vi.mocked(projectsRepository.submit).mockResolvedValue(
+      row({ ...complete, status: 'submitted', submittedAt: new Date('2026-01-02T00:00:00Z') }),
+    );
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
+
+    const result = await projectsService.submit(complete.id, caller);
+
+    expect(result.status).toBe('submitted');
+    expect(result.submittedAt).toBe('2026-01-02T00:00:00.000Z');
+    expect(result.rooms).toHaveLength(1);
   });
 });

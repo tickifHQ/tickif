@@ -1,4 +1,6 @@
-import { db, schema, eq, asc } from '@repo/db';
+import { inArray } from 'drizzle-orm';
+import { db, schema, eq, and, asc } from '@repo/db';
+import type { UpdateImageMetadataInput } from '@repo/contracts';
 
 /**
  * Data-access for media. The ONLY media layer that imports Drizzle.
@@ -6,7 +8,17 @@ import { db, schema, eq, asc } from '@repo/db';
 export type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
 export type ProjectImageListItem = Pick<
   ProjectImageRecord,
-  'id' | 'status' | 'sortOrder' | 'width' | 'height' | 'derivatives'
+  | 'id'
+  | 'roomId'
+  | 'status'
+  | 'sortOrder'
+  | 'themeSlugs'
+  | 'materialSlugs'
+  | 'finishSlugs'
+  | 'tagSlugs'
+  | 'width'
+  | 'height'
+  | 'derivatives'
 >;
 
 export const mediaRepository = {
@@ -62,6 +74,50 @@ export const mediaRepository = {
     return row ?? null;
   },
 
+  async roomBelongsToProject(roomId: string, projectId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.projectRoom.id })
+      .from(schema.projectRoom)
+      .where(and(eq(schema.projectRoom.id, roomId), eq(schema.projectRoom.projectId, projectId)))
+      .limit(1);
+    return !!row;
+  },
+
+  async taxonomySlugsExist(
+    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    slugs: string[],
+  ): Promise<boolean> {
+    const uniqueSlugs = [...new Set(slugs)];
+    if (uniqueSlugs.length === 0) return true;
+
+    const rows = await db
+      .select({ slug: schema.taxonomy.slug })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, kind), inArray(schema.taxonomy.slug, uniqueSlugs)));
+    return rows.length === uniqueSlugs.length;
+  },
+
+  async updateMetadata(
+    imageId: string,
+    input: UpdateImageMetadataInput,
+  ): Promise<ProjectImageRecord> {
+    const patch: Partial<typeof schema.projectImage.$inferInsert> = {};
+    if (input.roomId !== undefined) patch.roomId = input.roomId;
+    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
+    if (input.themeSlugs !== undefined) patch.themeSlugs = input.themeSlugs;
+    if (input.materialSlugs !== undefined) patch.materialSlugs = input.materialSlugs;
+    if (input.finishSlugs !== undefined) patch.finishSlugs = input.finishSlugs;
+    if (input.tagSlugs !== undefined) patch.tagSlugs = input.tagSlugs;
+
+    const [row] = await db
+      .update(schema.projectImage)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(schema.projectImage.id, imageId))
+      .returning();
+    if (!row) throw new Error('update returned no row');
+    return row;
+  },
+
   async listByProject(
     projectId: string,
     page: { limit: number; offset: number },
@@ -69,8 +125,13 @@ export const mediaRepository = {
     return db
       .select({
         id: schema.projectImage.id,
+        roomId: schema.projectImage.roomId,
         status: schema.projectImage.status,
         sortOrder: schema.projectImage.sortOrder,
+        themeSlugs: schema.projectImage.themeSlugs,
+        materialSlugs: schema.projectImage.materialSlugs,
+        finishSlugs: schema.projectImage.finishSlugs,
+        tagSlugs: schema.projectImage.tagSlugs,
         width: schema.projectImage.width,
         height: schema.projectImage.height,
         derivatives: schema.projectImage.derivatives,

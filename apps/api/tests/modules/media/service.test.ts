@@ -6,6 +6,9 @@ vi.mock('../../../src/modules/media/repository.js', () => ({
     createProcessing: vi.fn(),
     findImageWithOwner: vi.fn(),
     listByProject: vi.fn(),
+    roomBelongsToProject: vi.fn(),
+    taxonomySlugsExist: vi.fn(),
+    updateMetadata: vi.fn(),
   },
 }));
 vi.mock('@repo/storage', () => ({
@@ -155,8 +158,13 @@ describe('mediaService.listProjectImages', () => {
 
   const row = {
     id: 'img-1',
+    roomId: null,
     status: 'ready',
     sortOrder: 0,
+    themeSlugs: ['modern'],
+    materialSlugs: ['wood'],
+    finishSlugs: ['veneer'],
+    tagSlugs: ['hero'],
     width: 1600,
     height: 1200,
     derivatives: [{ variant: 'thumb', format: 'webp', key: 'd/t.webp', width: 320, height: 240 }],
@@ -169,6 +177,11 @@ describe('mediaService.listProjectImages', () => {
     const result = await mediaService.listProjectImages({ projectId: 'p', limit: 50, offset: 0, ...OWNER });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ id: 'img-1', status: 'ready', sortOrder: 0 });
+    expect(result.items[0]).toMatchObject({
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['veneer'],
+    });
     expect(result.items[0]!.derivatives).toHaveLength(1);
   });
 
@@ -189,5 +202,90 @@ describe('mediaService.listProjectImages', () => {
       ...SUPERADMIN,
     });
     expect(result.items).toHaveLength(1);
+  });
+});
+
+describe('mediaService.updateImageMetadata', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    repo.taxonomySlugsExist.mockResolvedValue(true);
+  });
+
+  const image = {
+    id: 'img-1',
+    projectId: 'project-1',
+    originalKey: 'originals/project-1/abc',
+    status: 'ready' as const,
+    ownerUserId: OWNER.userId,
+  };
+
+  it('rejects room ids from another project', async () => {
+    repo.findImageWithOwner.mockResolvedValue(image);
+    repo.roomBelongsToProject.mockResolvedValue(false);
+
+    await expect(
+      mediaService.updateImageMetadata({
+        imageId: 'img-1',
+        metadata: { roomId: '33333333-3333-4333-8333-333333333333' },
+        ...OWNER,
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(repo.updateMetadata).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown theme taxonomy slugs', async () => {
+    repo.findImageWithOwner.mockResolvedValue(image);
+    repo.taxonomySlugsExist.mockResolvedValueOnce(false);
+
+    await expect(
+      mediaService.updateImageMetadata({
+        imageId: 'img-1',
+        metadata: { themeSlugs: ['not-real'] },
+        ...OWNER,
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(repo.taxonomySlugsExist).toHaveBeenCalledWith('theme', ['not-real']);
+    expect(repo.updateMetadata).not.toHaveBeenCalled();
+  });
+
+  it('updates room and taxonomy metadata for the owner', async () => {
+    repo.findImageWithOwner.mockResolvedValue(image);
+    repo.roomBelongsToProject.mockResolvedValue(true);
+    repo.updateMetadata.mockResolvedValue({
+      id: 'img-1',
+      roomId: '33333333-3333-4333-8333-333333333333',
+      status: 'ready',
+      sortOrder: 2,
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['veneer'],
+      tagSlugs: ['hero'],
+      width: 1600,
+      height: 1200,
+      derivatives: [],
+    } as never);
+
+    const result = await mediaService.updateImageMetadata({
+      imageId: 'img-1',
+      metadata: {
+        roomId: '33333333-3333-4333-8333-333333333333',
+        sortOrder: 2,
+        themeSlugs: ['modern'],
+        materialSlugs: ['wood'],
+        finishSlugs: ['veneer'],
+        tagSlugs: ['hero'],
+      },
+      ...OWNER,
+    });
+
+    expect(repo.updateMetadata).toHaveBeenCalledWith('img-1', {
+      roomId: '33333333-3333-4333-8333-333333333333',
+      sortOrder: 2,
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['veneer'],
+      tagSlugs: ['hero'],
+    });
+    expect(result).toMatchObject({ roomId: '33333333-3333-4333-8333-333333333333' });
   });
 });
