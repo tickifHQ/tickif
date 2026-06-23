@@ -3,7 +3,7 @@ import { getServerSession, requireAuth, rolePassesCheck } from '../../src/lib/au
 
 const mock = vi.hoisted(() => ({
   headers: vi.fn(),
-  redirect: vi.fn(),
+  redirect: vi.fn().mockImplementation(() => { throw new Error('NEXT_REDIRECT'); }),
 }));
 
 vi.mock('next/headers', () => ({
@@ -79,5 +79,17 @@ describe('getServerSession', () => {
       },
     );
     expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('redirects to /login when session is null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(requireAuth()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/login');
+  });
+
+  it('redirects to /unauthorized when role is insufficient', async () => {
+    await expect(requireAuth({ requiredRole: 'superadmin' })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
 });

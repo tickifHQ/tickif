@@ -100,9 +100,16 @@ function optionalTrimmed(value: string) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function formatOptionalPhone(countryCode: string, phone: string) {
   const digits = phone.replace(/\D/g, '');
-  return digits.length > 0 ? `${countryCode}${digits}` : undefined;
+  return digits.length >= 7 ? `${countryCode}${digits}` : undefined;
 }
 
 function teamSizeToStaffCount(teamSize: string) {
@@ -229,6 +236,10 @@ export function DesignerOnboarding({
       setStep('presence');
       return;
     }
+    if (step === 'presence') {
+      setStep('details');
+      return;
+    }
     setStep('entity');
   }
 
@@ -280,8 +291,8 @@ export function DesignerOnboarding({
         themeIds: selectedThemeIds,
         ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
         ...(phone ? { phone } : {}),
-        ...(optionalTrimmed(websiteUrl) ? { websiteUrl: optionalTrimmed(websiteUrl) } : {}),
-        ...(optionalTrimmed(googleBusinessUrl) ? { googleBusinessUrl: optionalTrimmed(googleBusinessUrl) } : {}),
+        ...(normalizeUrl(websiteUrl) ? { websiteUrl: normalizeUrl(websiteUrl) } : {}),
+        ...(normalizeUrl(googleBusinessUrl) ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) } : {}),
         ...(optionalTrimmed(instagramHandle) ? { instagramHandle: optionalTrimmed(instagramHandle) } : {}),
         ...(optionalTrimmed(linkedinHandle) ? { linkedinHandle: optionalTrimmed(linkedinHandle) } : {}),
         ...(optionalTrimmed(youtubeHandle) ? { youtubeHandle: optionalTrimmed(youtubeHandle) } : {}),
@@ -351,7 +362,7 @@ export function DesignerOnboarding({
 
   return (
     <OnboardingShell signedInAs={displayEmail} onBack={handleBack}>
-      <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-8" onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-1">
           <h1 className="text-lg font-medium tracking-[-0.015em]">
             Let&apos;s set up your space on Tickif
@@ -927,6 +938,7 @@ function PresenceFields({
         </Label>
         <Input
           id={`${formId}-website`}
+          type="url"
           value={websiteUrl}
           onChange={(event) => onWebsiteUrlChange(event.target.value)}
           placeholder="https://"
@@ -943,6 +955,7 @@ function PresenceFields({
         </Label>
         <Input
           id={`${formId}-google-business`}
+          type="url"
           value={googleBusinessUrl}
           onChange={(event) => onGoogleBusinessUrlChange(event.target.value)}
           placeholder="https://"

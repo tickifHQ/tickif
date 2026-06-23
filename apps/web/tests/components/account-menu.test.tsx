@@ -60,4 +60,15 @@ describe('AccountMenu', () => {
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
+
+  it('still redirects to login even when signOut rejects', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    mock.signOut.mockRejectedValue(new Error('Network error'));
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByText('A'));
+    await user.click(screen.getByText('Sign out'));
+    expect(mock.router.replace).toHaveBeenCalledWith('/login');
+    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
 });

@@ -122,7 +122,7 @@ describe('DesignerOnboarding', () => {
     expect(decodeURIComponent(companyAvatar.getAttribute('src') ?? '')).toContain('SI');
   });
 
-  it('returns from socials to listing type selection', async () => {
+  it('returns from socials to details instead of entity', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
@@ -134,8 +134,8 @@ describe('DesignerOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: /signed in as mahi@test\.com/i }));
 
-    expect(screen.getByRole('button', { name: /just me/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /interior company \(firm\)/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/display name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
   });
@@ -253,6 +253,70 @@ describe('DesignerOnboarding', () => {
     });
     expect(await screen.findByText(/You're set up, there/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add your projects/i })).toBeInTheDocument();
+  });
+
+  it('normalizes a bare domain to https:// before submit', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
+      },
+    });
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.type(await screen.findByLabelText(/website/i), 'mystudio.com');
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    await waitFor(() => {
+      expect(submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          websiteUrl: 'https://mystudio.com',
+        }),
+      );
+    });
+  });
+
+  it('omits short phone numbers from the submit payload', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
+      },
+    });
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.type(screen.getByLabelText(/whatsapp number/i), '123');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(submit).toHaveBeenCalledWith(
+        expect.not.objectContaining({ phone: expect.any(String) }),
+      );
+    });
   });
 
   it('surfaces API errors inline', async () => {
