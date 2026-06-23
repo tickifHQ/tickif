@@ -22,12 +22,12 @@ pnpm install
 cp .env.example .env          # then set BETTER_AUTH_SECRET (see getting-started)
 pnpm infra:up                 # Postgres + Redis in Docker
 pnpm db:migrate               # apply schema
-pnpm dev                      # api :3001, web :3000, worker
+pnpm dev                      # api :8008, web :3000, worker
 ```
 
 - Web: <http://localhost:3000>
-- API docs (Scalar): <http://localhost:3001/docs>
-- OpenAPI spec: <http://localhost:3001/openapi.json>
+- API docs (Scalar): <http://localhost:8008/docs>
+- OpenAPI spec: <http://localhost:8008/openapi.json>
 
 ## The one rule to internalize
 

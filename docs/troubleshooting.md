@@ -117,6 +117,6 @@ pnpm why <pkg> -r          # find duplicate versions of a dependency
 docker compose ps          # are Postgres/Redis healthy?
 docker compose logs -f postgres
 pnpm --filter @repo/api dev    # run a single app to isolate its output
-curl http://localhost:3001/health
+curl http://localhost:8008/health
 pnpm db:studio             # browse the database
 ```

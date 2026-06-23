@@ -6,31 +6,55 @@ import {
   Asterisk,
   Bookmark,
   Calendar,
+  ChevronDown,
   House,
   LockKeyhole,
   Mail,
   MessageSquare,
   Star,
   Users,
+  X,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import { Card } from '@repo/ui/components/card';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
+import { countries as allCountries } from 'country-codes-flags-phone-codes';
 import { OtpInput } from '@/components/otp-input';
-import { PhoneNumberInput, countries, type Country } from '@/components/phone-number-input';
 
 interface LoginCardProps {
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
 type Step = 'phone' | 'otp';
 type OtpDigits = string[];
+
+interface Country {
+  code: string;
+  flag: string;
+  name: string;
+}
+
+const countries: Country[] = allCountries
+  .filter((c) => c.dialCode)
+  .map((c) => ({ code: c.dialCode, flag: c.flag, name: c.name }))
+  .sort((a, b) => {
+    if (a.name === 'India') return -1;
+    if (b.name === 'India') return 1;
+    return a.name.localeCompare(b.name);
+  });
 
 const COOLDOWN_SECONDS = 30;
 
@@ -91,7 +115,14 @@ const designerFeatures = [
   { icon: Calendar, title: 'Turn visitors into clients' },
 ] as const;
 
-export function LoginCard({ onSuccess }: LoginCardProps) {
+const trustAvatars = [
+  { initials: 'PK', className: 'bg-[#1a9b7a]' },
+  { initials: 'RV', className: 'bg-[#3b5570]' },
+  { initials: 'AM', className: 'bg-[#a8741d]' },
+  { initials: 'SN', className: 'bg-[#5d4a6b]' },
+] as const;
+
+export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -102,11 +133,23 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
   const [loginMode, setLoginMode] = useState<'browsing' | 'designer'>('browsing');
+  const [countrySearch, setCountrySearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
   const promoSubtitle = loginMode === 'designer'
     ? 'One link to share your work, get discovered, and turn views into real enquiries.'
     : 'Save the homes you love, message designers, and book free consultations.';
+
+  const filteredCountries = countrySearch
+    ? countries.filter((c) => {
+        const q = countrySearch.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.code.toLowerCase().includes(q)
+        );
+      })
+    : countries;
 
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
@@ -215,6 +258,12 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
     }
   }
 
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setPhone(digits);
+    setError('');
+  }
+
   async function handleGoogleLogin() {
     setLoading(true);
     setError('');
@@ -244,18 +293,16 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
     return (
       <div className="flex flex-col overflow-hidden md:flex-row">
         {/* Left: Brand / Promo Panel */}
-        <div className="flex w-full flex-col justify-between rounded-xl bg-muted px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0">
+        <div className="flex w-full flex-col justify-between rounded-xl px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0 [background-image:radial-gradient(circle_at_top_left,rgba(26,155,122,0.28),transparent_55%),linear-gradient(170deg,#17271f_0%,#0e1814_100%)]">
           <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1.5 rounded-md border border-muted-foreground/20 px-2.5 py-1 w-fit">
-              <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="text-xs text-muted-foreground">Trusted by 5000+ homeowners</span>
+            <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
+              <Users className="size-3.5 text-success" aria-hidden="true" />
+              <span className="text-xs font-medium text-success">Trusted by 5000+ homeowners</span>
             </div>
 
             <div className="flex flex-col gap-2">
-              <h2 className="font-display text-2xl font-semibold text-foreground">
-                Welcome to Tickif
-              </h2>
-              <p className="text-xs text-muted-foreground">{promoSubtitle}</p>
+              <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
+              <p className="text-xs text-white/60">{promoSubtitle}</p>
 
               <div className="mt-6 flex flex-col gap-3">
                 {features.map((f) => {
@@ -263,8 +310,8 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                   const testId = `feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`;
                   return (
                     <div key={f.title} data-testid={testId} className="flex items-center gap-2.5">
-                      <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                      <p className="text-sm font-medium text-foreground">{f.title}</p>
+                      <Icon className="size-4 shrink-0 text-white" aria-hidden="true" />
+                      <p className="text-sm text-white">{f.title}</p>
                     </div>
                   );
                 })}
@@ -274,25 +321,20 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
 
           <div className="mt-6 flex flex-col gap-3">
             <div className="flex -space-x-2">
-              <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">PK</AvatarFallback>
-              </Avatar>
-              <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">RV</AvatarFallback>
-              </Avatar>
-              <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">AM</AvatarFallback>
-              </Avatar>
-              <Avatar className="size-8 border-2 border-muted ring-2 ring-background">
-                <AvatarFallback className="bg-muted text-xs font-medium text-muted-foreground">SN</AvatarFallback>
-              </Avatar>
+              {trustAvatars.map((a) => (
+                <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
+                  <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>
+                    {a.initials}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">12,400+ homeowners</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs font-medium text-white">12,400+ homeowners</p>
+              <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
                 trust Tickif
-                <span className="ml-1.5 inline-flex items-center gap-1 text-warning">
-                  <Star className="size-3" fill="currentColor" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1">
+                  <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
                   4.9 (1.5k)
                 </span>
               </p>
@@ -303,7 +345,20 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
         {/* Right: Form Panel */}
         <div className="flex w-full flex-col px-6 py-8 md:flex-1">
           <div className="flex flex-col gap-5">
-            <h3 className="text-base font-medium text-foreground">Login to continue</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-medium text-foreground">Login to continue</h3>
+              {onClose && (
+                <Button
+                  onClick={onClose}
+                  aria-label="Close"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </Button>
+              )}
+            </div>
 
             <div className="flex flex-col gap-4">
               <Tabs
@@ -319,7 +374,7 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                   </TabsTrigger>
                   <TabsTrigger value="designer" className="flex-1 gap-1.5">
                     <Asterisk className="size-4" aria-hidden="true" />
-                    Interior designer
+                    I'm a designer
                   </TabsTrigger>
                 </TabsList>
 
@@ -328,32 +383,98 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                     className="flex transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-100%'})` }}
                   >
-                    <div className="flex w-full shrink-0 flex-col gap-3" inert={loginMode !== 'browsing'} aria-hidden={loginMode !== 'browsing'}>
+                    <div
+                      className={cn(
+                        'flex w-full shrink-0 flex-col gap-3 transition-opacity duration-300',
+                        loginMode === 'browsing' ? 'opacity-100' : 'opacity-0',
+                      )}
+                      inert={loginMode !== 'browsing'}
+                      aria-hidden={loginMode !== 'browsing'}
+                    >
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="phone">
-                          Phone Number <span className="text-destructive">*</span>
-                        </Label>
-                        <PhoneNumberInput
-                          id="phone"
-                          phone={phone}
-                          selectedCountry={selectedCountry}
-                          onPhoneChange={(digits) => {
-                            setPhone(digits);
-                            setError('');
-                          }}
-                          onSelectedCountryChange={setSelectedCountry}
-                          onEnter={handleSendOtp}
-                          disabled={loading}
-                        />
+                        <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
+                          <DropdownMenu
+                            onOpenChange={(open) => {
+                              if (!open) setCountrySearch('');
+                            }}
+                          >
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                disabled={loading}
+                              >
+                                <span className="text-base leading-none">{selectedCountry.flag}</span>
+                                <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" sideOffset={2} collisionPadding={8} className="max-h-60 overflow-y-auto max-w-[calc(100vw-1rem)]">
+                              <div className="sticky top-0 -mx-1 -mt-1 mb-1 z-10 bg-popover px-1 pt-1 shadow-sm">
+                                <input
+                                  ref={searchRef}
+                                  type="text"
+                                  placeholder="Search countries..."
+                                  value={countrySearch}
+                                  onChange={(e) => setCountrySearch(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      if (countrySearch) {
+                                        e.preventDefault();
+                                        setCountrySearch('');
+                                        return;
+                                      }
+                                      return;
+                                    }
+                                    e.stopPropagation();
+                                  }}
+                                  className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                  autoFocus
+                                />
+                              </div>
+                              {filteredCountries.length > 0 ? (
+                                filteredCountries.map((country) => (
+                                  <DropdownMenuItem
+                                    key={`${country.code}-${country.name}`}
+                                    onSelect={() => setSelectedCountry(country)}
+                                    className="gap-2"
+                                  >
+                                    <span className="text-base leading-none">{country.flag}</span>
+                                    <span className="text-muted-foreground">{country.code}</span>
+                                    <span className="text-foreground">{country.name}</span>
+                                  </DropdownMenuItem>
+                                ))
+                              ) : (
+                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                                  No countries found
+                                </div>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            inputMode="numeric"
+                            aria-label="Phone number"
+                            placeholder="9123456789"
+                            value={phone}
+                            onChange={handlePhoneChange}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSendOtp();
+                            }}
+                            className="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                            disabled={loading}
+                            autoComplete="tel"
+                          />
+                        </div>
                       </div>
 
                       <Button
                         type="button"
                         onClick={handleSendOtp}
                         disabled={loading || phone.length < 10}
-                        className="w-full cursor-pointer"
+                        className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
                       >
-                        {loading ? 'Sending…' : 'Send OTP'}
+                        {loading ? 'Sending…' : 'Get OTP'}
                       </Button>
 
                       <OrSeparator className="my-5" />
@@ -363,7 +484,14 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                       </div>
                     </div>
 
-                    <div className="flex w-full shrink-0 flex-col gap-4" inert={loginMode !== 'designer'} aria-hidden={loginMode !== 'designer'}>
+                    <div
+                      className={cn(
+                        'flex w-full shrink-0 flex-col gap-4 transition-opacity duration-300',
+                        loginMode === 'designer' ? 'opacity-100' : 'opacity-0',
+                      )}
+                      inert={loginMode !== 'designer'}
+                      aria-hidden={loginMode !== 'designer'}
+                    >
                       <GoogleSignInButton label="Login with Google" loading={loading} onClick={handleGoogleLogin} />
 
                       <OrSeparator className="my-2" />
@@ -381,7 +509,7 @@ export function LoginCard({ onSuccess }: LoginCardProps) {
                             id="designer-email"
                             type="email"
                             placeholder="you@example.com"
-                            className="pl-10"
+                            className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
                             disabled
                           />
                         </div>

@@ -6,7 +6,7 @@ import type { AppType } from '@repo/api';
  * the web bundle never pulls in server code — but every call is checked against
  * the real route definitions at compile time (no codegen step).
  */
-const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
 
 export const api = hc<AppType>(baseUrl, {
   fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>

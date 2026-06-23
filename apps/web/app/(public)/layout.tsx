@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { SiteNav } from '@/components/site-nav';
-import { SiteFooter } from '@/components/site-footer';
+import { PublicHeader } from '@/components/public-header';
+import { PublicFooter } from '@/components/public-footer';
 import { getServerSession } from '@/lib/auth-guard';
 import { ScrollGate } from '@/components/scroll-gate';
 
@@ -17,9 +17,9 @@ export default async function PublicLayout({ children }: { children: ReactNode }
 
   return (
     <div className="flex min-h-screen flex-col">
-      <SiteNav />
+      <PublicHeader isAuthenticated={isAuthenticated} />
       <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <PublicFooter />
       {!isAuthenticated && <ScrollGate />}
     </div>
   );
