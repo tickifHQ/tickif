@@ -167,6 +167,24 @@ describe('projectsService.create', () => {
     expect(created.slug).toMatch(/^sunlit-bandra-apartment-/);
   });
 
+  it('retries slug creation when another draft wins the insert race', async () => {
+    vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      orgId: 'org_1',
+    });
+    vi.mocked(projectsRepository.createDraft)
+      .mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }))
+      .mockImplementationOnce(async (_input, _designerId, slug) => row({ slug }));
+
+    const created = await projectsService.create({
+      title: 'Sunlit Bandra Apartment',
+    }, caller);
+
+    expect(projectsRepository.createDraft).toHaveBeenCalledTimes(2);
+    expect(created.slug).toMatch(/^sunlit-bandra-apartment-/);
+  });
+
   it('generates a title and room prefill when title is omitted', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
     vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
@@ -185,7 +203,9 @@ describe('projectsService.create', () => {
         '2-bhk': '2 BHK',
         luxury: 'Luxury',
       }[slug] ?? slug,
-      metadata: {},
+      metadata: slug === 'apartment'
+        ? { propertyTypeSlug: 'residential', defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom'] }
+        : {},
     }));
     vi.mocked(projectsRepository.createDraft).mockImplementation(async (input, _designerId, slug) =>
       row({

@@ -42,6 +42,12 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
   throw AppError.forbidden();
 }
 
+function assertDraftProject(status: string): void {
+  if (status !== 'draft') {
+    throw AppError.conflict('Only draft project media can be edited');
+  }
+}
+
 /**
  * Media use-cases. Framework-free: imports the repository and the storage
  * wrapper, never Hono or Drizzle.
@@ -60,6 +66,7 @@ export const mediaService = {
     // 404 (not 403) when missing so we don't leak which project ids exist.
     if (!owner) throw AppError.notFound('Project not found');
     assertAccess(owner.ownerUserId, input);
+    assertDraftProject(owner.projectStatus);
 
     const key = buildOriginalKey(input.projectId);
     const image = await mediaRepository.createProcessing({
@@ -81,6 +88,7 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     assertAccess(image.ownerUserId, input);
+    assertDraftProject(image.projectStatus);
     // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
     if (image.status !== 'processing') {
       throw AppError.conflict('Image has already been committed');
@@ -114,33 +122,36 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     assertAccess(image.ownerUserId, input);
+    assertDraftProject(image.projectStatus);
 
-    if (
-      input.metadata.roomId !== undefined &&
-      input.metadata.roomId !== null &&
-      !(await mediaRepository.roomBelongsToProject(input.metadata.roomId, image.projectId))
-    ) {
+    const [roomValid, themeValid, finishValid, materialValid] = await Promise.all([
+      input.metadata.roomId === undefined || input.metadata.roomId === null
+        ? Promise.resolve(true)
+        : mediaRepository.roomBelongsToProject(input.metadata.roomId, image.projectId),
+      input.metadata.themeSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('theme', input.metadata.themeSlugs),
+      input.metadata.finishSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('finish', input.metadata.finishSlugs),
+      input.metadata.materialSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('material', input.metadata.materialSlugs),
+    ]);
+
+    if (!roomValid) {
       throw AppError.unprocessable('Room does not belong to this project');
     }
 
-    if (
-      input.metadata.themeSlugs !== undefined &&
-      !(await mediaRepository.taxonomySlugsExist('theme', input.metadata.themeSlugs))
-    ) {
+    if (!themeValid) {
       throw AppError.unprocessable('Invalid themeSlugs');
     }
 
-    if (
-      input.metadata.finishSlugs !== undefined &&
-      !(await mediaRepository.taxonomySlugsExist('finish', input.metadata.finishSlugs))
-    ) {
+    if (!finishValid) {
       throw AppError.unprocessable('Invalid finishSlugs');
     }
 
-    if (
-      input.metadata.materialSlugs !== undefined &&
-      !(await mediaRepository.taxonomySlugsExist('material', input.metadata.materialSlugs))
-    ) {
+    if (!materialValid) {
       throw AppError.unprocessable('Invalid materialSlugs');
     }
 

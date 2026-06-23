@@ -249,115 +249,75 @@ type RoomPrefillSpec = {
   metadata?: CreateProjectRoomInput['metadata'];
 };
 
-const ROOM_PREFILLS: Record<string, RoomPrefillSpec[]> = {
-  villa: [
-    { slug: 'garden-landscape' },
-    { slug: 'terrace-rooftop' },
-    { slug: 'garage-parking' },
-  ],
-  farmhouse: [
-    { slug: 'garden-landscape' },
-    { slug: 'terrace-rooftop' },
-    { slug: 'garage-parking' },
-  ],
-  'commercial-workspace': [
-    { slug: 'cabin', metadata: { labels: ['Cabin 1'] } },
-    { slug: 'workstation-open-seating' },
-    { slug: 'conference-room' },
-  ],
-  'corporate-office': [],
-  'it-tech-office': [],
-  'co-working-space': [],
-  'home-office': [],
-  'creative-studio': [],
-  'bank-finance': [],
-  'institutional-public': [
-    { slug: 'lobby-reception' },
-    { slug: 'guest-room', metadata: { labels: ['Guest Room 1'] } },
-    { slug: 'restaurant-dining' },
-  ],
-  'clinic-hospital': [],
-  'school-college': [],
-  'gym-fitness-center': [],
-  'religious-spiritual': [],
-  'event-banquet-hall': [],
-  'childcare-playschool': [],
-  'retail-showroom': [
-    { slug: 'storefront-facade' },
-    { slug: 'display-area' },
-    { slug: 'billing-counter' },
-  ],
-  showroom: [],
-  'retail-store': [],
-  'jewellery-store': [],
-  'salon-spa': [],
-  'pharmacy-clinic-store': [],
-  'pop-up-kiosk': [],
-  'food-hospitality': [
-    { slug: 'dining-area' },
-    { slug: 'kitchen' },
-    { slug: 'bar-counter' },
-  ],
-  'cafe-coffee-shop': [],
-  restaurant: [],
-  'bar-lounge': [],
-  'hotel-resort': [],
-  'homestay-airbnb': [],
-  'bakery-patisserie': [],
-};
-
-for (const alias of [
-  'corporate-office',
-  'it-tech-office',
-  'co-working-space',
-  'home-office',
-  'creative-studio',
-  'bank-finance',
-]) {
-  ROOM_PREFILLS[alias] = ROOM_PREFILLS['commercial-workspace']!;
-}
-for (const alias of [
-  'clinic-hospital',
-  'school-college',
-  'gym-fitness-center',
-  'religious-spiritual',
-  'event-banquet-hall',
-  'childcare-playschool',
-]) {
-  ROOM_PREFILLS[alias] = ROOM_PREFILLS['institutional-public']!;
-}
-for (const alias of [
-  'showroom',
-  'retail-store',
-  'jewellery-store',
-  'salon-spa',
-  'pharmacy-clinic-store',
-  'pop-up-kiosk',
-]) {
-  ROOM_PREFILLS[alias] = ROOM_PREFILLS['retail-showroom']!;
-}
-for (const alias of [
-  'cafe-coffee-shop',
-  'restaurant',
-  'bar-lounge',
-  'hotel-resort',
-  'homestay-airbnb',
-  'bakery-patisserie',
-]) {
-  ROOM_PREFILLS[alias] = ROOM_PREFILLS['food-hospitality']!;
+function defaultRoomSlugs(metadata?: Record<string, unknown> | null): string[] {
+  const value = metadata?.defaultRoomSlugs;
+  if (!Array.isArray(value)) return [];
+  return value.filter((slug): slug is string => typeof slug === 'string' && slug.length > 0);
 }
 
-function buildRoomPrefillSpecs(project: Pick<ProjectRecord, 'propertyTypeSlug' | 'propertySubtypeSlug' | 'bhkSlug'>): RoomPrefillSpec[] {
-  const key = project.propertySubtypeSlug ?? project.propertyTypeSlug;
-  if (key === 'apartment' || key === 'residential' || key === 'penthouse' || key === 'studio-apartment' || key === 'duplex-triplex' || key === 'row-house-town-house') {
-    const bedrooms = Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
-      slug: 'bedroom',
-      name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
-      metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
-    }));
-    return [{ slug: 'kitchen' }, ...bedrooms, { slug: 'bathroom' }];
+function prefillMetadata(slug: string): CreateProjectRoomInput['metadata'] | undefined {
+  if (slug === 'cabin') return { labels: ['Cabin 1'] };
+  if (slug === 'guest-room') return { labels: ['Guest Room 1'] };
+  return undefined;
+}
+
+function expandRoomPrefillSlugs(
+  slugs: string[],
+  project: Pick<ProjectRecord, 'bhkSlug'>,
+): RoomPrefillSpec[] {
+  return slugs.flatMap((slug): RoomPrefillSpec[] => {
+    if (slug === 'bedroom') {
+      return Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
+        slug,
+        name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+        metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+      }));
+    }
+    return [{ slug, metadata: prefillMetadata(slug) }];
+  });
+}
+
+async function buildRoomPrefillSpecs(
+  project: Pick<ProjectRecord, 'propertyTypeSlug' | 'propertySubtypeSlug' | 'bhkSlug'>,
+): Promise<RoomPrefillSpec[]> {
+  const [subtypeTerm, typeTerm] = await Promise.all([
+    project.propertySubtypeSlug
+      ? projectsRepository.findTaxonomyTermBySlug('property_subtype', project.propertySubtypeSlug)
+      : null,
+    project.propertyTypeSlug
+      ? projectsRepository.findTaxonomyTermBySlug('property_type', project.propertyTypeSlug)
+      : null,
+  ]);
+  const subtypeDefaults = defaultRoomSlugs(subtypeTerm?.metadata);
+  const typeDefaults = defaultRoomSlugs(typeTerm?.metadata);
+  return expandRoomPrefillSlugs(subtypeDefaults.length > 0 ? subtypeDefaults : typeDefaults, project);
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === '23505'
+  );
+}
+
+async function createDraftWithUniqueSlug(
+  input: CreateProjectInput & { title: string },
+  designerId: string,
+): Promise<ProjectRecord> {
+  const base = projectsRepository.slugify(input.title);
+  const baseTaken = await projectsRepository.findBySlug(base);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const suffix = `${Date.now().toString(36).slice(-4)}${attempt === 0 ? '' : `-${attempt}`}`;
+    const slug = attempt === 0 && !baseTaken ? base : `${base}-${suffix}`;
+    try {
+      return await projectsRepository.createDraft(input, designerId, slug);
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
   }
-  return key ? ROOM_PREFILLS[key] ?? [] : [];
+  return projectsRepository.createDraft(input, designerId, `${base}-${Date.now().toString(36)}`);
 }
 
 async function prefillRoomsIfEmpty(
@@ -367,7 +327,7 @@ async function prefillRoomsIfEmpty(
   const rooms = existingRooms ?? (await projectsRepository.listRooms(project.id));
   if (rooms.length > 0) return rooms;
 
-  const specs = buildRoomPrefillSpecs(project);
+  const specs = await buildRoomPrefillSpecs(project);
   if (specs.length === 0) return rooms;
   const roomTypeSlugs = [...new Set(specs.map((spec) => spec.slug))];
   const roomTypes = await projectsRepository.findRoomTypesBySlugs(roomTypeSlugs);
@@ -466,13 +426,7 @@ export const projectsService = {
     const title = await buildProjectTitle(input);
     const draftInput = { ...input, title };
 
-    // Ensure a unique slug; append a short suffix on collision.
-    const base = projectsRepository.slugify(title);
-    let slug = base;
-    if (await projectsRepository.findBySlug(slug)) {
-      slug = `${base}-${Date.now().toString(36).slice(-4)}`;
-    }
-    const row = await projectsRepository.createDraft(draftInput, designer.id, slug);
+    const row = await createDraftWithUniqueSlug(draftInput, designer.id);
     const rooms = await prefillRoomsIfEmpty(row, []);
     return toDetailResponse(row, rooms);
   },

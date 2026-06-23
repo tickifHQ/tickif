@@ -82,7 +82,7 @@ describe('POST /api/media/upload-url', () => {
   it('mints a presigned url and creates a processing row for the owner (201)', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
 
     const res = await client.api.media['upload-url'].$post(
       { json: { projectId: project.id, contentType: 'image/jpeg', size: 1000 } },
@@ -124,7 +124,7 @@ describe('POST /api/media/:imageId/commit', () => {
   it('accepts (202) and reports processing for the owner', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
     const image = await makeProjectImage({ projectId: project.id });
 
     const res = await client.api.media[':imageId'].commit.$post(
@@ -194,10 +194,53 @@ describe('GET /api/projects/:id/images', () => {
 });
 
 describe('PATCH /api/media/:imageId/metadata', () => {
+  it('rejects unauthenticated requests with 401', async () => {
+    const res = await client.api.media[':imageId'].metadata.$patch({
+      param: { imageId: RANDOM_UUID },
+      json: { tagSlugs: ['hero'] },
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('403s for a non-owner', async () => {
+    const { cookie } = await createAuthedSession();
+    const other = await makeDesigner();
+    const project = await makeProject({ designerId: other.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it('409s when metadata is changed after the project leaves draft', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(409);
+  });
+
   it('updates room and taxonomy metadata for an owned image', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
     const room = await makeProjectRoom({ projectId: project.id });
     const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
     await makeTaxonomy({ kind: 'theme', slug: 'modern', label: 'Modern' });
@@ -235,7 +278,7 @@ describe('PATCH /api/media/:imageId/metadata', () => {
   it('rejects unknown managed taxonomy metadata', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
     const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
 
     const res = await client.api.media[':imageId'].metadata.$patch(
@@ -252,7 +295,7 @@ describe('PATCH /api/media/:imageId/metadata', () => {
   it('rejects room ids from another project', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
     const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
     const otherRoom = await makeProjectRoom();
 

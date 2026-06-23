@@ -91,7 +91,10 @@ describe('POST /api/projects', () => {
       kind: 'property_subtype',
       slug: 'apartment',
       label: 'Apartment / flat',
-      metadata: { propertyTypeSlug: 'residential' },
+      metadata: {
+        propertyTypeSlug: 'residential',
+        defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom'],
+      },
     });
     await makeTaxonomy({ kind: 'bhk', slug: '2-bhk', label: '2 BHK' });
     await makeTaxonomy({ kind: 'budget_band', slug: 'luxury', label: 'Luxury' });
@@ -488,5 +491,21 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(body.error.details).toMatchObject({
       missing: expect.arrayContaining(['property-type', 'at-least-three-photos']),
     });
+  });
+
+  it('rejects completeness and submit for published projects', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002021');
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
+      headers: { cookie },
+    });
+    expect(completeness.status).toBe(409);
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(409);
   });
 });

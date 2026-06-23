@@ -183,6 +183,8 @@ export const project = pgTable(
     slug: text('slug').notNull().unique(),
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
+    // Project upload drafts store taxonomy slugs denormalized for ergonomic edits;
+    // services validate slugs on write while profile footprint remains FK-backed for search.
     propertyTypeSlug: text('property_type_slug'),
     propertySubtypeSlug: text('property_subtype_slug'),
     scopeSlug: text('scope_slug'),
@@ -274,6 +276,7 @@ export const projectImage = pgTable(
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
     contentType: text('content_type').notNull(),
     derivatives: jsonb('derivatives').$type<ProjectImageDerivative[]>().default([]).notNull(),
+    // Image-level taxonomy refs are draft-friendly slugs; media service validates each slug before write.
     themeSlugs: jsonb('theme_slugs').$type<string[]>().default([]).notNull(),
     materialSlugs: jsonb('material_slugs').$type<string[]>().default([]).notNull(),
     finishSlugs: jsonb('finish_slugs').$type<string[]>().default([]).notNull(),
