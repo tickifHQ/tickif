@@ -74,20 +74,6 @@ const onboardingIllustrations = {
   panel: '/illustrations/onboarding-living-room.svg',
 } as const;
 
-const cityOptions = [
-  'Ahmedabad',
-  'Bengaluru',
-  'Chandigarh',
-  'Chennai',
-  'Delhi NCR',
-  'Hyderabad',
-  'Jaipur',
-  'Kochi',
-  'Kolkata',
-  'Mumbai',
-  'Pune',
-] as const;
-
 type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
 
 const firmTypeOptions = [
@@ -136,8 +122,7 @@ export function DesignerOnboarding({
   const [entityType, setEntityType] = useState<EntityType>('individual');
   const [userName, setUserName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [city, setCity] = useState('Chennai');
-  const [citySearch, setCitySearch] = useState('');
+  const [address, setAddress] = useState('');
   const [firmType, setFirmType] = useState('Private Limited');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappCountry, setWhatsappCountry] = useState(countries[0]!);
@@ -159,9 +144,6 @@ export function DesignerOnboarding({
   const companyHandlePlaceholder = companyName.trim()
     ? `@${companyName.trim().toLowerCase().replaceAll(/\s+/g, '')}`
     : '@yourstudio';
-  const filteredCities = citySearch
-    ? cityOptions.filter((option) => option.toLowerCase().includes(citySearch.toLowerCase()))
-    : cityOptions;
   const canSubmit = useMemo(() => {
     const hasIndividualName = entityType === 'company' || userName.trim().length >= 2;
     const hasCompany = entityType === 'individual' || companyName.trim().length >= 2;
@@ -216,7 +198,7 @@ export function DesignerOnboarding({
         entityType,
         userName: effectiveUserName,
         companyName: entityType === 'company' ? trimmedCompanyName : undefined,
-        cityIds: [],
+        address: address.trim() || undefined,
         scopeIds: [],
         themeIds: [],
       };
@@ -321,16 +303,16 @@ export function DesignerOnboarding({
             </div>
 
             <div className="grid gap-1">
-              <Label htmlFor={`${formId}-city`} className="text-[13px] font-medium leading-relaxed">
-                City
+              <Label htmlFor={`${formId}-address`} className="text-[13px] font-medium leading-relaxed">
+                Address
               </Label>
-              <CitySelect
-                id={`${formId}-city`}
-                city={city}
-                citySearch={citySearch}
-                options={filteredCities}
-                onCityChange={setCity}
-                onSearchChange={setCitySearch}
+              <Input
+                id={`${formId}-address`}
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder="Studio address or service location"
+                autoComplete="street-address"
+                className="h-8 rounded-md px-2 text-[13px]"
               />
             </div>
 
@@ -368,14 +350,11 @@ export function DesignerOnboarding({
           />
         ) : entityType === 'company' && step === 'details' ? (
           <CompanyBasicsFields
-            city={city}
-            citySearch={citySearch}
+            address={address}
             companyName={companyName}
             firmType={firmType}
             formId={formId}
-            filteredCities={filteredCities}
-            onCityChange={setCity}
-            onCitySearchChange={setCitySearch}
+            onAddressChange={setAddress}
             onCompanyNameChange={setCompanyName}
             onFirmTypeChange={setFirmType}
           />
@@ -475,25 +454,19 @@ function CompletionStep({
 }
 
 function CompanyBasicsFields({
-  city,
-  citySearch,
+  address,
   companyName,
-  filteredCities,
   firmType,
   formId,
-  onCityChange,
-  onCitySearchChange,
+  onAddressChange,
   onCompanyNameChange,
   onFirmTypeChange,
 }: {
-  city: string;
-  citySearch: string;
+  address: string;
   companyName: string;
-  filteredCities: readonly string[];
   firmType: string;
   formId: string;
-  onCityChange: (value: string) => void;
-  onCitySearchChange: (value: string) => void;
+  onAddressChange: (value: string) => void;
   onCompanyNameChange: (value: string) => void;
   onFirmTypeChange: (value: string) => void;
 }) {
@@ -537,16 +510,16 @@ function CompanyBasicsFields({
       />
 
       <div className="grid gap-1">
-        <Label htmlFor={`${formId}-city`} className="text-[13px] font-medium leading-relaxed">
-          Cities you take projects in
+        <Label htmlFor={`${formId}-address`} className="text-[13px] font-medium leading-relaxed">
+          Address
         </Label>
-        <CitySelect
-          id={`${formId}-city`}
-          city={city}
-          citySearch={citySearch}
-          options={filteredCities}
-          onCityChange={onCityChange}
-          onSearchChange={onCitySearchChange}
+        <Input
+          id={`${formId}-address`}
+          value={address}
+          onChange={(event) => onAddressChange(event.target.value)}
+          placeholder="Studio address or service location"
+          autoComplete="street-address"
+          className="h-8 rounded-md px-2 text-[13px]"
         />
       </div>
     </div>
@@ -918,81 +891,6 @@ function SocialInput({
         className="h-full border-0 bg-transparent px-3 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
-  );
-}
-
-function CitySelect({
-  city,
-  citySearch,
-  id,
-  onCityChange,
-  onSearchChange,
-  options,
-}: {
-  city: string;
-  citySearch: string;
-  id: string;
-  onCityChange: (city: string) => void;
-  onSearchChange: (search: string) => void;
-  options: readonly string[];
-}) {
-  return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) onSearchChange('');
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          className="flex h-8 w-full items-center justify-between rounded-md border bg-background px-2 text-left text-[13px] font-medium shadow-xs outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <span>{city || 'Select your city'}</span>
-          <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={2}
-        collisionPadding={8}
-        className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
-      >
-        <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 bg-popover px-1 pt-1 shadow-sm">
-          <input
-            type="text"
-            value={citySearch}
-            onChange={(event) => onSearchChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && citySearch) {
-                event.preventDefault();
-                onSearchChange('');
-                return;
-              }
-              event.stopPropagation();
-            }}
-            placeholder="Search city..."
-            className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            autoFocus
-          />
-        </div>
-        {options.length > 0 ? (
-          options.map((option) => (
-            <DropdownMenuItem
-              key={option}
-              onSelect={() => onCityChange(option)}
-              className="text-[13px]"
-            >
-              {option}
-            </DropdownMenuItem>
-          ))
-        ) : (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-            No cities found
-          </div>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
