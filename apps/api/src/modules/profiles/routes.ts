@@ -61,10 +61,6 @@ const onboardRoute = createRoute({
       description: 'Unauthorized or banned',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
-    403: {
-      description: 'Forbidden — no Google account linked',
-      content: { 'application/json': { schema: errorResponseSchema } },
-    },
     422: {
       description: 'Validation error — invalid taxonomy IDs or missing required fields',
       content: { 'application/json': { schema: errorResponseSchema } },

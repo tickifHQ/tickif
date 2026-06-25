@@ -82,13 +82,17 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.profile.displayName).toBe('Acme Co');
   });
 
-  it('rejects phone-OTP visitor (403 — no Google account)', async () => {
+  it('allows phone-OTP user to complete onboarding (#157)', async () => {
     const { cookie } = await createAuthedSession('+919800001001');
     const res = await request('POST', '/api/profiles/me', {
       cookie,
-      body: { entityType: 'individual', userName: 'Visitor' },
+      body: { entityType: 'individual', userName: 'OTP Designer' },
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.profile.displayName).toBe('OTP Designer');
+    expect(body.profile.entityType).toBe('individual');
+    expect(body.organization).toBeDefined();
   });
 
   it('rejects unauthenticated (401)', async () => {
@@ -237,6 +241,29 @@ describe('GET /api/profiles/me/completion', () => {
     expect(body.steps).toHaveLength(4);
     // displayName (filled) + contact via verified email = 2/6 = 33%
     expect(body.score).toBe(33);
+    expect(body.missing).toContain('location');
+  });
+
+  it('address satisfies location requirement in completion score', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-comp-addr',
+      email: 'comp-addr@test.com',
+    });
+    await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Addr User',
+        address: 'Koramangala, Bengaluru',
+      },
+    });
+
+    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // displayName + contact + location (via address) = 3/6 = 50%
+    expect(body.score).toBe(50);
+    expect(body.missing).not.toContain('location');
   });
 
   it('rejects unauthenticated (401)', async () => {

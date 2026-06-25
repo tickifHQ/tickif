@@ -11,6 +11,10 @@ describe('project_image model (E-105)', () => {
     expect(image.originalKey).toMatch(/.+/);
     expect(image.sortOrder).toBe(0);
     expect(image.derivatives).toEqual([]);
+    expect(image.themeSlugs).toEqual([]);
+    expect(image.materialSlugs).toEqual([]);
+    expect(image.finishSlugs).toEqual([]);
+    expect(image.tagSlugs).toEqual([]);
     expect(image.roomId).toBeNull();
     expect(image.createdAt).toBeInstanceOf(Date);
     expect(image.updatedAt).toBeInstanceOf(Date);
@@ -29,6 +33,10 @@ describe('project_image model (E-105)', () => {
       width: 1600,
       height: 1200,
       sortOrder: 3,
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['veneer'],
+      tagSlugs: ['hero'],
       derivatives,
     });
 
@@ -41,6 +49,10 @@ describe('project_image model (E-105)', () => {
     expect(row!.status).toBe('ready');
     expect(row!.phash).toBe('ffffffffffffffff');
     expect(row!.derivatives).toEqual(derivatives);
+    expect(row!.themeSlugs).toEqual(['modern']);
+    expect(row!.materialSlugs).toEqual(['wood']);
+    expect(row!.finishSlugs).toEqual(['veneer']);
+    expect(row!.tagSlugs).toEqual(['hero']);
     expect(row!.sortOrder).toBe(3);
   });
 

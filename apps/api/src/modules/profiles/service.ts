@@ -27,7 +27,7 @@ import { isOrgWriter } from '../orgs/repository.js';
 const COMPLETION_THRESHOLD = 60;
 
 /** The required profile fields that drive the completion score. */
-const REQUIRED_FIELDS = ['display-name', 'bio', 'logo', 'city', 'scope', 'contact'] as const;
+const REQUIRED_FIELDS = ['display-name', 'bio', 'logo', 'location', 'scope', 'contact'] as const;
 type RequiredField = (typeof REQUIRED_FIELDS)[number];
 
 type CompletionInput = {
@@ -81,13 +81,7 @@ export const profilesService = {
       };
     }
 
-    // 2. Google SSO check
-    const hasGoogle = await profilesRepository.hasGoogleAccount(userId);
-    if (!hasGoogle) {
-      throw AppError.forbidden('Google SSO required for designer onboarding');
-    }
-
-    // 3. Validate taxonomy IDs (single round-trip, deduped)
+    // 2. Validate taxonomy IDs (single round-trip, deduped)
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
       scopeIds: input.scopeIds.length > 0 ? input.scopeIds : undefined,
       themeIds: input.themeIds.length > 0 ? input.themeIds : undefined,
@@ -262,7 +256,7 @@ export const profilesService = {
       return { filled: [], missing: [...REQUIRED_FIELDS] };
     }
 
-    // Parallelize the async checks (city count, scope count, contact)
+    // Parallelize the async checks (scope count, contact)
     const [cityCount, scopeCount, hasContact] = await Promise.all([
       profilesRepository.countFootprintByKind(profile.id, 'city'),
       profilesRepository.countFootprintByKind(profile.id, 'scope'),
@@ -281,8 +275,9 @@ export const profilesService = {
     if (profile.logoImageId) filled.push('logo');
     else missing.push('logo');
 
-    if (cityCount >= 1) filled.push('city');
-    else missing.push('city');
+    // Location: satisfied by free-text address (onboarding) OR city taxonomy footprint (profile update)
+    if (profile.address?.trim() || cityCount >= 1) filled.push('location');
+    else missing.push('location');
 
     if (scopeCount >= 1) filled.push('scope');
     else missing.push('scope');

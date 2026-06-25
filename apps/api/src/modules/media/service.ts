@@ -4,6 +4,7 @@ import type {
   ListProjectImagesResponse,
   CommitUploadResponse,
   ProjectImageDto,
+  UpdateImageMetadataInput,
 } from '@repo/contracts';
 import { config } from '@repo/config';
 import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
@@ -17,8 +18,13 @@ export type Caller = { userId: string; userRole: string };
 function toImageDto(row: ProjectImageListItem): ProjectImageDto {
   return {
     id: row.id,
+    roomId: row.roomId,
     status: row.status,
     sortOrder: row.sortOrder,
+    themeSlugs: row.themeSlugs,
+    materialSlugs: row.materialSlugs,
+    finishSlugs: row.finishSlugs,
+    tagSlugs: row.tagSlugs,
     width: row.width,
     height: row.height,
     derivatives: row.derivatives,
@@ -34,6 +40,12 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
   if (caller.userRole === 'superadmin') return;
   if (ownerUserId && ownerUserId === caller.userId) return;
   throw AppError.forbidden();
+}
+
+function assertEditableProject(status: string): void {
+  if (status !== 'draft' && status !== 'changes_requested') {
+    throw AppError.conflict('Only draft or changes-requested project media can be edited');
+  }
 }
 
 /**
@@ -54,6 +66,7 @@ export const mediaService = {
     // 404 (not 403) when missing so we don't leak which project ids exist.
     if (!owner) throw AppError.notFound('Project not found');
     assertAccess(owner.ownerUserId, input);
+    assertEditableProject(owner.projectStatus);
 
     const key = buildOriginalKey(input.projectId);
     const image = await mediaRepository.createProcessing({
@@ -75,6 +88,7 @@ export const mediaService = {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
     assertAccess(image.ownerUserId, input);
+    assertEditableProject(image.projectStatus);
     // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
     if (image.status !== 'processing') {
       throw AppError.conflict('Image has already been committed');
@@ -100,5 +114,47 @@ export const mediaService = {
       offset: input.offset,
     });
     return { items: rows.map(toImageDto) };
+  },
+
+  async updateImageMetadata(
+    input: { imageId: string; metadata: UpdateImageMetadataInput } & Caller,
+  ): Promise<ProjectImageDto> {
+    const image = await mediaRepository.findImageWithOwner(input.imageId);
+    if (!image) throw AppError.notFound('Image not found');
+    assertAccess(image.ownerUserId, input);
+    assertEditableProject(image.projectStatus);
+
+    const [roomValid, themeValid, finishValid, materialValid] = await Promise.all([
+      input.metadata.roomId === undefined || input.metadata.roomId === null
+        ? Promise.resolve(true)
+        : mediaRepository.roomBelongsToProject(input.metadata.roomId, image.projectId),
+      input.metadata.themeSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('theme', input.metadata.themeSlugs),
+      input.metadata.finishSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('finish', input.metadata.finishSlugs),
+      input.metadata.materialSlugs === undefined
+        ? Promise.resolve(true)
+        : mediaRepository.taxonomySlugsExist('material', input.metadata.materialSlugs),
+    ]);
+
+    if (!roomValid) {
+      throw AppError.unprocessable('Room does not belong to this project');
+    }
+
+    if (!themeValid) {
+      throw AppError.unprocessable('Invalid themeSlugs');
+    }
+
+    if (!finishValid) {
+      throw AppError.unprocessable('Invalid finishSlugs');
+    }
+
+    if (!materialValid) {
+      throw AppError.unprocessable('Invalid materialSlugs');
+    }
+
+    return toImageDto(await mediaRepository.updateMetadata(input.imageId, input.metadata));
   },
 };

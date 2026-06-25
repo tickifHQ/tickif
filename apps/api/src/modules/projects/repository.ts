@@ -17,6 +17,10 @@ import type {
 export type ProjectRecord = typeof schema.project.$inferSelect;
 export type ProjectRoomRecord = typeof schema.projectRoom.$inferSelect;
 type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
+export type TaxonomyTermRecord = Pick<
+  typeof schema.taxonomy.$inferSelect,
+  'id' | 'kind' | 'slug' | 'label' | 'metadata'
+>;
 export type ProjectImageAttachmentRecord = Pick<
   ProjectImageRecord,
   'id' | 'projectId' | 'roomId' | 'status' | 'sortOrder'
@@ -94,7 +98,7 @@ export const projectsRepository = {
   },
 
   async createDraft(
-    input: CreateProjectInput,
+    input: CreateProjectInput & { title: string },
     designerId: string,
     slug: string,
   ): Promise<ProjectRecord> {
@@ -105,8 +109,17 @@ export const projectsRepository = {
         title: input.title,
         slug,
         description: input.description ?? null,
+        propertyTypeSlug: input.propertyTypeSlug ?? null,
+        propertySubtypeSlug: input.propertySubtypeSlug ?? null,
+        scopeSlug: input.scopeSlug ?? null,
+        bhkSlug: input.bhkSlug ?? null,
+        sizeSqft: input.sizeSqft ?? null,
         citySlug: input.citySlug ?? null,
+        localitySlug: input.localitySlug ?? null,
+        buildingName: input.buildingName ?? null,
         budgetBandSlug: input.budgetBandSlug ?? null,
+        completedMonth: input.completedMonth ?? null,
+        durationMonths: input.durationMonths ?? null,
         metadata: input.metadata ?? {},
       })
       .returning();
@@ -118,8 +131,17 @@ export const projectsRepository = {
     const patch: Partial<typeof schema.project.$inferInsert> = {};
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
+    if (input.propertyTypeSlug !== undefined) patch.propertyTypeSlug = input.propertyTypeSlug;
+    if (input.propertySubtypeSlug !== undefined) patch.propertySubtypeSlug = input.propertySubtypeSlug;
+    if (input.scopeSlug !== undefined) patch.scopeSlug = input.scopeSlug;
+    if (input.bhkSlug !== undefined) patch.bhkSlug = input.bhkSlug;
+    if (input.sizeSqft !== undefined) patch.sizeSqft = input.sizeSqft;
     if (input.citySlug !== undefined) patch.citySlug = input.citySlug;
+    if (input.localitySlug !== undefined) patch.localitySlug = input.localitySlug;
+    if (input.buildingName !== undefined) patch.buildingName = input.buildingName;
     if (input.budgetBandSlug !== undefined) patch.budgetBandSlug = input.budgetBandSlug;
+    if (input.completedMonth !== undefined) patch.completedMonth = input.completedMonth;
+    if (input.durationMonths !== undefined) patch.durationMonths = input.durationMonths;
     if (input.coverImageId !== undefined) patch.coverImageId = input.coverImageId;
     if (input.metadata !== undefined) patch.metadata = input.metadata;
 
@@ -129,6 +151,45 @@ export const projectsRepository = {
       .where(eq(schema.project.id, id))
       .returning();
     return row ?? null;
+  },
+
+  async submit(id: string): Promise<ProjectRecord> {
+    const now = new Date();
+    const [row] = await db
+      .update(schema.project)
+      .set({ status: 'submitted', submittedAt: now, updatedAt: now })
+      .where(eq(schema.project.id, id))
+      .returning();
+    if (!row) throw new Error('update returned no row');
+    return row;
+  },
+
+  async getReadyImageCounts(projectId: string): Promise<{
+    readyImageCount: number;
+    taggedReadyImageCount: number;
+  }> {
+    const [row] = await db
+      .select({
+        readyImageCount: sql<number>`count(*)::int`,
+        taggedReadyImageCount: sql<number>`
+          count(*) filter (
+            where ${schema.projectImage.roomId} is not null
+              and jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
+              and jsonb_array_length(${schema.projectImage.finishSlugs}) > 0
+          )::int
+        `,
+      })
+      .from(schema.projectImage)
+      .where(
+        and(
+          eq(schema.projectImage.projectId, projectId),
+          eq(schema.projectImage.status, 'ready'),
+        ),
+      );
+    return {
+      readyImageCount: row?.readyImageCount ?? 0,
+      taggedReadyImageCount: row?.taggedReadyImageCount ?? 0,
+    };
   },
 
   async deleteProject(id: string): Promise<boolean> {
@@ -174,6 +235,66 @@ export const projectsRepository = {
     return !!row;
   },
 
+  async findTaxonomyTermBySlug(
+    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    slug: string,
+  ): Promise<TaxonomyTermRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        metadata: schema.taxonomy.metadata,
+      })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, kind), eq(schema.taxonomy.slug, slug)))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async propertySubtypeExists(input: {
+    subtypeSlug: string;
+    propertyTypeSlug?: string | null;
+  }): Promise<boolean> {
+    const filters = [
+      eq(schema.taxonomy.kind, 'property_subtype'),
+      eq(schema.taxonomy.slug, input.subtypeSlug),
+      input.propertyTypeSlug
+        ? sql`${schema.taxonomy.metadata}->>'propertyTypeSlug' = ${input.propertyTypeSlug}`
+        : undefined,
+    ].filter((f) => f !== undefined);
+
+    const [row] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(and(...filters))
+      .limit(1);
+    return !!row;
+  },
+
+  async localityExists(input: { citySlug: string; localitySlug: string }): Promise<boolean> {
+    const [city] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, 'city'), eq(schema.taxonomy.slug, input.citySlug)))
+      .limit(1);
+    if (!city) return false;
+
+    const [locality] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.kind, 'locality'),
+          eq(schema.taxonomy.slug, input.localitySlug),
+          eq(schema.taxonomy.parentId, city.id),
+        ),
+      )
+      .limit(1);
+    return !!locality;
+  },
+
   async listRooms(projectId: string): Promise<ProjectRoomRecord[]> {
     return db
       .select()
@@ -205,6 +326,45 @@ export const projectsRepository = {
       .returning();
     if (!row) throw new Error('insert returned no row');
     return row;
+  },
+
+  async findRoomTypesBySlugs(slugs: string[]): Promise<TaxonomyTermRecord[]> {
+    if (slugs.length === 0) return [];
+    return db
+      .select({
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        metadata: schema.taxonomy.metadata,
+      })
+      .from(schema.taxonomy)
+      .where(and(eq(schema.taxonomy.kind, 'room'), inArray(schema.taxonomy.slug, slugs)));
+  },
+
+  async createRooms(
+    projectId: string,
+    inputs: CreateProjectRoomInput[],
+  ): Promise<ProjectRoomRecord[]> {
+    if (inputs.length === 0) return [];
+    const now = new Date();
+    return db.transaction(async (tx) =>
+      tx
+        .insert(schema.projectRoom)
+        .values(
+          inputs.map((input) => ({
+            projectId,
+            roomTypeId: input.roomTypeId,
+            name: input.name,
+            description: input.description ?? null,
+            sortOrder: input.sortOrder ?? 0,
+            metadata: input.metadata ?? {},
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .returning(),
+    );
   },
 
   async updateRoom(
