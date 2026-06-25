@@ -302,7 +302,6 @@ const completenessRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot read this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only editable project completeness can be checked'),
   },
 });
 

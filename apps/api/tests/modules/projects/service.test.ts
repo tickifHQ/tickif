@@ -361,6 +361,19 @@ describe('projectsService.getCompleteness', () => {
     expect(result.missing).toContain('property-type');
     expect(result.missing).toContain('at-least-three-photos');
   });
+
+  it('reports completeness for published projects without owner access', async () => {
+    vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'published' }));
+    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
+      readyImageCount: 0,
+      taggedReadyImageCount: 0,
+    });
+
+    const result = await projectsService.getCompleteness(row().id, caller);
+
+    expect(result.complete).toBe(false);
+    expect(projectsRepository.findOwnership).not.toHaveBeenCalled();
+  });
 });
 
 describe('projectsService.submit', () => {

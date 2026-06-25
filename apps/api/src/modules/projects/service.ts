@@ -114,6 +114,17 @@ async function requireEditableProject(projectId: string, caller: Caller): Promis
   return ownership;
 }
 
+async function requireReadableProject(projectId: string, caller: Caller): Promise<ProjectRecord> {
+  const project = await projectsRepository.findById(projectId);
+  if (!project) throw AppError.notFound('Project not found');
+  if (project.status === 'published') return project;
+
+  const ownership = await projectsRepository.findOwnership(projectId);
+  if (!ownership) throw AppError.notFound('Project not found');
+  await assertAccess(ownership, caller);
+  return project;
+}
+
 async function validateProjectTaxonomy(input: {
   propertyTypeSlug?: string | null;
   propertySubtypeSlug?: string | null;
@@ -539,9 +550,7 @@ export const projectsService = {
   },
 
   async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {
-    await requireEditableProject(projectId, caller);
-    const project = await projectsRepository.findById(projectId);
-    if (!project) throw AppError.notFound('Project not found');
+    const project = await requireReadableProject(projectId, caller);
     return buildCompleteness(project, await projectsRepository.getReadyImageCounts(projectId));
   },
 

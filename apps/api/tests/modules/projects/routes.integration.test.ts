@@ -551,14 +551,14 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
   });
 
-  it('rejects completeness and submit for published projects', async () => {
+  it('reports completeness but rejects submit for published projects', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002021');
     const project = await makeProject({ designerId: designer.id, status: 'published' });
 
     const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
       headers: { cookie },
     });
-    expect(completeness.status).toBe(409);
+    expect(completeness.status).toBe(200);
 
     const submit = await app.request(`/api/projects/${project.id}/submit`, {
       method: 'POST',
