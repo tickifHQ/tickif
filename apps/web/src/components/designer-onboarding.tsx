@@ -312,7 +312,7 @@ export function DesignerOnboarding({
   if (result) {
     return (
       <OnboardingShell signedInAs={displayEmail} onBack={handleCompletionBack}>
-        <CompletionStep onAddProjects={() => router.push('/designer/dashboard')} onSkip={() => router.push('/designer/dashboard')} />
+        <CompletionStep onAddProjects={() => router.push('/designer/projects/upload')} onSkip={() => router.push('/designer/dashboard')} />
       </OnboardingShell>
     );
   }

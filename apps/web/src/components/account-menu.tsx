@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import {
   DropdownMenu,
@@ -13,15 +14,21 @@ import {
   DropdownMenuItem,
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
-export function AccountMenu() {
+export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (isPending) {
-    return <Skeleton role="status" className="size-8 rounded-full" />;
+    return (
+      <Skeleton
+        role="status"
+        className={showLabel ? 'h-10 w-28 rounded-full' : 'size-8 rounded-full'}
+      />
+    );
   }
 
   if (!session) {
@@ -36,7 +43,8 @@ export function AccountMenu() {
   }
 
   const user = session.user;
-  const initial = (user.name ?? user.email ?? '?').charAt(0).toUpperCase();
+  const displayName = user.name ?? user.email ?? 'Account';
+  const initial = displayName.charAt(0).toUpperCase();
 
   async function handleSignOut() {
     try {
@@ -53,10 +61,31 @@ export function AccountMenu() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="outline-none">
-          <Avatar>
+        <button
+          type="button"
+          className={
+            showLabel
+              ? 'inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-1.5 py-1 pr-3 text-[13px] leading-[1.1] font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground'
+              : 'cursor-pointer outline-none'
+          }
+        >
+          <Avatar className={showLabel ? 'size-8' : undefined}>
+            <InitialsAvatar
+              seed={displayName}
+              fallbackSeed="Tickif"
+              alt=""
+              size={showLabel ? 32 : 40}
+            />
             <AvatarFallback>{initial}</AvatarFallback>
           </Avatar>
+          {showLabel ? (
+            <>
+              <span className="max-w-24 truncate text-[13px] leading-[1.1] font-medium">
+                {displayName}
+              </span>
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </>
+          ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">

@@ -1,35 +1,55 @@
-import { Container } from '@/components/container';
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Button } from '@repo/ui/components/button';
+import { headers } from 'next/headers';
+import { profileCompletionResponseSchema, type ProfileCompletionResponse } from '@repo/contracts';
+import { DesignerDashboardOverview } from '@/components/designer-dashboard-overview';
+import { requireAuth } from '@/lib/auth-guard';
+import { api } from '@/lib/api';
 
 export const metadata = {
   title: 'Designer dashboard · Tickif',
 };
 
-export default function DesignerDashboardPage() {
-  return (
-    <Container className="py-16">
-      <h1 className="text-3xl font-semibold tracking-tight">Designer dashboard</h1>
-      <p className="mt-2 text-muted-foreground">
-        Manage your portfolio, profile, projects, and leads from one place.
-      </p>
+async function getCompletion(): Promise<ProfileCompletionResponse> {
+  const reqHeaders = await headers();
+  const cookie = reqHeaders.get('cookie');
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit your profile</CardTitle>
-            <CardDescription>
-              Keep your studio details, contact links, and service footprint up to date.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/designer/profile">Open profile editor</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </Container>
+  if (!cookie) {
+    return { steps: [], score: 0, missing: [] };
+  }
+
+  try {
+    const response = await api.api.profiles.me.completion.$get({}, { headers: { cookie } });
+
+    if (!response.ok) {
+      return { steps: [], score: 0, missing: [] };
+    }
+
+    const payload = await response.json();
+    const parsed = profileCompletionResponseSchema.safeParse(payload);
+
+    if (!parsed.success) {
+      return { steps: [], score: 0, missing: [] };
+    }
+
+    return parsed.data;
+  } catch {
+    return { steps: [], score: 0, missing: [] };
+  }
+}
+
+export default async function DesignerDashboardPage() {
+  const [session, completion] = await Promise.all([
+    requireAuth({ requiredRole: 'designer' }),
+    getCompletion(),
+  ]);
+
+  const studioName = session.user.name?.trim() || 'Your studio';
+  const studioLocation = session.user.email?.trim() || 'Designer workspace';
+
+  return (
+    <DesignerDashboardOverview
+      studioName={studioName}
+      studioLocation={studioLocation}
+      completion={completion}
+    />
   );
 }

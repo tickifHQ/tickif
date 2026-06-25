@@ -177,6 +177,38 @@ describe('DesignerOnboarding', () => {
     expect(mock.router.push).not.toHaveBeenCalled();
   });
 
+  it('opens project upload from the completion add-projects CTA', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: {
+          id: 'org-1',
+          name: 'Mahi Studio',
+          slug: 'mahi-studio',
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(await screen.findByRole('button', { name: /add your projects/i }));
+
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/upload');
+  });
+
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,
