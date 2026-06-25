@@ -81,13 +81,7 @@ export const profilesService = {
       };
     }
 
-    // 2. Google SSO check
-    const hasGoogle = await profilesRepository.hasGoogleAccount(userId);
-    if (!hasGoogle) {
-      throw AppError.forbidden('Google SSO required for designer onboarding');
-    }
-
-    // 3. Validate taxonomy IDs (single round-trip, deduped)
+    // 2. Validate taxonomy IDs (single round-trip, deduped)
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
       scopeIds: input.scopeIds.length > 0 ? input.scopeIds : undefined,
       themeIds: input.themeIds.length > 0 ? input.themeIds : undefined,
