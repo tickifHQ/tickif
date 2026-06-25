@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent, ReactNode } from 'react';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,10 +13,9 @@ import {
   Linkedin,
   Loader2,
   UserRound,
-  X,
   Youtube,
 } from 'lucide-react';
-import type { OnboardDesignerInput, OnboardDesignerResponse } from '@repo/contracts';
+import type { ListTaxonomyResponse, OnboardDesignerInput, OnboardDesignerResponse, TaxonomyTerm } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -31,6 +30,7 @@ import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries } from '@/components/phone-number-input';
 
 type EntityType = OnboardDesignerInput['entityType'];
@@ -75,6 +75,8 @@ const onboardingIllustrations = {
 } as const;
 
 type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
+type TaxonomyKind = 'scope' | 'theme';
+type TaxonomyOptions = Record<TaxonomyKind, TaxonomyTerm[]>;
 
 const firmTypeOptions = [
   'Private Limited',
@@ -84,17 +86,49 @@ const firmTypeOptions = [
   'Studio',
 ] as const;
 
-const serviceOptions = [
-  'Full Home Interiors',
-  'Modular Kitchen',
-  'Renovation',
-  'Commercial Interiors',
-  'Styling & Decor',
-] as const;
-
 const foundedOptions = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018'] as const;
 
 const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
+
+const emptyTaxonomyOptions: TaxonomyOptions = {
+  scope: [],
+  theme: [],
+};
+
+function optionalTrimmed(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function formatOptionalPhone(countryCode: string, phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 7 ? `${countryCode}${digits}` : undefined;
+}
+
+function teamSizeToStaffCount(teamSize: string) {
+  if (teamSize === 'Just me') return 1;
+  if (teamSize === '50+') return 51;
+  const upperBound = teamSize.split('-')[1];
+  return upperBound ? Number.parseInt(upperBound, 10) : undefined;
+}
+
+async function fetchTaxonomyTerms(kind: TaxonomyKind) {
+  const res = await api.api.taxonomy.terms.$get({ query: { kind } });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(`Could not load ${kind} options.`);
+  }
+
+  return (data as ListTaxonomyResponse).terms;
+}
 
 async function submitWithApi(input: OnboardDesignerInput) {
   const res = await api.api.profiles.me.$post({ json: input });
@@ -109,6 +143,11 @@ async function submitWithApi(input: OnboardDesignerInput) {
   }
 
   return { data: data as OnboardDesignerResponse, created: res.status === 201 };
+}
+
+async function signOutToLogin() {
+  await authClient.signOut();
+  window.location.href = '/login?mode=designer';
 }
 
 export function DesignerOnboarding({
@@ -131,9 +170,13 @@ export function DesignerOnboarding({
   const [instagramHandle, setInstagramHandle] = useState('');
   const [linkedinHandle, setLinkedinHandle] = useState('');
   const [youtubeHandle, setYoutubeHandle] = useState('');
-  const [servicesOffered, setServicesOffered] = useState<string[]>(['Full Home Interiors']);
+  const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>([]);
+  const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>([]);
   const [foundedYear, setFoundedYear] = useState('2021');
   const [teamSize, setTeamSize] = useState('2-10');
+  const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOptions>(emptyTaxonomyOptions);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(true);
+  const [taxonomyError, setTaxonomyError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<OnboardDesignerResponse | null>(null);
@@ -150,16 +193,59 @@ export function DesignerOnboarding({
     return hasIndividualName && hasCompany && !submitting;
   }, [companyName, entityType, submitting, userName]);
 
-  function handleBack() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTaxonomy() {
+      setTaxonomyLoading(true);
+      setTaxonomyError('');
+
+      try {
+        const [scope, theme] = await Promise.all([
+          fetchTaxonomyTerms('scope'),
+          fetchTaxonomyTerms('theme'),
+        ]);
+
+        if (!cancelled) {
+          setTaxonomyOptions({ scope, theme });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setTaxonomyError(err instanceof Error ? err.message : 'Could not load profile options.');
+        }
+      } finally {
+        if (!cancelled) {
+          setTaxonomyLoading(false);
+        }
+      }
+    }
+
+    void loadTaxonomy();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleBack() {
     if (step === 'entity') {
-      router.push('/');
+      await signOutToLogin();
       return;
     }
     if (step === 'services') {
       setStep('presence');
       return;
     }
-    setStep(step === 'presence' ? 'details' : 'entity');
+    if (step === 'presence') {
+      setStep('details');
+      return;
+    }
+    setStep('entity');
+  }
+
+  function handleCompletionBack() {
+    setResult(null);
+    setStep(entityType === 'company' ? 'services' : 'presence');
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -194,13 +280,25 @@ export function DesignerOnboarding({
 
     setSubmitting(true);
     try {
+      const phone = formatOptionalPhone(whatsappCountry.code, whatsappNumber);
+      const foundedYearValue = Number.parseInt(foundedYear, 10);
+      const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
         entityType,
         userName: effectiveUserName,
-        companyName: entityType === 'company' ? trimmedCompanyName : undefined,
         address: address.trim() || undefined,
-        scopeIds: [],
-        themeIds: [],
+        scopeIds: selectedScopeIds,
+        themeIds: selectedThemeIds,
+        ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
+        ...(phone ? { phone } : {}),
+        ...(normalizeUrl(websiteUrl) ? { websiteUrl: normalizeUrl(websiteUrl) } : {}),
+        ...(normalizeUrl(googleBusinessUrl) ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) } : {}),
+        ...(optionalTrimmed(instagramHandle) ? { instagramHandle: optionalTrimmed(instagramHandle) } : {}),
+        ...(optionalTrimmed(linkedinHandle) ? { linkedinHandle: optionalTrimmed(linkedinHandle) } : {}),
+        ...(optionalTrimmed(youtubeHandle) ? { youtubeHandle: optionalTrimmed(youtubeHandle) } : {}),
+        ...(entityType === 'company' && optionalTrimmed(firmType) ? { firmType: optionalTrimmed(firmType) } : {}),
+        ...(entityType === 'company' && Number.isFinite(foundedYearValue) ? { foundedYear: foundedYearValue } : {}),
+        ...(entityType === 'company' && staffCount ? { staffCount } : {}),
       };
       const response = await onSubmitOnboarding(payload);
       setResult(response.data);
@@ -213,7 +311,7 @@ export function DesignerOnboarding({
 
   if (result) {
     return (
-      <OnboardingShell signedInAs={displayEmail} onBack={() => router.push('/designer/dashboard')}>
+      <OnboardingShell signedInAs={displayEmail} onBack={handleCompletionBack}>
         <CompletionStep onAddProjects={() => router.push('/designer/dashboard')} onSkip={() => router.push('/designer/dashboard')} />
       </OnboardingShell>
     );
@@ -264,7 +362,7 @@ export function DesignerOnboarding({
 
   return (
     <OnboardingShell signedInAs={displayEmail} onBack={handleBack}>
-      <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-8" onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-1">
           <h1 className="text-lg font-medium tracking-[-0.015em]">
             Let&apos;s set up your space on Tickif
@@ -276,15 +374,12 @@ export function DesignerOnboarding({
             <div className="flex items-start gap-6">
               <div className="relative shrink-0">
                 <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
-                  <UserRound className="size-9 text-muted-foreground" aria-hidden="true" />
+                  <InitialsAvatar
+                    seed={userName}
+                    fallbackSeed={displayNamePlaceholder}
+                    alt="Generated profile initials"
+                  />
                 </div>
-                <button
-                  type="button"
-                  aria-label="Remove profile image"
-                  className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border bg-background"
-                >
-                  <X className="size-3 text-muted-foreground" aria-hidden="true" />
-                </button>
               </div>
 
               <div className="grid flex-1 gap-1 self-stretch">
@@ -381,10 +476,16 @@ export function DesignerOnboarding({
           <CompanyServicesFields
             formId={formId}
             foundedYear={foundedYear}
-            servicesOffered={servicesOffered}
+            scopeOptions={taxonomyOptions.scope}
+            selectedScopeIds={selectedScopeIds}
+            selectedThemeIds={selectedThemeIds}
+            taxonomyError={taxonomyError}
+            taxonomyLoading={taxonomyLoading}
+            themeOptions={taxonomyOptions.theme}
             teamSize={teamSize}
             onFoundedYearChange={setFoundedYear}
-            onServicesOfferedChange={setServicesOffered}
+            onScopeIdsChange={setSelectedScopeIds}
+            onThemeIdsChange={setSelectedThemeIds}
             onTeamSizeChange={setTeamSize}
           />
         ) : (
@@ -475,15 +576,12 @@ function CompanyBasicsFields({
       <div className="flex items-start gap-6">
         <div className="relative shrink-0">
           <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-lg border bg-card shadow-xs">
-            <BriefcaseBusiness className="size-8 text-muted-foreground" aria-hidden="true" />
+            <InitialsAvatar
+              seed={companyName}
+              fallbackSeed="Livspace Interiors"
+              alt="Generated company logo initials"
+            />
           </div>
-          <button
-            type="button"
-            aria-label="Remove company logo"
-            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border bg-background"
-          >
-            <X className="size-3 text-muted-foreground" aria-hidden="true" />
-          </button>
         </div>
 
         <div className="grid flex-1 gap-1 self-stretch">
@@ -603,28 +701,55 @@ function CompanyServicesFields({
   formId,
   foundedYear,
   onFoundedYearChange,
-  onServicesOfferedChange,
+  onScopeIdsChange,
+  onThemeIdsChange,
   onTeamSizeChange,
-  servicesOffered,
+  scopeOptions,
+  selectedScopeIds,
+  selectedThemeIds,
+  taxonomyError,
+  taxonomyLoading,
+  themeOptions,
   teamSize,
 }: {
   formId: string;
   foundedYear: string;
-  servicesOffered: string[];
+  scopeOptions: readonly TaxonomyTerm[];
+  selectedScopeIds: string[];
+  selectedThemeIds: string[];
+  taxonomyError: string;
+  taxonomyLoading: boolean;
+  themeOptions: readonly TaxonomyTerm[];
   teamSize: string;
   onFoundedYearChange: (value: string) => void;
-  onServicesOfferedChange: (value: string[]) => void;
+  onScopeIdsChange: (value: string[]) => void;
+  onThemeIdsChange: (value: string[]) => void;
   onTeamSizeChange: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <CompactMultiSelect
+      {taxonomyError ? (
+        <p className="text-xs text-destructive">{taxonomyError}</p>
+      ) : null}
+
+      <TaxonomyMultiSelect
         id={`${formId}-services`}
         label="Services offered"
         labelHint="Select all that apply"
-        options={serviceOptions}
-        values={servicesOffered}
-        onValuesChange={onServicesOfferedChange}
+        emptyLabel={taxonomyLoading ? 'Loading services...' : 'No services available'}
+        options={scopeOptions}
+        values={selectedScopeIds}
+        onValuesChange={onScopeIdsChange}
+      />
+
+      <TaxonomyMultiSelect
+        id={`${formId}-themes`}
+        label="Design themes"
+        labelHint="Select all that apply"
+        emptyLabel={taxonomyLoading ? 'Loading themes...' : 'No themes available'}
+        options={themeOptions}
+        values={selectedThemeIds}
+        onValuesChange={onThemeIdsChange}
       />
 
       <div className="grid grid-cols-2 gap-5">
@@ -647,7 +772,8 @@ function CompanyServicesFields({
   );
 }
 
-function CompactMultiSelect({
+function TaxonomyMultiSelect({
+  emptyLabel,
   id,
   label,
   labelHint,
@@ -659,17 +785,21 @@ function CompactMultiSelect({
   label: string;
   labelHint?: string;
   values: string[];
-  options: readonly string[];
+  options: readonly TaxonomyTerm[];
+  emptyLabel: string;
   onValuesChange: (values: string[]) => void;
 }) {
-  const displayValue = values.length > 0 ? values.join(', ') : 'Select services';
+  const selectedLabels = options
+    .filter((option) => values.includes(option.id))
+    .map((option) => option.label);
+  const displayValue = selectedLabels.length > 0 ? selectedLabels.join(', ') : 'Select options';
 
-  function toggleOption(option: string) {
-    if (values.includes(option)) {
-      onValuesChange(values.filter((value) => value !== option));
+  function toggleOption(optionId: string) {
+    if (values.includes(optionId)) {
+      onValuesChange(values.filter((value) => value !== optionId));
       return;
     }
-    onValuesChange([...values, option]);
+    onValuesChange([...values, optionId]);
   }
 
   return (
@@ -695,17 +825,23 @@ function CompactMultiSelect({
           collisionPadding={8}
           className="w-[var(--radix-dropdown-menu-trigger-width)]"
         >
-          {options.map((option) => (
-            <DropdownMenuCheckboxItem
-              key={option}
-              checked={values.includes(option)}
-              onCheckedChange={() => toggleOption(option)}
-              onSelect={(event) => event.preventDefault()}
-              className="text-[13px]"
-            >
-              {option}
-            </DropdownMenuCheckboxItem>
-          ))}
+          {options.length > 0 ? (
+            options.map((option) => (
+              <DropdownMenuCheckboxItem
+                key={option.id}
+                checked={values.includes(option.id)}
+                onCheckedChange={() => toggleOption(option.id)}
+                onSelect={(event) => event.preventDefault()}
+                className="text-[13px]"
+              >
+                {option.label}
+              </DropdownMenuCheckboxItem>
+            ))
+          ) : (
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+              {emptyLabel}
+            </div>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -802,6 +938,7 @@ function PresenceFields({
         </Label>
         <Input
           id={`${formId}-website`}
+          type="url"
           value={websiteUrl}
           onChange={(event) => onWebsiteUrlChange(event.target.value)}
           placeholder="https://"
@@ -818,6 +955,7 @@ function PresenceFields({
         </Label>
         <Input
           id={`${formId}-google-business`}
+          type="url"
           value={googleBusinessUrl}
           onChange={(event) => onGoogleBusinessUrlChange(event.target.value)}
           placeholder="https://"
@@ -951,11 +1089,6 @@ function EntityChoiceCard({
 }
 
 function OnboardingSecondaryActions() {
-  async function handleSignOut() {
-    await authClient.signOut();
-    window.location.href = '/login';
-  }
-
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
       <button type="button" className="cursor-pointer font-medium text-foreground hover:underline">
@@ -964,7 +1097,7 @@ function OnboardingSecondaryActions() {
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
       <button
         type="button"
-        onClick={handleSignOut}
+        onClick={signOutToLogin}
         className="cursor-pointer font-medium text-foreground hover:underline"
       >
         Sign out
@@ -1021,10 +1154,13 @@ function OnboardingShell({
         </section>
 
         <aside className="relative hidden overflow-hidden border-l bg-card lg:block">
-          <div className="absolute inset-y-0 left-6 w-44 border-x border-dashed bg-background/20" />
+          <div className="absolute inset-y-0 left-6 z-20 border-l border-dashed border-border" />
+          <div className="absolute inset-y-0 left-50 border-l border-dashed border-border" />
+          <div className="absolute inset-y-0 left-6 w-44 bg-background/20" />
           <div className="absolute left-0 right-0 top-[38%] h-px bg-border" />
           <div className="absolute left-0 right-0 top-[62%] h-px bg-border" />
           <div className="absolute left-6 right-0 top-[38%] h-[24%] bg-background" />
+          <div className="absolute left-6 right-0 top-[38%] z-10 h-px bg-border" />
           <div className="relative flex h-full items-center px-12">
             <div className="max-w-sm">
               <blockquote className="text-xl leading-[25px] tracking-normal">
@@ -1040,6 +1176,7 @@ function OnboardingShell({
               </div>
             </div>
           </div>
+          <div className="absolute bottom-12 left-0 right-0 z-10 h-px bg-border xl:bottom-14" aria-hidden="true" />
           <div className="absolute bottom-3 right-0 w-80 xl:w-96">
             <Image
               src={onboardingIllustrations.panel}

@@ -17,7 +17,7 @@ work down; the first two get you running, the rest are reference.
 ## TL;DR
 
 ```bash
-# prerequisites: Node >= 20, pnpm >= 10, Docker
+# prerequisites: Node >= 22.13.0, pnpm >= 10, Docker
 pnpm install
 cp .env.example .env          # then set BETTER_AUTH_SECRET (see getting-started)
 pnpm infra:up                 # Postgres + Redis in Docker

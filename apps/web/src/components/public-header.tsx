@@ -9,7 +9,15 @@ const navLinks = [
 ];
 
 /** Public discovery header from the Figma home frame. Admin/designer chrome stays on the shared SiteNav. */
-export function PublicHeader({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
+export function PublicHeader({
+  isAuthenticated = false,
+  userRole = null,
+}: {
+  isAuthenticated?: boolean;
+  userRole?: string | null;
+}) {
+  const listYourWorkHref = getListYourWorkHref({ isAuthenticated, userRole });
+
   return (
     <header className="border-b border-[#e8e6e1] bg-white">
       <div className="mx-auto flex h-14 w-full max-w-[1512px] items-center justify-between px-6 lg:px-10">
@@ -32,7 +40,7 @@ export function PublicHeader({ isAuthenticated = false }: { isAuthenticated?: bo
 
         <div className="flex items-center gap-2.5">
           <Link
-            href="/designer/dashboard"
+            href={listYourWorkHref}
             className="hidden h-8 items-center gap-1.5 rounded-md border border-border bg-white px-2.5 text-[13px] font-medium text-foreground shadow-sm transition-colors hover:bg-accent sm:inline-flex"
           >
             <svg viewBox="0 0 24 24" className="size-[15px]" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -57,4 +65,22 @@ export function PublicHeader({ isAuthenticated = false }: { isAuthenticated?: bo
       </div>
     </header>
   );
+}
+
+function getListYourWorkHref({
+  isAuthenticated,
+  userRole,
+}: {
+  isAuthenticated: boolean;
+  userRole: string | null;
+}) {
+  if (!isAuthenticated) {
+    return '/login?mode=designer';
+  }
+
+  if (userRole === 'designer' || userRole === 'admin' || userRole === 'superadmin') {
+    return '/designer/dashboard';
+  }
+
+  return '/designer/onboarding';
 }

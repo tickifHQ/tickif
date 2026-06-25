@@ -7,7 +7,7 @@ five minutes.
 
 | Tool | Version | Notes |
 | --- | --- | --- |
-| Node.js | >= 20 (22 LTS recommended) | `node -v` |
+| Node.js | >= 22.13.0 (22 LTS) | `node -v` |
 | pnpm | >= 10 | `corepack enable && corepack prepare pnpm@latest --activate`, or `npm i -g pnpm` |
 | Docker | any recent | For local Postgres + Redis + MinIO via `docker compose` |
 

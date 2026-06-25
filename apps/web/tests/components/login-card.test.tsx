@@ -51,6 +51,16 @@ describe('LoginCard', () => {
     expect(screen.getByTestId('feature-turn-visitors-into-clients')).toBeInTheDocument();
   });
 
+  it('can open with designer mode selected', () => {
+    render(<LoginCard initialMode="designer" />);
+    expect(screen.getByRole('tab', { name: /i'm a designer/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
+  });
+
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
@@ -90,13 +100,16 @@ describe('LoginCard', () => {
     expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
   });
 
-  it('calls Google signIn with origin callback in designer mode', async () => {
+  it('calls Google signIn with onboarding callback in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     await user.click(screen.getByRole('button', { name: /login with google/i }));
-    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/designer/onboarding',
+    });
   });
 
   it('shows error when Google signIn fails in browsing mode', async () => {

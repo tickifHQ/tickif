@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireAuth } from '@/lib/auth-guard';
 
 /**
@@ -11,5 +12,10 @@ import { requireAuth } from '@/lib/auth-guard';
  */
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   await requireAuth();
-  return <>{children}</>;
+  return (
+    <>
+      <ProtectedBfcacheGuard />
+      {children}
+    </>
+  );
 }

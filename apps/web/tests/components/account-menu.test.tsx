@@ -7,6 +7,10 @@ const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
   session: null as { user: { name: string; email: string | null } } | null,
   isPending: false,
+  router: {
+    refresh: vi.fn(),
+    replace: vi.fn(),
+  },
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -16,11 +20,17 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => mock.router,
+}));
+
 describe('AccountMenu', () => {
   beforeEach(() => {
     mock.session = null;
     mock.isPending = false;
     mock.signOut.mockReset();
+    mock.router.refresh.mockReset();
+    mock.router.replace.mockReset();
   });
 
   it('renders a skeleton when session is loading', () => {
@@ -47,5 +57,18 @@ describe('AccountMenu', () => {
     await user.click(screen.getByText('A'));
     await user.click(screen.getByText('Sign out'));
     expect(mock.signOut).toHaveBeenCalledTimes(1);
+    expect(mock.router.replace).toHaveBeenCalledWith('/login');
+    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('still redirects to login even when signOut rejects', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    mock.signOut.mockRejectedValue(new Error('Network error'));
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByText('A'));
+    await user.click(screen.getByText('Sign out'));
+    expect(mock.router.replace).toHaveBeenCalledWith('/login');
+    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 });

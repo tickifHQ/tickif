@@ -1,12 +1,17 @@
+import { redirect } from 'next/navigation';
 import { DesignerOnboarding } from '@/components/designer-onboarding';
-import { getServerSession } from '@/lib/auth-guard';
+import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 
 export const metadata = {
   title: 'Designer onboarding · Tickif',
 };
 
 export default async function DesignerOnboardingPage() {
-  const session = await getServerSession();
+  const session = await getServerSession({ disableCookieCache: true });
+
+  if (rolePassesCheck(session?.user.role ?? null, 'designer')) {
+    redirect('/designer/dashboard');
+  }
 
   return (
     <DesignerOnboarding

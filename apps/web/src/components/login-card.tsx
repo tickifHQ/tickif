@@ -33,7 +33,10 @@ import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { countries as allCountries } from 'country-codes-flags-phone-codes';
 import { OtpInput } from '@/components/otp-input';
 
+type LoginMode = 'browsing' | 'designer';
+
 interface LoginCardProps {
+  initialMode?: LoginMode;
   onSuccess?: () => void;
   onClose?: () => void;
 }
@@ -122,7 +125,7 @@ const trustAvatars = [
   { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
-export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
+export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -132,7 +135,7 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
-  const [loginMode, setLoginMode] = useState<'browsing' | 'designer'>('browsing');
+  const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
   const [countrySearch, setCountrySearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -267,7 +270,9 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
   async function handleGoogleLogin() {
     setLoading(true);
     setError('');
-    const callbackURL = window.location.origin;
+    const callbackURL = loginMode === 'designer'
+      ? `${window.location.origin}/designer/onboarding`
+      : window.location.origin;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) {
@@ -362,10 +367,10 @@ export function LoginCard({ onSuccess, onClose }: LoginCardProps) {
 
             <div className="flex flex-col gap-4">
               <Tabs
-                defaultValue="browsing"
+                defaultValue={initialMode}
                 value={loginMode}
                 className="w-full"
-                onValueChange={(val) => setLoginMode(val as 'browsing' | 'designer')}
+                onValueChange={(val) => setLoginMode(val as LoginMode)}
               >
                 <TabsList className="w-full">
                   <TabsTrigger value="browsing" className="flex-1 gap-1.5">
