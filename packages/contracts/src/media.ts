@@ -59,11 +59,25 @@ export const derivativeSchema = z.object({
 });
 export type Derivative = z.infer<typeof derivativeSchema>;
 
+const taxonomySlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a taxonomy slug such as traditional');
+
+const taxonomySlugList = z.array(taxonomySlug).max(25);
+
 export const projectImageSchema = z
   .object({
     id: z.uuid(),
+    roomId: z.uuid().nullable(),
     status: imageStatus,
     sortOrder: z.number().int(),
+    themeSlugs: z.array(z.string()),
+    materialSlugs: z.array(z.string()),
+    finishSlugs: z.array(z.string()),
+    tagSlugs: z.array(z.string()),
     width: z.number().int().nullable(),
     height: z.number().int().nullable(),
     derivatives: z.array(derivativeSchema),
@@ -91,6 +105,21 @@ export const imageIdParamSchema = z.object({ imageId: z.uuid() }).meta({ id: 'Im
 export const projectImagesParamSchema = z
   .object({ id: z.uuid() })
   .meta({ id: 'ProjectImagesParam' });
+
+export const updateImageMetadataSchema = z
+  .object({
+    roomId: z.uuid().nullable().optional(),
+    sortOrder: z.number().int().min(0).max(10_000).optional(),
+    themeSlugs: taxonomySlugList.optional(),
+    materialSlugs: taxonomySlugList.optional(),
+    finishSlugs: taxonomySlugList.optional(),
+    tagSlugs: taxonomySlugList.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field is required',
+  })
+  .meta({ id: 'UpdateImageMetadata' });
+export type UpdateImageMetadataInput = z.infer<typeof updateImageMetadataSchema>;
 
 // Query strings arrive as text, so coerce; bounds keep an unbounded scan off the table.
 export const listProjectImagesQuerySchema = z

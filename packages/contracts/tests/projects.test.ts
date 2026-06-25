@@ -4,6 +4,7 @@ import {
   createProjectSchema,
   linkProjectImageSchema,
   listProjectsQuerySchema,
+  projectStatus,
   projectRoomSchema,
   reorderProjectRoomsSchema,
   updateProjectSchema,
@@ -27,10 +28,23 @@ describe('createProjectSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('allows the backend to generate a title from project metadata', () => {
+    const result = createProjectSchema.safeParse({
+      buildingName: 'Maitri Apartments',
+      propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
+      bhkSlug: '2-bhk',
+      citySlug: 'bengaluru',
+      budgetBandSlug: 'luxury',
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('allows taxonomy refs and metadata without a client-supplied designer id', () => {
     const result = createProjectSchema.safeParse({
       title: 'Valid Title',
       citySlug: 'mumbai',
+      propertySubtypeSlug: 'apartment',
       budgetBandSlug: 'premium',
       metadata: { scopeLabels: ['full-home'] },
     });
@@ -52,6 +66,13 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
+  it('accepts changes_requested as a project status filter', () => {
+    expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
+    expect(listProjectsQuerySchema.parse({ status: 'changes_requested' }).status).toBe(
+      'changes_requested',
+    );
+  });
+
   it('applies defaults and coerces string pagination', () => {
     const parsed = listProjectsQuerySchema.parse({ limit: '10', offset: '5' });
     expect(parsed).toMatchObject({ limit: 10, offset: 5 });
