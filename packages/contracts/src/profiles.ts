@@ -147,6 +147,16 @@ export const profileIdParamSchema = z.object({
   id: z.string().uuid(),
 });
 
+/** Public profile slug path parameter. */
+export const profileSlugParamSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a URL-safe profile slug'),
+});
+
 /**
  * PATCH /api/profiles/me — partial update.
  * Taxonomy arrays use replace semantics: present → replace, absent → untouched.

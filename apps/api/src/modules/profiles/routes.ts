@@ -6,6 +6,7 @@ import {
   profilePublicResponseSchema,
   profileOwnerResponseSchema,
   profileIdParamSchema,
+  profileSlugParamSchema,
   updateProfileSchema,
   errorResponseSchema,
 } from '@repo/contracts';
@@ -69,6 +70,30 @@ const onboardRoute = createRoute({
 });
 
 export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/slug/{slug}',
+      tags: ['Profiles'],
+      summary: 'Get a public profile by organization slug (active only)',
+      request: { params: profileSlugParamSchema },
+      responses: {
+        200: {
+          description: 'Public profile projection',
+          content: { 'application/json': { schema: profilePublicResponseSchema } },
+        },
+        404: {
+          description: 'Profile not found or not active',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const { slug } = c.req.valid('param');
+      const result = await profilesService.getPublicProfileBySlug(slug);
+      return c.json(result, 200);
+    },
+  )
   .openapi(
     createRoute({
       method: 'get',

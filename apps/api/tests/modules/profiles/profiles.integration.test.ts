@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner } from '@repo/db/testing';
+import { makeDesigner, makeOrganization } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { signInWithGoogle, createAuthedSession, createRoleSession } from '../../helpers/auth.js';
 import { getSession } from '@repo/auth';
@@ -293,6 +293,22 @@ describe('GET /api/profiles/:id — public read', () => {
     expect(body).not.toHaveProperty('updatedAt');
   });
 
+  it('returns public projection by organization slug', async () => {
+    const org = await makeOrganization({ name: 'Studio Noir', slug: 'studio-noir' });
+    const designer = await makeDesigner({
+      orgId: org.id,
+      displayName: 'Studio Noir',
+      status: 'active',
+    });
+
+    const res = await request('GET', '/api/profiles/slug/studio-noir');
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.id).toBe(designer.id);
+    expect(body.displayName).toBe('Studio Noir');
+  });
+
   // Regression: status-gated public read (#99 review)
   it('returns 404 for draft profiles (not publicly visible)', async () => {
     const designer = await makeDesigner({ status: 'draft', displayName: 'Draft' });
@@ -444,7 +460,7 @@ describe('PATCH /api/profiles/me — update', () => {
 
   // Regression: footprint replace semantics (#99 review) — full exercise
   it('replaces taxonomy footprint correctly (replace, clear, leave untouched)', async () => {
-    const { cookie, orgId } = await setupDesignerWithSession();
+    const { cookie } = await setupDesignerWithSession();
 
     // Seed taxonomy terms
     const cityMumbai = await seedTaxonomy('city', 'mumbai', 'Mumbai');
