@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner, makeOrganization } from '@repo/db/testing';
+import { makeDesigner, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { signInWithGoogle, createAuthedSession, createRoleSession } from '../../helpers/auth.js';
 import { getSession } from '@repo/auth';
@@ -268,6 +268,65 @@ describe('GET /api/profiles/me/completion', () => {
 
   it('rejects unauthenticated (401)', async () => {
     const res = await request('GET', '/api/profiles/me/completion');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/profiles/me/dashboard', () => {
+  it('returns the Linear dashboard summary for the active organization', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-dashboard-summary',
+      email: 'dashboard-summary@test.com',
+    });
+    await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Summary Studio',
+        address: 'Indiranagar, Bangalore',
+      },
+    });
+    const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
+    const [profile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.userId, session!.user.id));
+    await makeProject({ designerId: profile!.id, status: 'published', title: 'Published' });
+    await makeProject({ designerId: profile!.id, status: 'submitted', title: 'Submitted' });
+    await makeProject({ designerId: profile!.id, status: 'in_review', title: 'In Review' });
+    await makeProject({ designerId: profile!.id, status: 'draft', title: 'Draft' });
+    await makeProject({
+      designerId: profile!.id,
+      status: 'changes_requested',
+      title: 'Changes Requested',
+    });
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body).toEqual({
+      profileCompletion: {
+        score: 50,
+        missing: ['bio', 'logo', 'scope'],
+      },
+      projects: {
+        total: 5,
+        published: 1,
+        inReview: 2,
+        draft: 2,
+      },
+      leads: {
+        total: 0,
+        new: 0,
+      },
+      shareUrl: expect.stringMatching(/^https:\/\/tickif\.com\/d\/summary-studio-[a-z0-9]+$/),
+    });
+    expect(body.profileCompletion).not.toHaveProperty('steps');
+  });
+
+  it('rejects unauthenticated dashboard summary requests', async () => {
+    const res = await request('GET', '/api/profiles/me/dashboard');
     expect(res.status).toBe(401);
   });
 });

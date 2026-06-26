@@ -125,6 +125,38 @@ describe('dashboardService.getOverview', () => {
   });
 });
 
+describe('dashboardService.getProfileDashboard', () => {
+  it('returns the Linear E-140 dashboard summary contract', async () => {
+    vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue([
+      { status: 'published', count: 4 },
+      { status: 'submitted', count: 1 },
+      { status: 'in_review', count: 2 },
+      { status: 'draft', count: 3 },
+      { status: 'changes_requested', count: 2 },
+    ]);
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result).toEqual({
+      profileCompletion: {
+        score: 67,
+        missing: ['logo', 'scope'],
+      },
+      projects: {
+        total: 12,
+        published: 4,
+        inReview: 3,
+        draft: 5,
+      },
+      leads: {
+        total: 0,
+        new: 0,
+      },
+      shareUrl: 'https://tickif.com/d/studio-noir',
+    });
+  });
+});
+
 describe('dashboardService.recordPortfolioShare', () => {
   it('increments and returns the copy-link payload', async () => {
     vi.mocked(dashboardRepository.incrementShareCount).mockResolvedValue(3);

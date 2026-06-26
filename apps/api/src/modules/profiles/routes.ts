@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   profileCompletionResponseSchema,
+  profileDashboardResponseSchema,
   onboardDesignerSchema,
   onboardDesignerResponseSchema,
   profilePublicResponseSchema,
@@ -12,6 +13,7 @@ import {
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
+import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
 
 /**
@@ -32,6 +34,29 @@ const completionRoute = createRoute({
     },
     401: {
       description: 'Unauthorized',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+  },
+});
+
+const dashboardRoute = createRoute({
+  method: 'get',
+  path: '/me/dashboard',
+  tags: ['Profiles'],
+  summary: 'Get dashboard summary for the active designer organization',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Dashboard summary with completion, project counts, lead counts, and share URL',
+      content: { 'application/json': { schema: profileDashboardResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    403: {
+      description: 'No designer profile for the active organization',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -122,6 +147,15 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
     const user = c.get('user')!;
     const session = c.get('session');
     const result = await profilesService.getCompletion({
+      userId: user.id,
+      orgId: session?.activeOrganizationId ?? null,
+    });
+    return c.json(result, 200);
+  })
+  .openapi(dashboardRoute, async (c) => {
+    const user = c.get('user')!;
+    const session = c.get('session');
+    const result = await dashboardService.getProfileDashboard({
       userId: user.id,
       orgId: session?.activeOrganizationId ?? null,
     });

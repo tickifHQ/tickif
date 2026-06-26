@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dashboardOverviewResponseSchema } from '../src/dashboard.js';
+import { profileDashboardResponseSchema } from '../src/profiles.js';
 
 describe('dashboard contracts', () => {
   it('accepts the overview aggregate without KYC fields', () => {
@@ -57,6 +58,30 @@ describe('dashboard contracts', () => {
         copyText: 'tickif.in/d/studio-noir',
         shareCount: 0,
       },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('profile dashboard contracts', () => {
+  it('accepts the E-140 summary response shape', () => {
+    const result = profileDashboardResponseSchema.safeParse({
+      profileCompletion: {
+        score: 60,
+        missing: ['bio', 'logo'],
+      },
+      projects: {
+        total: 12,
+        published: 4,
+        inReview: 2,
+        draft: 6,
+      },
+      leads: {
+        total: 0,
+        new: 0,
+      },
+      shareUrl: 'https://tickif.com/d/studio-noir',
     });
 
     expect(result.success).toBe(true);
