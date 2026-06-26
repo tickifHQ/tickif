@@ -1,9 +1,10 @@
-import { inArray } from 'drizzle-orm';
-import { db, schema, eq, and, desc, asc, sql } from '@repo/db';
+import { ilike, inArray } from 'drizzle-orm';
+import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
   LinkProjectImageInput,
+  ProjectListSort,
   ProjectStatus,
   ReorderProjectRoomsInput,
   UpdateProjectInput,
@@ -34,10 +35,34 @@ export type ProjectOwnership = {
 };
 
 export type ListProjectsParams = {
-  status?: ProjectStatus;
-  citySlug?: string;
+  userId: string;
+  activeOrgId?: string | null;
+  statuses?: ProjectStatus[];
+  q?: string;
   limit: number;
   offset: number;
+  sort: ProjectListSort;
+};
+
+export type ProjectListItemRecord = Pick<
+  ProjectRecord,
+  | 'id'
+  | 'slug'
+  | 'title'
+  | 'propertyTypeSlug'
+  | 'propertySubtypeSlug'
+  | 'citySlug'
+  | 'localitySlug'
+  | 'status'
+  | 'coverImageId'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
+export type DuplicateProjectParams = {
+  source: ProjectRecord;
+  title: string;
+  slug: string;
 };
 
 function slugify(title: string): string {
@@ -52,23 +77,66 @@ function slugify(title: string): string {
 }
 
 export const projectsRepository = {
-  async list(params: ListProjectsParams): Promise<{ items: ProjectRecord[]; total: number }> {
+  async list(params: ListProjectsParams): Promise<{ items: ProjectListItemRecord[]; total: number }> {
     const filters = [
-      params.status ? eq(schema.project.status, params.status) : undefined,
-      params.citySlug ? eq(schema.project.citySlug, params.citySlug) : undefined,
+      eq(schema.member.userId, params.userId),
+      params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+      params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
+      params.q
+        ? or(
+            ilike(schema.project.title, `%${params.q}%`),
+            ilike(schema.project.localitySlug, `%${params.q}%`),
+          )
+        : undefined,
     ].filter((f) => f !== undefined);
 
     const where = filters.length ? and(...filters) : undefined;
+    const orderBy = (() => {
+      switch (params.sort) {
+        case 'updatedAt':
+          return asc(schema.project.updatedAt);
+        case '-createdAt':
+          return desc(schema.project.createdAt);
+        case 'createdAt':
+          return asc(schema.project.createdAt);
+        case 'title':
+          return asc(schema.project.title);
+        case '-title':
+          return desc(schema.project.title);
+        case '-updatedAt':
+        default:
+          return desc(schema.project.updatedAt);
+      }
+    })();
 
     const [items, [count]] = await Promise.all([
       db
-        .select()
+        .select({
+          id: schema.project.id,
+          slug: schema.project.slug,
+          title: schema.project.title,
+          propertyTypeSlug: schema.project.propertyTypeSlug,
+          propertySubtypeSlug: schema.project.propertySubtypeSlug,
+          citySlug: schema.project.citySlug,
+          localitySlug: schema.project.localitySlug,
+          status: schema.project.status,
+          coverImageId: schema.project.coverImageId,
+          createdAt: schema.project.createdAt,
+          updatedAt: schema.project.updatedAt,
+        })
         .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
         .where(where)
-        .orderBy(desc(schema.project.createdAt))
+        .orderBy(orderBy)
         .limit(params.limit)
         .offset(params.offset),
-      db.select({ value: sql<number>`count(*)::int` }).from(schema.project).where(where),
+      db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
+        .where(where),
     ]);
 
     return { items, total: count?.value ?? 0 };
@@ -125,6 +193,117 @@ export const projectsRepository = {
       .returning();
     if (!row) throw new Error('insert returned no row');
     return row;
+  },
+
+  async duplicateProject(params: DuplicateProjectParams): Promise<{
+    project: ProjectRecord;
+    rooms: ProjectRoomRecord[];
+  }> {
+    return db.transaction(async (tx) => {
+      const now = new Date();
+      const [project] = await tx
+        .insert(schema.project)
+        .values({
+          designerId: params.source.designerId,
+          title: params.title,
+          slug: params.slug,
+          description: params.source.description,
+          status: 'draft',
+          propertyTypeSlug: params.source.propertyTypeSlug,
+          propertySubtypeSlug: params.source.propertySubtypeSlug,
+          scopeSlug: params.source.scopeSlug,
+          bhkSlug: params.source.bhkSlug,
+          sizeSqft: params.source.sizeSqft,
+          citySlug: params.source.citySlug,
+          localitySlug: params.source.localitySlug,
+          buildingName: params.source.buildingName,
+          budgetBandSlug: params.source.budgetBandSlug,
+          completedMonth: params.source.completedMonth,
+          durationMonths: params.source.durationMonths,
+          metadata: params.source.metadata ?? {},
+          publishedAt: null,
+          submittedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+      if (!project) throw new Error('insert returned no row');
+
+      const sourceRooms = await tx
+        .select()
+        .from(schema.projectRoom)
+        .where(eq(schema.projectRoom.projectId, params.source.id))
+        .orderBy(asc(schema.projectRoom.sortOrder), asc(schema.projectRoom.createdAt));
+
+      const roomIdBySourceId = new Map<string, string>();
+      const rooms = sourceRooms.length
+        ? await tx
+            .insert(schema.projectRoom)
+            .values(
+              sourceRooms.map((room) => ({
+                projectId: project.id,
+                roomTypeId: room.roomTypeId,
+                name: room.name,
+                description: room.description,
+                sortOrder: room.sortOrder,
+                metadata: room.metadata ?? {},
+                createdAt: now,
+                updatedAt: now,
+              })),
+            )
+            .returning()
+        : [];
+
+      sourceRooms.forEach((room, index) => {
+        const copiedRoom = rooms[index];
+        if (copiedRoom) roomIdBySourceId.set(room.id, copiedRoom.id);
+      });
+
+      const sourceImages = await tx
+        .select()
+        .from(schema.projectImage)
+        .where(eq(schema.projectImage.projectId, params.source.id))
+        .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
+
+      let copiedCoverImageId: string | null = null;
+      for (const image of sourceImages) {
+        const [copiedImage] = await tx
+          .insert(schema.projectImage)
+          .values({
+            projectId: project.id,
+            roomId: image.roomId ? roomIdBySourceId.get(image.roomId) ?? null : null,
+            originalKey: image.originalKey,
+            contentType: image.contentType,
+            derivatives: image.derivatives,
+            themeSlugs: image.themeSlugs,
+            materialSlugs: image.materialSlugs,
+            finishSlugs: image.finishSlugs,
+            tagSlugs: image.tagSlugs,
+            width: image.width,
+            height: image.height,
+            phash: image.phash,
+            status: image.status,
+            sortOrder: image.sortOrder,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning({ id: schema.projectImage.id });
+        if (image.id === params.source.coverImageId) {
+          copiedCoverImageId = copiedImage?.id ?? null;
+        }
+      }
+
+      if (copiedCoverImageId) {
+        const [updatedProject] = await tx
+          .update(schema.project)
+          .set({ coverImageId: copiedCoverImageId, updatedAt: now })
+          .where(eq(schema.project.id, project.id))
+          .returning();
+        return { project: updatedProject ?? project, rooms };
+      }
+
+      return { project, rooms };
+    });
   },
 
   async updateDraft(id: string, input: UpdateProjectInput): Promise<ProjectRecord | null> {

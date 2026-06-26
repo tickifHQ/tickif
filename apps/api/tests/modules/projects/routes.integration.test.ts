@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { testClient } from 'hono/testing';
 import { eq } from 'drizzle-orm';
-import type { ErrorResponse, ListProjectRoomsResponse, ProjectDetailResponse, ProjectRoom } from '@repo/contracts';
+import type {
+  ErrorResponse,
+  ListProjectRoomsResponse,
+  ListProjectsResponse,
+  ProjectDetailResponse,
+  ProjectRoom,
+} from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -18,6 +24,13 @@ const client = testClient(app);
 async function makeDesignerSession(phoneNumber = '+919800002001') {
   const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
   const designer = await makeDesigner({ userId });
+  await db.insert(schema.member).values({
+    id: `mem-${userId}`,
+    organizationId: designer.orgId,
+    userId,
+    role: 'owner',
+    createdAt: new Date(),
+  });
   return { cookie, userId, designer };
 }
 
@@ -33,25 +46,89 @@ async function requestJson(path: string, method: string, cookie: string | undefi
 }
 
 describe('GET /api/projects', () => {
-  it('returns published projects from the DB', async () => {
-    const designer = await makeDesigner();
-    await makeProject({ designerId: designer.id, title: 'Sunlit Bandra Apartment' });
-
+  it('rejects unauthenticated project listing requests', async () => {
     const res = await client.api.projects.$get({ query: {} });
-    expect(res.status).toBe(200);
-
-    const body = await res.json();
-    expect(body.total).toBe(1);
-    expect(body.items[0]).toMatchObject({ title: 'Sunlit Bandra Apartment', status: 'published' });
+    expect(res.status).toBe(401);
   });
 
-  it('filters by status', async () => {
-    const designer = await makeDesigner();
-    await makeProject({ designerId: designer.id, status: 'draft' });
+  it('returns an org-scoped project page with dashboard list fields', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002030');
+    await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Apartment',
+      status: 'published',
+      propertyTypeSlug: 'residential',
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+    });
+    await makeProject({
+      designerId: designer.id,
+      title: 'Andheri Apartment',
+      status: 'draft',
+      propertySubtypeSlug: 'apartment',
+      citySlug: 'mumbai',
+      localitySlug: 'andheri',
+    });
+    await makeProject({ title: 'Other Org Project', status: 'published' });
 
-    const res = await client.api.projects.$get({ query: { status: 'published' } });
-    const body = await res.json();
-    expect(body.total).toBe(0);
+    const res = await client.api.projects.$get(
+      { query: { sort: 'title' } },
+      { headers: { cookie } },
+    );
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as ListProjectsResponse;
+    expect(body).toMatchObject({ total: 2, page: 1, limit: 12, totalPages: 1 });
+    expect(body.items.map((item) => item.title)).toEqual([
+      'Andheri Apartment',
+      'Bandra Apartment',
+    ]);
+    expect(body.items[0]).toMatchObject({
+      propertyType: 'apartment',
+      city: 'mumbai',
+      locality: 'andheri',
+      coverImageUrl: null,
+    });
+  });
+
+  it('maps dashboard status buckets and applies search and pagination', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002031');
+    await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Draft',
+      status: 'draft',
+      localitySlug: 'bandra',
+    });
+    await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Changes',
+      status: 'changes_requested',
+      localitySlug: 'bandra',
+    });
+    await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Submitted',
+      status: 'submitted',
+      localitySlug: 'bandra',
+    });
+
+    const draft = await client.api.projects.$get(
+      { query: { status: 'draft', q: 'bandra', page: 1, limit: 1, sort: 'title' } },
+      { headers: { cookie } },
+    );
+    expect(draft.status).toBe(200);
+    const draftBody = (await draft.json()) as ListProjectsResponse;
+    expect(draftBody).toMatchObject({ total: 2, page: 1, limit: 1, totalPages: 2 });
+    expect(draftBody.items[0]?.status).toBe('changes_requested');
+
+    const review = await client.api.projects.$get(
+      { query: { status: 'in_review' } },
+      { headers: { cookie } },
+    );
+    expect(review.status).toBe(200);
+    const reviewBody = (await review.json()) as ListProjectsResponse;
+    expect(reviewBody.total).toBe(1);
+    expect(reviewBody.items[0]?.status).toBe('submitted');
   });
 });
 
@@ -331,6 +408,83 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(projectRows).toHaveLength(0);
     expect(roomRows).toHaveLength(0);
     expect(imageRows).toHaveLength(0);
+  });
+
+  it('duplicates an owned project into a fresh draft with rooms and image metadata', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002032');
+    const project = await makeProject({
+      designerId: designer.id,
+      title: 'Original Project',
+      slug: 'original-project',
+      status: 'published',
+      propertyTypeSlug: 'residential',
+      citySlug: 'mumbai',
+    });
+    const room = await makeProjectRoom({
+      projectId: project.id,
+      name: 'Living Room',
+      sortOrder: 2,
+      metadata: { labels: ['Main'] },
+    });
+    const image = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      originalKey: 'orig/source.jpg',
+      contentType: 'image/jpeg',
+      derivatives: [{ variant: 'thumb', format: 'webp', key: 'thumb/source.webp', width: 320, height: 240 }],
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['matte'],
+      tagSlugs: ['warm'],
+      width: 1600,
+      height: 1200,
+      phash: 'abc123',
+      status: 'ready',
+      sortOrder: 4,
+    });
+    await db.update(schema.project).set({ coverImageId: image.id }).where(eq(schema.project.id, project.id));
+
+    const res = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { project: ProjectDetailResponse };
+    expect(body.project).toMatchObject({
+      title: 'Original Project Copy',
+      status: 'draft',
+      propertyTypeSlug: 'residential',
+      citySlug: 'mumbai',
+    });
+    expect(body.project.id).not.toBe(project.id);
+    expect(body.project.slug).not.toBe(project.slug);
+    expect(body.project.submittedAt).toBeNull();
+    expect(body.project.publishedAt).toBeNull();
+    expect(body.project.rooms).toHaveLength(1);
+    expect(body.project.rooms[0]).toMatchObject({
+      name: 'Living Room',
+      sortOrder: 2,
+      metadata: { labels: ['Main'] },
+    });
+
+    const copiedImages = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, body.project.id));
+    expect(copiedImages).toHaveLength(1);
+    expect(copiedImages[0]).toMatchObject({
+      roomId: body.project.rooms[0]?.id,
+      originalKey: 'orig/source.jpg',
+      contentType: 'image/jpeg',
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['matte'],
+      tagSlugs: ['warm'],
+      status: 'ready',
+      sortOrder: 4,
+    });
+    expect(body.project.coverImageId).toBe(copiedImages[0]?.id);
   });
 
   it('allows a superadmin to update a draft they do not own', async () => {
