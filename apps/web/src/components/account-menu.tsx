@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
+import { Avatar } from '@repo/ui/components/avatar';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -44,7 +44,6 @@ export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
 
   const user = session.user;
   const displayName = user.name ?? user.email ?? 'Account';
-  const initial = displayName.charAt(0).toUpperCase();
 
   async function handleSignOut() {
     try {
@@ -63,6 +62,7 @@ export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          aria-label={showLabel ? undefined : `Open account menu for ${displayName}`}
           className={
             showLabel
               ? 'inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-1.5 py-1 pr-3 text-[13px] leading-[1.1] font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground'
@@ -76,7 +76,6 @@ export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
               alt=""
               size={showLabel ? 32 : 40}
             />
-            <AvatarFallback>{initial}</AvatarFallback>
           </Avatar>
           {showLabel ? (
             <>

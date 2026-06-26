@@ -44,17 +44,17 @@ describe('AccountMenu', () => {
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
   });
 
-  it('renders user initial when authenticated', () => {
+  it('renders a generated avatar trigger when authenticated', () => {
     mock.session = { user: { name: 'Alice', email: 'alice@test.com' } };
     render(<AccountMenu />);
-    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open account menu for alice/i })).toBeInTheDocument();
   });
 
   it('calls signOut on sign-out click', async () => {
     mock.session = { user: { name: 'Alice', email: null } };
     const user = userEvent.setup();
     render(<AccountMenu />);
-    await user.click(screen.getByText('A'));
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
     await user.click(screen.getByText('Sign out'));
     expect(mock.signOut).toHaveBeenCalledTimes(1);
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
@@ -66,7 +66,7 @@ describe('AccountMenu', () => {
     mock.signOut.mockRejectedValue(new Error('Network error'));
     const user = userEvent.setup();
     render(<AccountMenu />);
-    await user.click(screen.getByText('A'));
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
     await user.click(screen.getByText('Sign out'));
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);

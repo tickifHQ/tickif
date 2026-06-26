@@ -163,10 +163,10 @@ const projectDeliveryScopeSlugs = ['design', 'interior-execution', 'construction
 const projectTypeBackendMap: Record<string, { propertyTypeSlug: string; propertySubtypeSlug?: string }> = {
   apartment: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
   villa: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' },
-  'office-commercial': { propertyTypeSlug: 'commercial-workspace' },
+  'office-commercial': { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'corporate-office' },
   'institutional-public': { propertyTypeSlug: 'institutional-public' },
-  'retail-showroom': { propertyTypeSlug: 'retail-showroom' },
-  'cafe-restaurant': { propertyTypeSlug: 'food-hospitality' },
+  'retail-showroom': { propertyTypeSlug: 'retail-showroom', propertySubtypeSlug: 'showroom' },
+  'cafe-restaurant': { propertyTypeSlug: 'food-hospitality', propertySubtypeSlug: 'cafe-coffee-shop' },
 };
 
 const fallbackDurationOptions = ['1 month', '2 months', '3 months', '4 months', '6 months', '9 months', '12+ months'];
@@ -466,16 +466,6 @@ function parseDurationMonths(value: string) {
   return parsePositiveInteger(match[1]!);
 }
 
-function canUseProjectType(projectType: string, availablePropertyTypeSlugs: Set<string>) {
-  if (availablePropertyTypeSlugs.size === 0) return true;
-
-  const mappedPropertyTypeSlug = projectTypeBackendMap[projectType]?.propertyTypeSlug;
-  return (
-    (mappedPropertyTypeSlug ? availablePropertyTypeSlugs.has(mappedPropertyTypeSlug) : false) ||
-    availablePropertyTypeSlugs.has(projectType)
-  );
-}
-
 function getBackendProjectSelection(
   projectType: string,
   projectSubtype: string,
@@ -483,18 +473,23 @@ function getBackendProjectSelection(
   availablePropertySubtypeSlugs: Set<string>,
 ) {
   const base = projectTypeBackendMap[projectType] ?? projectTypeBackendMap.apartment!;
-  const propertyTypeSlug = availablePropertyTypeSlugs.has(base.propertyTypeSlug)
-    ? base.propertyTypeSlug
-    : projectType;
+  const hasLoadedPropertyTypes = availablePropertyTypeSlugs.size > 0;
+  const hasLoadedPropertySubtypes = availablePropertySubtypeSlugs.size > 0;
+  const propertyTypeSlug = base.propertyTypeSlug;
+
+  if (hasLoadedPropertyTypes && !availablePropertyTypeSlugs.has(propertyTypeSlug)) {
+    throw new Error(`Project type taxonomy is missing "${propertyTypeSlug}". Please refresh seed data and try again.`);
+  }
+
   const mappedSubtypeSlug = (base.propertySubtypeSlug ?? projectSubtype) || undefined;
-  const propertySubtypeSlug =
-    mappedSubtypeSlug && propertyTypeSlug === base.propertyTypeSlug && availablePropertySubtypeSlugs.has(mappedSubtypeSlug)
-      ? mappedSubtypeSlug
-      : undefined;
+
+  if (mappedSubtypeSlug && hasLoadedPropertySubtypes && !availablePropertySubtypeSlugs.has(mappedSubtypeSlug)) {
+    throw new Error(`Project subtype taxonomy is missing "${mappedSubtypeSlug}". Please refresh seed data and try again.`);
+  }
 
   return {
     propertyTypeSlug,
-    propertySubtypeSlug,
+    propertySubtypeSlug: mappedSubtypeSlug,
   };
 }
 
@@ -1079,15 +1074,13 @@ export function DesignerProjectUpload() {
     () => {
       const termsBySlug = new Map(propertyTypes.map((term) => [term.slug, term]));
 
-      return supportedProjectTypeSlugs
-        .filter((slug) => canUseProjectType(slug, availablePropertyTypeSlugs))
-        .map((slug) => ({
-          slug,
-          label: termsBySlug.get(slug)?.label ?? fallbackProjectTypeLabels[slug] ?? slug,
-          ...projectTypeVisuals[slug]!,
-        }));
+      return supportedProjectTypeSlugs.map((slug) => ({
+        slug,
+        label: termsBySlug.get(slug)?.label ?? fallbackProjectTypeLabels[slug] ?? slug,
+        ...projectTypeVisuals[slug]!,
+      }));
     },
-    [availablePropertyTypeSlugs, propertyTypes],
+    [propertyTypes],
   );
   const scopeOptions = useMemo(
     () =>
@@ -1338,7 +1331,7 @@ export function DesignerProjectUpload() {
   }
 
   function toggleScope(scope: string) {
-    setSelectedScopes((current) => (current.includes(scope) ? [] : [scope]));
+    setSelectedScopes([scope]);
   }
 
   function handleProjectTypeSelect(nextProjectType: string) {

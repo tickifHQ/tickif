@@ -5,7 +5,7 @@ import type { ComponentType, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
+import { Avatar } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import {
   ArrowUpRight,
@@ -138,7 +138,6 @@ export function DesignerWorkspaceShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const initial = studioName.charAt(0).toUpperCase() || 'T';
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -162,9 +161,6 @@ export function DesignerWorkspaceShell({
                   alt=""
                   size={40}
                 />
-                <AvatarFallback className="rounded-xl bg-primary/10 text-primary">
-                  {initial}
-                </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
