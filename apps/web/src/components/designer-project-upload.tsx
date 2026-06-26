@@ -2206,7 +2206,7 @@ export function DesignerProjectUpload() {
             </div>
           </SectionFrame>
 
-          <div className="sticky bottom-0 z-10 border border-border/80 bg-background/95 px-4 py-3 shadow-sm backdrop-blur sm:rounded-2xl sm:px-5 xl:w-[calc(100%+19.8125rem+1.5rem)]">
+          <div className="sticky bottom-0 z-10 border border-border/80 bg-background/95 px-4 py-3 shadow-sm backdrop-blur sm:rounded-2xl sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"
