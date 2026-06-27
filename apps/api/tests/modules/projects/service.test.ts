@@ -16,6 +16,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findByIdWithRooms: vi.fn(),
       findBySlug: vi.fn(),
       createDraft: vi.fn(),
+      duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
       deleteProject: vi.fn(),
       findDesignerByUserId: vi.fn(),
@@ -110,12 +111,25 @@ const caller = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('projectsService.list', () => {
-  it('maps rows to the response shape and passes pagination through', async () => {
+  it('maps owner rows to the dashboard response shape and passes filters through', async () => {
     vi.mocked(projectsRepository.list).mockResolvedValue({ items: [row()], total: 1 });
 
-    const result = await projectsService.list({ limit: 20, offset: 0 });
+    const result = await projectsService.list(
+      { status: 'draft', q: 'bandra', page: 2, limit: 20, sort: '-updatedAt' },
+      caller,
+    );
 
+    expect(projectsRepository.list).toHaveBeenCalledWith({
+      userId: caller.userId,
+      activeOrgId: undefined,
+      statuses: ['draft', 'changes_requested'],
+      q: 'bandra',
+      limit: 20,
+      offset: 20,
+      sort: '-updatedAt',
+    });
     expect(result.total).toBe(1);
+    expect(result).toMatchObject({ page: 2, limit: 20, totalPages: 1 });
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');

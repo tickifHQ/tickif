@@ -209,6 +209,7 @@ export const project = pgTable(
   (t) => [
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
+    index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
     index('project_locality_idx').on(t.localitySlug),
     index('project_property_type_idx').on(t.propertyTypeSlug),

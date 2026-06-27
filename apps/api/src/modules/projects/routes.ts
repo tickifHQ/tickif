@@ -4,6 +4,7 @@ import {
   createProjectSchema,
   deleteProjectResponseSchema,
   deleteProjectRoomResponseSchema,
+  duplicateProjectResponseSchema,
   linkProjectImageSchema,
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
@@ -32,29 +33,38 @@ import { projectsService } from './service.js';
  * Each `.openapi()` call also contributes to the generated OpenAPI spec.
  */
 
+const errorJson = (description: string) => ({
+  description,
+  content: { 'application/json': { schema: errorResponseSchema } },
+});
+
 const listRoute = createRoute({
   method: 'get',
   path: '/',
   tags: ['Projects'],
-  summary: 'List projects',
+  summary: 'List projects owned by the active organization',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   request: { query: listProjectsQuerySchema },
   responses: {
     200: {
       description: 'A page of projects',
       content: { 'application/json': { schema: listProjectsResponseSchema } },
     },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot list these projects'),
   },
 });
 
-const errorJson = (description: string) => ({
-  description,
-  content: { 'application/json': { schema: errorResponseSchema } },
-});
-
-function caller(user: AuthVariables['user']) {
+function caller(user: AuthVariables['user'], session?: AuthVariables['session']) {
   if (!user) throw AppError.unauthorized();
   const isBanned = !!user.banned && (!user.banExpires || user.banExpires > new Date());
-  return { userId: user.id, userRole: user.role ?? '', isBanned };
+  return {
+    userId: user.id,
+    userRole: user.role ?? '',
+    isBanned,
+    activeOrgId: session?.activeOrganizationId ?? null,
+  };
 }
 
 const getRoute = createRoute({
@@ -139,6 +149,25 @@ const deleteProjectRoute = createRoute({
     403: errorJson('Caller cannot delete this project'),
     404: errorJson('Project not found'),
     409: errorJson('Only draft or changes-requested projects can be deleted'),
+  },
+});
+
+const duplicateProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/duplicate',
+  tags: ['Projects'],
+  summary: 'Duplicate an owned project into a fresh draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    201: {
+      description: 'Duplicated project draft',
+      content: { 'application/json': { schema: duplicateProjectResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot duplicate this project'),
+    404: errorJson('Project not found'),
   },
 });
 
@@ -330,7 +359,10 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
   .openapi(listRoute, async (c) => {
-    const result = await projectsService.list(c.req.valid('query'));
+    const result = await projectsService.list(
+      c.req.valid('query'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(getRoute, async (c) => {
@@ -352,6 +384,11 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const { id } = c.req.valid('param');
     const result = await projectsService.delete(id, caller(c.get('user')));
     return c.json(result, 200);
+  })
+  .openapi(duplicateProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.duplicate(id, caller(c.get('user')));
+    return c.json(result, 201);
   })
   .openapi(listRoomsRoute, async (c) => {
     const { id } = c.req.valid('param');
