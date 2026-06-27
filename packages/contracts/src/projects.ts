@@ -206,25 +206,60 @@ export const linkProjectImageSchema = z
   .meta({ id: 'LinkProjectImage' });
 export type LinkProjectImageInput = z.infer<typeof linkProjectImageSchema>;
 
+export const projectListStatus = z
+  .enum(['all', 'draft', 'in_review', 'published'])
+  .default('all')
+  .meta({ id: 'ProjectListStatus' });
+export type ProjectListStatus = z.infer<typeof projectListStatus>;
+
+export const projectListSort = z
+  .enum(['-updatedAt', 'updatedAt', '-createdAt', 'createdAt', 'title', '-title'])
+  .default('-updatedAt')
+  .meta({ id: 'ProjectListSort' });
+export type ProjectListSort = z.infer<typeof projectListSort>;
+
 export const listProjectsQuerySchema = z
   .object({
-    status: projectStatus.optional(),
-    citySlug: z.string().optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(20),
-    offset: z.coerce.number().int().min(0).default(0),
+    status: projectListStatus,
+    q: z.string().trim().min(1).max(120).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(12),
+    sort: projectListSort,
   })
   .meta({ id: 'ListProjectsQuery' });
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
+export const projectListItemSchema = z
+  .object({
+    id: z.uuid(),
+    slug: z.string(),
+    title: z.string(),
+    propertyType: z.string().nullable(),
+    city: z.string().nullable(),
+    locality: z.string().nullable(),
+    status: projectStatus,
+    coverImageUrl: z.string().url().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .meta({ id: 'ProjectListItem' });
+export type ProjectListItem = z.infer<typeof projectListItemSchema>;
+
 export const listProjectsResponseSchema = z
   .object({
-    items: z.array(projectResponseSchema),
+    items: z.array(projectListItemSchema),
+    page: z.number().int(),
     total: z.number().int(),
     limit: z.number().int(),
-    offset: z.number().int(),
+    totalPages: z.number().int(),
   })
   .meta({ id: 'ProjectList' });
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
+
+export const duplicateProjectResponseSchema = z
+  .object({ project: projectDetailResponseSchema })
+  .meta({ id: 'DuplicateProjectResponse' });
+export type DuplicateProjectResponse = z.infer<typeof duplicateProjectResponseSchema>;
 
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
