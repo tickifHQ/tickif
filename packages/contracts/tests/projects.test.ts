@@ -4,6 +4,7 @@ import {
   createProjectSchema,
   linkProjectImageSchema,
   listProjectsQuerySchema,
+  projectListStatus,
   projectStatus,
   projectRoomSchema,
   reorderProjectRoomsSchema,
@@ -66,21 +67,28 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
-  it('accepts changes_requested as a project status filter', () => {
+  it('keeps changes_requested as a persisted project status but not a list bucket', () => {
     expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
-    expect(listProjectsQuerySchema.parse({ status: 'changes_requested' }).status).toBe(
-      'changes_requested',
-    );
+    expect(projectListStatus.safeParse('changes_requested').success).toBe(false);
   });
 
   it('applies defaults and coerces string pagination', () => {
-    const parsed = listProjectsQuerySchema.parse({ limit: '10', offset: '5' });
-    expect(parsed).toMatchObject({ limit: 10, offset: 5 });
+    const parsed = listProjectsQuerySchema.parse({ limit: '10', page: '5' });
+    expect(parsed).toMatchObject({ limit: 10, page: 5 });
   });
 
-  it('defaults limit/offset when absent', () => {
+  it('defaults dashboard listing filters when absent', () => {
     const parsed = listProjectsQuerySchema.parse({});
-    expect(parsed).toMatchObject({ limit: 20, offset: 0 });
+    expect(parsed).toMatchObject({ status: 'all', limit: 12, page: 1, sort: '-updatedAt' });
+  });
+
+  it('accepts the Linear dashboard status buckets and search', () => {
+    const parsed = listProjectsQuerySchema.parse({
+      status: 'in_review',
+      q: 'bandra',
+      sort: 'title',
+    });
+    expect(parsed).toMatchObject({ status: 'in_review', q: 'bandra', sort: 'title' });
   });
 });
 

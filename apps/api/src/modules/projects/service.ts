@@ -3,15 +3,18 @@ import type {
   CreateProjectRoomInput,
   DeleteProjectResponse,
   DeleteProjectRoomResponse,
+  DuplicateProjectResponse,
   LinkProjectImageInput,
   ListProjectRoomsResponse,
   ListProjectsQuery,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectImageAttachment,
+  ProjectListItem,
   ProjectResponse,
   ListProjectsResponse,
   ProjectRoom,
+  ProjectStatus,
   ReorderProjectRoomsInput,
   UpdateProjectInput,
   UpdateProjectRoomInput,
@@ -20,6 +23,7 @@ import { AppError } from '../../lib/errors.js';
 import {
   projectsRepository,
   type ProjectImageAttachmentRecord,
+  type ProjectListItemRecord,
   type ProjectOwnership,
   type ProjectRecord,
   type ProjectRoomRecord,
@@ -90,8 +94,28 @@ function toImageAttachment(row: ProjectImageAttachmentRecord): ProjectImageAttac
   };
 }
 
+function toListItem(row: ProjectListItemRecord): ProjectListItem {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    propertyType: row.propertySubtypeSlug ?? row.propertyTypeSlug,
+    city: row.citySlug,
+    locality: row.localitySlug,
+    status: row.status,
+    coverImageUrl: null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 /** The authenticated caller, as resolved by the route from the session. */
-export type Caller = { userId: string; userRole: string; isBanned: boolean };
+export type Caller = {
+  userId: string;
+  userRole: string;
+  isBanned: boolean;
+  activeOrgId?: string | null;
+};
 
 function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
@@ -335,6 +359,41 @@ async function createDraftWithUniqueSlug(
   return projectsRepository.createDraft(input, designerId, `${base}-${Date.now().toString(36)}`);
 }
 
+async function duplicateWithUniqueSlug(
+  source: ProjectRecord,
+  title: string,
+): Promise<{ project: ProjectRecord; rooms: ProjectRoomRecord[] }> {
+  const base = projectsRepository.slugify(title);
+  const baseTaken = await projectsRepository.findBySlug(base);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const suffix = `${Date.now().toString(36).slice(-4)}${attempt === 0 ? '' : `-${attempt}`}`;
+    const slug = attempt === 0 && !baseTaken ? base : `${base}-${suffix}`;
+    try {
+      return await projectsRepository.duplicateProject({ source, title, slug });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+  return projectsRepository.duplicateProject({
+    source,
+    title,
+    slug: `${base}-${Date.now().toString(36)}`,
+  });
+}
+
+function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] | undefined {
+  if (status === 'draft') return ['draft', 'changes_requested'];
+  if (status === 'in_review') return ['submitted', 'in_review'];
+  if (status === 'published') return ['published'];
+  return undefined;
+}
+
+function duplicateTitle(title: string): string {
+  const suffix = ' Copy';
+  if (title.length + suffix.length <= 160) return `${title}${suffix}`;
+  return `${title.slice(0, 160 - suffix.length)}${suffix}`;
+}
+
 async function prefillRoomsIfEmpty(
   project: Pick<ProjectRecord, 'id' | 'propertyTypeSlug' | 'propertySubtypeSlug' | 'bhkSlug'>,
   existingRooms?: ProjectRoomRecord[],
@@ -401,18 +460,25 @@ function buildCompleteness(
 }
 
 export const projectsService = {
-  async list(query: ListProjectsQuery): Promise<ListProjectsResponse> {
+  async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const limit = query.limit;
+    const page = query.page;
     const { items, total } = await projectsRepository.list({
-      status: query.status,
-      citySlug: query.citySlug,
-      limit: query.limit,
-      offset: query.offset,
+      userId: caller.userId,
+      activeOrgId: caller.activeOrgId,
+      statuses: statusesForList(query.status),
+      q: query.q,
+      limit,
+      offset: (page - 1) * limit,
+      sort: query.sort,
     });
     return {
-      items: items.map(toResponse),
+      items: items.map(toListItem),
+      page,
       total,
-      limit: query.limit,
-      offset: query.offset,
+      limit,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
     };
   },
 
@@ -473,6 +539,18 @@ export const projectsService = {
       throw AppError.notFound('Project not found');
     }
     return { id: projectId, deleted: true };
+  },
+
+  async duplicate(projectId: string, caller: Caller): Promise<DuplicateProjectResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+
+    const source = await projectsRepository.findById(projectId);
+    if (!source) throw AppError.notFound('Project not found');
+
+    const duplicated = await duplicateWithUniqueSlug(source, duplicateTitle(source.title));
+    return { project: toDetailResponse(duplicated.project, duplicated.rooms) };
   },
 
   async listRooms(projectId: string, caller: Caller): Promise<ListProjectRoomsResponse> {
