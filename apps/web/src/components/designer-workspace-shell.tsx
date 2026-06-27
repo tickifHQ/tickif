@@ -33,8 +33,8 @@ type NavItem = {
 
 const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: House },
-  { label: 'Projects', href: '/designer/projects/upload', icon: FolderKanban },
-  { label: 'Leads', icon: Users },
+  { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
+  { label: 'Leads', href: '/designer/leads', icon: Users },
   { label: 'Consultations', icon: CalendarDays },
   { label: 'Reviews', icon: Star },
   { label: 'Analytics', icon: ChartLine },
@@ -111,10 +111,28 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     );
   }
 
+  if (pathname === '/designer/projects') {
+    return (
+      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+        <FolderKanban className="size-4" />
+        <span className="font-medium">Projects</span>
+      </div>
+    );
+  }
+
+  if (pathname === '/designer/leads') {
+    return (
+      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+        <Users className="size-4" />
+        <span className="font-medium">Leads</span>
+      </div>
+    );
+  }
+
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
-        <Link href="/designer/projects/upload" className="inline-flex items-center gap-2 text-foreground">
+        <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
           <BriefcaseBusiness className="size-4" />
           <span className="font-medium">Projects</span>
         </Link>
@@ -195,7 +213,7 @@ export function DesignerWorkspaceShell({
           <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-[22px] border border-border/80 bg-background/80 px-6 backdrop-blur">
             <WorkspaceHeaderTitle pathname={pathname} />
             <div className="flex items-center gap-2.5">
-              {pathname === '/designer/dashboard' ? (
+              {pathname === '/designer/dashboard' || pathname === '/designer/projects' || pathname === '/designer/leads' ? (
                 <Button
                   asChild
                   variant="emphasis"

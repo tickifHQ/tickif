@@ -614,7 +614,7 @@ function SectionFrame({
           type="button"
           onClick={onToggle}
           className={cn(
-            'flex w-full items-start justify-between gap-4 px-5 text-left sm:px-6',
+            'flex w-full items-start justify-between gap-4 px-5 text-left transition-[padding] duration-300 ease-out sm:px-6 motion-reduce:transition-none',
             open ? 'pt-4 pb-3' : 'py-4',
           )}
         >
@@ -627,12 +627,19 @@ function SectionFrame({
           <ChevronDown className={cn('mt-1 size-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
         </button>
 
-        {open ? (
-          <CardContent className="p-0">
-            <Divider />
-            {children}
-          </CardContent>
-        ) : null}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+            open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className={cn('min-h-0 overflow-hidden', !open && 'invisible pointer-events-none')}>
+            <CardContent className="p-0">
+              <Divider />
+              {children}
+            </CardContent>
+          </div>
+        </div>
       </Card>
     </section>
   );
@@ -913,8 +920,13 @@ function RoomCard({
         </div>
       </div>
 
-      {room.expanded ? (
-        <>
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+          room.expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+        )}
+      >
+        <div className={cn('min-h-0 overflow-hidden', !room.expanded && 'invisible pointer-events-none')}>
           <Divider />
           <div className="space-y-4 px-5 py-4">
             <div className="space-y-1.5">
@@ -1070,8 +1082,8 @@ function RoomCard({
               Tagging photos gets you 2× more search appearances. Use keywords like accent wall, marble counter, window — the more specific, the better your reach.
             </div>
           </div>
-        </>
-      ) : null}
+        </div>
+      </div>
     </div>
   );
 }
