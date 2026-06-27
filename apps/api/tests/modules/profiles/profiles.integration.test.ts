@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner, makeOrganization, makeProject } from '@repo/db/testing';
+import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { signInWithGoogle, createAuthedSession, createRoleSession } from '../../helpers/auth.js';
 import { getSession } from '@repo/auth';
@@ -300,6 +300,9 @@ describe('GET /api/profiles/me/dashboard', () => {
       status: 'changes_requested',
       title: 'Changes Requested',
     });
+    await makeLead({ organizationId: profile!.orgId, status: 'new' });
+    await makeLead({ organizationId: profile!.orgId, status: 'contacted' });
+    await makeLead({ status: 'new' });
 
     const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
 
@@ -317,8 +320,8 @@ describe('GET /api/profiles/me/dashboard', () => {
         draft: 2,
       },
       leads: {
-        total: 0,
-        new: 0,
+        total: 2,
+        new: 1,
       },
       shareUrl: expect.stringMatching(/^https:\/\/tickif\.com\/d\/summary-studio-[a-z0-9]+$/),
     });
