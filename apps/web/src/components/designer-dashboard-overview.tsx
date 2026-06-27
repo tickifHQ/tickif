@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import type { ProfileCompletionResponse } from '@repo/contracts';
+import type { ProfileDashboardResponse } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent } from '@repo/ui/components/card';
@@ -23,18 +23,6 @@ type OverviewChecklistItem = {
   done: boolean;
   action?: React.ReactNode;
 };
-
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function findStep(steps: ProfileCompletionResponse['steps'], key: string) {
-  return steps.find((step) => step.key === key);
-}
 
 function ChecklistStep({
   item,
@@ -125,24 +113,25 @@ function RightRailInfoRow({
 export function DesignerDashboardOverview({
   studioName,
   studioLocation,
-  completion,
+  portfolioUrl,
+  dashboard,
+  dashboardError,
 }: {
   studioName: string;
   studioLocation: string;
-  completion: ProfileCompletionResponse;
+  portfolioUrl: string;
+  dashboard: ProfileDashboardResponse;
+  dashboardError?: string | null;
 }) {
-  const portfolioUrl = `https://tickif.in/d/${slugify(studioName) || 'studio'}`;
-  const googleDone = findStep(completion.steps, 'signed-in-with-google')?.done ?? false;
-  const orgDone = findStep(completion.steps, 'org-created')?.done ?? false;
-  const projectDone = findStep(completion.steps, 'first-project-uploaded')?.done ?? false;
-  const profileDone = findStep(completion.steps, 'profile-completed')?.done ?? false;
+  const profileDone = dashboard.profileCompletion.missing.length === 0;
+  const projectDone = dashboard.projects.total > 0;
 
-  const checklistItems: OverviewChecklistItem[] = [
+  const trackedChecklistItems: OverviewChecklistItem[] = [
     {
       key: 'account-creation',
       title: 'Account creation',
       description: 'Set up your workspace on Tickif.',
-      done: googleDone && orgDone,
+      done: true,
     },
     {
       key: 'first-project',
@@ -155,18 +144,6 @@ export function DesignerDashboardOverview({
             <Plus className="size-4" />
             Add new project
           </Link>
-        </Button>
-      ),
-    },
-    {
-      key: 'kyc',
-      title: 'Complete KYC',
-      description: 'Complete KYC process to get the verified badge and build trust among users.',
-      done: false,
-      action: (
-        <Button type="button" variant="outline" disabled>
-          <ShieldCheck className="size-4" />
-          Complete KYC
         </Button>
       ),
     },
@@ -184,14 +161,9 @@ export function DesignerDashboardOverview({
         </Button>
       ),
     },
-    {
-      key: 'share-link',
-      title: 'Share the portfolio link in socials',
-      description: 'Use this portfolio link to share your work in socials and on your website.',
-      done: false,
-      action: <CopyLinkButton value={portfolioUrl} variant="link" className="h-auto px-0 text-sm text-foreground no-underline hover:no-underline" />,
-    },
   ];
+  const hasTrackedSteps = trackedChecklistItems.length > 0;
+  const trackedChecklistComplete = hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -206,6 +178,17 @@ export function DesignerDashboardOverview({
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
         <div className="space-y-5">
+          {dashboardError ? (
+            <Card className="rounded-2xl border-destructive/30 bg-destructive/5">
+              <CardContent className="px-6 py-5">
+                <div className="text-base font-medium text-foreground">Could not load dashboard summary</div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Refresh the page in a moment. Your dashboard and project upload actions are still available.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card className="overflow-hidden rounded-2xl">
             <CardContent className="px-6 pt-6 pb-6">
               <div className="flex items-end justify-between gap-4">
@@ -213,13 +196,13 @@ export function DesignerDashboardOverview({
                   Complete profile
                 </div>
                 <div className="text-[1.75rem] font-medium tracking-tight text-primary">
-                  {completion.score}%
+                  {dashboard.profileCompletion.score}%
                 </div>
               </div>
               <div className="mt-3 h-1.5 rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${completion.score}%` }}
+                  style={{ width: `${dashboard.profileCompletion.score}%` }}
                 />
               </div>
             </CardContent>
@@ -227,15 +210,29 @@ export function DesignerDashboardOverview({
 
           <Card className="rounded-2xl">
             <CardContent className="px-6 pt-4 pb-6">
-              <ol aria-label="Profile setup steps">
-                {checklistItems.map((item, index) => (
-                  <ChecklistStep
-                    key={item.key}
-                    item={item}
-                    isLast={index === checklistItems.length - 1}
-                  />
-                ))}
-              </ol>
+              {trackedChecklistComplete ? (
+                <div className="flex items-start gap-4 py-4">
+                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
+                    <Check className="size-5" />
+                  </span>
+                  <div>
+                    <div className="text-base font-medium text-foreground">Setup complete</div>
+                    <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+                      Your core workspace setup is done. Keep your portfolio fresh by adding more projects and sharing your link.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <ol aria-label="Profile setup steps">
+                  {trackedChecklistItems.map((item, index) => (
+                    <ChecklistStep
+                      key={item.key}
+                      item={item}
+                      isLast={index === trackedChecklistItems.length - 1}
+                    />
+                  ))}
+                </ol>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -332,8 +329,8 @@ export function DesignerDashboardOverview({
               </p>
               <CopyLinkButton
                 value={portfolioUrl}
-                variant="default"
-                className="mt-6 w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                variant="emphasis"
+                className="mt-6 w-full cursor-pointer"
               />
             </CardContent>
           </Card>

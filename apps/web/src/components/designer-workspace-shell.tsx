@@ -13,7 +13,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChartLine,
-  ChevronDown,
   CircleUserRound,
   FileBadge2,
   FolderKanban,
@@ -150,10 +149,7 @@ export function DesignerWorkspaceShell({
           </div>
 
           <div className="border-b border-border p-4">
-            <button
-              type="button"
-              className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-3 text-left shadow-sm transition-colors hover:bg-accent"
-            >
+            <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-3 text-left shadow-sm">
               <Avatar className="size-10 rounded-xl">
                 <InitialsAvatar
                   seed={studioName}
@@ -166,8 +162,7 @@ export function DesignerWorkspaceShell({
                 <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
                 <div className="truncate text-xs leading-[1.1] text-muted-foreground">{studioLocation}</div>
               </div>
-              <ChevronDown className="size-4 text-muted-foreground" />
-            </button>
+            </div>
           </div>
 
           <div className="flex flex-1 flex-col justify-between px-4 py-5">
@@ -203,7 +198,8 @@ export function DesignerWorkspaceShell({
               {pathname === '/designer/dashboard' ? (
                 <Button
                   asChild
-                  className="h-10 cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                  variant="emphasis"
+                  className="h-10 cursor-pointer"
                 >
                   <Link href="/designer/projects/upload">
                     <Plus className="size-4" />
@@ -214,7 +210,7 @@ export function DesignerWorkspaceShell({
               <AccountMenu showLabel />
             </div>
           </header>
-          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
             <main className="h-full min-w-0 overflow-y-auto">{children}</main>
           </section>
         </div>

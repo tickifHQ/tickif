@@ -5,8 +5,17 @@ export const metadata = {
   title: 'Upload project · Tickif',
 };
 
-export default async function DesignerProjectUploadPage() {
-  await requireAuth({ requiredRole: 'designer' });
+type DesignerProjectUploadPageProps = {
+  searchParams: Promise<{
+    projectId?: string;
+  }>;
+};
 
-  return <DesignerProjectUpload />;
+export default async function DesignerProjectUploadPage({
+  searchParams,
+}: DesignerProjectUploadPageProps) {
+  await requireAuth({ requiredRole: 'designer' });
+  const params = await searchParams;
+
+  return <DesignerProjectUpload initialProjectId={params.projectId} />;
 }

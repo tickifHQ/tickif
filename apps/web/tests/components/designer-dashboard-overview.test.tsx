@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ProfileCompletionResponse } from '@repo/contracts';
+import type { ProfileDashboardResponse } from '@repo/contracts';
 import { DesignerDashboardOverview } from '../../src/components/designer-dashboard-overview';
 
 vi.mock('next/navigation', () => ({
@@ -10,15 +10,22 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-const completion: ProfileCompletionResponse = {
-  score: 20,
-  missing: ['bio', 'logo', 'city', 'scope', 'contact'],
-  steps: [
-    { key: 'signed-in-with-google', label: 'Sign in with Google', done: true },
-    { key: 'org-created', label: 'Create your organization', done: true },
-    { key: 'profile-completed', label: 'Complete your profile', done: false },
-    { key: 'first-project-uploaded', label: 'Upload your first project', done: false },
-  ],
+const dashboard: ProfileDashboardResponse = {
+  profileCompletion: {
+    score: 20,
+    missing: ['bio', 'logo', 'location', 'scope', 'contact'],
+  },
+  projects: {
+    total: 0,
+    published: 0,
+    inReview: 0,
+    draft: 0,
+  },
+  leads: {
+    total: 0,
+    new: 0,
+  },
+  shareUrl: 'https://tickif.com/d/livspace',
 };
 
 describe('DesignerDashboardOverview', () => {
@@ -27,7 +34,8 @@ describe('DesignerDashboardOverview', () => {
       <DesignerDashboardOverview
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
-        completion={completion}
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
       />,
     );
 
@@ -36,16 +44,18 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.getByText('20%')).toBeInTheDocument();
     expect(screen.getByText(/account creation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/upload your first project/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/complete kyc/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/share the portfolio link in socials/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/complete profile/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/complete kyc/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/share the portfolio link in socials/i)).not.toBeInTheDocument();
   });
 
-  it('links the shipped project actions into the upload flow and keeps unshipped actions disabled', () => {
+  it('links the shipped project, profile, and share actions', () => {
     render(
       <DesignerDashboardOverview
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
-        completion={completion}
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
       />,
     );
 
@@ -55,11 +65,50 @@ describe('DesignerDashboardOverview', () => {
       'href',
       '/designer/projects/upload',
     );
-    expect(screen.getByRole('button', { name: /complete kyc/i })).toBeDisabled();
     expect(screen.getByRole('link', { name: /manage portfolio/i })).toHaveAttribute(
       'href',
       '/designer/profile',
     );
-    expect(screen.getAllByRole('button', { name: /copy link/i })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+  });
+
+  it('shows setup complete once all tracked backend steps are done', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{
+          ...dashboard,
+          profileCompletion: {
+            score: 100,
+            missing: [],
+          },
+          projects: {
+            total: 1,
+            published: 0,
+            inReview: 0,
+            draft: 1,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/setup complete/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/profile setup steps/i)).not.toBeInTheDocument();
+  });
+
+  it('surfaces completion loading failures without replacing them with a fake empty state', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+        dashboardError="Could not load dashboard summary."
+      />,
+    );
+
+    expect(screen.getByText(/could not load dashboard summary/i)).toBeInTheDocument();
   });
 });

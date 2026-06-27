@@ -163,6 +163,19 @@ export type ProfilePublicResponse = z.infer<typeof profilePublicResponseSchema>;
 export const profileOwnerResponseSchema = profileBaseSchema.meta({ id: 'ProfileOwner' });
 export type ProfileOwnerResponse = z.infer<typeof profileOwnerResponseSchema>;
 
+/** Authenticated current profile context used by designer workspace screens. */
+export const currentProfileResponseSchema = profileOwnerResponseSchema
+  .extend({
+    organization: z.object({
+      id: z.string(),
+      name: z.string(),
+      slug: z.string(),
+    }),
+    shareUrl: z.string().url(),
+  })
+  .meta({ id: 'CurrentProfile' });
+export type CurrentProfileResponse = z.infer<typeof currentProfileResponseSchema>;
+
 /** Profile ID path parameter. */
 export const profileIdParamSchema = z.object({
   id: z.string().uuid(),

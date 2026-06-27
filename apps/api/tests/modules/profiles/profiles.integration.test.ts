@@ -499,6 +499,19 @@ describe('PATCH /api/profiles/me — update', () => {
     return { cookie: freshCookie, userId: session!.user.id, orgId: member!.organizationId };
   }
 
+  it('reads current profile with active organization context and share URL', async () => {
+    const { cookie } = await setupDesignerWithSession();
+
+    const res = await request('GET', '/api/profiles/me', { cookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.displayName).toBe('Patch User');
+    expect(body.organization.name).toBe('Patch User');
+    expect(body.organization.slug).toMatch(/^patch-user/);
+    expect(new URL(body.shareUrl).pathname).toBe(`/d/${body.organization.slug}`);
+  });
+
   it('updates profile fields (partial — bio only)', async () => {
     const { cookie } = await setupDesignerWithSession();
     const res = await request('PATCH', '/api/profiles/me', {

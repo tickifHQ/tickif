@@ -1,0 +1,214 @@
+import type {
+  CreateProjectInput,
+  UpdateImageMetadataInput,
+} from '@repo/contracts';
+
+type BackendProjectSelection = {
+  propertyTypeSlug: string;
+  propertySubtypeSlug?: string;
+};
+
+export type ProjectImageMoveDirection = 'previous' | 'next';
+
+type DefaultRoomRefreshDraft = {
+  id?: string;
+  roomSlug: string;
+  title: string;
+  description: string;
+  designStyle: string;
+  materialFinish: string;
+  tags: string[];
+  tagInput: string;
+  images: unknown[];
+  uploading: boolean;
+  uploadError: string;
+};
+
+export const projectTypeBackendMap: Record<string, BackendProjectSelection> = {
+  apartment: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+  villa: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' },
+  'office-commercial': { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'corporate-office' },
+  'institutional-public': { propertyTypeSlug: 'institutional-public' },
+  'retail-showroom': { propertyTypeSlug: 'retail-showroom', propertySubtypeSlug: 'showroom' },
+  'cafe-restaurant': { propertyTypeSlug: 'food-hospitality', propertySubtypeSlug: 'cafe-coffee-shop' },
+};
+
+export function getBackendProjectSelection({
+  projectType,
+  projectSubtype,
+  availablePropertyTypeSlugs,
+  availablePropertySubtypeSlugs,
+}: {
+  projectType: string;
+  projectSubtype: string;
+  availablePropertyTypeSlugs: Set<string>;
+  availablePropertySubtypeSlugs: Set<string>;
+}): BackendProjectSelection {
+  const base = projectTypeBackendMap[projectType] ?? projectTypeBackendMap.apartment!;
+  const hasLoadedPropertyTypes = availablePropertyTypeSlugs.size > 0;
+  const hasLoadedPropertySubtypes = availablePropertySubtypeSlugs.size > 0;
+  const propertyTypeSlug = base.propertyTypeSlug;
+
+  if (hasLoadedPropertyTypes && !availablePropertyTypeSlugs.has(propertyTypeSlug)) {
+    throw new Error(`Project type taxonomy is missing "${propertyTypeSlug}". Please refresh seed data and try again.`);
+  }
+
+  const mappedSubtypeSlug = (projectSubtype || base.propertySubtypeSlug) || undefined;
+
+  if (mappedSubtypeSlug && hasLoadedPropertySubtypes && !availablePropertySubtypeSlugs.has(mappedSubtypeSlug)) {
+    throw new Error(`Project subtype taxonomy is missing "${mappedSubtypeSlug}". Please refresh seed data and try again.`);
+  }
+
+  return {
+    propertyTypeSlug,
+    propertySubtypeSlug: mappedSubtypeSlug,
+  };
+}
+
+function slugifyTitle(input: string) {
+  return input.trim() || 'Untitled project draft';
+}
+
+function parsePositiveInteger(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseDurationMonths(value: string) {
+  const match = /^(\d+)/.exec(value.trim());
+  if (!match) return undefined;
+  return parsePositiveInteger(match[1]!);
+}
+
+function mapProjectMetadata(input: {
+  uiProjectTypeSlug: string;
+  projectSubtypeSlug: string;
+  projectSubtypeLabel: string;
+  localityLabel: string;
+  scopes: string[];
+}) {
+  return {
+    uiProjectTypeSlug: input.uiProjectTypeSlug || undefined,
+    projectSubtypeLabel: input.projectSubtypeLabel || undefined,
+    projectSubtypeSlug: input.projectSubtypeSlug || undefined,
+    localityLabel: input.localityLabel || undefined,
+    scopeSlugs: input.scopes,
+  };
+}
+
+export function buildCreateProjectPayload(input: {
+  projectName: string;
+  selectedProjectTypeLabel: string;
+  aboutProject: string;
+  backendProjectSelection: BackendProjectSelection;
+  selectedScopeSlug: string;
+  primaryField: 'bhk' | 'subtype';
+  bhkSlug: string;
+  sizeSqft: string;
+  citySlug: string;
+  localitySlug?: string;
+  localityLabel: string;
+  buildingName: string;
+  budgetBandSlug: string;
+  completedByMonth: string;
+  projectDuration: string;
+  projectType: string;
+  selectedProjectSubtypeLabel: string;
+  selectedScopes: string[];
+}): CreateProjectInput {
+  return {
+    title: slugifyTitle(input.projectName || `${input.selectedProjectTypeLabel} project`),
+    description: input.aboutProject.trim() || undefined,
+    propertyTypeSlug: input.backendProjectSelection.propertyTypeSlug,
+    propertySubtypeSlug: input.backendProjectSelection.propertySubtypeSlug,
+    scopeSlug: input.selectedScopeSlug || undefined,
+    bhkSlug: input.primaryField === 'bhk' ? input.bhkSlug || undefined : undefined,
+    sizeSqft: parsePositiveInteger(input.sizeSqft),
+    citySlug: input.citySlug || undefined,
+    localitySlug: input.localitySlug,
+    buildingName: input.buildingName.trim() || undefined,
+    budgetBandSlug: input.budgetBandSlug || undefined,
+    completedMonth: input.completedByMonth || undefined,
+    durationMonths: parseDurationMonths(input.projectDuration),
+    metadata: mapProjectMetadata({
+      uiProjectTypeSlug: input.projectType,
+      projectSubtypeSlug: input.backendProjectSelection.propertySubtypeSlug ?? '',
+      projectSubtypeLabel: input.selectedProjectSubtypeLabel,
+      localityLabel: input.localityLabel,
+      scopes: input.selectedScopes,
+    }),
+  };
+}
+
+function toSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function uniqueNonEmpty(values: string[]) {
+  return [...new Set(values.filter((value) => value.length > 0))];
+}
+
+export function buildImageMetadata(input: {
+  roomId: string;
+  sortOrder: number;
+  designStyle: string;
+  materialFinish: string;
+  tags: string[];
+}): UpdateImageMetadataInput {
+  return {
+    roomId: input.roomId,
+    sortOrder: input.sortOrder,
+    themeSlugs: input.designStyle ? [input.designStyle] : [],
+    finishSlugs: input.materialFinish ? [input.materialFinish] : [],
+    tagSlugs: uniqueNonEmpty(input.tags.map(toSlug)),
+  };
+}
+
+export function moveProjectImage<T extends { id: string; sortOrder: number }>(
+  images: T[],
+  imageId: string,
+  direction: ProjectImageMoveDirection,
+): T[] {
+  const currentIndex = images.findIndex((image) => image.id === imageId);
+  if (currentIndex < 0) return images;
+
+  const targetIndex = direction === 'previous' ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= images.length) return images;
+
+  const nextImages = [...images];
+  const [movedImage] = nextImages.splice(currentIndex, 1);
+  if (!movedImage) return images;
+  nextImages.splice(targetIndex, 0, movedImage);
+
+  return nextImages.map((image, index) => ({ ...image, sortOrder: index }));
+}
+
+export function shouldRefreshPristineDefaultRooms(
+  currentRooms: DefaultRoomRefreshDraft[],
+  nextDefaultRooms: Array<Pick<DefaultRoomRefreshDraft, 'roomSlug' | 'title'>>,
+): boolean {
+  if (currentRooms.length > nextDefaultRooms.length) return false;
+
+  const roomsArePristine = currentRooms.every(
+    (room) =>
+      !room.id &&
+      room.description.length === 0 &&
+      room.designStyle.length === 0 &&
+      room.materialFinish.length === 0 &&
+      room.tags.length === 0 &&
+      room.tagInput.length === 0 &&
+      room.images.length === 0 &&
+      !room.uploading &&
+      room.uploadError.length === 0,
+  );
+
+  if (!roomsArePristine) return false;
+
+  const currentSignature = currentRooms.map((room) => `${room.roomSlug}:${room.title}`).join('|');
+  const nextSignature = nextDefaultRooms.map((room) => `${room.roomSlug}:${room.title}`).join('|');
+  return currentSignature !== nextSignature;
+}

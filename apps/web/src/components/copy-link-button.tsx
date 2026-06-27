@@ -10,7 +10,7 @@ export function CopyLinkButton({
   className,
 }: {
   value: string;
-  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'link';
+  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'link';
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);

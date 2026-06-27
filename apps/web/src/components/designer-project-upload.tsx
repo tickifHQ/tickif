@@ -3,8 +3,10 @@
 import type { ChangeEvent, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -17,13 +19,14 @@ import {
   Plus,
   Search,
   Sparkles,
+  Star,
   Trash2,
 } from 'lucide-react';
 import {
   allowedImageContentType,
   type AllowedImageContentType,
-  type CreateProjectInput,
   type CreateProjectRoomInput,
+  type ListProjectImagesResponse,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
   type ProjectImageAttachment,
@@ -31,7 +34,6 @@ import {
   type ProjectRoom,
   type TaxonomyTerm,
   type UpdateProjectInput,
-  type UpdateImageMetadataInput,
   type UploadUrlResponse,
   type UpdateProjectRoomInput,
 } from '@repo/contracts';
@@ -44,6 +46,14 @@ import { Label } from '@repo/ui/components/label';
 import { Textarea } from '@repo/ui/components/textarea';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
+import {
+  buildCreateProjectPayload as buildCreateProjectPayloadInput,
+  buildImageMetadata as buildImageMetadataInput,
+  getBackendProjectSelection,
+  moveProjectImage,
+  shouldRefreshPristineDefaultRooms,
+  type ProjectImageMoveDirection,
+} from '@/lib/designer-project-upload';
 
 type ProjectTypeOption = {
   slug: string;
@@ -159,15 +169,6 @@ const fallbackProjectTypeLabels: Record<string, string> = {
   'cafe-restaurant': 'Cafe / Restaurant',
 };
 const projectDeliveryScopeSlugs = ['design', 'interior-execution', 'construction'];
-
-const projectTypeBackendMap: Record<string, { propertyTypeSlug: string; propertySubtypeSlug?: string }> = {
-  apartment: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
-  villa: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' },
-  'office-commercial': { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'corporate-office' },
-  'institutional-public': { propertyTypeSlug: 'institutional-public' },
-  'retail-showroom': { propertyTypeSlug: 'retail-showroom', propertySubtypeSlug: 'showroom' },
-  'cafe-restaurant': { propertyTypeSlug: 'food-hospitality', propertySubtypeSlug: 'cafe-coffee-shop' },
-};
 
 const fallbackDurationOptions = ['1 month', '2 months', '3 months', '4 months', '6 months', '9 months', '12+ months'];
 
@@ -386,10 +387,6 @@ function makeRoomDraft(seed: { roomSlug: string; title: string }, index: number)
   };
 }
 
-function slugifyTitle(input: string) {
-  return input.trim() || 'Untitled project draft';
-}
-
 function propertyTypeLabel(slug: string, options: ProjectTypeOption[]) {
   return options.find((option) => option.slug === slug)?.label ?? 'Project';
 }
@@ -439,73 +436,80 @@ function normalizeRoomSearchValue(value: string) {
   return value.trim().toLowerCase();
 }
 
-function toSlug(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function uniqueNonEmpty(values: string[]) {
-  return [...new Set(values.filter((value) => value.length > 0))];
-}
-
 function isLocalPreviewImage(image: ProjectImagePreview) {
   return image.id.startsWith('local-preview-');
 }
 
-function parsePositiveInteger(value: string) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function parseDurationMonths(value: string) {
-  const match = /^(\d+)/.exec(value.trim());
-  if (!match) return undefined;
-  return parsePositiveInteger(match[1]!);
+function metadataString(value: unknown) {
+  return typeof value === 'string' ? value : '';
 }
 
-function getBackendProjectSelection(
-  projectType: string,
-  projectSubtype: string,
-  availablePropertyTypeSlugs: Set<string>,
-  availablePropertySubtypeSlugs: Set<string>,
+function metadataStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function metadataNumberString(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+}
+
+function inferUiProjectType(project: ProjectDetailResponse) {
+  const metadata = metadataRecord(project.metadata);
+  const storedProjectType = metadataString(metadata.uiProjectTypeSlug);
+  if (supportedProjectTypeSlugs.includes(storedProjectType)) return storedProjectType;
+
+  switch (project.propertySubtypeSlug) {
+    case 'apartment':
+      return 'apartment';
+    case 'villa':
+      return 'villa';
+  }
+
+  switch (project.propertyTypeSlug) {
+    case 'commercial-workspace':
+      return 'office-commercial';
+    case 'institutional-public':
+      return 'institutional-public';
+    case 'retail-showroom':
+      return 'retail-showroom';
+    case 'food-hospitality':
+      return 'cafe-restaurant';
+    case 'residential':
+    default:
+      return 'apartment';
+  }
+}
+
+function firstAttributeLabel(
+  metadata: ProjectRoom['metadata'],
+  key: string,
 ) {
-  const base = projectTypeBackendMap[projectType] ?? projectTypeBackendMap.apartment!;
-  const hasLoadedPropertyTypes = availablePropertyTypeSlugs.size > 0;
-  const hasLoadedPropertySubtypes = availablePropertySubtypeSlugs.size > 0;
-  const propertyTypeSlug = base.propertyTypeSlug;
-
-  if (hasLoadedPropertyTypes && !availablePropertyTypeSlugs.has(propertyTypeSlug)) {
-    throw new Error(`Project type taxonomy is missing "${propertyTypeSlug}". Please refresh seed data and try again.`);
-  }
-
-  const mappedSubtypeSlug = (base.propertySubtypeSlug ?? projectSubtype) || undefined;
-
-  if (mappedSubtypeSlug && hasLoadedPropertySubtypes && !availablePropertySubtypeSlugs.has(mappedSubtypeSlug)) {
-    throw new Error(`Project subtype taxonomy is missing "${mappedSubtypeSlug}". Please refresh seed data and try again.`);
-  }
-
-  return {
-    propertyTypeSlug,
-    propertySubtypeSlug: mappedSubtypeSlug,
-  };
+  const attributes = metadataRecord(metadata.attributeLabels);
+  return metadataStringArray(attributes[key])[0] ?? '';
 }
 
-function mapProjectMetadata(input: {
-  uiProjectTypeSlug: string;
-  projectSubtypeSlug: string;
-  projectSubtypeLabel: string;
-  localityLabel: string;
-  scopes: string[];
-}) {
+function roomSlugFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
+  return roomTerms.find((term) => term.id === room.roomTypeId)?.slug ?? room.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function roomTitleFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
+  return room.name || roomTerms.find((term) => term.id === room.roomTypeId)?.label || 'Project room';
+}
+
+function toProjectImagePreview(image: ProjectImageDto, index: number, existing?: ProjectImagePreview): ProjectImagePreview {
   return {
-    uiProjectTypeSlug: input.uiProjectTypeSlug || undefined,
-    projectSubtypeLabel: input.projectSubtypeLabel || undefined,
-    projectSubtypeSlug: input.projectSubtypeSlug || undefined,
-    localityLabel: input.localityLabel || undefined,
-    scopeSlugs: input.scopes,
+    id: image.id,
+    status: image.status,
+    sortOrder: image.sortOrder,
+    width: image.width,
+    height: image.height,
+    fileName: existing?.fileName ?? `Image ${index + 1}`,
+    previewUrl: existing?.previewUrl,
   };
 }
 
@@ -654,7 +658,7 @@ function ProjectTypeCard({
       className={cn(
         'relative flex h-[110px] w-[150px] shrink-0 flex-col items-center rounded-[18px] border px-3 py-4 text-center transition-colors',
         selected
-          ? 'border-primary bg-primary/5 text-primary shadow-[0_8px_20px_rgba(15,23,42,0.08),0_0_0_1px_hsl(var(--primary)/0.22)]'
+          ? 'border-primary bg-primary/5 text-primary shadow-sm ring-1 ring-primary/20'
           : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground',
       )}
     >
@@ -852,6 +856,9 @@ type RoomCardProps = {
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSetCover: (imageId: string) => void;
+  onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
+  coverImageId: string | null;
   allowDelete: boolean;
 };
 
@@ -868,6 +875,9 @@ function RoomCard({
   onAddTag,
   onRemoveTag,
   onUpload,
+  onSetCover,
+  onMoveImage,
+  coverImageId,
   allowDelete,
 }: RoomCardProps) {
   const imageCount = room.images.length;
@@ -940,36 +950,91 @@ function RoomCard({
             ) : null}
 
             {room.images.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {room.images.map((image) => {
+              <div className="grid gap-2 sm:grid-cols-2">
+                {room.images.map((image, index) => {
                   const statusLabel =
                     image.status === 'ready' ? 'Ready' : image.status === 'processing' ? 'Processing' : 'Failed';
+                  const canPersistImage = !isLocalPreviewImage(image);
+                  const isCover = coverImageId === image.id;
 
                   return (
                     <div
                       key={image.id}
-                      className="relative h-10 w-13 overflow-hidden rounded-sm border border-border bg-muted"
+                      className={cn(
+                        'overflow-hidden rounded-xl border bg-muted/40',
+                        isCover ? 'border-primary ring-1 ring-primary/20' : 'border-border',
+                      )}
                       title={`${image.fileName} · ${statusLabel}`}
                     >
-                      {image.previewUrl ? (
-                        <div
-                          role="img"
-                          aria-label={`${image.fileName} (${statusLabel})`}
-                          className="h-full w-full bg-cover bg-center"
-                          style={{ backgroundImage: `url(${image.previewUrl})` }}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                          <ImagePlus className="size-4" aria-hidden="true" />
-                          <span className="sr-only">{`${image.fileName} (${statusLabel})`}</span>
+                      <div className="flex gap-3 p-2">
+                        <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                          {image.previewUrl ? (
+                            <div
+                              role="img"
+                              aria-label={`${image.fileName} (${statusLabel})`}
+                              className="h-full w-full bg-cover bg-center"
+                              style={{ backgroundImage: `url(${image.previewUrl})` }}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                              <ImagePlus className="size-4" aria-hidden="true" />
+                              <span className="sr-only">{`${image.fileName} (${statusLabel})`}</span>
+                            </div>
+                          )}
+                          {image.status === 'processing' ? (
+                            <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70" aria-hidden="true" />
+                          ) : null}
+                          {image.status === 'failed' ? (
+                            <span className="absolute inset-0 bg-destructive/20" aria-hidden="true" />
+                          ) : null}
                         </div>
-                      )}
-                      {image.status === 'processing' ? (
-                        <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70" aria-hidden="true" />
-                      ) : null}
-                      {image.status === 'failed' ? (
-                        <span className="absolute inset-0 bg-destructive/20" aria-hidden="true" />
-                      ) : null}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn(typography.bodyMedium, 'truncate text-foreground')}>
+                              {image.fileName}
+                            </span>
+                            {isCover ? <Star className="size-3.5 shrink-0 fill-primary text-primary" /> : null}
+                          </div>
+                          <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
+                            {statusLabel}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Button
+                              type="button"
+                              variant={isCover ? 'secondary' : 'outline'}
+                              size="sm"
+                              disabled={!canPersistImage}
+                              onClick={() => onSetCover(image.id)}
+                              className="h-7 px-2 text-[11px]"
+                            >
+                              <Star className="size-3" />
+                              {isCover ? 'Cover' : 'Set cover'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={index === 0}
+                              onClick={() => onMoveImage(image.id, 'previous')}
+                              className="size-7"
+                              aria-label={`Move ${image.fileName} earlier`}
+                            >
+                              <ArrowLeft className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={index === room.images.length - 1}
+                              onClick={() => onMoveImage(image.id, 'next')}
+                              className="size-7"
+                              aria-label={`Move ${image.fileName} later`}
+                            >
+                              <ArrowRight className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -1011,7 +1076,12 @@ function RoomCard({
   );
 }
 
-export function DesignerProjectUpload() {
+export function DesignerProjectUpload({
+  initialProjectId,
+}: {
+  initialProjectId?: string;
+}) {
+  const router = useRouter();
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(true);
   const [cities, setCities] = useState<TaxonomyTerm[]>([]);
   const [localities, setLocalities] = useState<TaxonomyTerm[]>([]);
@@ -1026,6 +1096,9 @@ export function DesignerProjectUpload() {
   const [taxonomyError, setTaxonomyError] = useState('');
 
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
+  const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('');
   const [aboutProject, setAboutProject] = useState('');
   const [projectType, setProjectType] = useState('apartment');
@@ -1118,12 +1191,12 @@ export function DesignerProjectUpload() {
   );
   const backendProjectSelection = useMemo(
     () =>
-      getBackendProjectSelection(
+      getBackendProjectSelection({
         projectType,
         projectSubtype,
         availablePropertyTypeSlugs,
         availablePropertySubtypeSlugs,
-      ),
+      }),
     [availablePropertySubtypeSlugs, availablePropertyTypeSlugs, projectSubtype, projectType],
   );
   const selectedLocality = useMemo(
@@ -1134,6 +1207,13 @@ export function DesignerProjectUpload() {
 
   const totalImages = useMemo(
     () => rooms.reduce((count, room) => count + room.images.length, 0),
+    [rooms],
+  );
+  const hasProcessingImages = useMemo(
+    () =>
+      rooms.some((room) =>
+        room.images.some((image) => image.status === 'processing' && !isLocalPreviewImage(image)),
+      ),
     [rooms],
   );
 
@@ -1186,6 +1266,16 @@ export function DesignerProjectUpload() {
       previewUrlsRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+
+    const timer = window.setTimeout(() => {
+      setNotice('');
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1266,6 +1356,118 @@ export function DesignerProjectUpload() {
   }, [selectedCity]);
 
   useEffect(() => {
+    if (!initialProjectId || loadingTaxonomy || loadedProjectId === initialProjectId) return;
+
+    let cancelled = false;
+    const draftProjectId = initialProjectId;
+
+    async function loadProjectDraft() {
+      setLoadingProject(true);
+      setError('');
+      setNotice('');
+
+      try {
+        const projectResponse = await api.api.projects[':id'].$get({
+          param: { id: draftProjectId },
+        });
+        const projectPayload = await projectResponse.json();
+
+        if (!projectResponse.ok) {
+          throw new Error(extractApiMessage(projectPayload, 'Could not load this project draft.'));
+        }
+
+        const project = projectPayload as ProjectDetailResponse;
+        const imagesResponse = await api.api.projects[':id'].images.$get({
+          param: { id: project.id },
+          query: { limit: 100, offset: 0 },
+        });
+        const imagesPayload = await imagesResponse.json();
+
+        if (!imagesResponse.ok) {
+          throw new Error(extractApiMessage(imagesPayload, 'Could not load this project draft images.'));
+        }
+
+        if (cancelled) return;
+
+        const projectImagePayload = imagesPayload as ListProjectImagesResponse;
+        const projectMetadata = metadataRecord(project.metadata);
+        const projectImages = (projectImagePayload.items ?? []).sort(
+          (left, right) => left.sortOrder - right.sortOrder,
+        );
+        const imagesByRoom = new Map<string, ProjectImageDto[]>();
+        for (const image of projectImages) {
+          if (!image.roomId) continue;
+          const roomImages = imagesByRoom.get(image.roomId) ?? [];
+          roomImages.push(image);
+          imagesByRoom.set(image.roomId, roomImages);
+        }
+
+        const hydratedRooms = project.rooms.length > 0
+          ? project.rooms
+            .sort((left, right) => left.sortOrder - right.sortOrder)
+            .map((room, index) => {
+              const roomImages = imagesByRoom.get(room.id) ?? [];
+              return {
+                clientId: `room-${index}-${room.id}`,
+                id: room.id,
+                roomSlug: roomSlugFromRoom(room, roomTerms),
+                roomTypeId: room.roomTypeId,
+                title: roomTitleFromRoom(room, roomTerms),
+                description: room.description ?? '',
+                expanded: index === 0,
+                designStyle: firstAttributeLabel(room.metadata, 'theme') || roomImages[0]?.themeSlugs[0] || '',
+                materialFinish: firstAttributeLabel(room.metadata, 'finish') || roomImages[0]?.finishSlugs[0] || '',
+                tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
+                tagInput: '',
+                images: roomImages.map((image, imageIndex) => toProjectImagePreview(image, imageIndex)),
+                uploading: false,
+                uploadError: '',
+              } satisfies RoomDraft;
+            })
+          : buildDefaultRooms(inferUiProjectType(project), project.bhkSlug ?? '').map((seed, index) =>
+            makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
+          );
+
+        setProjectId(project.id);
+        setLoadedProjectId(project.id);
+        setProjectName(project.title);
+        setAboutProject(project.description ?? '');
+        setProjectType(inferUiProjectType(project));
+        setProjectSubtype(project.propertySubtypeSlug ?? metadataString(projectMetadata.projectSubtypeSlug));
+        setBhkSlug(project.bhkSlug ?? '');
+        setSizeSqft(metadataNumberString(project.sizeSqft));
+        setCitySlug(project.citySlug ?? '');
+        setLocality(project.localitySlug ?? metadataString(projectMetadata.localityLabel));
+        setBuildingName(project.buildingName ?? '');
+        setSelectedScopes(
+          project.scopeSlug
+            ? [project.scopeSlug]
+            : metadataStringArray(projectMetadata.scopeSlugs).slice(0, 1),
+        );
+        setCompletedByMonth(project.completedMonth ?? '');
+        setProjectDuration(project.durationMonths ? `${project.durationMonths} months` : '');
+        setBudgetBandSlug(project.budgetBandSlug ?? '');
+        setCoverImageId(project.coverImageId);
+        setRooms(hydratedRooms);
+        setSections({ classification: true, timeline: true, metadata: true, images: true });
+        setNotice('Draft loaded. You can continue editing from here.');
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Could not load this project draft.');
+        }
+      } finally {
+        if (!cancelled) setLoadingProject(false);
+      }
+    }
+
+    void loadProjectDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialProjectId, loadedProjectId, loadingTaxonomy, roomTerms]);
+
+  useEffect(() => {
     if (projectTypeOptions.length === 0) return;
     if (projectTypeOptions.some((option) => option.slug === projectType)) return;
 
@@ -1300,31 +1502,34 @@ export function DesignerProjectUpload() {
   }, [projectSubtype, selectedProjectTypeBehavior.primaryField]);
 
   useEffect(() => {
-    const roomsArePristine = rooms.every(
-      (room) =>
-        !room.id &&
-        room.description.length === 0 &&
-        room.designStyle.length === 0 &&
-        room.materialFinish.length === 0 &&
-        room.tags.length === 0 &&
-        room.tagInput.length === 0 &&
-        room.images.length === 0 &&
-        !room.uploading &&
-        room.uploadError.length === 0,
-    );
+    setRooms((currentRooms) => {
+      const nextDefaultRooms = buildDefaultRooms(projectType, bhkSlug).map((seed, index) =>
+        makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
+      );
 
-    if (!roomsArePristine) return;
+      return shouldRefreshPristineDefaultRooms(currentRooms, nextDefaultRooms)
+        ? nextDefaultRooms
+        : currentRooms;
+    });
+  }, [bhkSlug, projectType]);
 
-    const nextDefaultRooms = buildDefaultRooms(projectType, bhkSlug).map((seed, index) =>
-      makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
-    );
-    const currentSignature = rooms.map((room) => `${room.roomSlug}:${room.title}`).join('|');
-    const nextSignature = nextDefaultRooms.map((room) => `${room.roomSlug}:${room.title}`).join('|');
+  useEffect(() => {
+    if (!projectId || !hasProcessingImages) return;
 
-    if (currentSignature !== nextSignature) {
-      setRooms(nextDefaultRooms);
-    }
-  }, [bhkSlug, projectType, rooms]);
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      refreshProjectImages(projectId).catch(() => {
+        if (!cancelled) {
+          setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
+        }
+      });
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [hasProcessingImages, projectId]);
 
   function toggleSection(section: SectionId) {
     setSections((current) => ({ ...current, [section]: !current[section] }));
@@ -1344,6 +1549,43 @@ export function DesignerProjectUpload() {
     setRooms((current) => current.map((room) => (room.clientId === clientId ? updater(room) : room)));
   }
 
+  function mergeServerImages(serverImages: ProjectImageDto[]) {
+    setRooms((currentRooms) =>
+      currentRooms.map((room) => {
+        if (!room.id) return room;
+
+        const existingById = new Map(room.images.map((image) => [image.id, image]));
+        const localPreviews = room.images.filter(isLocalPreviewImage);
+        const roomServerImages = serverImages
+          .filter((image) => image.roomId === room.id)
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+          .map((image, index) => toProjectImagePreview(image, index, existingById.get(image.id)));
+
+        return {
+          ...room,
+          images: [...roomServerImages, ...localPreviews],
+        };
+      }),
+    );
+  }
+
+  async function refreshProjectImages(currentProjectId: string) {
+    const response = await api.api.projects[':id'].images.$get({
+      param: { id: currentProjectId },
+      query: { limit: 100, offset: 0 },
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractApiMessage(payload, 'Could not refresh image processing status.'));
+    }
+
+    const imagePayload = payload as ListProjectImagesResponse;
+    const images = imagePayload.items ?? [];
+    mergeServerImages(images);
+    return images;
+  }
+
   function revokePreviewUrl(previewUrl?: string) {
     if (!previewUrl) return;
     URL.revokeObjectURL(previewUrl);
@@ -1356,6 +1598,49 @@ export function DesignerProjectUpload() {
       removedRoom?.images.forEach((image) => revokePreviewUrl(image.previewUrl));
       return current.filter((room) => room.clientId !== clientId);
     });
+  }
+
+  function handleSetCover(imageId: string) {
+    if (imageId.startsWith('local-preview-')) return;
+
+    setCoverImageId(imageId);
+    setNotice('Cover image selected. Save the draft to persist it.');
+    setError('');
+  }
+
+  async function handleMoveImage(room: RoomDraft, imageId: string, direction: ProjectImageMoveDirection) {
+    const nextImages = moveProjectImage(room.images, imageId, direction);
+    if (nextImages === room.images) return;
+
+    updateRoom(room.clientId, (current) => ({
+      ...current,
+      images: moveProjectImage(current.images, imageId, direction),
+    }));
+    setError('');
+    setNotice('Image order updated.');
+
+    if (!projectId || !room.id) return;
+
+    try {
+      await Promise.all(
+        nextImages
+          .filter((image) => !isLocalPreviewImage(image))
+          .map((image, index) =>
+            api.api.projects[':id'].images[':imageId'].$patch({
+              param: { id: projectId, imageId: image.id },
+              json: { roomId: room.id, sortOrder: index },
+            }).then(async (response) => {
+              if (!response.ok) {
+                const payload = await response.json();
+                throw new Error(extractApiMessage(payload, `Could not reorder ${image.fileName}.`));
+              }
+            }),
+          ),
+      );
+    } catch (moveError) {
+      setError(moveError instanceof Error ? moveError.message : 'Could not save the new image order.');
+      void refreshProjectImages(projectId);
+    }
   }
 
   async function handleDeleteRoom(room: RoomDraft) {
@@ -1401,37 +1686,32 @@ export function DesignerProjectUpload() {
     ]);
   }
 
-  function buildCreateProjectPayload(): CreateProjectInput {
-    const parsedSizeSqft = parsePositiveInteger(sizeSqft);
-    const parsedDurationMonths = parseDurationMonths(projectDuration);
-
-    return {
-      title: slugifyTitle(projectName || `${selectedProjectTypeLabel} project`),
-      description: aboutProject.trim() || undefined,
-      propertyTypeSlug: backendProjectSelection.propertyTypeSlug,
-      propertySubtypeSlug: backendProjectSelection.propertySubtypeSlug,
-      scopeSlug: selectedScopeSlug || undefined,
-      bhkSlug: selectedProjectTypeBehavior.primaryField === 'bhk' ? bhkSlug || undefined : undefined,
-      sizeSqft: parsedSizeSqft,
-      citySlug: citySlug || undefined,
+  function buildCreateProjectPayload() {
+    return buildCreateProjectPayloadInput({
+      projectName,
+      selectedProjectTypeLabel,
+      aboutProject,
+      backendProjectSelection,
+      selectedScopeSlug,
+      primaryField: selectedProjectTypeBehavior.primaryField,
+      bhkSlug,
+      sizeSqft,
+      citySlug,
       localitySlug: selectedLocality?.slug,
-      buildingName: buildingName.trim() || undefined,
-      budgetBandSlug: budgetBandSlug || undefined,
-      completedMonth: completedByMonth || undefined,
-      durationMonths: parsedDurationMonths,
-      metadata: mapProjectMetadata({
-        uiProjectTypeSlug: projectType,
-        projectSubtypeSlug: backendProjectSelection.propertySubtypeSlug ?? '',
-        projectSubtypeLabel: selectedProjectSubtypeLabel,
-        localityLabel: selectedLocality?.label ?? locality,
-        scopes: selectedScopes,
-      }),
-    };
+      localityLabel: selectedLocality?.label ?? locality,
+      buildingName,
+      budgetBandSlug,
+      completedByMonth,
+      projectDuration,
+      projectType,
+      selectedProjectSubtypeLabel,
+      selectedScopes,
+    });
   }
 
   function buildUpdateProjectPayload(): UpdateProjectInput {
     const createPayload = buildCreateProjectPayload();
-    const coverImageId = rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
+    const fallbackCoverImageId = rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
 
     return {
       title: createPayload.title,
@@ -1447,7 +1727,7 @@ export function DesignerProjectUpload() {
       budgetBandSlug: createPayload.budgetBandSlug ?? null,
       completedMonth: createPayload.completedMonth ?? null,
       durationMonths: createPayload.durationMonths ?? null,
-      coverImageId,
+      coverImageId: coverImageId ?? fallbackCoverImageId,
       metadata: createPayload.metadata,
     };
   }
@@ -1466,6 +1746,8 @@ export function DesignerProjectUpload() {
 
     const detail = payloadJson as ProjectDetailResponse;
     setProjectId(detail.id);
+    setLoadedProjectId(detail.id);
+    router.replace(`/designer/projects/upload?projectId=${detail.id}`);
     return detail.id;
   }
 
@@ -1527,14 +1809,14 @@ export function DesignerProjectUpload() {
     return room.id;
   }
 
-  function buildImageMetadata(room: RoomDraft, roomId: string, sortOrder: number): UpdateImageMetadataInput {
-    return {
+  function buildImageMetadata(room: RoomDraft, roomId: string, sortOrder: number) {
+    return buildImageMetadataInput({
       roomId,
       sortOrder,
-      themeSlugs: room.designStyle ? [room.designStyle] : [],
-      finishSlugs: room.materialFinish ? [room.materialFinish] : [],
-      tagSlugs: uniqueNonEmpty(room.tags.map(toSlug)),
-    };
+      designStyle: room.designStyle,
+      materialFinish: room.materialFinish,
+      tags: room.tags,
+    });
   }
 
   async function syncImageMetadata(room: RoomDraft, roomId: string) {
@@ -1779,6 +2061,7 @@ export function DesignerProjectUpload() {
           }
 
           const updatedImage = metadataPayload as ProjectImageDto;
+          setCoverImageId((current) => current ?? linkedImage.id);
 
           updateRoom(room.clientId, (current) => ({
             ...current,
@@ -1887,6 +2170,7 @@ export function DesignerProjectUpload() {
 
   function handleRoomSearchSelect(template: RoomTemplate) {
     addRoomFromTemplate(template);
+    setSections((current) => ({ ...current, images: true }));
     setNotice(`${template.title} added to this project.`);
     setError('');
     closeRoomSearch();
@@ -1927,9 +2211,18 @@ export function DesignerProjectUpload() {
       ) : null}
 
       {notice ? (
-        <Alert className="mt-6 border-primary/20 bg-primary/5 text-primary">
-          <Check className="size-4" />
-          <AlertDescription>{notice}</AlertDescription>
+        <div className="fixed top-4 right-4 z-50 w-[min(calc(100vw-2rem),22rem)]">
+          <Alert variant="success" className="shadow-lg">
+            <Check className="size-4" />
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+
+      {loadingProject ? (
+        <Alert className="mt-6">
+          <Loader2 className="size-4 animate-spin" />
+          <AlertDescription>Loading saved draft…</AlertDescription>
         </Alert>
       ) : null}
 
@@ -2185,6 +2478,9 @@ export function DesignerProjectUpload() {
                     }))
                   }
                   onUpload={(event) => void handleUpload(room, event)}
+                  onSetCover={handleSetCover}
+                  onMoveImage={(imageId, direction) => void handleMoveImage(room, imageId, direction)}
+                  coverImageId={coverImageId}
                   allowDelete={rooms.length > defaultRoomCount}
                 />
               ))}
@@ -2194,7 +2490,7 @@ export function DesignerProjectUpload() {
                 onClick={() => setRoomSearchOpen(true)}
                 className="group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-dashed border-border/80 bg-background px-4 py-3 text-left transition-colors hover:border-primary/40"
               >
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent,rgba(16,185,129,0.08),transparent)] bg-[length:200%_100%] animate-pulse" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent,hsl(var(--primary)/0.08),transparent)] bg-[length:200%_100%] animate-pulse" />
                 <div className={cn('relative flex items-center gap-2 text-muted-foreground', typography.subsectionTitle)}>
                   <Plus className="size-4 text-primary" />
                   Add new room type
@@ -2212,7 +2508,7 @@ export function DesignerProjectUpload() {
                 type="button"
                 variant="outline"
                 onClick={() => void saveDraft()}
-                disabled={saving}
+                disabled={saving || loadingProject}
                 className="text-sm leading-none font-semibold"
               >
                 {saving ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -2223,7 +2519,7 @@ export function DesignerProjectUpload() {
                 onClick={async () => {
                   await handleSubmitProject();
                 }}
-                disabled={saving}
+                disabled={saving || loadingProject}
                 className="text-sm leading-[1.6] font-medium"
               >
                 {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
