@@ -314,6 +314,30 @@ export const profilesService = {
     };
   },
 
+  /** Public read by organization slug for shareable portfolio URLs. */
+  async getPublicProfileBySlug(orgSlug: string): Promise<ProfilePublicResponse> {
+    const profile = await profilesRepository.findByOrgSlug(orgSlug);
+    if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
+
+    const footprint = await profilesRepository.getFootprint(profile.id);
+
+    return {
+      id: profile.id,
+      displayName: profile.displayName,
+      entityType: profile.entityType,
+      bio: profile.bio,
+      logoImageId: profile.logoImageId,
+      status: profile.status,
+      yearsExperience: profile.yearsExperience,
+      projectCount: profile.projectCount,
+      shareCount: profile.shareCount,
+      avgRating: profile.avgRating,
+      reviewCount: profile.reviewCount,
+      footprint,
+      createdAt: profile.createdAt.toISOString(),
+    };
+  },
+
   /**
    * Owner update — requires write-capable org role.
    *

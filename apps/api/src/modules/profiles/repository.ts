@@ -243,6 +243,17 @@ export const profilesRepository = {
     return row ?? null;
   },
 
+  /** Find a profile by owning organization slug (for public portfolio URLs). */
+  async findByOrgSlug(orgSlug: string): Promise<DesignerProfileRecord | null> {
+    const [row] = await db
+      .select({ profile: schema.designerProfile })
+      .from(schema.designerProfile)
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.organization.slug, orgSlug))
+      .limit(1);
+    return row?.profile ?? null;
+  },
+
   /** Get all footprint taxonomy terms for a profile. */
   async getFootprint(
     profileId: string,

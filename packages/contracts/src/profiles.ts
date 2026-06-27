@@ -18,6 +18,27 @@ export const profileCompletionResponseSchema = z
   .meta({ id: 'ProfileCompletion' });
 export type ProfileCompletionResponse = z.infer<typeof profileCompletionResponseSchema>;
 
+export const profileDashboardResponseSchema = z
+  .object({
+    profileCompletion: profileCompletionResponseSchema.pick({
+      score: true,
+      missing: true,
+    }),
+    projects: z.object({
+      total: z.number().int(),
+      published: z.number().int(),
+      inReview: z.number().int(),
+      draft: z.number().int(),
+    }),
+    leads: z.object({
+      total: z.number().int(),
+      new: z.number().int(),
+    }),
+    shareUrl: z.string().url(),
+  })
+  .meta({ id: 'ProfileDashboard' });
+export type ProfileDashboardResponse = z.infer<typeof profileDashboardResponseSchema>;
+
 // --- Onboarding (E-35) ---
 
 /**
@@ -145,6 +166,16 @@ export type ProfileOwnerResponse = z.infer<typeof profileOwnerResponseSchema>;
 /** Profile ID path parameter. */
 export const profileIdParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+/** Public profile slug path parameter. */
+export const profileSlugParamSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a URL-safe profile slug'),
 });
 
 /**
