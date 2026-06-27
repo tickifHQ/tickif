@@ -1,5 +1,6 @@
 import type { ProfileDashboardResponse } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { leadsService } from '../leads/service.js';
 import { profilesService } from '../profiles/service.js';
 import {
   dashboardRepository,
@@ -33,9 +34,10 @@ export const dashboardService = {
       throw AppError.forbidden('Designer profile required');
     }
 
-    const [completion, counts] = await Promise.all([
+    const [completion, counts, leadCounts] = await Promise.all([
       profilesService.getCompletion({ userId: input.userId, orgId: profile.orgId }),
       dashboardRepository.countProjectsByStatus(profile.profileId),
+      leadsService.countForOrganization(profile.orgId),
     ]);
 
     const published = countProjectBucket(counts, ['published']);
@@ -54,8 +56,8 @@ export const dashboardService = {
         draft,
       },
       leads: {
-        total: 0,
-        new: 0,
+        total: leadCounts.total,
+        new: leadCounts.new,
       },
       shareUrl: shareUrl(profile.orgSlug),
     };

@@ -35,6 +35,8 @@ export const projectStatusEnum = pgEnum('project_status', [
   'changes_requested',
 ]);
 
+export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
+
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
@@ -215,6 +217,33 @@ export const project = pgTable(
     index('project_property_type_idx').on(t.propertyTypeSlug),
     index('project_property_subtype_idx').on(t.propertySubtypeSlug),
     index('project_scope_idx').on(t.scopeSlug),
+  ],
+);
+
+export const lead = pgTable(
+  'lead',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    referredProjectId: uuid('referred_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    name: text('name').notNull(),
+    contactNumber: text('contact_number').notNull(),
+    budgetBandSlug: text('budget_band_slug'),
+    message: text('message'),
+    source: text('source').default('enquiry').notNull(),
+    status: leadStatusEnum('status').default('new').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('lead_organization_idx').on(t.organizationId),
+    index('lead_referred_project_idx').on(t.referredProjectId),
+    index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
   ],
 );
 
