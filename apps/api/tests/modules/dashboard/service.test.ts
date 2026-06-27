@@ -27,6 +27,7 @@ const input = { userId: 'user_1', orgId: 'org_1' };
 
 const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardProfileContext => ({
   profileId: '11111111-1111-4111-8111-111111111111',
+  orgId: 'org_1',
   orgSlug: 'studio-noir',
   ...overrides,
 });
@@ -62,6 +63,7 @@ describe('dashboardService.getProfileDashboard', () => {
       { status: 'in_review', count: 2 },
       { status: 'draft', count: 3 },
       { status: 'changes_requested', count: 2 },
+      { status: 'rejected', count: 9 },
     ]);
 
     const result = await dashboardService.getProfileDashboard(input);
@@ -82,6 +84,17 @@ describe('dashboardService.getProfileDashboard', () => {
         new: 0,
       },
       shareUrl: 'https://tickif.com/d/studio-noir',
+    });
+  });
+
+  it('resolves completion against the same organization as the dashboard context', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(profile({ orgId: 'org_2' }));
+
+    await dashboardService.getProfileDashboard({ userId: 'user_1', orgId: null });
+
+    expect(profilesService.getCompletion).toHaveBeenCalledWith({
+      userId: 'user_1',
+      orgId: 'org_2',
     });
   });
 

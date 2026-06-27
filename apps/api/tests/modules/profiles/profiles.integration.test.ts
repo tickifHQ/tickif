@@ -329,6 +329,74 @@ describe('GET /api/profiles/me/dashboard', () => {
     const res = await request('GET', '/api/profiles/me/dashboard');
     expect(res.status).toBe(401);
   });
+
+  it('rejects authenticated users without a designer organization', async () => {
+    const { cookie } = await createRoleSession('+919800001020', 'designer');
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('scopes dashboard summary to the active organization', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001021', 'designer');
+    const orgA = await makeOrganization({ name: 'Alpha Studio', slug: 'alpha-studio' });
+    const orgB = await makeOrganization({ name: 'Beta Studio', slug: 'beta-studio' });
+    await db.insert(schema.member).values([
+      {
+        id: `mem-alpha-${userId}`,
+        organizationId: orgA.id,
+        userId,
+        role: 'owner',
+        createdAt: new Date(),
+      },
+      {
+        id: `mem-beta-${userId}`,
+        organizationId: orgB.id,
+        userId,
+        role: 'owner',
+        createdAt: new Date(),
+      },
+    ]);
+    const alphaProfile = await makeDesigner({
+      orgId: orgA.id,
+      userId,
+      displayName: 'Alpha Studio',
+    });
+    const [betaProfile] = await db
+      .insert(schema.designerProfile)
+      .values({
+        orgId: orgB.id,
+        displayName: 'Beta Studio',
+        address: 'Indiranagar, Bangalore',
+      })
+      .returning();
+    await makeProject({ designerId: alphaProfile.id, status: 'published', title: 'Alpha' });
+    await makeProject({ designerId: betaProfile!.id, status: 'published', title: 'Beta Published' });
+    await makeProject({ designerId: betaProfile!.id, status: 'draft', title: 'Beta Draft' });
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: orgB.id })
+      .where(eq(schema.session.userId, userId));
+    const freshCookie = cookie
+      .split('; ')
+      .filter((c) => !c.startsWith('better-auth.session_data'))
+      .join('; ');
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie: freshCookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.profileCompletion.score).toBe(50);
+    expect(body.profileCompletion.missing).toEqual(['bio', 'logo', 'scope']);
+    expect(body.projects).toEqual({
+      total: 2,
+      published: 1,
+      inReview: 0,
+      draft: 1,
+    });
+    expect(body.shareUrl).toBe('https://tickif.com/d/beta-studio');
+  });
 });
 
 describe('GET /api/profiles/:id — public read', () => {
@@ -366,6 +434,24 @@ describe('GET /api/profiles/:id — public read', () => {
     const body = await json(res);
     expect(body.id).toBe(designer.id);
     expect(body.displayName).toBe('Studio Noir');
+  });
+
+  it('returns 404 for unknown organization slug', async () => {
+    const res = await request('GET', '/api/profiles/slug/missing-studio');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for non-active organization slug', async () => {
+    const org = await makeOrganization({ name: 'Draft Studio', slug: 'draft-studio' });
+    await makeDesigner({
+      orgId: org.id,
+      displayName: 'Draft Studio',
+      status: 'draft',
+    });
+
+    const res = await request('GET', '/api/profiles/slug/draft-studio');
+
+    expect(res.status).toBe(404);
   });
 
   // Regression: status-gated public read (#99 review)

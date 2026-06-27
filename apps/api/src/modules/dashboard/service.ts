@@ -34,9 +34,13 @@ export const dashboardService = {
     }
 
     const [completion, counts] = await Promise.all([
-      profilesService.getCompletion(input),
+      profilesService.getCompletion({ userId: input.userId, orgId: profile.orgId }),
       dashboardRepository.countProjectsByStatus(profile.profileId),
     ]);
+
+    const published = countProjectBucket(counts, ['published']);
+    const inReview = countProjectBucket(counts, ['submitted', 'in_review']);
+    const draft = countProjectBucket(counts, ['draft', 'changes_requested']);
 
     return {
       profileCompletion: {
@@ -44,10 +48,10 @@ export const dashboardService = {
         missing: completion.missing,
       },
       projects: {
-        total: counts.reduce((sum, count) => sum + count.count, 0),
-        published: countProjectBucket(counts, ['published']),
-        inReview: countProjectBucket(counts, ['submitted', 'in_review']),
-        draft: countProjectBucket(counts, ['draft', 'changes_requested']),
+        total: published + inReview + draft,
+        published,
+        inReview,
+        draft,
       },
       leads: {
         total: 0,

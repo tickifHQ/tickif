@@ -1,12 +1,8 @@
 import { db, schema, eq, and, desc, sql } from '@repo/db';
 
-/**
- * Data-access for designer dashboard overview. This repository composes existing
- * profile, organization, and project tables without adding new persistence.
- */
-
 export type DashboardProfileContext = {
   profileId: string;
+  orgId: string;
   orgSlug: string;
 };
 
@@ -28,6 +24,7 @@ export const dashboardRepository = {
     const [row] = await db
       .select({
         profileId: schema.designerProfile.id,
+        orgId: schema.designerProfile.orgId,
         orgSlug: schema.organization.slug,
       })
       .from(schema.designerProfile)
