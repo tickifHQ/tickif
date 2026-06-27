@@ -175,6 +175,20 @@ export async function makeProjectImage(
   return row!;
 }
 
+export async function makeLead(overrides: Partial<typeof schema.lead.$inferInsert> = {}) {
+  const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const [row] = await db
+    .insert(schema.lead)
+    .values({
+      organizationId,
+      name: overrides.name ?? 'Test Lead',
+      contactNumber: overrides.contactNumber ?? '+919800000000',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 // --- seed helpers (test-only) -------------------------------------------------
 
 export { seedTaxonomy } from './seeds/taxonomy.js';

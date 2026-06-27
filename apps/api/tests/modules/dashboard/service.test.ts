@@ -19,9 +19,16 @@ vi.mock('../../../src/modules/profiles/service.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/leads/service.js', () => ({
+  leadsService: {
+    countForOrganization: vi.fn(),
+  },
+}));
+
 const { dashboardService } = await import('../../../src/modules/dashboard/service.js');
 const { dashboardRepository } = await import('../../../src/modules/dashboard/repository.js');
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
+const { leadsService } = await import('../../../src/modules/leads/service.js');
 
 const input = { userId: 'user_1', orgId: 'org_1' };
 
@@ -53,6 +60,7 @@ beforeEach(() => {
   vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(profile());
   vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(counts());
   vi.mocked(profilesService.getCompletion).mockResolvedValue(completion());
+  vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 0, new: 0 });
 });
 
 describe('dashboardService.getProfileDashboard', () => {
@@ -65,6 +73,7 @@ describe('dashboardService.getProfileDashboard', () => {
       { status: 'changes_requested', count: 2 },
       { status: 'rejected', count: 9 },
     ]);
+    vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 7, new: 3 });
 
     const result = await dashboardService.getProfileDashboard(input);
 
@@ -80,11 +89,12 @@ describe('dashboardService.getProfileDashboard', () => {
         draft: 5,
       },
       leads: {
-        total: 0,
-        new: 0,
+        total: 7,
+        new: 3,
       },
       shareUrl: 'https://tickif.com/d/studio-noir',
     });
+    expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1');
   });
 
   it('resolves completion against the same organization as the dashboard context', async () => {
