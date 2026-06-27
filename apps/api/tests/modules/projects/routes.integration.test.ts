@@ -130,6 +130,31 @@ describe('GET /api/projects', () => {
     expect(reviewBody.total).toBe(1);
     expect(reviewBody.items[0]?.status).toBe('submitted');
   });
+
+  it('treats LIKE metacharacters in search as literal text', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002039');
+    await makeProject({
+      designerId: designer.id,
+      title: '100% Modular Kitchen',
+      slug: '100-percent-modular-kitchen',
+      status: 'published',
+    });
+    await makeProject({
+      designerId: designer.id,
+      title: '100X Modular Kitchen',
+      slug: '100x-modular-kitchen',
+      status: 'published',
+    });
+
+    const res = await client.api.projects.$get(
+      { query: { q: '100%', sort: 'title' } },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ListProjectsResponse;
+    expect(body.items.map((item) => item.title)).toEqual(['100% Modular Kitchen']);
+  });
 });
 
 describe('POST /api/projects', () => {
@@ -485,6 +510,64 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       sortOrder: 4,
     });
     expect(body.project.coverImageId).toBe(copiedImages[0]?.id);
+  });
+
+  it('rejects unauthenticated duplicate requests', async () => {
+    const { designer } = await makeDesignerSession('+919800002033');
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const res = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('forbids cross-organization duplicate requests', async () => {
+    const { designer } = await makeDesignerSession('+919800002034');
+    const stranger = await makeDesignerSession('+919800002035');
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const res = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+      headers: { cookie: stranger.cookie },
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('forbids same-organization non-owners from duplicating a project', async () => {
+    const { designer } = await makeDesignerSession('+919800002036');
+    const sameOrgMember = await createRoleSession('+919800002037', 'visitor');
+    await db.insert(schema.member).values({
+      id: `mem-${sameOrgMember.userId}`,
+      organizationId: designer.orgId,
+      userId: sameOrgMember.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const res = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+      headers: { cookie: sameOrgMember.cookie },
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when duplicating a missing project', async () => {
+    const { cookie } = await makeDesignerSession('+919800002038');
+
+    const res = await app.request(
+      '/api/projects/11111111-1111-4111-8111-111111111111/duplicate',
+      {
+        method: 'POST',
+        headers: { cookie },
+      },
+    );
+
+    expect(res.status).toBe(404);
   });
 
   it('allows a superadmin to update a draft they do not own', async () => {

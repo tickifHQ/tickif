@@ -76,16 +76,21 @@ function slugify(title: string): string {
   );
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 export const projectsRepository = {
   async list(params: ListProjectsParams): Promise<{ items: ProjectListItemRecord[]; total: number }> {
+    const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
       eq(schema.member.userId, params.userId),
       params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
       params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
-      params.q
+      searchPattern
         ? or(
-            ilike(schema.project.title, `%${params.q}%`),
-            ilike(schema.project.localitySlug, `%${params.q}%`),
+            ilike(schema.project.title, searchPattern),
+            ilike(schema.project.localitySlug, searchPattern),
           )
         : undefined,
     ].filter((f) => f !== undefined);
