@@ -2,9 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
   ProjectImageAttachmentRecord,
+  ProjectImageDeletionRecord,
   ProjectRecord,
   ProjectRoomRecord,
 } from '../../../src/modules/projects/repository.js';
+
+vi.mock('@repo/storage', () => ({
+  deleteObject: vi.fn(async () => undefined),
+  presignDownload: vi.fn(async ({ key }: { key: string }) => `https://signed.example/${key}`),
+}));
 
 // Replace the Drizzle-backed repository with a fake. This is what makes the
 // service unit-testable with NO database — the payoff of the layering rule.
@@ -12,6 +18,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
   return {
     projectsRepository: {
       list: vi.fn(),
+      findCoverImages: vi.fn(),
       findById: vi.fn(),
       findByIdWithRooms: vi.fn(),
       findBySlug: vi.fn(),
@@ -35,6 +42,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteRoom: vi.fn(),
       findImage: vi.fn(),
       updateImageLink: vi.fn(),
+      deleteImage: vi.fn(),
       getReadyImageCounts: vi.fn(),
       submit: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
@@ -52,6 +60,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
 // Import AFTER the mock is registered.
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
+const { deleteObject } = await import('@repo/storage');
 
 const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -102,6 +111,17 @@ const imageRow = (over: Partial<ProjectImageAttachmentRecord> = {}): ProjectImag
   ...over,
 });
 
+const deletedImageRow = (over: Partial<ProjectImageDeletionRecord> = {}): ProjectImageDeletionRecord => ({
+  id: '55555555-5555-4555-8555-555555555555',
+  projectId: '11111111-1111-4111-8111-111111111111',
+  originalKey: 'originals/project/image',
+  derivatives: [
+    { variant: 'thumb', format: 'webp', key: 'derivatives/project/image/thumb.webp', width: 320, height: 240 },
+    { variant: 'large', format: 'avif', key: 'derivatives/project/image/large.avif', width: 1600, height: 1200 },
+  ],
+  ...over,
+});
+
 const caller = {
   userId: '99999999-9999-4999-8999-999999999999',
   userRole: 'designer',
@@ -113,6 +133,7 @@ beforeEach(() => vi.clearAllMocks());
 describe('projectsService.list', () => {
   it('maps owner rows to the dashboard response shape and passes filters through', async () => {
     vi.mocked(projectsRepository.list).mockResolvedValue({ items: [row()], total: 1 });
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
 
     const result = await projectsService.list(
       { status: 'draft', q: 'bandra', page: 2, limit: 20, sort: '-updatedAt' },
@@ -128,6 +149,7 @@ describe('projectsService.list', () => {
       offset: 20,
       sort: '-updatedAt',
     });
+    expect(projectsRepository.findCoverImages).toHaveBeenCalledWith([]);
     expect(result.total).toBe(1);
     expect(result).toMatchObject({ page: 2, limit: 20, totalPages: 1 });
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
@@ -352,6 +374,27 @@ describe('projectsService.linkImage', () => {
       ),
     ).rejects.toMatchObject({ status: 404 });
     expect(projectsRepository.findRoom).not.toHaveBeenCalled();
+  });
+});
+
+describe('projectsService.deleteImage', () => {
+  it('deletes the DB image and best-effort cleans original and derivative objects', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
+
+    await expect(projectsService.deleteImage(row().id, imageRow().id, caller)).resolves.toEqual({
+      id: imageRow().id,
+      deleted: true,
+    });
+
+    expect(deleteObject).toHaveBeenCalledWith('originals/project/image');
+    expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
+    expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
   });
 });
 

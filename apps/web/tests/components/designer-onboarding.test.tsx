@@ -77,6 +77,10 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByRole('heading', { name: /set up your space/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /just me/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /interior company \(firm\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /need help\? contact support/i })).toHaveAttribute(
+      'href',
+      'mailto:support@tickif.in',
+    );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
   });
 
@@ -206,7 +210,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(await screen.findByRole('button', { name: /add your projects/i }));
 
-    expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/upload');
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/new');
   });
 
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {

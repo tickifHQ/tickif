@@ -26,6 +26,8 @@ const emptyProjects: ListProjectsResponse = {
   totalPages: 1,
 };
 
+const projectCountStatuses: ProjectListStatus[] = ['all', 'published', 'in_review', 'draft'];
+
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -42,10 +44,7 @@ function parseProjectQuery(searchParams: Record<string, string | string[] | unde
   return parsed.success ? parsed.data : listProjectsQuerySchema.parse({});
 }
 
-async function getProjects(query: ListProjectsQuery) {
-  const reqHeaders = await headers();
-  const cookie = reqHeaders.get('cookie');
-
+async function fetchProjects(query: ListProjectsQuery, cookie: string | null) {
   if (!cookie) return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
 
   try {
@@ -62,15 +61,45 @@ async function getProjects(query: ListProjectsQuery) {
   }
 }
 
+async function getProjects(query: ListProjectsQuery) {
+  const reqHeaders = await headers();
+  return fetchProjects(query, reqHeaders.get('cookie'));
+}
+
+async function getProjectTabCounts(query: ListProjectsQuery) {
+  const reqHeaders = await headers();
+  const cookie = reqHeaders.get('cookie');
+  const entries = await Promise.all(
+    projectCountStatuses.map(async (status) => {
+      const result = await fetchProjects(
+        {
+          ...query,
+          status,
+          page: 1,
+          limit: 1,
+        },
+        cookie,
+      );
+      return [status, result.ok ? result.data.total : undefined] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries) as Partial<Record<ProjectListStatus, number>>;
+}
+
 export default async function DesignerProjectsPage({ searchParams }: DesignerProjectsPageProps) {
   await requireAuth({ requiredRole: 'designer' });
   const params = await searchParams;
   const query = parseProjectQuery(params);
-  const projects = await getProjects(query);
+  const [projects, tabCounts] = await Promise.all([
+    getProjects(query),
+    getProjectTabCounts(query),
+  ]);
 
   return (
     <DesignerProjectsList
       projects={projects.data}
+      tabCounts={tabCounts}
       activeStatus={query.status as ProjectListStatus}
       query={query.q}
       error={projects.ok ? undefined : projects.message}

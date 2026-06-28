@@ -312,7 +312,7 @@ export function DesignerOnboarding({
   if (result) {
     return (
       <OnboardingShell signedInAs={displayEmail} onBack={handleCompletionBack}>
-        <CompletionStep onAddProjects={() => router.push('/designer/projects/upload')} onSkip={() => router.push('/designer/dashboard')} />
+        <CompletionStep onAddProjects={() => router.push('/designer/projects/new')} onSkip={() => router.push('/designer/dashboard')} />
       </OnboardingShell>
     );
   }
@@ -1091,9 +1091,9 @@ function EntityChoiceCard({
 function OnboardingSecondaryActions() {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-      <button type="button" className="cursor-pointer font-medium text-foreground hover:underline">
+      <a href="mailto:support@tickif.in" className="cursor-pointer font-medium text-foreground hover:underline">
         Need help? Contact support
-      </button>
+      </a>
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
       <button
         type="button"
@@ -1109,9 +1109,9 @@ function OnboardingSecondaryActions() {
 function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-      <button type="button" className="cursor-pointer font-medium text-foreground hover:underline">
+      <a href="mailto:support@tickif.in" className="cursor-pointer font-medium text-foreground hover:underline">
         Need help? Contact support
-      </button>
+      </a>
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
       <button
         type="button"

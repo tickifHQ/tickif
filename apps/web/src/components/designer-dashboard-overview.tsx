@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import type { ProfileDashboardResponse } from '@repo/contracts';
+import type { CompletionStep, ProfileCompletionResponse, ProfileDashboardResponse } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent } from '@repo/ui/components/card';
@@ -115,53 +115,100 @@ export function DesignerDashboardOverview({
   studioLocation,
   portfolioUrl,
   dashboard,
+  completion,
   dashboardError,
 }: {
   studioName: string;
   studioLocation: string;
   portfolioUrl: string;
   dashboard: ProfileDashboardResponse;
+  completion?: ProfileCompletionResponse | null;
   dashboardError?: string | null;
 }) {
-  const profileDone = dashboard.profileCompletion.missing.length === 0;
-  const projectDone = dashboard.projects.total > 0;
+  const profileDone = completion
+    ? completion.steps.some((step) => step.key === 'profile-completed' && step.done)
+    : dashboard.profileCompletion.missing.length === 0;
+  const projectDone = completion
+    ? completion.steps.some((step) => step.key === 'first-project-uploaded' && step.done)
+    : dashboard.projects.total > 0;
 
-  const trackedChecklistItems: OverviewChecklistItem[] = [
-    {
-      key: 'account-creation',
-      title: 'Account creation',
-      description: 'Set up your workspace on Tickif.',
-      done: true,
-    },
-    {
-      key: 'first-project',
-      title: 'Upload your first project',
-      description: 'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
-      done: projectDone,
-      action: projectDone ? null : (
-        <Button asChild variant="outline">
-          <Link href="/designer/projects/upload">
-            <Plus className="size-4" />
-            Add new project
-          </Link>
-        </Button>
-      ),
-    },
-    {
-      key: 'profile',
-      title: 'Complete profile',
-      description: 'Add your profile tags, social links, short bio, and customize your portfolio.',
-      done: profileDone,
-      action: profileDone ? null : (
+  function checklistDescription(step: CompletionStep) {
+    if (step.key === 'signed-in-with-google') return 'Use Google SSO so your designer workspace stays secure.';
+    if (step.key === 'org-created') return 'Set up your workspace on Tickif.';
+    if (step.key === 'profile-completed') return 'Add your profile tags, social links, short bio, and customize your portfolio.';
+    if (step.key === 'first-project-uploaded') return 'Upload your first project to make your profile live and present it as a portfolio.';
+    return 'Complete this step to keep your designer workspace moving.';
+  }
+
+  function checklistAction(step: CompletionStep) {
+    if (step.done) return null;
+    if (step.key === 'profile-completed') {
+      return (
         <Button asChild variant="outline">
           <Link href="/designer/profile">
             Manage portfolio
             <ArrowRight className="size-4" />
           </Link>
         </Button>
-      ),
-    },
-  ];
+      );
+    }
+    if (step.key === 'first-project-uploaded') {
+      return (
+        <Button asChild variant="outline">
+          <Link href="/designer/projects/new">
+            <Plus className="size-4" />
+            Add new project
+          </Link>
+        </Button>
+      );
+    }
+    return null;
+  }
+
+  const trackedChecklistItems: OverviewChecklistItem[] = completion
+    ? completion.steps.map((step) => ({
+        key: step.key,
+        title: step.label,
+        description: checklistDescription(step),
+        done: step.done,
+        action: checklistAction(step),
+      }))
+    : [
+        {
+          key: 'account-creation',
+          title: 'Account creation',
+          description: 'Set up your workspace on Tickif.',
+          done: true,
+        },
+        {
+          key: 'first-project',
+          title: 'Upload your first project',
+          description: 'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
+          done: projectDone,
+          action: projectDone ? null : (
+            <Button asChild variant="outline">
+              <Link href="/designer/projects/new">
+                <Plus className="size-4" />
+                Add new project
+              </Link>
+            </Button>
+          ),
+        },
+        {
+          key: 'profile',
+          title: 'Complete profile',
+          description: 'Add your profile tags, social links, short bio, and customize your portfolio.',
+          done: profileDone,
+          action: profileDone ? null : (
+            <Button asChild variant="outline">
+              <Link href="/designer/profile">
+                Manage portfolio
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          ),
+        },
+      ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
   const trackedChecklistComplete = hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
 
@@ -261,7 +308,7 @@ export function DesignerDashboardOverview({
                 />
               </div>
               <Button asChild className="mt-4 w-full text-sm font-medium">
-                <Link href="/designer/projects/upload">
+                <Link href="/designer/projects/new">
                   <Plus className="size-4" />
                   Add first project
                 </Link>

@@ -1,6 +1,7 @@
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
+  DeleteProjectImageResponse,
   DeleteProjectResponse,
   DeleteProjectRoomResponse,
   DuplicateProjectResponse,
@@ -18,11 +19,15 @@ import type {
   ReorderProjectRoomsInput,
   UpdateProjectInput,
   UpdateProjectRoomInput,
+  Derivative,
 } from '@repo/contracts';
+import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import {
   projectsRepository,
+  type ProjectCoverImageRecord,
   type ProjectImageAttachmentRecord,
+  type ProjectImageDeletionRecord,
   type ProjectListItemRecord,
   type ProjectOwnership,
   type ProjectRecord,
@@ -94,7 +99,38 @@ function toImageAttachment(row: ProjectImageAttachmentRecord): ProjectImageAttac
   };
 }
 
-function toListItem(row: ProjectListItemRecord): ProjectListItem {
+function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageResponse {
+  return { id: row.id, deleted: true };
+}
+
+async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
+  const keys = [
+    row.originalKey,
+    ...row.derivatives.map((derivative) => derivative.key),
+  ].filter((key): key is string => Boolean(key));
+
+  await Promise.allSettled(keys.map((key) => deleteObject(key)));
+}
+
+function pickPreviewDerivative(derivatives: Derivative[]): string | null {
+  return (
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
+    derivatives[0]?.key ??
+    null
+  );
+}
+
+async function coverImageUrl(coverImage?: ProjectCoverImageRecord): Promise<string | null> {
+  if (!coverImage || coverImage.status !== 'ready') return null;
+  const previewKey = pickPreviewDerivative(coverImage.derivatives);
+  return previewKey ? presignDownload({ key: previewKey }) : null;
+}
+
+async function toListItem(
+  row: ProjectListItemRecord,
+  coverImages: Map<string, ProjectCoverImageRecord>,
+): Promise<ProjectListItem> {
   return {
     id: row.id,
     slug: row.slug,
@@ -103,7 +139,7 @@ function toListItem(row: ProjectListItemRecord): ProjectListItem {
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
-    coverImageUrl: null,
+    coverImageUrl: await coverImageUrl(row.coverImageId ? coverImages.get(row.coverImageId) : undefined),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -473,8 +509,12 @@ export const projectsService = {
       offset: (page - 1) * limit,
       sort: query.sort,
     });
+    const coverImages = await projectsRepository.findCoverImages(
+      items.map((project) => project.coverImageId).filter((id): id is string => !!id),
+    );
+
     return {
-      items: items.map(toListItem),
+      items: await Promise.all(items.map((item) => toListItem(item, coverImages))),
       page,
       total,
       limit,
@@ -625,6 +665,18 @@ export const projectsService = {
     const row = await projectsRepository.updateImageLink(projectId, imageId, input);
     if (!row) throw AppError.notFound('Image not found');
     return toImageAttachment(row);
+  },
+
+  async deleteImage(
+    projectId: string,
+    imageId: string,
+    caller: Caller,
+  ): Promise<DeleteProjectImageResponse> {
+    await requireEditableProject(projectId, caller);
+    const image = await projectsRepository.deleteImage(projectId, imageId);
+    if (!image) throw AppError.notFound('Image not found');
+    await deleteImageObjects(image);
+    return toImageDeletion(image);
   },
 
   async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {

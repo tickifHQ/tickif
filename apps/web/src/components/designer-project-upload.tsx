@@ -21,20 +21,26 @@ import {
   Sparkles,
   Star,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   allowedImageContentType,
+  listProjectImagesResponseSchema,
+  listTaxonomyResponseSchema,
+  projectCompletenessResponseSchema,
+  projectDetailResponseSchema,
+  projectImageAttachmentSchema,
+  projectImageSchema,
+  projectRoomSchema,
+  uploadUrlResponseSchema,
   type AllowedImageContentType,
   type CreateProjectRoomInput,
-  type ListProjectImagesResponse,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
-  type ProjectImageAttachment,
   type ProjectImageDto,
   type ProjectRoom,
   type TaxonomyTerm,
   type UpdateProjectInput,
-  type UploadUrlResponse,
   type UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
@@ -52,6 +58,7 @@ import {
   getBackendProjectSelection,
   moveProjectImage,
   shouldRefreshPristineDefaultRooms,
+  type BackendProjectSelection,
   type ProjectImageMoveDirection,
 } from '@/lib/designer-project-upload';
 
@@ -67,6 +74,10 @@ type ProjectSubtypeOption = {
   slug: string;
   label: string;
 };
+
+type BackendProjectSelectionState =
+  | { selection: BackendProjectSelection; error: '' }
+  | { selection: null; error: string };
 
 type RoomTemplate = {
   slug: string;
@@ -427,9 +438,33 @@ function extractApiMessage(payload: unknown, fallback: string) {
     'message' in payload.error &&
     typeof payload.error.message === 'string'
   ) {
+    const details =
+      'details' in payload.error && Array.isArray(payload.error.details)
+        ? payload.error.details
+            .map((detail) => {
+              if (!detail || typeof detail !== 'object') return null;
+              const path = 'path' in detail && typeof detail.path === 'string' ? detail.path : '';
+              const message = 'message' in detail && typeof detail.message === 'string' ? detail.message : '';
+              return [path, message].filter(Boolean).join(': ');
+            })
+            .filter(Boolean)
+        : [];
+
+    if (details.length > 0) {
+      return `${payload.error.message}: ${details.join(', ')}`;
+    }
+
     return payload.error.message;
   }
   return fallback;
+}
+
+function parseApiPayload<T>(payload: unknown, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }, fallback: string): T {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(fallback);
+  }
+  return parsed.data;
 }
 
 function normalizeRoomSearchValue(value: string) {
@@ -509,7 +544,7 @@ function toProjectImagePreview(image: ProjectImageDto, index: number, existing?:
     width: image.width,
     height: image.height,
     fileName: existing?.fileName ?? `Image ${index + 1}`,
-    previewUrl: existing?.previewUrl,
+    previewUrl: image.previewUrl ?? existing?.previewUrl,
   };
 }
 
@@ -571,6 +606,7 @@ function FormField({
   onChange,
   placeholder,
   type = 'text',
+  helperText,
   className,
 }: {
   label: string;
@@ -578,6 +614,7 @@ function FormField({
   onChange: (value: string) => void;
   placeholder: string;
   type?: 'text' | 'number' | 'month';
+  helperText?: string;
   className?: string;
 }) {
   return (
@@ -590,6 +627,9 @@ function FormField({
         placeholder={placeholder}
         className={typography.control}
       />
+      {helperText ? (
+        <p className={cn(typography.bodySmall, 'text-muted-foreground')}>{helperText}</p>
+      ) : null}
     </div>
   );
 }
@@ -865,6 +905,7 @@ type RoomCardProps = {
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onSetCover: (imageId: string) => void;
   onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
+  onRemoveImage: (imageId: string) => void;
   coverImageId: string | null;
   allowDelete: boolean;
 };
@@ -884,6 +925,7 @@ function RoomCard({
   onUpload,
   onSetCover,
   onMoveImage,
+  onRemoveImage,
   coverImageId,
   allowDelete,
 }: RoomCardProps) {
@@ -973,11 +1015,19 @@ function RoomCard({
                     <div
                       key={image.id}
                       className={cn(
-                        'overflow-hidden rounded-xl border bg-muted/40',
+                        'relative overflow-hidden rounded-xl border bg-muted/40',
                         isCover ? 'border-primary ring-1 ring-primary/20' : 'border-border',
                       )}
                       title={`${image.fileName} · ${statusLabel}`}
                     >
+                      <button
+                        type="button"
+                        onClick={() => onRemoveImage(image.id)}
+                        className="absolute top-1.5 right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-border bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground"
+                        aria-label={`Remove ${image.fileName}`}
+                      >
+                        <X className="size-3.5" />
+                      </button>
                       <div className="flex gap-3 p-2">
                         <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                           {image.previewUrl ? (
@@ -1142,6 +1192,7 @@ export function DesignerProjectUpload({
   const [notice, setNotice] = useState('');
   const [completion, setCompletion] = useState<ProjectCompletenessResponse | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
+  const errorAlertRef = useRef<HTMLDivElement | null>(null);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1201,16 +1252,41 @@ export function DesignerProjectUpload({
     () => detailSubtypeOptions.find((option) => option.value === projectSubtype)?.label ?? '',
     [detailSubtypeOptions, projectSubtype],
   );
-  const backendProjectSelection = useMemo(
-    () =>
-      getBackendProjectSelection({
-        projectType,
-        projectSubtype,
-        availablePropertyTypeSlugs,
-        availablePropertySubtypeSlugs,
-      }),
+  const backendProjectSelectionState = useMemo<BackendProjectSelectionState>(
+    () => {
+      try {
+        return {
+          selection: getBackendProjectSelection({
+            projectType,
+            projectSubtype,
+            availablePropertyTypeSlugs,
+            availablePropertySubtypeSlugs,
+          }),
+          error: '',
+        };
+      } catch (selectionError) {
+        return {
+          selection: null,
+          error: selectionError instanceof Error ? selectionError.message : 'Project type taxonomy is not ready. Please refresh and try again.',
+        };
+      }
+    },
     [availablePropertySubtypeSlugs, availablePropertyTypeSlugs, projectSubtype, projectType],
   );
+  const backendProjectSelection = backendProjectSelectionState.selection;
+  const backendProjectSelectionError = backendProjectSelectionState.error;
+
+  useEffect(() => {
+    if (!backendProjectSelectionError) return;
+    setError(backendProjectSelectionError);
+  }, [backendProjectSelectionError]);
+
+  useEffect(() => {
+    if (backendProjectSelectionError || !error) return;
+    if (!error.startsWith('Project type taxonomy is missing') && !error.startsWith('Project subtype taxonomy is missing')) return;
+    setError('');
+  }, [backendProjectSelectionError, error]);
+
   const selectedLocality = useMemo(
     () => localities.find((term) => term.slug === locality) ?? null,
     [localities, locality],
@@ -1267,7 +1343,7 @@ export function DesignerProjectUpload({
       throw new Error(`Could not load ${kind} options.`);
     }
     const payload = await response.json();
-    return payload.terms as TaxonomyTerm[];
+    return parseApiPayload(payload, listTaxonomyResponseSchema, `Could not load ${kind} options.`).terms;
   }
 
   useEffect(() => {
@@ -1388,7 +1464,11 @@ export function DesignerProjectUpload({
           throw new Error(extractApiMessage(projectPayload, 'Could not load this project draft.'));
         }
 
-        const project = projectPayload as ProjectDetailResponse;
+        const project = parseApiPayload(
+          projectPayload,
+          projectDetailResponseSchema,
+          'Could not load this project draft.',
+        );
         const imagesResponse = await api.api.projects[':id'].images.$get({
           param: { id: project.id },
           query: { limit: 100, offset: 0 },
@@ -1401,7 +1481,11 @@ export function DesignerProjectUpload({
 
         if (cancelled) return;
 
-        const projectImagePayload = imagesPayload as ListProjectImagesResponse;
+        const projectImagePayload = parseApiPayload(
+          imagesPayload,
+          listProjectImagesResponseSchema,
+          'Could not load this project draft images.',
+        );
         const projectMetadata = metadataRecord(project.metadata);
         const projectImages = (projectImagePayload.items ?? []).sort(
           (left, right) => left.sortOrder - right.sortOrder,
@@ -1592,7 +1676,11 @@ export function DesignerProjectUpload({
       throw new Error(extractApiMessage(payload, 'Could not refresh image processing status.'));
     }
 
-    const imagePayload = payload as ListProjectImagesResponse;
+    const imagePayload = parseApiPayload(
+      payload,
+      listProjectImagesResponseSchema,
+      'Could not refresh image processing status.',
+    );
     const images = imagePayload.items ?? [];
     mergeServerImages(images);
     return images;
@@ -1602,6 +1690,19 @@ export function DesignerProjectUpload({
     if (!previewUrl) return;
     URL.revokeObjectURL(previewUrl);
     previewUrlsRef.current.delete(previewUrl);
+  }
+
+  function removeImageFromRoom(clientId: string, imageId: string, revokePreview = true) {
+    updateRoom(clientId, (current) => {
+      const removedImage = current.images.find((image) => image.id === imageId);
+      if (revokePreview) revokePreviewUrl(removedImage?.previewUrl);
+      return {
+        ...current,
+        images: current.images.filter((image) => image.id !== imageId),
+      };
+    });
+
+    setCoverImageId((current) => (current === imageId ? null : current));
   }
 
   function removeRoom(clientId: string) {
@@ -1678,6 +1779,48 @@ export function DesignerProjectUpload({
     setNotice(`${room.title} removed from the draft.`);
   }
 
+  async function handleDeleteImage(room: RoomDraft, imageId: string) {
+    setError('');
+    setNotice('');
+
+    if (imageId.startsWith('local-preview-')) {
+      removeImageFromRoom(room.clientId, imageId);
+      return;
+    }
+
+    const currentProjectId = projectId;
+    if (!currentProjectId) {
+      removeImageFromRoom(room.clientId, imageId);
+      return;
+    }
+
+    const removedImage = room.images.find((image) => image.id === imageId);
+    removeImageFromRoom(room.clientId, imageId, false);
+
+    try {
+      const response = await api.api.projects[':id'].images[':imageId'].$delete({
+        param: { id: currentProjectId, imageId },
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(extractApiMessage(payload, 'Could not remove this image.'));
+      }
+
+      setNotice('Image removed from the draft.');
+      revokePreviewUrl(removedImage?.previewUrl);
+      await refreshProjectImages(currentProjectId);
+    } catch (deleteError) {
+      if (removedImage) {
+        updateRoom(room.clientId, (current) => ({
+          ...current,
+          images: [...current.images, removedImage].sort((left, right) => left.sortOrder - right.sortOrder),
+        }));
+      }
+      setError(deleteError instanceof Error ? deleteError.message : 'Could not remove this image.');
+    }
+  }
+
   function addRoomFromTemplate(template: RoomTemplate) {
     const existingCount = rooms.filter((room) => room.roomSlug === template.slug).length;
     const nextTitle = template.allowMultiple
@@ -1699,6 +1842,10 @@ export function DesignerProjectUpload({
   }
 
   function buildCreateProjectPayload() {
+    if (!backendProjectSelection) {
+      throw new Error(backendProjectSelectionError || 'Project type taxonomy is not ready. Please refresh and try again.');
+    }
+
     return buildCreateProjectPayloadInput({
       projectName,
       selectedProjectTypeLabel,
@@ -1756,7 +1903,11 @@ export function DesignerProjectUpload({
       throw new Error(extractApiMessage(payloadJson, 'Could not create the draft project.'));
     }
 
-    const detail = payloadJson as ProjectDetailResponse;
+    const detail = parseApiPayload(
+      payloadJson,
+      projectDetailResponseSchema,
+      'Could not create the draft project.',
+    );
     setProjectId(detail.id);
     setLoadedProjectId(detail.id);
     router.replace(`/designer/projects/upload?projectId=${detail.id}`);
@@ -1803,7 +1954,7 @@ export function DesignerProjectUpload({
         throw new Error(extractApiMessage(payloadJson, `Could not create ${room.title}.`));
       }
 
-      const created = payloadJson as ProjectRoom;
+      const created = parseApiPayload(payloadJson, projectRoomSchema, `Could not create ${room.title}.`);
       updateRoom(room.clientId, (current) => ({ ...current, id: created.id, roomTypeId: created.roomTypeId }));
       return created.id;
     }
@@ -1845,7 +1996,11 @@ export function DesignerProjectUpload({
         throw new Error(extractApiMessage(metadataPayload, `Could not update metadata for ${image.fileName}.`));
       }
 
-      const updatedImage = metadataPayload as ProjectImageDto;
+      const updatedImage = parseApiPayload(
+        metadataPayload,
+        projectImageSchema,
+        `Could not update metadata for ${image.fileName}.`,
+      );
       updateRoom(room.clientId, (current) => ({
         ...current,
         images: current.images.map((currentImage) =>
@@ -1873,7 +2028,11 @@ export function DesignerProjectUpload({
       throw new Error(extractApiMessage(payload, 'Could not check project completeness.'));
     }
 
-    const nextCompletion = payload as ProjectCompletenessResponse;
+    const nextCompletion = parseApiPayload(
+      payload,
+      projectCompletenessResponseSchema,
+      'Could not check project completeness.',
+    );
     setCompletion(nextCompletion);
     return nextCompletion;
   }
@@ -1905,7 +2064,10 @@ export function DesignerProjectUpload({
       return currentProjectId;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not save this project draft.');
-      throw saveError;
+      requestAnimationFrame(() => {
+        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return null;
     } finally {
       setSaving(false);
     }
@@ -1929,6 +2091,9 @@ export function DesignerProjectUpload({
             ? `Project is not ready to submit yet. Missing: ${missingLabels.join(', ')}.`
             : 'Project is not ready to submit yet.',
         );
+        requestAnimationFrame(() => {
+          errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
         return;
       }
 
@@ -1941,7 +2106,11 @@ export function DesignerProjectUpload({
         throw new Error(extractApiMessage(payload, 'Could not submit this project.'));
       }
 
-      const submittedProject = payload as ProjectDetailResponse;
+      const submittedProject = parseApiPayload(
+        payload,
+        projectDetailResponseSchema,
+        'Could not submit this project.',
+      );
       setNotice(
         submittedProject.submittedAt
           ? 'Project submitted for review.'
@@ -1949,6 +2118,9 @@ export function DesignerProjectUpload({
       );
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Could not submit this project.');
+      requestAnimationFrame(() => {
+        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     } finally {
       setSaving(false);
     }
@@ -2028,7 +2200,11 @@ export function DesignerProjectUpload({
             throw new Error(extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`));
           }
 
-          const uploaded = uploadPayload as UploadUrlResponse;
+          const uploaded = parseApiPayload(
+            uploadPayload,
+            uploadUrlResponseSchema,
+            `Could not prepare upload for ${file.name}.`,
+          );
 
           const storageResponse = await fetch(uploaded.uploadUrl, {
             method: 'PUT',
@@ -2061,7 +2237,11 @@ export function DesignerProjectUpload({
             throw new Error(extractApiMessage(linkedPayload, `Could not attach ${file.name} to ${room.title}.`));
           }
 
-          const linkedImage = linkedPayload as ProjectImageAttachment;
+          const linkedImage = parseApiPayload(
+            linkedPayload,
+            projectImageAttachmentSchema,
+            `Could not attach ${file.name} to ${room.title}.`,
+          );
           const metadataResponse = await api.api.media[':imageId'].metadata.$patch({
             param: { imageId: linkedImage.id },
             json: buildImageMetadata(room, roomId, sortOrder),
@@ -2072,7 +2252,11 @@ export function DesignerProjectUpload({
             throw new Error(extractApiMessage(metadataPayload, `Could not tag ${file.name}.`));
           }
 
-          const updatedImage = metadataPayload as ProjectImageDto;
+          const updatedImage = parseApiPayload(
+            metadataPayload,
+            projectImageSchema,
+            `Could not tag ${file.name}.`,
+          );
           setCoverImageId((current) => current ?? linkedImage.id);
 
           updateRoom(room.clientId, (current) => ({
@@ -2103,6 +2287,7 @@ export function DesignerProjectUpload({
         }
       }
 
+      await refreshProjectImages(currentProjectId);
       setNotice('Images uploaded and linked to the draft.');
     } catch (uploadError) {
       updateRoom(room.clientId, (current) => ({
@@ -2215,7 +2400,7 @@ export function DesignerProjectUpload({
       ) : null}
 
       {error ? (
-        <Alert variant="destructive" className="mt-6">
+        <Alert ref={errorAlertRef} variant="destructive" className="mt-6">
           <AlertCircle className="size-4" />
           <AlertTitle>Something needs attention</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -2395,7 +2580,8 @@ export function DesignerProjectUpload({
                     value={completedByMonth}
                     onChange={setCompletedByMonth}
                     type="month"
-                    placeholder="March 2026"
+                    placeholder="YYYY-MM"
+                    helperText="Use YYYY-MM, for example 2026-03."
                   />
                   <FormSelect
                     label="Project duration"
@@ -2492,6 +2678,7 @@ export function DesignerProjectUpload({
                   onUpload={(event) => void handleUpload(room, event)}
                   onSetCover={handleSetCover}
                   onMoveImage={(imageId, direction) => void handleMoveImage(room, imageId, direction)}
+                  onRemoveImage={(imageId) => void handleDeleteImage(room, imageId)}
                   coverImageId={coverImageId}
                   allowDelete={rooms.length > defaultRoomCount}
                 />
@@ -2519,7 +2706,11 @@ export function DesignerProjectUpload({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void saveDraft()}
+                onClick={() => {
+                  void saveDraft().catch((saveError: unknown) => {
+                    setError(saveError instanceof Error ? saveError.message : 'Could not save this project draft.');
+                  });
+                }}
                 disabled={saving || loadingProject}
                 className="text-sm leading-none font-semibold"
               >

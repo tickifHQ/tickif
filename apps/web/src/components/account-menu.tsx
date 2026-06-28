@@ -17,7 +17,13 @@ import { Skeleton } from '@repo/ui/components/skeleton';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
-export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
+export function AccountMenu({
+  showLabel = false,
+  avatarSeed,
+}: {
+  showLabel?: boolean;
+  avatarSeed?: string;
+}) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -44,6 +50,7 @@ export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
 
   const user = session.user;
   const displayName = user.name ?? user.email ?? 'Account';
+  const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
   async function handleSignOut() {
     try {
@@ -71,7 +78,7 @@ export function AccountMenu({ showLabel = false }: { showLabel?: boolean }) {
         >
           <Avatar className={showLabel ? 'size-8' : undefined}>
             <InitialsAvatar
-              seed={displayName}
+              seed={resolvedAvatarSeed}
               fallbackSeed="Tickif"
               alt=""
               size={showLabel ? 32 : 40}

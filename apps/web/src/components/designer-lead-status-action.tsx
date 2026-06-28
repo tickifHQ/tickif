@@ -14,7 +14,7 @@ import {
 import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 
-const statusOptions: Array<{ value: Exclude<LeadStatus, 'new'>; label: string }> = [
+export const leadStatusOptions: Array<{ value: Exclude<LeadStatus, 'new'>; label: string }> = [
   { value: 'contacted', label: 'Mark as contacted' },
   { value: 'closed', label: 'Mark as closed' },
   { value: 'spam', label: 'Mark as spam' },
@@ -77,7 +77,7 @@ export function DesignerLeadStatusAction({
           </Badge>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
-          {statusOptions.map((option) => (
+          {leadStatusOptions.map((option) => (
             <DropdownMenuItem
               key={option.value}
               disabled={isPending || option.value === status}

@@ -81,6 +81,7 @@ export const projectImageSchema = z
     width: z.number().int().nullable(),
     height: z.number().int().nullable(),
     derivatives: z.array(derivativeSchema),
+    previewUrl: z.url().nullable().default(null),
   })
   .meta({ id: 'ProjectImage' });
 export type ProjectImageDto = z.infer<typeof projectImageSchema>;

@@ -56,7 +56,7 @@ export function DesignerProjectRowActions({
           return;
         }
 
-        router.push(`/designer/projects/upload?projectId=${parsed.data.project.id}`);
+        router.push(`/designer/projects/${parsed.data.project.id}/edit`);
         router.refresh();
       } catch {
         setError('Could not duplicate project.');
@@ -99,7 +99,7 @@ export function DesignerProjectRowActions({
         <Copy className="size-4" />
       </Button>
       <Button asChild variant="ghost" size="icon" className="size-8" aria-label={`Edit ${projectTitle}`}>
-        <Link href={`/designer/projects/upload?projectId=${projectId}`}>
+        <Link href={`/designer/projects/${projectId}/edit`}>
           <Pencil className="size-4" />
         </Link>
       </Button>

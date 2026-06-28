@@ -299,3 +299,8 @@ export const deleteProjectRoomResponseSchema = z
   .object({ id: z.uuid(), deleted: z.literal(true) })
   .meta({ id: 'DeleteProjectRoomResponse' });
 export type DeleteProjectRoomResponse = z.infer<typeof deleteProjectRoomResponseSchema>;
+
+export const deleteProjectImageResponseSchema = z
+  .object({ id: z.uuid(), deleted: z.literal(true) })
+  .meta({ id: 'DeleteProjectImageResponse' });
+export type DeleteProjectImageResponse = z.infer<typeof deleteProjectImageResponseSchema>;

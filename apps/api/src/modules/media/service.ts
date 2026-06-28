@@ -7,7 +7,7 @@ import type {
   UpdateImageMetadataInput,
 } from '@repo/contracts';
 import { config } from '@repo/config';
-import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
+import { buildOriginalKey, presignDownload, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
 import { mediaRepository, type ProjectImageListItem } from './repository.js';
@@ -15,7 +15,17 @@ import { mediaRepository, type ProjectImageListItem } from './repository.js';
 /** The authenticated caller, as resolved by the route from the session. */
 export type Caller = { userId: string; userRole: string };
 
-function toImageDto(row: ProjectImageListItem): ProjectImageDto {
+function pickPreviewDerivative(row: ProjectImageListItem): string | null {
+  return (
+    row.derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
+    row.derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
+    row.derivatives[0]?.key ??
+    null
+  );
+}
+
+async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
+  const previewKey = row.status === 'ready' ? pickPreviewDerivative(row) : null;
   return {
     id: row.id,
     roomId: row.roomId,
@@ -28,6 +38,7 @@ function toImageDto(row: ProjectImageListItem): ProjectImageDto {
     width: row.width,
     height: row.height,
     derivatives: row.derivatives,
+    previewUrl: previewKey ? await presignDownload({ key: previewKey }) : null,
   };
 }
 
@@ -113,7 +124,7 @@ export const mediaService = {
       limit: input.limit,
       offset: input.offset,
     });
-    return { items: rows.map(toImageDto) };
+    return { items: await Promise.all(rows.map(toImageDto)) };
   },
 
   async updateImageMetadata(

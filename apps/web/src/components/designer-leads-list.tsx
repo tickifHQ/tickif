@@ -1,9 +1,11 @@
 import Link from 'next/link';
-import type { LeadListStatus, ListLeadsResponse } from '@repo/contracts';
+import type { LeadDetailResponse, LeadListStatus, ListLeadsResponse } from '@repo/contracts';
 import { Avatar } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
-import { ArrowDown, ExternalLink, MoreVertical } from 'lucide-react';
+import { ArrowDown, ExternalLink } from 'lucide-react';
+import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dialog';
+import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
 import { DesignerLeadStatusAction } from '@/components/designer-lead-status-action';
 import { DesignerListControls, type DesignerListTab } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
@@ -32,13 +34,41 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function leadDetailHref({
+  leadId,
+  activeStatus,
+  query,
+  page,
+  limit,
+}: {
+  leadId: string;
+  activeStatus: LeadListStatus;
+  query?: string;
+  page: number;
+  limit: number;
+}) {
+  const params = new URLSearchParams();
+  if (activeStatus !== 'all') params.set('status', activeStatus);
+  if (query) params.set('q', query);
+  if (page > 1) params.set('page', String(page));
+  if (limit !== 12) params.set('limit', String(limit));
+  params.set('leadId', leadId);
+  return `/designer/leads?${params.toString()}`;
+}
+
 export function DesignerLeadsList({
   leads,
+  tabCounts,
+  selectedLead,
+  selectedLeadError,
   activeStatus,
   query,
   error,
 }: {
   leads: ListLeadsResponse;
+  tabCounts?: Partial<Record<LeadListStatus, number>>;
+  selectedLead?: LeadDetailResponse | null;
+  selectedLeadError?: string;
   activeStatus: LeadListStatus;
   query?: string;
   error?: string;
@@ -48,7 +78,7 @@ export function DesignerLeadsList({
       <DesignerListControls
         tabs={leadTabs.map((tab) => ({
           ...tab,
-          count: tab.value === 'all' ? leads.total : undefined,
+          count: tabCounts?.[tab.value] ?? (tab.value === activeStatus ? leads.total : undefined),
         }))}
         activeTab={activeStatus}
         searchValue={query}
@@ -105,13 +135,17 @@ export function DesignerLeadsList({
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       <Button asChild variant="ghost" size="icon" className="size-8" aria-label={`Open ${lead.name} lead`}>
-                        <Link href={`/designer/leads?leadId=${lead.id}`}>
+                        <Link href={leadDetailHref({
+                          leadId: lead.id,
+                          activeStatus,
+                          query,
+                          page: leads.page,
+                          limit: leads.limit,
+                        })}>
                           <ExternalLink className="size-4" />
                         </Link>
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={`More actions for ${lead.name}`}>
-                        <MoreVertical className="size-4" />
-                      </Button>
+                      <DesignerLeadMoreMenu leadId={lead.id} leadName={lead.name} status={lead.status} />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -139,6 +173,7 @@ export function DesignerLeadsList({
         limit={leads.limit}
         className={leads.items.length === 0 ? 'opacity-70' : undefined}
       />
+      <DesignerLeadDetailDialog lead={selectedLead ?? null} error={selectedLeadError} />
     </div>
   );
 }

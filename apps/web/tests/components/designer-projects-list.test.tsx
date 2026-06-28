@@ -58,7 +58,7 @@ describe('DesignerProjectsList', () => {
     expect(screen.getByText('Needs change')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /edit 2bhk apartment in velachery/i })).toHaveAttribute(
       'href',
-      '/designer/projects/upload?projectId=11111111-1111-4111-8111-111111111111',
+      '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
     );
   });
 
@@ -72,6 +72,6 @@ describe('DesignerProjectsList', () => {
     );
 
     expect(screen.getByText(/no projects found/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add new project/i })).toHaveAttribute('href', '/designer/projects/upload');
+    expect(screen.getByRole('link', { name: /add new project/i })).toHaveAttribute('href', '/designer/projects/new');
   });
 });

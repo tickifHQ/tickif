@@ -82,11 +82,13 @@ function ProjectTypeBadge({ label }: { label: string | null }) {
 
 export function DesignerProjectsList({
   projects,
+  tabCounts,
   activeStatus,
   query,
   error,
 }: {
   projects: ListProjectsResponse;
+  tabCounts?: Partial<Record<ProjectListStatus, number>>;
   activeStatus: ProjectListStatus;
   query?: string;
   error?: string;
@@ -96,7 +98,7 @@ export function DesignerProjectsList({
       <DesignerListControls
         tabs={projectTabs.map((tab) => ({
           ...tab,
-          count: tab.value === 'all' ? projects.total : undefined,
+          count: tabCounts?.[tab.value] ?? (tab.value === activeStatus ? projects.total : undefined),
         }))}
         activeTab={activeStatus}
         searchValue={query}
@@ -172,7 +174,7 @@ export function DesignerProjectsList({
                       {query ? 'Try a different search or clear the filter.' : 'Add your first project to make your portfolio live.'}
                     </p>
                     <Button asChild variant="emphasis" className="mt-2">
-                      <Link href="/designer/projects/upload">Add new project</Link>
+                      <Link href="/designer/projects/new">Add new project</Link>
                     </Button>
                   </div>
                 </TableCell>

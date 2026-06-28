@@ -3,7 +3,7 @@ import type {
   UpdateImageMetadataInput,
 } from '@repo/contracts';
 
-type BackendProjectSelection = {
+export type BackendProjectSelection = {
   propertyTypeSlug: string;
   propertySubtypeSlug?: string;
 };
@@ -65,8 +65,9 @@ export function getBackendProjectSelection({
   };
 }
 
-function slugifyTitle(input: string) {
-  return input.trim() || 'Untitled project draft';
+function projectTitle(input: string, fallback: string) {
+  const trimmed = input.trim();
+  return trimmed.length >= 3 ? trimmed : fallback;
 }
 
 function parsePositiveInteger(value: string) {
@@ -117,7 +118,7 @@ export function buildCreateProjectPayload(input: {
   selectedScopes: string[];
 }): CreateProjectInput {
   return {
-    title: slugifyTitle(input.projectName || `${input.selectedProjectTypeLabel} project`),
+    title: projectTitle(input.projectName, `${input.selectedProjectTypeLabel || 'Untitled'} project`),
     description: input.aboutProject.trim() || undefined,
     propertyTypeSlug: input.backendProjectSelection.propertyTypeSlug,
     propertySubtypeSlug: input.backendProjectSelection.propertySubtypeSlug,

@@ -60,10 +60,10 @@ describe('DesignerDashboardOverview', () => {
     );
 
     expect(screen.getAllByRole('link', { name: /add new project/i })).toHaveLength(1);
-    expect(screen.getAllByRole('link', { name: /add new project/i }).every((link) => link.getAttribute('href') === '/designer/projects/upload')).toBe(true);
+    expect(screen.getAllByRole('link', { name: /add new project/i }).every((link) => link.getAttribute('href') === '/designer/projects/new')).toBe(true);
     expect(screen.getByRole('link', { name: /add first project/i })).toHaveAttribute(
       'href',
-      '/designer/projects/upload',
+      '/designer/projects/new',
     );
     expect(screen.getByRole('link', { name: /manage portfolio/i })).toHaveAttribute(
       'href',
@@ -96,6 +96,34 @@ describe('DesignerDashboardOverview', () => {
 
     expect(screen.getByText(/setup complete/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/profile setup steps/i)).not.toBeInTheDocument();
+  });
+
+  it('uses API-provided completion steps when available', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+        completion={{
+          score: 20,
+          missing: ['bio'],
+          steps: [
+            { key: 'signed-in-with-google', label: 'Sign in with Google', done: true },
+            { key: 'org-created', label: 'Create your organization', done: true },
+            { key: 'profile-completed', label: 'Complete your profile', done: false },
+            { key: 'first-project-uploaded', label: 'Upload your first project', done: false },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
+    expect(screen.getByText(/create your organization/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /add new project/i }).at(0)).toHaveAttribute(
+      'href',
+      '/designer/projects/new',
+    );
   });
 
   it('surfaces completion loading failures without replacing them with a fake empty state', () => {
