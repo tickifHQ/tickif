@@ -77,6 +77,10 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByRole('heading', { name: /set up your space/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /just me/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /interior company \(firm\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /need help\? contact support/i })).toHaveAttribute(
+      'href',
+      'mailto:support@tickif.in',
+    );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
   });
 
@@ -175,6 +179,38 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.queryByText(/You're set up, there/i)).not.toBeInTheDocument();
     expect(mock.router.push).not.toHaveBeenCalled();
+  });
+
+  it('opens project upload from the completion add-projects CTA', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: {
+          id: 'org-1',
+          name: 'Mahi Studio',
+          slug: 'mahi-studio',
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(await screen.findByRole('button', { name: /add your projects/i }));
+
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/new');
   });
 
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {

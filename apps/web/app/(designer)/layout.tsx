@@ -1,23 +1,20 @@
 import type { ReactNode } from 'react';
-import { SiteNav } from '@/components/site-nav';
-import { SiteFooter } from '@/components/site-footer';
+import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
-
-const designerLinks = [
-  { href: '/designer/dashboard', label: 'Dashboard' },
-  { href: '/', label: 'View site' },
-];
+import { getCurrentDesignerProfile } from '@/lib/designer-profile';
 
 /** Designer workspace chrome. Requires role: designer, admin, or superadmin. */
 export default async function DesignerLayout({ children }: { children: ReactNode }) {
-  await requireAuth({ requiredRole: 'designer' });
+  const session = await requireAuth({ requiredRole: 'designer' });
+  const profile = await getCurrentDesignerProfile();
+  const studioName = profile?.displayName.trim() || session.user.name?.trim() || 'Your studio';
+  const studioLocation = profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <DesignerWorkspaceShell studioName={studioName} studioLocation={studioLocation}>
       <ProtectedBfcacheGuard />
-      <SiteNav brand="Tickif · Designer" brandHref="/designer/dashboard" links={designerLinks} />
-      <main className="flex-1">{children}</main>
-      <SiteFooter />
-    </div>
+      {children}
+    </DesignerWorkspaceShell>
   );
 }

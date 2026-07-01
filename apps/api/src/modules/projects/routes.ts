@@ -2,12 +2,15 @@ import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   createProjectRoomSchema,
   createProjectSchema,
+  deleteProjectImageResponseSchema,
   deleteProjectResponseSchema,
   deleteProjectRoomResponseSchema,
+  duplicateProjectResponseSchema,
   linkProjectImageSchema,
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
+  projectCompletenessResponseSchema,
   projectDetailResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
@@ -31,29 +34,38 @@ import { projectsService } from './service.js';
  * Each `.openapi()` call also contributes to the generated OpenAPI spec.
  */
 
+const errorJson = (description: string) => ({
+  description,
+  content: { 'application/json': { schema: errorResponseSchema } },
+});
+
 const listRoute = createRoute({
   method: 'get',
   path: '/',
   tags: ['Projects'],
-  summary: 'List projects',
+  summary: 'List projects owned by the active organization',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
   request: { query: listProjectsQuerySchema },
   responses: {
     200: {
       description: 'A page of projects',
       content: { 'application/json': { schema: listProjectsResponseSchema } },
     },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot list these projects'),
   },
 });
 
-const errorJson = (description: string) => ({
-  description,
-  content: { 'application/json': { schema: errorResponseSchema } },
-});
-
-function caller(user: AuthVariables['user']) {
+function caller(user: AuthVariables['user'], session?: AuthVariables['session']) {
   if (!user) throw AppError.unauthorized();
   const isBanned = !!user.banned && (!user.banExpires || user.banExpires > new Date());
-  return { userId: user.id, userRole: user.role ?? '', isBanned };
+  return {
+    userId: user.id,
+    userRole: user.role ?? '',
+    isBanned,
+    activeOrgId: session?.activeOrganizationId ?? null,
+  };
 }
 
 const getRoute = createRoute({
@@ -76,7 +88,7 @@ const createProjectRoute = createRoute({
   method: 'post',
   path: '/',
   tags: ['Projects'],
-  summary: 'Create a project draft',
+  summary: 'Create an editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -99,7 +111,7 @@ const updateProjectRoute = createRoute({
   method: 'patch',
   path: '/{id}',
   tags: ['Projects'],
-  summary: 'Update an owned project draft',
+  summary: 'Update an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -116,7 +128,7 @@ const updateProjectRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Invalid taxonomy refs or cover image'),
   },
 });
@@ -125,7 +137,7 @@ const deleteProjectRoute = createRoute({
   method: 'delete',
   path: '/{id}',
   tags: ['Projects'],
-  summary: 'Delete an owned project draft',
+  summary: 'Delete an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { params: projectIdParamSchema },
@@ -137,7 +149,26 @@ const deleteProjectRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot delete this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft projects can be deleted'),
+    409: errorJson('Only draft or changes-requested projects can be deleted'),
+  },
+});
+
+const duplicateProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/duplicate',
+  tags: ['Projects'],
+  summary: 'Duplicate an owned project into a fresh draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    201: {
+      description: 'Duplicated project draft',
+      content: { 'application/json': { schema: duplicateProjectResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot duplicate this project'),
+    404: errorJson('Project not found'),
   },
 });
 
@@ -145,7 +176,7 @@ const listRoomsRoute = createRoute({
   method: 'get',
   path: '/{id}/rooms',
   tags: ['Projects'],
-  summary: 'List rooms for an owned project draft',
+  summary: 'List rooms for an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { params: projectIdParamSchema },
@@ -157,7 +188,7 @@ const listRoomsRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot read these rooms'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft project rooms can be edited'),
+    409: errorJson('Only editable project rooms can be edited'),
   },
 });
 
@@ -165,7 +196,7 @@ const createRoomRoute = createRoute({
   method: 'post',
   path: '/{id}/rooms',
   tags: ['Projects'],
-  summary: 'Create a room in an owned project draft',
+  summary: 'Create a room in an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -182,7 +213,7 @@ const createRoomRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Invalid room type'),
   },
 });
@@ -191,7 +222,7 @@ const reorderRoomsRoute = createRoute({
   method: 'patch',
   path: '/{id}/rooms/reorder',
   tags: ['Projects'],
-  summary: 'Reorder rooms in an owned project draft',
+  summary: 'Reorder rooms in an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -208,7 +239,7 @@ const reorderRoomsRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Invalid room ordering'),
   },
 });
@@ -217,7 +248,7 @@ const updateRoomRoute = createRoute({
   method: 'patch',
   path: '/{id}/rooms/{roomId}',
   tags: ['Projects'],
-  summary: 'Update a room in an owned project draft',
+  summary: 'Update a room in an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -234,7 +265,7 @@ const updateRoomRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project or room not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Invalid room type'),
   },
 });
@@ -243,7 +274,7 @@ const deleteRoomRoute = createRoute({
   method: 'delete',
   path: '/{id}/rooms/{roomId}',
   tags: ['Projects'],
-  summary: 'Delete a room from an owned project draft',
+  summary: 'Delete a room from an owned editable project',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { params: projectRoomIdParamSchema },
@@ -255,7 +286,7 @@ const deleteRoomRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project or room not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
   },
 });
 
@@ -280,8 +311,68 @@ const linkImageRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot edit this project'),
     404: errorJson('Project or image not found'),
-    409: errorJson('Only draft projects can be edited'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Room must belong to project'),
+  },
+});
+
+const deleteImageRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/images/{imageId}',
+  tags: ['Projects'],
+  summary: 'Delete an image from an owned editable project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectImageIdParamSchema },
+  responses: {
+    200: {
+      description: 'Deleted image',
+      content: { 'application/json': { schema: deleteProjectImageResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot edit this project'),
+    404: errorJson('Project or image not found'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
+  },
+});
+
+const completenessRoute = createRoute({
+  method: 'get',
+  path: '/{id}/completeness',
+  tags: ['Projects'],
+  summary: 'Get project upload completeness',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Project completeness requirements',
+      content: { 'application/json': { schema: projectCompletenessResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot read this project'),
+    404: errorJson('Project not found'),
+  },
+});
+
+const submitRoute = createRoute({
+  method: 'post',
+  path: '/{id}/submit',
+  tags: ['Projects'],
+  summary: 'Submit or resubmit a complete project for review',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Submitted project',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot submit this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Only draft or changes-requested projects can be submitted'),
+    422: errorJson('Project is missing required upload information'),
   },
 });
 
@@ -289,7 +380,10 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
   .openapi(listRoute, async (c) => {
-    const result = await projectsService.list(c.req.valid('query'));
+    const result = await projectsService.list(
+      c.req.valid('query'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(getRoute, async (c) => {
@@ -311,6 +405,11 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const { id } = c.req.valid('param');
     const result = await projectsService.delete(id, caller(c.get('user')));
     return c.json(result, 200);
+  })
+  .openapi(duplicateProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.duplicate(id, caller(c.get('user')));
+    return c.json(result, 201);
   })
   .openapi(listRoomsRoute, async (c) => {
     const { id } = c.req.valid('param');
@@ -350,6 +449,21 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('json'),
       caller(c.get('user')),
     );
+    return c.json(result, 200);
+  })
+  .openapi(deleteImageRoute, async (c) => {
+    const { id, imageId } = c.req.valid('param');
+    const result = await projectsService.deleteImage(id, imageId, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(completenessRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.getCompleteness(id, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(submitRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.submit(id, caller(c.get('user')));
     return c.json(result, 200);
   });
 

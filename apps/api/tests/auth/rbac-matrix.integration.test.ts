@@ -204,15 +204,18 @@ describe('RBAC matrix: real app routes (E-89)', () => {
           .status,
         `${actor} → GET /health`,
       ).toBe(200);
-      expect(
-        (
-          await app.request('/api/projects', {
-            headers: actors[actor] ? { cookie: actors[actor]! } : {},
-          })
-        ).status,
-        `${actor} → GET /api/projects`,
-      ).toBe(200);
     }
+
+    // GET /api/projects is now the authenticated owner dashboard list (E-142).
+    const getProjects = (cookie?: string) =>
+      app.request('/api/projects', { headers: cookie ? { cookie } : {} });
+    expect((await getProjects(actors.anon)).status, 'anon → GET /api/projects').toBe(401);
+    expect((await getProjects(actors.expired)).status, 'expired → GET /api/projects').toBe(401);
+    expect((await getProjects(actors.banned)).status, 'banned → GET /api/projects').toBe(403);
+    expect((await getProjects(actors.visitor)).status, 'visitor → GET /api/projects').toBe(200);
+    expect((await getProjects(actors.designer)).status, 'designer → GET /api/projects').toBe(200);
+    expect((await getProjects(actors.admin)).status, 'admin → GET /api/projects').toBe(200);
+    expect((await getProjects(actors.superadmin)).status, 'superadmin → GET /api/projects').toBe(200);
 
     // POST /api/projects is authenticated and requires a designer profile owned by the caller.
     const post = (label: string, cookie?: string) =>

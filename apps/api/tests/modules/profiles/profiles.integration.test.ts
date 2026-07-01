@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner } from '@repo/db/testing';
+import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { signInWithGoogle, createAuthedSession, createRoleSession } from '../../helpers/auth.js';
 import { getSession } from '@repo/auth';
@@ -82,13 +82,17 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.profile.displayName).toBe('Acme Co');
   });
 
-  it('rejects phone-OTP visitor (403 — no Google account)', async () => {
+  it('allows phone-OTP user to complete onboarding (#157)', async () => {
     const { cookie } = await createAuthedSession('+919800001001');
     const res = await request('POST', '/api/profiles/me', {
       cookie,
-      body: { entityType: 'individual', userName: 'Visitor' },
+      body: { entityType: 'individual', userName: 'OTP Designer' },
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.profile.displayName).toBe('OTP Designer');
+    expect(body.profile.entityType).toBe('individual');
+    expect(body.organization).toBeDefined();
   });
 
   it('rejects unauthenticated (401)', async () => {
@@ -237,11 +241,164 @@ describe('GET /api/profiles/me/completion', () => {
     expect(body.steps).toHaveLength(4);
     // displayName (filled) + contact via verified email = 2/6 = 33%
     expect(body.score).toBe(33);
+    expect(body.missing).toContain('location');
+  });
+
+  it('address satisfies location requirement in completion score', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-comp-addr',
+      email: 'comp-addr@test.com',
+    });
+    await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Addr User',
+        address: 'Koramangala, Bengaluru',
+      },
+    });
+
+    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    // displayName + contact + location (via address) = 3/6 = 50%
+    expect(body.score).toBe(50);
+    expect(body.missing).not.toContain('location');
   });
 
   it('rejects unauthenticated (401)', async () => {
     const res = await request('GET', '/api/profiles/me/completion');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/profiles/me/dashboard', () => {
+  it('returns the Linear dashboard summary for the active organization', async () => {
+    const { cookie } = await signInWithGoogle({
+      sub: 'g-dashboard-summary',
+      email: 'dashboard-summary@test.com',
+    });
+    await request('POST', '/api/profiles/me', {
+      cookie,
+      body: {
+        entityType: 'individual',
+        userName: 'Summary Studio',
+        address: 'Indiranagar, Bangalore',
+      },
+    });
+    const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
+    const [profile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.userId, session!.user.id));
+    await makeProject({ designerId: profile!.id, status: 'published', title: 'Published' });
+    await makeProject({ designerId: profile!.id, status: 'submitted', title: 'Submitted' });
+    await makeProject({ designerId: profile!.id, status: 'in_review', title: 'In Review' });
+    await makeProject({ designerId: profile!.id, status: 'draft', title: 'Draft' });
+    await makeProject({
+      designerId: profile!.id,
+      status: 'changes_requested',
+      title: 'Changes Requested',
+    });
+    await makeLead({ organizationId: profile!.orgId, status: 'new' });
+    await makeLead({ organizationId: profile!.orgId, status: 'contacted' });
+    await makeLead({ status: 'new' });
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body).toEqual({
+      profileCompletion: {
+        score: 50,
+        missing: ['bio', 'logo', 'scope'],
+      },
+      projects: {
+        total: 5,
+        published: 1,
+        inReview: 2,
+        draft: 2,
+      },
+      leads: {
+        total: 2,
+        new: 1,
+      },
+      shareUrl: expect.stringMatching(/^https:\/\/tickif\.com\/d\/summary-studio-[a-z0-9]+$/),
+    });
+    expect(body.profileCompletion).not.toHaveProperty('steps');
+  });
+
+  it('rejects unauthenticated dashboard summary requests', async () => {
+    const res = await request('GET', '/api/profiles/me/dashboard');
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects authenticated users without a designer organization', async () => {
+    const { cookie } = await createRoleSession('+919800001020', 'designer');
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('scopes dashboard summary to the active organization', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001021', 'designer');
+    const orgA = await makeOrganization({ name: 'Alpha Studio', slug: 'alpha-studio' });
+    const orgB = await makeOrganization({ name: 'Beta Studio', slug: 'beta-studio' });
+    await db.insert(schema.member).values([
+      {
+        id: `mem-alpha-${userId}`,
+        organizationId: orgA.id,
+        userId,
+        role: 'owner',
+        createdAt: new Date(),
+      },
+      {
+        id: `mem-beta-${userId}`,
+        organizationId: orgB.id,
+        userId,
+        role: 'owner',
+        createdAt: new Date(),
+      },
+    ]);
+    const alphaProfile = await makeDesigner({
+      orgId: orgA.id,
+      userId,
+      displayName: 'Alpha Studio',
+    });
+    const [betaProfile] = await db
+      .insert(schema.designerProfile)
+      .values({
+        orgId: orgB.id,
+        displayName: 'Beta Studio',
+        address: 'Indiranagar, Bangalore',
+      })
+      .returning();
+    await makeProject({ designerId: alphaProfile.id, status: 'published', title: 'Alpha' });
+    await makeProject({ designerId: betaProfile!.id, status: 'published', title: 'Beta Published' });
+    await makeProject({ designerId: betaProfile!.id, status: 'draft', title: 'Beta Draft' });
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: orgB.id })
+      .where(eq(schema.session.userId, userId));
+    const freshCookie = cookie
+      .split('; ')
+      .filter((c) => !c.startsWith('better-auth.session_data'))
+      .join('; ');
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie: freshCookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.profileCompletion.score).toBe(50);
+    expect(body.profileCompletion.missing).toEqual(['bio', 'logo', 'scope']);
+    expect(body.projects).toEqual({
+      total: 2,
+      published: 1,
+      inReview: 0,
+      draft: 1,
+    });
+    expect(body.shareUrl).toBe('https://tickif.com/d/beta-studio');
   });
 });
 
@@ -264,6 +421,40 @@ describe('GET /api/profiles/:id — public read', () => {
     expect(body).not.toHaveProperty('staffCount');
     expect(body).not.toHaveProperty('orgId');
     expect(body).not.toHaveProperty('updatedAt');
+  });
+
+  it('returns public projection by organization slug', async () => {
+    const org = await makeOrganization({ name: 'Studio Noir', slug: 'studio-noir' });
+    const designer = await makeDesigner({
+      orgId: org.id,
+      displayName: 'Studio Noir',
+      status: 'active',
+    });
+
+    const res = await request('GET', '/api/profiles/slug/studio-noir');
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.id).toBe(designer.id);
+    expect(body.displayName).toBe('Studio Noir');
+  });
+
+  it('returns 404 for unknown organization slug', async () => {
+    const res = await request('GET', '/api/profiles/slug/missing-studio');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for non-active organization slug', async () => {
+    const org = await makeOrganization({ name: 'Draft Studio', slug: 'draft-studio' });
+    await makeDesigner({
+      orgId: org.id,
+      displayName: 'Draft Studio',
+      status: 'draft',
+    });
+
+    const res = await request('GET', '/api/profiles/slug/draft-studio');
+
+    expect(res.status).toBe(404);
   });
 
   // Regression: status-gated public read (#99 review)
@@ -310,6 +501,19 @@ describe('PATCH /api/profiles/me — update', () => {
       .join('; ');
     return { cookie: freshCookie, userId: session!.user.id, orgId: member!.organizationId };
   }
+
+  it('reads current profile with active organization context and share URL', async () => {
+    const { cookie } = await setupDesignerWithSession();
+
+    const res = await request('GET', '/api/profiles/me', { cookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.displayName).toBe('Patch User');
+    expect(body.organization.name).toBe('Patch User');
+    expect(body.organization.slug).toMatch(/^patch-user/);
+    expect(new URL(body.shareUrl).pathname).toBe(`/d/${body.organization.slug}`);
+  });
 
   it('updates profile fields (partial — bio only)', async () => {
     const { cookie } = await setupDesignerWithSession();
@@ -417,7 +621,7 @@ describe('PATCH /api/profiles/me — update', () => {
 
   // Regression: footprint replace semantics (#99 review) — full exercise
   it('replaces taxonomy footprint correctly (replace, clear, leave untouched)', async () => {
-    const { cookie, orgId } = await setupDesignerWithSession();
+    const { cookie } = await setupDesignerWithSession();
 
     // Seed taxonomy terms
     const cityMumbai = await seedTaxonomy('city', 'mumbai', 'Mumbai');

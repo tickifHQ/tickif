@@ -32,15 +32,19 @@ export const projectStatusEnum = pgEnum('project_status', [
   'in_review',
   'published',
   'rejected',
+  'changes_requested',
 ]);
 
-// Admin-managed taxonomy: 13 kinds covering geography, property, design, budget,
+export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
+
+// Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
 export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
   'city',
   'locality',
   'property_type',
+  'property_subtype',
   'bhk',
   'room',
   'scope',
@@ -182,20 +186,64 @@ export const project = pgTable(
     slug: text('slug').notNull().unique(),
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
+    // Project upload drafts store taxonomy slugs denormalized for ergonomic edits;
+    // services validate slugs on write while profile footprint remains FK-backed for search.
+    propertyTypeSlug: text('property_type_slug'),
+    propertySubtypeSlug: text('property_subtype_slug'),
+    scopeSlug: text('scope_slug'),
+    bhkSlug: text('bhk_slug'),
+    sizeSqft: integer('size_sqft'),
     citySlug: text('city_slug'),
+    localitySlug: text('locality_slug'),
+    buildingName: text('building_name'),
     budgetBandSlug: text('budget_band_slug'),
     // Points at project_image; FK deferred because project_image already owns project_id.
     coverImageId: uuid('cover_image_id'),
+    completedMonth: text('completed_month'),
+    durationMonths: integer('duration_months'),
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
+    submittedAt: timestamp('submitted_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
+    index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
+    index('project_locality_idx').on(t.localitySlug),
+    index('project_property_type_idx').on(t.propertyTypeSlug),
+    index('project_property_subtype_idx').on(t.propertySubtypeSlug),
+    index('project_scope_idx').on(t.scopeSlug),
+  ],
+);
+
+export const lead = pgTable(
+  'lead',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    referredProjectId: uuid('referred_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    name: text('name').notNull(),
+    contactNumber: text('contact_number').notNull(),
+    budgetBandSlug: text('budget_band_slug'),
+    message: text('message'),
+    source: text('source').default('enquiry').notNull(),
+    status: leadStatusEnum('status').default('new').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('lead_organization_idx').on(t.organizationId),
+    index('lead_referred_project_idx').on(t.referredProjectId),
+    index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
   ],
 );
 
@@ -259,6 +307,11 @@ export const projectImage = pgTable(
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
     contentType: text('content_type').notNull(),
     derivatives: jsonb('derivatives').$type<ProjectImageDerivative[]>().default([]).notNull(),
+    // Image-level taxonomy refs are draft-friendly slugs; media service validates each slug before write.
+    themeSlugs: jsonb('theme_slugs').$type<string[]>().default([]).notNull(),
+    materialSlugs: jsonb('material_slugs').$type<string[]>().default([]).notNull(),
+    finishSlugs: jsonb('finish_slugs').$type<string[]>().default([]).notNull(),
+    tagSlugs: jsonb('tag_slugs').$type<string[]>().default([]).notNull(),
     width: integer('width'),
     height: integer('height'),
     phash: text('phash'),

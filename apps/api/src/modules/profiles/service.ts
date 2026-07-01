@@ -6,8 +6,10 @@ import type {
   OnboardDesignerResponse,
   ProfilePublicResponse,
   ProfileOwnerResponse,
+  CurrentProfileResponse,
   UpdateProfileInput,
 } from '@repo/contracts';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
 import { isOrgWriter } from '../orgs/repository.js';
@@ -27,7 +29,7 @@ import { isOrgWriter } from '../orgs/repository.js';
 const COMPLETION_THRESHOLD = 60;
 
 /** The required profile fields that drive the completion score. */
-const REQUIRED_FIELDS = ['display-name', 'bio', 'logo', 'city', 'scope', 'contact'] as const;
+const REQUIRED_FIELDS = ['display-name', 'bio', 'logo', 'location', 'scope', 'contact'] as const;
 type RequiredField = (typeof REQUIRED_FIELDS)[number];
 
 type CompletionInput = {
@@ -81,13 +83,7 @@ export const profilesService = {
       };
     }
 
-    // 2. Google SSO check
-    const hasGoogle = await profilesRepository.hasGoogleAccount(userId);
-    if (!hasGoogle) {
-      throw AppError.forbidden('Google SSO required for designer onboarding');
-    }
-
-    // 3. Validate taxonomy IDs (single round-trip, deduped)
+    // 2. Validate taxonomy IDs (single round-trip, deduped)
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({
       scopeIds: input.scopeIds.length > 0 ? input.scopeIds : undefined,
       themeIds: input.themeIds.length > 0 ? input.themeIds : undefined,
@@ -262,7 +258,7 @@ export const profilesService = {
       return { filled: [], missing: [...REQUIRED_FIELDS] };
     }
 
-    // Parallelize the async checks (city count, scope count, contact)
+    // Parallelize the async checks (scope count, contact)
     const [cityCount, scopeCount, hasContact] = await Promise.all([
       profilesRepository.countFootprintByKind(profile.id, 'city'),
       profilesRepository.countFootprintByKind(profile.id, 'scope'),
@@ -281,8 +277,9 @@ export const profilesService = {
     if (profile.logoImageId) filled.push('logo');
     else missing.push('logo');
 
-    if (cityCount >= 1) filled.push('city');
-    else missing.push('city');
+    // Location: satisfied by free-text address (onboarding) OR city taxonomy footprint (profile update)
+    if (profile.address?.trim() || cityCount >= 1) filled.push('location');
+    else missing.push('location');
 
     if (scopeCount >= 1) filled.push('scope');
     else missing.push('scope');
@@ -295,12 +292,92 @@ export const profilesService = {
 
   // --- Read/Update (E-37) ---
 
+  /** Current owner read for authenticated designer workspace context. */
+  async getCurrentProfile(userId: string, activeOrgId: string | null): Promise<CurrentProfileResponse> {
+    const orgId = activeOrgId ?? (await profilesRepository.hasOrganization(userId));
+    if (!orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+
+    const canRead = await isOrgWriter(userId, orgId);
+    if (!canRead) {
+      throw AppError.forbidden('Insufficient org role to read this profile');
+    }
+
+    const current = await profilesRepository.findByOrgIdWithOrg(orgId);
+    if (!current) {
+      throw AppError.notFound('No profile found for the active organization');
+    }
+
+    const { profile, org } = current;
+    const footprint = await profilesRepository.getFootprint(profile.id);
+
+    return {
+      id: profile.id,
+      orgId: profile.orgId,
+      displayName: profile.displayName,
+      entityType: profile.entityType,
+      bio: profile.bio,
+      logoImageId: profile.logoImageId,
+      status: profile.status,
+      yearsExperience: profile.yearsExperience,
+      projectCount: profile.projectCount,
+      shareCount: profile.shareCount,
+      avgRating: profile.avgRating,
+      reviewCount: profile.reviewCount,
+      websiteUrl: profile.websiteUrl,
+      googleBusinessUrl: profile.googleBusinessUrl,
+      phone: profile.phone,
+      address: profile.address,
+      instagramHandle: profile.instagramHandle,
+      linkedinHandle: profile.linkedinHandle,
+      youtubeHandle: profile.youtubeHandle,
+      firmType: profile.firmType,
+      foundedYear: profile.foundedYear,
+      staffCount: profile.staffCount,
+      testimonialBannerEnabled: profile.testimonialBannerEnabled,
+      footprint,
+      organization: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+      },
+      shareUrl: `${config.PUBLIC_WEB_URL}/d/${org.slug}`,
+      createdAt: profile.createdAt.toISOString(),
+      updatedAt: profile.updatedAt.toISOString(),
+    };
+  },
+
   /** Public read — only active profiles, no private/corporate fields. */
   async getPublicProfile(profileId: string): Promise<ProfilePublicResponse> {
     const profile = await profilesRepository.findById(profileId);
     if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
 
     const footprint = await profilesRepository.getFootprint(profileId);
+
+    return {
+      id: profile.id,
+      displayName: profile.displayName,
+      entityType: profile.entityType,
+      bio: profile.bio,
+      logoImageId: profile.logoImageId,
+      status: profile.status,
+      yearsExperience: profile.yearsExperience,
+      projectCount: profile.projectCount,
+      shareCount: profile.shareCount,
+      avgRating: profile.avgRating,
+      reviewCount: profile.reviewCount,
+      footprint,
+      createdAt: profile.createdAt.toISOString(),
+    };
+  },
+
+  /** Public read by organization slug for shareable portfolio URLs. */
+  async getPublicProfileBySlug(orgSlug: string): Promise<ProfilePublicResponse> {
+    const profile = await profilesRepository.findByOrgSlug(orgSlug);
+    if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
+
+    const footprint = await profilesRepository.getFootprint(profile.id);
 
     return {
       id: profile.id,

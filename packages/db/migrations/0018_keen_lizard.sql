@@ -1,0 +1,1 @@
+CREATE INDEX "project_designer_status_updated_idx" ON "project" USING btree ("designer_id","status","updated_at");

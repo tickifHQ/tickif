@@ -7,16 +7,37 @@ import { z } from 'zod';
  */
 
 export const projectStatus = z
-  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected'])
+  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested'])
   .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
 
+const taxonomySlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a taxonomy slug such as modern or 3-bhk');
+
+const completedMonth = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM format');
+
 export const createProjectSchema = z
   .object({
-    title: z.string().min(3).max(160),
+    title: z.string().trim().min(3).max(160).optional(),
     description: z.string().max(5000).optional(),
-    citySlug: z.string().min(1).max(80).optional(),
-    budgetBandSlug: z.string().min(1).max(80).optional(),
+    propertyTypeSlug: taxonomySlug.optional(),
+    propertySubtypeSlug: taxonomySlug.optional(),
+    scopeSlug: taxonomySlug.optional(),
+    bhkSlug: taxonomySlug.optional(),
+    sizeSqft: z.number().int().positive().max(100_000).optional(),
+    citySlug: taxonomySlug.optional(),
+    localitySlug: taxonomySlug.optional(),
+    buildingName: z.string().trim().min(1).max(160).optional(),
+    budgetBandSlug: taxonomySlug.optional(),
+    completedMonth: completedMonth.optional(),
+    durationMonths: z.number().int().positive().max(240).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .meta({ id: 'CreateProject' });
@@ -26,8 +47,17 @@ export const updateProjectSchema = z
   .object({
     title: z.string().trim().min(3).max(160).optional(),
     description: z.string().max(5000).nullable().optional(),
-    citySlug: z.string().trim().min(1).max(80).nullable().optional(),
-    budgetBandSlug: z.string().trim().min(1).max(80).nullable().optional(),
+    propertyTypeSlug: taxonomySlug.nullable().optional(),
+    propertySubtypeSlug: taxonomySlug.nullable().optional(),
+    scopeSlug: taxonomySlug.nullable().optional(),
+    bhkSlug: taxonomySlug.nullable().optional(),
+    sizeSqft: z.number().int().positive().max(100_000).nullable().optional(),
+    citySlug: taxonomySlug.nullable().optional(),
+    localitySlug: taxonomySlug.nullable().optional(),
+    buildingName: z.string().trim().min(1).max(160).nullable().optional(),
+    budgetBandSlug: taxonomySlug.nullable().optional(),
+    completedMonth: completedMonth.nullable().optional(),
+    durationMonths: z.number().int().positive().max(240).nullable().optional(),
     coverImageId: z.uuid().nullable().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })
@@ -124,11 +154,21 @@ export const projectResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     status: projectStatus,
+    propertyTypeSlug: z.string().nullable(),
+    propertySubtypeSlug: z.string().nullable(),
+    scopeSlug: z.string().nullable(),
+    bhkSlug: z.string().nullable(),
+    sizeSqft: z.number().int().nullable(),
     citySlug: z.string().nullable(),
+    localitySlug: z.string().nullable(),
+    buildingName: z.string().nullable(),
     budgetBandSlug: z.string().nullable(),
+    completedMonth: z.string().nullable(),
+    durationMonths: z.number().int().nullable(),
     coverImageId: z.uuid().nullable(),
     metadata: z.record(z.string(), z.unknown()).nullable(),
     publishedAt: z.string().datetime().nullable(),
+    submittedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -166,25 +206,60 @@ export const linkProjectImageSchema = z
   .meta({ id: 'LinkProjectImage' });
 export type LinkProjectImageInput = z.infer<typeof linkProjectImageSchema>;
 
+export const projectListStatus = z
+  .enum(['all', 'draft', 'in_review', 'published'])
+  .default('all')
+  .meta({ id: 'ProjectListStatus' });
+export type ProjectListStatus = z.infer<typeof projectListStatus>;
+
+export const projectListSort = z
+  .enum(['-updatedAt', 'updatedAt', '-createdAt', 'createdAt', 'title', '-title'])
+  .default('-updatedAt')
+  .meta({ id: 'ProjectListSort' });
+export type ProjectListSort = z.infer<typeof projectListSort>;
+
 export const listProjectsQuerySchema = z
   .object({
-    status: projectStatus.optional(),
-    citySlug: z.string().optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(20),
-    offset: z.coerce.number().int().min(0).default(0),
+    status: projectListStatus,
+    q: z.string().trim().min(1).max(120).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(12),
+    sort: projectListSort,
   })
   .meta({ id: 'ListProjectsQuery' });
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
+export const projectListItemSchema = z
+  .object({
+    id: z.uuid(),
+    slug: z.string(),
+    title: z.string(),
+    propertyType: z.string().nullable(),
+    city: z.string().nullable(),
+    locality: z.string().nullable(),
+    status: projectStatus,
+    coverImageUrl: z.string().url().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .meta({ id: 'ProjectListItem' });
+export type ProjectListItem = z.infer<typeof projectListItemSchema>;
+
 export const listProjectsResponseSchema = z
   .object({
-    items: z.array(projectResponseSchema),
+    items: z.array(projectListItemSchema),
+    page: z.number().int(),
     total: z.number().int(),
     limit: z.number().int(),
-    offset: z.number().int(),
+    totalPages: z.number().int(),
   })
   .meta({ id: 'ProjectList' });
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
+
+export const duplicateProjectResponseSchema = z
+  .object({ project: projectDetailResponseSchema })
+  .meta({ id: 'DuplicateProjectResponse' });
+export type DuplicateProjectResponse = z.infer<typeof duplicateProjectResponseSchema>;
 
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
@@ -196,6 +271,25 @@ export const projectImageIdParamSchema = z
   .object({ id: z.uuid(), imageId: z.uuid() })
   .meta({ id: 'ProjectImageIdParam' });
 
+export const projectCompletenessRequirementSchema = z
+  .object({
+    key: z.string(),
+    label: z.string(),
+    complete: z.boolean(),
+  })
+  .meta({ id: 'ProjectCompletenessRequirement' });
+export type ProjectCompletenessRequirement = z.infer<typeof projectCompletenessRequirementSchema>;
+
+export const projectCompletenessResponseSchema = z
+  .object({
+    complete: z.boolean(),
+    score: z.number().int().min(0).max(100),
+    missing: z.array(z.string()),
+    requirements: z.array(projectCompletenessRequirementSchema),
+  })
+  .meta({ id: 'ProjectCompleteness' });
+export type ProjectCompletenessResponse = z.infer<typeof projectCompletenessResponseSchema>;
+
 export const deleteProjectResponseSchema = z
   .object({ id: z.uuid(), deleted: z.literal(true) })
   .meta({ id: 'DeleteProjectResponse' });
@@ -205,3 +299,8 @@ export const deleteProjectRoomResponseSchema = z
   .object({ id: z.uuid(), deleted: z.literal(true) })
   .meta({ id: 'DeleteProjectRoomResponse' });
 export type DeleteProjectRoomResponse = z.infer<typeof deleteProjectRoomResponseSchema>;
+
+export const deleteProjectImageResponseSchema = z
+  .object({ id: z.uuid(), deleted: z.literal(true) })
+  .meta({ id: 'DeleteProjectImageResponse' });
+export type DeleteProjectImageResponse = z.infer<typeof deleteProjectImageResponseSchema>;

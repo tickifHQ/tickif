@@ -154,3 +154,17 @@ export async function presignUpload(params: {
     signableHeaders: new Set(['content-type', 'content-length']),
   });
 }
+
+/** Short-lived private read URL for an already-stored object. */
+export async function presignDownload(params: {
+  key: string;
+  expiresIn?: number;
+}): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET),
+    Key: params.key,
+  });
+  return getSignedUrl(r2Client(), command, {
+    expiresIn: params.expiresIn ?? config.R2_UPLOAD_URL_EXPIRY_SECONDS,
+  });
+}

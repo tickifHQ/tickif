@@ -74,6 +74,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8008),
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8008'),
 
+  // Public web origin for shareable URLs returned by the API.
+  PUBLIC_WEB_URL: z.string().url().default('https://tickif.com'),
+
   // SMS / OTP provider. Selection is explicit; creds are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
   NOVU_SECRET_KEY: z.string().optional(),

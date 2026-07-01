@@ -7,6 +7,8 @@ import {
   listProjectImagesQuerySchema,
   imageIdParamSchema,
   projectImagesParamSchema,
+  projectImageSchema,
+  updateImageMetadataSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -51,6 +53,7 @@ const uploadUrlRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the project'),
     404: errorJson('Project not found'),
+    409: errorJson('Only draft or changes-requested project media can be edited'),
   },
 });
 
@@ -71,7 +74,31 @@ const commitRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller does not own the image'),
     404: errorJson('Image not found'),
-    409: errorJson('Image has already been committed'),
+    409: errorJson('Image has already been committed or project is not editable'),
+  },
+});
+
+const updateMetadataRoute = createRoute({
+  method: 'patch',
+  path: '/{imageId}/metadata',
+  tags: ['Media'],
+  summary: 'Update room and search metadata for an uploaded image',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    params: imageIdParamSchema,
+    body: { content: { 'application/json': { schema: updateImageMetadataSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Updated image metadata',
+      content: { 'application/json': { schema: projectImageSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller does not own the image'),
+    404: errorJson('Image not found'),
+    409: errorJson('Only draft or changes-requested project media can be edited'),
+    422: errorJson('Room does not belong to this project'),
   },
 });
 
@@ -87,6 +114,15 @@ export const mediaRoutes = mediaApp()
     const { imageId } = c.req.valid('param');
     const result = await mediaService.commitUpload({ imageId, ...caller(c) });
     return c.json(result, 202);
+  })
+  .openapi(updateMetadataRoute, async (c) => {
+    const { imageId } = c.req.valid('param');
+    const result = await mediaService.updateImageMetadata({
+      imageId,
+      metadata: c.req.valid('json'),
+      ...caller(c),
+    });
+    return c.json(result, 200);
   });
 
 const listImagesRoute = createRoute({
@@ -108,7 +144,10 @@ const listImagesRoute = createRoute({
   },
 });
 
-/** Mounted under /api/projects so the path reads /api/projects/:id/images (E-111 contract). */
+/**
+ * Read/list stays project-scoped for project detail screens; image-level write
+ * actions stay under /api/media because they are addressed by image id only.
+ */
 export const projectImagesRoutes = mediaApp().openapi(listImagesRoute, async (c) => {
   const { id } = c.req.valid('param');
   const { limit, offset } = c.req.valid('query');
