@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ListLeadsResponse } from '@repo/contracts';
+import type { LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
 import { DesignerLeadsList } from '../../src/components/designer-leads-list';
 
 vi.mock('next/navigation', () => ({
@@ -40,6 +40,15 @@ const leads: ListLeadsResponse = {
   ],
 };
 
+const selectedLead: LeadDetailResponse = {
+  ...leads.items[0]!,
+  referredProjectId: '33333333-3333-4333-8333-333333333333',
+  message: 'Needs a modular kitchen quote.',
+  source: 'enquiry',
+  createdAt: '2026-01-06T00:00:00.000Z',
+  updatedAt: '2026-01-06T00:00:00.000Z',
+};
+
 describe('DesignerLeadsList', () => {
   it('renders lead filters and API rows without exposing backend status copy', () => {
     render(<DesignerLeadsList leads={leads} activeStatus="all" />);
@@ -57,5 +66,12 @@ describe('DesignerLeadsList', () => {
 
     expect(screen.getByText(/no leads found/i)).toBeInTheDocument();
     expect(screen.getByText(/try a different search/i)).toBeInTheDocument();
+  });
+
+  it('labels the lead detail dialog for assistive technology', () => {
+    render(<DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />);
+
+    expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
+    expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
   });
 });

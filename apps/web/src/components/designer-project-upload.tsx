@@ -57,6 +57,8 @@ import {
   buildImageMetadata as buildImageMetadataInput,
   getBackendProjectSelection,
   moveProjectImage,
+  roomSlugCandidates,
+  roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
   type BackendProjectSelection,
   type ProjectImageMoveDirection,
@@ -249,7 +251,7 @@ function bedroomTemplatesForBhk(bhkSlug: string) {
 
 function buildResidentialRoomSuggestions(bhkSlug: string) {
   return [
-    { slug: 'modular-kitchen', title: 'Kitchen' },
+    { slug: 'kitchen', title: 'Kitchen' },
     ...bedroomTemplatesForBhk(bhkSlug),
     { slug: 'bathroom', title: 'Bathroom', allowMultiple: true, numberedPrefix: 'Bathroom' },
     { slug: 'foyer', title: 'Foyer / Entrance' },
@@ -269,7 +271,7 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
     primaryPlaceholder: 'Select BHK',
     buildingNameLabel: 'Apartment / Building name',
     defaultRooms: () => [
-      { slug: 'modular-kitchen', title: 'Kitchen' },
+      { slug: 'kitchen', title: 'Kitchen' },
       { slug: 'master-bedroom', title: 'Master Bedroom' },
       { slug: 'bathroom', title: 'Bathroom' },
     ],
@@ -283,7 +285,7 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
     primaryPlaceholder: 'Select BHK',
     buildingNameLabel: 'Villa / Building name',
     defaultRooms: () => [
-      { slug: 'modular-kitchen', title: 'Kitchen' },
+      { slug: 'kitchen', title: 'Kitchen' },
       { slug: 'master-bedroom', title: 'Master Bedroom' },
       { slug: 'bathroom', title: 'Bathroom' },
     ],
@@ -415,16 +417,7 @@ function buildSuggestedRooms(slug: string, bhkSlug: string) {
 }
 
 function findRoomTypeId(roomTerms: TaxonomyTerm[], slug: string) {
-  const aliasMap: Record<string, string[]> = {
-    'modular-kitchen': ['modular-kitchen', 'kitchen'],
-    kitchen: ['kitchen', 'modular-kitchen'],
-    'dining-area': ['dining-area', 'dining'],
-    'restaurant-dining': ['restaurant-dining', 'dining'],
-    'guest-room': ['guest-room', 'guest-bedroom'],
-    'workstation-open-seating-area': ['workstation-open-seating', 'workstation-open-seating-area'],
-    'breakout-lounge-area': ['breakout-lounge', 'breakout-lounge-area'],
-  };
-  const alias = aliasMap[slug] ?? [slug];
+  const alias = roomSlugCandidates(slug);
   return roomTerms.find((term) => alias.includes(term.slug))?.id;
 }
 
@@ -534,6 +527,47 @@ function roomSlugFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
 
 function roomTitleFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
   return room.name || roomTerms.find((term) => term.id === room.roomTypeId)?.label || 'Project room';
+}
+
+function normalizedRoomTitle(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function attachExistingProjectRoomsToDrafts(
+  draftRooms: RoomDraft[],
+  projectRooms: ProjectRoom[],
+  roomTerms: TaxonomyTerm[],
+) {
+  const usedProjectRoomIds = new Set<string>();
+  const matchesByClientId = new Map<string, ProjectRoom>();
+
+  const rooms = draftRooms.map((room) => {
+    if (room.id) return room;
+
+    const match = projectRooms.find((projectRoom) => {
+      if (usedProjectRoomIds.has(projectRoom.id)) return false;
+      const projectRoomSlug = roomSlugFromRoom(projectRoom, roomTerms);
+      const projectRoomTitle = roomTitleFromRoom(projectRoom, roomTerms);
+      return (
+        roomSlugsMatch(room.roomSlug, projectRoomSlug) ||
+        normalizedRoomTitle(room.title) === normalizedRoomTitle(projectRoomTitle)
+      );
+    });
+
+    if (!match) return room;
+
+    usedProjectRoomIds.add(match.id);
+    matchesByClientId.set(room.clientId, match);
+
+    return {
+      ...room,
+      id: match.id,
+      roomTypeId: match.roomTypeId,
+      description: room.description || match.description || '',
+    };
+  });
+
+  return { rooms, matchesByClientId };
 }
 
 function toProjectImagePreview(image: ProjectImageDto, index: number, existing?: ProjectImagePreview): ProjectImagePreview {
@@ -1193,6 +1227,7 @@ export function DesignerProjectUpload({
   const [completion, setCompletion] = useState<ProjectCompletenessResponse | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
+  const createdProjectRoomMatchesRef = useRef(new Map<string, ProjectRoom>());
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1908,6 +1943,9 @@ export function DesignerProjectUpload({
       projectDetailResponseSchema,
       'Could not create the draft project.',
     );
+    const attachedRooms = attachExistingProjectRoomsToDrafts(rooms, detail.rooms, roomTerms);
+    createdProjectRoomMatchesRef.current = attachedRooms.matchesByClientId;
+    setRooms(attachedRooms.rooms);
     setProjectId(detail.id);
     setLoadedProjectId(detail.id);
     router.replace(`/designer/projects/upload?projectId=${detail.id}`);
@@ -1929,7 +1967,10 @@ export function DesignerProjectUpload({
   }
 
   async function syncRoomRecord(currentProjectId: string, room: RoomDraft, sortOrder: number) {
-    const roomTypeId = room.roomTypeId || findRoomTypeId(roomTerms, room.roomSlug);
+    const attachedRoom = room.id ? null : createdProjectRoomMatchesRef.current.get(room.clientId) ?? null;
+    const existingRoomId = room.id ?? attachedRoom?.id;
+    const existingRoomTypeId = room.roomTypeId ?? attachedRoom?.roomTypeId;
+    const roomTypeId = existingRoomTypeId || findRoomTypeId(roomTerms, room.roomSlug);
 
     if (!roomTypeId) {
       throw new Error(`Missing room type for ${room.title}.`);
@@ -1943,7 +1984,7 @@ export function DesignerProjectUpload({
       metadata: mapRoomMetadata(room),
     };
 
-    if (!room.id) {
+    if (!existingRoomId) {
       const response = await api.api.projects[':id'].rooms.$post({
         param: { id: currentProjectId },
         json: roomPayload as CreateProjectRoomInput,
@@ -1960,7 +2001,7 @@ export function DesignerProjectUpload({
     }
 
     const response = await api.api.projects[':id'].rooms[':roomId'].$patch({
-      param: { id: currentProjectId, roomId: room.id },
+      param: { id: currentProjectId, roomId: existingRoomId },
       json: roomPayload,
     });
     const payloadJson = await response.json();
@@ -1969,7 +2010,8 @@ export function DesignerProjectUpload({
       throw new Error(extractApiMessage(payloadJson, `Could not update ${room.title}.`));
     }
 
-    return room.id;
+    updateRoom(room.clientId, (current) => ({ ...current, id: existingRoomId, roomTypeId }));
+    return existingRoomId;
   }
 
   function buildImageMetadata(room: RoomDraft, roomId: string, sortOrder: number) {
