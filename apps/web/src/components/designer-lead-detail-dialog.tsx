@@ -9,6 +9,8 @@ import { Button } from '@repo/ui/components/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogTitle,
 } from '@repo/ui/components/dialog';
 import { Textarea } from '@repo/ui/components/textarea';
 import { ArrowRight, ImagePlus, X } from 'lucide-react';
@@ -118,6 +120,10 @@ export function DesignerLeadDetailDialog({
         overlayClassName="bg-black/25 backdrop-blur-sm"
         className="max-h-[calc(100vh-3rem)] gap-0 overflow-hidden rounded-2xl border-border p-0 sm:max-w-[43rem]"
       >
+        <DialogTitle className="sr-only">Lead details</DialogTitle>
+        <DialogDescription className="sr-only">
+          View homeowner contact details, referred project, lead status, and notes.
+        </DialogDescription>
         <div className="flex items-center justify-between px-6 pt-6">
           <div className="font-mono text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Lead details

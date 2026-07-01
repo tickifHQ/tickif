@@ -4,6 +4,8 @@ import {
   buildImageMetadata,
   getBackendProjectSelection,
   moveProjectImage,
+  roomSlugCandidates,
+  roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
 } from '../../src/lib/designer-project-upload';
 
@@ -144,6 +146,13 @@ describe('designer project upload helpers', () => {
       finishSlugs: ['matte-laminate'],
       tagSlugs: ['warm-wood'],
     });
+  });
+
+  it('matches UI room aliases against backend default room slugs', () => {
+    expect(roomSlugCandidates('modular-kitchen')).toContain('kitchen');
+    expect(roomSlugsMatch('modular-kitchen', 'kitchen')).toBe(true);
+    expect(roomSlugsMatch('master-bedroom', 'bedroom')).toBe(true);
+    expect(roomSlugsMatch('bathroom', 'bedroom')).toBe(false);
   });
 
   it('moves project images and rewrites contiguous sort order', () => {

@@ -23,7 +23,9 @@ type TermSeed = {
 };
 
 const residentialRoomDefaults = { defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom'] };
-const villaRoomDefaults = { defaultRoomSlugs: ['garden-landscape', 'terrace-rooftop', 'garage-parking'] };
+const villaRoomDefaults = {
+  defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom', 'garden-landscape', 'terrace-rooftop', 'garage-parking'],
+};
 const workspaceRoomDefaults = { defaultRoomSlugs: ['cabin', 'workstation-open-seating', 'conference-room'] };
 const institutionalRoomDefaults = { defaultRoomSlugs: ['lobby-reception', 'guest-room', 'restaurant-dining'] };
 const retailRoomDefaults = { defaultRoomSlugs: ['storefront-facade', 'display-area', 'billing-counter'] };

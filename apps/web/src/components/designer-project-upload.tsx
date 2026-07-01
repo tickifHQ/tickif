@@ -57,6 +57,8 @@ import {
   buildImageMetadata as buildImageMetadataInput,
   getBackendProjectSelection,
   moveProjectImage,
+  roomSlugCandidates,
+  roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
   type BackendProjectSelection,
   type ProjectImageMoveDirection,
@@ -249,7 +251,7 @@ function bedroomTemplatesForBhk(bhkSlug: string) {
 
 function buildResidentialRoomSuggestions(bhkSlug: string) {
   return [
-    { slug: 'modular-kitchen', title: 'Kitchen' },
+    { slug: 'kitchen', title: 'Kitchen' },
     ...bedroomTemplatesForBhk(bhkSlug),
     { slug: 'bathroom', title: 'Bathroom', allowMultiple: true, numberedPrefix: 'Bathroom' },
     { slug: 'foyer', title: 'Foyer / Entrance' },
@@ -269,7 +271,7 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
     primaryPlaceholder: 'Select BHK',
     buildingNameLabel: 'Apartment / Building name',
     defaultRooms: () => [
-      { slug: 'modular-kitchen', title: 'Kitchen' },
+      { slug: 'kitchen', title: 'Kitchen' },
       { slug: 'master-bedroom', title: 'Master Bedroom' },
       { slug: 'bathroom', title: 'Bathroom' },
     ],
@@ -283,7 +285,7 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
     primaryPlaceholder: 'Select BHK',
     buildingNameLabel: 'Villa / Building name',
     defaultRooms: () => [
-      { slug: 'modular-kitchen', title: 'Kitchen' },
+      { slug: 'kitchen', title: 'Kitchen' },
       { slug: 'master-bedroom', title: 'Master Bedroom' },
       { slug: 'bathroom', title: 'Bathroom' },
     ],
@@ -415,16 +417,10 @@ function buildSuggestedRooms(slug: string, bhkSlug: string) {
 }
 
 function findRoomTypeId(roomTerms: TaxonomyTerm[], slug: string) {
-  const aliasMap: Record<string, string[]> = {
-    'modular-kitchen': ['modular-kitchen', 'kitchen'],
-    kitchen: ['kitchen', 'modular-kitchen'],
-    'dining-area': ['dining-area', 'dining'],
-    'restaurant-dining': ['restaurant-dining', 'dining'],
-    'guest-room': ['guest-room', 'guest-bedroom'],
-    'workstation-open-seating-area': ['workstation-open-seating', 'workstation-open-seating-area'],
-    'breakout-lounge-area': ['breakout-lounge', 'breakout-lounge-area'],
-  };
-  const alias = aliasMap[slug] ?? [slug];
+  const exactMatch = roomTerms.find((term) => term.slug === slug);
+  if (exactMatch) return exactMatch.id;
+
+  const alias = roomSlugCandidates(slug);
   return roomTerms.find((term) => alias.includes(term.slug))?.id;
 }
 
@@ -534,6 +530,43 @@ function roomSlugFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
 
 function roomTitleFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
   return room.name || roomTerms.find((term) => term.id === room.roomTypeId)?.label || 'Project room';
+}
+
+function attachExistingProjectRoomsToDrafts(
+  draftRooms: RoomDraft[],
+  projectRooms: ProjectRoom[],
+  roomTerms: TaxonomyTerm[],
+) {
+  const usedProjectRoomIds = new Set<string>();
+
+  function findMatch(room: RoomDraft) {
+    const candidates = projectRooms.filter((projectRoom) => !usedProjectRoomIds.has(projectRoom.id));
+
+    const titleMatch = candidates.find(
+      (projectRoom) =>
+        normalizeRoomSearchValue(room.title) === normalizeRoomSearchValue(roomTitleFromRoom(projectRoom, roomTerms)),
+    );
+    if (titleMatch) return titleMatch;
+
+    return candidates.find((projectRoom) => roomSlugsMatch(room.roomSlug, roomSlugFromRoom(projectRoom, roomTerms)));
+  }
+
+  return draftRooms.map((room) => {
+    if (room.id) return room;
+
+    const match = findMatch(room);
+
+    if (!match) return room;
+
+    usedProjectRoomIds.add(match.id);
+
+    return {
+      ...room,
+      id: match.id,
+      roomTypeId: match.roomTypeId,
+      description: room.description || match.description || '',
+    };
+  });
 }
 
 function toProjectImagePreview(image: ProjectImageDto, index: number, existing?: ProjectImagePreview): ProjectImagePreview {
@@ -1193,6 +1226,7 @@ export function DesignerProjectUpload({
   const [completion, setCompletion] = useState<ProjectCompletenessResponse | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
+  const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1891,27 +1925,37 @@ export function DesignerProjectUpload({
     };
   }
 
-  async function ensureProject(): Promise<string> {
-    if (projectId) return projectId;
+  async function ensureProject(): Promise<{ projectId: string; rooms: RoomDraft[] }> {
+    if (projectId) return { projectId, rooms };
+    if (ensureProjectPromiseRef.current) return ensureProjectPromiseRef.current;
 
-    const payload = buildCreateProjectPayload();
+    const promise = (async () => {
+      const payload = buildCreateProjectPayload();
 
-    const response = await api.api.projects.$post({ json: payload });
-    const payloadJson = await response.json();
+      const response = await api.api.projects.$post({ json: payload });
+      const payloadJson = await response.json();
 
-    if (!response.ok) {
-      throw new Error(extractApiMessage(payloadJson, 'Could not create the draft project.'));
-    }
+      if (!response.ok) {
+        throw new Error(extractApiMessage(payloadJson, 'Could not create the draft project.'));
+      }
 
-    const detail = parseApiPayload(
-      payloadJson,
-      projectDetailResponseSchema,
-      'Could not create the draft project.',
-    );
-    setProjectId(detail.id);
-    setLoadedProjectId(detail.id);
-    router.replace(`/designer/projects/upload?projectId=${detail.id}`);
-    return detail.id;
+      const detail = parseApiPayload(
+        payloadJson,
+        projectDetailResponseSchema,
+        'Could not create the draft project.',
+      );
+      const attachedRooms = attachExistingProjectRoomsToDrafts(rooms, detail.rooms, roomTerms);
+      setRooms(attachedRooms);
+      setProjectId(detail.id);
+      setLoadedProjectId(detail.id);
+      router.replace(`/designer/projects/upload?projectId=${detail.id}`);
+      return { projectId: detail.id, rooms: attachedRooms };
+    })().finally(() => {
+      ensureProjectPromiseRef.current = null;
+    });
+
+    ensureProjectPromiseRef.current = promise;
+    return promise;
   }
 
   async function syncProject(currentProjectId: string) {
@@ -1969,6 +2013,7 @@ export function DesignerProjectUpload({
       throw new Error(extractApiMessage(payloadJson, `Could not update ${room.title}.`));
     }
 
+    updateRoom(room.clientId, (current) => ({ ...current, id: room.id, roomTypeId }));
     return room.id;
   }
 
@@ -2038,10 +2083,10 @@ export function DesignerProjectUpload({
   }
 
   async function syncDraft() {
-    const currentProjectId = await ensureProject();
+    const { projectId: currentProjectId, rooms: currentRooms } = await ensureProject();
     await syncProject(currentProjectId);
 
-    for (const [index, room] of rooms.entries()) {
+    for (const [index, room] of currentRooms.entries()) {
       const roomId = await syncRoomRecord(currentProjectId, room, index);
       await syncImageMetadata(room, roomId);
     }
@@ -2181,8 +2226,13 @@ export function DesignerProjectUpload({
     setNotice('');
 
     try {
-      const currentProjectId = await ensureProject();
-      const roomId = await syncRoomRecord(currentProjectId, room, rooms.findIndex((item) => item.clientId === room.clientId));
+      const { projectId: currentProjectId, rooms: currentRooms } = await ensureProject();
+      const attachedRoom = currentRooms.find((item) => item.clientId === room.clientId) ?? room;
+      const roomId = await syncRoomRecord(
+        currentProjectId,
+        attachedRoom,
+        currentRooms.findIndex((item) => item.clientId === room.clientId),
+      );
 
       for (const [index, upload] of pendingUploads.entries()) {
         const { file, preview } = upload;

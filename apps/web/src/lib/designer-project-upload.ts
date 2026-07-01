@@ -24,6 +24,27 @@ type DefaultRoomRefreshDraft = {
   uploadError: string;
 };
 
+const roomSlugAliasMap: Record<string, string[]> = {
+  'modular-kitchen': ['modular-kitchen', 'kitchen'],
+  kitchen: ['kitchen', 'modular-kitchen'],
+  'master-bedroom': ['master-bedroom', 'bedroom'],
+  'kids-bedroom': ['kids-bedroom', 'bedroom'],
+  'guest-bedroom': ['guest-bedroom', 'bedroom'],
+  'dining-area': ['dining-area', 'dining'],
+  'restaurant-dining': ['restaurant-dining', 'dining'],
+  'guest-room': ['guest-room', 'guest-bedroom'],
+  'workstation-open-seating-area': ['workstation-open-seating', 'workstation-open-seating-area'],
+  'breakout-lounge-area': ['breakout-lounge', 'breakout-lounge-area'],
+};
+
+export function roomSlugCandidates(slug: string) {
+  return roomSlugAliasMap[slug] ?? [slug];
+}
+
+export function roomSlugsMatch(left: string, right: string) {
+  return roomSlugCandidates(left).includes(right) || roomSlugCandidates(right).includes(left);
+}
+
 export const projectTypeBackendMap: Record<string, BackendProjectSelection> = {
   apartment: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
   villa: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' },
