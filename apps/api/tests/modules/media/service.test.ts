@@ -14,13 +14,14 @@ vi.mock('../../../src/modules/media/repository.js', () => ({
 vi.mock('@repo/storage', () => ({
   buildOriginalKey: vi.fn(() => 'originals/p/uuid'),
   presignUpload: vi.fn(async () => 'https://r2.example/originals/p/uuid?X-Amz-Signature=abc'),
+  presignDownload: vi.fn(async ({ key }: { key: string }) => `https://r2.example/${key}?X-Amz-Signature=read`),
   objectExists: vi.fn(async () => true),
 }));
 vi.mock('@repo/queue', () => ({ enqueueMedia: vi.fn(async () => {}) }));
 
 import { mediaService } from '../../../src/modules/media/service.js';
 import { mediaRepository } from '../../../src/modules/media/repository.js';
-import { buildOriginalKey, presignUpload, objectExists } from '@repo/storage';
+import { buildOriginalKey, presignUpload, presignDownload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../../src/lib/errors.js';
 
@@ -205,6 +206,8 @@ describe('mediaService.listProjectImages', () => {
       finishSlugs: ['veneer'],
     });
     expect(result.items[0]!.derivatives).toHaveLength(1);
+    expect(result.items[0]!.previewUrl).toBe('https://r2.example/d/t.webp?X-Amz-Signature=read');
+    expect(presignDownload).toHaveBeenCalledWith({ key: 'd/t.webp' });
   });
 
   it('403s for a non-owner who is not superadmin', async () => {

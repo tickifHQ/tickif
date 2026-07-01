@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
-import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
+import { InitialsAvatar } from '@/components/initials-avatar';
+import { Avatar } from '@repo/ui/components/avatar';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,14 +14,27 @@ import {
   DropdownMenuItem,
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
-export function AccountMenu() {
+export function AccountMenu({
+  showLabel = false,
+  avatarSeed,
+}: {
+  showLabel?: boolean;
+  avatarSeed?: string;
+}) {
   const { data: session, isPending } = authClient.useSession();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (isPending) {
-    return <Skeleton role="status" className="size-8 rounded-full" />;
+    return (
+      <Skeleton
+        role="status"
+        className={showLabel ? 'h-10 w-28 rounded-full' : 'size-8 rounded-full'}
+      />
+    );
   }
 
   if (!session) {
@@ -34,24 +49,49 @@ export function AccountMenu() {
   }
 
   const user = session.user;
-  const initial = (user.name ?? user.email ?? '?').charAt(0).toUpperCase();
+  const displayName = user.name ?? user.email ?? 'Account';
+  const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
   async function handleSignOut() {
     try {
       await authClient.signOut();
-      setOpen(false);
     } catch {
+      // Keep the user moving away from protected UI even if the local sign-out call reports an error.
+    } finally {
       setOpen(false);
+      router.replace('/login');
+      router.refresh();
     }
   }
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="outline-none">
-          <Avatar>
-            <AvatarFallback>{initial}</AvatarFallback>
+        <button
+          type="button"
+          aria-label={showLabel ? undefined : `Open account menu for ${displayName}`}
+          className={
+            showLabel
+              ? 'inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-1.5 py-1 pr-3 text-[13px] leading-[1.1] font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground'
+              : 'cursor-pointer outline-none'
+          }
+        >
+          <Avatar className={showLabel ? 'size-8' : undefined}>
+            <InitialsAvatar
+              seed={resolvedAvatarSeed}
+              fallbackSeed="Tickif"
+              alt=""
+              size={showLabel ? 32 : 40}
+            />
           </Avatar>
+          {showLabel ? (
+            <>
+              <span className="max-w-24 truncate text-[13px] leading-[1.1] font-medium">
+                {displayName}
+              </span>
+              <ChevronDown className="size-4 text-muted-foreground" />
+            </>
+          ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">

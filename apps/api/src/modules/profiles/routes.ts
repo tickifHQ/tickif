@@ -6,6 +6,7 @@ import {
   onboardDesignerResponseSchema,
   profilePublicResponseSchema,
   profileOwnerResponseSchema,
+  currentProfileResponseSchema,
   profileIdParamSchema,
   profileSlugParamSchema,
   updateProfileSchema,
@@ -95,6 +96,47 @@ const onboardRoute = createRoute({
 });
 
 export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/me',
+      tags: ['Profiles'],
+      summary: 'Get own profile and active organization context',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        200: {
+          description: 'Current owner profile context',
+          content: { 'application/json': { schema: currentProfileResponseSchema } },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden — not a writer in the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile for the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'No active organization selected',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await profilesService.getCurrentProfile(
+        user.id,
+        session?.activeOrganizationId ?? null,
+      );
+      return c.json(result, 200);
+    },
+  )
   .openapi(
     createRoute({
       method: 'get',

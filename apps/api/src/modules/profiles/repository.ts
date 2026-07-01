@@ -19,6 +19,25 @@ export const profilesRepository = {
     return row ?? null;
   },
 
+  /** Find the designer profile and organization by organization id. */
+  async findByOrgIdWithOrg(
+    orgId: string,
+  ): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect } | null> {
+    const [row] = await db
+      .select({
+        profile: schema.designerProfile,
+        org: schema.organization,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(
+        schema.organization,
+        eq(schema.designerProfile.orgId, schema.organization.id),
+      )
+      .where(eq(schema.designerProfile.orgId, orgId))
+      .limit(1);
+    return row ?? null;
+  },
+
   /** Check if the user has linked a Google account. */
   async hasGoogleAccount(userId: string): Promise<boolean> {
     const [row] = await db

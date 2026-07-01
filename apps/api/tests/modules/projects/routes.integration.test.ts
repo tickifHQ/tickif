@@ -61,7 +61,7 @@ describe('GET /api/projects', () => {
       citySlug: 'mumbai',
       localitySlug: 'bandra',
     });
-    await makeProject({
+    const draftProject = await makeProject({
       designerId: designer.id,
       title: 'Andheri Apartment',
       status: 'draft',
@@ -69,6 +69,15 @@ describe('GET /api/projects', () => {
       citySlug: 'mumbai',
       localitySlug: 'andheri',
     });
+    const coverImage = await makeProjectImage({
+      projectId: draftProject.id,
+      status: 'ready',
+      derivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/project/cover/thumb.webp', width: 320, height: 240 }],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: coverImage.id })
+      .where(eq(schema.project.id, draftProject.id));
     await makeProject({ title: 'Other Org Project', status: 'published' });
 
     const res = await client.api.projects.$get(
@@ -87,8 +96,8 @@ describe('GET /api/projects', () => {
       propertyType: 'apartment',
       city: 'mumbai',
       locality: 'andheri',
-      coverImageUrl: null,
     });
+    expect(body.items[0]?.coverImageUrl).toContain('X-Amz-Signature=');
   });
 
   it('maps dashboard status buckets and applies search and pagination', async () => {
@@ -409,6 +418,31 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toBe('Room must belong to the project');
+  });
+
+  it('deletes an owned draft project image and clears it as cover', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002035');
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: image.id })
+      .where(eq(schema.project.id, project.id));
+
+    const res = await app.request(`/api/projects/${project.id}/images/${image.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: image.id, deleted: true });
+
+    const [imageRows, [projectRow]] = await Promise.all([
+      db.select().from(schema.projectImage).where(eq(schema.projectImage.id, image.id)),
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+    ]);
+    expect(imageRows).toHaveLength(0);
+    expect(projectRow?.coverImageId).toBeNull();
   });
 
   it('deletes owned draft projects and cascades rooms and images', async () => {

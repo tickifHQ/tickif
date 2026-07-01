@@ -206,15 +206,18 @@ const rooms: TermSeed[] = [
 
 // ─── SCOPES ────────────────────────────────────────────────────────────────────
 const scopes: TermSeed[] = [
-  { kind: 'scope', slug: 'full-home', label: 'Full Home', sortOrder: 1 },
-  { kind: 'scope', slug: 'single-room', label: 'Single Room', sortOrder: 2 },
-  { kind: 'scope', slug: 'modular-kitchen', label: 'Modular Kitchen', sortOrder: 3 },
-  { kind: 'scope', slug: 'wardrobe', label: 'Wardrobe', sortOrder: 4 },
-  { kind: 'scope', slug: 'false-ceiling', label: 'False Ceiling', sortOrder: 5 },
-  { kind: 'scope', slug: 'painting-only', label: 'Painting Only', sortOrder: 6 },
-  { kind: 'scope', slug: 'renovation', label: 'Renovation', sortOrder: 7 },
-  { kind: 'scope', slug: 'new-construction', label: 'New Construction', sortOrder: 8 },
-  { kind: 'scope', slug: 'commercial', label: 'Commercial', sortOrder: 9 },
+  { kind: 'scope', slug: 'design', label: 'Design', sortOrder: 1 },
+  { kind: 'scope', slug: 'interior-execution', label: 'Interior execution', sortOrder: 2 },
+  { kind: 'scope', slug: 'construction', label: 'Construction', sortOrder: 3 },
+  { kind: 'scope', slug: 'full-home', label: 'Full Home', sortOrder: 10 },
+  { kind: 'scope', slug: 'single-room', label: 'Single Room', sortOrder: 11 },
+  { kind: 'scope', slug: 'modular-kitchen', label: 'Modular Kitchen', sortOrder: 12 },
+  { kind: 'scope', slug: 'wardrobe', label: 'Wardrobe', sortOrder: 13 },
+  { kind: 'scope', slug: 'false-ceiling', label: 'False Ceiling', sortOrder: 14 },
+  { kind: 'scope', slug: 'painting-only', label: 'Painting Only', sortOrder: 15 },
+  { kind: 'scope', slug: 'renovation', label: 'Renovation', sortOrder: 16 },
+  { kind: 'scope', slug: 'new-construction', label: 'New Construction', sortOrder: 17 },
+  { kind: 'scope', slug: 'commercial', label: 'Commercial', sortOrder: 18 },
 ];
 
 // ─── THEMES ────────────────────────────────────────────────────────────────────
@@ -242,10 +245,10 @@ const themes: TermSeed[] = [
 // NOTE: INR ranges are industry-standard tiers (Livspace/HomeLane ballpark).
 // Exact ranges pending product confirmation — structural correctness unaffected.
 const budgetBands: TermSeed[] = [
-  { kind: 'budget_band', slug: 'budget', label: 'Budget', sortOrder: 1, metadata: { min: 0, max: 500000 } },
-  { kind: 'budget_band', slug: 'moderate', label: 'Moderate', sortOrder: 2, metadata: { min: 500001, max: 1500000 } },
-  { kind: 'budget_band', slug: 'upscale', label: 'Upscale', sortOrder: 3, metadata: { min: 1500001, max: 3500000 } },
-  { kind: 'budget_band', slug: 'luxury', label: 'Luxury', sortOrder: 4, metadata: { min: 3500001, max: null } },
+  { kind: 'budget_band', slug: 'budget', label: 'Under ₹5L', sortOrder: 1, metadata: { min: 0, max: 500000 } },
+  { kind: 'budget_band', slug: 'moderate', label: '₹5L - ₹15L', sortOrder: 2, metadata: { min: 500001, max: 1500000 } },
+  { kind: 'budget_band', slug: 'upscale', label: '₹15L - ₹35L', sortOrder: 3, metadata: { min: 1500001, max: 3500000 } },
+  { kind: 'budget_band', slug: 'luxury', label: '₹35L+', sortOrder: 4, metadata: { min: 3500001, max: null } },
 ];
 
 // ─── E-124: PER-ROOM ATTRIBUTE VOCABULARIES ────────────────────────────────────

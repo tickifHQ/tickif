@@ -1,14 +1,14 @@
 # Tickif API — Hono server (REST + OpenAPI + auth).
 # Follow-up: slim the runtime image with `pnpm deploy`/turbo prune once stabilized.
 
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @repo/api... build
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/* \

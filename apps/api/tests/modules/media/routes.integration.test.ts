@@ -182,6 +182,7 @@ describe('GET /api/projects/:id/images', () => {
     expect(body.items[0]!.sortOrder).toBe(0);
     expect(body.items[0]!.status).toBe('ready');
     expect(body.items[0]!.derivatives).toHaveLength(1);
+    expect(body.items[0]!.previewUrl).toContain('X-Amz-Signature=');
     expect(body.items[0]).toMatchObject({
       roomId: null,
       themeSlugs: [],
@@ -190,6 +191,144 @@ describe('GET /api/projects/:id/images', () => {
       tagSlugs: [],
     });
     expect(body.items[1]!.status).toBe('processing');
+    expect(body.items[1]!.previewUrl).toBeNull();
+  });
+});
+
+describe('PATCH /api/media/:imageId/metadata', () => {
+  it('rejects unauthenticated requests with 401', async () => {
+    const res = await client.api.media[':imageId'].metadata.$patch({
+      param: { imageId: RANDOM_UUID },
+      json: { tagSlugs: ['hero'] },
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('403s for a non-owner', async () => {
+    const { cookie } = await createAuthedSession();
+    const other = await makeDesigner();
+    const project = await makeProject({ designerId: other.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it('409s when metadata is changed after the project leaves draft', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(409);
+  });
+
+  it('updates metadata while changes are requested', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'changes_requested' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { tagSlugs: ['hero'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    if (res.status !== 200) throw new Error('expected 200');
+    expect(await res.json()).toMatchObject({ id: image.id, tagSlugs: ['hero'] });
+  });
+
+  it('updates room and taxonomy metadata for an owned image', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const room = await makeProjectRoom({ projectId: project.id });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+    await makeTaxonomy({ kind: 'theme', slug: 'modern', label: 'Modern' });
+    await makeTaxonomy({ kind: 'material', slug: 'wood', label: 'Wood' });
+    await makeTaxonomy({ kind: 'finish', slug: 'veneer', label: 'Veneer' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: {
+          roomId: room.id,
+          sortOrder: 4,
+          themeSlugs: ['modern'],
+          materialSlugs: ['wood'],
+          finishSlugs: ['veneer'],
+          tagSlugs: ['hero'],
+        },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    if (res.status !== 200) throw new Error('expected 200');
+    expect(await res.json()).toMatchObject({
+      id: image.id,
+      roomId: room.id,
+      sortOrder: 4,
+      themeSlugs: ['modern'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['veneer'],
+      tagSlugs: ['hero'],
+    });
+  });
+
+  it('rejects unknown managed taxonomy metadata', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { themeSlugs: ['not-real'] },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects room ids from another project', async () => {
+    const { cookie } = await createAuthedSession();
+    const designer = await makeDesigner({ userId: await sessionUserId() });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
+    const otherRoom = await makeProjectRoom();
+
+    const res = await client.api.media[':imageId'].metadata.$patch(
+      {
+        param: { imageId: image.id },
+        json: { roomId: otherRoom.id },
+      },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(422);
   });
 });
 

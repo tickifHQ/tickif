@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   createProjectRoomSchema,
   createProjectSchema,
+  deleteProjectImageResponseSchema,
   deleteProjectResponseSchema,
   deleteProjectRoomResponseSchema,
   duplicateProjectResponseSchema,
@@ -315,6 +316,26 @@ const linkImageRoute = createRoute({
   },
 });
 
+const deleteImageRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/images/{imageId}',
+  tags: ['Projects'],
+  summary: 'Delete an image from an owned editable project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectImageIdParamSchema },
+  responses: {
+    200: {
+      description: 'Deleted image',
+      content: { 'application/json': { schema: deleteProjectImageResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot edit this project'),
+    404: errorJson('Project or image not found'),
+    409: errorJson('Only draft or changes-requested projects can be edited'),
+  },
+});
+
 const completenessRoute = createRoute({
   method: 'get',
   path: '/{id}/completeness',
@@ -428,6 +449,11 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('json'),
       caller(c.get('user')),
     );
+    return c.json(result, 200);
+  })
+  .openapi(deleteImageRoute, async (c) => {
+    const { id, imageId } = c.req.valid('param');
+    const result = await projectsService.deleteImage(id, imageId, caller(c.get('user')));
     return c.json(result, 200);
   })
   .openapi(completenessRoute, async (c) => {

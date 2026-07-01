@@ -6,8 +6,10 @@ import type {
   OnboardDesignerResponse,
   ProfilePublicResponse,
   ProfileOwnerResponse,
+  CurrentProfileResponse,
   UpdateProfileInput,
 } from '@repo/contracts';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
 import { isOrgWriter } from '../orgs/repository.js';
@@ -289,6 +291,62 @@ export const profilesService = {
   },
 
   // --- Read/Update (E-37) ---
+
+  /** Current owner read for authenticated designer workspace context. */
+  async getCurrentProfile(userId: string, activeOrgId: string | null): Promise<CurrentProfileResponse> {
+    const orgId = activeOrgId ?? (await profilesRepository.hasOrganization(userId));
+    if (!orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+
+    const canRead = await isOrgWriter(userId, orgId);
+    if (!canRead) {
+      throw AppError.forbidden('Insufficient org role to read this profile');
+    }
+
+    const current = await profilesRepository.findByOrgIdWithOrg(orgId);
+    if (!current) {
+      throw AppError.notFound('No profile found for the active organization');
+    }
+
+    const { profile, org } = current;
+    const footprint = await profilesRepository.getFootprint(profile.id);
+
+    return {
+      id: profile.id,
+      orgId: profile.orgId,
+      displayName: profile.displayName,
+      entityType: profile.entityType,
+      bio: profile.bio,
+      logoImageId: profile.logoImageId,
+      status: profile.status,
+      yearsExperience: profile.yearsExperience,
+      projectCount: profile.projectCount,
+      shareCount: profile.shareCount,
+      avgRating: profile.avgRating,
+      reviewCount: profile.reviewCount,
+      websiteUrl: profile.websiteUrl,
+      googleBusinessUrl: profile.googleBusinessUrl,
+      phone: profile.phone,
+      address: profile.address,
+      instagramHandle: profile.instagramHandle,
+      linkedinHandle: profile.linkedinHandle,
+      youtubeHandle: profile.youtubeHandle,
+      firmType: profile.firmType,
+      foundedYear: profile.foundedYear,
+      staffCount: profile.staffCount,
+      testimonialBannerEnabled: profile.testimonialBannerEnabled,
+      footprint,
+      organization: {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+      },
+      shareUrl: `${config.PUBLIC_WEB_URL}/d/${org.slug}`,
+      createdAt: profile.createdAt.toISOString(),
+      updatedAt: profile.updatedAt.toISOString(),
+    };
+  },
 
   /** Public read — only active profiles, no private/corporate fields. */
   async getPublicProfile(profileId: string): Promise<ProfilePublicResponse> {

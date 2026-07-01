@@ -26,6 +26,10 @@ export type ProjectImageAttachmentRecord = Pick<
   ProjectImageRecord,
   'id' | 'projectId' | 'roomId' | 'status' | 'sortOrder'
 >;
+export type ProjectImageDeletionRecord = Pick<
+  ProjectImageRecord,
+  'id' | 'projectId' | 'originalKey' | 'derivatives'
+>;
 
 export type ProjectOwnership = {
   projectId: string;
@@ -58,6 +62,7 @@ export type ProjectListItemRecord = Pick<
   | 'createdAt'
   | 'updatedAt'
 >;
+export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
 
 export type DuplicateProjectParams = {
   source: ProjectRecord;
@@ -145,6 +150,22 @@ export const projectsRepository = {
     ]);
 
     return { items, total: count?.value ?? 0 };
+  },
+
+  async findCoverImages(imageIds: string[]): Promise<Map<string, ProjectCoverImageRecord>> {
+    const uniqueIds = [...new Set(imageIds)];
+    if (uniqueIds.length === 0) return new Map();
+
+    const rows = await db
+      .select({
+        id: schema.projectImage.id,
+        status: schema.projectImage.status,
+        derivatives: schema.projectImage.derivatives,
+      })
+      .from(schema.projectImage)
+      .where(inArray(schema.projectImage.id, uniqueIds));
+
+    return new Map(rows.map((row) => [row.id, row]));
   },
 
   async findById(id: string): Promise<ProjectRecord | null> {
@@ -638,6 +659,34 @@ export const projectsRepository = {
         sortOrder: schema.projectImage.sortOrder,
       });
     return row ?? null;
+  },
+
+  async deleteImage(projectId: string, imageId: string): Promise<ProjectImageDeletionRecord | null> {
+    return db.transaction(async (tx) => {
+      const [image] = await tx
+        .select({
+          id: schema.projectImage.id,
+          projectId: schema.projectImage.projectId,
+          originalKey: schema.projectImage.originalKey,
+          derivatives: schema.projectImage.derivatives,
+        })
+        .from(schema.projectImage)
+        .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)))
+        .limit(1);
+
+      if (!image) return null;
+
+      await tx
+        .update(schema.project)
+        .set({ coverImageId: null, updatedAt: new Date() })
+        .where(and(eq(schema.project.id, projectId), eq(schema.project.coverImageId, imageId)));
+
+      await tx
+        .delete(schema.projectImage)
+        .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)));
+
+      return image;
+    });
   },
 
   slugify,
