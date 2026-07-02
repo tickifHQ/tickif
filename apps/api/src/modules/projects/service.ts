@@ -463,7 +463,7 @@ async function validateRoomType(roomTypeId: string): Promise<void> {
 
 function buildCompleteness(
   project: ProjectRecord,
-  imageCounts: { readyImageCount: number; taggedReadyImageCount: number },
+  imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
   const requirements = [
     { key: 'project-name', label: 'Project name', complete: project.title.trim().length > 0 },
@@ -473,15 +473,15 @@ function buildCompleteness(
     { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
     {
       key: 'at-least-three-photos',
-      label: 'At least 3 ready photos',
-      complete: imageCounts.readyImageCount >= 3,
+      label: 'At least 3 photos',
+      complete: imageCounts.imageCount >= 3,
     },
     {
       key: 'image-metadata',
-      label: 'Room, theme, and finish metadata on each ready photo',
+      label: 'Room, theme, and finish metadata on each photo',
       complete:
-        imageCounts.readyImageCount >= 3 &&
-        imageCounts.taggedReadyImageCount === imageCounts.readyImageCount,
+        imageCounts.imageCount >= 3 &&
+        imageCounts.taggedImageCount === imageCounts.imageCount,
     },
   ];
   const completeCount = requirements.filter((requirement) => requirement.complete).length;
@@ -681,7 +681,7 @@ export const projectsService = {
 
   async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {
     const project = await requireReadableProject(projectId, caller);
-    return buildCompleteness(project, await projectsRepository.getReadyImageCounts(projectId));
+    return buildCompleteness(project, await projectsRepository.getUploadImageCounts(projectId));
   },
 
   async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
@@ -691,7 +691,7 @@ export const projectsService = {
 
     const completeness = buildCompleteness(
       project,
-      await projectsRepository.getReadyImageCounts(projectId),
+      await projectsRepository.getUploadImageCounts(projectId),
     );
     if (!completeness.complete) {
       throw AppError.unprocessable('Project is missing required upload information', {

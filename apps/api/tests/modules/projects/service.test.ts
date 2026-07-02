@@ -43,7 +43,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findImage: vi.fn(),
       updateImageLink: vi.fn(),
       deleteImage: vi.fn(),
-      getReadyImageCounts: vi.fn(),
+      getUploadImageCounts: vi.fn(),
       submit: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
       slugify: (t: string) =>
@@ -407,9 +407,9 @@ describe('projectsService.getCompleteness', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 1,
-      taggedReadyImageCount: 0,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 1,
+      taggedImageCount: 0,
     });
 
     const result = await projectsService.getCompleteness(row().id, caller);
@@ -417,13 +417,15 @@ describe('projectsService.getCompleteness', () => {
     expect(result.complete).toBe(false);
     expect(result.missing).toContain('property-type');
     expect(result.missing).toContain('at-least-three-photos');
+    expect(result.requirements.find((requirement) => requirement.key === 'at-least-three-photos')?.label)
+      .toBe('At least 3 photos');
   });
 
   it('reports completeness for published projects without owner access', async () => {
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'published' }));
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 0,
-      taggedReadyImageCount: 0,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 0,
+      taggedImageCount: 0,
     });
 
     const result = await projectsService.getCompleteness(row().id, caller);
@@ -449,9 +451,9 @@ describe('projectsService.submit', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 3,
-      taggedReadyImageCount: 3,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 3,
+      taggedImageCount: 3,
     });
     vi.mocked(projectsRepository.submit).mockResolvedValue(
       row({ ...complete, status: 'submitted', submittedAt: new Date('2026-01-02T00:00:00Z') }),
@@ -480,9 +482,9 @@ describe('projectsService.submit', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(requestedChanges);
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 3,
-      taggedReadyImageCount: 3,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 3,
+      taggedImageCount: 3,
     });
     vi.mocked(projectsRepository.submit).mockResolvedValue(
       row({

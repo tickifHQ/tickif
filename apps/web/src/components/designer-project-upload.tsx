@@ -2082,6 +2082,14 @@ export function DesignerProjectUpload({
     return nextCompletion;
   }
 
+  function refreshUploadStateInBackground(currentProjectId: string) {
+    void Promise.all([refreshProjectImages(currentProjectId), fetchCompleteness(currentProjectId)]).catch(
+      (refreshError: unknown) => {
+        setError(refreshError instanceof Error ? refreshError.message : 'Could not refresh image processing status.');
+      },
+    );
+  }
+
   async function syncDraft() {
     const { projectId: currentProjectId, rooms: currentRooms } = await ensureProject();
     await syncProject(currentProjectId);
@@ -2337,8 +2345,8 @@ export function DesignerProjectUpload({
         }
       }
 
-      await refreshProjectImages(currentProjectId);
-      setNotice('Images uploaded and linked to the draft.');
+      refreshUploadStateInBackground(currentProjectId);
+      setNotice('Images uploaded and linked to the draft. Processing will continue in the background.');
     } catch (uploadError) {
       updateRoom(room.clientId, (current) => ({
         ...current,

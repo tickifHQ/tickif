@@ -1,5 +1,5 @@
 import { ilike, inArray } from 'drizzle-orm';
-import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
+import { db, schema, eq, and, or, desc, asc, sql, isNotNull } from '@repo/db';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -369,17 +369,16 @@ export const projectsRepository = {
     return row;
   },
 
-  async getReadyImageCounts(projectId: string): Promise<{
-    readyImageCount: number;
-    taggedReadyImageCount: number;
+  async getUploadImageCounts(projectId: string): Promise<{
+    imageCount: number;
+    taggedImageCount: number;
   }> {
     const [row] = await db
       .select({
-        readyImageCount: sql<number>`count(*)::int`,
-        taggedReadyImageCount: sql<number>`
+        imageCount: sql<number>`count(*)::int`,
+        taggedImageCount: sql<number>`
           count(*) filter (
-            where ${schema.projectImage.roomId} is not null
-              and jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
+            where jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
               and jsonb_array_length(${schema.projectImage.finishSlugs}) > 0
           )::int
         `,
@@ -388,12 +387,13 @@ export const projectsRepository = {
       .where(
         and(
           eq(schema.projectImage.projectId, projectId),
-          eq(schema.projectImage.status, 'ready'),
+          inArray(schema.projectImage.status, ['processing', 'ready']),
+          isNotNull(schema.projectImage.roomId),
         ),
       );
     return {
-      readyImageCount: row?.readyImageCount ?? 0,
-      taggedReadyImageCount: row?.taggedReadyImageCount ?? 0,
+      imageCount: row?.imageCount ?? 0,
+      taggedImageCount: row?.taggedImageCount ?? 0,
     };
   },
 
