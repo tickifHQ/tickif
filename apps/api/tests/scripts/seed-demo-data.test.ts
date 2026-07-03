@@ -1,8 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { SEED_DESIGNERS } from '../../src/scripts/seed-demo/data.js';
-
-const FIXTURES_DIR = new URL('../../fixtures/seed-demo/', import.meta.url);
 
 const allProjects = SEED_DESIGNERS.flatMap((designer) => designer.projects);
 const allImages = allProjects.flatMap((project) => project.images);
@@ -55,13 +52,13 @@ describe('seed-demo data matrix', () => {
     }
   });
 
-  it('references fixture files that exist and are real JPEGs', async () => {
+  it('references unique fixture files with well-formed unsplash photo ids', () => {
+    // Fixtures are downloaded from images.unsplash.com and cached on first seed run.
+    const files = allImages.map((image) => image.file);
+    expect(new Set(files).size).toBe(files.length);
     for (const image of allImages) {
-      const bytes = await readFile(new URL(image.file, FIXTURES_DIR));
-      expect(bytes.length).toBeGreaterThan(10_000);
-      // JPEG magic bytes — a failed download (HTML error page) would not match.
-      expect(bytes[0]).toBe(0xff);
-      expect(bytes[1]).toBe(0xd8);
+      expect(image.file).toMatch(/^[a-z0-9-]+\.jpg$/);
+      expect(image.unsplashId).toMatch(/^\d{10,13}-[0-9a-f]{12}$/);
     }
   });
 });

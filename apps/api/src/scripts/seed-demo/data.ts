@@ -10,8 +10,10 @@
 export type SeedImageSpec = {
   /** Fixed projectImage uuid. */
   id: string;
-  /** Fixture filename under apps/api/fixtures/seed-demo/. */
+  /** Fixture filename under apps/api/fixtures/seed-demo/ (downloaded + cached on first run). */
   file: string;
+  /** images.unsplash.com photo id the fixture is downloaded from (see fixtures README). */
+  unsplashId: string;
   /** Room (kind 'room' taxonomy slug) this image belongs to. */
   roomSlug: string;
   themeSlugs: string[];
@@ -118,6 +120,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000101',
             file: 'd1-p1-01-living-room.jpg',
+            unsplashId: '1586023492125-27b2c045efd7',
             roomSlug: 'living-room',
             themeSlugs: ['modern'],
             materialSlugs: ['veneer', 'solid-wood'],
@@ -127,6 +130,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000102',
             file: 'd1-p1-02-modular-kitchen.jpg',
+            unsplashId: '1556911220-bff31c812dba',
             roomSlug: 'modular-kitchen',
             themeSlugs: ['modern'],
             materialSlugs: ['plywood-bwp', 'quartz'],
@@ -136,6 +140,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000103',
             file: 'd1-p1-03-master-bedroom.jpg',
+            unsplashId: '1616594039964-ae9021a400a0',
             roomSlug: 'master-bedroom',
             themeSlugs: ['modern'],
             materialSlugs: ['mdf', 'laminate'],
@@ -145,6 +150,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000104',
             file: 'd1-p1-04-dining.jpg',
+            unsplashId: '1617806118233-18e1de247200',
             roomSlug: 'dining',
             themeSlugs: ['modern'],
             materialSlugs: ['solid-wood'],
@@ -174,6 +180,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000201',
             file: 'd1-p2-01-living-room.jpg',
+            unsplashId: '1583847268964-b28dc8f51f92',
             roomSlug: 'living-room',
             themeSlugs: ['scandinavian'],
             materialSlugs: ['solid-wood', 'laminate'],
@@ -183,6 +190,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000202',
             file: 'd1-p2-02-bedroom.jpg',
+            unsplashId: '1595526114035-0d45ed16cfbf',
             roomSlug: 'bedroom',
             themeSlugs: ['scandinavian'],
             materialSlugs: ['mdf', 'particleboard'],
@@ -192,6 +200,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000203',
             file: 'd1-p2-03-kitchen.jpg',
+            unsplashId: '1600489000022-c2086d79f9d4',
             roomSlug: 'kitchen',
             themeSlugs: ['scandinavian'],
             materialSlugs: ['plywood-bwr', 'laminate'],
@@ -201,6 +210,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000204',
             file: 'd1-p2-04-study.jpg',
+            unsplashId: '1486946255434-2466348c2166',
             roomSlug: 'study',
             themeSlugs: ['scandinavian'],
             materialSlugs: ['mdf', 'laminate'],
@@ -254,6 +264,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000301',
             file: 'd2-p3-01-living-and-dining.jpg',
+            unsplashId: '1600607687939-ce8a6c25118c',
             roomSlug: 'living-and-dining',
             themeSlugs: ['contemporary'],
             materialSlugs: ['marble', 'veneer', 'solid-wood'],
@@ -263,6 +274,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000302',
             file: 'd2-p3-02-master-bedroom.jpg',
+            unsplashId: '1505693416388-ac5ce068fe85',
             roomSlug: 'master-bedroom',
             themeSlugs: ['contemporary'],
             materialSlugs: ['veneer', 'solid-wood'],
@@ -272,6 +284,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000303',
             file: 'd2-p3-03-guest-bedroom.jpg',
+            unsplashId: '1522771739844-6a9f6d5f14af',
             roomSlug: 'guest-bedroom',
             themeSlugs: ['contemporary'],
             materialSlugs: ['mdf', 'laminate'],
@@ -281,6 +294,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000304',
             file: 'd2-p3-04-garden-landscape.jpg',
+            unsplashId: '1600585154340-be6161a56a0c',
             roomSlug: 'garden-landscape',
             themeSlugs: ['contemporary'],
             materialSlugs: ['granite', 'solid-wood'],
@@ -310,6 +324,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000401',
             file: 'd2-p4-01-dining-area.jpg',
+            unsplashId: '1554118811-1e0d58224f24',
             roomSlug: 'dining-area',
             themeSlugs: ['industrial'],
             materialSlugs: ['solid-wood', 'pvc'],
@@ -319,6 +334,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000402',
             file: 'd2-p4-02-bar-counter.jpg',
+            unsplashId: '1521017432531-fbd92d768814',
             roomSlug: 'bar-counter',
             themeSlugs: ['industrial'],
             materialSlugs: ['solid-wood', 'granite'],
@@ -328,6 +344,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000403',
             file: 'd2-p4-03-outdoor-seating.jpg',
+            unsplashId: '1445116572660-236099ec97a0',
             roomSlug: 'outdoor-seating',
             themeSlugs: ['industrial'],
             materialSlugs: ['solid-wood'],
@@ -337,6 +354,7 @@ export const SEED_DESIGNERS: SeedDesignerSpec[] = [
           {
             id: 'e5eed1a6-0000-4000-8000-000000000404',
             file: 'd2-p4-04-billing-counter.jpg',
+            unsplashId: '1453614512568-c4024d13c247',
             roomSlug: 'billing-takeaway-counter',
             themeSlugs: ['industrial'],
             materialSlugs: ['solid-wood', 'granite'],

@@ -1,9 +1,13 @@
 # Demo seed fixture images
 
 Real interior-design photos used by `pnpm db:seed:demo` (see `apps/api/src/scripts/seed-demo/`).
+The JPEGs are **not committed** — the seed script downloads any missing file from
+`https://images.unsplash.com/photo-<id>?w=1600&q=78&fm=jpg&fit=max` on first run and caches
+it in this directory (gitignored). The photo id for each file lives in
+`apps/api/src/scripts/seed-demo/data.ts` (`unsplashId`).
+
 All photos are from [Unsplash](https://unsplash.com) and are used under the
 [Unsplash License](https://unsplash.com/license) (free to use, no attribution required).
-Each file was downloaded at 1600px width (`?w=1600&q=78&fm=jpg&fit=max`).
 
 | File | Room | Source |
 | --- | --- | --- |

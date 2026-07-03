@@ -19,9 +19,12 @@
  * Idempotent: all ids are fixed constants (see data.ts). A re-run skips projects
  * whose images are all `ready`; `--force` deletes their rows + R2 objects +
  * stale queue jobs and reseeds from scratch.
+ *
+ * Fixture images are downloaded from Unsplash on first run and cached under
+ * apps/api/fixtures/seed-demo/ (gitignored) — see the README there for sources.
  */
 
-import { readFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { Queue } from 'bullmq';
 import { HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
 import { config } from '@repo/config';
@@ -30,7 +33,12 @@ import { inArray } from 'drizzle-orm';
 import { seedTaxonomy } from '@repo/db/seeds/taxonomy';
 import { buildOriginalKey, deleteObject, putObject, r2Client } from '@repo/storage';
 import { connection, enqueueMedia, closeQueues, QUEUES } from '@repo/queue';
-import { SEED_DESIGNERS, type SeedDesignerSpec, type SeedProjectSpec } from './data.js';
+import {
+  SEED_DESIGNERS,
+  type SeedDesignerSpec,
+  type SeedImageSpec,
+  type SeedProjectSpec,
+} from './data.js';
 
 const FIXTURES_DIR = new URL('../../../fixtures/seed-demo/', import.meta.url);
 const POLL_INTERVAL_MS = 3_000;
@@ -62,6 +70,35 @@ async function ensureBucket(): Promise<void> {
   }
 }
 
+/** Download any missing fixture JPEGs from Unsplash into the (gitignored) cache dir. */
+async function ensureFixtures(specs: SeedDesignerSpec[]): Promise<void> {
+  await mkdir(FIXTURES_DIR, { recursive: true });
+  const images = specs.flatMap((d) => d.projects.flatMap((p) => p.images));
+  const missing: SeedImageSpec[] = [];
+  for (const image of images) {
+    try {
+      await access(new URL(image.file, FIXTURES_DIR));
+    } catch {
+      missing.push(image);
+    }
+  }
+  if (missing.length === 0) return;
+
+  console.log(`[seed-demo] downloading ${missing.length} fixture image(s) from Unsplash (cached for later runs)...`);
+  for (const image of missing) {
+    // Same params the originals were committed with (see fixtures/seed-demo/README.md).
+    const url = `https://images.unsplash.com/photo-${image.unsplashId}?w=1600&q=78&fm=jpg&fit=max`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`fixture download failed (HTTP ${res.status}) for ${image.file}: ${url}`);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+      throw new Error(`fixture download for ${image.file} is not a JPEG: ${url}`);
+    }
+    await writeFile(new URL(image.file, FIXTURES_DIR), bytes);
+    console.log(`[seed-demo]   downloaded ${image.file} (${Math.round(bytes.length / 1024)} kB)`);
+  }
+}
+
 /** Resolve every taxonomy (kind, slug) the matrix references; hard-fail listing gaps. */
 async function resolveTaxonomy(specs: SeedDesignerSpec[]): Promise<TaxonomyMap> {
   const wanted = new Set<string>();
@@ -69,6 +106,11 @@ async function resolveTaxonomy(specs: SeedDesignerSpec[]): Promise<TaxonomyMap> 
     for (const f of designer.footprint) wanted.add(taxKey(f.kind, f.slug));
     for (const project of designer.projects) {
       for (const slug of project.roomSlugs) wanted.add(taxKey('room', slug));
+      for (const image of project.images) {
+        for (const slug of image.themeSlugs) wanted.add(taxKey('theme', slug));
+        for (const slug of image.materialSlugs) wanted.add(taxKey('material', slug));
+        for (const slug of image.finishSlugs) wanted.add(taxKey('finish', slug));
+      }
     }
   }
 
@@ -93,7 +135,24 @@ async function resolveTaxonomy(specs: SeedDesignerSpec[]): Promise<TaxonomyMap> 
   return map;
 }
 
-/** Mirror of the onboarding transaction (profiles/repository.ts createWithOrganization). */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function upsertFootprint(
+  tx: Tx,
+  profileId: string,
+  spec: SeedDesignerSpec,
+  tax: TaxonomyMap,
+): Promise<void> {
+  const rows = spec.footprint.map((f) => ({
+    profileId,
+    taxonomyId: tax.get(taxKey(f.kind, f.slug))!.id,
+  }));
+  if (rows.length > 0) {
+    await tx.insert(schema.designerProfileFootprint).values(rows).onConflictDoNothing();
+  }
+}
+
+/** Mirror of the onboarding transaction (profiles/repository.ts onboard). */
 async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise<string> {
   return await db.transaction(async (tx) => {
     // Reuse a user that already signed in with this phone (dev OTP) instead of colliding.
@@ -122,6 +181,23 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
       .update(schema.user)
       .set({ role: 'designer', status: 'active' })
       .where(eq(schema.user.id, userId));
+
+    // designer_profile has a partial unique index on userId; if this user already
+    // onboarded for real (own org + profile), attach the demo projects to that
+    // profile instead of inserting a second one and aborting on the index.
+    const [ownedProfile] = await tx
+      .select({ id: schema.designerProfile.id, orgId: schema.designerProfile.orgId })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.userId, userId))
+      .limit(1);
+    if (ownedProfile && ownedProfile.orgId !== spec.orgId) {
+      console.warn(
+        `[seed-demo] ${spec.phone} already has a designer profile (org ${ownedProfile.orgId}) — ` +
+          `reusing it instead of creating '${spec.orgName}'`,
+      );
+      await upsertFootprint(tx, ownedProfile.id, spec, tax);
+      return ownedProfile.id;
+    }
 
     await tx
       .insert(schema.organization)
@@ -178,13 +254,7 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
       .returning({ id: schema.designerProfile.id });
     if (!profile) throw new Error(`profile upsert returned no row for ${spec.orgSlug}`);
 
-    const footprintRows = spec.footprint.map((f) => ({
-      profileId: profile.id,
-      taxonomyId: tax.get(taxKey(f.kind, f.slug))!.id,
-    }));
-    if (footprintRows.length > 0) {
-      await tx.insert(schema.designerProfileFootprint).values(footprintRows).onConflictDoNothing();
-    }
+    await upsertFootprint(tx, profile.id, spec, tax);
 
     return profile.id;
   });
@@ -230,18 +300,28 @@ async function seedProject(
   tax: TaxonomyMap,
   force: boolean,
 ): Promise<string[]> {
+  // Key the skip/cleanup decision on the project row, not the image rows: a run
+  // that crashed after inserting the project (and its rooms) but before any image
+  // must still be cleaned up, or re-runs would stack duplicate projectRoom rows.
+  const [existingProject] = await db
+    .select({ id: schema.project.id })
+    .from(schema.project)
+    .where(eq(schema.project.id, spec.id))
+    .limit(1);
   const existing = await db
     .select({ id: schema.projectImage.id, status: schema.projectImage.status })
     .from(schema.projectImage)
     .where(eq(schema.projectImage.projectId, spec.id));
 
   const allReady =
-    existing.length === spec.images.length && existing.every((row) => row.status === 'ready');
+    existingProject !== undefined &&
+    existing.length === spec.images.length &&
+    existing.every((row) => row.status === 'ready');
   if (allReady && !force) {
     console.log(`[seed-demo] '${spec.slug}' already seeded — skipping (use --force to reseed)`);
     return [];
   }
-  if (existing.length > 0 || force) {
+  if (existingProject || force) {
     console.log(`[seed-demo] '${spec.slug}' incomplete or --force — cleaning up before reseed`);
     await cleanupProject(spec.id);
   }
@@ -269,10 +349,6 @@ async function seedProject(
       metadata: { seeded: true },
       submittedAt: now,
       publishedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: schema.project.id,
-      set: { designerId, title: spec.title, status: 'published', updatedAt: now },
     });
 
   const roomIdBySlug = new Map<string, string>();
@@ -314,8 +390,11 @@ async function seedProject(
   return spec.images.map((image) => image.id);
 }
 
-/** Poll until the worker has processed every enqueued image (or time out gracefully). */
-async function waitForProcessing(imageIds: string[]): Promise<void> {
+/**
+ * Poll until the worker has processed every enqueued image (or time out gracefully).
+ * Returns the ids of images that ended `failed` so main can exit non-zero.
+ */
+async function waitForProcessing(imageIds: string[]): Promise<string[]> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   for (;;) {
     const rows = await db
@@ -327,18 +406,13 @@ async function waitForProcessing(imageIds: string[]): Promise<void> {
     const processing = rows.length - ready - failed.length;
 
     console.log(`[seed-demo] media: ${ready}/${imageIds.length} ready, ${processing} processing`);
-    if (failed.length > 0) {
-      console.error(
-        `[seed-demo] ${failed.length} image(s) FAILED processing: ${failed.map((row) => row.id).join(', ')}`,
-      );
-    }
-    if (processing === 0) return;
+    if (processing === 0) return failed.map((row) => row.id);
     if (Date.now() > deadline) {
       console.warn(
         '[seed-demo] timed out waiting for the worker. Jobs remain queued in Redis; ' +
           'start the worker (`pnpm --filter @repo/worker dev`) and the images will finish processing.',
       );
-      return;
+      return failed.map((row) => row.id);
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
@@ -348,6 +422,7 @@ async function main(): Promise<void> {
   const force = process.argv.includes('--force');
   console.log(`[seed-demo] starting${force ? ' (force)' : ''}...`);
 
+  await ensureFixtures(SEED_DESIGNERS);
   await seedTaxonomy();
   await ensureBucket();
   const tax = await resolveTaxonomy(SEED_DESIGNERS);
@@ -363,7 +438,13 @@ async function main(): Promise<void> {
 
   if (enqueued.length > 0) {
     console.log(`[seed-demo] waiting for the worker to process ${enqueued.length} image(s)...`);
-    await waitForProcessing(enqueued);
+    const failed = await waitForProcessing(enqueued);
+    if (failed.length > 0) {
+      throw new Error(
+        `${failed.length} image(s) FAILED processing: ${failed.join(', ')} — ` +
+          'check the worker logs; a re-run cleans up and reseeds the affected projects.',
+      );
+    }
   }
 
   console.log(
