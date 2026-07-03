@@ -22,7 +22,7 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/tsconfig": "workspace:*",
     "@repo/vitest-config": "workspace:*",
-    "eslint": "^9.18.0",
+    "eslint": "^10.6.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

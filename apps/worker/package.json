@@ -30,7 +30,7 @@
     "@repo/tsconfig": "workspace:*",
     "@repo/vitest-config": "workspace:*",
     "@types/node": "catalog:",
-    "eslint": "^9.18.0",
+    "eslint": "^10.6.0",
     "tsup": "^8.5.1",
     "tsx": "catalog:",
     "typescript": "catalog:",

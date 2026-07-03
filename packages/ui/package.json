@@ -55,7 +55,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "eslint": "^9.18.0",
+    "eslint": "^10.6.0",
     "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
