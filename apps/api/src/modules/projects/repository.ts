@@ -813,5 +813,34 @@ export const projectsRepository = {
     });
   },
 
+  /** Public gallery: all ready images for a published project, ordered by sortOrder. */
+  async listPublicGalleryImages(projectId: string): Promise<Array<{
+    id: string;
+    derivatives: typeof schema.projectImage.$inferSelect.derivatives;
+    width: number | null;
+    height: number | null;
+    sortOrder: number;
+    roomName: string | null;
+  }>> {
+    return db
+      .select({
+        id: schema.projectImage.id,
+        derivatives: schema.projectImage.derivatives,
+        width: schema.projectImage.width,
+        height: schema.projectImage.height,
+        sortOrder: schema.projectImage.sortOrder,
+        roomName: schema.projectRoom.name,
+      })
+      .from(schema.projectImage)
+      .leftJoin(schema.projectRoom, eq(schema.projectImage.roomId, schema.projectRoom.id))
+      .where(
+        and(
+          eq(schema.projectImage.projectId, projectId),
+          eq(schema.projectImage.status, 'ready'),
+        ),
+      )
+      .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
+  },
+
   slugify,
 };

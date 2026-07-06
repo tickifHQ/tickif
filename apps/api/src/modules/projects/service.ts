@@ -797,4 +797,40 @@ export const projectsService = {
 
     return toDetailResponse(await projectsRepository.submit(projectId), await projectsRepository.listRooms(projectId));
   },
+
+  /** Public gallery: returns presigned URLs for all ready images of a published project. */
+  async getGallery(projectId: string): Promise<Array<{
+    id: string;
+    url: string;
+    width: number | null;
+    height: number | null;
+    roomName: string | null;
+  }>> {
+    // Verify project exists and is published
+    const project = await projectsRepository.findById(projectId);
+    if (!project || project.status !== 'published') {
+      throw AppError.notFound('Project not found');
+    }
+
+    const images = await projectsRepository.listPublicGalleryImages(projectId);
+
+    // Presign each image's best derivative
+    const gallery = await Promise.all(
+      images.map(async (img) => {
+        const key = pickPreviewDerivative(img.derivatives ?? []);
+        if (!key) return null;
+        const url = await presignDownload({ key }).catch(() => null);
+        if (!url) return null;
+        return {
+          id: img.id,
+          url,
+          width: img.width,
+          height: img.height,
+          roomName: img.roomName,
+        };
+      }),
+    );
+
+    return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+  },
 };

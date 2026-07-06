@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
+import { z } from 'zod';
 import {
   createProjectRoomSchema,
   createProjectSchema,
@@ -404,6 +405,28 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     c.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
     return c.json(result, 200);
   })
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/{id}/gallery',
+      tags: ['Projects'],
+      summary: 'Public gallery: all processed images for a published project',
+      request: { params: projectIdParamSchema },
+      responses: {
+        200: {
+          description: 'Gallery images with presigned URLs',
+          content: { 'application/json': { schema: z.object({ images: z.array(z.object({ id: z.string(), url: z.string(), width: z.number().nullable(), height: z.number().nullable(), roomName: z.string().nullable() })) }) } },
+        },
+        404: errorJson('Project not found or not published'),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const images = await projectsService.getGallery(id);
+      c.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      return c.json({ images }, 200);
+    },
+  )
   .openapi(listRoute, async (c) => {
     const result = await projectsService.list(
       c.req.valid('query'),

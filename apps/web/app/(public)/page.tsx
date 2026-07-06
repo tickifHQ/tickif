@@ -1,7 +1,8 @@
 import { HomeHero } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { ShowcaseCard } from '@/components/showcase-card';
-import { mockProjects } from '@/lib/mock-projects';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 const filters = [
   'Affordable modular kitchens',
@@ -14,7 +15,35 @@ const filters = [
   'Walnut & cane interiors',
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Fetch published projects from the public feed API
+  let projects: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    studio: string;
+    city: string | null;
+    locality: string | null;
+    rating: number;
+    budget: string | null;
+    tags: string[];
+    coverImageUrl: string | null;
+    imageWidth: number | null;
+    imageHeight: number | null;
+  }> = [];
+
+  try {
+    const res = await fetch(`${API_URL}/api/projects/feed?limit=30`, {
+      next: { revalidate: 60 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      projects = data.projects ?? [];
+    }
+  } catch {
+    // Fallback: empty feed if API is unavailable
+  }
+
   return (
     <>
       <TrustStrip />
@@ -62,9 +91,15 @@ export default function HomePage() {
         </div>
 
         <div className="mt-8 columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
-          {mockProjects.map((project) => (
-            <ShowcaseCard key={project.id} project={project} />
-          ))}
+          {projects.length > 0 ? (
+            projects.map((project) => (
+              <ShowcaseCard key={project.id} project={project} />
+            ))
+          ) : (
+            <p className="col-span-full text-center text-sm text-muted-foreground">
+              No projects yet — check back soon.
+            </p>
+          )}
         </div>
       </section>
     </>
