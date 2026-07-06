@@ -281,6 +281,7 @@ export const projectsRepository = {
           eq(schema.taxonomy.kind, 'locality'),
           eq(schema.taxonomy.isActive, true),
           eq(city.kind, 'city'),
+          eq(city.isActive, true),
           or(
             ...unique.map((p) =>
               and(eq(schema.taxonomy.slug, p.localitySlug), eq(city.slug, p.citySlug)),
