@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Asterisk,
   Bookmark,
@@ -127,6 +127,8 @@ const trustAvatars = [
 
 export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isVerified = searchParams.get('verified') === 'true';
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
   const [phone, setPhone] = useState('');
@@ -138,6 +140,13 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
   const [countrySearch, setCountrySearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Email auth state
+  const [designerEmail, setDesignerEmail] = useState('');
+  const [designerPassword, setDesignerPassword] = useState('');
+  const [designerName, setDesignerName] = useState('');
+  const [emailMode, setEmailMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  const [emailMessage, setEmailMessage] = useState('');
 
   const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
   const promoSubtitle = loginMode === 'designer'
@@ -280,6 +289,41 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
       }
     } catch {
       setError('Couldn\'t sign in with Google');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleEmailAuth() {
+    setError('');
+    setEmailMessage('');
+    setLoading(true);
+    try {
+      if (emailMode === 'sign-up') {
+        const { error: signUpError } = await authClient.signUp.email({
+          name: designerName,
+          email: designerEmail,
+          password: designerPassword,
+          callbackURL: window.location.origin + '/login?mode=designer&verified=true',
+        });
+        if (signUpError) {
+          setError(signUpError.message ?? 'Sign up failed');
+        } else {
+          setEmailMessage('Account created! Check your email to verify your address.');
+        }
+      } else {
+        const { error: signInError } = await authClient.signIn.email({
+          email: designerEmail,
+          password: designerPassword,
+        });
+        if (signInError) {
+          setError(signInError.message ?? 'Sign in failed');
+        } else {
+          window.location.href = '/designer/onboarding';
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -501,10 +545,31 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
                       <OrSeparator className="my-2" />
 
+                      {emailMessage && (
+                        <p className="rounded-md bg-green-50 p-2 text-sm text-green-700">{emailMessage}</p>
+                      )}
+
+                      {isVerified && !emailMessage && (
+                        <p className="rounded-md bg-green-50 p-2 text-sm text-green-700">
+                          Email verified! Sign in with your credentials.
+                        </p>
+                      )}
+
+                      {emailMode === 'sign-up' && (
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor="designer-name">Name</Label>
+                          <Input
+                            id="designer-name"
+                            type="text"
+                            value={designerName}
+                            onChange={(e) => setDesignerName(e.target.value)}
+                            placeholder="Your name"
+                          />
+                        </div>
+                      )}
+
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="designer-email">
-                          Email <span className="text-xs text-muted-foreground">(optional)</span>
-                        </Label>
+                        <Label htmlFor="designer-email">Email</Label>
                         <div className="relative">
                           <Mail
                             className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -513,9 +578,29 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                           <Input
                             id="designer-email"
                             type="email"
+                            value={designerEmail}
+                            onChange={(e) => setDesignerEmail(e.target.value)}
                             placeholder="you@example.com"
                             className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
-                            disabled
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="designer-password">Password</Label>
+                        <div className="relative">
+                          <LockKeyhole
+                            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <Input
+                            id="designer-password"
+                            type="password"
+                            value={designerPassword}
+                            onChange={(e) => setDesignerPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
+                            minLength={8}
                           />
                         </div>
                       </div>
@@ -523,10 +608,29 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                       <Button
                         type="button"
                         className="w-full"
-                        disabled
+                        disabled={loading || !designerEmail || !designerPassword || (emailMode === 'sign-up' && !designerName)}
+                        onClick={handleEmailAuth}
                       >
-                        Login
+                        {loading ? 'Loading...' : emailMode === 'sign-up' ? 'Create Account' : 'Login'}
                       </Button>
+
+                      <p className="text-center text-xs text-muted-foreground">
+                        {emailMode === 'sign-in' ? (
+                          <>
+                            No account?{' '}
+                            <button type="button" className="text-primary underline" onClick={() => { setEmailMode('sign-up'); setError(''); setEmailMessage(''); }}>
+                              Create one
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            Already have an account?{' '}
+                            <button type="button" className="text-primary underline" onClick={() => { setEmailMode('sign-in'); setError(''); setEmailMessage(''); }}>
+                              Sign in
+                            </button>
+                          </>
+                        )}
+                      </p>
                     </div>
                   </div>
 

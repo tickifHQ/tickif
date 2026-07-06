@@ -5,6 +5,7 @@ import { db, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
 import { ac, roles } from './permissions.js';
+import { sendEmail } from './email.js';
 
 /**
  * Tickif auth — better-auth instance.
@@ -70,7 +71,38 @@ export const auth = betterAuth({
   }),
 
   emailAndPassword: {
-    enabled: false,
+    enabled: true,
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      void sendEmail({
+        to: user.email,
+        subject: 'Reset your Tickif password',
+        html: `
+          <h2>Reset your password</h2>
+          <p>Hi ${user.name},</p>
+          <p>Click the link below to reset your password:</p>
+          <p><a href="${url}">Reset Password</a></p>
+          <p>If you didn't request this, you can safely ignore this email.</p>
+          <p>— Tickif</p>
+        `,
+      });
+    },
+  },
+
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendEmail({
+        to: user.email,
+        subject: 'Verify your Tickif email',
+        html: `
+          <h2>Verify your email</h2>
+          <p>Hi ${user.name},</p>
+          <p>Click the link below to verify your email address:</p>
+          <p><a href="${url}">Verify Email</a></p>
+          <p>— Tickif</p>
+        `,
+      });
+    },
   },
 
   socialProviders,

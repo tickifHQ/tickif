@@ -83,6 +83,10 @@ const envSchema = z.object({
   NOVU_OTP_WORKFLOW_ID: z.string().optional(),
   NOVU_API_URL: z.string().url().default('https://api.novu.co'),
 
+  // Email delivery (Resend). Optional in dev (logs to console); required in production.
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
+
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
   // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
   R2_ACCOUNT_ID: z.string().optional(),

@@ -60,7 +60,7 @@ describe('getServerSession', () => {
     await getServerSession({ disableCookieCache: true });
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8008/api/auth/get-session?disableCookieCache=true',
+      'http://localhost:3001/api/auth/get-session?disableCookieCache=true',
       {
         headers: { cookie: 'better-auth.session_token=test' },
         cache: 'no-store',
@@ -72,7 +72,7 @@ describe('getServerSession', () => {
     await requireAuth({ requiredRole: 'designer' });
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8008/api/auth/get-session?disableCookieCache=true',
+      'http://localhost:3001/api/auth/get-session?disableCookieCache=true',
       {
         headers: { cookie: 'better-auth.session_token=test' },
         cache: 'no-store',

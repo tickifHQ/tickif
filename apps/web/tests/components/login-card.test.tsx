@@ -5,6 +5,7 @@ import { LoginCard } from '../../src/components/login-card';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const mock = vi.hoisted(() => ({
