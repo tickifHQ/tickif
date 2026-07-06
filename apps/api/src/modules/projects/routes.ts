@@ -6,6 +6,8 @@ import {
   deleteProjectResponseSchema,
   deleteProjectRoomResponseSchema,
   duplicateProjectResponseSchema,
+  feedProjectsQuerySchema,
+  feedProjectsResponseSchema,
   linkProjectImageSchema,
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
@@ -67,6 +69,22 @@ function caller(user: AuthVariables['user'], session?: AuthVariables['session'])
     activeOrgId: session?.activeOrganizationId ?? null,
   };
 }
+
+// Public, unauthenticated. Registered before `getRoute` so the static `/feed`
+// segment resolves ahead of the `/{id}` param route.
+const feedRoute = createRoute({
+  method: 'get',
+  path: '/feed',
+  tags: ['Projects'],
+  summary: 'Public feed of published projects for the landing page',
+  request: { query: feedProjectsQuerySchema },
+  responses: {
+    200: {
+      description: 'A page of published projects',
+      content: { 'application/json': { schema: feedProjectsResponseSchema } },
+    },
+  },
+});
 
 const getRoute = createRoute({
   method: 'get',
@@ -379,6 +397,13 @@ const submitRoute = createRoute({
 export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(feedRoute, async (c) => {
+    const result = await projectsService.feed(c.req.valid('query'));
+    // Hot anonymous path: let shared caches absorb bursts. TTL stays well inside the
+    // presigned cover URLs' validity so cached JSON never points at expired signatures.
+    c.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    return c.json(result, 200);
+  })
   .openapi(listRoute, async (c) => {
     const result = await projectsService.list(
       c.req.valid('query'),

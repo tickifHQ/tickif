@@ -8,6 +8,8 @@ import type {
   LinkProjectImageInput,
   ListProjectRoomsResponse,
   ListProjectsQuery,
+  FeedProjectsQuery,
+  FeedProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectImageAttachment,
@@ -26,12 +28,14 @@ import { AppError } from '../../lib/errors.js';
 import {
   projectsRepository,
   type ProjectCoverImageRecord,
+  type ProjectFeedItemRecord,
   type ProjectImageAttachmentRecord,
   type ProjectImageDeletionRecord,
   type ProjectListItemRecord,
   type ProjectOwnership,
   type ProjectRecord,
   type ProjectRoomRecord,
+  type TaxonomyKind,
 } from './repository.js';
 
 /**
@@ -121,10 +125,70 @@ function pickPreviewDerivative(derivatives: Derivative[]): string | null {
   );
 }
 
-async function coverImageUrl(coverImage?: ProjectCoverImageRecord): Promise<string | null> {
-  if (!coverImage || coverImage.status !== 'ready') return null;
+/**
+ * The single "when does a cover have a URL" policy, shared by the dashboard list and the
+ * public feed. Accepts the left-join nulls the feed carries. Callers that must not fail the
+ * whole response on a presign error append `.catch(() => null)`.
+ */
+async function coverImageUrl(coverImage?: {
+  status: ProjectFeedItemRecord['coverStatus'];
+  derivatives: ProjectFeedItemRecord['coverDerivatives'];
+}): Promise<string | null> {
+  if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
   const previewKey = pickPreviewDerivative(coverImage.derivatives);
   return previewKey ? presignDownload({ key: previewKey }) : null;
+}
+
+function toFeedProject(
+  row: ProjectFeedItemRecord,
+  labels: Map<string, string>,
+  localityLabels: Map<string, string>,
+  coverImageUrl: string | null,
+): FeedProjectsResponse['projects'][number] {
+  const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
+    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+
+  const tags = [
+    labelOf('bhk', row.bhkSlug),
+    labelOf('scope', row.scopeSlug) ?? labelOf('property_subtype', row.propertySubtypeSlug),
+  ].filter((tag): tag is string => !!tag);
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    studio: row.studio,
+    city: labelOf('city', row.citySlug),
+    locality:
+      row.citySlug && row.localitySlug
+        ? localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null
+        : null,
+    rating: Number(row.rating) || 0,
+    reviewCount: row.reviewCount,
+    budget: labelOf('budget_band', row.budgetBandSlug),
+    tags,
+    coverImageUrl,
+    imageWidth: row.coverWidth,
+    imageHeight: row.coverHeight,
+  };
+}
+
+/** Non-hierarchical (kind, slug) taxonomy pairs a feed row needs resolved (locality handled separately). */
+function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; slug: string }[] {
+  const pairs: { kind: TaxonomyKind; slug: string }[] = [];
+  if (row.citySlug) pairs.push({ kind: 'city', slug: row.citySlug });
+  if (row.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: row.budgetBandSlug });
+  if (row.bhkSlug) pairs.push({ kind: 'bhk', slug: row.bhkSlug });
+  if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
+  if (row.propertySubtypeSlug) pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
+  return pairs;
+}
+
+/** City-scoped locality pairs; empty unless the row has both a city and a locality. */
+function feedLocalityPairs(row: ProjectFeedItemRecord): { citySlug: string; localitySlug: string }[] {
+  return row.citySlug && row.localitySlug
+    ? [{ citySlug: row.citySlug, localitySlug: row.localitySlug }]
+    : [];
 }
 
 async function toListItem(
@@ -520,6 +584,38 @@ export const projectsService = {
       limit,
       totalPages: total === 0 ? 0 : Math.ceil(total / limit),
     };
+  },
+
+  /**
+   * Public landing feed of published projects. No caller — anyone can read it.
+   * Fetches limit+1 to compute `hasMore`, then resolves taxonomy labels and
+   * cover URLs for the page in a single batched query (no N+1).
+   */
+  async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
+    const { page, limit } = query;
+    const rows = await projectsRepository.listPublishedFeed({
+      limit: limit + 1,
+      offset: (page - 1) * limit,
+    });
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const [labels, localityLabels] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(pageRows.flatMap(feedTaxonomyPairs)),
+      projectsRepository.findLocalityLabels(pageRows.flatMap(feedLocalityPairs)),
+    ]);
+
+    const projects = await Promise.all(
+      pageRows.map(async (row) => {
+        const cover = await coverImageUrl({
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        }).catch(() => null);
+        return toFeedProject(row, labels, localityLabels, cover);
+      }),
+    );
+
+    return { projects, page, limit, hasMore };
   },
 
   async getById(id: string, caller?: Caller): Promise<ProjectDetailResponse> {

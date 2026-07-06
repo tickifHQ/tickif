@@ -1,4 +1,5 @@
 import { ilike, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
 import type {
   CreateProjectInput,
@@ -63,6 +64,28 @@ export type ProjectListItemRecord = Pick<
   | 'updatedAt'
 >;
 export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
+
+export type TaxonomyKind = (typeof schema.taxonomyKindEnum.enumValues)[number];
+
+/** One row of the public landing feed — project + its designer + cover image, flat. */
+export type ProjectFeedItemRecord = {
+  id: string;
+  slug: string;
+  title: string;
+  citySlug: string | null;
+  localitySlug: string | null;
+  budgetBandSlug: string | null;
+  scopeSlug: string | null;
+  bhkSlug: string | null;
+  propertySubtypeSlug: string | null;
+  studio: string;
+  rating: string; // designer_profile.avg_rating is numeric → string over the wire
+  reviewCount: number;
+  coverStatus: ProjectImageRecord['status'] | null;
+  coverDerivatives: ProjectImageRecord['derivatives'] | null;
+  coverWidth: number | null;
+  coverHeight: number | null;
+};
 
 export type DuplicateProjectParams = {
   source: ProjectRecord;
@@ -166,6 +189,107 @@ export const projectsRepository = {
       .where(inArray(schema.projectImage.id, uniqueIds));
 
     return new Map(rows.map((row) => [row.id, row]));
+  },
+
+  /**
+   * Public landing feed: published projects only, newest first, joined to their
+   * designer (studio name + rating) and cover image. No auth/org scoping.
+   */
+  async listPublishedFeed(params: { limit: number; offset: number }): Promise<ProjectFeedItemRecord[]> {
+    const cover = alias(schema.projectImage, 'cover');
+    return db
+      .select({
+        id: schema.project.id,
+        slug: schema.project.slug,
+        title: schema.project.title,
+        citySlug: schema.project.citySlug,
+        localitySlug: schema.project.localitySlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
+        scopeSlug: schema.project.scopeSlug,
+        bhkSlug: schema.project.bhkSlug,
+        propertySubtypeSlug: schema.project.propertySubtypeSlug,
+        studio: schema.designerProfile.displayName,
+        rating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
+        coverStatus: cover.status,
+        coverDerivatives: cover.derivatives,
+        coverWidth: cover.width,
+        coverHeight: cover.height,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      // Only active designers: suspended studios 404 on their public profile, so their
+      // projects must not surface here either. `id` is the stable tiebreaker for paging.
+      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+        desc(schema.project.id),
+      )
+      .limit(params.limit)
+      .offset(params.offset);
+  },
+
+  /**
+   * Batch-resolve display labels for non-hierarchical taxonomy pairs (city, budget_band,
+   * bhk, scope, property_subtype — unique by `(kind, slug)`). Filters `is_active` so the
+   * public feed hides retired terms, matching the taxonomy module's read policy. Localities
+   * are NOT resolvable here (slug is only unique within a parent city) — use
+   * `findLocalityLabels`. Keyed `${kind}:${slug}`; unresolved pairs are simply absent.
+   */
+  async findTaxonomyLabels(pairs: { kind: TaxonomyKind; slug: string }[]): Promise<Map<string, string>> {
+    const unique = [...new Map(pairs.map((p) => [`${p.kind}:${p.slug}`, p])).values()];
+    if (unique.length === 0) return new Map();
+    const rows = await db
+      .select({
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.isActive, true),
+          or(...unique.map((p) => and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)))),
+        ),
+      );
+    return new Map(rows.map((row) => [`${row.kind}:${row.slug}`, row.label]));
+  },
+
+  /**
+   * Resolve locality labels scoped to their parent city. Locality slugs are only unique
+   * within a city (`/mumbai/andheri` vs `/pune/andheri`), so resolving by slug alone would
+   * pick an arbitrary city's label. Keyed `${citySlug}:${localitySlug}`.
+   */
+  async findLocalityLabels(
+    pairs: { citySlug: string; localitySlug: string }[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Map(pairs.map((p) => [`${p.citySlug}:${p.localitySlug}`, p])).values()];
+    if (unique.length === 0) return new Map();
+    const city = alias(schema.taxonomy, 'city');
+    const rows = await db
+      .select({
+        citySlug: city.slug,
+        localitySlug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
+      .from(schema.taxonomy)
+      .innerJoin(city, eq(schema.taxonomy.parentId, city.id))
+      .where(
+        and(
+          eq(schema.taxonomy.kind, 'locality'),
+          eq(schema.taxonomy.isActive, true),
+          eq(city.kind, 'city'),
+          eq(city.isActive, true),
+          or(
+            ...unique.map((p) =>
+              and(eq(schema.taxonomy.slug, p.localitySlug), eq(city.slug, p.citySlug)),
+            ),
+          ),
+        ),
+      );
+    return new Map(rows.map((row) => [`${row.citySlug}:${row.localitySlug}`, row.label]));
   },
 
   async findById(id: string): Promise<ProjectRecord | null> {
