@@ -48,6 +48,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       submit: vi.fn(),
       listPublishedFeed: vi.fn(),
       findTaxonomyLabels: vi.fn(),
+      findLocalityLabels: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
       slugify: (t: string) =>
         t
@@ -531,12 +532,12 @@ describe('projectsService.feed', () => {
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
       new Map([
         ['city:mumbai', 'Mumbai'],
-        ['locality:bandra', 'Bandra'],
         ['budget_band:3-5-lakh', '₹3–5L'],
         ['bhk:2-bhk', '2 BHK'],
         ['scope:full-home', 'Full Home'],
       ]),
     );
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map([['mumbai:bandra', 'Bandra']]));
 
     const result = await projectsService.feed({ page: 1, limit: 1 });
 
@@ -563,6 +564,7 @@ describe('projectsService.feed', () => {
       feedRow({ coverStatus: 'processing', localitySlug: null, budgetBandSlug: null }),
     ]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map([['city:mumbai', 'Mumbai']]));
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
 
     const result = await projectsService.feed({ page: 1, limit: 12 });
 

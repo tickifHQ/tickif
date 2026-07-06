@@ -125,33 +125,24 @@ function pickPreviewDerivative(derivatives: Derivative[]): string | null {
   );
 }
 
-async function coverImageUrl(coverImage?: ProjectCoverImageRecord): Promise<string | null> {
-  if (!coverImage || coverImage.status !== 'ready') return null;
+/**
+ * The single "when does a cover have a URL" policy, shared by the dashboard list and the
+ * public feed. Accepts the left-join nulls the feed carries. Callers that must not fail the
+ * whole response on a presign error append `.catch(() => null)`.
+ */
+async function coverImageUrl(coverImage?: {
+  status: ProjectFeedItemRecord['coverStatus'];
+  derivatives: ProjectFeedItemRecord['coverDerivatives'];
+}): Promise<string | null> {
+  if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
   const previewKey = pickPreviewDerivative(coverImage.derivatives);
   return previewKey ? presignDownload({ key: previewKey }) : null;
-}
-
-/**
- * Feed cover URL. Unlike the dashboard's `coverImageUrl`, a presign failure here
- * degrades to `null` for that one card rather than failing the whole public feed.
- */
-async function feedCoverImageUrl(
-  status: ProjectFeedItemRecord['coverStatus'],
-  derivatives: ProjectFeedItemRecord['coverDerivatives'],
-): Promise<string | null> {
-  if (status !== 'ready' || !derivatives) return null;
-  const previewKey = pickPreviewDerivative(derivatives);
-  if (!previewKey) return null;
-  try {
-    return await presignDownload({ key: previewKey });
-  } catch {
-    return null;
-  }
 }
 
 function toFeedProject(
   row: ProjectFeedItemRecord,
   labels: Map<string, string>,
+  localityLabels: Map<string, string>,
   coverImageUrl: string | null,
 ): FeedProjectsResponse['projects'][number] {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
@@ -168,7 +159,10 @@ function toFeedProject(
     title: row.title,
     studio: row.studio,
     city: labelOf('city', row.citySlug),
-    locality: labelOf('locality', row.localitySlug),
+    locality:
+      row.citySlug && row.localitySlug
+        ? localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null
+        : null,
     rating: Number(row.rating) || 0,
     reviewCount: row.reviewCount,
     budget: labelOf('budget_band', row.budgetBandSlug),
@@ -179,16 +173,22 @@ function toFeedProject(
   };
 }
 
-/** Collect the (kind, slug) taxonomy pairs a feed row needs resolved to labels. */
+/** Non-hierarchical (kind, slug) taxonomy pairs a feed row needs resolved (locality handled separately). */
 function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; slug: string }[] {
   const pairs: { kind: TaxonomyKind; slug: string }[] = [];
   if (row.citySlug) pairs.push({ kind: 'city', slug: row.citySlug });
-  if (row.localitySlug) pairs.push({ kind: 'locality', slug: row.localitySlug });
   if (row.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: row.budgetBandSlug });
   if (row.bhkSlug) pairs.push({ kind: 'bhk', slug: row.bhkSlug });
   if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
   if (row.propertySubtypeSlug) pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
   return pairs;
+}
+
+/** City-scoped locality pairs; empty unless the row has both a city and a locality. */
+function feedLocalityPairs(row: ProjectFeedItemRecord): { citySlug: string; localitySlug: string }[] {
+  return row.citySlug && row.localitySlug
+    ? [{ citySlug: row.citySlug, localitySlug: row.localitySlug }]
+    : [];
 }
 
 async function toListItem(
@@ -600,12 +600,19 @@ export const projectsService = {
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-    const labels = await projectsRepository.findTaxonomyLabels(pageRows.flatMap(feedTaxonomyPairs));
+    const [labels, localityLabels] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(pageRows.flatMap(feedTaxonomyPairs)),
+      projectsRepository.findLocalityLabels(pageRows.flatMap(feedLocalityPairs)),
+    ]);
 
     const projects = await Promise.all(
-      pageRows.map(async (row) =>
-        toFeedProject(row, labels, await feedCoverImageUrl(row.coverStatus, row.coverDerivatives)),
-      ),
+      pageRows.map(async (row) => {
+        const cover = await coverImageUrl({
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        }).catch(() => null);
+        return toFeedProject(row, labels, localityLabels, cover);
+      }),
     );
 
     return { projects, page, limit, hasMore };

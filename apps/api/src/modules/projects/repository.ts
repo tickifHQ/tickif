@@ -219,15 +219,24 @@ export const projectsRepository = {
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      .where(eq(schema.project.status, 'published'))
-      .orderBy(sql`${schema.project.publishedAt} desc nulls last`, desc(schema.project.createdAt))
+      // Only active designers: suspended studios 404 on their public profile, so their
+      // projects must not surface here either. `id` is the stable tiebreaker for paging.
+      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+        desc(schema.project.id),
+      )
       .limit(params.limit)
       .offset(params.offset);
   },
 
   /**
-   * Batch-resolve display labels for a set of (kind, slug) taxonomy pairs.
-   * Returns a map keyed by `${kind}:${slug}`; unresolved pairs are simply absent.
+   * Batch-resolve display labels for non-hierarchical taxonomy pairs (city, budget_band,
+   * bhk, scope, property_subtype — unique by `(kind, slug)`). Filters `is_active` so the
+   * public feed hides retired terms, matching the taxonomy module's read policy. Localities
+   * are NOT resolvable here (slug is only unique within a parent city) — use
+   * `findLocalityLabels`. Keyed `${kind}:${slug}`; unresolved pairs are simply absent.
    */
   async findTaxonomyLabels(pairs: { kind: TaxonomyKind; slug: string }[]): Promise<Map<string, string>> {
     const unique = [...new Map(pairs.map((p) => [`${p.kind}:${p.slug}`, p])).values()];
@@ -240,9 +249,46 @@ export const projectsRepository = {
       })
       .from(schema.taxonomy)
       .where(
-        or(...unique.map((p) => and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)))),
+        and(
+          eq(schema.taxonomy.isActive, true),
+          or(...unique.map((p) => and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)))),
+        ),
       );
     return new Map(rows.map((row) => [`${row.kind}:${row.slug}`, row.label]));
+  },
+
+  /**
+   * Resolve locality labels scoped to their parent city. Locality slugs are only unique
+   * within a city (`/mumbai/andheri` vs `/pune/andheri`), so resolving by slug alone would
+   * pick an arbitrary city's label. Keyed `${citySlug}:${localitySlug}`.
+   */
+  async findLocalityLabels(
+    pairs: { citySlug: string; localitySlug: string }[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Map(pairs.map((p) => [`${p.citySlug}:${p.localitySlug}`, p])).values()];
+    if (unique.length === 0) return new Map();
+    const city = alias(schema.taxonomy, 'city');
+    const rows = await db
+      .select({
+        citySlug: city.slug,
+        localitySlug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
+      .from(schema.taxonomy)
+      .innerJoin(city, eq(schema.taxonomy.parentId, city.id))
+      .where(
+        and(
+          eq(schema.taxonomy.kind, 'locality'),
+          eq(schema.taxonomy.isActive, true),
+          eq(city.kind, 'city'),
+          or(
+            ...unique.map((p) =>
+              and(eq(schema.taxonomy.slug, p.localitySlug), eq(city.slug, p.citySlug)),
+            ),
+          ),
+        ),
+      );
+    return new Map(rows.map((row) => [`${row.citySlug}:${row.localitySlug}`, row.label]));
   },
 
   async findById(id: string): Promise<ProjectRecord | null> {

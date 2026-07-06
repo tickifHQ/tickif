@@ -265,7 +265,9 @@ export type DuplicateProjectResponse = z.infer<typeof duplicateProjectResponseSc
 
 export const feedProjectsQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
+    // Bounded page: this is an unauthenticated route, so a huge page would push a
+    // huge OFFSET onto Postgres (sort + discard the whole published set) per request.
+    page: z.coerce.number().int().min(1).max(10000).default(1),
     limit: z.coerce.number().int().min(1).max(30).default(12),
   })
   .meta({ id: 'FeedProjectsQuery' });

@@ -5,6 +5,10 @@ import { db, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeTaxonomy } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 
+/** Designers only surface in the feed when active — factory defaults to draft. */
+const activeDesigner = (overrides: Partial<typeof schema.designerProfile.$inferInsert> = {}) =>
+  makeDesigner({ status: 'active', ...overrides });
+
 /** Seed the taxonomy terms a fully-tagged feed card needs (city + locality + budget + bhk + scope). */
 async function seedFeedTaxonomy() {
   const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
@@ -53,7 +57,7 @@ async function getFeed(query = '') {
 describe('GET /api/projects/feed', () => {
   it('serves published projects with full card metadata to an unauthenticated caller', async () => {
     await seedFeedTaxonomy();
-    const designer = await makeDesigner({
+    const designer = await activeDesigner({
       displayName: 'Studio Noir',
       avgRating: '4.70',
       reviewCount: 12,
@@ -84,7 +88,7 @@ describe('GET /api/projects/feed', () => {
   });
 
   it('excludes projects that are not published', async () => {
-    const designer = await makeDesigner();
+    const designer = await activeDesigner();
     await makePublishedProject(designer.id, { title: 'Live One' });
     await makeProject({ designerId: designer.id, status: 'draft', title: 'Draft One' });
     await makeProject({ designerId: designer.id, status: 'submitted', title: 'Submitted One' });
@@ -103,7 +107,7 @@ describe('GET /api/projects/feed', () => {
   });
 
   it('paginates and reports hasMore', async () => {
-    const designer = await makeDesigner();
+    const designer = await activeDesigner();
     for (let i = 0; i < 3; i += 1) {
       await makePublishedProject(designer.id, { title: `Project ${i}` });
     }
@@ -119,12 +123,43 @@ describe('GET /api/projects/feed', () => {
   });
 
   it('degrades cover image URL to null when the cover is not ready', async () => {
-    const designer = await makeDesigner();
+    const designer = await activeDesigner();
     const project = await makePublishedProject(designer.id, { title: 'No Cover Yet' });
     const cover = await makeProjectImage({ projectId: project.id, status: 'processing' });
     await db.update(schema.project).set({ coverImageId: cover.id }).where(eq(schema.project.id, project.id));
 
     const { body } = await getFeed();
     expect(body.projects[0]?.coverImageUrl).toBeNull();
+  });
+
+  it('excludes published projects belonging to a suspended designer', async () => {
+    const active = await activeDesigner({ displayName: 'Active Studio' });
+    const suspended = await makeDesigner({ status: 'suspended', displayName: 'Suspended Studio' });
+    await makePublishedProject(active.id, { title: 'Visible' });
+    await makePublishedProject(suspended.id, { title: 'Hidden' });
+
+    const { body } = await getFeed();
+    expect(body.projects.map((p) => p.title)).toEqual(['Visible']);
+  });
+
+  it('resolves a locality label scoped to its parent city, not another city sharing the slug', async () => {
+    const mumbai = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+    const pune = await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
+    // Same locality slug under two different cities, with different labels.
+    await makeTaxonomy({ kind: 'locality', slug: 'andheri', label: 'Andheri', parentId: mumbai.id });
+    await makeTaxonomy({ kind: 'locality', slug: 'andheri', label: 'Andheri West', parentId: pune.id });
+
+    const designer = await activeDesigner();
+    await makePublishedProject(designer.id, {
+      title: 'Pune Home',
+      citySlug: 'pune',
+      localitySlug: 'andheri',
+      budgetBandSlug: null,
+      bhkSlug: null,
+      scopeSlug: null,
+    });
+
+    const { body } = await getFeed();
+    expect(body.projects[0]).toMatchObject({ city: 'Pune', locality: 'Andheri West' });
   });
 });
