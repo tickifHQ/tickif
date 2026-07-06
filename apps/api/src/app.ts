@@ -8,6 +8,7 @@ import { onError } from './lib/errors.js';
 import { validationHook } from './lib/validation.js';
 import { withSession, type AuthVariables } from './lib/auth-middleware.js';
 import { projectsRoutes } from './modules/projects/routes.js';
+import { projectsFeedRoutes } from './modules/projects/feed.routes.js';
 import { mediaRoutes, projectImagesRoutes } from './modules/media/routes.js';
 import { profilesRoutes } from './modules/profiles/routes.js';
 import { taxonomyRoutes } from './modules/taxonomy/routes.js';
@@ -53,6 +54,8 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  // Public feed first: the static `/feed` segment must resolve ahead of `/{id}`.
+  .route('/api/projects', projectsFeedRoutes)
   .route('/api/projects', projectsRoutes)
   .route('/api/projects', projectImagesRoutes)
   .route('/api/media', mediaRoutes)

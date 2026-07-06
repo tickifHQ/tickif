@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
+  ProjectFeedItemRecord,
   ProjectImageAttachmentRecord,
   ProjectImageDeletionRecord,
   ProjectRecord,
@@ -45,6 +46,8 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteImage: vi.fn(),
       getReadyImageCounts: vi.fn(),
       submit: vi.fn(),
+      listPublishedFeed: vi.fn(),
+      findTaxonomyLabels: vi.fn(),
       // keep the real-ish slugify so create() behavior is realistic
       slugify: (t: string) =>
         t
@@ -497,5 +500,78 @@ describe('projectsService.submit', () => {
 
     expect(result.status).toBe('submitted');
     expect(projectsRepository.submit).toHaveBeenCalledWith(requestedChanges.id);
+  });
+});
+
+describe('projectsService.feed', () => {
+  const feedRow = (over: Partial<ProjectFeedItemRecord> = {}): ProjectFeedItemRecord => ({
+    id: '11111111-1111-4111-8111-111111111111',
+    slug: 'industrial-chic-apartment',
+    title: 'Industrial Chic Apartment',
+    citySlug: 'mumbai',
+    localitySlug: 'bandra',
+    budgetBandSlug: '3-5-lakh',
+    scopeSlug: 'full-home',
+    bhkSlug: '2-bhk',
+    propertySubtypeSlug: null,
+    studio: 'Studio Noir',
+    rating: '4.70',
+    reviewCount: 12,
+    coverStatus: 'ready',
+    coverDerivatives: [
+      { variant: 'thumb', format: 'webp', key: 'derivatives/cover/thumb.webp', width: 320, height: 240 },
+    ],
+    coverWidth: 480,
+    coverHeight: 640,
+    ...over,
+  });
+
+  it('maps rows to cards, resolving labels and signing the cover, with hasMore from limit+1', async () => {
+    vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([feedRow(), feedRow({ id: 'x' })]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
+      new Map([
+        ['city:mumbai', 'Mumbai'],
+        ['locality:bandra', 'Bandra'],
+        ['budget_band:3-5-lakh', '₹3–5L'],
+        ['bhk:2-bhk', '2 BHK'],
+        ['scope:full-home', 'Full Home'],
+      ]),
+    );
+
+    const result = await projectsService.feed({ page: 1, limit: 1 });
+
+    // limit+1 fetched (2 rows), so only 1 returned and hasMore is true.
+    expect(projectsRepository.listPublishedFeed).toHaveBeenCalledWith({ limit: 2, offset: 0 });
+    expect(result).toMatchObject({ page: 1, limit: 1, hasMore: true });
+    expect(result.projects).toHaveLength(1);
+    expect(result.projects[0]).toMatchObject({
+      studio: 'Studio Noir',
+      city: 'Mumbai',
+      locality: 'Bandra',
+      budget: '₹3–5L',
+      rating: 4.7,
+      reviewCount: 12,
+      tags: ['2 BHK', 'Full Home'],
+      coverImageUrl: 'https://signed.example/derivatives/cover/thumb.webp',
+      imageWidth: 480,
+      imageHeight: 640,
+    });
+  });
+
+  it('nulls unresolved labels and the cover URL when the image is not ready', async () => {
+    vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([
+      feedRow({ coverStatus: 'processing', localitySlug: null, budgetBandSlug: null }),
+    ]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map([['city:mumbai', 'Mumbai']]));
+
+    const result = await projectsService.feed({ page: 1, limit: 12 });
+
+    expect(result.hasMore).toBe(false);
+    expect(result.projects[0]).toMatchObject({
+      city: 'Mumbai',
+      locality: null,
+      budget: null,
+      coverImageUrl: null,
+    });
   });
 });

@@ -261,6 +261,45 @@ export const duplicateProjectResponseSchema = z
   .meta({ id: 'DuplicateProjectResponse' });
 export type DuplicateProjectResponse = z.infer<typeof duplicateProjectResponseSchema>;
 
+// --- Public feed (logged-out landing page) ----------------------------------
+
+export const feedProjectsQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(30).default(12),
+  })
+  .meta({ id: 'FeedProjectsQuery' });
+export type FeedProjectsQuery = z.infer<typeof feedProjectsQuerySchema>;
+
+export const feedProjectSchema = z
+  .object({
+    id: z.uuid(),
+    slug: z.string(),
+    title: z.string(),
+    studio: z.string(),
+    city: z.string().nullable(),
+    locality: z.string().nullable(),
+    rating: z.number(),
+    reviewCount: z.number().int(),
+    budget: z.string().nullable(),
+    tags: z.array(z.string()),
+    coverImageUrl: z.string().url().nullable(),
+    imageWidth: z.number().int().nullable(),
+    imageHeight: z.number().int().nullable(),
+  })
+  .meta({ id: 'FeedProject' });
+export type FeedProject = z.infer<typeof feedProjectSchema>;
+
+export const feedProjectsResponseSchema = z
+  .object({
+    projects: z.array(feedProjectSchema),
+    page: z.number().int(),
+    limit: z.number().int(),
+    hasMore: z.boolean(),
+  })
+  .meta({ id: 'FeedProjects' });
+export type FeedProjectsResponse = z.infer<typeof feedProjectsResponseSchema>;
+
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
 export const projectRoomIdParamSchema = z

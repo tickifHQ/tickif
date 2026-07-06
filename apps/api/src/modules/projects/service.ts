@@ -8,6 +8,8 @@ import type {
   LinkProjectImageInput,
   ListProjectRoomsResponse,
   ListProjectsQuery,
+  FeedProjectsQuery,
+  FeedProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectImageAttachment,
@@ -26,12 +28,14 @@ import { AppError } from '../../lib/errors.js';
 import {
   projectsRepository,
   type ProjectCoverImageRecord,
+  type ProjectFeedItemRecord,
   type ProjectImageAttachmentRecord,
   type ProjectImageDeletionRecord,
   type ProjectListItemRecord,
   type ProjectOwnership,
   type ProjectRecord,
   type ProjectRoomRecord,
+  type TaxonomyKind,
 } from './repository.js';
 
 /**
@@ -125,6 +129,66 @@ async function coverImageUrl(coverImage?: ProjectCoverImageRecord): Promise<stri
   if (!coverImage || coverImage.status !== 'ready') return null;
   const previewKey = pickPreviewDerivative(coverImage.derivatives);
   return previewKey ? presignDownload({ key: previewKey }) : null;
+}
+
+/**
+ * Feed cover URL. Unlike the dashboard's `coverImageUrl`, a presign failure here
+ * degrades to `null` for that one card rather than failing the whole public feed.
+ */
+async function feedCoverImageUrl(
+  status: ProjectFeedItemRecord['coverStatus'],
+  derivatives: ProjectFeedItemRecord['coverDerivatives'],
+): Promise<string | null> {
+  if (status !== 'ready' || !derivatives) return null;
+  const previewKey = pickPreviewDerivative(derivatives);
+  if (!previewKey) return null;
+  try {
+    return await presignDownload({ key: previewKey });
+  } catch {
+    return null;
+  }
+}
+
+function toFeedProject(
+  row: ProjectFeedItemRecord,
+  labels: Map<string, string>,
+  coverImageUrl: string | null,
+): FeedProjectsResponse['projects'][number] {
+  const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
+    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+
+  const tags = [
+    labelOf('bhk', row.bhkSlug),
+    labelOf('scope', row.scopeSlug) ?? labelOf('property_subtype', row.propertySubtypeSlug),
+  ].filter((tag): tag is string => !!tag);
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    studio: row.studio,
+    city: labelOf('city', row.citySlug),
+    locality: labelOf('locality', row.localitySlug),
+    rating: Number(row.rating) || 0,
+    reviewCount: row.reviewCount,
+    budget: labelOf('budget_band', row.budgetBandSlug),
+    tags,
+    coverImageUrl,
+    imageWidth: row.coverWidth,
+    imageHeight: row.coverHeight,
+  };
+}
+
+/** Collect the (kind, slug) taxonomy pairs a feed row needs resolved to labels. */
+function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; slug: string }[] {
+  const pairs: { kind: TaxonomyKind; slug: string }[] = [];
+  if (row.citySlug) pairs.push({ kind: 'city', slug: row.citySlug });
+  if (row.localitySlug) pairs.push({ kind: 'locality', slug: row.localitySlug });
+  if (row.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: row.budgetBandSlug });
+  if (row.bhkSlug) pairs.push({ kind: 'bhk', slug: row.bhkSlug });
+  if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
+  if (row.propertySubtypeSlug) pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
+  return pairs;
 }
 
 async function toListItem(
@@ -520,6 +584,31 @@ export const projectsService = {
       limit,
       totalPages: total === 0 ? 0 : Math.ceil(total / limit),
     };
+  },
+
+  /**
+   * Public landing feed of published projects. No caller — anyone can read it.
+   * Fetches limit+1 to compute `hasMore`, then resolves taxonomy labels and
+   * cover URLs for the page in a single batched query (no N+1).
+   */
+  async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
+    const { page, limit } = query;
+    const rows = await projectsRepository.listPublishedFeed({
+      limit: limit + 1,
+      offset: (page - 1) * limit,
+    });
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const labels = await projectsRepository.findTaxonomyLabels(pageRows.flatMap(feedTaxonomyPairs));
+
+    const projects = await Promise.all(
+      pageRows.map(async (row) =>
+        toFeedProject(row, labels, await feedCoverImageUrl(row.coverStatus, row.coverDerivatives)),
+      ),
+    );
+
+    return { projects, page, limit, hasMore };
   },
 
   async getById(id: string, caller?: Caller): Promise<ProjectDetailResponse> {
