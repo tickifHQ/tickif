@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   BriefcaseBusiness,
-  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Instagram,
@@ -227,27 +226,6 @@ export function DesignerOnboarding({
     };
   }, []);
 
-  async function handleBack() {
-    if (step === 'entity') {
-      await signOutToLogin();
-      return;
-    }
-    if (step === 'services') {
-      setStep('presence');
-      return;
-    }
-    if (step === 'presence') {
-      setStep('details');
-      return;
-    }
-    setStep('entity');
-  }
-
-  function handleCompletionBack() {
-    setResult(null);
-    setStep(entityType === 'company' ? 'services' : 'presence');
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -311,7 +289,7 @@ export function DesignerOnboarding({
 
   if (result) {
     return (
-      <OnboardingShell signedInAs={displayEmail} onBack={handleCompletionBack}>
+      <OnboardingShell signedInAs={displayEmail}>
         <CompletionStep onAddProjects={() => router.push('/designer/projects/new')} onSkip={() => router.push('/designer/dashboard')} />
       </OnboardingShell>
     );
@@ -319,7 +297,7 @@ export function DesignerOnboarding({
 
   if (step === 'entity') {
     return (
-      <OnboardingShell signedInAs={displayEmail} onBack={handleBack}>
+      <OnboardingShell signedInAs={displayEmail}>
         <div className="flex flex-col gap-8">
           <div className="flex flex-col gap-1">
             <h1 className="text-lg font-medium tracking-[-0.015em]">
@@ -361,7 +339,7 @@ export function DesignerOnboarding({
   }
 
   return (
-    <OnboardingShell signedInAs={displayEmail} onBack={handleBack}>
+    <OnboardingShell signedInAs={displayEmail}>
       <form className="flex flex-col gap-8" onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-1">
           <h1 className="text-lg font-medium tracking-[-0.015em]">
@@ -1126,11 +1104,9 @@ function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
 
 function OnboardingShell({
   children,
-  onBack,
   signedInAs,
 }: {
   children: ReactNode;
-  onBack: () => void;
   signedInAs: string;
 }) {
   return (
@@ -1138,17 +1114,12 @@ function OnboardingShell({
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(420px,600px)]">
         <section className="flex items-center justify-center px-5 py-12 sm:px-8">
           <div className="w-full max-w-[450px]">
-            <button
-              type="button"
-              onClick={onBack}
-              className="mb-8 flex cursor-pointer items-center gap-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ChevronLeft className="size-4" aria-hidden="true" />
+            <div className="mb-8 flex items-center gap-2 text-left text-xs text-muted-foreground">
               <span>
                 <span className="text-muted-foreground/70">Signed in as </span>
                 <span className="font-medium text-muted-foreground">{signedInAs}</span>
               </span>
-            </button>
+            </div>
             {children}
           </div>
         </section>
