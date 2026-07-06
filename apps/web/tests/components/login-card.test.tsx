@@ -97,7 +97,10 @@ describe('LoginCard', () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('button', { name: /continue with google/i }));
-    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/onboarding',
+    });
   });
 
   it('calls Google signIn with onboarding callback in designer mode', async () => {

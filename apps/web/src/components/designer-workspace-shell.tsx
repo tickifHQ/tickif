@@ -47,7 +47,7 @@ const growItems: NavItem[] = [
   { label: 'Verification', icon: ShieldCheck },
   { label: 'Terms & roles', icon: FileBadge2 },
   { label: 'Plan & billing', icon: HandCoins },
-  { label: 'Profile & settings', icon: CircleUserRound },
+  { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
 ];
 
 function isItemActive(pathname: string, href?: string) {
@@ -219,8 +219,8 @@ export function DesignerWorkspaceShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const isProjectUploadRoute = pathname.startsWith('/designer/projects/upload');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
@@ -285,8 +285,22 @@ export function DesignerWorkspaceShell({
               <AccountMenu showLabel avatarSeed={studioName} />
             </div>
           </header>
-          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto">{children}</main>
+          <section
+            className={
+              isProjectUploadRoute
+                ? 'rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm'
+                : 'min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm'
+            }
+          >
+            <main
+              className={
+                isProjectUploadRoute
+                  ? 'min-w-0'
+                  : 'h-full min-w-0 overflow-y-auto'
+              }
+            >
+              {children}
+            </main>
           </section>
         </div>
       </div>

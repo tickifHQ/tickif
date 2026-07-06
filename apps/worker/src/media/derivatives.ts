@@ -68,11 +68,12 @@ export async function* eachDerivative(
 
   for (const spec of variants) {
     const outWidth = Math.min(spec.width, info.width);
+    const outHeight = Math.round(info.height * (outWidth / info.width));
     const resized = sharp(raw, rawInput).resize({ width: spec.width, withoutEnlargement: true });
     const base =
       watermark && outWidth >= watermark.minImageWidth
         ? resized.composite([
-            { input: buildWatermarkSvg(outWidth, watermark), gravity: watermark.gravity },
+            { input: buildWatermarkSvg(outWidth, outHeight, watermark) },
           ])
         : resized;
 

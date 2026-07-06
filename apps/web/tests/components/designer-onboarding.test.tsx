@@ -69,7 +69,7 @@ describe('DesignerOnboarding', () => {
     window.history.pushState({}, '', '/designer/onboarding');
   });
 
-  it('renders the onboarding shell with signed-in context and entity options', () => {
+  it('renders the onboarding shell with signed-in context and entity options', async () => {
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
     expect(screen.getByText(/Signed in as/i)).toBeInTheDocument();
@@ -82,6 +82,9 @@ describe('DesignerOnboarding', () => {
       'mailto:support@tickif.in',
     );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mock.taxonomyGet).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('keeps the user on onboarding when the header is clicked from entity selection', async () => {
@@ -92,6 +95,19 @@ describe('DesignerOnboarding', () => {
 
     expect(screen.getByRole('heading', { name: /set up your space/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/designer/onboarding');
+    expect(mock.signOut).not.toHaveBeenCalled();
+    expect(mock.router.push).not.toHaveBeenCalled();
+  });
+
+  it('treats the signed-in header as context instead of a navigation control', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    expect(screen.queryByRole('button', { name: /signed in as mahi@test\.com/i })).not.toBeInTheDocument();
+    expect(screen.getByText('mahi@test.com')).toBeInTheDocument();
+
+    await user.click(screen.getByText('mahi@test.com'));
+
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
   });
@@ -292,6 +308,24 @@ describe('DesignerOnboarding', () => {
     });
     expect(await screen.findByText(/You're set up, there/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add your projects/i })).toBeInTheDocument();
+  });
+
+  it('shows field-level validation for invalid URL inputs before submit', async () => {
+    const submit = vi.fn();
+    const user = userEvent.setup();
+
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.type(screen.getByLabelText(/website/i), 'not a url');
+    await user.type(screen.getByLabelText(/google business/i), 'bad google url');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByText('Enter a valid website URL.')).toBeInTheDocument();
+    expect(screen.getByText('Enter a valid Google Business URL.')).toBeInTheDocument();
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('normalizes a bare domain to https:// before submit', async () => {
