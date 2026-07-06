@@ -84,15 +84,15 @@ describe('DesignerOnboarding', () => {
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
   });
 
-  it('signs out to the login screen when backing from the entity selection screen', async () => {
+  it('keeps the user on onboarding when the header is clicked from entity selection', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
-    await user.click(screen.getByRole('button', { name: /signed in as mahi@test\.com/i }));
+    await user.click(screen.getByText('mahi@test.com'));
 
-    expect(mock.signOut).toHaveBeenCalled();
-    expect(window.location.pathname).toBe('/login');
-    expect(window.location.search).toBe('?mode=designer');
+    expect(screen.getByRole('heading', { name: /set up your space/i })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/designer/onboarding');
+    expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
   });
 
@@ -110,14 +110,16 @@ describe('DesignerOnboarding', () => {
 
   it('renders generated initials avatars for individual and company details', async () => {
     const user = userEvent.setup();
-    render(<DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />);
+    const { unmount } = render(<DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />);
 
     await user.click(screen.getByRole('button', { name: /just me/i }));
 
     const profileAvatar = screen.getByRole('img', { name: /generated profile initials/i });
     expect(profileAvatar).toHaveAttribute('src', expect.stringContaining('data:image/svg+xml'));
 
-    await user.click(screen.getByRole('button', { name: /signed in as sarthak wade/i }));
+    unmount();
+    render(<DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />);
+
     await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
     await user.type(screen.getByLabelText(/company name/i), 'Sarthak Interiors');
 
@@ -126,7 +128,7 @@ describe('DesignerOnboarding', () => {
     expect(decodeURIComponent(companyAvatar.getAttribute('src') ?? '')).toContain('SI');
   });
 
-  it('returns from socials to details instead of entity', async () => {
+  it('keeps the user on the current onboarding step when the header is clicked', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
@@ -136,15 +138,15 @@ describe('DesignerOnboarding', () => {
 
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /signed in as mahi@test\.com/i }));
+    await user.click(screen.getByText('mahi@test.com'));
 
-    expect(screen.getByLabelText(/display name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
   });
 
-  it('returns from completion to socials instead of leaving onboarding', async () => {
+  it('keeps the user on completion when the header is clicked', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,
       data: {
@@ -174,10 +176,11 @@ describe('DesignerOnboarding', () => {
 
     expect(await screen.findByText(/You're set up, there/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /signed in as mahi@test\.com/i }));
+    await user.click(screen.getByText('mahi@test.com'));
 
-    expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
-    expect(screen.queryByText(/You're set up, there/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/You're set up, there/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/website/i)).not.toBeInTheDocument();
+    expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
   });
 
