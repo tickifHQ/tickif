@@ -17,6 +17,7 @@ export default async function HomePage() {
     return (
       <div className="bg-[#fafaf8]">
         <section className="mx-auto w-full max-w-[1512px] px-6 py-6 lg:px-10">
+          <h1 className="sr-only">Explore home projects</h1>
           <HomeSearchBar />
           <div className="mt-5">
             <FeedFilters />

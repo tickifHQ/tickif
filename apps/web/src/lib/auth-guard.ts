@@ -56,8 +56,9 @@ export function rolePassesCheck(
  * Non-throwing variant — returns session or null.
  * Used in (public)/layout.tsx to decide whether to render the scroll-gate.
  *
- * Deduped per request (React cache) so layout + page can both call it
- * without issuing a second round-trip to the API.
+ * Deduped per request (React cache), keyed by disableCookieCache: callers
+ * passing the same flag (e.g. (public) layout + page) share one API
+ * round-trip; callers with different flags still fetch independently.
  */
 export async function getServerSession(options?: GetServerSessionOptions): Promise<SessionData | null> {
   return fetchSession(Boolean(options?.disableCookieCache));
