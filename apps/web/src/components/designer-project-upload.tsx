@@ -1335,6 +1335,7 @@ export function DesignerProjectUpload({
   const uploadingRoomIdsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
   const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
+  const projectNameAutoManagedRef = useRef(true);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1691,6 +1692,7 @@ export function DesignerProjectUpload({
         setProjectId(project.id);
         setLoadedProjectId(project.id);
         setProjectName(project.title);
+        projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
         setProjectType(inferUiProjectType(project));
         setProjectSubtype(project.propertySubtypeSlug ?? metadataString(projectMetadata.projectSubtypeSlug));
@@ -1762,7 +1764,9 @@ export function DesignerProjectUpload({
   }, [projectSubtype, selectedProjectTypeBehavior.primaryField]);
 
   useEffect(() => {
-    if (projectName.trim().length > 0 || !defaultProjectName) return;
+    if (!defaultProjectName) return;
+    if (!projectNameAutoManagedRef.current && projectName.trim().length > 0) return;
+    projectNameAutoManagedRef.current = true;
     setProjectName(defaultProjectName);
   }, [defaultProjectName, projectName]);
 
@@ -2026,6 +2030,11 @@ export function DesignerProjectUpload({
         expanded: true,
       },
     ]);
+  }
+
+  function handleProjectNameChange(value: string) {
+    projectNameAutoManagedRef.current = false;
+    setProjectName(value);
   }
 
   function buildCreateProjectPayload() {
@@ -2845,7 +2854,7 @@ export function DesignerProjectUpload({
                 <FormField
                   label="Project name"
                   value={projectName}
-                  onChange={setProjectName}
+                  onChange={handleProjectNameChange}
                   placeholder={defaultProjectName}
                 />
                 <div className="space-y-1.5">
