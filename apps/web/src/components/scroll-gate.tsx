@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { LoginCard } from '@/components/login-card';
+import { env } from '@/env';
 
 /**
  * Scroll-gate component for public feed.
@@ -17,15 +18,6 @@ import { LoginCard } from '@/components/login-card';
 
 const SCROLL_UNIT_PX = 400;
 
-function getLimit(): number {
-  const raw = process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT;
-  if (raw === undefined || raw === '') return 5;
-  const parsed = parseInt(raw, 10);
-  // 0 = gate disabled (never trigger)
-  if (isNaN(parsed) || parsed < 0) return 5;
-  return parsed;
-}
-
 export function ScrollGate() {
   const [gated, setGated] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -37,7 +29,7 @@ export function ScrollGate() {
     setMounted(true);
     lastScrollYRef.current = window.scrollY;
 
-    const limit = getLimit();
+    const limit = env.NEXT_PUBLIC_SCROLL_GATE_LIMIT;
     // 0 = gate disabled
     if (limit === 0) return;
 

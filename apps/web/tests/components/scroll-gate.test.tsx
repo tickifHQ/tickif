@@ -2,6 +2,10 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScrollGate } from '../../src/components/scroll-gate';
 
+vi.mock('../../src/env', () => ({
+  env: { NEXT_PUBLIC_SCROLL_GATE_LIMIT: 1 },
+}));
+
 vi.mock('../../src/components/login-card', () => ({
   LoginCard: ({ onClose }: { onClose?: () => void }) => (
     <div data-testid="login-card">
@@ -16,7 +20,6 @@ vi.mock('../../src/components/login-card', () => ({
 
 describe('ScrollGate', () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT = '1';
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
       value: 0,
