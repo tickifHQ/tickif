@@ -12,7 +12,7 @@ const filters = [
 /** Filters button + category chips row shared by both home states (Figma "pins" filter bar). */
 export function FeedFilters() {
   return (
-    <div className="flex items-center gap-4 overflow-x-auto pb-1">
+    <div className="flex items-center gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <button
         type="button"
         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ede9e1] px-3.5 py-2 text-xs font-medium text-[#52525b] transition-colors hover:bg-accent"
