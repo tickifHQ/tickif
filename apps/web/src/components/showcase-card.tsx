@@ -29,6 +29,19 @@ const FALLBACK_WIDTH = 480;
 const FALLBACK_HEIGHT = 600;
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+/**
+ * Shared props to prevent image downloading via common browser methods:
+ * - onContextMenu: blocks right-click "Save Image As"
+ * - draggable: prevents drag-to-desktop / drag-to-another-tab
+ * - onDragStart: fallback for browsers that ignore draggable="false"
+ * - style properties: disable text/image selection and webkit drag
+ */
+const imageProtectionProps = {
+  onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  draggable: false as const,
+  onDragStart: (e: React.DragEvent) => e.preventDefault(),
+};
+
 export function ShowcaseCard({ project }: { project: FeedProject }) {
   const [gallery, setGallery] = useState<GalleryImage[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -109,9 +122,12 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
           src={imageUrl}
           alt={project.title}
           loading="lazy"
-          className="w-full object-cover"
-          style={{ aspectRatio: `${width} / ${height}` }}
+          className="w-full object-cover pointer-events-none select-none"
+          style={{ aspectRatio: `${width} / ${height}`, WebkitUserDrag: 'none' } as React.CSSProperties}
+          {...imageProtectionProps}
         />
+        {/* Transparent overlay to intercept right-click/long-press on the image area */}
+        <div className="absolute inset-0" onContextMenu={(e) => e.preventDefault()} />
 
         {project.budget && (
           <span className="absolute bottom-3 left-3 rounded-full bg-background/95 px-2.5 py-1 font-mono text-[11px] font-medium text-foreground shadow-sm transition-opacity group-hover:opacity-0 sm:opacity-100">
@@ -219,7 +235,7 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
           )}
 
           {/* Main image */}
-          <div className="flex max-h-[85vh] max-w-[85vw] flex-col items-center" onClick={(e) => e.stopPropagation()}>
+          <div className="relative flex max-h-[85vh] max-w-[85vw] flex-col items-center" onClick={(e) => e.stopPropagation()}>
             {loading ? (
               <div className="flex items-center justify-center">
                 <div className="size-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
@@ -228,13 +244,25 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
               <img
                 src={currentImage.url}
                 alt={`${project.title}${currentImage.roomName ? ` — ${currentImage.roomName}` : ''}`}
-                className="max-h-[75vh] max-w-full rounded-lg object-contain"
+                className="max-h-[75vh] max-w-full rounded-lg object-contain pointer-events-none select-none"
+                style={{ WebkitUserDrag: 'none' } as React.CSSProperties}
+                {...imageProtectionProps}
               />
             ) : (
               <img
                 src={imageUrl}
                 alt={project.title}
-                className="max-h-[75vh] max-w-full rounded-lg object-contain"
+                className="max-h-[75vh] max-w-full rounded-lg object-contain pointer-events-none select-none"
+                style={{ WebkitUserDrag: 'none' } as React.CSSProperties}
+                {...imageProtectionProps}
+              />
+            )}
+            {/* Transparent overlay to block long-press/touch-hold "Save Image" on mobile */}
+            {!loading && (
+              <div
+                className="absolute inset-0 rounded-lg"
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ touchAction: 'pan-x' }}
               />
             )}
             <div className="mt-4 text-center">
