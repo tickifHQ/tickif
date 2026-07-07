@@ -813,5 +813,31 @@ export const projectsRepository = {
     });
   },
 
+  async findReferencedImageObjectKeys(keys: string[]): Promise<string[]> {
+    if (keys.length === 0) return [];
+
+    const keySet = new Set(keys);
+    const derivativeKeyFilters = keys.map((key) =>
+      sql<boolean>`${schema.projectImage.derivatives} @> ${JSON.stringify([{ key }])}::jsonb`,
+    );
+    const rows = await db
+      .select({
+        originalKey: schema.projectImage.originalKey,
+        derivatives: schema.projectImage.derivatives,
+      })
+      .from(schema.projectImage)
+      .where(or(inArray(schema.projectImage.originalKey, keys), ...derivativeKeyFilters));
+
+    const referenced = new Set<string>();
+    for (const row of rows) {
+      if (keySet.has(row.originalKey)) referenced.add(row.originalKey);
+      for (const derivative of row.derivatives) {
+        if (keySet.has(derivative.key)) referenced.add(derivative.key);
+      }
+    }
+
+    return [...referenced];
+  },
+
   slugify,
 };
