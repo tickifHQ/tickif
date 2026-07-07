@@ -111,7 +111,16 @@ function validateOptionalUrl(
 ) {
   const normalized = normalizeUrl(value);
   if (!normalized) return '';
-  return schema.safeParse(normalized).success ? '' : message;
+  if (!schema.safeParse(normalized).success) return message;
+
+  try {
+    const url = new URL(normalized);
+    const hostname = url.hostname.toLowerCase();
+    const hasPublicHostname = hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
+    return hasPublicHostname ? '' : message;
+  } catch {
+    return message;
+  }
 }
 
 function formatOptionalPhone(countryCode: string, phone: string) {

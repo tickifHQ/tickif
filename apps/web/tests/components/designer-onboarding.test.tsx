@@ -319,8 +319,8 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.type(screen.getByLabelText(/website/i), 'not a url');
-    await user.type(screen.getByLabelText(/google business/i), 'bad google url');
+    await user.type(screen.getByLabelText(/website/i), 'anything');
+    await user.type(screen.getByLabelText(/google business/i), 'bad');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByText('Enter a valid website URL.')).toBeInTheDocument();
