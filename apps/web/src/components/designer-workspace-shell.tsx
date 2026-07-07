@@ -219,16 +219,15 @@ export function DesignerWorkspaceShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const isProjectUploadRoute = pathname.startsWith('/designer/projects/upload');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="flex min-h-screen overflow-hidden bg-muted/20">
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
+    <div className="h-screen overflow-hidden bg-muted/30">
+      <div className="flex h-full overflow-hidden bg-muted/20">
+        <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
           <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
         </aside>
 
@@ -285,20 +284,8 @@ export function DesignerWorkspaceShell({
               <AccountMenu showLabel avatarSeed={studioName} />
             </div>
           </header>
-          <section
-            className={
-              isProjectUploadRoute
-                ? 'rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm'
-                : 'min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm'
-            }
-          >
-            <main
-              className={
-                isProjectUploadRoute
-                  ? 'min-w-0'
-                  : 'h-full min-w-0 overflow-y-auto'
-              }
-            >
+          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
+            <main className="h-full min-w-0 overflow-y-auto">
               {children}
             </main>
           </section>

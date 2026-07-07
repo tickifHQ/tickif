@@ -33,7 +33,7 @@ describe('DesignerWorkspaceShell', () => {
     );
   });
 
-  it('lets the project upload route size to content instead of forcing a full-height shell pane', () => {
+  it('keeps project upload scrolling inside the shell so the sidebar stays fixed', () => {
     pathnameState.value = '/designer/projects/upload';
     render(
       <DesignerWorkspaceShell studioName="Antika Interiors" studioLocation="Chennai">
@@ -44,9 +44,9 @@ describe('DesignerWorkspaceShell', () => {
     const main = screen.getByText('Upload content').closest('main');
     const section = main?.closest('section');
 
-    expect(main).not.toHaveClass('h-full');
-    expect(main).not.toHaveClass('overflow-y-auto');
-    expect(section).not.toHaveClass('flex-1');
-    expect(section).not.toHaveClass('overflow-hidden');
+    expect(main).toHaveClass('h-full');
+    expect(main).toHaveClass('overflow-y-auto');
+    expect(section).toHaveClass('flex-1');
+    expect(section).toHaveClass('overflow-hidden');
   });
 });
