@@ -1,8 +1,7 @@
 import { createAuthClient } from 'better-auth/react';
-import { phoneNumberClient } from 'better-auth/client/plugins';
-import { env } from '@/env';
+import { phoneNumberClient, emailOTPClient } from 'better-auth/client/plugins';
 
 export const authClient = createAuthClient({
-  baseURL: env.NEXT_PUBLIC_API_URL,
-  plugins: [phoneNumberClient()],
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+  plugins: [phoneNumberClient(), emailOTPClient()],
 });
