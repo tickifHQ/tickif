@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { env } from '@/env';
 
 /**
  * Server-side auth utilities for layouts and server components.
@@ -7,8 +8,6 @@ import { headers } from 'next/headers';
  * Calls the API's better-auth session endpoint to resolve the current user.
  * Does NOT import @repo/auth (that pulls DB deps into the web bundle).
  */
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
 
 type SessionUser = {
   id: string;
@@ -62,7 +61,7 @@ export async function getServerSession(options?: GetServerSessionOptions): Promi
   if (!cookie) return null;
 
   try {
-    const url = new URL('/api/auth/get-session', API_URL);
+    const url = new URL('/api/auth/get-session', env.NEXT_PUBLIC_API_URL);
     if (options?.disableCookieCache) {
       url.searchParams.set('disableCookieCache', 'true');
     }
