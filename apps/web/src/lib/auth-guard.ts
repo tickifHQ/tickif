@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { env } from '@/env';
 
 /**
  * Server-side auth utilities for layouts and server components.
@@ -8,7 +9,7 @@ import { headers } from 'next/headers';
  * Does NOT import @repo/auth (that pulls DB deps into the web bundle).
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
+const API_URL = env.NEXT_PUBLIC_API_URL;
 
 type SessionUser = {
   id: string;
