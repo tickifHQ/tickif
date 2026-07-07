@@ -15,13 +15,14 @@ export default async function HomePage() {
 
   if (session) {
     return (
-      <div className="bg-gradient-to-t from-[#e8f0eb] to-[#fafaf8]">
+      <div className="bg-[#fafaf8]">
         <section className="mx-auto w-full max-w-[1512px] px-6 py-6 lg:px-10">
           <HomeSearchBar />
           <div className="mt-5">
             <FeedFilters />
           </div>
-          <div className="mt-6">
+          {/* Green fade sits behind the grid only — page margins stay #FAFAF8 (Figma 14339:8424). */}
+          <div className="mt-6 bg-[linear-gradient(0deg,#e8f0eb_40%,rgba(247,244,239,0)_100%)]">
             <ProjectFeed />
           </div>
         </section>
