@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
-// Validate env vars at build time — fails fast on bad or missing values.
+// Import order matters: load the monorepo-root .env first, then validate.
+// ESM evaluates static imports in declaration order.
+import './load-root-env';
+// Validate env vars at build time — fails fast on bad values.
 import './src/env';
 
 const nextConfig: NextConfig = {

@@ -9,8 +9,6 @@ import { env } from '@/env';
  * Does NOT import @repo/auth (that pulls DB deps into the web bundle).
  */
 
-const API_URL = env.NEXT_PUBLIC_API_URL;
-
 type SessionUser = {
   id: string;
   name: string;
@@ -63,7 +61,7 @@ export async function getServerSession(options?: GetServerSessionOptions): Promi
   if (!cookie) return null;
 
   try {
-    const url = new URL('/api/auth/get-session', API_URL);
+    const url = new URL('/api/auth/get-session', env.NEXT_PUBLIC_API_URL);
     if (options?.disableCookieCache) {
       url.searchParams.set('disableCookieCache', 'true');
     }

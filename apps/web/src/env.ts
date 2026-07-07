@@ -14,9 +14,15 @@ export const env = createEnv({
     NEXT_PUBLIC_API_URL: z.url().default('http://localhost:8008'),
     // Cumulative downward scroll-units (400px each) before anon users hit the
     // login wall on the public feed. 0 disables the gate entirely.
-    NEXT_PUBLIC_SCROLL_GATE_LIMIT: z.coerce.number().int().min(0).default(5),
+    // Strict digits-only shape: z.coerce would turn ' ' into 0 and silently
+    // disable the gate.
+    NEXT_PUBLIC_SCROLL_GATE_LIMIT: z
+      .string()
+      .trim()
+      .regex(/^\d+$/, 'must be a non-negative integer')
+      .default('5')
+      .transform(Number),
   },
-  server: {},
   // NEXT_PUBLIC_* vars are inlined by Next at build time, so they must be
   // referenced literally here for the client bundle to see them.
   experimental__runtimeEnv: {
@@ -24,5 +30,4 @@ export const env = createEnv({
     NEXT_PUBLIC_SCROLL_GATE_LIMIT: process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT,
   },
   emptyStringAsUndefined: true,
-  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
 });

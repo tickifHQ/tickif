@@ -299,6 +299,9 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
+      '@next/env':
+        specifier: ^16.2.7
+        version: 16.2.7
       '@repo/api':
         specifier: workspace:*
         version: link:../api

@@ -28,6 +28,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@next/env": "^16.2.7",
     "@repo/api": "workspace:*",
     "@repo/eslint-config": "workspace:*",
     "@repo/tsconfig": "workspace:*",
