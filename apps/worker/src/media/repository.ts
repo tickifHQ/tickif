@@ -43,10 +43,21 @@ export async function markReady(
 }
 
 export async function markFailed(imageId: string): Promise<void> {
-  await db
-    .update(schema.projectImage)
-    .set({ status: 'failed', updatedAt: new Date() })
-    .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')));
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    const [image] = await tx
+      .update(schema.projectImage)
+      .set({ status: 'failed', updatedAt: now })
+      .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
+      .returning({ projectId: schema.projectImage.projectId });
+
+    if (!image) return;
+
+    await tx
+      .update(schema.project)
+      .set({ status: 'changes_requested', submittedAt: null, updatedAt: now })
+      .where(and(eq(schema.project.id, image.projectId), eq(schema.project.status, 'submitted')));
+  });
 }
 
 /**
