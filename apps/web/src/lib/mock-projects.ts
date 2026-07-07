@@ -8,6 +8,7 @@ export type FeedProject = {
   budget: string;
   tags: [string, string];
   imageHeight: number;
+  sponsored?: boolean;
 };
 
 export const FEED_IMAGE_WIDTH = 480;
@@ -43,6 +44,8 @@ export const mockProjects: FeedProject[] = Array.from({ length: 30 }, (_, i) => 
     id: `${b.slug}-${i}`,
     seed: `${b.slug}-${i}`,
     imageHeight: heights[i % heights.length]!,
+    // One mid-feed slot carries the "Sponsored" treatment from the design.
+    sponsored: i === 9,
   };
 });
 
