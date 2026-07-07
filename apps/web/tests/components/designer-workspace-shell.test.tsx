@@ -43,7 +43,10 @@ describe('DesignerWorkspaceShell', () => {
 
     const main = screen.getByText('Upload content').closest('main');
     const section = main?.closest('section');
+    const shell = main?.closest('.fixed');
 
+    expect(shell).toHaveClass('inset-0');
+    expect(shell).toHaveClass('overflow-hidden');
     expect(main).toHaveClass('h-full');
     expect(main).toHaveClass('overflow-y-auto');
     expect(section).toHaveClass('flex-1');
