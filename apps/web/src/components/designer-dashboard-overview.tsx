@@ -13,6 +13,7 @@ import {
   Copy,
   Plus,
   ShieldCheck,
+  ShieldPlus,
   UserRoundCheck,
 } from 'lucide-react';
 
@@ -37,17 +38,21 @@ function ChecklistStep({
         {!isLast ? (
           <span
             aria-hidden="true"
-            className="absolute top-8 bottom-[-1.25rem] left-1/2 w-px -translate-x-1/2 bg-border"
+            className="absolute top-[calc(0.125rem+1.75rem)] bottom-[-2.5rem] left-1/2 w-px -translate-x-1/2 bg-border"
           />
         ) : null}
         <span
           className={
             item.done
-              ? 'relative z-10 mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary'
-              : 'relative z-10 mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background'
+              ? 'relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background'
+              : 'relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background'
           }
         >
-          {item.done ? <Check className="size-4" /> : <span className="size-2.5 rounded-full border border-muted-foreground/50" />}
+          {item.done ? (
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#77DB89] text-white">
+              <Check className="size-3" />
+            </span>
+          ) : <span className="size-2 rounded-full bg-muted-foreground/30" />}
         </span>
       </div>
 
@@ -56,8 +61,8 @@ function ChecklistStep({
           <div
             className={
               item.done
-                ? 'text-base font-medium text-muted-foreground line-through'
-                : 'text-base font-medium text-foreground'
+                ? 'text-lg font-semibold text-muted-foreground line-through'
+                : 'text-lg font-semibold text-foreground'
             }
           >
             {item.title}
@@ -90,7 +95,7 @@ function RightRailInfoRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">{title}</div>
-        <div className="mt-1 text-sm leading-5 text-muted-foreground">{description}</div>
+        <div className="text-[13px] leading-4 text-muted-foreground">{description}</div>
       </div>
       {href ? <ArrowRight className="size-4 shrink-0 text-muted-foreground" /> : null}
     </>
@@ -177,7 +182,7 @@ export function DesignerDashboardOverview({
         {
           key: 'account-creation',
           title: 'Account creation',
-          description: 'Set up your workspace on Tickif.',
+          description: 'Setup your workspace on Tickif.',
           done: true,
         },
         {
@@ -193,6 +198,12 @@ export function DesignerDashboardOverview({
               </Link>
             </Button>
           ),
+        },
+        {
+          key: 'complete-kyc',
+          title: 'Complete KYC',
+          description: 'Complete KYC process to get the verified badge on your profile.',
+          done: false,
         },
         {
           key: 'profile',
@@ -236,13 +247,13 @@ export function DesignerDashboardOverview({
             </Card>
           ) : null}
 
-          <Card className="overflow-hidden rounded-2xl">
-            <CardContent className="px-6 pt-6 pb-6">
+          <div className="overflow-hidden rounded-2xl">
+            <div className="px-6 pt-6 pb-6">
               <div className="flex items-end justify-between gap-4">
-                <div className="text-[1.75rem] font-medium tracking-tight text-foreground">
+                <div className="text-base font-medium text-muted-foreground">
                   Complete profile
                 </div>
-                <div className="text-[1.75rem] font-medium tracking-tight text-primary">
+                <div className="text-base font-medium text-primary">
                   {dashboard.profileCompletion.score}%
                 </div>
               </div>
@@ -252,10 +263,10 @@ export function DesignerDashboardOverview({
                   style={{ width: `${dashboard.profileCompletion.score}%` }}
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="rounded-2xl">
+          <Card className="rounded-2xl shadow-md">
             <CardContent className="px-6 pt-4 pb-6">
               {trackedChecklistComplete ? (
                 <div className="flex items-start gap-4 py-4">
@@ -288,14 +299,14 @@ export function DesignerDashboardOverview({
           <Card className="relative overflow-visible rounded-2xl bg-primary/5">
             <CardContent className="relative px-4 pt-4 pb-4">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 pr-24">
-                  <Badge variant="outline" className="font-mono text-xs font-medium border-primary/20 bg-background/70 text-primary">
-                    Complete setup
+                <div className="min-w-0">
+                  <Badge variant="outline" className="text-xs font-medium border-primary/20 bg-background/70 text-primary">
+                    COMPLETE SETUP
                   </Badge>
-                  <div className="mt-4 text-sm font-medium tracking-normal text-foreground">
+                  <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
                     Add your first project
                   </div>
-                  <p className="mt-2 text-xs leading-5 font-medium text-muted-foreground">
+                  <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
                     It goes public and gets indexed the moment your first project is approved. Usually 24–48 hours.
                   </p>
                 </div>
@@ -307,7 +318,7 @@ export function DesignerDashboardOverview({
                   className="absolute -top-[4.25rem] right-3 hidden h-auto w-28 sm:block"
                 />
               </div>
-              <Button asChild className="mt-4 w-full text-sm font-medium">
+              <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
                 <Link href="/designer/projects/new">
                   <Plus className="size-4" />
                   Add first project
@@ -317,8 +328,9 @@ export function DesignerDashboardOverview({
           </Card>
 
           <div>
-            <div className="mb-3 px-3 text-xs font-medium tracking-[0.22em] text-muted-foreground uppercase">
-              What happens next
+            <div className="mb-3 flex items-center gap-2 px-3 text-xs font-medium tracking-normal text-muted-foreground">
+              <ShieldPlus className="size-4" />
+              WHAT HAPPENS NEXT
             </div>
             <Card className="overflow-hidden rounded-2xl">
               <RightRailInfoRow
@@ -336,6 +348,7 @@ export function DesignerDashboardOverview({
                 icon={<ShieldCheck className="size-4" />}
                 title="Start verification"
                 description="Get a head start on your KYC."
+                href="/designer/profile"
               />
             </Card>
           </div>
@@ -365,8 +378,8 @@ export function DesignerDashboardOverview({
               </div>
             </div>
             <CardContent className="px-5 pt-6 pb-5">
-              <div className="text-xs tracking-[0.22em] text-muted-foreground uppercase">
-                One link. Everywhere.
+              <div className="text-xs tracking-normal text-muted-foreground">
+                ONE LINK. {`  `} EVERYWHERE.
               </div>
               <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
                 A portfolio worth <span className="text-primary">sharing.</span>
@@ -377,7 +390,7 @@ export function DesignerDashboardOverview({
               <CopyLinkButton
                 value={portfolioUrl}
                 variant="emphasis"
-                className="mt-6 w-full cursor-pointer"
+                className="mt-6 w-full cursor-pointer rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#3e4148] hover:to-[#1f2228]"
               />
             </CardContent>
           </Card>

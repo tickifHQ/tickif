@@ -10,19 +10,18 @@ import { Button } from '@repo/ui/components/button';
 import {
   ArrowUpRight,
   BadgeHelp,
-  BriefcaseBusiness,
-  CalendarDays,
-  ChartLine,
-  CircleUserRound,
-  FileBadge2,
-  FolderKanban,
-  HandCoins,
-  House,
+  ChartNoAxesCombined,
+  ChevronsUpDown,
+  ContactRound,
+  CreditCard,
+  LayoutGrid,
+  Link2,
   Menu,
   MessagesSquare,
   Plus,
+  Settings,
   ShieldCheck,
-  Star,
+  SlidersHorizontal,
   Users,
   X,
 } from 'lucide-react';
@@ -34,20 +33,18 @@ type NavItem = {
 };
 
 const studioItems: NavItem[] = [
-  { label: 'Overview', href: '/designer/dashboard', icon: House },
-  { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
-  { label: 'Leads', href: '/designer/leads', icon: Users },
-  { label: 'Consultations', icon: CalendarDays },
-  { label: 'Reviews', icon: Star },
-  { label: 'Analytics', icon: ChartLine },
+  { label: 'Overview', href: '/designer/dashboard', icon: LayoutGrid },
+  { label: 'Projects', href: '/designer/projects', icon: SlidersHorizontal },
+  { label: 'Leads', href: '/designer/leads', icon: ContactRound },
+  { label: 'Analytics', icon: ChartNoAxesCombined },
 ];
 
 const growItems: NavItem[] = [
-  { label: 'Portfolio', href: '/designer/onboarding', icon: BriefcaseBusiness },
+  { label: 'Portfolio', href: '/designer/onboarding', icon: Link2 },
   { label: 'Verification', icon: ShieldCheck },
-  { label: 'Terms & roles', icon: FileBadge2 },
-  { label: 'Plan & billing', icon: HandCoins },
-  { label: 'Profile & settings', icon: CircleUserRound },
+  { label: 'Team & Roles', icon: Users },
+  { label: 'Plan & Billing', icon: CreditCard },
+  { label: 'Profile & Settings', icon: Settings },
 ];
 
 function isItemActive(pathname: string, href?: string) {
@@ -91,7 +88,7 @@ function SidebarSection({
 }) {
   return (
     <section className="space-y-2">
-      <div className="font-mono px-2 py-2 text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
+      <div className="text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
         {title}
       </div>
       <div className="space-y-0.5">
@@ -107,7 +104,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   if (pathname === '/designer/dashboard') {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <House className="size-4" />
+        <LayoutGrid className="size-4" />
         <span className="font-medium">Overview</span>
       </div>
     );
@@ -116,7 +113,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   if (pathname === '/designer/projects') {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <FolderKanban className="size-4" />
+        <SlidersHorizontal className="size-4" />
         <span className="font-medium">Projects</span>
       </div>
     );
@@ -125,7 +122,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   if (pathname === '/designer/leads') {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <Users className="size-4" />
+        <ContactRound className="size-4" />
         <span className="font-medium">Leads</span>
       </div>
     );
@@ -135,7 +132,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
         <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
-          <BriefcaseBusiness className="size-4" />
+          <SlidersHorizontal className="size-4" />
           <span className="font-medium">Projects</span>
         </Link>
         <span>/</span>
@@ -158,14 +155,14 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="border-b border-border px-6 py-5">
+      <div className="px-6 py-5">
         <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
           <span>Tickif</span>
         </Link>
       </div>
 
-      <div className="border-b border-border p-4">
-        <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-3 text-left shadow-sm">
+      <div className="border-b border-border px-4 pb-4">
+        <div className="flex w-full items-center gap-3 px-2">
           <Avatar className="size-10 rounded-xl">
             <InitialsAvatar
               seed={studioName}
@@ -178,6 +175,7 @@ function SidebarContent({
             <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
             <div className="truncate text-xs leading-[1.1] text-muted-foreground">{studioLocation}</div>
           </div>
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </div>
       </div>
 
@@ -274,7 +272,7 @@ export function DesignerWorkspaceShell({
                 <Button
                   asChild
                   variant="emphasis"
-                  className="h-10 cursor-pointer"
+                  className="h-10 cursor-pointer rounded-[0.5vw]"
                 >
                   <Link href="/designer/projects/new">
                     <Plus className="size-4" />

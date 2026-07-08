@@ -43,6 +43,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-minioadmin}
       MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      MINIO_CORS_ALLOW_ORIGIN: http://localhost:3000
     ports:
       - "9000:9000"
       - "9001:9001"

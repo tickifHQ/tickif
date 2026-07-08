@@ -50,6 +50,7 @@ export function AccountMenu({
 
   const user = session.user;
   const displayName = user.name ?? user.email ?? 'Account';
+  const firstName = (user.name ?? '').split(' ')[0] || displayName;
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
   async function handleSignOut() {
@@ -87,7 +88,7 @@ export function AccountMenu({
           {showLabel ? (
             <>
               <span className="max-w-24 truncate text-[13px] leading-[1.1] font-medium">
-                {displayName}
+                {firstName}
               </span>
               <ChevronDown className="size-4 text-muted-foreground" />
             </>

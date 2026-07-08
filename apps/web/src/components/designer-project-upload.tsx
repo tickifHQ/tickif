@@ -12,13 +12,13 @@ import {
   ChevronDown,
   ChevronsUpDown,
   CircleDashed,
-  Clock3,
   ImagePlus,
-  Info,
+  LayoutList,
+  Lightbulb,
   Loader2,
   Plus,
   Search,
-  Sparkles,
+  ShieldPlus,
   Star,
   Trash2,
   X,
@@ -128,7 +128,7 @@ type SectionId = 'classification' | 'timeline' | 'metadata' | 'images';
 const typography = {
   pageTitle: 'text-2xl leading-[1.25] font-medium tracking-[-0.0096em]',
   pageSubtitle: 'text-sm leading-[1.6] font-normal',
-  stepLabel: 'font-mono text-xs leading-4 font-medium tracking-[-0.02em] uppercase',
+  stepLabel: 'text-xs leading-4 font-semibold tracking-[-0.02em] uppercase',
   sectionTitle: 'text-lg leading-[1.6] font-medium tracking-normal',
   subsectionTitle: 'text-base leading-[1.1] font-medium tracking-normal',
   label: 'text-[13px] leading-[1.6] font-medium',
@@ -136,7 +136,7 @@ const typography = {
   bodySmall: 'text-xs leading-[1.6] font-normal',
   bodyMedium: 'text-xs leading-[1.6] font-medium',
   navText: 'text-[13px] leading-[1.1] font-medium',
-  monoEyebrow: 'font-mono text-xs leading-4 font-medium tracking-[-0.02em] uppercase',
+  monoEyebrow: 'text-xs leading-4 font-medium tracking-normal',
 };
 
 const projectTypeVisuals: Record<string, Omit<ProjectTypeOption, 'slug' | 'label'>> = {
@@ -687,7 +687,7 @@ function SectionFrame({
           type="button"
           onClick={onToggle}
           className={cn(
-            'flex w-full items-start justify-between gap-4 px-5 text-left transition-[padding] duration-300 ease-out sm:px-6 motion-reduce:transition-none',
+            'flex w-full items-start justify-between gap-4 bg-muted/30 px-5 text-left transition-[padding] duration-300 ease-out sm:px-6 motion-reduce:transition-none',
             open ? 'pt-4 pb-3' : 'py-4',
           )}
         >
@@ -697,7 +697,7 @@ function SectionFrame({
               {title}
             </h2>
           </div>
-          <ChevronDown className={cn('mt-1 size-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
+          <ChevronsUpDown className="mt-1 size-4 text-muted-foreground" />
         </button>
 
         <div
@@ -792,7 +792,7 @@ function ChecklistCard({
   return (
     <div>
       <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
-        <span className="text-primary">{icon}</span>
+        <span className="text-muted-foreground">{icon}</span>
         {title}
       </div>
       <Card className="overflow-hidden rounded-2xl border-border/80">
@@ -800,7 +800,7 @@ function ChecklistCard({
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0">
               {item.done ? (
-                <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-white">
                   <Check className="size-3.5" />
                 </span>
               ) : (
@@ -827,15 +827,15 @@ function TipsCard() {
   return (
     <div>
       <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
-        <Sparkles className="size-3.5 text-primary" />
-        Tips for better visibility
+        <ShieldPlus className="size-3.5 text-muted-foreground" />
+        TIPS FOR BETTER VISIBILITY
       </div>
-      <Card className="rounded-2xl border-border/80">
-        <CardContent className="space-y-4 p-4">
+      <Card className="rounded-2xl border-border/80 bg-primary/5">
+        <CardContent className="space-y-2 p-3">
           {tips.map((tip) => (
             <div key={tip} className="flex items-start gap-3">
               <Check className="mt-0.5 size-4 text-primary" />
-              <p className={cn(typography.bodyMedium, 'text-muted-foreground')}>{tip}</p>
+              <p className="text-sm font-medium text-muted-foreground">{tip}</p>
             </div>
           ))}
         </CardContent>
@@ -848,8 +848,8 @@ function WhyItMattersCard() {
   return (
     <div>
       <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
-        <Info className="size-3.5 text-primary" />
-        Tip
+        <Lightbulb className="size-3.5 text-muted-foreground" />
+        TIP
       </div>
       <Card className="rounded-2xl border-primary/10 bg-primary/5">
         <CardContent className="p-4">
@@ -1161,8 +1161,10 @@ function RoomCard({
               onRemoveTag={onRemoveTag}
             />
 
-            <div className={cn('rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-primary', typography.bodyMedium)}>
-              Tagging photos gets you 2× more search appearances. Use keywords like accent wall, marble counter, window — the more specific, the better your reach.
+            <div className="flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3">
+              <Lightbulb className="size-4 shrink-0 text-primary" />
+              <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
+              <span className={cn(typography.bodyMedium, 'text-muted-foreground text-primary text-[13px]')}>Tagging photos gets you 2× more search appearances. Use keywords like accent wall, marble counter, window — the more specific, the better your reach.</span>
             </div>
           </div>
         </div>
@@ -2485,7 +2487,7 @@ export function DesignerProjectUpload({
               <div className="px-5 pt-5 pb-4 sm:px-6">
                 <div className={cn(typography.label, 'text-foreground')}>Project type</div>
                 <div className="relative mt-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2">
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                     {projectTypeOptions.map((option) => (
                       <ProjectTypeCard
                         key={option.slug}
@@ -2659,8 +2661,10 @@ export function DesignerProjectUpload({
                     placeholder="Select"
                   />
                 </div>
-                <div className={cn('mt-5 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-primary', typography.bodyMedium)}>
-                  Project with a cost range get 3× more enquiries
+                <div className="mt-5 flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3">
+                  <Lightbulb className="size-4 shrink-0 text-primary" />
+                  <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
+                  <span className={cn(typography.bodyMedium, 'text-muted-foreground text-primary text-[13px]')}>Project with a cost range get 3x more enquiries</span>
                 </div>
               </div>
             </div>
@@ -2785,8 +2789,8 @@ export function DesignerProjectUpload({
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
           <TipsCard />
           <ChecklistCard
-            title="Required information"
-            icon={<Clock3 className="size-3.5" />}
+            title="REQUIRED INFORMATION"
+            icon={<LayoutList className="size-3.5" />}
             items={requiredChecklist}
           />
           <WhyItMattersCard />
