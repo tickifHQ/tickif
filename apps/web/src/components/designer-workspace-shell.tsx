@@ -37,16 +37,16 @@ const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: House },
   { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
   { label: 'Leads', href: '/designer/leads', icon: Users },
-  { label: 'Consultations', icon: CalendarDays },
-  { label: 'Reviews', icon: Star },
-  { label: 'Analytics', icon: ChartLine },
+  { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
+  { label: 'Reviews', href: '/designer/reviews', icon: Star },
+  { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/onboarding', icon: BriefcaseBusiness },
   { label: 'Verification', icon: ShieldCheck },
-  { label: 'Terms & roles', icon: FileBadge2 },
-  { label: 'Plan & billing', icon: HandCoins },
+  { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
+  { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
   { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
 ];
 
@@ -104,29 +104,15 @@ function SidebarSection({
 }
 
 function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
-  if (pathname === '/designer/dashboard') {
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <House className="size-4" />
-        <span className="font-medium">Overview</span>
-      </div>
-    );
-  }
+  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
 
-  if (pathname === '/designer/projects') {
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <FolderKanban className="size-4" />
-        <span className="font-medium">Projects</span>
-      </div>
-    );
-  }
+  if (navigationItem?.href && !pathname.startsWith('/designer/projects/upload')) {
+    const Icon = navigationItem.icon;
 
-  if (pathname === '/designer/leads') {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <Users className="size-4" />
-        <span className="font-medium">Leads</span>
+        <Icon className="size-4" />
+        <span className="font-medium">{navigationItem.label}</span>
       </div>
     );
   }

@@ -1,17 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { DesignerWorkspaceShell } from '../../src/components/designer-workspace-shell';
 
-const pathnameState = vi.hoisted(() => ({
-  value: '/designer/dashboard',
+const mock = vi.hoisted(() => ({
+  pathname: '/designer/dashboard',
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => pathnameState.value,
+  usePathname: () => mock.pathname,
 }));
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: () => <div>Account menu</div>,
+  AccountMenu: () => <div data-testid="account-menu" />,
 }));
 
 vi.mock('@/components/initials-avatar', () => ({
@@ -19,22 +19,42 @@ vi.mock('@/components/initials-avatar', () => ({
 }));
 
 describe('DesignerWorkspaceShell', () => {
+  it('links every implemented designer dashboard section from the sidebar', () => {
+    mock.pathname = '/designer/analytics';
+
+    render(
+      <DesignerWorkspaceShell studioName="Studio One" studioLocation="Mumbai">
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getAllByRole('link', { name: /consultations/i })[0]).toHaveAttribute('href', '/designer/consultations');
+    expect(screen.getAllByRole('link', { name: /reviews/i })[0]).toHaveAttribute('href', '/designer/reviews');
+    expect(screen.getAllByRole('link', { name: /analytics/i })[0]).toHaveAttribute('href', '/designer/analytics');
+    expect(screen.getAllByRole('link', { name: /terms & roles/i })[0]).toHaveAttribute('href', '/designer/terms-roles');
+    expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute('href', '/designer/plan-billing');
+    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute('href', '/designer/profile');
+    expect(screen.getByText('Dashboard content')).toBeInTheDocument();
+  });
+
   it('routes Profile & settings to the designer profile page', () => {
-    pathnameState.value = '/designer/dashboard';
+    mock.pathname = '/designer/dashboard';
+
     render(
       <DesignerWorkspaceShell studioName="Antika Interiors" studioLocation="Chennai">
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.getByRole('link', { name: /profile & settings/i })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute(
       'href',
       '/designer/profile',
     );
   });
 
   it('keeps project upload scrolling inside the shell so the sidebar stays fixed', () => {
-    pathnameState.value = '/designer/projects/upload';
+    mock.pathname = '/designer/projects/upload';
+
     render(
       <DesignerWorkspaceShell studioName="Antika Interiors" studioLocation="Chennai">
         <div>Upload content</div>
