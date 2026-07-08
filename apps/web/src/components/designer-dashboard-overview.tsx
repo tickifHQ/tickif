@@ -200,12 +200,6 @@ export function DesignerDashboardOverview({
           ),
         },
         {
-          key: 'complete-kyc',
-          title: 'Complete KYC',
-          description: 'Complete KYC process to get the verified badge on your profile.',
-          done: false,
-        },
-        {
           key: 'profile',
           title: 'Complete profile',
           description: 'Add your profile tags, social links, short bio, and customize your portfolio.',
