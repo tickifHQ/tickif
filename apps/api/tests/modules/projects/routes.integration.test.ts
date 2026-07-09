@@ -908,7 +908,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as ErrorResponse;
     expect(body.error.details).toMatchObject({
-      missing: expect.arrayContaining(['property-type', 'at-least-three-photos']),
+      missing: expect.arrayContaining(['property-type', 'scope', 'cost-range']),
     });
   });
 
