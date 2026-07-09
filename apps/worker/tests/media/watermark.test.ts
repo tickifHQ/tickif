@@ -74,4 +74,24 @@ describe('generateDerivatives with watermark', () => {
 
     expect(Math.abs((await meanStdev(marked!.buffer)) - (await meanStdev(plain!.buffer)))).toBeLessThan(0.5);
   });
+
+  it('uses the actual resized dimensions when compositing the watermark', async () => {
+    const halfPixelResize = await sharp({
+      create: { width: 640, height: 401, channels: 3, background: 'blue' },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const [marked] = await generateDerivatives(halfPixelResize, {
+      variants: [{ variant: 'thumb', width: 320 }],
+      formats: ['webp'],
+      watermark: { ...wm, minImageWidth: 1 },
+    });
+
+    expect(marked).toMatchObject({ width: 320 });
+    await expect(sharp(marked!.buffer).metadata()).resolves.toMatchObject({
+      width: marked!.width,
+      height: marked!.height,
+    });
+  });
 });

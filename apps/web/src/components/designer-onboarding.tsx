@@ -123,6 +123,21 @@ function validateOptionalUrl(
   }
 }
 
+const websiteUrlValidationMessage = 'Enter a valid website URL.';
+const googleBusinessUrlValidationMessage = 'Enter a valid Google Business URL.';
+
+function validateWebsiteUrl(value: string) {
+  return validateOptionalUrl(value, onboardDesignerSchema.shape.websiteUrl, websiteUrlValidationMessage);
+}
+
+function validateGoogleBusinessUrl(value: string) {
+  return validateOptionalUrl(
+    value,
+    onboardDesignerSchema.shape.googleBusinessUrl,
+    googleBusinessUrlValidationMessage,
+  );
+}
+
 function formatOptionalPhone(countryCode: string, phone: string) {
   const digits = phone.replace(/\D/g, '');
   return digits.length >= 7 ? `${countryCode}${digits}` : undefined;
@@ -245,20 +260,22 @@ export function DesignerOnboarding({
     };
   }, []);
 
+  function handleWebsiteUrlChange(value: string) {
+    setWebsiteUrl(value);
+    setWebsiteUrlError(validateWebsiteUrl(value));
+  }
+
+  function handleGoogleBusinessUrlChange(value: string) {
+    setGoogleBusinessUrl(value);
+    setGoogleBusinessUrlError(validateGoogleBusinessUrl(value));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
 
-    const nextWebsiteUrlError = validateOptionalUrl(
-      websiteUrl,
-      onboardDesignerSchema.shape.websiteUrl,
-      'Enter a valid website URL.',
-    );
-    const nextGoogleBusinessUrlError = validateOptionalUrl(
-      googleBusinessUrl,
-      onboardDesignerSchema.shape.googleBusinessUrl,
-      'Enter a valid Google Business URL.',
-    );
+    const nextWebsiteUrlError = validateWebsiteUrl(websiteUrl);
+    const nextGoogleBusinessUrlError = validateGoogleBusinessUrl(googleBusinessUrl);
     setWebsiteUrlError(nextWebsiteUrlError);
     setGoogleBusinessUrlError(nextGoogleBusinessUrlError);
 
@@ -451,28 +468,10 @@ export function DesignerOnboarding({
             linkedinHandle={linkedinHandle}
             websiteUrl={websiteUrl}
             youtubeHandle={youtubeHandle}
-            onGoogleBusinessUrlChange={(value) => {
-              setGoogleBusinessUrl(value);
-              setGoogleBusinessUrlError(
-                validateOptionalUrl(
-                  value,
-                  onboardDesignerSchema.shape.googleBusinessUrl,
-                  'Enter a valid Google Business URL.',
-                ),
-              );
-            }}
+            onGoogleBusinessUrlChange={handleGoogleBusinessUrlChange}
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
-            onWebsiteUrlChange={(value) => {
-              setWebsiteUrl(value);
-              setWebsiteUrlError(
-                validateOptionalUrl(
-                  value,
-                  onboardDesignerSchema.shape.websiteUrl,
-                  'Enter a valid website URL.',
-                ),
-              );
-            }}
+            onWebsiteUrlChange={handleWebsiteUrlChange}
             onYoutubeHandleChange={setYoutubeHandle}
             websiteUrlError={websiteUrlError}
             googleBusinessUrlError={googleBusinessUrlError}
@@ -498,28 +497,10 @@ export function DesignerOnboarding({
             whatsappCountry={whatsappCountry}
             whatsappNumber={whatsappNumber}
             youtubeHandle={youtubeHandle}
-            onGoogleBusinessUrlChange={(value) => {
-              setGoogleBusinessUrl(value);
-              setGoogleBusinessUrlError(
-                validateOptionalUrl(
-                  value,
-                  onboardDesignerSchema.shape.googleBusinessUrl,
-                  'Enter a valid Google Business URL.',
-                ),
-              );
-            }}
+            onGoogleBusinessUrlChange={handleGoogleBusinessUrlChange}
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
-            onWebsiteUrlChange={(value) => {
-              setWebsiteUrl(value);
-              setWebsiteUrlError(
-                validateOptionalUrl(
-                  value,
-                  onboardDesignerSchema.shape.websiteUrl,
-                  'Enter a valid website URL.',
-                ),
-              );
-            }}
+            onWebsiteUrlChange={handleWebsiteUrlChange}
             onWhatsappCountryChange={setWhatsappCountry}
             onWhatsappNumberChange={setWhatsappNumber}
             onYoutubeHandleChange={setYoutubeHandle}

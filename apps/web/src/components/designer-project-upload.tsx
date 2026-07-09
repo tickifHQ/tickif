@@ -1765,10 +1765,9 @@ export function DesignerProjectUpload({
 
   useEffect(() => {
     if (!defaultProjectName) return;
-    if (!projectNameAutoManagedRef.current && projectName.trim().length > 0) return;
-    projectNameAutoManagedRef.current = true;
+    if (!projectNameAutoManagedRef.current) return;
     setProjectName(defaultProjectName);
-  }, [defaultProjectName, projectName]);
+  }, [defaultProjectName]);
 
   useEffect(() => {
     setRooms((currentRooms) => {

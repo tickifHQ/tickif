@@ -1,16 +1,19 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginCard } from '../../src/components/login-card';
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
-
 const mock = vi.hoisted(() => ({
+  router: {
+    push: vi.fn(),
+  },
   sendOtp: vi.fn(),
   verify: vi.fn(),
   signInSocial: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => mock.router,
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -21,6 +24,12 @@ vi.mock('@/lib/auth-client', () => ({
 }));
 
 describe('LoginCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    document.cookie = 'tickif_visitor_onboarded=; Max-Age=0; Path=/';
+  });
+
   it('renders trusted-by badge, welcome title, and phone input', () => {
     render(<LoginCard />);
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
@@ -102,6 +111,19 @@ describe('LoginCard', () => {
       callbackURL: 'http://localhost:3000/onboarding',
     });
   });
+
+  it('sends completed visitors home after Google sign in', async () => {
+    window.localStorage.setItem('tickif.visitorOnboarding', JSON.stringify({ displayName: 'Mahi', city: 'chennai' }));
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/',
+    });
+  });
+
 
   it('calls Google signIn with onboarding callback in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });

@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
+import { hasCompletedVisitorOnboarding } from '@/lib/visitor-onboarding';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
@@ -102,6 +103,10 @@ const browsingFeatures = [
   { icon: Calendar, title: 'Book free consultations' },
 ] as const;
 
+function visitorPostLoginPath() {
+  return hasCompletedVisitorOnboarding() ? '/' : '/onboarding';
+}
+
 const designerFeatures = [
   { icon: Bookmark, title: 'Share your work anywhere' },
   { icon: MessageSquare, title: 'Get bookings from home owners' },
@@ -152,7 +157,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     if (onSuccess) {
       onSuccess();
     } else {
-      router.push(loginMode === 'designer' ? '/designer/onboarding' : '/onboarding');
+      router.push(loginMode === 'designer' ? '/designer/onboarding' : visitorPostLoginPath());
     }
   }, [success, loginMode, router, onSuccess]);
 
@@ -262,7 +267,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     setError('');
     const callbackURL = loginMode === 'designer'
       ? `${window.location.origin}/designer/onboarding`
-      : `${window.location.origin}/onboarding`;
+      : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) {
