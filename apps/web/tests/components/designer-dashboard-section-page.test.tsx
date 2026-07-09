@@ -10,11 +10,12 @@ describe('DesignerDashboardSectionPage', () => {
     ['terms-roles', 'Control studio access and operating terms', 'Update profile'],
     ['plan-billing', 'Track plan access and billing readiness', 'Contact support'],
   ] as const)('renders the %s section page', (section, title, action) => {
-    render(<DesignerDashboardSectionPage section={section} />);
+    const { container } = render(<DesignerDashboardSectionPage section={section} />);
 
     expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: new RegExp(action, 'i') })).toBeInTheDocument();
     expect(screen.getByText(/workspace snapshot/i)).toBeInTheDocument();
     expect(screen.getByText(/current setup/i)).toBeInTheDocument();
+    expect(container.querySelectorAll('.h-full.flex-1.items-end')).toHaveLength(7);
   });
 });

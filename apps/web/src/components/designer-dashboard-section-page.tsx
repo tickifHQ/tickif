@@ -263,7 +263,7 @@ function EmptyChart({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-52 items-end gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
       {[38, 52, 44, 68, 58, 74, 63].map((height, index) => (
-        <div key={`${height}-${index}`} className="flex flex-1 items-end">
+        <div key={`${height}-${index}`} className="flex h-full flex-1 items-end">
           <div
             className="w-full rounded-t-md bg-primary/25"
             style={{ height: `${height}%` }}
