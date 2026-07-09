@@ -21,21 +21,24 @@ type SendEmailParams = {
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
   if (!resend) {
-    // Dev fallback: log to console
+    if (config.NODE_ENV === 'production') {
+      throw new Error('[email] RESEND_API_KEY is required in production');
+    }
+    // Dev fallback: log subject only (never log OTP-containing HTML in case logs are shared)
     console.log(`[email] TO: ${to} | SUBJECT: ${subject}`);
-    console.log(`[email] HTML:\n${html}\n`);
     return;
   }
 
-  try {
-    const result = await resend.emails.send({
-      from: emailFrom,
-      to,
-      subject,
-      html,
-    });
-    console.log(`[email] Sent to ${to}: ${result.data?.id ?? 'no-id'}`);
-  } catch (err) {
-    console.error(`[email] FAILED to send to ${to}:`, err);
+  const result = await resend.emails.send({
+    from: emailFrom,
+    to,
+    subject,
+    html,
+  });
+
+  if (result.error) {
+    throw new Error(`[email] FAILED to send to ${to}: ${result.error.message}`);
   }
+
+  console.log(`[email] Sent to ${to}: ${result.data?.id ?? 'no-id'}`);
 }

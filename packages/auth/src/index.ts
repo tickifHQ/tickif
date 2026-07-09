@@ -76,12 +76,16 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      void sendEmail({
+      const escapedName = (user.name ?? '').replace(/[&<>"']/g, (ch) => {
+        const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[ch] ?? ch;
+      });
+      await sendEmail({
         to: user.email,
         subject: 'Verify your Tickif email',
         html: `
           <h2>Verify your email</h2>
-          <p>Hi ${user.name},</p>
+          <p>Hi ${escapedName},</p>
           <p>Click the link below to verify your email address:</p>
           <p><a href="${url}">Verify Email</a></p>
           <p>— Tickif</p>
@@ -132,6 +136,8 @@ export const auth = betterAuth({
       otpLength: 6,
       expiresIn: 300,
       allowedAttempts: 3,
+      storeOTP: 'hashed',
+      rateLimit: { window: 60, max: 3 },
       async sendVerificationOTP({ email, otp, type }) {
         const subject =
           type === 'sign-in'
@@ -139,7 +145,7 @@ export const auth = betterAuth({
             : type === 'email-verification'
               ? 'Verify your Tickif email'
               : 'Reset your Tickif password';
-        void sendEmail({
+        await sendEmail({
           to: email,
           subject,
           html: `

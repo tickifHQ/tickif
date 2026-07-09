@@ -25,8 +25,22 @@ export function OtpInput({
   }, []);
 
   function handleChange(index: number, inputValue: string) {
+    const digits = inputValue.replace(/\D/g, '');
+
+    // Multi-character input (e.g., iOS OTP autofill)
+    if (digits.length > 1) {
+      const next = [...value];
+      for (let i = 0; i < length; i++) {
+        next[i] = digits[i] ?? next[i] ?? '';
+      }
+      onChange(next);
+      const focusIndex = Math.min(digits.length, length - 1);
+      inputRefs.current[focusIndex]?.focus();
+      return;
+    }
+
     // Single digit typed
-    const digit = inputValue.replace(/\D/g, '').slice(0, 1);
+    const digit = digits.slice(0, 1);
     if (digit && digit !== value[index]) {
       const next = [...value];
       next[index] = digit;
