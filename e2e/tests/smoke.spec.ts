@@ -8,18 +8,24 @@ const API_URL = 'http://localhost:3001';
 
 test('home page renders', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Tickif' })).toBeVisible();
-  await expect(page.getByText(/Published projects/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'tickif' }).first()).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search homes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Trending projects' })).toBeVisible();
 });
 
-test('api is healthy and serves the projects endpoint', async ({ request }) => {
+test('api is healthy and protects the projects endpoint', async ({ request }) => {
   const health = await request.get(`${API_URL}/health`);
   expect(health.ok()).toBeTruthy();
   expect(await health.json()).toMatchObject({ status: 'ok' });
 
   const projects = await request.get(`${API_URL}/api/projects`);
-  expect(projects.ok()).toBeTruthy();
-  expect(await projects.json()).toHaveProperty('items');
+  expect(projects.status()).toBe(401);
+  await expect(projects.json()).resolves.toMatchObject({
+    error: {
+      code: 'unauthorized',
+      message: 'Authentication required',
+    },
+  });
 });
 
 test('OpenAPI spec and Scalar docs are served', async ({ request, page }) => {

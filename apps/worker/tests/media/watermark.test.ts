@@ -7,7 +7,6 @@ const wm: WatermarkConfig = {
   text: 'Tickif',
   opacity: 0.8,
   scale: 0.3,
-  gravity: 'southeast',
   minImageWidth: 200,
 };
 
@@ -24,15 +23,19 @@ beforeAll(async () => {
 });
 
 describe('buildWatermarkSvg', () => {
-  it('produces an SVG sharp can rasterize, containing the text', async () => {
-    const svg = buildWatermarkSvg(800, wm);
-    expect(svg.toString()).toContain('Tickif');
+  it('produces a full-canvas tiled SVG sharp can rasterize', async () => {
+    const svg = buildWatermarkSvg(800, 600, wm);
+    const text = svg.toString();
+    expect(text.match(/Tickif/g)?.length).toBeGreaterThan(6);
+
     const meta = await sharp(svg).metadata();
     expect(meta.format).toBe('svg');
+    expect(meta.width).toBe(800);
+    expect(meta.height).toBe(600);
   });
 
   it('escapes XML-significant characters in the text', () => {
-    const svg = buildWatermarkSvg(800, { ...wm, text: 'A & B <x>' }).toString();
+    const svg = buildWatermarkSvg(800, 600, { ...wm, text: 'A & B <x>' }).toString();
     expect(svg).toContain('A &amp; B &lt;x&gt;');
   });
 });
@@ -70,5 +73,25 @@ describe('generateDerivatives with watermark', () => {
     });
 
     expect(Math.abs((await meanStdev(marked!.buffer)) - (await meanStdev(plain!.buffer)))).toBeLessThan(0.5);
+  });
+
+  it('uses the actual resized dimensions when compositing the watermark', async () => {
+    const halfPixelResize = await sharp({
+      create: { width: 640, height: 401, channels: 3, background: 'blue' },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const [marked] = await generateDerivatives(halfPixelResize, {
+      variants: [{ variant: 'thumb', width: 320 }],
+      formats: ['webp'],
+      watermark: { ...wm, minImageWidth: 1 },
+    });
+
+    expect(marked).toMatchObject({ width: 320 });
+    await expect(sharp(marked!.buffer).metadata()).resolves.toMatchObject({
+      width: marked!.width,
+      height: marked!.height,
+    });
   });
 });

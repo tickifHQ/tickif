@@ -183,6 +183,7 @@ describe('GET /api/projects/:id/images', () => {
     expect(body.items[0]!.status).toBe('ready');
     expect(body.items[0]!.derivatives).toHaveLength(1);
     expect(body.items[0]!.previewUrl).toContain('X-Amz-Signature=');
+    expect(body.items[0]!.viewerUrl).toContain('X-Amz-Signature=');
     expect(body.items[0]).toMatchObject({
       roomId: null,
       themeSlugs: [],
@@ -192,6 +193,7 @@ describe('GET /api/projects/:id/images', () => {
     });
     expect(body.items[1]!.status).toBe('processing');
     expect(body.items[1]!.previewUrl).toBeNull();
+    expect(body.items[1]!.viewerUrl).toBeNull();
   });
 });
 

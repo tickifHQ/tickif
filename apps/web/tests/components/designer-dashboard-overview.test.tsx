@@ -41,7 +41,7 @@ describe('DesignerDashboardOverview', () => {
 
     expect(screen.getByRole('heading', { name: /welcome, livspace/i })).toBeInTheDocument();
     expect(screen.getByText(/let's get your profile ready to go live/i)).toBeInTheDocument();
-    expect(screen.getByText('20%')).toBeInTheDocument();
+    expect(screen.getByText('33%')).toBeInTheDocument();
     expect(screen.getByText(/account creation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/upload your first project/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/complete profile/i).length).toBeGreaterThan(0);
@@ -120,10 +120,47 @@ describe('DesignerDashboardOverview', () => {
 
     expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
     expect(screen.getByText(/create your organization/i)).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /add new project/i }).at(0)).toHaveAttribute(
       'href',
       '/designer/projects/new',
     );
+  });
+
+  it('shows checklist progress instead of backend field score on the setup card', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{
+          ...dashboard,
+          profileCompletion: {
+            score: 33,
+            missing: ['bio', 'logo', 'scope', 'contact'],
+          },
+          projects: {
+            total: 1,
+            published: 0,
+            inReview: 0,
+            draft: 1,
+          },
+        }}
+        completion={{
+          score: 33,
+          missing: ['bio', 'logo', 'scope', 'contact'],
+          steps: [
+            { key: 'signed-in-with-google', label: 'Sign in with Google', done: true },
+            { key: 'org-created', label: 'Create your organization', done: true },
+            { key: 'profile-completed', label: 'Complete your profile', done: false },
+            { key: 'first-project-uploaded', label: 'Upload your first project', done: true },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.queryByText('33%')).not.toBeInTheDocument();
   });
 
   it('surfaces completion loading failures without replacing them with a fake empty state', () => {

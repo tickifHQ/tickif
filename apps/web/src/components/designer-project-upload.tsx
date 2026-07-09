@@ -46,7 +46,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import { Card, CardContent } from '@repo/ui/components/card';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Textarea } from '@repo/ui/components/textarea';
@@ -54,6 +54,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
+  deriveDefaultProjectTitle,
   buildImageMetadata as buildImageMetadataInput,
   getBackendProjectSelection,
   moveProjectImage,
@@ -121,6 +122,13 @@ type RoomDraft = {
 type ProjectImagePreview = Pick<ProjectImageDto, 'id' | 'status' | 'sortOrder' | 'width' | 'height'> & {
   fileName: string;
   previewUrl?: string;
+  viewerUrl?: string;
+};
+
+type ViewerImage = {
+  imageId: string;
+  src: string;
+  alt: string;
 };
 
 type SectionId = 'classification' | 'timeline' | 'metadata' | 'images';
@@ -578,6 +586,7 @@ function toProjectImagePreview(image: ProjectImageDto, index: number, existing?:
     height: image.height,
     fileName: existing?.fileName ?? `Image ${index + 1}`,
     previewUrl: image.previewUrl ?? existing?.previewUrl,
+    viewerUrl: image.viewerUrl ?? existing?.viewerUrl ?? image.previewUrl ?? existing?.previewUrl,
   };
 }
 
@@ -680,6 +689,70 @@ function SectionFrame({
   onToggle: () => void;
   children: ReactNode;
 }) {
+  const [shouldRenderBody, setShouldRenderBody] = useState(open);
+  const [isBodyVisible, setIsBodyVisible] = useState(open);
+  const hasHandledInitialStateRef = useRef(false);
+  const openFrameRef = useRef<number | null>(null);
+  const openSecondFrameRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    function clearScheduledAnimationWork() {
+      if (openFrameRef.current !== null) {
+        window.cancelAnimationFrame(openFrameRef.current);
+        openFrameRef.current = null;
+      }
+
+      if (openSecondFrameRef.current !== null) {
+        window.cancelAnimationFrame(openSecondFrameRef.current);
+        openSecondFrameRef.current = null;
+      }
+
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    }
+
+    if (!hasHandledInitialStateRef.current) {
+      hasHandledInitialStateRef.current = true;
+      return clearScheduledAnimationWork;
+    }
+
+    clearScheduledAnimationWork();
+
+    if (open) {
+      setShouldRenderBody(true);
+      setIsBodyVisible(false);
+
+      openFrameRef.current = window.requestAnimationFrame(() => {
+        openSecondFrameRef.current = window.requestAnimationFrame(() => {
+          setIsBodyVisible(true);
+          openFrameRef.current = null;
+          openSecondFrameRef.current = null;
+        });
+      });
+
+      return clearScheduledAnimationWork;
+    }
+
+    setIsBodyVisible(false);
+
+    closeTimerRef.current = window.setTimeout(() => {
+      setShouldRenderBody(false);
+      closeTimerRef.current = null;
+    }, 320);
+
+    return clearScheduledAnimationWork;
+  }, [open]);
+
+  useEffect(() => {
+    if (!shouldRenderBody) {
+      setIsBodyVisible(false);
+      return;
+    }
+  }, [shouldRenderBody]);
+
   return (
     <section>
       <Card className="overflow-hidden rounded-[20px] border-border/80 shadow-sm">
@@ -700,19 +773,29 @@ function SectionFrame({
           <ChevronDown className={cn('mt-1 size-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
         </button>
 
-        <div
-          className={cn(
-            'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
-            open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-          )}
-        >
-          <div className={cn('min-h-0 overflow-hidden', !open && 'invisible pointer-events-none')}>
-            <CardContent className="p-0">
-              <Divider />
-              {children}
-            </CardContent>
+        {shouldRenderBody ? (
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+              isBodyVisible ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+            )}
+            onTransitionEnd={(event) => {
+              if (event.currentTarget !== event.target || open) return;
+              if (closeTimerRef.current !== null) {
+                window.clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+              }
+              setShouldRenderBody(false);
+            }}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <CardContent className="p-0">
+                <Divider />
+                {children}
+              </CardContent>
+            </div>
           </div>
-        </div>
+        ) : null}
       </Card>
     </section>
   );
@@ -937,6 +1020,7 @@ type RoomCardProps = {
   onRemoveTag: (tag: string) => void;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onSetCover: (imageId: string) => void;
+  onOpenImage: (image: ProjectImagePreview, statusLabel: string) => void;
   onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
   onRemoveImage: (imageId: string) => void;
   coverImageId: string | null;
@@ -957,6 +1041,7 @@ function RoomCard({
   onRemoveTag,
   onUpload,
   onSetCover,
+  onOpenImage,
   onMoveImage,
   onRemoveImage,
   coverImageId,
@@ -1014,8 +1099,22 @@ function RoomCard({
               />
             </div>
 
-            <label className="block cursor-pointer rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors hover:border-primary/50 hover:bg-primary/5">
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple className="sr-only" onChange={onUpload} />
+            <label
+              className={cn(
+                'block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors',
+                room.uploading
+                  ? 'cursor-not-allowed opacity-70'
+                  : 'cursor-pointer hover:border-primary/50 hover:bg-primary/5',
+              )}
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                multiple
+                className="sr-only"
+                onChange={onUpload}
+                disabled={room.uploading}
+              />
               <ImagePlus className="mx-auto size-5 text-muted-foreground" />
               <div className={cn(typography.label, 'mt-3 text-foreground')}>Upload Files</div>
               <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
@@ -1064,12 +1163,19 @@ function RoomCard({
                       <div className="flex gap-3 p-2">
                         <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                           {image.previewUrl ? (
-                            <div
-                              role="img"
-                              aria-label={`${image.fileName} (${statusLabel})`}
-                              className="h-full w-full bg-cover bg-center"
-                              style={{ backgroundImage: `url(${image.previewUrl})` }}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => onOpenImage(image, statusLabel)}
+                              className="block h-full w-full cursor-zoom-in"
+                              aria-label={`Open ${image.fileName}`}
+                            >
+                              <div
+                                role="img"
+                                aria-label={`${image.fileName} (${statusLabel})`}
+                                className="h-full w-full bg-cover bg-center"
+                                style={{ backgroundImage: `url(${image.previewUrl})` }}
+                              />
+                            </button>
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                               <ImagePlus className="size-4" aria-hidden="true" />
@@ -1194,6 +1300,7 @@ export function DesignerProjectUpload({
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
+  const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
   const [projectName, setProjectName] = useState('');
   const [aboutProject, setAboutProject] = useState('');
   const [projectType, setProjectType] = useState('apartment');
@@ -1225,8 +1332,10 @@ export function DesignerProjectUpload({
   const [notice, setNotice] = useState('');
   const [completion, setCompletion] = useState<ProjectCompletenessResponse | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
+  const uploadingRoomIdsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
   const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
+  const projectNameAutoManagedRef = useRef(true);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1324,6 +1433,28 @@ export function DesignerProjectUpload({
   const selectedLocality = useMemo(
     () => localities.find((term) => term.slug === locality) ?? null,
     [localities, locality],
+  );
+  const defaultProjectName = useMemo(
+    () =>
+      deriveDefaultProjectTitle({
+        primaryField: selectedProjectTypeBehavior.primaryField,
+        bhkSlug,
+        selectedProjectSubtypeLabel,
+        selectedProjectTypeLabel,
+        localityLabel: selectedLocality?.label ?? locality,
+        cityLabel: selectedCity?.label ?? '',
+        citySlug,
+      }),
+    [
+      bhkSlug,
+      citySlug,
+      locality,
+      selectedCity?.label,
+      selectedLocality?.label,
+      selectedProjectSubtypeLabel,
+      selectedProjectTypeBehavior.primaryField,
+      selectedProjectTypeLabel,
+    ],
   );
   const selectedScopeSlug = selectedScopes[0] ?? '';
 
@@ -1561,6 +1692,7 @@ export function DesignerProjectUpload({
         setProjectId(project.id);
         setLoadedProjectId(project.id);
         setProjectName(project.title);
+        projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
         setProjectType(inferUiProjectType(project));
         setProjectSubtype(project.propertySubtypeSlug ?? metadataString(projectMetadata.projectSubtypeSlug));
@@ -1630,6 +1762,12 @@ export function DesignerProjectUpload({
       setProjectSubtype('');
     }
   }, [projectSubtype, selectedProjectTypeBehavior.primaryField]);
+
+  useEffect(() => {
+    if (!defaultProjectName) return;
+    if (!projectNameAutoManagedRef.current) return;
+    setProjectName(defaultProjectName);
+  }, [defaultProjectName]);
 
   useEffect(() => {
     setRooms((currentRooms) => {
@@ -1726,6 +1864,17 @@ export function DesignerProjectUpload({
     previewUrlsRef.current.delete(previewUrl);
   }
 
+  function openImageViewer(image: ProjectImagePreview, statusLabel: string) {
+    const src = image.viewerUrl ?? image.previewUrl;
+    if (!src) return;
+
+    setViewerImage({
+      imageId: image.id,
+      src,
+      alt: `${image.fileName} (${statusLabel})`,
+    });
+  }
+
   function removeImageFromRoom(clientId: string, imageId: string, revokePreview = true) {
     updateRoom(clientId, (current) => {
       const removedImage = current.images.find((image) => image.id === imageId);
@@ -1736,13 +1885,18 @@ export function DesignerProjectUpload({
       };
     });
 
+    setViewerImage((current) => (current?.imageId === imageId ? null : current));
     setCoverImageId((current) => (current === imageId ? null : current));
   }
 
   function removeRoom(clientId: string) {
+    const removedRoom = rooms.find((room) => room.clientId === clientId);
+    removedRoom?.images.forEach((image) => revokePreviewUrl(image.previewUrl));
+    if (viewerImage && removedRoom?.images.some((image) => image.id === viewerImage.imageId)) {
+      setViewerImage(null);
+    }
+
     setRooms((current) => {
-      const removedRoom = current.find((room) => room.clientId === clientId);
-      removedRoom?.images.forEach((image) => revokePreviewUrl(image.previewUrl));
       return current.filter((room) => room.clientId !== clientId);
     });
   }
@@ -1843,7 +1997,9 @@ export function DesignerProjectUpload({
 
       setNotice('Image removed from the draft.');
       revokePreviewUrl(removedImage?.previewUrl);
-      await refreshProjectImages(currentProjectId);
+      void refreshProjectImages(currentProjectId).catch(() => {
+        setError('Image removed, but we could not refresh the latest processing status. Refresh the page in a moment.');
+      });
     } catch (deleteError) {
       if (removedImage) {
         updateRoom(room.clientId, (current) => ({
@@ -1875,6 +2031,11 @@ export function DesignerProjectUpload({
     ]);
   }
 
+  function handleProjectNameChange(value: string) {
+    projectNameAutoManagedRef.current = false;
+    setProjectName(value);
+  }
+
   function buildCreateProjectPayload() {
     if (!backendProjectSelection) {
       throw new Error(backendProjectSelectionError || 'Project type taxonomy is not ready. Please refresh and try again.');
@@ -1890,6 +2051,7 @@ export function DesignerProjectUpload({
       bhkSlug,
       sizeSqft,
       citySlug,
+      cityLabel: selectedCity?.label ?? '',
       localitySlug: selectedLocality?.slug,
       localityLabel: selectedLocality?.label ?? locality,
       buildingName,
@@ -2172,6 +2334,11 @@ export function DesignerProjectUpload({
   }
 
   async function handleUpload(room: RoomDraft, event: ChangeEvent<HTMLInputElement>) {
+    if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
+      event.target.value = '';
+      return;
+    }
+
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
 
@@ -2202,6 +2369,7 @@ export function DesignerProjectUpload({
             height: null,
             fileName: file.name,
             previewUrl,
+            viewerUrl: previewUrl,
           },
         });
       }
@@ -2222,6 +2390,7 @@ export function DesignerProjectUpload({
       uploadError: '',
       images: [...current.images, ...pendingUploads.map((upload) => upload.preview)],
     }));
+    uploadingRoomIdsRef.current.add(room.clientId);
     setError('');
     setNotice('');
 
@@ -2315,13 +2484,14 @@ export function DesignerProjectUpload({
             images: current.images.map((currentImage) =>
               currentImage.id === preview.id
                 ? {
-                id: linkedImage.id,
-                status: updatedImage.status,
-                sortOrder: updatedImage.sortOrder,
-                width: updatedImage.width,
-                height: updatedImage.height,
-                fileName: file.name,
+                    id: linkedImage.id,
+                    status: updatedImage.status,
+                    sortOrder: updatedImage.sortOrder,
+                    width: updatedImage.width,
+                    height: updatedImage.height,
+                    fileName: file.name,
                     previewUrl: preview.previewUrl,
+                    viewerUrl: preview.previewUrl,
                   }
                 : currentImage,
             ),
@@ -2337,14 +2507,17 @@ export function DesignerProjectUpload({
         }
       }
 
-      await refreshProjectImages(currentProjectId);
       setNotice('Images uploaded and linked to the draft.');
+      void refreshProjectImages(currentProjectId).catch(() => {
+        setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
+      });
     } catch (uploadError) {
       updateRoom(room.clientId, (current) => ({
         ...current,
         uploadError: uploadError instanceof Error ? uploadError.message : 'Could not upload images.',
       }));
     } finally {
+      uploadingRoomIdsRef.current.delete(room.clientId);
       updateRoom(room.clientId, (current) => ({ ...current, uploading: false }));
     }
   }
@@ -2435,7 +2608,7 @@ export function DesignerProjectUpload({
   }
 
   return (
-    <div className="px-6 py-6 md:px-8 md:py-8 xl:px-10 xl:py-10">
+    <div className="px-6 py-6 md:px-8 md:py-8 xl:px-10 xl:py-8">
       <div>
         <h1 className={cn(typography.pageTitle, 'text-foreground')}>Upload project</h1>
         <p className={cn(typography.pageSubtitle, 'mt-2 text-muted-foreground')}>Let&apos;s get your profile ready to go live.</p>
@@ -2458,8 +2631,11 @@ export function DesignerProjectUpload({
       ) : null}
 
       {notice ? (
-        <div className="fixed top-4 right-4 z-50 w-[min(calc(100vw-2rem),22rem)]">
-          <Alert variant="success" className="shadow-lg">
+        <div className="fixed top-4 right-4 z-[1000] w-[min(calc(100vw-2rem),22rem)]">
+          <Alert
+            variant="success"
+            className="border-success/40 bg-card text-card-foreground shadow-xl ring-1 ring-success/15 [&>svg]:text-success"
+          >
             <Check className="size-4" />
             <AlertDescription>{notice}</AlertDescription>
           </Alert>
@@ -2473,8 +2649,8 @@ export function DesignerProjectUpload({
         </Alert>
       ) : null}
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
-        <div className="space-y-4">
+      <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
+        <div className="space-y-4 xl:pr-2">
           <SectionFrame
             step="Step 1"
             title="Project classification"
@@ -2677,8 +2853,8 @@ export function DesignerProjectUpload({
                 <FormField
                   label="Project name"
                   value={projectName}
-                  onChange={setProjectName}
-                  placeholder="Maitri Apartments - 2BHK luxury in Bangalore"
+                  onChange={handleProjectNameChange}
+                  placeholder={defaultProjectName}
                 />
                 <div className="space-y-1.5">
                   <Label className={cn(typography.label, 'text-foreground')}>About the project</Label>
@@ -2727,6 +2903,7 @@ export function DesignerProjectUpload({
                   }
                   onUpload={(event) => void handleUpload(room, event)}
                   onSetCover={handleSetCover}
+                  onOpenImage={openImageViewer}
                   onMoveImage={(imageId, direction) => void handleMoveImage(room, imageId, direction)}
                   onRemoveImage={(imageId) => void handleDeleteImage(room, imageId)}
                   coverImageId={coverImageId}
@@ -2751,7 +2928,7 @@ export function DesignerProjectUpload({
             </div>
           </SectionFrame>
 
-          <div className="sticky bottom-0 z-10 border border-border/80 bg-background/95 px-4 py-3 shadow-sm backdrop-blur sm:rounded-2xl sm:px-5">
+          <div className="border border-border/80 bg-background px-4 py-3 shadow-sm sm:rounded-2xl sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button
                 type="button"
@@ -2792,6 +2969,43 @@ export function DesignerProjectUpload({
           <WhyItMattersCard />
         </aside>
       </div>
+
+      <Dialog
+        open={Boolean(viewerImage)}
+        onOpenChange={(open) => {
+          if (!open) setViewerImage(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="w-auto max-w-[calc(100vw-2rem)] overflow-visible border-0 bg-transparent p-0 text-white shadow-none sm:max-w-[calc(100vw-4rem)]"
+          overlayClassName="bg-black/70 backdrop-blur-[2px]"
+        >
+          <DialogTitle className="sr-only">Project image preview</DialogTitle>
+          <DialogDescription className="sr-only">
+            Preview the selected project image in the highest available watermarked quality.
+          </DialogDescription>
+
+          {viewerImage ? (
+            <div className="relative">
+              <DialogClose
+                className={cn(
+                  'absolute -top-4 -right-4 z-10 inline-flex size-9 items-center justify-center rounded-full border border-white/20 bg-black/75 text-white shadow-lg backdrop-blur-sm transition-colors',
+                  'hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+                )}
+                aria-label="Close image preview"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </DialogClose>
+              <img
+                src={viewerImage.src}
+                alt={viewerImage.alt}
+                className="block max-h-[85vh] max-w-[calc(100vw-2rem)] rounded-lg border border-white/25 object-contain shadow-2xl sm:max-w-[calc(100vw-4rem)]"
+              />
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={roomSearchOpen}
