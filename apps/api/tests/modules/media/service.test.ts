@@ -190,7 +190,10 @@ describe('mediaService.listProjectImages', () => {
     tagSlugs: ['hero'],
     width: 1600,
     height: 1200,
-    derivatives: [{ variant: 'thumb', format: 'webp', key: 'd/t.webp', width: 320, height: 240 }],
+    derivatives: [
+      { variant: 'thumb', format: 'webp', key: 'd/t.webp', width: 320, height: 240 },
+      { variant: 'large', format: 'webp', key: 'd/l.webp', width: 1600, height: 1200 },
+    ],
   };
 
   it('maps rows to DTOs for the owner', async () => {
@@ -205,9 +208,11 @@ describe('mediaService.listProjectImages', () => {
       materialSlugs: ['wood'],
       finishSlugs: ['veneer'],
     });
-    expect(result.items[0]!.derivatives).toHaveLength(1);
+    expect(result.items[0]!.derivatives).toHaveLength(2);
     expect(result.items[0]!.previewUrl).toBe('https://r2.example/d/t.webp?X-Amz-Signature=read');
+    expect(result.items[0]!.viewerUrl).toBe('https://r2.example/d/l.webp?X-Amz-Signature=read');
     expect(presignDownload).toHaveBeenCalledWith({ key: 'd/t.webp' });
+    expect(presignDownload).toHaveBeenCalledWith({ key: 'd/l.webp' });
   });
 
   it('403s for a non-owner who is not superadmin', async () => {

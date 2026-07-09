@@ -8,13 +8,10 @@ import {
   BriefcaseBusiness,
   ChevronRight,
   ChevronsUpDown,
-  Instagram,
-  Linkedin,
   Loader2,
   UserRound,
-  Youtube,
 } from 'lucide-react';
-import type { ListTaxonomyResponse, OnboardDesignerInput, OnboardDesignerResponse, TaxonomyTerm } from '@repo/contracts';
+import { onboardDesignerSchema, type ListTaxonomyResponse, type OnboardDesignerInput, type OnboardDesignerResponse, type TaxonomyTerm } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -29,6 +26,7 @@ import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries } from '@/components/phone-number-input';
 
@@ -106,6 +104,40 @@ function normalizeUrl(value: string): string | undefined {
   return `https://${trimmed}`;
 }
 
+function validateOptionalUrl(
+  value: string,
+  schema: { safeParse: (value: unknown) => { success: boolean } },
+  message: string,
+) {
+  const normalized = normalizeUrl(value);
+  if (!normalized) return '';
+  if (!schema.safeParse(normalized).success) return message;
+
+  try {
+    const url = new URL(normalized);
+    const hostname = url.hostname.toLowerCase();
+    const hasPublicHostname = hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
+    return hasPublicHostname ? '' : message;
+  } catch {
+    return message;
+  }
+}
+
+const websiteUrlValidationMessage = 'Enter a valid website URL.';
+const googleBusinessUrlValidationMessage = 'Enter a valid Google Business URL.';
+
+function validateWebsiteUrl(value: string) {
+  return validateOptionalUrl(value, onboardDesignerSchema.shape.websiteUrl, websiteUrlValidationMessage);
+}
+
+function validateGoogleBusinessUrl(value: string) {
+  return validateOptionalUrl(
+    value,
+    onboardDesignerSchema.shape.googleBusinessUrl,
+    googleBusinessUrlValidationMessage,
+  );
+}
+
 function formatOptionalPhone(countryCode: string, phone: string) {
   const digits = phone.replace(/\D/g, '');
   return digits.length >= 7 ? `${countryCode}${digits}` : undefined;
@@ -166,6 +198,8 @@ export function DesignerOnboarding({
   const [whatsappCountry, setWhatsappCountry] = useState(countries[0]!);
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [googleBusinessUrl, setGoogleBusinessUrl] = useState('');
+  const [websiteUrlError, setWebsiteUrlError] = useState('');
+  const [googleBusinessUrlError, setGoogleBusinessUrlError] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [linkedinHandle, setLinkedinHandle] = useState('');
   const [youtubeHandle, setYoutubeHandle] = useState('');
@@ -226,9 +260,28 @@ export function DesignerOnboarding({
     };
   }, []);
 
+  function handleWebsiteUrlChange(value: string) {
+    setWebsiteUrl(value);
+    setWebsiteUrlError(validateWebsiteUrl(value));
+  }
+
+  function handleGoogleBusinessUrlChange(value: string) {
+    setGoogleBusinessUrl(value);
+    setGoogleBusinessUrlError(validateGoogleBusinessUrl(value));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+
+    const nextWebsiteUrlError = validateWebsiteUrl(websiteUrl);
+    const nextGoogleBusinessUrlError = validateGoogleBusinessUrl(googleBusinessUrl);
+    setWebsiteUrlError(nextWebsiteUrlError);
+    setGoogleBusinessUrlError(nextGoogleBusinessUrlError);
+
+    if (nextWebsiteUrlError || nextGoogleBusinessUrlError) {
+      return;
+    }
 
     const trimmedUserName = userName.trim();
     const trimmedCompanyName = companyName.trim();
@@ -415,11 +468,13 @@ export function DesignerOnboarding({
             linkedinHandle={linkedinHandle}
             websiteUrl={websiteUrl}
             youtubeHandle={youtubeHandle}
-            onGoogleBusinessUrlChange={setGoogleBusinessUrl}
+            onGoogleBusinessUrlChange={handleGoogleBusinessUrlChange}
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
-            onWebsiteUrlChange={setWebsiteUrl}
+            onWebsiteUrlChange={handleWebsiteUrlChange}
             onYoutubeHandleChange={setYoutubeHandle}
+            websiteUrlError={websiteUrlError}
+            googleBusinessUrlError={googleBusinessUrlError}
           />
         ) : entityType === 'company' && step === 'details' ? (
           <CompanyBasicsFields
@@ -442,13 +497,15 @@ export function DesignerOnboarding({
             whatsappCountry={whatsappCountry}
             whatsappNumber={whatsappNumber}
             youtubeHandle={youtubeHandle}
-            onGoogleBusinessUrlChange={setGoogleBusinessUrl}
+            onGoogleBusinessUrlChange={handleGoogleBusinessUrlChange}
             onInstagramHandleChange={setInstagramHandle}
             onLinkedinHandleChange={setLinkedinHandle}
-            onWebsiteUrlChange={setWebsiteUrl}
+            onWebsiteUrlChange={handleWebsiteUrlChange}
             onWhatsappCountryChange={setWhatsappCountry}
             onWhatsappNumberChange={setWhatsappNumber}
             onYoutubeHandleChange={setYoutubeHandle}
+            websiteUrlError={websiteUrlError}
+            googleBusinessUrlError={googleBusinessUrlError}
           />
         ) : entityType === 'company' && step === 'services' ? (
           <CompanyServicesFields
@@ -605,6 +662,7 @@ function CompanyBasicsFields({
 function CompanyPresenceFields({
   formId,
   googleBusinessUrl,
+  googleBusinessUrlError,
   instagramHandle,
   linkedinHandle,
   onGoogleBusinessUrlChange,
@@ -616,16 +674,19 @@ function CompanyPresenceFields({
   onYoutubeHandleChange,
   placeholderHandle,
   websiteUrl,
+  websiteUrlError,
   whatsappCountry,
   whatsappNumber,
   youtubeHandle,
 }: {
   formId: string;
   googleBusinessUrl: string;
+  googleBusinessUrlError: string;
   instagramHandle: string;
   linkedinHandle: string;
   placeholderHandle: string;
   websiteUrl: string;
+  websiteUrlError: string;
   whatsappCountry: (typeof countries)[number];
   whatsappNumber: string;
   youtubeHandle: string;
@@ -664,6 +725,8 @@ function CompanyPresenceFields({
         linkedinHandle={linkedinHandle}
         placeholderHandle={placeholderHandle}
         websiteUrl={websiteUrl}
+        websiteUrlError={websiteUrlError}
+        googleBusinessUrlError={googleBusinessUrlError}
         youtubeHandle={youtubeHandle}
         onGoogleBusinessUrlChange={onGoogleBusinessUrlChange}
         onInstagramHandleChange={onInstagramHandleChange}
@@ -880,6 +943,7 @@ function PresenceFields({
   formId,
   googleBusinessHint = 'Used to pull your reviews',
   googleBusinessUrl,
+  googleBusinessUrlError,
   instagramHandle,
   linkedinHandle,
   onGoogleBusinessUrlChange,
@@ -889,16 +953,19 @@ function PresenceFields({
   onYoutubeHandleChange,
   placeholderHandle,
   websiteUrl,
+  websiteUrlError,
   youtubeHandle,
 }: {
   firstName?: string;
   formId: string;
   googleBusinessHint?: string;
   googleBusinessUrl: string;
+  googleBusinessUrlError: string;
   instagramHandle: string;
   linkedinHandle: string;
   placeholderHandle?: string;
   websiteUrl: string;
+  websiteUrlError: string;
   youtubeHandle: string;
   onGoogleBusinessUrlChange: (value: string) => void;
   onInstagramHandleChange: (value: string) => void;
@@ -924,6 +991,7 @@ function PresenceFields({
           inputMode="url"
           className="h-8 rounded-md px-2 text-[13px]"
         />
+        {websiteUrlError ? <p className="text-xs text-destructive">{websiteUrlError}</p> : null}
       </div>
 
       <div className="grid gap-1">
@@ -940,6 +1008,9 @@ function PresenceFields({
           inputMode="url"
           className="h-8 rounded-md px-2 text-[13px]"
         />
+        {googleBusinessUrlError ? (
+          <p className="text-xs text-destructive">{googleBusinessUrlError}</p>
+        ) : null}
       </div>
 
       <div className="grid gap-2">
@@ -947,7 +1018,7 @@ function PresenceFields({
         <div className="grid gap-3">
           <SocialInput
             id={`${formId}-instagram`}
-            icon={Instagram}
+            icon={InstagramBrandIcon}
             label="Instagram"
             value={instagramHandle}
             onChange={onInstagramHandleChange}
@@ -955,7 +1026,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-linkedin`}
-            icon={Linkedin}
+            icon={LinkedInBrandIcon}
             label="LinkedIn"
             value={linkedinHandle}
             onChange={onLinkedinHandleChange}
@@ -963,7 +1034,7 @@ function PresenceFields({
           />
           <SocialInput
             id={`${formId}-youtube`}
-            icon={Youtube}
+            icon={YouTubeBrandIcon}
             label="YouTube"
             value={youtubeHandle}
             onChange={onYoutubeHandleChange}
@@ -983,7 +1054,7 @@ function SocialInput({
   placeholder,
   value,
 }: {
-  icon: typeof Instagram;
+  icon: (props: { className?: string }) => ReactNode;
   id: string;
   label: string;
   value: string;

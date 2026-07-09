@@ -211,6 +211,9 @@ export function DesignerDashboardOverview({
       ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
   const trackedChecklistComplete = hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
+  const checklistProgressScore = hasTrackedSteps
+    ? Math.round((trackedChecklistItems.filter((item) => item.done).length / trackedChecklistItems.length) * 100)
+    : dashboard.profileCompletion.score;
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -243,13 +246,13 @@ export function DesignerDashboardOverview({
                   Complete profile
                 </div>
                 <div className="text-[1.75rem] font-medium tracking-tight text-primary">
-                  {dashboard.profileCompletion.score}%
+                  {checklistProgressScore}%
                 </div>
               </div>
               <div className="mt-3 h-1.5 rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${dashboard.profileCompletion.score}%` }}
+                  style={{ width: `${checklistProgressScore}%` }}
                 />
               </div>
             </CardContent>
