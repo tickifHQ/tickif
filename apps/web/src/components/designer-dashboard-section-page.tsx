@@ -236,21 +236,32 @@ type DesignerDashboardSectionPageProps = {
 };
 
 function ActionLink({ action, variant }: { action: DashboardAction; variant: 'default' | 'outline' }) {
-  const external = action.href.startsWith('mailto:');
+  const isMailto = action.href.startsWith('mailto:');
+  const content = (
+    <>
+      {action.label}
+      <ArrowRight className="size-4" />
+    </>
+  );
+
+  if (isMailto) {
+    return (
+      <Button asChild variant={variant}>
+        <a href={action.href}>{content}</a>
+      </Button>
+    );
+  }
 
   return (
     <Button asChild variant={variant}>
-      <Link href={action.href} target={external ? '_blank' : undefined}>
-        {action.label}
-        <ArrowRight className="size-4" />
-      </Link>
+      <Link href={action.href}>{content}</Link>
     </Button>
   );
 }
 
 function EmptyChart({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-52 items-end gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
+    <div className="flex h-52 items-end gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
       {[38, 52, 44, 68, 58, 74, 63].map((height, index) => (
         <div key={`${height}-${index}`} className="flex flex-1 items-end">
           <div

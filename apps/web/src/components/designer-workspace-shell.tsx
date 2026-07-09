@@ -104,19 +104,6 @@ function SidebarSection({
 }
 
 function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
-  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
-
-  if (navigationItem?.href && !pathname.startsWith('/designer/projects/upload')) {
-    const Icon = navigationItem.icon;
-
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <Icon className="size-4" />
-        <span className="font-medium">{navigationItem.label}</span>
-      </div>
-    );
-  }
-
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
@@ -126,6 +113,19 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
         </Link>
         <span>/</span>
         <span className="font-medium text-foreground">Upload project</span>
+      </div>
+    );
+  }
+
+  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
+
+  if (navigationItem?.href) {
+    const Icon = navigationItem.icon;
+
+    return (
+      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+        <Icon className="size-4" />
+        <span className="font-medium">{navigationItem.label}</span>
       </div>
     );
   }
