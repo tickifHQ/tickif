@@ -10,6 +10,8 @@ const mock = vi.hoisted(() => ({
   sendOtp: vi.fn(),
   verify: vi.fn(),
   signInSocial: vi.fn(),
+  emailOtpSendVerificationOtp: vi.fn(),
+  signInEmailOtp: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -19,7 +21,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
     phoneNumber: { sendOtp: mock.sendOtp, verify: mock.verify },
-    signIn: { social: mock.signInSocial },
+    signIn: { social: mock.signInSocial, emailOtp: mock.signInEmailOtp },
+    emailOtp: { sendVerificationOtp: mock.emailOtpSendVerificationOtp },
   },
 }));
 
@@ -67,7 +70,7 @@ describe('LoginCard', () => {
       'true',
     );
     expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
   });
 
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
@@ -79,7 +82,7 @@ describe('LoginCard', () => {
 
   it('shows Google sign-in in browsing mode', () => {
     render(<LoginCard />);
-    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
@@ -91,21 +94,20 @@ describe('LoginCard', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Google sign-in, email input, and button in designer mode', async () => {
+  it('shows Google sign-in and email input in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
-    expect(screen.getAllByText('OR')).toHaveLength(2);
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Login' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Continue$/i })).toBeInTheDocument();
   });
 
   it('calls Google signIn with origin callback in browsing mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[0]!);
     expect(mock.signInSocial).toHaveBeenCalledWith({
       provider: 'google',
       callbackURL: 'http://localhost:3000/onboarding',
@@ -128,9 +130,9 @@ describe('LoginCard', () => {
   it('calls Google signIn with onboarding callback in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    render(<LoginCard initialMode="designer" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
     expect(mock.signInSocial).toHaveBeenCalledWith({
       provider: 'google',
       callbackURL: 'http://localhost:3000/designer/onboarding',
@@ -141,16 +143,17 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[0]!);
     expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    render(<LoginCard initialMode="designer" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
     expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 

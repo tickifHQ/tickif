@@ -8,7 +8,6 @@ import {
   Calendar,
   ChevronDown,
   House,
-  LockKeyhole,
   Mail,
   MessageSquare,
   Star,
@@ -134,6 +133,13 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [countrySearch, setCountrySearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Email OTP state (designer tab)
+  const [designerEmail, setDesignerEmail] = useState('');
+  const [emailOtpStep, setEmailOtpStep] = useState<'email' | 'otp'>('email');
+  const [emailOtp, setEmailOtp] = useState<OtpDigits>(['', '', '', '', '', '']);
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const [emailMessage, setEmailMessage] = useState('');
+
   const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
   const promoSubtitle = loginMode === 'designer'
     ? 'One link to share your work, get discovered, and turn views into real enquiries.'
@@ -142,39 +148,49 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const filteredCountries = countrySearch
     ? countries.filter((c) => {
         const q = countrySearch.toLowerCase();
-        return (
-          c.name.toLowerCase().includes(q) ||
-          c.code.toLowerCase().includes(q)
-        );
+        return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
       })
     : countries;
 
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
+  const emailCooldownRef = useRef(emailCooldown);
+  emailCooldownRef.current = emailCooldown;
 
   useEffect(() => {
     if (!success) return;
     if (onSuccess) {
       onSuccess();
+      return;
+    }
+    // After successful auth, check if designer onboarding is needed
+    if (loginMode === 'designer') {
+      // Redirect to onboarding — the page itself will redirect to dashboard if already complete
+      window.location.href = '/designer/onboarding';
     } else {
-      router.push(loginMode === 'designer' ? '/designer/onboarding' : visitorPostLoginPath());
+      router.push(visitorPostLoginPath());
     }
   }, [success, loginMode, router, onSuccess]);
 
+  // Phone OTP cooldown
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => {
-      if (cooldownRef.current <= 1) {
-        clearInterval(id);
-        setCooldown(0);
-      } else {
-        setCooldown((prev) => prev - 1);
-      }
+      if (cooldownRef.current <= 1) { clearInterval(id); setCooldown(0); }
+      else setCooldown((prev) => prev - 1);
     }, 1000);
     return () => clearInterval(id);
-    // cooldown > 0 expression as dependency means this effect only re-runs
-    // when cooldown crosses the zero boundary (0→>0 or >0→0), not on every tick
   }, [cooldown > 0]);
+
+  // Email OTP cooldown
+  useEffect(() => {
+    if (emailCooldown <= 0) return;
+    const id = setInterval(() => {
+      if (emailCooldownRef.current <= 1) { clearInterval(id); setEmailCooldown(0); }
+      else setEmailCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [emailCooldown > 0]);
 
   const validatePhone = useCallback((value: string): string | null => {
     const digits = value.replace(/\D/g, '');
@@ -182,78 +198,50 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     return null;
   }, []);
 
+  // ─── Phone OTP handlers ─────────────────────────────────────────────────
   async function handleSendOtp() {
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     const validationError = validatePhone(phone);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
+    if (validationError) { setError(validationError); return; }
     setError('');
     setLoading(true);
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
-      if (error) {
-        setError(error.message || 'Failed to send OTP');
-        return;
-      }
+      if (error) { setError(error.message || 'Failed to send OTP'); return; }
       setStep('otp');
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send OTP';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+      setError(err instanceof Error ? err.message : 'Failed to send OTP');
+    } finally { setLoading(false); }
   }
 
   async function handleVerify() {
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     const otp = code.join('');
-    if (otp.length !== 6) {
-      setError('Enter the full 6-digit OTP');
-      return;
-    }
-
+    if (otp.length !== 6) { setError('Enter the full 6-digit OTP'); return; }
     setError('');
     setLoading(true);
     try {
       const { error } = await authClient.phoneNumber.verify({ phoneNumber: fullPhone, code: otp });
-      if (error) {
-        setError(error.message || 'Invalid or expired OTP');
-        setCode(['', '', '', '', '', '']);
-        return;
-      }
+      if (error) { setError(error.message || 'Invalid or expired OTP'); setCode(['', '', '', '', '', '']); return; }
       setSuccess(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid or expired OTP';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Invalid or expired OTP');
       setCode(['', '', '', '', '', '']);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function handleResend() {
     if (cooldown > 0) return;
-    setError('');
-    setCode(['', '', '', '', '', '']);
-    setLoading(true);
+    setError(''); setCode(['', '', '', '', '', '']); setLoading(true);
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
-      if (error) {
-        setError(error.message || 'Failed to resend OTP');
-        return;
-      }
+      if (error) { setError(error.message || 'Failed to resend OTP'); return; }
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to resend OTP';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+      setError(err instanceof Error ? err.message : 'Failed to resend OTP');
+    } finally { setLoading(false); }
   }
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -262,22 +250,73 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     setError('');
   }
 
+  // ─── Google SSO handler ─────────────────────────────────────────────────
   async function handleGoogleLogin() {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     const callbackURL = loginMode === 'designer'
       ? `${window.location.origin}/designer/onboarding`
       : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
-      if (result?.error) {
-        setError('Couldn\'t sign in with Google');
-      }
-    } catch {
-      setError('Couldn\'t sign in with Google');
-    } finally {
-      setLoading(false);
+      if (result?.error) setError('Couldn\'t sign in with Google');
+    } catch { setError('Couldn\'t sign in with Google'); }
+    finally { setLoading(false); }
+  }
+
+  // ─── Email OTP handlers (designer tab) ──────────────────────────────────
+  async function handleEmailOtpSend() {
+    if (!designerEmail.trim() || !designerEmail.includes('@')) {
+      setError('Enter a valid email address'); return;
     }
+    setError(''); setEmailMessage(''); setLoading(true);
+    try {
+      const { error: sendError } = await authClient.emailOtp.sendVerificationOtp({
+        email: designerEmail.trim(),
+        type: 'sign-in',
+      });
+      if (sendError) { setError(sendError.message ?? 'Failed to send code'); }
+      else {
+        setEmailOtpStep('otp');
+        setEmailCooldown(COOLDOWN_SECONDS);
+        setEmailMessage(`Code sent to ${designerEmail.trim()}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send code');
+    } finally { setLoading(false); }
+  }
+
+  async function handleEmailOtpVerify() {
+    const otp = emailOtp.join('');
+    if (otp.length !== 6) { setError('Enter the full 6-digit code'); return; }
+    setError(''); setLoading(true);
+    try {
+      const { error: signInError } = await authClient.signIn.emailOtp({
+        email: designerEmail.trim(),
+        otp,
+      });
+      if (signInError) {
+        setError(signInError.message ?? 'Invalid or expired code');
+        setEmailOtp(['', '', '', '', '', '']);
+      } else { setSuccess(true); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
+      setEmailOtp(['', '', '', '', '', '']);
+    } finally { setLoading(false); }
+  }
+
+  async function handleEmailOtpResend() {
+    if (emailCooldown > 0) return;
+    setError(''); setEmailOtp(['', '', '', '', '', '']); setLoading(true);
+    try {
+      const { error: sendError } = await authClient.emailOtp.sendVerificationOtp({
+        email: designerEmail.trim(),
+        type: 'sign-in',
+      });
+      if (sendError) { setError(sendError.message ?? 'Failed to resend code'); }
+      else { setEmailCooldown(COOLDOWN_SECONDS); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resend code');
+    } finally { setLoading(false); }
   }
 
   if (success) {
@@ -299,17 +338,14 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
               <Users className="size-3.5 text-success" aria-hidden="true" />
               <span className="text-xs font-medium text-success">Trusted by 5000+ homeowners</span>
             </div>
-
             <div className="flex flex-col gap-2">
               <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
               <p className="text-xs text-white/60">{promoSubtitle}</p>
-
               <div className="mt-6 flex flex-col gap-3">
                 {features.map((f) => {
                   const Icon = f.icon;
-                  const testId = `feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`;
                   return (
-                    <div key={f.title} data-testid={testId} className="flex items-center gap-2.5">
+                    <div key={f.title} data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`} className="flex items-center gap-2.5">
                       <Icon className="size-4 shrink-0 text-white" aria-hidden="true" />
                       <p className="text-sm text-white">{f.title}</p>
                     </div>
@@ -318,14 +354,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
               </div>
             </div>
           </div>
-
           <div className="mt-6 flex flex-col gap-3">
             <div className="flex -space-x-2">
               {trustAvatars.map((a) => (
                 <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
-                  <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>
-                    {a.initials}
-                  </AvatarFallback>
+                  <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>{a.initials}</AvatarFallback>
                 </Avatar>
               ))}
             </div>
@@ -343,30 +376,19 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
         </div>
 
         {/* Right: Form Panel */}
-        <div className="flex w-full flex-col px-6 py-8 md:flex-1">
+        <div className="flex w-full min-w-0 flex-col px-6 py-8 md:flex-1">
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-base font-medium text-foreground">Login to continue</h3>
               {onClose && (
-                <Button
-                  onClick={onClose}
-                  aria-label="Close"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
+                <Button onClick={onClose} aria-label="Close" variant="ghost" size="icon" className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground">
                   <X className="size-4" aria-hidden="true" />
                 </Button>
               )}
             </div>
 
             <div className="flex flex-col gap-4">
-              <Tabs
-                defaultValue={initialMode}
-                value={loginMode}
-                className="w-full"
-                onValueChange={(val) => setLoginMode(val as LoginMode)}
-              >
+              <Tabs defaultValue={initialMode} value={loginMode} className="w-full" onValueChange={(val) => setLoginMode(val as LoginMode)}>
                 <TabsList className="w-full">
                   <TabsTrigger value="browsing" className="flex-1 gap-1.5">
                     <House className="size-4" aria-hidden="true" />
@@ -378,32 +400,22 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                   </TabsTrigger>
                 </TabsList>
 
-                <div className="relative mt-4 overflow-hidden">
+                <div className="relative mt-4 w-full overflow-hidden">
                   <div
-                    className="flex transition-transform duration-300 ease-in-out"
-                    style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-100%'})` }}
+                    className="flex w-[200%] transition-transform duration-300 ease-in-out"
+                    style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-50%'})` }}
                   >
+                    {/* ─── Browsing tab: Phone OTP + Google ─── */}
                     <div
-                      className={cn(
-                        'flex w-full shrink-0 flex-col gap-3 transition-opacity duration-300',
-                        loginMode === 'browsing' ? 'opacity-100' : 'opacity-0',
-                      )}
+                      className={cn('flex w-1/2 shrink-0 flex-col gap-3 transition-opacity duration-300', loginMode === 'browsing' ? 'opacity-100' : 'opacity-0')}
                       inert={loginMode !== 'browsing'}
                       aria-hidden={loginMode !== 'browsing'}
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
-                          <DropdownMenu
-                            onOpenChange={(open) => {
-                              if (!open) setCountrySearch('');
-                            }}
-                          >
+                          <DropdownMenu onOpenChange={(open) => { if (!open) setCountrySearch(''); }}>
                             <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                disabled={loading}
-                              >
+                              <button type="button" className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" disabled={loading}>
                                 <span className="text-base leading-none">{selectedCountry.flag}</span>
                                 <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
                               </button>
@@ -416,37 +428,21 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                                   placeholder="Search countries..."
                                   value={countrySearch}
                                   onChange={(e) => setCountrySearch(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                      if (countrySearch) {
-                                        e.preventDefault();
-                                        setCountrySearch('');
-                                        return;
-                                      }
-                                      return;
-                                    }
-                                    e.stopPropagation();
-                                  }}
+                                  onKeyDown={(e) => { if (e.key === 'Escape') { if (countrySearch) { e.preventDefault(); setCountrySearch(''); return; } return; } e.stopPropagation(); }}
                                   className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                                   autoFocus
                                 />
                               </div>
                               {filteredCountries.length > 0 ? (
                                 filteredCountries.map((country) => (
-                                  <DropdownMenuItem
-                                    key={`${country.code}-${country.name}`}
-                                    onSelect={() => setSelectedCountry(country)}
-                                    className="gap-2"
-                                  >
+                                  <DropdownMenuItem key={`${country.code}-${country.name}`} onSelect={() => setSelectedCountry(country)} className="gap-2">
                                     <span className="text-base leading-none">{country.flag}</span>
                                     <span className="text-muted-foreground">{country.code}</span>
                                     <span className="text-foreground">{country.name}</span>
                                   </DropdownMenuItem>
                                 ))
                               ) : (
-                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                                  No countries found
-                                </div>
+                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">No countries found</div>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -458,9 +454,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                             placeholder="9123456789"
                             value={phone}
                             onChange={handlePhoneChange}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSendOtp();
-                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
                             className="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                             disabled={loading}
                             autoComplete="tel"
@@ -484,44 +478,86 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                       </div>
                     </div>
 
+                    {/* ─── Designer tab: Google SSO + Email OTP ─── */}
                     <div
-                      className={cn(
-                        'flex w-full shrink-0 flex-col gap-4 transition-opacity duration-300',
-                        loginMode === 'designer' ? 'opacity-100' : 'opacity-0',
-                      )}
+                      className={cn('flex w-1/2 shrink-0 flex-col gap-4 transition-opacity duration-300', loginMode === 'designer' ? 'opacity-100' : 'opacity-0')}
                       inert={loginMode !== 'designer'}
                       aria-hidden={loginMode !== 'designer'}
                     >
-                      <GoogleSignInButton label="Login with Google" loading={loading} onClick={handleGoogleLogin} />
+                      <GoogleSignInButton label="Continue with Google" loading={loading} onClick={handleGoogleLogin} />
 
                       <OrSeparator className="my-2" />
 
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="designer-email">
-                          Email <span className="text-xs text-muted-foreground">(optional)</span>
-                        </Label>
-                        <div className="relative">
-                          <Mail
-                            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                          <Input
-                            id="designer-email"
-                            type="email"
-                            placeholder="you@example.com"
-                            className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
-                            disabled
-                          />
-                        </div>
-                      </div>
+                      {emailOtpStep === 'email' ? (
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="designer-email">Email</Label>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                              <Input
+                                id="designer-email"
+                                type="email"
+                                value={designerEmail}
+                                onChange={(e) => { setDesignerEmail(e.target.value); setError(''); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleEmailOtpSend(); }}
+                                placeholder="you@example.com"
+                                className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
+                                disabled={loading}
+                                autoComplete="email"
+                              />
+                            </div>
+                          </div>
 
-                      <Button
-                        type="button"
-                        className="w-full"
-                        disabled
-                      >
-                        Login
-                      </Button>
+                          <Button
+                            type="button"
+                            className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                            disabled={loading || !designerEmail.trim()}
+                            onClick={handleEmailOtpSend}
+                          >
+                            {loading ? 'Sending…' : 'Continue'}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {emailMessage && (
+                            <p className="rounded-md bg-green-50 p-2 text-center text-sm text-green-700">{emailMessage}</p>
+                          )}
+
+                          <OtpInput
+                            value={emailOtp}
+                            onChange={(v) => { setEmailOtp(v); setError(''); }}
+                            onComplete={handleEmailOtpVerify}
+                            disabled={loading}
+                          />
+
+                          <Button
+                            type="button"
+                            className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                            disabled={loading || emailOtp.some((d) => !d)}
+                            onClick={handleEmailOtpVerify}
+                          >
+                            {loading ? 'Verifying…' : 'Verify'}
+                          </Button>
+
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <button
+                              type="button"
+                              className="text-primary underline-offset-2 hover:underline"
+                              onClick={() => { setEmailOtpStep('email'); setError(''); setEmailMessage(''); setEmailOtp(['', '', '', '', '', '']); }}
+                            >
+                              Change email
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEmailOtpResend}
+                              disabled={emailCooldown > 0 || loading}
+                              className="underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
+                            >
+                              {emailCooldown > 0 ? `Resend in ${formatTimer(emailCooldown)}` : 'Resend code'}
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -546,7 +582,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
         <div className="flex flex-col items-center gap-4">
           <div className="flex size-24 items-center justify-center rounded-full bg-muted">
-            <LockKeyhole className="size-14 text-muted-foreground" aria-hidden="true" />
+            <Mail className="size-14 text-muted-foreground" aria-hidden="true" />
           </div>
           <p className="text-base text-muted-foreground">
             We've sent a code to{' '}
@@ -556,12 +592,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
           </p>
         </div>
 
-        <OtpInput
-          value={code}
-          onChange={setCode}
-          onComplete={handleVerify}
-          disabled={loading}
-        />
+        <OtpInput value={code} onChange={(v) => { setCode(v); setError(''); }} onComplete={handleVerify} disabled={loading} />
 
         <button
           type="button"
@@ -569,32 +600,16 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
           disabled={cooldown > 0 || loading}
           className="text-base text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
         >
-          {cooldown > 0
-            ? `Didn't get the code? Resend in ${formatTimer(cooldown)}`
-            : "Didn't get the code? Resend"}
+          {cooldown > 0 ? `Didn't get the code? Resend in ${formatTimer(cooldown)}` : "Didn't get the code? Resend"}
         </button>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex w-full gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => {
-              setStep('phone');
-              setError('');
-              setCode(['', '', '', '', '', '']);
-            }}
-          >
+          <Button type="button" variant="outline" className="flex-1" onClick={() => { setStep('phone'); setError(''); setCode(['', '', '', '', '', '']); }}>
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={handleVerify}
-            disabled={loading || code.some((d) => !d)}
-            className="flex-1"
-          >
+          <Button type="button" onClick={handleVerify} disabled={loading || code.some((d) => !d)} className="flex-1">
             {loading ? 'Verifying…' : 'Continue'}
           </Button>
         </div>

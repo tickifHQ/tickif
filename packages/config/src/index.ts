@@ -114,6 +114,10 @@ const envSchema = z.object({
   // Action on a duplicate: reject (status=failed) or flag for moderation.
   MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
   MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
+
+  // Email delivery via Resend (E-203). Optional in dev (logs to console).
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
 });
 
 /**
