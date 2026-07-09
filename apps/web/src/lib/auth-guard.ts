@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { env } from '@/env';
@@ -54,15 +55,23 @@ export function rolePassesCheck(
 /**
  * Non-throwing variant — returns session or null.
  * Used in (public)/layout.tsx to decide whether to render the scroll-gate.
+ *
+ * Deduped per request (React cache), keyed by disableCookieCache: callers
+ * passing the same flag (e.g. (public) layout + page) share one API
+ * round-trip; callers with different flags still fetch independently.
  */
 export async function getServerSession(options?: GetServerSessionOptions): Promise<SessionData | null> {
+  return fetchSession(Boolean(options?.disableCookieCache));
+}
+
+const fetchSession = cache(async (disableCookieCache: boolean): Promise<SessionData | null> => {
   const reqHeaders = await headers();
   const cookie = reqHeaders.get('cookie');
   if (!cookie) return null;
 
   try {
     const url = new URL('/api/auth/get-session', env.NEXT_PUBLIC_API_URL);
-    if (options?.disableCookieCache) {
+    if (disableCookieCache) {
       url.searchParams.set('disableCookieCache', 'true');
     }
 
@@ -78,7 +87,7 @@ export async function getServerSession(options?: GetServerSessionOptions): Promi
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Throwing variant — redirects on failure.

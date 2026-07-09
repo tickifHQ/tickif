@@ -111,12 +111,14 @@ function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageRes
 }
 
 async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
-  const keys = [
+  const keys = [...new Set([
     row.originalKey,
     ...row.derivatives.map((derivative) => derivative.key),
-  ].filter((key): key is string => Boolean(key));
+  ].filter((key): key is string => Boolean(key)))];
+  const referencedKeys = new Set(await projectsRepository.findReferencedImageObjectKeys(keys));
+  const unusedKeys = keys.filter((key) => !referencedKeys.has(key));
 
-  await Promise.allSettled(keys.map((key) => deleteObject(key)));
+  await Promise.allSettled(unusedKeys.map((key) => deleteObject(key)));
 }
 
 function pickPreviewDerivative(derivatives: Derivative[]): string | null {

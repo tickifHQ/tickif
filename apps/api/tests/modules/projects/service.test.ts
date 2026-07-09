@@ -46,6 +46,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteImage: vi.fn(),
       getUploadImageCounts: vi.fn(),
       submitWithUploadCounts: vi.fn(),
+      findReferencedImageObjectKeys: vi.fn(),
       submit: vi.fn(),
       listPublishedFeed: vi.fn(),
       findTaxonomyLabels: vi.fn(),
@@ -133,7 +134,10 @@ const caller = {
   isBanned: false,
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
+});
 
 describe('projectsService.list', () => {
   it('maps owner rows to the dashboard response shape and passes filters through', async () => {
@@ -399,6 +403,29 @@ describe('projectsService.deleteImage', () => {
 
     expect(deleteObject).toHaveBeenCalledWith('originals/project/image');
     expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
+    expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
+  });
+
+  it('keeps shared storage objects when another image row still references them', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
+    vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([
+      'originals/project/image',
+      'derivatives/project/image/thumb.webp',
+    ]);
+
+    await expect(projectsService.deleteImage(row().id, imageRow().id, caller)).resolves.toEqual({
+      id: imageRow().id,
+      deleted: true,
+    });
+
+    expect(deleteObject).not.toHaveBeenCalledWith('originals/project/image');
+    expect(deleteObject).not.toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
     expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
   });
 });

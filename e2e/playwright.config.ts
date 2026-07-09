@@ -23,7 +23,7 @@ export default defineConfig({
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
-      env: { DATABASE_URL: testDbUrl },
+      env: { DATABASE_URL: testDbUrl, PORT: '3001' },
     },
     {
       command: 'pnpm --filter @repo/web dev',

@@ -1,72 +1,62 @@
 import { HomeHero } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
-import { ShowcaseCard } from '@/components/showcase-card';
-import { mockProjects } from '@/lib/mock-projects';
+import { HomeSearchBar } from '@/components/home-search-bar';
+import { FeedFilters } from '@/components/feed-filters';
+import { ProjectFeed } from '@/components/project-feed';
+import { getServerSession } from '@/lib/auth-guard';
 
-const filters = [
-  'Affordable modular kitchens',
-  'Modern 2BHK interiors',
-  'Scandinavian-style apartments',
-  'Cozy bedroom ideas',
-  'warm living room ideas',
-  'Industrial loft apartments',
-  '3BHK homes under ₹15L',
-  'Walnut & cane interiors',
-];
+/**
+ * Landing page with two states (Figma "HOME [Logged out]" / "HOME [Logged in]"):
+ * - Logged out: trust banner + hero + "Trending projects" feed.
+ * - Logged in: prominent search bar straight into the filtered feed.
+ */
+export default async function HomePage() {
+  const session = await getServerSession();
 
-export default function HomePage() {
+  if (session) {
+    return (
+      <div className="bg-[#fafaf8]">
+        <section className="mx-auto w-full max-w-[1512px] px-6 py-6 lg:px-10">
+          <h1 className="sr-only">Explore home projects</h1>
+          <HomeSearchBar />
+          <div className="mt-5">
+            <FeedFilters />
+          </div>
+          {/* Green fade sits behind the grid only — page margins stay #FAFAF8 (Figma 14339:8424). */}
+          <div className="mt-6 bg-[linear-gradient(0deg,#e8f0eb_40%,rgba(247,244,239,0)_100%)]">
+            <ProjectFeed />
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <>
       <TrustStrip />
       <HomeHero />
 
-      <section className="mx-auto w-full max-w-[1512px] px-6 py-12 lg:px-10">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-3xl tracking-tight">Trending projects</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Hand-picked by our editors this week</p>
+      <div className="bg-gradient-to-t from-[#e8f0eb] to-[#fafaf8]">
+        <section className="mx-auto w-full max-w-[1512px] px-6 py-12 lg:px-10">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="font-display text-3xl tracking-tight">Trending projects</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Hand-picked by our editors this week</p>
+            </div>
+            <a href="/" className="shrink-0 text-sm font-medium text-primary hover:underline">
+              See all projects →
+            </a>
           </div>
-          <a href="/" className="shrink-0 text-sm font-medium text-primary hover:underline">
-            See all projects →
-          </a>
-        </div>
 
-        <div className="mt-6 flex items-center gap-4 overflow-x-auto pb-1">
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#ede9e1] px-3.5 py-2 text-xs font-medium text-[#52525b] transition-colors hover:bg-accent"
-          >
-            <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M3 5h18M6 12h12M10 19h4" strokeLinecap="round" />
-            </svg>
-            Filters
-          </button>
-          <span className="h-[22px] w-px shrink-0 bg-[#ede9e1]" />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="shrink-0 rounded-full border border-primary bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground"
-            >
-              All
-            </button>
-            {filters.map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                className="shrink-0 whitespace-nowrap rounded-full border border-[#ede9e1] px-3.5 py-1.5 text-xs font-medium text-[#52525b] transition-colors hover:bg-accent hover:text-foreground"
-              >
-                {filter}
-              </button>
-            ))}
+          <div className="mt-6">
+            <FeedFilters />
           </div>
-        </div>
 
-        <div className="mt-8 columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
-          {mockProjects.map((project) => (
-            <ShowcaseCard key={project.id} project={project} />
-          ))}
-        </div>
-      </section>
+          <div className="mt-8">
+            <ProjectFeed />
+          </div>
+        </section>
+      </div>
     </>
   );
 }
