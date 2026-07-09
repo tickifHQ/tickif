@@ -1,4 +1,4 @@
-import { db, schema, eq, and, ne, isNotNull } from '@repo/db';
+import { db, schema, eq, and, or, ne, isNotNull, sql } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
 export type ProcessingImage = {
@@ -49,14 +49,37 @@ export async function markFailed(imageId: string): Promise<void> {
       .update(schema.projectImage)
       .set({ status: 'failed', updatedAt: now })
       .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
-      .returning({ projectId: schema.projectImage.projectId });
+      .returning({ id: schema.projectImage.id, projectId: schema.projectImage.projectId });
 
     if (!image) return;
 
+    const failureMetadata = {
+      mediaProcessingFailure: {
+        imageId: image.id,
+        reason: 'Image processing failed after submission. Please replace or remove the failed image before resubmitting.',
+        recordedAt: now.toISOString(),
+      },
+    };
+
     await tx
       .update(schema.project)
-      .set({ status: 'changes_requested', submittedAt: null, updatedAt: now })
-      .where(and(eq(schema.project.id, image.projectId), eq(schema.project.status, 'submitted')));
+      .set({
+        status: 'changes_requested',
+        submittedAt: null,
+        publishedAt: null,
+        metadata: sql`coalesce(${schema.project.metadata}, '{}'::jsonb) || ${JSON.stringify(failureMetadata)}::jsonb`,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(schema.project.id, image.projectId),
+          or(
+            eq(schema.project.status, 'submitted'),
+            eq(schema.project.status, 'in_review'),
+            eq(schema.project.status, 'published'),
+          ),
+        ),
+      );
   });
 }
 

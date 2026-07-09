@@ -1228,6 +1228,7 @@ export function DesignerProjectUpload({
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
   const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
   const uploadStateRefreshVersionRef = useRef(0);
+  const imageListRefreshVersionRef = useRef(0);
 
   const selectedCity = useMemo(
     () => cities.find((term) => term.slug === citySlug) ?? null,
@@ -1649,9 +1650,9 @@ export function DesignerProjectUpload({
 
     let cancelled = false;
     const timer = window.setInterval(() => {
-      const refreshVersion = beginUploadStateRefresh();
-      refreshProjectImages(projectId, refreshVersion).catch(() => {
-        if (!cancelled && isCurrentUploadStateRefresh(refreshVersion)) {
+      const imageListRefreshVersion = beginImageListRefresh();
+      refreshProjectImages(projectId, imageListRefreshVersion).catch(() => {
+        if (!cancelled && isCurrentImageListRefresh(imageListRefreshVersion)) {
           setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
         }
       });
@@ -1686,12 +1687,22 @@ export function DesignerProjectUpload({
     return uploadStateRefreshVersionRef.current;
   }
 
+  function beginImageListRefresh() {
+    imageListRefreshVersionRef.current += 1;
+    return imageListRefreshVersionRef.current;
+  }
+
   function invalidateUploadStateRefresh() {
     uploadStateRefreshVersionRef.current += 1;
+    imageListRefreshVersionRef.current += 1;
   }
 
   function isCurrentUploadStateRefresh(refreshVersion: number) {
     return uploadStateRefreshVersionRef.current === refreshVersion;
+  }
+
+  function isCurrentImageListRefresh(refreshVersion: number) {
+    return imageListRefreshVersionRef.current === refreshVersion;
   }
 
   function mergeServerImages(serverImages: ProjectImageDto[]) {
@@ -1803,8 +1814,8 @@ export function DesignerProjectUpload({
       );
     } catch (moveError) {
       setError(moveError instanceof Error ? moveError.message : 'Could not save the new image order.');
-      const refreshVersion = beginUploadStateRefresh();
-      void refreshProjectImages(projectId, refreshVersion);
+      const imageListRefreshVersion = beginImageListRefresh();
+      void refreshProjectImages(projectId, imageListRefreshVersion);
     }
   }
 
@@ -2104,13 +2115,14 @@ export function DesignerProjectUpload({
   }
 
   function refreshUploadStateInBackground(currentProjectId: string) {
-    const refreshVersion = beginUploadStateRefresh();
+    const uploadStateRefreshVersion = beginUploadStateRefresh();
+    const imageListRefreshVersion = beginImageListRefresh();
     void Promise.all([
-      refreshProjectImages(currentProjectId, refreshVersion),
-      fetchCompleteness(currentProjectId, refreshVersion),
+      refreshProjectImages(currentProjectId, imageListRefreshVersion),
+      fetchCompleteness(currentProjectId, uploadStateRefreshVersion),
     ]).catch(
       (refreshError: unknown) => {
-        if (!isCurrentUploadStateRefresh(refreshVersion)) return;
+        if (!isCurrentUploadStateRefresh(uploadStateRefreshVersion)) return;
         setError(refreshError instanceof Error ? refreshError.message : 'Could not refresh image processing status.');
       },
     );

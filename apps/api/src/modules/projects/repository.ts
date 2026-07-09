@@ -39,6 +39,32 @@ export type ProjectOwnership = {
   ownerUserId: string | null;
 };
 
+export type UploadImageCounts = {
+  imageCount: number;
+  taggedImageCount: number;
+};
+
+export type SubmitWithUploadCountsResult = {
+  project: ProjectRecord | null;
+  counts: UploadImageCounts;
+  submitted: ProjectRecord | null;
+};
+
+const freshProcessingImageFilter = sql`
+  (
+    ${schema.projectImage.status} = 'ready'
+    or (
+      ${schema.projectImage.status} = 'processing'
+      and ${schema.projectImage.updatedAt} >= now() - interval '30 minutes'
+    )
+  )
+`;
+
+const emptyUploadImageCounts: UploadImageCounts = {
+  imageCount: 0,
+  taggedImageCount: 0,
+};
+
 export type ListProjectsParams = {
   userId: string;
   activeOrgId?: string | null;
@@ -493,10 +519,65 @@ export const projectsRepository = {
     return row;
   },
 
-  async getUploadImageCounts(projectId: string): Promise<{
-    imageCount: number;
-    taggedImageCount: number;
-  }> {
+  async submitWithUploadCounts(
+    id: string,
+    requirements: { minImageCount: number },
+  ): Promise<SubmitWithUploadCountsResult> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.id, id))
+        .for('update')
+        .limit(1);
+
+      if (!project) {
+        return { project: null, counts: emptyUploadImageCounts, submitted: null };
+      }
+
+      const [row] = await tx
+        .select({
+          imageCount: sql<number>`count(*)::int`,
+          taggedImageCount: sql<number>`
+            count(*) filter (
+              where jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
+                and jsonb_array_length(${schema.projectImage.finishSlugs}) > 0
+            )::int
+          `,
+        })
+        .from(schema.projectImage)
+        .where(
+          and(
+            eq(schema.projectImage.projectId, id),
+            freshProcessingImageFilter,
+            isNotNull(schema.projectImage.roomId),
+          ),
+        );
+
+      const counts = {
+        imageCount: row?.imageCount ?? 0,
+        taggedImageCount: row?.taggedImageCount ?? 0,
+      };
+      const hasRequiredImages =
+        counts.imageCount >= requirements.minImageCount &&
+        counts.taggedImageCount === counts.imageCount;
+
+      if (!hasRequiredImages) {
+        return { project, counts, submitted: null };
+      }
+
+      const now = new Date();
+      const [submitted] = await tx
+        .update(schema.project)
+        .set({ status: 'submitted', submittedAt: now, updatedAt: now })
+        .where(and(eq(schema.project.id, id), inArray(schema.project.status, ['draft', 'changes_requested'])))
+        .returning();
+
+      return { project, counts, submitted: submitted ?? null };
+    });
+  },
+
+  async getUploadImageCounts(projectId: string): Promise<UploadImageCounts> {
     const [row] = await db
       .select({
         imageCount: sql<number>`count(*)::int`,
@@ -511,7 +592,7 @@ export const projectsRepository = {
       .where(
         and(
           eq(schema.projectImage.projectId, projectId),
-          inArray(schema.projectImage.status, ['processing', 'ready']),
+          freshProcessingImageFilter,
           isNotNull(schema.projectImage.roomId),
         ),
       );

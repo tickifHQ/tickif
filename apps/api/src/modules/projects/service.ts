@@ -44,6 +44,9 @@ import {
  * unit-testable with a fake repository and free to move to its own service.
  */
 
+const REQUIRED_PROJECT_PHOTO_COUNT = 3;
+const PHOTO_COMPLETENESS_KEYS = new Set(['at-least-three-photos', 'image-metadata']);
+
 function toResponse(row: ProjectRecord): ProjectResponse {
   return {
     id: row.id,
@@ -785,16 +788,35 @@ export const projectsService = {
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
 
-    const completeness = buildCompleteness(
+    const metadataCompleteness = buildCompleteness(
       project,
-      await projectsRepository.getUploadImageCounts(projectId),
+      {
+        imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+        taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+      },
     );
+    const metadataMissing = metadataCompleteness.missing.filter((key) => !PHOTO_COMPLETENESS_KEYS.has(key));
+    if (metadataMissing.length > 0) {
+      throw AppError.unprocessable('Project is missing required upload information', {
+        missing: metadataMissing,
+      });
+    }
+
+    const submission = await projectsRepository.submitWithUploadCounts(projectId, {
+      minImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+    });
+    if (!submission.project) throw AppError.notFound('Project not found');
+
+    const completeness = buildCompleteness(project, submission.counts);
     if (!completeness.complete) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: completeness.missing,
       });
     }
+    if (!submission.submitted) {
+      throw AppError.conflict('Only draft or changes-requested projects can be submitted');
+    }
 
-    return toDetailResponse(await projectsRepository.submit(projectId), await projectsRepository.listRooms(projectId));
+    return toDetailResponse(submission.submitted, await projectsRepository.listRooms(projectId));
   },
 };

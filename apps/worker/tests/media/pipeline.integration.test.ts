@@ -123,27 +123,38 @@ describe('media pipeline (integration)', () => {
     );
   });
 
-  it('moves submitted projects back to changes requested when processing later fails', async () => {
-    const submittedAt = new Date('2026-01-02T00:00:00Z');
-    const project = await makeProject({ status: 'submitted', submittedAt });
-    const originalKey = `originals/${project.id}/corrupt`;
-    const image = await makeProjectImage({
-      projectId: project.id,
-      originalKey,
-      contentType: 'image/jpeg',
-      status: 'processing',
-    });
-    r2.set(originalKey, Buffer.from('not an image'));
+  it.each(['submitted', 'in_review', 'published'] as const)(
+    'moves %s projects back to changes requested when processing later fails',
+    async (status) => {
+      const submittedAt = new Date('2026-01-02T00:00:00Z');
+      const publishedAt = status === 'published' ? new Date('2026-01-03T00:00:00Z') : null;
+      const project = await makeProject({ status, submittedAt, publishedAt });
+      const originalKey = `originals/${project.id}/corrupt`;
+      const image = await makeProjectImage({
+        projectId: project.id,
+        originalKey,
+        contentType: 'image/jpeg',
+        status: 'processing',
+      });
+      r2.set(originalKey, Buffer.from('not an image'));
 
-    const result = await processMedia(job(image.id));
+      const result = await processMedia(job(image.id));
 
-    expect(result).toEqual({ ok: false, reason: 'corrupt' });
-    expect(await reload(image.id).then((row) => row.status)).toBe('failed');
-    await expect(reloadProject(project.id)).resolves.toMatchObject({
-      status: 'changes_requested',
-      submittedAt: null,
-    });
-  });
+      expect(result).toEqual({ ok: false, reason: 'corrupt' });
+      expect(await reload(image.id).then((row) => row.status)).toBe('failed');
+      await expect(reloadProject(project.id)).resolves.toMatchObject({
+        status: 'changes_requested',
+        submittedAt: null,
+        publishedAt: null,
+        metadata: {
+          mediaProcessingFailure: expect.objectContaining({
+            imageId: image.id,
+            reason: expect.stringContaining('Image processing failed after submission'),
+          }),
+        },
+      });
+    },
+  );
 
   it('ignores a malformed phash on a sibling row instead of failing the new upload', async () => {
     const project = await makeProject();

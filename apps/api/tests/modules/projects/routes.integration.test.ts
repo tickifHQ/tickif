@@ -813,6 +813,47 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(body).toMatchObject({ id: project.id, status: 'submitted' });
   });
 
+  it('does not count stale processing images as complete', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002045');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    const staleUpdatedAt = new Date(Date.now() - 31 * 60 * 1000);
+    for (let index = 0; index < 3; index += 1) {
+      await makeProjectImage({
+        projectId: project.id,
+        roomId: room.id,
+        status: 'processing',
+        sortOrder: index,
+        themeSlugs: ['modern'],
+        finishSlugs: ['veneer'],
+        updatedAt: staleUpdatedAt,
+      });
+    }
+
+    const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
+      headers: { cookie },
+    });
+    expect(completeness.status).toBe(200);
+    const completenessBody = (await completeness.json()) as ProjectCompletenessResponse;
+    expect(completenessBody).toMatchObject({
+      complete: false,
+      missing: expect.arrayContaining(['at-least-three-photos']),
+    });
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(422);
+  });
+
   it('resubmits complete changes-requested projects', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002023');
     const project = await makeProject({
