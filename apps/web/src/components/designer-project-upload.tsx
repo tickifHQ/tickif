@@ -1335,6 +1335,8 @@ export function DesignerProjectUpload({
   const uploadingRoomIdsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
   const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
+  const uploadStateRefreshVersionRef = useRef(0);
+  const imageListRefreshVersionRef = useRef(0);
   const projectNameAutoManagedRef = useRef(true);
 
   const selectedCity = useMemo(
@@ -1786,8 +1788,9 @@ export function DesignerProjectUpload({
 
     let cancelled = false;
     const timer = window.setInterval(() => {
-      refreshProjectImages(projectId).catch(() => {
-        if (!cancelled) {
+      const imageListRefreshVersion = beginImageListRefresh();
+      refreshProjectImages(projectId, imageListRefreshVersion).catch(() => {
+        if (!cancelled && isCurrentImageListRefresh(imageListRefreshVersion)) {
           setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
         }
       });
@@ -1817,6 +1820,29 @@ export function DesignerProjectUpload({
     setRooms((current) => current.map((room) => (room.clientId === clientId ? updater(room) : room)));
   }
 
+  function beginUploadStateRefresh() {
+    uploadStateRefreshVersionRef.current += 1;
+    return uploadStateRefreshVersionRef.current;
+  }
+
+  function beginImageListRefresh() {
+    imageListRefreshVersionRef.current += 1;
+    return imageListRefreshVersionRef.current;
+  }
+
+  function invalidateUploadStateRefresh() {
+    uploadStateRefreshVersionRef.current += 1;
+    imageListRefreshVersionRef.current += 1;
+  }
+
+  function isCurrentUploadStateRefresh(refreshVersion: number) {
+    return uploadStateRefreshVersionRef.current === refreshVersion;
+  }
+
+  function isCurrentImageListRefresh(refreshVersion: number) {
+    return imageListRefreshVersionRef.current === refreshVersion;
+  }
+
   function mergeServerImages(serverImages: ProjectImageDto[]) {
     setRooms((currentRooms) =>
       currentRooms.map((room) => {
@@ -1837,7 +1863,7 @@ export function DesignerProjectUpload({
     );
   }
 
-  async function refreshProjectImages(currentProjectId: string) {
+  async function refreshProjectImages(currentProjectId: string, refreshVersion?: number) {
     const response = await api.api.projects[':id'].images.$get({
       param: { id: currentProjectId },
       query: { limit: 100, offset: 0 },
@@ -1854,6 +1880,7 @@ export function DesignerProjectUpload({
       'Could not refresh image processing status.',
     );
     const images = imagePayload.items ?? [];
+    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion)) return images;
     mergeServerImages(images);
     return images;
   }
@@ -1913,6 +1940,7 @@ export function DesignerProjectUpload({
     const nextImages = moveProjectImage(room.images, imageId, direction);
     if (nextImages === room.images) return;
 
+    invalidateUploadStateRefresh();
     updateRoom(room.clientId, (current) => ({
       ...current,
       images: moveProjectImage(current.images, imageId, direction),
@@ -1940,7 +1968,8 @@ export function DesignerProjectUpload({
       );
     } catch (moveError) {
       setError(moveError instanceof Error ? moveError.message : 'Could not save the new image order.');
-      void refreshProjectImages(projectId);
+      const imageListRefreshVersion = beginImageListRefresh();
+      void refreshProjectImages(projectId, imageListRefreshVersion);
     }
   }
 
@@ -1971,6 +2000,8 @@ export function DesignerProjectUpload({
     setError('');
     setNotice('');
 
+    invalidateUploadStateRefresh();
+
     if (imageId.startsWith('local-preview-')) {
       removeImageFromRoom(room.clientId, imageId);
       return;
@@ -1997,9 +2028,10 @@ export function DesignerProjectUpload({
 
       setNotice('Image removed from the draft.');
       revokePreviewUrl(removedImage?.previewUrl);
-      void refreshProjectImages(currentProjectId).catch(() => {
-        setError('Image removed, but we could not refresh the latest processing status. Refresh the page in a moment.');
-      });
+      refreshUploadStateInBackground(
+        currentProjectId,
+        'Image removed, but we could not refresh the latest processing status. Refresh the page in a moment.',
+      );
     } catch (deleteError) {
       if (removedImage) {
         updateRoom(room.clientId, (current) => ({
@@ -2225,7 +2257,7 @@ export function DesignerProjectUpload({
     }
   }
 
-  async function fetchCompleteness(currentProjectId: string) {
+  async function fetchCompleteness(currentProjectId: string, refreshVersion?: number) {
     const response = await api.api.projects[':id'].completeness.$get({
       param: { id: currentProjectId },
     });
@@ -2240,8 +2272,26 @@ export function DesignerProjectUpload({
       projectCompletenessResponseSchema,
       'Could not check project completeness.',
     );
+    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion)) return nextCompletion;
     setCompletion(nextCompletion);
     return nextCompletion;
+  }
+
+  function refreshUploadStateInBackground(currentProjectId: string, refreshErrorMessage?: string) {
+    const uploadStateRefreshVersion = beginUploadStateRefresh();
+    const imageListRefreshVersion = beginImageListRefresh();
+    void Promise.all([
+      refreshProjectImages(currentProjectId, imageListRefreshVersion),
+      fetchCompleteness(currentProjectId, uploadStateRefreshVersion),
+    ]).catch(
+      (refreshError: unknown) => {
+        if (!isCurrentUploadStateRefresh(uploadStateRefreshVersion)) return;
+        setError(
+          refreshErrorMessage ??
+            (refreshError instanceof Error ? refreshError.message : 'Could not refresh image processing status.'),
+        );
+      },
+    );
   }
 
   async function syncDraft() {
@@ -2260,6 +2310,7 @@ export function DesignerProjectUpload({
     setSaving(true);
     setError('');
     setNotice('');
+    invalidateUploadStateRefresh();
 
     try {
       const currentProjectId = await syncDraft();
@@ -2284,6 +2335,7 @@ export function DesignerProjectUpload({
     setSaving(true);
     setError('');
     setNotice('');
+    invalidateUploadStateRefresh();
 
     try {
       const currentProjectId = await syncDraft();
@@ -2384,6 +2436,9 @@ export function DesignerProjectUpload({
       return;
     }
 
+    setError('');
+    setNotice('');
+    invalidateUploadStateRefresh();
     updateRoom(room.clientId, (current) => ({
       ...current,
       uploading: true,
@@ -2391,8 +2446,6 @@ export function DesignerProjectUpload({
       images: [...current.images, ...pendingUploads.map((upload) => upload.preview)],
     }));
     uploadingRoomIdsRef.current.add(room.clientId);
-    setError('');
-    setNotice('');
 
     try {
       const { projectId: currentProjectId, rooms: currentRooms } = await ensureProject();
@@ -2507,10 +2560,8 @@ export function DesignerProjectUpload({
         }
       }
 
-      setNotice('Images uploaded and linked to the draft.');
-      void refreshProjectImages(currentProjectId).catch(() => {
-        setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
-      });
+      refreshUploadStateInBackground(currentProjectId);
+      setNotice('Images uploaded and linked to the draft. Processing will continue in the background.');
     } catch (uploadError) {
       updateRoom(room.clientId, (current) => ({
         ...current,

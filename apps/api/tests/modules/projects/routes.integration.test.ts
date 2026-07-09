@@ -5,6 +5,7 @@ import type {
   ErrorResponse,
   ListProjectRoomsResponse,
   ListProjectsResponse,
+  ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectRoom,
 } from '@repo/contracts';
@@ -764,6 +765,95 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(body.submittedAt).toEqual(expect.any(String));
   });
 
+  it('counts linked processing images as complete so upload processing can finish in the background', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002044');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    for (let index = 0; index < 3; index += 1) {
+      await makeProjectImage({
+        projectId: project.id,
+        roomId: room.id,
+        status: 'processing',
+        sortOrder: index,
+        themeSlugs: ['modern'],
+        finishSlugs: ['veneer'],
+      });
+    }
+    await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'failed',
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await makeProjectImage({ projectId: project.id, status: 'processing' });
+
+    const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
+      headers: { cookie },
+    });
+    expect(completeness.status).toBe(200);
+    const completenessBody = (await completeness.json()) as ProjectCompletenessResponse;
+    expect(completenessBody).toMatchObject({ complete: true, missing: [] });
+    expect(completenessBody.requirements.find((requirement) => requirement.key === 'at-least-three-photos'))
+      .toMatchObject({ label: 'At least 3 photos', complete: true });
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(200);
+    const body = (await submit.json()) as ProjectDetailResponse;
+    expect(body).toMatchObject({ id: project.id, status: 'submitted' });
+  });
+
+  it('does not count stale processing images as complete', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002045');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    const staleUpdatedAt = new Date(Date.now() - 31 * 60 * 1000);
+    for (let index = 0; index < 3; index += 1) {
+      await makeProjectImage({
+        projectId: project.id,
+        roomId: room.id,
+        status: 'processing',
+        sortOrder: index,
+        themeSlugs: ['modern'],
+        finishSlugs: ['veneer'],
+        updatedAt: staleUpdatedAt,
+      });
+    }
+
+    const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
+      headers: { cookie },
+    });
+    expect(completeness.status).toBe(200);
+    const completenessBody = (await completeness.json()) as ProjectCompletenessResponse;
+    expect(completenessBody).toMatchObject({
+      complete: false,
+      missing: expect.arrayContaining(['at-least-three-photos']),
+    });
+
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(422);
+  });
+
   it('resubmits complete changes-requested projects', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002023');
     const project = await makeProject({
@@ -818,7 +908,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as ErrorResponse;
     expect(body.error.details).toMatchObject({
-      missing: expect.arrayContaining(['property-type', 'at-least-three-photos']),
+      missing: expect.arrayContaining(['property-type', 'scope', 'cost-range']),
     });
   });
 
