@@ -95,6 +95,7 @@ describe('designer project upload helpers', () => {
       bhkSlug: '2-bhk',
       sizeSqft: '1450',
       citySlug: 'bengaluru',
+      cityLabel: 'Bengaluru',
       localitySlug: 'indiranagar',
       localityLabel: 'Indiranagar',
       buildingName: ' Maitri Apartments ',
@@ -128,6 +129,81 @@ describe('designer project upload helpers', () => {
         scopeSlugs: ['construction'],
       },
     });
+  });
+
+  it('derives a default project title from the selected BHK/type and location when the field is blank', () => {
+    const apartmentPayload = buildCreateProjectPayload({
+      projectName: '   ',
+      selectedProjectTypeLabel: 'Apartment',
+      aboutProject: '',
+      backendProjectSelection: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+      selectedScopeSlug: 'construction',
+      primaryField: 'bhk',
+      bhkSlug: '2-bhk',
+      sizeSqft: '',
+      citySlug: 'bengaluru',
+      cityLabel: 'Bengaluru',
+      localitySlug: 'indiranagar',
+      localityLabel: 'Indiranagar',
+      buildingName: '',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'apartment',
+      selectedProjectSubtypeLabel: 'Apartment',
+      selectedScopes: ['construction'],
+    });
+
+    const commercialPayload = buildCreateProjectPayload({
+      projectName: '',
+      selectedProjectTypeLabel: 'Office / Commercial',
+      aboutProject: '',
+      backendProjectSelection: { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'creative-studio' },
+      selectedScopeSlug: 'design',
+      primaryField: 'subtype',
+      bhkSlug: '',
+      sizeSqft: '',
+      citySlug: 'chennai',
+      cityLabel: 'Chennai',
+      localitySlug: '',
+      localityLabel: '',
+      buildingName: '',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'office-commercial',
+      selectedProjectSubtypeLabel: 'Creative Studio',
+      selectedScopes: ['design'],
+    });
+
+    expect(apartmentPayload.title).toBe('2 BHK in Indiranagar');
+    expect(commercialPayload.title).toBe('Creative Studio in Chennai');
+  });
+
+  it('replaces a stale type-only auto title once BHK and location are available', () => {
+    const payload = buildCreateProjectPayload({
+      projectName: 'Apartment',
+      selectedProjectTypeLabel: 'Apartment',
+      aboutProject: '',
+      backendProjectSelection: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+      selectedScopeSlug: 'construction',
+      primaryField: 'bhk',
+      bhkSlug: '2-bhk',
+      sizeSqft: '1450',
+      citySlug: 'mumbai',
+      cityLabel: 'Mumbai',
+      localitySlug: 'bandra',
+      localityLabel: 'Bandra',
+      buildingName: 'Hello World 2',
+      budgetBandSlug: '',
+      completedByMonth: '',
+      projectDuration: '',
+      projectType: 'apartment',
+      selectedProjectSubtypeLabel: 'Apartment',
+      selectedScopes: ['construction'],
+    });
+
+    expect(payload.title).toBe('2 BHK in Bandra');
   });
 
   it('builds image metadata with taxonomy slugs and deduplicated tags', () => {

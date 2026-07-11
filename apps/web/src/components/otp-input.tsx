@@ -25,18 +25,22 @@ export function OtpInput({
   }, []);
 
   function handleChange(index: number, inputValue: string) {
-    if (inputValue.length > 1) {
-      const pasted = inputValue.replace(/\D/g, '').split('').slice(0, length);
+    const digits = inputValue.replace(/\D/g, '');
+
+    // Multi-character input (e.g., iOS OTP autofill)
+    if (digits.length > 1) {
       const next = [...value];
       for (let i = 0; i < length; i++) {
-        next[i] = pasted[i] ?? '';
+        next[i] = digits[i] ?? next[i] ?? '';
       }
       onChange(next);
-      inputRefs.current[Math.min(pasted.length, length - 1)]?.focus();
+      const focusIndex = Math.min(digits.length, length - 1);
+      inputRefs.current[focusIndex]?.focus();
       return;
     }
 
-    const digit = inputValue.replace(/\D/g, '');
+    // Single digit typed
+    const digit = digits.slice(0, 1);
     if (digit && digit !== value[index]) {
       const next = [...value];
       next[index] = digit;
@@ -45,6 +49,19 @@ export function OtpInput({
         inputRefs.current[index + 1]?.focus();
       }
     }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    if (!pasted) return;
+    const next = [...value];
+    for (let i = 0; i < length; i++) {
+      next[i] = pasted[i] ?? '';
+    }
+    onChange(next);
+    const focusIndex = Math.min(pasted.length, length - 1);
+    inputRefs.current[focusIndex]?.focus();
   }
 
   function handleKeyDown(index: number, e: React.KeyboardEvent) {
@@ -67,7 +84,7 @@ export function OtpInput({
   }
 
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex w-full justify-center gap-1.5 px-2">
       {Array.from({ length }, (_, i) => (
         <Input
           key={i}
@@ -76,13 +93,14 @@ export function OtpInput({
           }}
           type="text"
           inputMode="numeric"
-          maxLength={1}
+          maxLength={length}
           value={value[i] ?? ''}
           aria-label={`OTP digit ${i + 1}`}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
+          onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
-          className="h-14 w-[clamp(42px,11vw,56px)] rounded-lg text-center text-2xl font-medium"
+          className="h-12 min-w-0 flex-1 rounded-lg text-center text-xl font-medium"
           disabled={disabled}
           autoComplete="one-time-code"
         />
