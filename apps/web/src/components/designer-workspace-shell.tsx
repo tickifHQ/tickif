@@ -10,18 +10,20 @@ import { Button } from '@repo/ui/components/button';
 import {
   ArrowUpRight,
   BadgeHelp,
-  BriefcaseBusiness,
   CalendarDays,
   ChartLine,
+  ChevronsUpDown,
   CircleUserRound,
   FileBadge2,
   FolderKanban,
   HandCoins,
   House,
+  Link2,
   Menu,
   MessagesSquare,
   Plus,
   ShieldCheck,
+  SlidersHorizontal,
   Star,
   Users,
   X,
@@ -43,7 +45,7 @@ const studioItems: NavItem[] = [
 ];
 
 const growItems: NavItem[] = [
-  { label: 'Portfolio', href: '/designer/onboarding', icon: BriefcaseBusiness },
+  { label: 'Portfolio', href: '/designer/onboarding', icon: Link2 },
   { label: 'Verification', icon: ShieldCheck },
   { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
@@ -91,7 +93,7 @@ function SidebarSection({
 }) {
   return (
     <section className="space-y-2">
-      <div className="font-mono px-2 py-2 text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
+      <div className="text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
         {title}
       </div>
       <div className="space-y-0.5">
@@ -108,7 +110,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
         <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
-          <BriefcaseBusiness className="size-4" />
+          <SlidersHorizontal className="size-4" />
           <span className="font-medium">Projects</span>
         </Link>
         <span>/</span>
@@ -144,14 +146,14 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="border-b border-border px-6 py-5">
+      <div className="px-6 py-5">
         <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
           <span>Tickif</span>
         </Link>
       </div>
 
-      <div className="border-b border-border p-4">
-        <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-background p-3 text-left shadow-sm">
+      <div className="border-b border-border px-4 pb-4">
+        <div className="flex w-full items-center gap-3 px-2">
           <Avatar className="size-10 rounded-xl">
             <InitialsAvatar
               seed={studioName}
@@ -164,6 +166,7 @@ function SidebarContent({
             <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
             <div className="truncate text-xs leading-[1.1] text-muted-foreground">{studioLocation}</div>
           </div>
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </div>
       </div>
 
@@ -259,7 +262,7 @@ export function DesignerWorkspaceShell({
                 <Button
                   asChild
                   variant="emphasis"
-                  className="h-10 cursor-pointer"
+                  className="h-10 cursor-pointer rounded-full"
                 >
                   <Link href="/designer/projects/new">
                     <Plus className="size-4" />
