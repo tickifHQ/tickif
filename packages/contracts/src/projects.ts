@@ -302,6 +302,26 @@ export const feedProjectsResponseSchema = z
   .meta({ id: 'FeedProjects' });
 export type FeedProjectsResponse = z.infer<typeof feedProjectsResponseSchema>;
 
+// --- Public project gallery --------------------------------------------------
+
+export const galleryImageSchema = z
+  .object({
+    id: z.string(),
+    url: z.string(),
+    width: z.number().nullable(),
+    height: z.number().nullable(),
+    roomName: z.string().nullable(),
+  })
+  .meta({ id: 'GalleryImage' });
+export type GalleryImage = z.infer<typeof galleryImageSchema>;
+
+export const galleryResponseSchema = z
+  .object({
+    images: z.array(galleryImageSchema),
+  })
+  .meta({ id: 'GalleryResponse' });
+export type GalleryResponse = z.infer<typeof galleryResponseSchema>;
+
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
 export const projectRoomIdParamSchema = z

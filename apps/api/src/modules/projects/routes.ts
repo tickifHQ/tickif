@@ -9,6 +9,7 @@ import {
   duplicateProjectResponseSchema,
   feedProjectsQuerySchema,
   feedProjectsResponseSchema,
+  galleryResponseSchema,
   linkProjectImageSchema,
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
@@ -415,7 +416,7 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       responses: {
         200: {
           description: 'Gallery images with presigned URLs',
-          content: { 'application/json': { schema: z.object({ images: z.array(z.object({ id: z.string(), url: z.string(), width: z.number().nullable(), height: z.number().nullable(), roomName: z.string().nullable() })) }) } },
+          content: { 'application/json': { schema: galleryResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
       },

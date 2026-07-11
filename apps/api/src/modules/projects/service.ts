@@ -125,6 +125,20 @@ function pickPreviewDerivative(derivatives: Derivative[]): string | null {
   );
 }
 
+/** Pick the best derivative for fullscreen gallery display (largest available, never original). */
+function pickGalleryDerivative(derivatives: Derivative[]): string | null {
+  return (
+    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'medium' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
+    derivatives[0]?.key ??
+    null
+  );
+}
+
 /**
  * The single "when does a cover have a URL" policy, shared by the dashboard list and the
  * public feed. Accepts the left-join nulls the feed carries. Callers that must not fail the
@@ -814,10 +828,10 @@ export const projectsService = {
 
     const images = await projectsRepository.listPublicGalleryImages(projectId);
 
-    // Presign each image's best derivative
+    // Presign each image's best derivative for fullscreen display
     const gallery = await Promise.all(
       images.map(async (img) => {
-        const key = pickPreviewDerivative(img.derivatives ?? []);
+        const key = pickGalleryDerivative(img.derivatives ?? []);
         if (!key) return null;
         const url = await presignDownload({ key }).catch(() => null);
         if (!url) return null;

@@ -1,8 +1,7 @@
+import type { FeedProject } from '@repo/contracts';
 import { HomeHero } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { ShowcaseCard } from '@/components/showcase-card';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 const filters = [
   'Affordable modular kitchens',
@@ -16,32 +15,21 @@ const filters = [
 ];
 
 export default async function HomePage() {
-  // Fetch published projects from the public feed API
-  let projects: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    studio: string;
-    city: string | null;
-    locality: string | null;
-    rating: number;
-    budget: string | null;
-    tags: string[];
-    coverImageUrl: string | null;
-    imageWidth: number | null;
-    imageHeight: number | null;
-  }> = [];
+  let projects: FeedProject[] = [];
 
   try {
-    const res = await fetch(`${API_URL}/api/projects/feed?limit=30`, {
-      next: { revalidate: 60 },
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
+    const res = await fetch(`${baseUrl}/api/projects/feed?limit=30`, {
+      cache: 'no-store',
     });
     if (res.ok) {
       const data = await res.json();
       projects = data.projects ?? [];
+    } else {
+      console.error('[HomePage] feed response not ok:', res.status);
     }
-  } catch {
-    // Fallback: empty feed if API is unavailable
+  } catch (err) {
+    console.error('[HomePage] feed fetch error:', err);
   }
 
   return (
@@ -90,17 +78,19 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <div className="mt-8 columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
-          {projects.length > 0 ? (
-            projects.map((project) => (
+        {projects.length > 0 ? (
+          <div className="mt-8 columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
+            {projects.map((project) => (
               <ShowcaseCard key={project.id} project={project} />
-            ))
-          ) : (
-            <p className="col-span-full text-center text-sm text-muted-foreground">
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 flex items-center justify-center py-20">
+            <p className="text-sm text-muted-foreground">
               No projects yet — check back soon.
             </p>
-          )}
-        </div>
+          </div>
+        )}
       </section>
     </>
   );
