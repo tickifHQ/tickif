@@ -13,6 +13,9 @@ interface ProjectDetailViewProps {
 
 export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDetailViewProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [reported, setReported] = useState(false);
 
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
 
@@ -137,37 +140,27 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={(e) => {
-                  const svg = e.currentTarget.querySelector('svg');
-                  if (svg) {
-                    const isFilled = svg.getAttribute('fill') === 'currentColor';
-                    svg.setAttribute('fill', isFilled ? 'none' : 'currentColor');
-                    e.currentTarget.classList.toggle('text-primary', !isFilled);
-                    e.currentTarget.classList.toggle('text-foreground', isFilled);
-                  }
-                }}
-                className="flex flex-1 items-center justify-center rounded-xl bg-muted/70 py-2.5 text-foreground transition-colors hover:text-primary"
+                onClick={() => setBookmarked((prev) => !prev)}
+                aria-pressed={bookmarked}
+                className={`flex flex-1 items-center justify-center rounded-xl bg-muted/70 py-2.5 transition-colors hover:text-primary ${
+                  bookmarked ? 'text-primary' : 'text-foreground'
+                }`}
                 aria-label="Bookmark"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <svg viewBox="0 0 24 24" className="size-4" fill={bookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
               <button
                 type="button"
-                onClick={(e) => {
-                  const svg = e.currentTarget.querySelector('svg');
-                  if (svg) {
-                    const isFilled = svg.getAttribute('fill') === 'currentColor';
-                    svg.setAttribute('fill', isFilled ? 'none' : 'currentColor');
-                    e.currentTarget.classList.toggle('text-primary', !isFilled);
-                    e.currentTarget.classList.toggle('text-foreground', isFilled);
-                  }
-                }}
-                className="flex flex-1 items-center justify-center rounded-xl bg-muted/70 py-2.5 text-foreground transition-colors hover:text-primary"
+                onClick={() => setShared((prev) => !prev)}
+                aria-pressed={shared}
+                className={`flex flex-1 items-center justify-center rounded-xl bg-muted/70 py-2.5 transition-colors hover:text-primary ${
+                  shared ? 'text-primary' : 'text-foreground'
+                }`}
                 aria-label="Share"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <svg viewBox="0 0 24 24" className="size-4" fill={shared ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
                   <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
                   <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
                 </svg>
@@ -192,17 +185,14 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
               </div>
               <button
                 type="button"
-                onClick={(e) => {
-                  const svg = e.currentTarget.querySelector('svg');
-                  if (svg) {
-                    svg.setAttribute('fill', 'currentColor');
-                    e.currentTarget.classList.add('text-red-500');
-                  }
-                }}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-red-500"
+                onClick={() => setReported(true)}
+                aria-pressed={reported}
+                className={`flex items-center gap-1.5 text-sm transition-colors hover:text-red-500 ${
+                  reported ? 'text-red-500' : 'text-muted-foreground'
+                }`}
                 aria-label="Report"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <svg viewBox="0 0 24 24" className="size-4" fill={reported ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
                   <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round" /><line x1="4" x2="4" y1="22" y2="15" />
                 </svg>
                 Report
