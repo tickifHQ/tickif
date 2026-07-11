@@ -1,3 +1,4 @@
+import type { FeedProject } from '@repo/contracts';
 import { HomeHero } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { HomeSearchBar } from '@/components/home-search-bar';
@@ -5,13 +6,32 @@ import { FeedFilters } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
 import { getServerSession } from '@/lib/auth-guard';
 
+/** Fetches the public feed; the landing page renders its empty state on any failure. */
+async function fetchFeedProjects(): Promise<FeedProject[]> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
+    const res = await fetch(`${baseUrl}/api/projects/feed?limit=30`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.error('[HomePage] feed response not ok:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    return data.projects ?? [];
+  } catch (err) {
+    console.error('[HomePage] feed fetch error:', err);
+    return [];
+  }
+}
+
 /**
  * Landing page with two states (Figma "HOME [Logged out]" / "HOME [Logged in]"):
  * - Logged out: trust banner + hero + "Trending projects" feed.
  * - Logged in: prominent search bar straight into the filtered feed.
  */
 export default async function HomePage() {
-  const session = await getServerSession();
+  const [session, projects] = await Promise.all([getServerSession(), fetchFeedProjects()]);
 
   if (session) {
     return (
@@ -24,7 +44,7 @@ export default async function HomePage() {
           </div>
           {/* Green fade sits behind the grid only — page margins stay #FAFAF8 (Figma 14339:8424). */}
           <div className="mt-6 bg-[linear-gradient(0deg,#e8f0eb_40%,rgba(247,244,239,0)_100%)]">
-            <ProjectFeed />
+            <ProjectFeed projects={projects} />
           </div>
         </section>
       </div>
@@ -53,7 +73,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-8">
-            <ProjectFeed />
+            <ProjectFeed projects={projects} />
           </div>
         </section>
       </div>
