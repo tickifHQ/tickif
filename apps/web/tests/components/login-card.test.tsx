@@ -1,26 +1,38 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginCard } from '../../src/components/login-card';
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
-
 const mock = vi.hoisted(() => ({
+  router: {
+    push: vi.fn(),
+  },
   sendOtp: vi.fn(),
   verify: vi.fn(),
   signInSocial: vi.fn(),
+  emailOtpSendVerificationOtp: vi.fn(),
+  signInEmailOtp: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => mock.router,
 }));
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
     phoneNumber: { sendOtp: mock.sendOtp, verify: mock.verify },
-    signIn: { social: mock.signInSocial },
+    signIn: { social: mock.signInSocial, emailOtp: mock.signInEmailOtp },
+    emailOtp: { sendVerificationOtp: mock.emailOtpSendVerificationOtp },
   },
 }));
 
 describe('LoginCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    document.cookie = 'tickif_visitor_onboarded=; Max-Age=0; Path=/';
+  });
+
   it('renders trusted-by badge, welcome title, and phone input', () => {
     render(<LoginCard />);
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
@@ -58,7 +70,7 @@ describe('LoginCard', () => {
       'true',
     );
     expect(screen.getByTestId('feature-share-your-work-anywhere')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
   });
 
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
@@ -70,7 +82,7 @@ describe('LoginCard', () => {
 
   it('shows Google sign-in in browsing mode', () => {
     render(<LoginCard />);
-    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
@@ -82,30 +94,45 @@ describe('LoginCard', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('shows Google sign-in, email input, and button in designer mode', async () => {
+  it('shows Google sign-in and email input in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    expect(screen.getByRole('button', { name: /login with google/i })).toBeInTheDocument();
-    expect(screen.getAllByText('OR')).toHaveLength(2);
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Login' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Continue$/i })).toBeInTheDocument();
   });
 
   it('calls Google signIn with origin callback in browsing mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('button', { name: /continue with google/i }));
-    expect(mock.signInSocial).toHaveBeenCalledWith({ provider: 'google', callbackURL: 'http://localhost:3000' });
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[0]!);
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/onboarding',
+    });
   });
+
+  it('sends completed visitors home after Google sign in', async () => {
+    window.localStorage.setItem('tickif.visitorOnboarding', JSON.stringify({ displayName: 'Mahi', city: 'chennai' }));
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/',
+    });
+  });
+
 
   it('calls Google signIn with onboarding callback in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
     const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    render(<LoginCard initialMode="designer" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
     expect(mock.signInSocial).toHaveBeenCalledWith({
       provider: 'google',
       callbackURL: 'http://localhost:3000/designer/onboarding',
@@ -116,16 +143,17 @@ describe('LoginCard', () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
-    await user.click(screen.getByRole('button', { name: /continue with google/i }));
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[0]!);
     expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
-    await user.click(screen.getByRole('button', { name: /login with google/i }));
+    render(<LoginCard initialMode="designer" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
     expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
   });
 

@@ -56,7 +56,6 @@ export function DesignerProjectRowActions({
           return;
         }
 
-        router.push(`/designer/projects/${parsed.data.project.id}/edit`);
         router.refresh();
       } catch {
         setError('Could not duplicate project.');

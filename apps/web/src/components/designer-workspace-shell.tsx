@@ -10,18 +10,21 @@ import { Button } from '@repo/ui/components/button';
 import {
   ArrowUpRight,
   BadgeHelp,
-  ChartNoAxesCombined,
+  CalendarDays,
+  ChartLine,
   ChevronsUpDown,
-  ContactRound,
-  CreditCard,
-  LayoutGrid,
+  CircleUserRound,
+  FileBadge2,
+  FolderKanban,
+  HandCoins,
+  House,
   Link2,
   Menu,
   MessagesSquare,
   Plus,
-  Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Star,
   Users,
   X,
 } from 'lucide-react';
@@ -33,18 +36,20 @@ type NavItem = {
 };
 
 const studioItems: NavItem[] = [
-  { label: 'Overview', href: '/designer/dashboard', icon: LayoutGrid },
-  { label: 'Projects', href: '/designer/projects', icon: SlidersHorizontal },
-  { label: 'Leads', href: '/designer/leads', icon: ContactRound },
-  { label: 'Analytics', icon: ChartNoAxesCombined },
+  { label: 'Overview', href: '/designer/dashboard', icon: House },
+  { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
+  { label: 'Leads', href: '/designer/leads', icon: Users },
+  { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
+  { label: 'Reviews', href: '/designer/reviews', icon: Star },
+  { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/onboarding', icon: Link2 },
   { label: 'Verification', icon: ShieldCheck },
-  { label: 'Team & Roles', icon: Users },
-  { label: 'Plan & Billing', icon: CreditCard },
-  { label: 'Profile & Settings', icon: Settings },
+  { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
+  { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
+  { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
 ];
 
 function isItemActive(pathname: string, href?: string) {
@@ -101,33 +106,6 @@ function SidebarSection({
 }
 
 function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
-  if (pathname === '/designer/dashboard') {
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <LayoutGrid className="size-4" />
-        <span className="font-medium">Overview</span>
-      </div>
-    );
-  }
-
-  if (pathname === '/designer/projects') {
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <SlidersHorizontal className="size-4" />
-        <span className="font-medium">Projects</span>
-      </div>
-    );
-  }
-
-  if (pathname === '/designer/leads') {
-    return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
-        <ContactRound className="size-4" />
-        <span className="font-medium">Leads</span>
-      </div>
-    );
-  }
-
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
       <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
@@ -137,6 +115,19 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
         </Link>
         <span>/</span>
         <span className="font-medium text-foreground">Upload project</span>
+      </div>
+    );
+  }
+
+  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
+
+  if (navigationItem?.href) {
+    const Icon = navigationItem.icon;
+
+    return (
+      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+        <Icon className="size-4" />
+        <span className="font-medium">{navigationItem.label}</span>
       </div>
     );
   }
@@ -218,15 +209,14 @@ export function DesignerWorkspaceShell({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="flex min-h-screen overflow-hidden bg-muted/20">
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
+    <div className="fixed inset-0 overflow-hidden bg-muted/30">
+      <div className="flex h-full overflow-hidden bg-muted/20">
+        <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
           <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
         </aside>
 
@@ -272,7 +262,7 @@ export function DesignerWorkspaceShell({
                 <Button
                   asChild
                   variant="emphasis"
-                  className="h-10 cursor-pointer rounded-[0.5vw]"
+                  className="h-10 cursor-pointer rounded-full"
                 >
                   <Link href="/designer/projects/new">
                     <Plus className="size-4" />
@@ -284,7 +274,9 @@ export function DesignerWorkspaceShell({
             </div>
           </header>
           <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto">{children}</main>
+            <main className="h-full min-w-0 overflow-y-auto">
+              {children}
+            </main>
           </section>
         </div>
       </div>

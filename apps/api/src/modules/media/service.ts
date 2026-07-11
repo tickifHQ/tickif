@@ -15,17 +15,35 @@ import { mediaRepository, type ProjectImageListItem } from './repository.js';
 /** The authenticated caller, as resolved by the route from the session. */
 export type Caller = { userId: string; userRole: string };
 
+function pickDerivativeKey(
+  row: ProjectImageListItem,
+  variants: string[],
+): string | null {
+  for (const variant of variants) {
+    const webp = row.derivatives.find((derivative) => derivative.variant === variant && derivative.format === 'webp');
+    if (webp) return webp.key;
+
+    const fallback = row.derivatives.find((derivative) => derivative.variant === variant);
+    if (fallback) return fallback.key;
+  }
+
+  return row.derivatives[0]?.key ?? null;
+}
+
 function pickPreviewDerivative(row: ProjectImageListItem): string | null {
+  return pickDerivativeKey(row, ['thumb']);
+}
+
+function pickViewerDerivative(row: ProjectImageListItem): string | null {
   return (
-    row.derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
-    row.derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
-    row.derivatives[0]?.key ??
+    pickDerivativeKey(row, ['large', 'medium', 'small']) ??
     null
   );
 }
 
 async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
   const previewKey = row.status === 'ready' ? pickPreviewDerivative(row) : null;
+  const viewerKey = row.status === 'ready' ? pickViewerDerivative(row) : null;
   return {
     id: row.id,
     roomId: row.roomId,
@@ -39,6 +57,7 @@ async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
     height: row.height,
     derivatives: row.derivatives,
     previewUrl: previewKey ? await presignDownload({ key: previewKey }) : null,
+    viewerUrl: viewerKey ? await presignDownload({ key: viewerKey }) : null,
   };
 }
 

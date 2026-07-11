@@ -44,6 +44,9 @@ import {
  * unit-testable with a fake repository and free to move to its own service.
  */
 
+const REQUIRED_PROJECT_PHOTO_COUNT = 3;
+const PHOTO_COMPLETENESS_KEYS = new Set(['at-least-three-photos', 'image-metadata']);
+
 function toResponse(row: ProjectRecord): ProjectResponse {
   return {
     id: row.id,
@@ -108,12 +111,14 @@ function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageRes
 }
 
 async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
-  const keys = [
+  const keys = [...new Set([
     row.originalKey,
     ...row.derivatives.map((derivative) => derivative.key),
-  ].filter((key): key is string => Boolean(key));
+  ].filter((key): key is string => Boolean(key)))];
+  const referencedKeys = new Set(await projectsRepository.findReferencedImageObjectKeys(keys));
+  const unusedKeys = keys.filter((key) => !referencedKeys.has(key));
 
-  await Promise.allSettled(keys.map((key) => deleteObject(key)));
+  await Promise.allSettled(unusedKeys.map((key) => deleteObject(key)));
 }
 
 function pickPreviewDerivative(derivatives: Derivative[]): string | null {
@@ -527,7 +532,7 @@ async function validateRoomType(roomTypeId: string): Promise<void> {
 
 function buildCompleteness(
   project: ProjectRecord,
-  imageCounts: { readyImageCount: number; taggedReadyImageCount: number },
+  imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
   const requirements = [
     { key: 'project-name', label: 'Project name', complete: project.title.trim().length > 0 },
@@ -537,15 +542,15 @@ function buildCompleteness(
     { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
     {
       key: 'at-least-three-photos',
-      label: 'At least 3 ready photos',
-      complete: imageCounts.readyImageCount >= 3,
+      label: 'At least 3 photos',
+      complete: imageCounts.imageCount >= 3,
     },
     {
       key: 'image-metadata',
-      label: 'Room, theme, and finish metadata on each ready photo',
+      label: 'Room, theme, and finish metadata on each photo',
       complete:
-        imageCounts.readyImageCount >= 3 &&
-        imageCounts.taggedReadyImageCount === imageCounts.readyImageCount,
+        imageCounts.imageCount >= 3 &&
+        imageCounts.taggedImageCount === imageCounts.imageCount,
     },
   ];
   const completeCount = requirements.filter((requirement) => requirement.complete).length;
@@ -777,7 +782,7 @@ export const projectsService = {
 
   async getCompleteness(projectId: string, caller: Caller): Promise<ProjectCompletenessResponse> {
     const project = await requireReadableProject(projectId, caller);
-    return buildCompleteness(project, await projectsRepository.getReadyImageCounts(projectId));
+    return buildCompleteness(project, await projectsRepository.getUploadImageCounts(projectId));
   },
 
   async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
@@ -785,16 +790,35 @@ export const projectsService = {
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
 
-    const completeness = buildCompleteness(
+    const metadataCompleteness = buildCompleteness(
       project,
-      await projectsRepository.getReadyImageCounts(projectId),
+      {
+        imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+        taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+      },
     );
+    const metadataMissing = metadataCompleteness.missing.filter((key) => !PHOTO_COMPLETENESS_KEYS.has(key));
+    if (metadataMissing.length > 0) {
+      throw AppError.unprocessable('Project is missing required upload information', {
+        missing: metadataMissing,
+      });
+    }
+
+    const submission = await projectsRepository.submitWithUploadCounts(projectId, {
+      minImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+    });
+    if (!submission.project) throw AppError.notFound('Project not found');
+
+    const completeness = buildCompleteness(project, submission.counts);
     if (!completeness.complete) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: completeness.missing,
       });
     }
+    if (!submission.submitted) {
+      throw AppError.conflict('Only draft or changes-requested projects can be submitted');
+    }
 
-    return toDetailResponse(await projectsRepository.submit(projectId), await projectsRepository.listRooms(projectId));
+    return toDetailResponse(submission.submitted, await projectsRepository.listRooms(projectId));
   },
 };

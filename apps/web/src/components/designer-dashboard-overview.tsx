@@ -41,13 +41,7 @@ function ChecklistStep({
             className="absolute top-[calc(0.125rem+1.75rem)] bottom-[-2.5rem] left-1/2 w-px -translate-x-1/2 bg-border"
           />
         ) : null}
-        <span
-          className={
-            item.done
-              ? 'relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background'
-              : 'relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background'
-          }
-        >
+        <span className="relative z-10 mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background">
           {item.done ? (
             <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#77DB89] text-white">
               <Check className="size-3" />
@@ -182,7 +176,7 @@ export function DesignerDashboardOverview({
         {
           key: 'account-creation',
           title: 'Account creation',
-          description: 'Setup your workspace on Tickif.',
+          description: 'Set up your workspace on Tickif.',
           done: true,
         },
         {
@@ -216,6 +210,9 @@ export function DesignerDashboardOverview({
       ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
   const trackedChecklistComplete = hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
+  const checklistProgressScore = hasTrackedSteps
+    ? Math.round((trackedChecklistItems.filter((item) => item.done).length / trackedChecklistItems.length) * 100)
+    : dashboard.profileCompletion.score;
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -248,13 +245,13 @@ export function DesignerDashboardOverview({
                   Complete profile
                 </div>
                 <div className="text-base font-medium text-primary">
-                  {dashboard.profileCompletion.score}%
+                  {checklistProgressScore}%
                 </div>
               </div>
               <div className="mt-3 h-1.5 rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-[width]"
-                  style={{ width: `${dashboard.profileCompletion.score}%` }}
+                  style={{ width: `${checklistProgressScore}%` }}
                 />
               </div>
             </div>
@@ -373,7 +370,7 @@ export function DesignerDashboardOverview({
             </div>
             <CardContent className="px-5 pt-6 pb-5">
               <div className="text-xs tracking-normal text-muted-foreground">
-                ONE LINK. {`  `} EVERYWHERE.
+                ONE LINK. EVERYWHERE.
               </div>
               <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
                 A portfolio worth <span className="text-primary">sharing.</span>

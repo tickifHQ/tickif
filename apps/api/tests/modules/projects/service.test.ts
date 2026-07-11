@@ -44,7 +44,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findImage: vi.fn(),
       updateImageLink: vi.fn(),
       deleteImage: vi.fn(),
-      getReadyImageCounts: vi.fn(),
+      getUploadImageCounts: vi.fn(),
+      submitWithUploadCounts: vi.fn(),
+      findReferencedImageObjectKeys: vi.fn(),
       submit: vi.fn(),
       listPublishedFeed: vi.fn(),
       findTaxonomyLabels: vi.fn(),
@@ -132,7 +134,10 @@ const caller = {
   isBanned: false,
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
+});
 
 describe('projectsService.list', () => {
   it('maps owner rows to the dashboard response shape and passes filters through', async () => {
@@ -400,6 +405,29 @@ describe('projectsService.deleteImage', () => {
     expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
     expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
   });
+
+  it('keeps shared storage objects when another image row still references them', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
+    vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([
+      'originals/project/image',
+      'derivatives/project/image/thumb.webp',
+    ]);
+
+    await expect(projectsService.deleteImage(row().id, imageRow().id, caller)).resolves.toEqual({
+      id: imageRow().id,
+      deleted: true,
+    });
+
+    expect(deleteObject).not.toHaveBeenCalledWith('originals/project/image');
+    expect(deleteObject).not.toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
+    expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
+  });
 });
 
 describe('projectsService.getCompleteness', () => {
@@ -411,9 +439,9 @@ describe('projectsService.getCompleteness', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 1,
-      taggedReadyImageCount: 0,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 1,
+      taggedImageCount: 0,
     });
 
     const result = await projectsService.getCompleteness(row().id, caller);
@@ -421,13 +449,15 @@ describe('projectsService.getCompleteness', () => {
     expect(result.complete).toBe(false);
     expect(result.missing).toContain('property-type');
     expect(result.missing).toContain('at-least-three-photos');
+    expect(result.requirements.find((requirement) => requirement.key === 'at-least-three-photos')?.label)
+      .toBe('At least 3 photos');
   });
 
   it('reports completeness for published projects without owner access', async () => {
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'published' }));
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 0,
-      taggedReadyImageCount: 0,
+    vi.mocked(projectsRepository.getUploadImageCounts).mockResolvedValue({
+      imageCount: 0,
+      taggedImageCount: 0,
     });
 
     const result = await projectsService.getCompleteness(row().id, caller);
@@ -453,13 +483,11 @@ describe('projectsService.submit', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 3,
-      taggedReadyImageCount: 3,
+    vi.mocked(projectsRepository.submitWithUploadCounts).mockResolvedValue({
+      project: complete,
+      counts: { imageCount: 3, taggedImageCount: 3 },
+      submitted: row({ ...complete, status: 'submitted', submittedAt: new Date('2026-01-02T00:00:00Z') }),
     });
-    vi.mocked(projectsRepository.submit).mockResolvedValue(
-      row({ ...complete, status: 'submitted', submittedAt: new Date('2026-01-02T00:00:00Z') }),
-    );
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
 
     const result = await projectsService.submit(complete.id, caller);
@@ -484,23 +512,49 @@ describe('projectsService.submit', () => {
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(requestedChanges);
-    vi.mocked(projectsRepository.getReadyImageCounts).mockResolvedValue({
-      readyImageCount: 3,
-      taggedReadyImageCount: 3,
-    });
-    vi.mocked(projectsRepository.submit).mockResolvedValue(
-      row({
+    vi.mocked(projectsRepository.submitWithUploadCounts).mockResolvedValue({
+      project: requestedChanges,
+      counts: { imageCount: 3, taggedImageCount: 3 },
+      submitted: row({
         ...requestedChanges,
         status: 'submitted',
         submittedAt: new Date('2026-01-02T00:00:00Z'),
       }),
-    );
+    });
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
 
     const result = await projectsService.submit(requestedChanges.id, caller);
 
     expect(result.status).toBe('submitted');
-    expect(projectsRepository.submit).toHaveBeenCalledWith(requestedChanges.id);
+    expect(projectsRepository.submitWithUploadCounts).toHaveBeenCalledWith(requestedChanges.id, {
+      minImageCount: 3,
+    });
+  });
+
+  it('rejects when the atomic submit recheck sees stale image counts', async () => {
+    const complete = row({
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: complete.id,
+      designerId: complete.designerId,
+      status: 'draft',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
+    vi.mocked(projectsRepository.submitWithUploadCounts).mockResolvedValue({
+      project: complete,
+      counts: { imageCount: 2, taggedImageCount: 2 },
+      submitted: null,
+    });
+
+    await expect(projectsService.submit(complete.id, caller)).rejects.toMatchObject({
+      status: 422,
+    });
   });
 });
 

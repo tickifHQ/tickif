@@ -1,6 +1,6 @@
 import { ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
+import { db, schema, eq, and, or, desc, asc, sql, isNotNull } from '@repo/db';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -37,6 +37,32 @@ export type ProjectOwnership = {
   designerId: string;
   status: ProjectStatus;
   ownerUserId: string | null;
+};
+
+export type UploadImageCounts = {
+  imageCount: number;
+  taggedImageCount: number;
+};
+
+export type SubmitWithUploadCountsResult = {
+  project: ProjectRecord | null;
+  counts: UploadImageCounts;
+  submitted: ProjectRecord | null;
+};
+
+const freshProcessingImageFilter = sql`
+  (
+    ${schema.projectImage.status} = 'ready'
+    or (
+      ${schema.projectImage.status} = 'processing'
+      and ${schema.projectImage.updatedAt} >= now() - interval '30 minutes'
+    )
+  )
+`;
+
+const emptyUploadImageCounts: UploadImageCounts = {
+  imageCount: 0,
+  taggedImageCount: 0,
 };
 
 export type ListProjectsParams = {
@@ -493,17 +519,71 @@ export const projectsRepository = {
     return row;
   },
 
-  async getReadyImageCounts(projectId: string): Promise<{
-    readyImageCount: number;
-    taggedReadyImageCount: number;
-  }> {
+  async submitWithUploadCounts(
+    id: string,
+    requirements: { minImageCount: number },
+  ): Promise<SubmitWithUploadCountsResult> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.id, id))
+        .for('update')
+        .limit(1);
+
+      if (!project) {
+        return { project: null, counts: emptyUploadImageCounts, submitted: null };
+      }
+
+      const [row] = await tx
+        .select({
+          imageCount: sql<number>`count(*)::int`,
+          taggedImageCount: sql<number>`
+            count(*) filter (
+              where jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
+                and jsonb_array_length(${schema.projectImage.finishSlugs}) > 0
+            )::int
+          `,
+        })
+        .from(schema.projectImage)
+        .where(
+          and(
+            eq(schema.projectImage.projectId, id),
+            freshProcessingImageFilter,
+            isNotNull(schema.projectImage.roomId),
+          ),
+        );
+
+      const counts = {
+        imageCount: row?.imageCount ?? 0,
+        taggedImageCount: row?.taggedImageCount ?? 0,
+      };
+      const hasRequiredImages =
+        counts.imageCount >= requirements.minImageCount &&
+        counts.taggedImageCount === counts.imageCount;
+
+      if (!hasRequiredImages) {
+        return { project, counts, submitted: null };
+      }
+
+      const now = new Date();
+      const [submitted] = await tx
+        .update(schema.project)
+        .set({ status: 'submitted', submittedAt: now, updatedAt: now })
+        .where(and(eq(schema.project.id, id), inArray(schema.project.status, ['draft', 'changes_requested'])))
+        .returning();
+
+      return { project, counts, submitted: submitted ?? null };
+    });
+  },
+
+  async getUploadImageCounts(projectId: string): Promise<UploadImageCounts> {
     const [row] = await db
       .select({
-        readyImageCount: sql<number>`count(*)::int`,
-        taggedReadyImageCount: sql<number>`
+        imageCount: sql<number>`count(*)::int`,
+        taggedImageCount: sql<number>`
           count(*) filter (
-            where ${schema.projectImage.roomId} is not null
-              and jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
+            where jsonb_array_length(${schema.projectImage.themeSlugs}) > 0
               and jsonb_array_length(${schema.projectImage.finishSlugs}) > 0
           )::int
         `,
@@ -512,12 +592,13 @@ export const projectsRepository = {
       .where(
         and(
           eq(schema.projectImage.projectId, projectId),
-          eq(schema.projectImage.status, 'ready'),
+          freshProcessingImageFilter,
+          isNotNull(schema.projectImage.roomId),
         ),
       );
     return {
-      readyImageCount: row?.readyImageCount ?? 0,
-      taggedReadyImageCount: row?.taggedReadyImageCount ?? 0,
+      imageCount: row?.imageCount ?? 0,
+      taggedImageCount: row?.taggedImageCount ?? 0,
     };
   },
 
@@ -811,6 +892,32 @@ export const projectsRepository = {
 
       return image;
     });
+  },
+
+  async findReferencedImageObjectKeys(keys: string[]): Promise<string[]> {
+    if (keys.length === 0) return [];
+
+    const keySet = new Set(keys);
+    const derivativeKeyFilters = keys.map((key) =>
+      sql<boolean>`${schema.projectImage.derivatives} @> ${JSON.stringify([{ key }])}::jsonb`,
+    );
+    const rows = await db
+      .select({
+        originalKey: schema.projectImage.originalKey,
+        derivatives: schema.projectImage.derivatives,
+      })
+      .from(schema.projectImage)
+      .where(or(inArray(schema.projectImage.originalKey, keys), ...derivativeKeyFilters));
+
+    const referenced = new Set<string>();
+    for (const row of rows) {
+      if (keySet.has(row.originalKey)) referenced.add(row.originalKey);
+      for (const derivative of row.derivatives) {
+        if (keySet.has(derivative.key)) referenced.add(derivative.key);
+      }
+    }
+
+    return [...referenced];
   },
 
   slugify,

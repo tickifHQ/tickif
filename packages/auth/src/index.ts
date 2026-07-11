@@ -1,10 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { phoneNumber, admin, organization } from 'better-auth/plugins';
+import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
 import { db, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
 import { ac, roles } from './permissions.js';
+import { sendEmail } from './email.js';
 
 /**
  * Tickif auth — better-auth instance.
@@ -73,6 +74,26 @@ export const auth = betterAuth({
     enabled: false,
   },
 
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      const escapedName = (user.name ?? '').replace(/[&<>"']/g, (ch) => {
+        const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return map[ch] ?? ch;
+      });
+      await sendEmail({
+        to: user.email,
+        subject: 'Verify your Tickif email',
+        html: `
+          <h2>Verify your email</h2>
+          <p>Hi ${escapedName},</p>
+          <p>Click the link below to verify your email address:</p>
+          <p><a href="${url}">Verify Email</a></p>
+          <p>— Tickif</p>
+        `,
+      });
+    },
+  },
+
   socialProviders,
 
   // Account linking: when a Google sign-in resolves a verified email that matches
@@ -111,6 +132,32 @@ export const auth = betterAuth({
     // the write backstop (pinned by set-role.integration.test.ts).
     admin({ defaultRole: 'visitor', ac, roles, adminRoles: ['admin', 'superadmin'] }),
     organization(),
+    emailOTP({
+      otpLength: 6,
+      expiresIn: 300,
+      allowedAttempts: 3,
+      storeOTP: 'hashed',
+      rateLimit: { window: 60, max: 3 },
+      async sendVerificationOTP({ email, otp, type }) {
+        const subject =
+          type === 'sign-in'
+            ? 'Your Tickif login code'
+            : type === 'email-verification'
+              ? 'Verify your Tickif email'
+              : 'Reset your Tickif password';
+        await sendEmail({
+          to: email,
+          subject,
+          html: `
+            <h2>${subject}</h2>
+            <p>Your verification code is:</p>
+            <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; margin: 16px 0;">${otp}</p>
+            <p>This code expires in 5 minutes. If you didn't request this, you can safely ignore this email.</p>
+            <p>— Tickif</p>
+          `,
+        });
+      },
+    }),
   ],
 });
 
