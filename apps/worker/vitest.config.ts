@@ -23,6 +23,8 @@ export default defineConfig({
           environment: 'node',
           include: ['tests/**/*.test.ts'],
           exclude: ['tests/**/*.integration.test.ts'],
+          // Some unit tests exercise the real sharp derivative pipeline and can exceed 5s on CI.
+          testTimeout: 30_000,
         },
       },
       {
