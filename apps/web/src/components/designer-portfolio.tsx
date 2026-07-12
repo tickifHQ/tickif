@@ -704,7 +704,7 @@ export function DesignerPortfolio() {
       </div>
 
       {/* Footer */}
-      <div className="mx-6 mb-6 flex items-center justify-between rounded-xl border border-border bg-background px-6 py-4 shadow-md">
+      <div className="sticky bottom-0 z-10 mx-6 mb-6 flex items-center justify-between rounded-xl border border-border bg-background px-6 py-4 shadow-md">
         <button
           type="button"
           className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
