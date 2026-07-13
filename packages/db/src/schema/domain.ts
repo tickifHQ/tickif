@@ -327,3 +327,59 @@ export const projectImage = pgTable(
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
   ],
 );
+
+
+// --- Designer Portfolio (E-222) ---
+
+export const designerPortfolio = pgTable(
+  'designer_portfolio',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .unique()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+
+    // Link & URL
+    publicLinkEnabled: boolean('public_link_enabled').default(true).notNull(),
+    portfolioSlug: text('portfolio_slug').unique(),
+
+    // Customizations
+    accentColor: text('accent_color').default('#FF8F73').notNull(),
+
+    // Section visibility
+    showHero: boolean('show_hero').default(true).notNull(),
+    showTrustCredentials: boolean('show_trust_credentials').default(true).notNull(),
+    showFeaturedTestimonial: boolean('show_featured_testimonial').default(true).notNull(),
+    showReviews: boolean('show_reviews').default(true).notNull(),
+    showSocialLinks: boolean('show_social_links').default(true).notNull(),
+    showShareBlock: boolean('show_share_block').default(true).notNull(),
+
+    // Hero (tagline — displayName and bio live on designer_profile)
+    tagline: text('tagline'),
+
+    // Featured testimonial
+    testimonialWords: text('testimonial_words'),
+    testimonialAuthor: text('testimonial_author'),
+    testimonialProjectId: uuid('testimonial_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    testimonialUpdatedAt: timestamp('testimonial_updated_at'),
+
+    // Review display settings (Google-agnostic names)
+    showOverallRating: boolean('show_overall_rating').default(true).notNull(),
+    showPositiveReviewsOnly: boolean('show_positive_reviews_only').default(false).notNull(),
+
+    // Share block
+    showTickifBadge: boolean('show_tickif_badge').default(true).notNull(),
+
+    // Timestamps
+    publishedAt: timestamp('published_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('designer_portfolio_profile_idx').on(t.profileId),
+    index('designer_portfolio_slug_idx').on(t.portfolioSlug),
+  ],
+);
