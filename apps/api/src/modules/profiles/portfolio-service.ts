@@ -157,9 +157,9 @@ export const portfolioService = {
     const profile = await resolveProfile(caller);
 
     await withTransaction(async (tx: Tx) => {
-      let portfolio = await portfolioRepository.findByProfileId(profile.id);
+      const portfolio = await portfolioRepository.findByProfileId(profile.id);
       if (!portfolio) {
-        portfolio = await portfolioRepository.create(profile.id);
+        await portfolioRepository.create(profile.id);
       }
 
       // Validate slug if provided (inside transaction to prevent TOCTOU races)
