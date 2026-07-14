@@ -494,6 +494,7 @@ export function DesignerPortfolioSettings() {
                   src={portfolio.logoUrl}
                   alt="Portfolio logo"
                   fill
+                  unoptimized
                   className="object-cover"
                 />
               </div>

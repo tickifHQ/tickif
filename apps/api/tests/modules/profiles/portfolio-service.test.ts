@@ -133,7 +133,10 @@ function setupResolveProfile(profile = makeProfile()) {
 }
 
 function setupGetPortfolio(portfolio = makePortfolio()) {
-  vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(portfolio);
+  // getPortfolio now uses upsert (not findByProfileId) to ensure row exists
+  vi.mocked(portfolioRepository.upsert).mockResolvedValue(portfolio);
+  // getPortfolio resolves logoUrl via presignDownload when profile has logoImageId
+  vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
   return portfolio;
 }
 
@@ -148,6 +151,7 @@ describe('portfolioService.updatePortfolio', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.isReservedSlug).mockReturnValue(true);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
 
     await expect(
       portfolioService.updatePortfolio({ portfolioSlug: 'admin' }, caller),
@@ -159,6 +163,7 @@ describe('portfolioService.updatePortfolio', () => {
     setupGetPortfolio();
     vi.mocked(portfolioRepository.isReservedSlug).mockReturnValue(false);
     vi.mocked(portfolioRepository.isSlugAvailableInTx).mockResolvedValue(false);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
 
     await expect(
       portfolioService.updatePortfolio({ portfolioSlug: 'taken-slug' }, caller),
@@ -176,7 +181,11 @@ describe('portfolioService.updatePortfolio', () => {
       code: '23505',
       constraint: 'designer_portfolio_portfolio_slug_unique',
     });
-    vi.mocked(portfolioRepository.upsertInTx).mockRejectedValue(dbError);
+    // First call: initialization upsert (succeeds)
+    // Second call: actual update upsert (throws race condition)
+    vi.mocked(portfolioRepository.upsertInTx)
+      .mockResolvedValueOnce(makePortfolio())
+      .mockRejectedValueOnce(dbError);
 
     await expect(
       portfolioService.updatePortfolio({ portfolioSlug: 'race-slug' }, caller),
@@ -186,6 +195,7 @@ describe('portfolioService.updatePortfolio', () => {
   it('throws 422 when testimonial project not found', async () => {
     setupResolveProfile();
     setupGetPortfolio();
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
     vi.mocked(portfolioRepository.findProjectForDesignerInTx).mockResolvedValue(null);
 
     await expect(
@@ -202,6 +212,7 @@ describe('portfolioService.updatePortfolio', () => {
   it('throws 422 when testimonial project is not published', async () => {
     setupResolveProfile();
     setupGetPortfolio();
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
     vi.mocked(portfolioRepository.findProjectForDesignerInTx).mockResolvedValue({
       id: 'project-1',
       status: 'draft',
@@ -224,8 +235,8 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ testimonialProjectId: null }),
     );
-    // getPortfolio is called after commit to return fresh state
-    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(
+    // getPortfolio is called after commit to return fresh state — uses upsert now
+    vi.mocked(portfolioRepository.upsert).mockResolvedValue(
       makePortfolio({ testimonialProjectId: null }),
     );
 
@@ -249,8 +260,8 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
     );
-    // After commit, getPortfolio re-fetches
-    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(
+    // After commit, getPortfolio re-fetches via upsert
+    vi.mocked(portfolioRepository.upsert).mockResolvedValue(
       makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
     );
 
@@ -415,7 +426,7 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(makePortfolio());
+    vi.mocked(portfolioRepository.upsert).mockResolvedValue(makePortfolio());
 
     await portfolioService.updatePortfolio({ tagline: 'Hello' }, caller);
 
@@ -442,7 +453,7 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(makePortfolio());
+    vi.mocked(portfolioRepository.upsert).mockResolvedValue(makePortfolio());
 
     // Should not throw despite audit failure
     const result = await portfolioService.updatePortfolio({ tagline: 'Test' }, caller);

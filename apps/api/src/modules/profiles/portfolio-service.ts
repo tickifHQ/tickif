@@ -96,22 +96,26 @@ async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
 
 export const portfolioService = {
   /**
-   * GET portfolio. Creates default row if missing.
+   * GET portfolio. Creates default row if missing (atomic upsert to handle races).
    * Returns merged data from designer_portfolio + designer_profile.
    */
   async getPortfolio(caller: Caller): Promise<PortfolioResponse> {
     const profile = await resolveProfile(caller);
 
-    let portfolio = await portfolioRepository.findByProfileId(profile.id);
-    if (!portfolio) {
-      // Auto-create defaults on first read
-      portfolio = await portfolioRepository.create(profile.id);
-    }
+    // Use upsert to atomically ensure a row exists (handles concurrent first-GETs)
+    const portfolio = await portfolioRepository.upsert(profile.id, {});
 
     const badges = computeBadges(profile);
+    // Portfolio URL is only available when the designer has set a custom slug
+    // (public page routes /p/:slug and /d/:orgId do not exist yet)
     const portfolioUrl = portfolio.portfolioSlug
       ? `${config.PUBLIC_WEB_URL}/p/${portfolio.portfolioSlug}`
-      : `${config.PUBLIC_WEB_URL}/d/${profile.orgId}`;
+      : null;
+
+    // Resolve logo to a presigned download URL (or null)
+    const logoUrl = profile.logoImageId
+      ? await presignDownload({ key: profile.logoImageId })
+      : null;
 
     return {
       id: portfolio.id,
@@ -127,7 +131,7 @@ export const portfolioService = {
       tagline: portfolio.tagline,
       displayName: profile.displayName,
       bio: profile.bio,
-      logoUrl: profile.logoImageId ? profile.logoImageId : null,
+      logoUrl,
       websiteUrl: profile.websiteUrl,
       instagramHandle: profile.instagramHandle,
       linkedinHandle: profile.linkedinHandle,
@@ -157,10 +161,8 @@ export const portfolioService = {
     const profile = await resolveProfile(caller);
 
     await withTransaction(async (tx: Tx) => {
-      const portfolio = await portfolioRepository.findByProfileId(profile.id);
-      if (!portfolio) {
-        await portfolioRepository.create(profile.id);
-      }
+      // Ensure portfolio row exists (atomic, uses tx to avoid partial commit on later failure)
+      await portfolioRepository.upsertInTx(tx, profile.id, {});
 
       // Validate slug if provided (inside transaction to prevent TOCTOU races)
       if (input.portfolioSlug !== undefined && input.portfolioSlug !== null) {
@@ -334,12 +336,31 @@ export const portfolioService = {
   ): Promise<{ logoUrl: string }> {
     const profile = await resolveProfile(caller);
 
+    // Validate that the key belongs to this profile (prevent cross-profile attachment)
+    const expectedPrefix = `originals/logos/${profile.id}/`;
+    if (!input.objectKey.startsWith(expectedPrefix)) {
+      throw AppError.forbidden('Object key does not belong to this profile');
+    }
+
     const exists = await objectExists(input.objectKey);
     if (!exists) {
       throw AppError.badRequest('No uploaded object found for this image');
     }
 
+    // Delete old logo object if one exists (prevent orphaned storage objects)
+    // DB update first, storage cleanup second — if DB fails, user keeps old logo
+    const previousKey = profile.logoImageId;
+
     await profilesRepository.updateProfile(profile.id, { logoImageId: input.objectKey });
+
+    // Clean up the previous storage object (non-critical — orphan is acceptable)
+    if (previousKey && previousKey !== input.objectKey) {
+      try {
+        await deleteObject(previousKey);
+      } catch (err) {
+        console.error('[commitLogoUpload] Failed to delete previous logo:', err);
+      }
+    }
 
     emitAuditEvent({
       userId: caller.userId,

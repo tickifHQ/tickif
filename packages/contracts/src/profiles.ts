@@ -255,7 +255,7 @@ export const portfolioResponseSchema = z
     showPositiveReviewsOnly: z.boolean(),
     showTickifBadge: z.boolean(),
     badges: z.array(portfolioBadgeSchema),
-    portfolioUrl: z.string(),
+    portfolioUrl: z.string().nullable(),
     publishedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
