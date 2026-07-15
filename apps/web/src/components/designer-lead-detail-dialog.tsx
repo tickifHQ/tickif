@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@repo/ui/components/dialog';
+import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { ArrowRight, ImagePlus, X } from 'lucide-react';
 import { leadStatusOptions } from '@/components/designer-lead-status-action';
@@ -182,24 +183,17 @@ export function DesignerLeadDetailDialog({
                 </div>
               </div>
 
-              <div className="mt-6">
-                <label htmlFor="lead-status" className="text-sm font-medium text-foreground">
-                  Status
-                </label>
-                <select
-                  id="lead-status"
-                  value={selectedStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value as LeadStatus)}
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground shadow-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="new">{statusLabel('new')}</option>
-                  {leadStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {statusLabel(option.value)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectField
+                className="mt-6"
+                label="Status"
+                value={selectedStatus}
+                onValueChange={(value) => setSelectedStatus(value as LeadStatus)}
+                options={[
+                  { value: 'new', label: statusLabel('new') },
+                  ...leadStatusOptions.map((option) => ({ value: option.value, label: statusLabel(option.value) })),
+                ]}
+                placeholder="Select status"
+              />
 
               <div className="mt-5">
                 <label htmlFor="lead-notes" className="text-sm font-medium text-foreground">

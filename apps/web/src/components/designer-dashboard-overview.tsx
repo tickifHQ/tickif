@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { CompletionStep, ProfileCompletionResponse, ProfileDashboardResponse } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import { Card, CardContent } from '@repo/ui/components/card';
+import { Frame } from '@repo/ui/components/frame';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
@@ -228,17 +228,17 @@ export function DesignerDashboardOverview({
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
         <div className="space-y-5">
           {dashboardError ? (
-            <Card className="rounded-2xl border-destructive/30 bg-destructive/5">
-              <CardContent className="px-6 py-5">
+            <Frame variant="default" className="border-destructive/30 bg-destructive/5">
+              <div className="px-6 py-5">
                 <div className="text-base font-medium text-foreground">Could not load dashboard summary</div>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Refresh the page in a moment. Your dashboard and project upload actions are still available.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </Frame>
           ) : null}
 
-          <div className="overflow-hidden rounded-2xl">
+          <Frame className="overflow-hidden">
             <div className="px-6 pt-6 pb-6">
               <div className="flex items-end justify-between gap-4">
                 <div className="text-base font-medium text-muted-foreground">
@@ -255,10 +255,10 @@ export function DesignerDashboardOverview({
                 />
               </div>
             </div>
-          </div>
+          </Frame>
 
-          <Card className="rounded-2xl shadow-md">
-            <CardContent className="px-6 pt-4 pb-6">
+          <Frame className="shadow-md">
+            <div className="px-6 pt-4 pb-6">
               {trackedChecklistComplete ? (
                 <div className="flex items-start gap-4 py-4">
                   <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
@@ -282,13 +282,13 @@ export function DesignerDashboardOverview({
                   ))}
                 </ol>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
         </div>
 
         <div className="space-y-5">
-          <Card className="relative overflow-visible rounded-2xl bg-primary/5">
-            <CardContent className="relative px-4 pt-4 pb-4">
+          <Frame variant="accent" className="relative overflow-visible">
+            <div className="relative px-4 pt-4 pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <Badge variant="outline" className="text-xs font-medium border-primary/20 bg-background/70 text-primary">
@@ -315,15 +315,15 @@ export function DesignerDashboardOverview({
                   Add first project
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
 
           <div>
             <div className="mb-3 flex items-center gap-2 px-3 text-xs font-medium tracking-normal text-muted-foreground">
               <ShieldPlus className="size-4" />
               WHAT HAPPENS NEXT
             </div>
-            <Card className="overflow-hidden rounded-2xl">
+            <Frame className="overflow-hidden">
               <RightRailInfoRow
                 icon={<ClipboardCheck className="size-4" />}
                 title="We review your project"
@@ -341,10 +341,10 @@ export function DesignerDashboardOverview({
                 description="Get a head start on your KYC."
                 href="/designer/profile"
               />
-            </Card>
+            </Frame>
           </div>
 
-          <Card className="overflow-hidden rounded-3xl bg-primary/5">
+          <Frame variant="accent" radius="full" className="overflow-hidden">
             <div className="px-4 pt-4">
               <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
                 <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
@@ -368,7 +368,7 @@ export function DesignerDashboardOverview({
                 </div>
               </div>
             </div>
-            <CardContent className="px-5 pt-6 pb-5">
+            <div className="px-5 pt-6 pb-5">
               <div className="text-xs tracking-normal text-muted-foreground">
                 ONE LINK. EVERYWHERE.
               </div>
@@ -383,8 +383,8 @@ export function DesignerDashboardOverview({
                 variant="emphasis"
                 className="mt-6 w-full cursor-pointer rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#3e4148] hover:to-[#1f2228]"
               />
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
         </div>
       </div>
     </div>

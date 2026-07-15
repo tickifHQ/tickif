@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ListProjectsResponse, ProjectListStatus, ProjectStatus } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
+import { EmptyState } from '@repo/ui/components/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
 import { AlertCircle, ArrowDown, CheckCircle2, ImagePlus } from 'lucide-react';
 import { DesignerListControls } from '@/components/designer-list-controls';
@@ -168,15 +169,16 @@ export function DesignerProjectsList({
             ) : (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={6} className="py-14 text-center">
-                  <div className="mx-auto max-w-sm space-y-2">
-                    <h2 className="text-sm font-medium text-foreground">No projects found</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {query ? 'Try a different search or clear the filter.' : 'Add your first project to make your portfolio live.'}
-                    </p>
-                    <Button asChild variant="emphasis" className="mt-2">
-                      <Link href="/designer/projects/new">Add new project</Link>
-                    </Button>
-                  </div>
+                  <EmptyState
+                    icon={<ImagePlus className="size-5" />}
+                    title="No projects found"
+                    description={query ? 'Try a different search or clear the filter.' : 'Add your first project to make your portfolio live.'}
+                    action={
+                      <Button asChild variant="emphasis">
+                        <Link href="/designer/projects/new">Add new project</Link>
+                      </Button>
+                    }
+                  />
                 </TableCell>
               </TableRow>
             )}

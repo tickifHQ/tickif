@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import { Card, CardContent } from '@repo/ui/components/card';
+import { Frame } from '@repo/ui/components/frame';
 import type { ComponentType, ReactNode } from 'react';
 import {
   ArrowRight,
@@ -309,20 +309,20 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         {config.metrics.map((metric) => (
-          <Card key={metric.label}>
-            <CardContent className="px-5 py-5">
+          <Frame key={metric.label}>
+            <div className="px-5 py-5">
               <div className="text-sm font-medium text-muted-foreground">{metric.label}</div>
               <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</div>
               <div className="mt-1 text-sm text-muted-foreground">{metric.helper}</div>
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
         ))}
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
-          <Card>
-            <CardContent className="px-6 py-6">
+          <Frame>
+            <div className="px-6 py-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold tracking-tight text-foreground">Workspace snapshot</h2>
@@ -335,31 +335,31 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
               <div className="relative mt-6">
                 <EmptyChart>{config.title}</EmptyChart>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
 
           <div className="grid gap-4 md:grid-cols-3">
             {config.sections.map((item) => {
               const ItemIcon = item.icon;
 
               return (
-                <Card key={item.title}>
-                  <CardContent className="px-5 py-5">
+                <Frame key={item.title}>
+                  <div className="px-5 py-5">
                     <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <ItemIcon className="size-5" />
                     </span>
                     <h3 className="mt-4 text-base font-semibold text-foreground">{item.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </Frame>
               );
             })}
           </div>
         </div>
 
         <aside className="space-y-4">
-          <Card>
-            <CardContent className="px-5 py-5">
+          <Frame>
+            <div className="px-5 py-5">
               <h2 className="text-base font-semibold text-foreground">Current setup</h2>
               <div className="mt-5 space-y-4">
                 {config.timeline.map((item) => (
@@ -369,11 +369,11 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
 
-          <Card className="bg-primary/5">
-            <CardContent className="px-5 py-5">
+          <Frame variant="accent">
+            <div className="px-5 py-5">
               <div className="flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Sparkles className="size-4" />
@@ -385,8 +385,8 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Frame>
         </aside>
       </div>
     </div>
