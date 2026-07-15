@@ -191,21 +191,26 @@ export const profileSlugParamSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a URL-safe profile slug'),
 });
 
+// Shared profile field schemas (single source of truth for both endpoints)
+const sharedProfileFields = {
+  displayName: z.string().trim().min(2).max(100).optional(),
+  bio: z.string().max(500).nullable().optional(),
+  websiteUrl: z.string().url().max(200).nullable().optional(),
+  instagramHandle: z.string().trim().max(60).nullable().optional(),
+  linkedinHandle: z.string().trim().max(60).nullable().optional(),
+  youtubeHandle: z.string().trim().max(60).nullable().optional(),
+};
+
 /**
  * PATCH /api/profiles/me — partial update.
  * Taxonomy arrays use replace semantics: present → replace, absent → untouched.
  */
 export const updateProfileSchema = z.object({
-  displayName: z.string().trim().min(2).max(100).optional(),
-  bio: z.string().max(500).optional().nullable(),
+  ...sharedProfileFields,
   logoImageId: z.string().optional().nullable(),
   entityType: z.enum(['individual', 'company']).optional(),
-  websiteUrl: z.string().url().max(200).optional().nullable(),
   googleBusinessUrl: z.string().url().max(200).optional().nullable(),
   phone: z.string().trim().min(7).max(20).optional().nullable(),
-  instagramHandle: z.string().trim().max(60).optional().nullable(),
-  linkedinHandle: z.string().trim().max(60).optional().nullable(),
-  youtubeHandle: z.string().trim().max(60).optional().nullable(),
   firmType: z.string().trim().max(60).optional().nullable(),
   foundedYear: z.number().int().min(1900).max(2100).optional().nullable(),
   staffCount: z.number().int().min(0).optional().nullable(),
@@ -275,12 +280,7 @@ export const updatePortfolioSchema = z
     showSocialLinks: z.boolean().optional(),
     showShareBlock: z.boolean().optional(),
     tagline: z.string().max(200).nullable().optional(),
-    displayName: z.string().trim().min(2).max(120).optional(),
-    bio: z.string().max(2000).nullable().optional(),
-    websiteUrl: z.string().url().max(500).nullable().optional(),
-    instagramHandle: z.string().max(80).nullable().optional(),
-    linkedinHandle: z.string().max(80).nullable().optional(),
-    youtubeHandle: z.string().max(80).nullable().optional(),
+    ...sharedProfileFields,
     testimonialWords: z.string().max(500).nullable().optional(),
     testimonialAuthor: z.string().max(100).nullable().optional(),
     testimonialProjectId: z.string().uuid().nullable().optional(),

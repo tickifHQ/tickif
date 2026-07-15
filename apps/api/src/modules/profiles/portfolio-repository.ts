@@ -61,6 +61,36 @@ export const portfolioRepository = {
   },
 
   /**
+   * Find-or-create: returns the existing portfolio without mutating updatedAt,
+   * or inserts a new row with defaults. Handles race via unique violation catch.
+   */
+  async findOrCreate(profileId: string): Promise<PortfolioRecord> {
+    const existing = await this.findByProfileId(profileId);
+    if (existing) return existing;
+
+    try {
+      return await this.create(profileId);
+    } catch (err) {
+      // Race condition: another request created it between find and create
+      // Check both the error and its cause (Drizzle wraps PG errors)
+      const candidates: unknown[] = [err];
+      if (err instanceof Error && err.cause) candidates.push(err.cause);
+      const isRace = candidates.some(
+        (c) =>
+          typeof c === 'object' &&
+          c !== null &&
+          'code' in c &&
+          (c as { code?: unknown }).code === '23505',
+      );
+      if (isRace) {
+        const row = await this.findByProfileId(profileId);
+        if (row) return row;
+      }
+      throw err;
+    }
+  },
+
+  /**
    * Upsert portfolio. Creates a new row if one doesn't exist,
    * otherwise updates the existing row for the given profile.
    */

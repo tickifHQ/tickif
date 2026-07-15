@@ -9,6 +9,7 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     findByProfileId: vi.fn(),
     findBySlug: vi.fn(),
     create: vi.fn(),
+    findOrCreate: vi.fn(),
     upsert: vi.fn(),
     upsertInTx: vi.fn(),
     update: vi.fn(),
@@ -41,13 +42,6 @@ vi.mock('@repo/storage', () => ({
   presignDownload: vi.fn(),
   objectExists: vi.fn(),
   deleteObject: vi.fn(),
-}));
-
-vi.mock('@repo/config', () => ({
-  config: {
-    PUBLIC_WEB_URL: 'https://tickif.com',
-    R2_UPLOAD_URL_EXPIRY_SECONDS: 600,
-  },
 }));
 
 // Import AFTER mock registration
@@ -133,8 +127,8 @@ function setupResolveProfile(profile = makeProfile()) {
 }
 
 function setupGetPortfolio(portfolio = makePortfolio()) {
-  // getPortfolio now uses upsert (not findByProfileId) to ensure row exists
-  vi.mocked(portfolioRepository.upsert).mockResolvedValue(portfolio);
+  // getPortfolio now uses findOrCreate (non-mutating find-or-create pattern)
+  vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(portfolio);
   // getPortfolio resolves logoUrl via presignDownload when profile has logoImageId
   vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
   return portfolio;
@@ -235,8 +229,8 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ testimonialProjectId: null }),
     );
-    // getPortfolio is called after commit to return fresh state — uses upsert now
-    vi.mocked(portfolioRepository.upsert).mockResolvedValue(
+    // getPortfolio is called after commit to return fresh state — uses findOrCreate now
+    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(
       makePortfolio({ testimonialProjectId: null }),
     );
 
@@ -260,8 +254,8 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
     );
-    // After commit, getPortfolio re-fetches via upsert
-    vi.mocked(portfolioRepository.upsert).mockResolvedValue(
+    // After commit, getPortfolio re-fetches via findOrCreate
+    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(
       makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
     );
 
@@ -270,7 +264,7 @@ describe('portfolioService.updatePortfolio', () => {
     expect(result).toMatchObject({
       id: 'portfolio-1',
       tagline: 'New tagline',
-      portfolioUrl: 'https://tickif.com/p/my-studio',
+      portfolioUrl: null,
     });
   });
 });
@@ -381,19 +375,19 @@ describe('portfolioService.commitLogoUpload', () => {
 // =============================================================================
 
 describe('portfolioService.deleteLogo', () => {
-  it('clears DB when logo exists and storage succeeds', async () => {
+  it('clears DB first, then best-effort storage cleanup', async () => {
     setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(deleteObject).mockResolvedValue(undefined);
     vi.mocked(profilesRepository.updateProfile).mockResolvedValue(
       makeProfile({ logoImageId: null }),
     );
+    vi.mocked(deleteObject).mockResolvedValue(undefined);
 
     await portfolioService.deleteLogo(caller);
 
-    expect(deleteObject).toHaveBeenCalledWith('originals/logos/profile-1/key');
     expect(profilesRepository.updateProfile).toHaveBeenCalledWith('profile-1', {
       logoImageId: null,
     });
+    expect(deleteObject).toHaveBeenCalledWith('originals/logos/profile-1/key');
   });
 
   it('throws 404 when no logo exists', async () => {
@@ -405,14 +399,21 @@ describe('portfolioService.deleteLogo', () => {
     });
   });
 
-  it('throws 500 and does NOT clear DB when storage fails', async () => {
+  it('still succeeds when storage cleanup fails (orphan left)', async () => {
     setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
+    vi.mocked(profilesRepository.updateProfile).mockResolvedValue(
+      makeProfile({ logoImageId: null }),
+    );
     vi.mocked(deleteObject).mockRejectedValue(new Error('S3 network error'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(portfolioService.deleteLogo(caller)).rejects.toMatchObject({ status: 500 });
+    // Should NOT throw — storage failure is best-effort
+    await portfolioService.deleteLogo(caller);
 
-    // DB must not be modified
-    expect(profilesRepository.updateProfile).not.toHaveBeenCalled();
+    // DB must still be cleared
+    expect(profilesRepository.updateProfile).toHaveBeenCalledWith('profile-1', {
+      logoImageId: null,
+    });
   });
 });
 
@@ -426,7 +427,7 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.upsert).mockResolvedValue(makePortfolio());
+    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(makePortfolio());
 
     await portfolioService.updatePortfolio({ tagline: 'Hello' }, caller);
 
@@ -453,7 +454,7 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.upsert).mockResolvedValue(makePortfolio());
+    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(makePortfolio());
 
     // Should not throw despite audit failure
     const result = await portfolioService.updatePortfolio({ tagline: 'Test' }, caller);

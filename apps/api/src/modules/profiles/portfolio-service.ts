@@ -4,7 +4,6 @@ import type {
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
 } from '@repo/contracts';
-import { config } from '@repo/config';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../lib/errors.js';
@@ -51,19 +50,30 @@ function emitAuditEvent(event: AuditEvent): void {
 
 /** Check if a DB error is a unique constraint violation, optionally on a specific constraint. */
 function isUniqueViolation(error: unknown, constraintName?: string): boolean {
-  if (
-    typeof error !== 'object' ||
-    error === null ||
-    !('code' in error) ||
-    (error as { code?: unknown }).code !== '23505'
-  ) {
-    return false;
+  // Drizzle wraps PostgreSQL errors — check both the error itself and its cause
+  const candidates = [error];
+  if (error instanceof Error && error.cause) {
+    candidates.push(error.cause);
   }
-  if (!constraintName) return true;
-  return (
-    'constraint' in error &&
-    (error as { constraint?: unknown }).constraint === constraintName
-  );
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate !== 'object' ||
+      candidate === null ||
+      !('code' in candidate) ||
+      (candidate as { code?: unknown }).code !== '23505'
+    ) {
+      continue;
+    }
+    if (!constraintName) return true;
+    if (
+      'constraint' in candidate &&
+      (candidate as { constraint?: unknown }).constraint === constraintName
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
@@ -102,15 +112,13 @@ export const portfolioService = {
   async getPortfolio(caller: Caller): Promise<PortfolioResponse> {
     const profile = await resolveProfile(caller);
 
-    // Use upsert to atomically ensure a row exists (handles concurrent first-GETs)
-    const portfolio = await portfolioRepository.upsert(profile.id, {});
+    // Non-mutating find-or-create: avoids touching updatedAt on every GET
+    const portfolio = await portfolioRepository.findOrCreate(profile.id);
 
     const badges = computeBadges(profile);
-    // Portfolio URL is only available when the designer has set a custom slug
-    // (public page routes /p/:slug and /d/:orgId do not exist yet)
-    const portfolioUrl = portfolio.portfolioSlug
-      ? `${config.PUBLIC_WEB_URL}/p/${portfolio.portfolioSlug}`
-      : null;
+    // No public portfolio routes exist yet (/p/:slug and /d/:orgId are not shipped)
+    // portfolioUrl will be populated when the public page is implemented
+    const portfolioUrl = null;
 
     // Resolve logo to a presigned download URL (or null)
     const logoUrl = profile.logoImageId
@@ -383,17 +391,17 @@ export const portfolioService = {
       throw AppError.notFound('No logo exists to delete');
     }
 
-    // Storage delete MUST succeed before clearing the DB record.
-    // If this throws, the DB remains untouched (no orphan risk).
-    try {
-      await deleteObject(profile.logoImageId);
-    } catch (err) {
-      console.error('[deleteLogo] Storage delete failed:', err);
-      throw new AppError('internal_error', 'Failed to delete logo from storage', 500);
-    }
+    const keyToDelete = profile.logoImageId;
 
-    // Storage delete succeeded — now clear the DB association.
+    // Clear DB association first (authoritative state)
     await profilesRepository.updateProfile(profile.id, { logoImageId: null });
+
+    // Best-effort storage cleanup (orphan is acceptable if this fails)
+    try {
+      await deleteObject(keyToDelete);
+    } catch (err) {
+      console.error('[deleteLogo] Storage cleanup failed (orphan left):', err);
+    }
 
     emitAuditEvent({
       userId: caller.userId,

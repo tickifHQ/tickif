@@ -26,6 +26,4 @@ CREATE TABLE "designer_portfolio" (
 );
 --> statement-breakpoint
 ALTER TABLE "designer_portfolio" ADD CONSTRAINT "designer_portfolio_profile_id_designer_profile_id_fk" FOREIGN KEY ("profile_id") REFERENCES "public"."designer_profile"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "designer_portfolio" ADD CONSTRAINT "designer_portfolio_testimonial_project_id_project_id_fk" FOREIGN KEY ("testimonial_project_id") REFERENCES "public"."project"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "designer_portfolio_profile_idx" ON "designer_portfolio" USING btree ("profile_id");--> statement-breakpoint
-CREATE INDEX "designer_portfolio_slug_idx" ON "designer_portfolio" USING btree ("portfolio_slug");
+ALTER TABLE "designer_portfolio" ADD CONSTRAINT "designer_portfolio_testimonial_project_id_project_id_fk" FOREIGN KEY ("testimonial_project_id") REFERENCES "public"."project"("id") ON DELETE set null ON UPDATE no action;

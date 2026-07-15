@@ -378,8 +378,5 @@ export const designerPortfolio = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (t) => [
-    index('designer_portfolio_profile_idx').on(t.profileId),
-    index('designer_portfolio_slug_idx').on(t.portfolioSlug),
-  ],
+  // No explicit indexes needed — UNIQUE constraints create B-tree indexes
 );

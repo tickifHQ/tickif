@@ -135,6 +135,7 @@ export function DesignerPortfolioSettings() {
   // Slug check
   const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle');
   const slugDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSlugRef = useRef<string>('');
 
   // Logo
   const [isUploadingLogo, startLogoUploadTransition] = useTransition();
@@ -200,16 +201,23 @@ export function DesignerPortfolioSettings() {
 
       if (!slug || slug.length < 3) {
         setSlugStatus('idle');
+        latestSlugRef.current = '';
         return;
       }
 
       setSlugStatus('checking');
+      latestSlugRef.current = slug;
       slugDebounceRef.current = setTimeout(async () => {
         try {
           const result = await checkSlugAvailability(slug);
-          setSlugStatus(result.available ? 'available' : 'unavailable');
+          // Only update if this slug is still the latest request (prevents stale race)
+          if (latestSlugRef.current === slug) {
+            setSlugStatus(result.available ? 'available' : 'unavailable');
+          }
         } catch {
-          setSlugStatus('error');
+          if (latestSlugRef.current === slug) {
+            setSlugStatus('error');
+          }
         }
       }, 500);
     },

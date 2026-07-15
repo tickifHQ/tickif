@@ -870,38 +870,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "designer_portfolio_profile_idx": {
-          "name": "designer_portfolio_profile_idx",
-          "columns": [
-            {
-              "expression": "profile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "designer_portfolio_slug_idx": {
-          "name": "designer_portfolio_slug_idx",
-          "columns": [
-            {
-              "expression": "portfolio_slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "designer_portfolio_profile_id_designer_profile_id_fk": {
           "name": "designer_portfolio_profile_id_designer_profile_id_fk",
