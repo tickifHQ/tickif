@@ -51,20 +51,17 @@ function emitAuditEvent(event: AuditEvent): void {
 /** Check if a DB error is a unique constraint violation, optionally on a specific constraint. */
 function isUniqueViolation(error: unknown, constraintName?: string): boolean {
   // Drizzle wraps PostgreSQL errors — check both the error itself and its cause
-  const candidates = [error];
+  const candidates: unknown[] = [error];
   if (error instanceof Error && error.cause) {
     candidates.push(error.cause);
   }
 
   for (const candidate of candidates) {
-    if (
-      typeof candidate !== 'object' ||
-      candidate === null ||
-      !('code' in candidate) ||
-      (candidate as { code?: unknown }).code !== '23505'
-    ) {
-      continue;
-    }
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    if (!('code' in candidate)) continue;
+    if ((candidate as { code?: unknown }).code !== '23505') continue;
+
+    // Found a 23505 error — check constraint name if specified
     if (!constraintName) return true;
     if (
       'constraint' in candidate &&
