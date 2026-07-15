@@ -39,4 +39,14 @@ describe('MonthPickerField', () => {
 
     expect(screen.queryByRole('button', { name: 'Apr' })).not.toBeInTheDocument();
   });
+
+  it('renders the picker as an overlay so parent containers do not clip it', async () => {
+    const user = userEvent.setup();
+
+    render(<MonthPickerField label="Project completed by" value="2026-03" onChange={vi.fn()} />);
+
+    await user.click(screen.getByDisplayValue('2026-03'));
+
+    expect(screen.getByRole('button', { name: 'Apr' }).closest('.fixed')).toBeInTheDocument();
+  });
 });

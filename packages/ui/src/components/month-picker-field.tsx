@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 import { Button } from './button';
 import { Input } from './input';
@@ -44,10 +44,23 @@ export function MonthPickerField({
   const [open, setOpen] = useState(false);
   const [visibleYear, setVisibleYear] = useState(() => parseYear(value, currentYear));
   const containerRef = useRef<HTMLDivElement>(null);
+  const [pickerRect, setPickerRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const selectedValue = useMemo(() => value.trim(), [value]);
+
+  const updatePickerRect = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPickerRect({
+      left: rect.left,
+      top: rect.bottom + 4,
+      width: Math.max(rect.width, 256),
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+
+    updatePickerRect();
 
     function closeOnOutsidePointerDown(event: PointerEvent) {
       if (containerRef.current?.contains(event.target as Node)) return;
@@ -55,8 +68,15 @@ export function MonthPickerField({
     }
 
     document.addEventListener('pointerdown', closeOnOutsidePointerDown);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
-  }, [open]);
+    window.addEventListener('resize', updatePickerRect);
+    window.addEventListener('scroll', updatePickerRect, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+      window.removeEventListener('resize', updatePickerRect);
+      window.removeEventListener('scroll', updatePickerRect, true);
+    };
+  }, [open, updatePickerRect]);
 
   function selectMonth(monthIndex: number) {
     onChange(formatMonthValue(visibleYear, monthIndex));
@@ -77,9 +97,10 @@ export function MonthPickerField({
           aria-expanded={open}
           aria-haspopup="dialog"
         />
-        {open ? (
+        {open && pickerRect ? (
           <div
-            className="absolute left-0 top-full z-50 mt-1 w-full min-w-64 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+            className="fixed z-50 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
+            style={{ left: pickerRect.left, top: pickerRect.top, width: pickerRect.width }}
             onMouseDown={(event) => event.preventDefault()}
           >
             <div className="flex items-center justify-between gap-2">
