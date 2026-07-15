@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import { Frame } from '@repo/ui/components/frame';
+import { Card } from '@repo/ui/components/card';
 import type { ComponentType, ReactNode } from 'react';
 import {
   ArrowRight,
@@ -309,19 +309,19 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         {config.metrics.map((metric) => (
-          <Frame key={metric.label}>
+          <Card key={metric.label} radius="2xl">
             <div className="px-5 py-5">
               <div className="text-sm font-medium text-muted-foreground">{metric.label}</div>
               <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</div>
               <div className="mt-1 text-sm text-muted-foreground">{metric.helper}</div>
             </div>
-          </Frame>
+          </Card>
         ))}
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
-          <Frame>
+          <Card radius="2xl">
             <div className="px-6 py-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -336,14 +336,14 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                 <EmptyChart>{config.title}</EmptyChart>
               </div>
             </div>
-          </Frame>
+          </Card>
 
           <div className="grid gap-4 md:grid-cols-3">
             {config.sections.map((item) => {
               const ItemIcon = item.icon;
 
               return (
-                <Frame key={item.title}>
+                <Card key={item.title} radius="2xl">
                   <div className="px-5 py-5">
                     <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <ItemIcon className="size-5" />
@@ -351,14 +351,14 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                     <h3 className="mt-4 text-base font-semibold text-foreground">{item.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>
                   </div>
-                </Frame>
+                </Card>
               );
             })}
           </div>
         </div>
 
         <aside className="space-y-4">
-          <Frame>
+          <Card radius="2xl">
             <div className="px-5 py-5">
               <h2 className="text-base font-semibold text-foreground">Current setup</h2>
               <div className="mt-5 space-y-4">
@@ -370,9 +370,9 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                 ))}
               </div>
             </div>
-          </Frame>
+          </Card>
 
-          <Frame variant="accent">
+          <Card variant="accent" radius="2xl">
             <div className="px-5 py-5">
               <div className="flex items-start gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -386,7 +386,7 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                 </div>
               </div>
             </div>
-          </Frame>
+          </Card>
         </aside>
       </div>
     </div>

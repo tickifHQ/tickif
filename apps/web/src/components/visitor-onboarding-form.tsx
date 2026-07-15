@@ -65,7 +65,7 @@ export function VisitorOnboardingForm({
             </span>
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <Label htmlFor="visitor-display-name" className="text-[13px] font-medium">
+            <Label htmlFor="visitor-display-name" className="text-sm font-medium">
               Display name
             </Label>
             <Input
@@ -85,7 +85,7 @@ export function VisitorOnboardingForm({
         />
 
         <div className="space-y-1.5">
-          <Label htmlFor="visitor-whatsapp" className="text-[13px] font-medium">
+          <Label htmlFor="visitor-whatsapp" className="text-sm font-medium">
             WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
           </Label>
           <div className="flex">

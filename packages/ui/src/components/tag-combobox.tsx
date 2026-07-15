@@ -52,7 +52,7 @@ export function TagCombobox({
   const inputId = useId();
   const listboxId = useId();
   const [focused, setFocused] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -86,7 +86,8 @@ export function TagCombobox({
     ...(canCreate ? [{ type: 'create' as const, label: createLabel(normalizedValue), value: normalizedValue }] : []),
   ];
   const showMenu = focused && (menuItems.length > 0 || normalizedValue.length > 0 || options.length > 0);
-  const clampedActiveIndex = Math.min(activeIndex, Math.max(menuItems.length - 1, 0));
+  const clampedActiveIndex =
+    activeIndex === null ? null : Math.min(activeIndex, Math.max(menuItems.length - 1, 0));
 
   const updateMenuRect = useCallback(() => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -115,35 +116,56 @@ export function TagCombobox({
   }, [showMenu, updateMenuRect]);
 
   useEffect(() => {
-    if (!showMenu || menuItems.length === 0) return;
+    if (!showMenu || menuItems.length === 0 || clampedActiveIndex === null) return;
     itemRefs.current[clampedActiveIndex]?.scrollIntoView({ block: 'nearest' });
   }, [clampedActiveIndex, menuItems.length, showMenu]);
 
   function addTag(tag: string) {
     const next = normalizeTag(tag);
     if (!next) return;
+    if (selectedValues.has(next.toLowerCase())) {
+      onValueChange('');
+      setActiveIndex(null);
+      return;
+    }
     onAddTag(next);
     onValueChange('');
-    setActiveIndex(0);
+    setActiveIndex(null);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActiveIndex((current) => Math.min(current + 1, Math.max(menuItems.length - 1, 0)));
+      setActiveIndex((current) => {
+        if (menuItems.length === 0) return null;
+        if (current === null) return 0;
+        return Math.min(current + 1, menuItems.length - 1);
+      });
       return;
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActiveIndex((current) => Math.max(current - 1, 0));
+      setActiveIndex((current) => {
+        if (menuItems.length === 0) return null;
+        if (current === null) return 0;
+        return Math.max(current - 1, 0);
+      });
       return;
     }
 
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
-      const selected = menuItems[clampedActiveIndex];
+      if (normalizedValue.length === 0 && clampedActiveIndex === null) return;
+      const selected =
+        clampedActiveIndex === null ? menuItems[0] : menuItems[clampedActiveIndex];
       addTag(selected?.value ?? normalizedValue);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      setFocused(false);
+      setActiveIndex(null);
       return;
     }
 
@@ -183,7 +205,7 @@ export function TagCombobox({
             value={value}
             onChange={(event) => {
               onValueChange(event.target.value);
-              setActiveIndex(0);
+              setActiveIndex(normalizeTag(event.target.value).length > 0 ? 0 : null);
             }}
             onFocus={() => setFocused(true)}
             onBlur={() => window.setTimeout(() => setFocused(false), 120)}

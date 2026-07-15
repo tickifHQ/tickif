@@ -45,8 +45,8 @@ import {
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
+import { Card } from '@repo/ui/components/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
-import { Frame } from '@repo/ui/components/frame';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { MonthPickerField } from '@repo/ui/components/month-picker-field';
@@ -757,7 +757,7 @@ function SectionFrame({
 
   return (
     <section>
-      <Frame radius="xl" className="overflow-hidden">
+      <Card radius="2xl" className="overflow-hidden">
         <button
           type="button"
           onClick={onToggle}
@@ -798,7 +798,7 @@ function SectionFrame({
             </div>
           </div>
         ) : null}
-      </Frame>
+      </Card>
     </section>
   );
 }
@@ -880,7 +880,7 @@ function ChecklistCard({
         <span className="text-muted-foreground">{icon}</span>
         {title}
       </div>
-      <Frame className="overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="p-0">
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0">
@@ -895,7 +895,7 @@ function ChecklistCard({
             </div>
           ))}
         </div>
-      </Frame>
+      </Card>
     </div>
   );
 }
@@ -915,7 +915,7 @@ function TipsCard() {
         <ShieldPlus className="size-3.5 text-muted-foreground" />
         TIPS FOR BETTER VISIBILITY
       </div>
-      <Frame variant="accent" className="border-border/80">
+      <Card variant="accent" className="border-border/80">
         <div className="space-y-2 p-3">
           {tips.map((tip) => (
             <div key={tip} className="flex items-start gap-3">
@@ -924,7 +924,7 @@ function TipsCard() {
             </div>
           ))}
         </div>
-      </Frame>
+      </Card>
     </div>
   );
 }
@@ -936,7 +936,7 @@ function WhyItMattersCard() {
         <Lightbulb className="size-3.5 text-muted-foreground" />
         TIP
       </div>
-      <Frame variant="accent" className="border-primary/10">
+      <Card variant="accent" className="border-primary/10">
         <div className="p-4">
           <div className="mb-6 overflow-hidden rounded-2xl">
             <Image
@@ -953,7 +953,7 @@ function WhyItMattersCard() {
             Homeowners trust designers who show real work.
           </p>
         </div>
-      </Frame>
+      </Card>
     </div>
   );
 }
@@ -2800,7 +2800,7 @@ export function DesignerProjectUpload({
                     value={completedByMonth}
                     onChange={setCompletedByMonth}
                     placeholder="YYYY-MM"
-                    helperText="Use YYYY-MM, for example 2026-03."
+                    helperText="Pick the month this project was completed."
                   />
                   <FormSelect
                     label="Project duration"

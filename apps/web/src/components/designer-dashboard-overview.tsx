@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { CompletionStep, ProfileCompletionResponse, ProfileDashboardResponse } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import { Frame } from '@repo/ui/components/frame';
+import { Card } from '@repo/ui/components/card';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
@@ -228,17 +228,17 @@ export function DesignerDashboardOverview({
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
         <div className="space-y-5">
           {dashboardError ? (
-            <Frame variant="default" className="border-destructive/30 bg-destructive/5">
+            <Card radius="2xl" className="border-destructive/30 bg-destructive/5">
               <div className="px-6 py-5">
                 <div className="text-base font-medium text-foreground">Could not load dashboard summary</div>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Refresh the page in a moment. Your dashboard and project upload actions are still available.
                 </p>
               </div>
-            </Frame>
+            </Card>
           ) : null}
 
-          <Frame className="overflow-hidden">
+          <Card radius="2xl" className="overflow-hidden">
             <div className="px-6 pt-6 pb-6">
               <div className="flex items-end justify-between gap-4">
                 <div className="text-base font-medium text-muted-foreground">
@@ -255,9 +255,9 @@ export function DesignerDashboardOverview({
                 />
               </div>
             </div>
-          </Frame>
+          </Card>
 
-          <Frame className="shadow-md">
+          <Card radius="2xl" className="shadow-md">
             <div className="px-6 pt-4 pb-6">
               {trackedChecklistComplete ? (
                 <div className="flex items-start gap-4 py-4">
@@ -283,11 +283,11 @@ export function DesignerDashboardOverview({
                 </ol>
               )}
             </div>
-          </Frame>
+          </Card>
         </div>
 
         <div className="space-y-5">
-          <Frame variant="accent" className="relative overflow-visible">
+          <Card variant="accent" radius="2xl" className="relative overflow-visible">
             <div className="relative px-4 pt-4 pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -316,14 +316,14 @@ export function DesignerDashboardOverview({
                 </Link>
               </Button>
             </div>
-          </Frame>
+          </Card>
 
           <div>
             <div className="mb-3 flex items-center gap-2 px-3 text-xs font-medium tracking-normal text-muted-foreground">
               <ShieldPlus className="size-4" />
               WHAT HAPPENS NEXT
             </div>
-            <Frame className="overflow-hidden">
+            <Card radius="2xl" className="overflow-hidden">
               <RightRailInfoRow
                 icon={<ClipboardCheck className="size-4" />}
                 title="We review your project"
@@ -341,10 +341,10 @@ export function DesignerDashboardOverview({
                 description="Get a head start on your KYC."
                 href="/designer/profile"
               />
-            </Frame>
+            </Card>
           </div>
 
-          <Frame variant="accent" radius="full" className="overflow-hidden">
+          <Card variant="accent" radius="3xl" className="overflow-hidden">
             <div className="px-4 pt-4">
               <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
                 <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
@@ -384,7 +384,7 @@ export function DesignerDashboardOverview({
                 className="mt-6 w-full cursor-pointer rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#3e4148] hover:to-[#1f2228]"
               />
             </div>
-          </Frame>
+          </Card>
         </div>
       </div>
     </div>

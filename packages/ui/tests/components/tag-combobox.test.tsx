@@ -52,6 +52,27 @@ describe('TagCombobox', () => {
     expect(onValueChange).toHaveBeenCalledWith('');
   });
 
+  it('does not add the first suggestion on bare Enter after focus', async () => {
+    const user = userEvent.setup();
+    const onAddTag = vi.fn();
+
+    render(
+      <TagCombobox
+        tags={[]}
+        value=""
+        onValueChange={vi.fn()}
+        onAddTag={onAddTag}
+        onRemoveTag={vi.fn()}
+        options={options}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('{Enter}');
+
+    expect(onAddTag).not.toHaveBeenCalled();
+  });
+
   it('allows creating a tag when no option matches', async () => {
     const user = userEvent.setup();
     const onAddTag = vi.fn();
@@ -73,6 +94,29 @@ describe('TagCombobox', () => {
     expect(onAddTag).toHaveBeenCalledWith('Skylight');
   });
 
+  it('blocks case-variant duplicate tags', async () => {
+    const user = userEvent.setup();
+    const onAddTag = vi.fn();
+    const onValueChange = vi.fn();
+
+    render(
+      <TagCombobox
+        tags={['Accent wall']}
+        value="accent wall"
+        onValueChange={onValueChange}
+        onAddTag={onAddTag}
+        onRemoveTag={vi.fn()}
+        options={options}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('{Enter}');
+
+    expect(onAddTag).not.toHaveBeenCalled();
+    expect(onValueChange).toHaveBeenCalledWith('');
+  });
+
   it('keeps keyboard navigation aligned with the active option', async () => {
     const user = userEvent.setup();
 
@@ -92,7 +136,7 @@ describe('TagCombobox', () => {
     );
 
     await user.click(screen.getByRole('combobox'));
-    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
 
     expect(screen.getByRole('option', { name: 'Wood paneling' })).toHaveAttribute(
       'aria-selected',

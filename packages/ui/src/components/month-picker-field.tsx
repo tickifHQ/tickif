@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 import { Button } from './button';
@@ -44,6 +44,7 @@ export function MonthPickerField({
   const [open, setOpen] = useState(false);
   const [visibleYear, setVisibleYear] = useState(() => parseYear(value, currentYear));
   const containerRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [pickerRect, setPickerRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const selectedValue = useMemo(() => value.trim(), [value]);
 
@@ -60,23 +61,32 @@ export function MonthPickerField({
   useEffect(() => {
     if (!open) return;
 
+    setVisibleYear(parseYear(value, currentYear));
     updatePickerRect();
 
     function closeOnOutsidePointerDown(event: PointerEvent) {
       if (containerRef.current?.contains(event.target as Node)) return;
+      if (pickerRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
       setOpen(false);
     }
 
     document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+    document.addEventListener('keydown', closeOnEscape);
     window.addEventListener('resize', updatePickerRect);
     window.addEventListener('scroll', updatePickerRect, true);
 
     return () => {
       document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+      document.removeEventListener('keydown', closeOnEscape);
       window.removeEventListener('resize', updatePickerRect);
       window.removeEventListener('scroll', updatePickerRect, true);
     };
-  }, [open, updatePickerRect]);
+  }, [currentYear, open, updatePickerRect, value]);
 
   function selectMonth(monthIndex: number) {
     onChange(formatMonthValue(visibleYear, monthIndex));
@@ -88,17 +98,37 @@ export function MonthPickerField({
       <Label className="text-sm font-medium text-foreground">{label}</Label>
       <div ref={containerRef} className="relative">
         <Input
-          readOnly
+          type="month"
           value={value}
+          onChange={(event) => onChange(event.target.value)}
           onClick={() => setOpen(true)}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
-          className="cursor-pointer"
+          className={cn('cursor-pointer', selectedValue && 'pr-10')}
           aria-expanded={open}
           aria-haspopup="dialog"
         />
+        {selectedValue ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 size-8 -translate-y-1/2"
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange('');
+              setOpen(false);
+            }}
+            aria-label={`Clear ${label}`}
+          >
+            <X className="size-4" />
+          </Button>
+        ) : null}
         {open && pickerRect ? (
           <div
+            ref={pickerRef}
+            role="dialog"
+            aria-label={`${label} month picker`}
             className="fixed z-50 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-lg"
             style={{ left: pickerRect.left, top: pickerRect.top, width: pickerRect.width }}
             onMouseDown={(event) => event.preventDefault()}

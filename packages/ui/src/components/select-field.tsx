@@ -1,3 +1,5 @@
+'use client';
+
 import { ChevronsUpDown } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import { useId } from 'react';
@@ -44,7 +46,9 @@ export function SelectField({
           )}
           {...props}
         >
-          <option value="">{placeholder}</option>
+          <option value="" disabled hidden>
+            {placeholder}
+          </option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
