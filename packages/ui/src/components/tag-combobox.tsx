@@ -197,32 +197,34 @@ export function TagCombobox({
           <div
             id={listboxId}
             role="listbox"
-            className="fixed z-50 max-h-40 overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
+            className="fixed z-50 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
             style={{ left: menuRect.left, top: menuRect.top, width: menuRect.width }}
           >
-            {menuItems.length > 0 ? (
-              menuItems.map((item, index) => (
-                <button
-                  key={`${item.type}-${item.value}`}
-                  ref={(element) => {
-                    itemRefs.current[index] = element;
-                  }}
-                  type="button"
-                  role="option"
-                  aria-selected={index === clampedActiveIndex}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => addTag(item.value)}
-                  className={cn(
-                    'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
-                    index === clampedActiveIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))
-            ) : (
-              <div className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyLabel}</div>
-            )}
+            <div className="max-h-40 overflow-y-auto">
+              {menuItems.length > 0 ? (
+                menuItems.map((item, index) => (
+                  <button
+                    key={`${item.type}-${item.value}`}
+                    ref={(element) => {
+                      itemRefs.current[index] = element;
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={index === clampedActiveIndex}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => addTag(item.value)}
+                    className={cn(
+                      'flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
+                      index === clampedActiveIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))
+              ) : (
+                <div className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyLabel}</div>
+              )}
+            </div>
           </div>
         ) : null}
       </div>
