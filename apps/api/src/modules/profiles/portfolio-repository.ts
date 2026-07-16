@@ -235,7 +235,6 @@ export const portfolioRepository = {
     data: Partial<{
       displayName: string;
       bio: string | null;
-      logoImageId: string | null;
       websiteUrl: string | null;
       instagramHandle: string | null;
       linkedinHandle: string | null;
@@ -276,5 +275,50 @@ export const portfolioRepository = {
       )
       .limit(1);
     return row ?? null;
+  },
+
+  /**
+   * Compare-and-set: clear logoImageId only if it still matches the expected value.
+   * Returns true if the update matched a row, false if another request already changed it.
+   */
+  async clearLogoIfMatch(profileId: string, expectedKey: string): Promise<boolean> {
+    const result = await db
+      .update(schema.designerProfile)
+      .set({ logoImageId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.designerProfile.id, profileId),
+          eq(schema.designerProfile.logoImageId, expectedKey),
+        ),
+      )
+      .returning({ id: schema.designerProfile.id });
+    return result.length > 0;
+  },
+
+  /**
+   * Compare-and-set: set logoImageId only if it still matches the expected previous value.
+   * Returns true if the update matched, false if concurrent modification occurred.
+   */
+  async setLogoIfMatch(
+    profileId: string,
+    expectedPreviousKey: string | null,
+    newKey: string,
+  ): Promise<boolean> {
+    const condition = expectedPreviousKey
+      ? and(
+          eq(schema.designerProfile.id, profileId),
+          eq(schema.designerProfile.logoImageId, expectedPreviousKey),
+        )
+      : and(
+          eq(schema.designerProfile.id, profileId),
+          sql`${schema.designerProfile.logoImageId} IS NULL`,
+        );
+
+    const result = await db
+      .update(schema.designerProfile)
+      .set({ logoImageId: newKey, updatedAt: new Date() })
+      .where(condition!)
+      .returning({ id: schema.designerProfile.id });
+    return result.length > 0;
   },
 };

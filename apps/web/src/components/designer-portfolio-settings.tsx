@@ -131,6 +131,7 @@ export function DesignerPortfolioSettings() {
   const [isSaving, startSaveTransition] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const formRevisionRef = useRef(0);
 
   // Slug check
   const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle');
@@ -182,6 +183,7 @@ export function DesignerPortfolioSettings() {
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    formRevisionRef.current += 1;
     setSaveSuccess(false);
     setSaveError(null);
   }
@@ -242,17 +244,27 @@ export function DesignerPortfolioSettings() {
     const patch = computeChangedFields(form, savedForm);
     if (!patch) return;
 
+    const revisionAtSave = formRevisionRef.current;
+
     startSaveTransition(async () => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
         const updated = await updatePortfolio(patch);
-        setPortfolio(updated);
-        const newForm = portfolioToForm(updated);
-        setForm(newForm);
-        setSavedForm(newForm);
-        setSaveSuccess(true);
-        setSlugStatus('idle');
+        // Only apply server response if no edits were made during the request
+        if (formRevisionRef.current === revisionAtSave) {
+          setPortfolio(updated);
+          const newForm = portfolioToForm(updated);
+          setForm(newForm);
+          setSavedForm(newForm);
+          setSaveSuccess(true);
+          setSlugStatus('idle');
+        } else {
+          // Edits happened during save — update savedForm (server state) but keep user's edits
+          setPortfolio(updated);
+          setSavedForm(portfolioToForm(updated));
+          setSaveSuccess(true);
+        }
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : 'Could not save settings.');
       }
@@ -595,8 +607,9 @@ export function DesignerPortfolioSettings() {
               value={form.bio}
               onChange={(e) => updateField('bio', e.target.value)}
               placeholder="Tell homeowners about your design philosophy"
-              maxLength={2000}
+              maxLength={500}
               rows={4}
+              disabled={isSaving}
             />
           </div>
 

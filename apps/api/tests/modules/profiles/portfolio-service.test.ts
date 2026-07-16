@@ -20,6 +20,8 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     findProjectForDesigner: vi.fn(),
     findProjectForDesignerInTx: vi.fn(),
     updateProfileInTx: vi.fn(),
+    clearLogoIfMatch: vi.fn(),
+    setLogoIfMatch: vi.fn(),
   },
   withTransaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
     return fn({});
@@ -343,7 +345,7 @@ describe('portfolioService.commitLogoUpload', () => {
   it('returns logoUrl when object exists', async () => {
     setupResolveProfile();
     vi.mocked(objectExists).mockResolvedValue(true);
-    vi.mocked(profilesRepository.updateProfile).mockResolvedValue(makeProfile());
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
     vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
 
     const result = await portfolioService.commitLogoUpload(
@@ -352,9 +354,22 @@ describe('portfolioService.commitLogoUpload', () => {
     );
 
     expect(result.logoUrl).toBe('https://r2.example.com/presigned-get');
-    expect(profilesRepository.updateProfile).toHaveBeenCalledWith('profile-1', {
-      logoImageId: 'originals/logos/profile-1/uuid',
-    });
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/abc',
+      'originals/logos/profile-1/uuid',
+    );
+  });
+
+  it('throws 403 when object key does not belong to profile', async () => {
+    setupResolveProfile();
+
+    await expect(
+      portfolioService.commitLogoUpload(
+        { objectKey: 'originals/logos/other-profile/uuid' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it('throws 400 when object not found in storage', async () => {
@@ -368,6 +383,53 @@ describe('portfolioService.commitLogoUpload', () => {
       ),
     ).rejects.toMatchObject({ status: 400 });
   });
+
+  it('deletes previous logo when replacing', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/old-key' }));
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
+    vi.mocked(deleteObject).mockResolvedValue(undefined);
+
+    await portfolioService.commitLogoUpload(
+      { objectKey: 'originals/logos/profile-1/new-key' },
+      caller,
+    );
+
+    expect(deleteObject).toHaveBeenCalledWith('originals/logos/profile-1/old-key');
+  });
+
+  it('retries CAS once on concurrent modification and succeeds', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/old-key' }));
+    vi.mocked(objectExists).mockResolvedValue(true);
+    // First CAS fails (concurrent modification), second succeeds
+    vi.mocked(portfolioRepository.setLogoIfMatch)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
+
+    const result = await portfolioService.commitLogoUpload(
+      { objectKey: 'originals/logos/profile-1/new-key' },
+      caller,
+    );
+
+    expect(result.logoUrl).toBe('https://r2.example.com/presigned-get');
+    expect(portfolioRepository.setLogoIfMatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws 409 when CAS retry also fails (double concurrent modification)', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/old-key' }));
+    vi.mocked(objectExists).mockResolvedValue(true);
+    // Both CAS attempts fail
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(false);
+
+    await expect(
+      portfolioService.commitLogoUpload(
+        { objectKey: 'originals/logos/profile-1/new-key' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 409, message: 'Logo was modified concurrently, please retry' });
+  });
 });
 
 // =============================================================================
@@ -375,18 +437,17 @@ describe('portfolioService.commitLogoUpload', () => {
 // =============================================================================
 
 describe('portfolioService.deleteLogo', () => {
-  it('clears DB first, then best-effort storage cleanup', async () => {
+  it('clears DB via compare-and-set, then best-effort storage cleanup', async () => {
     setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(profilesRepository.updateProfile).mockResolvedValue(
-      makeProfile({ logoImageId: null }),
-    );
+    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(true);
     vi.mocked(deleteObject).mockResolvedValue(undefined);
 
     await portfolioService.deleteLogo(caller);
 
-    expect(profilesRepository.updateProfile).toHaveBeenCalledWith('profile-1', {
-      logoImageId: null,
-    });
+    expect(portfolioRepository.clearLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/key',
+    );
     expect(deleteObject).toHaveBeenCalledWith('originals/logos/profile-1/key');
   });
 
@@ -401,18 +462,35 @@ describe('portfolioService.deleteLogo', () => {
 
   it('still succeeds when storage cleanup fails (orphan left)', async () => {
     setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(profilesRepository.updateProfile).mockResolvedValue(
-      makeProfile({ logoImageId: null }),
-    );
+    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(true);
     vi.mocked(deleteObject).mockRejectedValue(new Error('S3 network error'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Should NOT throw — storage failure is best-effort
     await portfolioService.deleteLogo(caller);
 
-    // DB must still be cleared
-    expect(profilesRepository.updateProfile).toHaveBeenCalledWith('profile-1', {
-      logoImageId: null,
+    // DB must still be cleared via CAS
+    expect(portfolioRepository.clearLogoIfMatch).toHaveBeenCalledWith(
+      'profile-1',
+      'originals/logos/profile-1/key',
+    );
+  });
+
+  it('does not delete storage when compare-and-set fails (concurrent modification)', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
+    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(false);
+
+    await portfolioService.deleteLogo(caller);
+
+    // Storage should NOT be touched since CAS indicated another request already modified
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('throws 403 when logo key does not match expected prefix', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/other-profile/key' }));
+
+    await expect(portfolioService.deleteLogo(caller)).rejects.toMatchObject({
+      status: 403,
     });
   });
 });

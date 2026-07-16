@@ -98,7 +98,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   showPositiveReviewsOnly: false,
   showTickifBadge: true,
   badges: ['verified'],
-  portfolioUrl: 'https://tickif.com/p/my-studio',
+  portfolioUrl: null,
   publishedAt: null,
   createdAt: '2025-01-01T00:00:00.000Z',
   updatedAt: '2025-01-01T00:00:00.000Z',
@@ -191,7 +191,7 @@ describe('GET /me/portfolio', () => {
       displayName: 'Test Studio',
       portfolioSlug: 'my-studio',
       badges: ['verified'],
-      portfolioUrl: 'https://tickif.com/p/my-studio',
+      portfolioUrl: null,
     });
   });
 
@@ -241,14 +241,14 @@ describe('PATCH /me/portfolio', () => {
     expect(body.error.message).toBe('This portfolio slug is already taken');
   });
 
-  it('returns 400 on invalid input (bad accentColor format)', async () => {
+  it('returns 422 on invalid input (bad accentColor format)', async () => {
     mockAuthed();
 
     const res = await request('PATCH', '/me/portfolio', {
       body: { accentColor: 'not-a-hex' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('returns 401 without authentication', async () => {
@@ -283,14 +283,14 @@ describe('POST /me/portfolio/slug-check', () => {
     expect(body).toEqual({ slug: 'my-studio', available: true });
   });
 
-  it('returns 400 for invalid slug format', async () => {
+  it('returns 422 for invalid slug format', async () => {
     mockAuthed();
 
     const res = await request('POST', '/me/portfolio/slug-check', {
       body: { slug: '-invalid' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('returns 401 without authentication', async () => {
@@ -326,24 +326,24 @@ describe('POST /me/portfolio/logo/upload', () => {
     expect(body.key).toBe('originals/logos/profile-1/uuid-123');
   });
 
-  it('returns 400 for invalid content type', async () => {
+  it('returns 422 for invalid content type', async () => {
     mockAuthed();
 
     const res = await request('POST', '/me/portfolio/logo/upload', {
       body: { contentType: 'application/pdf', contentLength: 100000 },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
-  it('returns 400 for oversized content', async () => {
+  it('returns 422 for oversized content', async () => {
     mockAuthed();
 
     const res = await request('POST', '/me/portfolio/logo/upload', {
       body: { contentType: 'image/jpeg', contentLength: 6000000 },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('returns 401 without authentication', async () => {

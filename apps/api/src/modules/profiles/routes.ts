@@ -22,6 +22,7 @@ import {
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
+import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
 import { portfolioService } from './portfolio-service.js';
@@ -104,7 +105,7 @@ const onboardRoute = createRoute({
   },
 });
 
-export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook })
   .openapi(
     createRoute({
       method: 'get',
@@ -436,7 +437,6 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
         401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
         403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
         404: { description: 'No logo exists to delete', content: { 'application/json': { schema: errorResponseSchema } } },
-        500: { description: 'Storage deletion failure', content: { 'application/json': { schema: errorResponseSchema } } },
       },
     }),
     async (c) => {

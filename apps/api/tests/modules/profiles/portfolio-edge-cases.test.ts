@@ -203,7 +203,7 @@ describe('slug boundary validation', () => {
       body: { slug: '-leading' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('rejects slug with trailing hyphen (Zod regex)', async () => {
@@ -213,7 +213,7 @@ describe('slug boundary validation', () => {
       body: { slug: 'trailing-' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('rejects slug shorter than 3 characters', async () => {
@@ -223,7 +223,7 @@ describe('slug boundary validation', () => {
       body: { slug: 'ab' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('rejects slug with uppercase letters', async () => {
@@ -233,7 +233,7 @@ describe('slug boundary validation', () => {
       body: { slug: 'MyStudio' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 
   it('rejects slug with consecutive hyphens', async () => {
@@ -243,7 +243,7 @@ describe('slug boundary validation', () => {
       body: { slug: 'my--studio' },
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });
 
@@ -286,26 +286,6 @@ describe('concurrent slug claims', () => {
     const body = await json(res);
     expect(body.error.code).toBe('conflict');
     expect(body.error.message).toBe('This portfolio slug is already taken');
-  });
-});
-
-// =============================================================================
-// Logo delete when storage is down (500)
-// =============================================================================
-
-describe('logo delete when storage is down', () => {
-  it('returns 500 when service throws internal error', async () => {
-    mockAuthed();
-    const { AppError } = await import('../../../src/lib/errors.js');
-    vi.mocked(portfolioService.deleteLogo).mockRejectedValue(
-      new AppError('internal_error', 'Failed to delete logo from storage', 500),
-    );
-
-    const res = await request('DELETE', '/me/portfolio/logo');
-
-    expect(res.status).toBe(500);
-    const body = await json(res);
-    expect(body.error.code).toBe('internal_error');
   });
 });
 

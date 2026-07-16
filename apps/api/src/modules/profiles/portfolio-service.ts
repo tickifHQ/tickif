@@ -30,6 +30,14 @@ const ALLOWED_LOGO_CONTENT_TYPES = new Set([
 
 const MAX_LOGO_BYTES = 5_000_000;
 
+// Badge thresholds
+const BADGE_NEW_DAYS = 90;
+const BADGE_TOP_PERFORMER_RATING = 4.5;
+const BADGE_TOP_PERFORMER_REVIEWS = 10;
+const BADGE_ESTABLISHED_YEARS = 5;
+/** Minimum published projects for the "projects-published" badge. */
+const BADGE_PROJECTS_PUBLISHED_COUNT = 25;
+
 type AuditEvent = {
   userId: string;
   activeOrgId: string;
@@ -78,11 +86,11 @@ function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
   if (profile.status === 'active') badges.push('verified');
   const daysSinceCreation =
     (Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysSinceCreation < 90) badges.push('new');
-  if (Number(profile.avgRating) >= 4.5 && profile.reviewCount >= 10)
+  if (daysSinceCreation < BADGE_NEW_DAYS) badges.push('new');
+  if (Number(profile.avgRating) >= BADGE_TOP_PERFORMER_RATING && profile.reviewCount >= BADGE_TOP_PERFORMER_REVIEWS)
     badges.push('top-performer');
-  if (profile.yearsExperience >= 5) badges.push('established');
-  if (profile.projectCount >= 28) badges.push('projects-published');
+  if (profile.yearsExperience >= BADGE_ESTABLISHED_YEARS) badges.push('established');
+  if (profile.projectCount >= BADGE_PROJECTS_PUBLISHED_COUNT) badges.push('projects-published');
   return badges;
 }
 
@@ -118,9 +126,12 @@ export const portfolioService = {
     const portfolioUrl = null;
 
     // Resolve logo to a presigned download URL (or null)
-    const logoUrl = profile.logoImageId
-      ? await presignDownload({ key: profile.logoImageId })
-      : null;
+    // Validate prefix to prevent IDOR — only sign keys belonging to this profile
+    const expectedPrefix = `originals/logos/${profile.id}/`;
+    const logoUrl =
+      profile.logoImageId && profile.logoImageId.startsWith(expectedPrefix)
+        ? await presignDownload({ key: profile.logoImageId })
+        : null;
 
     return {
       id: portfolio.id,
@@ -264,7 +275,7 @@ export const portfolioService = {
       if (portfolioFields.showTickifBadge !== undefined)
         portfolioPatch.showTickifBadge = portfolioFields.showTickifBadge;
 
-      if (Object.keys(portfolioPatch).length > 0 || Object.keys(profileUpdates).length === 0) {
+      if (Object.keys(portfolioPatch).length > 0) {
         try {
           await portfolioRepository.upsertInTx(tx, profile.id, portfolioPatch);
         } catch (err: unknown) {
@@ -352,14 +363,28 @@ export const portfolioService = {
       throw AppError.badRequest('No uploaded object found for this image');
     }
 
-    // Delete old logo object if one exists (prevent orphaned storage objects)
-    // DB update first, storage cleanup second — if DB fails, user keeps old logo
+    // Compare-and-set: atomically swap logoImageId only if current value matches what we read
     const previousKey = profile.logoImageId;
-
-    await profilesRepository.updateProfile(profile.id, { logoImageId: input.objectKey });
+    const updated = await portfolioRepository.setLogoIfMatch(
+      profile.id,
+      previousKey,
+      input.objectKey,
+    );
+    if (!updated) {
+      // Concurrent modification — retry CAS once with fresh state
+      const freshProfile = await resolveProfile(caller);
+      const retried = await portfolioRepository.setLogoIfMatch(
+        freshProfile.id,
+        freshProfile.logoImageId,
+        input.objectKey,
+      );
+      if (!retried) {
+        throw AppError.conflict('Logo was modified concurrently, please retry');
+      }
+    }
 
     // Clean up the previous storage object (non-critical — orphan is acceptable)
-    if (previousKey && previousKey !== input.objectKey) {
+    if (previousKey && previousKey !== input.objectKey && previousKey.startsWith(expectedPrefix)) {
       try {
         await deleteObject(previousKey);
       } catch (err) {
@@ -390,8 +415,18 @@ export const portfolioService = {
 
     const keyToDelete = profile.logoImageId;
 
-    // Clear DB association first (authoritative state)
-    await profilesRepository.updateProfile(profile.id, { logoImageId: null });
+    // Validate prefix before allowing delete (prevent IDOR)
+    const expectedPrefix = `originals/logos/${profile.id}/`;
+    if (!keyToDelete.startsWith(expectedPrefix)) {
+      throw AppError.forbidden('Cannot delete logo: invalid key ownership');
+    }
+
+    // Compare-and-set: only clear if logoImageId hasn't changed since we read it
+    const updated = await portfolioRepository.clearLogoIfMatch(profile.id, keyToDelete);
+    if (!updated) {
+      // Another request already changed or cleared the logo — nothing to do
+      return;
+    }
 
     // Best-effort storage cleanup (orphan is acceptable if this fails)
     try {

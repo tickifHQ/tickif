@@ -207,7 +207,6 @@ const sharedProfileFields = {
  */
 export const updateProfileSchema = z.object({
   ...sharedProfileFields,
-  logoImageId: z.string().optional().nullable(),
   entityType: z.enum(['individual', 'company']).optional(),
   googleBusinessUrl: z.string().url().max(200).optional().nullable(),
   phone: z.string().trim().min(7).max(20).optional().nullable(),
