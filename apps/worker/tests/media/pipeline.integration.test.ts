@@ -22,11 +22,12 @@ vi.mock('@repo/storage', () => ({
 
 import { db, schema, eq } from '@repo/db';
 import { makeProject, makeProjectImage } from '@repo/db/testing';
+import type { MediaProcessJob } from '../../src/connection.js';
 import { processMedia } from '../../src/jobs/media-process.js';
 import { computePhash } from '../../src/media/phash.js';
 
-const job = (imageId: string): Job<{ imageId: string }> =>
-  ({ id: 'j', data: { imageId } }) as Job<{ imageId: string }>;
+const job = (imageId: string, mode?: MediaProcessJob['mode']): Job<MediaProcessJob> =>
+  ({ id: 'j', data: { imageId, mode } }) as Job<MediaProcessJob>;
 
 async function seedProcessing(bytes: Buffer) {
   const project = await makeProject();
@@ -85,13 +86,21 @@ describe('media pipeline (integration)', () => {
     expect(row.height).toBe(1200);
     expect(row.phash).toMatch(/^[0-9a-f]{16}$/);
     expect(row.derivatives).toHaveLength(8);
-    expect(row.derivatives.map((d) => d.format).sort()).toEqual(
-      ['avif', 'avif', 'avif', 'avif', 'webp', 'webp', 'webp', 'webp'],
-    );
+    expect(row.derivatives.map((d) => d.format).sort()).toEqual([
+      'avif',
+      'avif',
+      'avif',
+      'avif',
+      'webp',
+      'webp',
+      'webp',
+      'webp',
+    ]);
 
     // Every derivative object was written to R2 and is EXIF-stripped, correctly encoded.
     for (const d of row.derivatives) {
-      const key = `derivatives/${projectId}/${imageId}/${d.variant}.${d.format}`;
+      const key = d.key;
+      expect(key).toBe(`derivatives/${projectId}/${imageId}/${d.variant}-wm-v2.${d.format}`);
       expect(r2.has(key)).toBe(true);
       const meta = await sharp(r2.get(key)!).metadata();
       expect(meta.exif).toBeUndefined();
@@ -110,6 +119,33 @@ describe('media pipeline (integration)', () => {
     expect(row.width).toBe(4000);
     expect(row.height).toBe(3000);
   }, 60_000);
+
+  it('refreshes a ready image in place and removes its stale derivatives', async () => {
+    const { imageId } = await seedProcessing(representative);
+    await processMedia(job(imageId));
+
+    const ready = await reload(imageId);
+    const legacyDerivatives = ready.derivatives.map((derivative) => ({
+      ...derivative,
+      key: derivative.key.replace('-wm-v2.', '.'),
+    }));
+    for (const derivative of legacyDerivatives) r2.set(derivative.key, Buffer.from('legacy'));
+    await db
+      .update(schema.projectImage)
+      .set({ derivatives: legacyDerivatives })
+      .where(eq(schema.projectImage.id, imageId));
+
+    const result = await processMedia(job(imageId, 'reprocess'));
+
+    expect(result).toEqual({ ok: true, derivatives: 8 });
+    const refreshed = await reload(imageId);
+    expect(refreshed.status).toBe('ready');
+    expect(refreshed.derivatives.every((derivative) => derivative.key.includes('-wm-v2.'))).toBe(
+      true,
+    );
+    expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);
+    expect(r2.has(ready.originalKey)).toBe(true);
+  });
 
   it('marks corrupt bytes failed and writes no derivatives', async () => {
     const { projectId, imageId } = await seedProcessing(Buffer.from('not an image'));

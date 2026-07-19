@@ -6,6 +6,7 @@ export type ProcessingImage = {
   projectId: string;
   originalKey: string;
   contentType: string;
+  derivatives: schema.ProjectImageDerivative[];
   status: (typeof schema.projectImageStatusEnum.enumValues)[number];
 };
 
@@ -16,6 +17,7 @@ export async function getImageForProcessing(imageId: string): Promise<Processing
       projectId: schema.projectImage.projectId,
       originalKey: schema.projectImage.originalKey,
       contentType: schema.projectImage.contentType,
+      derivatives: schema.projectImage.derivatives,
       status: schema.projectImage.status,
     })
     .from(schema.projectImage)
@@ -42,6 +44,38 @@ export async function markReady(
   return rows.length > 0;
 }
 
+/** Replace public derivatives in place while keeping an already-ready image available. */
+export async function refreshReadyDerivatives(
+  imageId: string,
+  data: {
+    derivatives: schema.ProjectImageDerivative[];
+    width: number;
+    height: number;
+  },
+): Promise<boolean> {
+  const rows = await db
+    .update(schema.projectImage)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'ready')))
+    .returning({ id: schema.projectImage.id });
+  return rows.length > 0;
+}
+
+/** Resolve explicit IDs, or all ready image IDs for a confirmed operational backfill. */
+export async function listReadyImageIds(imageIds?: readonly string[]): Promise<string[]> {
+  if (imageIds?.length === 0) return [];
+
+  const ready = eq(schema.projectImage.status, 'ready');
+  const filter = imageIds
+    ? and(ready, or(...imageIds.map((imageId) => eq(schema.projectImage.id, imageId))))
+    : ready;
+  const rows = await db
+    .select({ id: schema.projectImage.id })
+    .from(schema.projectImage)
+    .where(filter);
+  return rows.map((row) => row.id);
+}
+
 export async function markFailed(imageId: string): Promise<void> {
   await db.transaction(async (tx) => {
     const now = new Date();
@@ -56,7 +90,8 @@ export async function markFailed(imageId: string): Promise<void> {
     const failureMetadata = {
       mediaProcessingFailure: {
         imageId: image.id,
-        reason: 'Image processing failed after submission. Please replace or remove the failed image before resubmitting.',
+        reason:
+          'Image processing failed after submission. Please replace or remove the failed image before resubmitting.',
         recordedAt: now.toISOString(),
       },
     };

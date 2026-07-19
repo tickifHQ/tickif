@@ -4,10 +4,10 @@ import { buildWatermarkSvg, type WatermarkConfig } from '../../src/media/waterma
 import { generateDerivatives } from '../../src/media/derivatives.js';
 
 const wm: WatermarkConfig = {
-  text: 'Tickif',
-  opacity: 0.8,
-  scale: 0.3,
-  minImageWidth: 200,
+  text: 'tickif',
+  opacity: 0.22,
+  scale: 0.16,
+  rotation: -30,
 };
 
 async function meanStdev(buffer: Buffer): Promise<number> {
@@ -23,10 +23,17 @@ beforeAll(async () => {
 });
 
 describe('buildWatermarkSvg', () => {
-  it('produces a full-canvas tiled SVG sharp can rasterize', async () => {
+  it('produces a restrained, staggered full-canvas pattern sharp can rasterize', async () => {
     const svg = buildWatermarkSvg(800, 600, wm);
     const text = svg.toString();
-    expect(text.match(/Tickif/g)?.length).toBeGreaterThan(6);
+    expect(text).toContain('<pattern');
+    expect(text).toContain('patternTransform="rotate(-30)"');
+    expect(text.match(/<text[^>]*>tickif<\/text>/g)?.length).toBe(2);
+    expect(text).toContain('fill-opacity="0.22"');
+
+    const fontSize = Number(text.match(/font-size="([\d.]+)"/)?.[1]);
+    expect(fontSize).toBeGreaterThanOrEqual(20);
+    expect(fontSize).toBeLessThanOrEqual(40);
 
     const meta = await sharp(svg).metadata();
     expect(meta.format).toBe('svg');
@@ -55,7 +62,7 @@ describe('generateDerivatives with watermark', () => {
     expect(await meanStdev(marked!.buffer)).toBeGreaterThan((await meanStdev(plain!.buffer)) + 2);
   });
 
-  it('skips the watermark for images below minImageWidth', async () => {
+  it('keeps small public derivatives protected with a scaled-down pattern', async () => {
     const small = await sharp({
       create: { width: 150, height: 100, channels: 3, background: 'blue' },
     })
@@ -72,7 +79,7 @@ describe('generateDerivatives with watermark', () => {
       watermark: wm,
     });
 
-    expect(Math.abs((await meanStdev(marked!.buffer)) - (await meanStdev(plain!.buffer)))).toBeLessThan(0.5);
+    expect(await meanStdev(marked!.buffer)).toBeGreaterThan((await meanStdev(plain!.buffer)) + 0.5);
   });
 
   it('uses the actual resized dimensions when compositing the watermark', async () => {
@@ -85,7 +92,7 @@ describe('generateDerivatives with watermark', () => {
     const [marked] = await generateDerivatives(halfPixelResize, {
       variants: [{ variant: 'thumb', width: 320 }],
       formats: ['webp'],
-      watermark: { ...wm, minImageWidth: 1 },
+      watermark: wm,
     });
 
     expect(marked).toMatchObject({ width: 320 });

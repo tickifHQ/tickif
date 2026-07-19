@@ -15,16 +15,28 @@ import { computePhash, findNearestDuplicate } from '../media/phash.js';
 import {
   getImageForProcessing,
   markReady,
+  refreshReadyDerivatives,
   markFailed,
   findProjectPhashes,
 } from '../media/repository.js';
 
 export type MediaProcessResult =
-  | { ok: true; skipped: 'missing' | 'already-ready' | 'already-failed' | 'lost-race' }
+  | {
+      ok: true;
+      skipped: 'missing' | 'already-ready' | 'already-failed' | 'not-ready' | 'lost-race';
+    }
   | { ok: true; derivatives: number }
   | { ok: false; reason: string };
 
-// Derivatives are content-addressed by key (variant never changes), so cache them forever.
+type StoredDerivative = {
+  variant: string;
+  format: 'webp' | 'avif';
+  key: string;
+  width: number;
+  height: number;
+};
+
+// Revisioned derivative keys make immutable caching safe across watermark updates.
 const DERIVATIVE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 /** Persist a permanent rejection and drop the now-orphaned original. Cleanup is best-effort. */
@@ -32,6 +44,40 @@ async function failPermanently(imageId: string, originalKey: string): Promise<vo
   await markFailed(imageId);
   await deleteObject(originalKey).catch((err) =>
     console.error(`[worker] media ${imageId}: original cleanup failed`, err),
+  );
+}
+
+async function generateAndStoreDerivatives(
+  image: { id: string; projectId: string },
+  original: Buffer,
+): Promise<StoredDerivative[]> {
+  const generated = [];
+  for await (const derivative of eachDerivative(original, { watermark: defaultWatermarkConfig })) {
+    generated.push(derivative);
+  }
+
+  return Promise.all(
+    generated.map(async (derivative) => {
+      const key = buildDerivativeKey(
+        image.projectId,
+        image.id,
+        `${derivative.variant}-${config.WATERMARK_REVISION}`,
+        derivative.format,
+      );
+      await putObject({
+        key,
+        body: derivative.buffer,
+        contentType: derivative.contentType,
+        cacheControl: DERIVATIVE_CACHE_CONTROL,
+      });
+      return {
+        variant: derivative.variant,
+        format: derivative.format,
+        key,
+        width: derivative.width,
+        height: derivative.height,
+      };
+    }),
   );
 }
 
@@ -45,16 +91,19 @@ async function failPermanently(imageId: string, originalKey: string): Promise<vo
  */
 export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProcessResult> {
   const { imageId } = job.data;
+  const isReprocess = job.data.mode === 'reprocess';
   const image = await getImageForProcessing(imageId);
   if (!image) return { ok: true, skipped: 'missing' };
-  if (image.status === 'ready') return { ok: true, skipped: 'already-ready' };
+  if (image.status === 'ready' && !isReprocess) return { ok: true, skipped: 'already-ready' };
   if (image.status === 'failed') return { ok: true, skipped: 'already-failed' };
+  if (image.status === 'processing' && isReprocess) return { ok: true, skipped: 'not-ready' };
 
   let original: Buffer;
   try {
     original = await getObject(image.originalKey);
   } catch (err) {
     if (err instanceof ObjectTooLargeError) {
+      if (isReprocess) return { ok: false, reason: 'too_large' };
       await failPermanently(imageId, image.originalKey);
       return { ok: false, reason: 'too_large' };
     }
@@ -63,8 +112,32 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
 
   const validation = await validateImageBytes(original, image.contentType);
   if (!validation.ok) {
+    if (isReprocess) return { ok: false, reason: validation.reason };
     await failPermanently(imageId, image.originalKey);
     return { ok: false, reason: validation.reason };
+  }
+
+  if (isReprocess) {
+    const derivatives = await generateAndStoreDerivatives(image, original);
+    const refreshed = await refreshReadyDerivatives(imageId, {
+      derivatives,
+      width: validation.width,
+      height: validation.height,
+    });
+    if (!refreshed) return { ok: true, skipped: 'lost-race' };
+
+    const refreshedKeys = new Set(derivatives.map((derivative) => derivative.key));
+    const staleKeys = image.derivatives
+      .map((derivative) => derivative.key)
+      .filter((key) => !refreshedKeys.has(key));
+    await Promise.all(
+      staleKeys.map((key) =>
+        deleteObject(key).catch((error: unknown) =>
+          console.error(`[worker] media ${imageId}: stale derivative cleanup failed`, error),
+        ),
+      ),
+    );
+    return { ok: true, derivatives: derivatives.length };
   }
 
   const phash = await computePhash(original);
@@ -81,24 +154,9 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
     );
   }
 
-  // Encoded derivatives are KB-range, so collect them (the full-res raw is already released)
-  // and upload in parallel rather than paying R2 round-trip latency 8 times serially.
-  const generated = [];
-  for await (const d of eachDerivative(original, { watermark: defaultWatermarkConfig })) {
-    generated.push(d);
-  }
-  const derivatives = await Promise.all(
-    generated.map(async (d) => {
-      const key = buildDerivativeKey(image.projectId, imageId, d.variant, d.format);
-      await putObject({
-        key,
-        body: d.buffer,
-        contentType: d.contentType,
-        cacheControl: DERIVATIVE_CACHE_CONTROL,
-      });
-      return { variant: d.variant, format: d.format, key, width: d.width, height: d.height };
-    }),
-  );
+  // Encoded derivatives are KB-range, so upload them in parallel instead of paying
+  // the storage round-trip latency eight times serially.
+  const derivatives = await generateAndStoreDerivatives(image, original);
 
   const flipped = await markReady(imageId, {
     derivatives,

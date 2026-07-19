@@ -62,4 +62,16 @@ describe('enqueueMedia', () => {
     expect(addMock.mock.calls[0]?.[2]?.jobId).toBe('media-img-9');
     expect(addMock.mock.calls[1]?.[2]?.jobId).toBe('media-img-9');
   });
+
+  it('uses a separate stable jobId for explicit derivative reprocessing', async () => {
+    const { enqueueMedia, JOBS } = await import('../src/index.js');
+
+    await enqueueMedia({ imageId: 'img-9', mode: 'reprocess' });
+
+    expect(addMock).toHaveBeenCalledWith(
+      JOBS.processMedia,
+      { imageId: 'img-9', mode: 'reprocess' },
+      { jobId: 'media-reprocess-img-9' },
+    );
+  });
 });
