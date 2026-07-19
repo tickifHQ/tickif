@@ -14,6 +14,11 @@ import type {
   ProjectDetailResponse,
   ProjectImageAttachment,
   ProjectListItem,
+  PortfolioProjectItem,
+  PortfolioProjectsQuery,
+  PortfolioProjectsResponse,
+  PortfolioProjectStatusCounts,
+  PortfolioProjectStatusGroup,
   ProjectResponse,
   ListProjectsResponse,
   ProjectRoom,
@@ -35,6 +40,7 @@ import {
   type ProjectOwnership,
   type ProjectRecord,
   type ProjectRoomRecord,
+  type ProjectStatusCountRecord,
   type TaxonomyKind,
 } from './repository.js';
 
@@ -121,11 +127,11 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
   await Promise.allSettled(unusedKeys.map((key) => deleteObject(key)));
 }
 
-function pickPreviewDerivative(derivatives: Derivative[]): string | null {
+function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
-    derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
-    derivatives[0]?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp') ??
+    derivatives.find((derivative) => derivative.variant === 'thumb') ??
+    derivatives[0] ??
     null
   );
 }
@@ -154,8 +160,8 @@ async function coverImageUrl(coverImage?: {
   derivatives: ProjectFeedItemRecord['coverDerivatives'];
 }): Promise<string | null> {
   if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
-  const previewKey = pickPreviewDerivative(coverImage.derivatives);
-  return previewKey ? presignDownload({ key: previewKey }) : null;
+  const preview = pickPreviewDerivative(coverImage.derivatives);
+  return preview ? presignDownload({ key: preview.key }) : null;
 }
 
 function toFeedProject(
@@ -214,6 +220,9 @@ async function toListItem(
   row: ProjectListItemRecord,
   coverImages: Map<string, ProjectCoverImageRecord>,
 ): Promise<ProjectListItem> {
+  const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
+  const url = await coverImageUrl(cover);
+
   return {
     id: row.id,
     slug: row.slug,
@@ -222,9 +231,54 @@ async function toListItem(
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
-    coverImageUrl: await coverImageUrl(row.coverImageId ? coverImages.get(row.coverImageId) : undefined),
+    coverImageUrl: url,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+async function toPortfolioItem(
+  row: ProjectListItemRecord,
+  coverImages: Map<string, ProjectCoverImageRecord>,
+): Promise<PortfolioProjectItem> {
+  const item = await toListItem(row, coverImages);
+  const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
+  const preview = cover?.derivatives ? pickPreviewDerivative(cover.derivatives) : null;
+
+  return {
+    ...item,
+    statusGroup: portfolioStatusGroup(row.status),
+    coverImage: cover && preview && item.coverImageUrl
+      ? {
+          id: cover.id,
+          url: item.coverImageUrl,
+          width: preview.width,
+          height: preview.height,
+        }
+      : null,
+  };
+}
+
+function portfolioStatusGroup(status: ProjectStatus): PortfolioProjectStatusGroup {
+  if (status === 'submitted' || status === 'in_review') return 'in_review';
+  return status;
+}
+
+function buildPortfolioStatusCounts(
+  counts: ProjectStatusCountRecord[],
+): PortfolioProjectStatusCounts {
+  const count = (statuses: ProjectStatus[]): number =>
+    counts
+      .filter((item) => statuses.includes(item.status))
+      .reduce((sum, item) => sum + item.count, 0);
+
+  return {
+    total: count(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested']),
+    draft: count(['draft']),
+    inReview: count(['submitted', 'in_review']),
+    published: count(['published']),
+    changesRequested: count(['changes_requested']),
+    rejected: count(['rejected']),
   };
 }
 
@@ -507,6 +561,14 @@ function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] |
   return undefined;
 }
 
+function statusesForPortfolio(
+  status: PortfolioProjectsQuery['status'],
+): ProjectStatus[] | undefined {
+  if (status === 'in_review') return ['submitted', 'in_review'];
+  if (status === 'all') return undefined;
+  return [status];
+}
+
 function duplicateTitle(title: string): string {
   const suffix = ' Copy';
   if (title.length + suffix.length <= 160) return `${title}${suffix}`;
@@ -598,6 +660,40 @@ export const projectsService = {
 
     return {
       items: await Promise.all(items.map((item) => toListItem(item, coverImages))),
+      page,
+      total,
+      limit,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+    };
+  },
+
+  async portfolio(
+    query: PortfolioProjectsQuery,
+    caller: Caller,
+  ): Promise<PortfolioProjectsResponse> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const { page, limit } = query;
+    const [{ items, total }, statusCounts] = await Promise.all([
+      projectsRepository.list({
+        userId: caller.userId,
+        activeOrgId: caller.activeOrgId,
+        statuses: statusesForPortfolio(query.status),
+        limit,
+        offset: (page - 1) * limit,
+        sort: query.sort,
+      }),
+      projectsRepository.countByStatus({
+        userId: caller.userId,
+        activeOrgId: caller.activeOrgId,
+      }),
+    ]);
+    const coverImages = await projectsRepository.findCoverImages(
+      items.map((project) => project.coverImageId).filter((id): id is string => !!id),
+    );
+
+    return {
+      items: await Promise.all(items.map((item) => toPortfolioItem(item, coverImages))),
+      statusCounts: buildPortfolioStatusCounts(statusCounts),
       page,
       total,
       limit,

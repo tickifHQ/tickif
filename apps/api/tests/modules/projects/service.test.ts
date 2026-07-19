@@ -19,6 +19,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
   return {
     projectsRepository: {
       list: vi.fn(),
+      countByStatus: vi.fn(),
       findCoverImages: vi.fn(),
       findById: vi.fn(),
       findByIdWithRooms: vi.fn(),
@@ -164,6 +165,71 @@ describe('projectsService.list', () => {
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+});
+
+describe('projectsService.portfolio', () => {
+  it('returns exact status groups, counts, and representative cover media', async () => {
+    const coverId = '55555555-5555-4555-8555-555555555555';
+    vi.mocked(projectsRepository.list).mockResolvedValue({
+      items: [row({ status: 'changes_requested', coverImageId: coverId })],
+      total: 1,
+    });
+    vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
+      { status: 'draft', count: 2 },
+      { status: 'submitted', count: 1 },
+      { status: 'in_review', count: 2 },
+      { status: 'published', count: 1 },
+      { status: 'changes_requested', count: 3 },
+      { status: 'rejected', count: 1 },
+    ]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
+      [coverId, {
+        id: coverId,
+        status: 'ready',
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: 'derivatives/project/cover/thumb.webp',
+            width: 320,
+            height: 240,
+          },
+        ],
+      }],
+    ]));
+
+    const result = await projectsService.portfolio(
+      { status: 'changes_requested', page: 1, limit: 12, sort: '-updatedAt' },
+      caller,
+    );
+
+    expect(projectsRepository.list).toHaveBeenCalledWith({
+      userId: caller.userId,
+      activeOrgId: undefined,
+      statuses: ['changes_requested'],
+      limit: 12,
+      offset: 0,
+      sort: '-updatedAt',
+    });
+    expect(result.statusCounts).toEqual({
+      total: 10,
+      draft: 2,
+      inReview: 3,
+      published: 1,
+      changesRequested: 3,
+      rejected: 1,
+    });
+    expect(result.items[0]).toMatchObject({
+      status: 'changes_requested',
+      statusGroup: 'changes_requested',
+      coverImage: {
+        id: coverId,
+        url: 'https://signed.example/derivatives/project/cover/thumb.webp',
+        width: 320,
+        height: 240,
+      },
+    });
   });
 });
 

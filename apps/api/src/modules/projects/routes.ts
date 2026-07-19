@@ -13,6 +13,8 @@ import {
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
+  portfolioProjectsQuerySchema,
+  portfolioProjectsResponseSchema,
   projectCompletenessResponseSchema,
   projectDetailResponseSchema,
   projectImageAttachmentSchema,
@@ -84,6 +86,24 @@ const feedRoute = createRoute({
       description: 'A page of published projects',
       content: { 'application/json': { schema: feedProjectsResponseSchema } },
     },
+  },
+});
+
+const portfolioRoute = createRoute({
+  method: 'get',
+  path: '/portfolio',
+  tags: ['Projects'],
+  summary: 'List portfolio-ready projects for the active designer organization',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { query: portfolioProjectsQuerySchema },
+  responses: {
+    200: {
+      description: 'Portfolio project summaries and status counts',
+      content: { 'application/json': { schema: portfolioProjectsResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot list these portfolio projects'),
   },
 });
 
@@ -427,6 +447,13 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       return c.json({ images }, 200);
     },
   )
+  .openapi(portfolioRoute, async (c) => {
+    const result = await projectsService.portfolio(
+      c.req.valid('query'),
+      caller(c.get('user'), c.get('session')),
+    );
+    return c.json(result, 200);
+  })
   .openapi(listRoute, async (c) => {
     const result = await projectsService.list(
       c.req.valid('query'),

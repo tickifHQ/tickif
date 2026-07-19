@@ -90,6 +90,10 @@ export type ProjectListItemRecord = Pick<
   | 'updatedAt'
 >;
 export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
+export type ProjectStatusCountRecord = {
+  status: ProjectStatus;
+  count: number;
+};
 
 export type TaxonomyKind = (typeof schema.taxonomyKindEnum.enumValues)[number];
 
@@ -199,6 +203,27 @@ export const projectsRepository = {
     ]);
 
     return { items, total: count?.value ?? 0 };
+  },
+
+  async countByStatus(params: {
+    userId: string;
+    activeOrgId?: string | null;
+  }): Promise<ProjectStatusCountRecord[]> {
+    const filters = [
+      eq(schema.member.userId, params.userId),
+      params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+    ].filter((filter) => filter !== undefined);
+
+    return db
+      .select({
+        status: schema.project.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
+      .where(and(...filters))
+      .groupBy(schema.project.status);
   },
 
   async findCoverImages(imageIds: string[]): Promise<Map<string, ProjectCoverImageRecord>> {

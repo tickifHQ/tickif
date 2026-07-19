@@ -4,6 +4,7 @@ import {
   createProjectSchema,
   linkProjectImageSchema,
   listProjectsQuerySchema,
+  portfolioProjectsQuerySchema,
   projectListStatus,
   projectStatus,
   projectRoomSchema,
@@ -89,6 +90,19 @@ describe('listProjectsQuerySchema', () => {
       sort: 'title',
     });
     expect(parsed).toMatchObject({ status: 'in_review', q: 'bandra', sort: 'title' });
+  });
+});
+
+describe('portfolioProjectsQuerySchema', () => {
+  it('supports each portfolio status group with bounded pagination', () => {
+    expect(portfolioProjectsQuerySchema.parse({ status: 'changes_requested' })).toMatchObject({
+      status: 'changes_requested',
+      page: 1,
+      limit: 12,
+      sort: '-updatedAt',
+    });
+    expect(portfolioProjectsQuerySchema.safeParse({ status: 'unknown' }).success).toBe(false);
+    expect(portfolioProjectsQuerySchema.safeParse({ limit: 51 }).success).toBe(false);
   });
 });
 
