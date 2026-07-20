@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
+import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries } from '@/components/phone-number-input';
@@ -107,20 +108,13 @@ export function DesignerProfileEditorPlaceholder() {
                 />
               </Field>
 
-              <Field htmlFor="profile-entity-type" label="Listing type">
-                <select
-                  id="profile-entity-type"
-                  value={entityType}
-                  onChange={(event) => setEntityType(event.target.value as EntityTypeOption)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {entityTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <SelectField
+                label="Listing type"
+                value={entityType}
+                onValueChange={(value) => setEntityType(value as EntityTypeOption)}
+                options={entityTypeOptions}
+                placeholder="Select listing type"
+              />
             </div>
           </div>
 
@@ -219,20 +213,13 @@ export function DesignerProfileEditorPlaceholder() {
             <CardTitle>Company details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-3">
-            <Field htmlFor="profile-firm-type" label="Firm type">
-              <select
-                id="profile-firm-type"
-                value={firmType}
-                onChange={(event) => setFirmType(event.target.value as FirmTypeOption)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                {firmTypeOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <SelectField
+              label="Firm type"
+              value={firmType}
+              onValueChange={(value) => setFirmType(value as FirmTypeOption)}
+              options={firmTypeOptions.map((option) => ({ label: option, value: option }))}
+              placeholder="Select firm type"
+            />
 
             <Field htmlFor="profile-founded-year" label="Founded year">
               <Input

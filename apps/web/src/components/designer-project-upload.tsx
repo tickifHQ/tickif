@@ -45,10 +45,13 @@ import {
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
-import { Card, CardContent } from '@repo/ui/components/card';
+import { Card } from '@repo/ui/components/card';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
+import { MonthPickerField } from '@repo/ui/components/month-picker-field';
+import { SelectField, type SelectFieldOption } from '@repo/ui/components/select-field';
+import { TagCombobox, type TagComboboxOption } from '@repo/ui/components/tag-combobox';
 import { Textarea } from '@repo/ui/components/textarea';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
@@ -192,6 +195,29 @@ const fallbackProjectTypeLabels: Record<string, string> = {
 const projectDeliveryScopeSlugs = ['design', 'interior-execution', 'construction'];
 
 const fallbackDurationOptions = ['1 month', '2 months', '3 months', '4 months', '6 months', '9 months', '12+ months'];
+
+const roomTagOptions: TagComboboxOption[] = [
+  'Accent wall',
+  'Arches',
+  'Built-in storage',
+  'Ceiling detail',
+  'Compact layout',
+  'Cove lighting',
+  'Custom furniture',
+  'Dining nook',
+  'False ceiling',
+  'Fluted panel',
+  'Glass partition',
+  'Indoor plants',
+  'Marble counter',
+  'Modular kitchen',
+  'Natural light',
+  'Open shelving',
+  'Statement lights',
+  'TV unit',
+  'Wardrobe',
+  'Window seating',
+].map((tag) => ({ label: tag, value: tag }));
 
 const commercialTypeOptions: ProjectSubtypeOption[] = [
   { slug: 'corporate-office', label: 'Corporate office' },
@@ -607,39 +633,17 @@ function FormSelect({
   options,
   placeholder,
   className,
+  allowEmpty,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
+  options: SelectFieldOption[];
   placeholder: string;
   className?: string;
+  allowEmpty?: boolean;
 }) {
-  return (
-    <div className={cn('space-y-1.5', className)}>
-      <Label className={cn(typography.label, 'text-foreground')}>{label}</Label>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={cn(
-            'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 shadow-xs transition-colors',
-            typography.control,
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-            !value && 'text-muted-foreground',
-          )}
-        >
-          <option value="">{placeholder}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
-      </div>
-    </div>
-  );
+  return <SelectField label={label} value={value} onValueChange={onChange} options={options} placeholder={placeholder} className={className} allowEmpty={allowEmpty} />;
 }
 
 function FormField({
@@ -755,7 +759,7 @@ function SectionFrame({
 
   return (
     <section>
-      <Card className="overflow-hidden rounded-[20px] border-border/80 shadow-sm">
+      <Card radius="2xl" className="overflow-hidden">
         <button
           type="button"
           onClick={onToggle}
@@ -789,10 +793,10 @@ function SectionFrame({
             }}
           >
             <div className="min-h-0 overflow-hidden">
-              <CardContent className="p-0">
+              <div className="p-0">
                 <Divider />
                 {children}
-              </CardContent>
+              </div>
             </div>
           </div>
         ) : null}
@@ -878,8 +882,8 @@ function ChecklistCard({
         <span className="text-muted-foreground">{icon}</span>
         {title}
       </div>
-      <Card className="overflow-hidden rounded-2xl border-border/80">
-        <CardContent className="p-0">
+      <Card radius="2xl" className="overflow-hidden">
+        <div className="p-0">
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0">
               {item.done ? (
@@ -892,7 +896,7 @@ function ChecklistCard({
               <span className={cn(typography.bodyMedium, item.done ? 'text-primary' : 'text-muted-foreground')}>{item.label}</span>
             </div>
           ))}
-        </CardContent>
+        </div>
       </Card>
     </div>
   );
@@ -913,15 +917,15 @@ function TipsCard() {
         <ShieldPlus className="size-3.5 text-muted-foreground" />
         TIPS FOR BETTER VISIBILITY
       </div>
-      <Card className="rounded-2xl border-border/80 bg-primary/5">
-        <CardContent className="space-y-2 p-3">
+      <Card variant="accent" radius="2xl" className="border-border/80">
+        <div className="space-y-2 p-3">
           {tips.map((tip) => (
             <div key={tip} className="flex items-start gap-3">
               <Check className="mt-0.5 size-4 text-primary" />
               <p className="text-sm font-medium text-muted-foreground">{tip}</p>
             </div>
           ))}
-        </CardContent>
+        </div>
       </Card>
     </div>
   );
@@ -934,8 +938,8 @@ function WhyItMattersCard() {
         <Lightbulb className="size-3.5 text-muted-foreground" />
         TIP
       </div>
-      <Card className="rounded-2xl border-primary/10 bg-primary/5">
-        <CardContent className="p-4">
+      <Card variant="accent" radius="2xl" className="border-primary/10">
+        <div className="p-4">
           <div className="mb-6 overflow-hidden rounded-2xl">
             <Image
               src="/illustrations/project-upload/project-upload-why-it-matters.svg"
@@ -950,58 +954,8 @@ function WhyItMattersCard() {
             Complete projects with photos, metadata, and cost info get 3× more enquiries.
             Homeowners trust designers who show real work.
           </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function TagInput({
-  tags,
-  value,
-  onValueChange,
-  onAddTag,
-  onRemoveTag,
-}: {
-  tags: string[];
-  value: string;
-  onValueChange: (value: string) => void;
-  onAddTag: (tag: string) => void;
-  onRemoveTag: (tag: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className={cn(typography.label, 'text-foreground')}>
-        Search tags <span className="text-muted-foreground">(Optional)</span>
-      </Label>
-      <div className="rounded-md border border-input bg-background px-3 py-2 shadow-xs">
-        <div className="mb-2 flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => onRemoveTag(tag)}
-              className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent"
-            >
-              <span>{tag}</span>
-              <span className="text-muted-foreground">×</span>
-            </button>
-          ))}
         </div>
-        <Input
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ',') {
-              event.preventDefault();
-              const next = value.trim();
-              if (next) onAddTag(next);
-            }
-          }}
-          className={cn('h-8 border-0 px-0 py-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0', typography.control)}
-          placeholder="accent wall, marble counter"
-        />
-      </div>
+      </Card>
     </div>
   );
 }
@@ -1259,12 +1213,14 @@ function RoomCard({
               />
             </div>
 
-            <TagInput
+            <TagCombobox
               tags={room.tags}
               value={room.tagInput}
               onValueChange={onTagInputChange}
               onAddTag={onAddTag}
               onRemoveTag={onRemoveTag}
+              options={roomTagOptions}
+              placeholder="accent wall, marble counter"
             />
 
             <div className="flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3">
@@ -2781,38 +2737,26 @@ export function DesignerProjectUpload({
                     options={cityOptions}
                     placeholder={loadingTaxonomy ? 'Loading…' : 'Select city'}
                   />
-                  <div className="space-y-1.5">
-                    <Label className={cn(typography.label, 'text-foreground')}>Locality / Area</Label>
-                    {localityOptions.length > 0 ? (
-                      <div className="relative">
-                        <select
-                          value={locality}
-                          onChange={(event) => setLocality(event.target.value)}
-                          className={cn(
-                            'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 shadow-xs transition-colors',
-                            typography.control,
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                            !locality && 'text-muted-foreground',
-                          )}
-                        >
-                          <option value="">e.g. Adyar, Koramangala</option>
-                          {localityOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                      </div>
-                    ) : (
+                  {localityOptions.length > 0 ? (
+                    <SelectField
+                      label="Locality / Area"
+                      value={locality}
+                      onValueChange={setLocality}
+                      options={localityOptions}
+                      placeholder="e.g. Adyar, Koramangala"
+                      allowEmpty
+                    />
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label className={cn(typography.label, 'text-foreground')}>Locality / Area</Label>
                       <Input
                         value={locality}
                         onChange={(event) => setLocality(event.target.value)}
                         placeholder="e.g. Adyar, Koramangala"
                         className={typography.control}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 {selectedProjectTypeBehavior.buildingNameLabel ? (
                   <div className="mt-5 max-w-[22.8125rem]">
@@ -2854,13 +2798,12 @@ export function DesignerProjectUpload({
             <div className="space-y-0">
               <div className="px-5 py-5 sm:px-6">
                 <div className="grid gap-5 md:grid-cols-2">
-                  <FormField
+                  <MonthPickerField
                     label="Project completed by"
                     value={completedByMonth}
                     onChange={setCompletedByMonth}
-                    type="month"
                     placeholder="YYYY-MM"
-                    helperText="Use YYYY-MM, for example 2026-03."
+                    helperText="Pick the month this project was completed."
                   />
                   <FormSelect
                     label="Project duration"
@@ -2868,6 +2811,7 @@ export function DesignerProjectUpload({
                     onChange={setProjectDuration}
                     options={fallbackDurationOptions.map((option) => ({ value: option, label: option }))}
                     placeholder="e.g. 4 months"
+                    allowEmpty
                   />
                 </div>
               </div>

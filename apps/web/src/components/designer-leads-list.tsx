@@ -2,8 +2,9 @@ import Link from 'next/link';
 import type { LeadDetailResponse, LeadListStatus, ListLeadsResponse } from '@repo/contracts';
 import { Avatar } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
+import { EmptyState } from '@repo/ui/components/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
-import { ArrowDown, ExternalLink } from 'lucide-react';
+import { ArrowDown, ExternalLink, UsersRound } from 'lucide-react';
 import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dialog';
 import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
 import { DesignerLeadStatusAction } from '@/components/designer-lead-status-action';
@@ -153,12 +154,11 @@ export function DesignerLeadsList({
             ) : (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={7} className="py-14 text-center">
-                  <div className="mx-auto max-w-sm space-y-2">
-                    <h2 className="text-sm font-medium text-foreground">No leads found</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {query ? 'Try a different search or clear the filter.' : 'New leads will appear here when homeowners enquire.'}
-                    </p>
-                  </div>
+                  <EmptyState
+                    icon={<UsersRound className="size-5" />}
+                    title="No leads found"
+                    description={query ? 'Try a different search or clear the filter.' : 'New leads will appear here when homeowners enquire.'}
+                  />
                 </TableCell>
               </TableRow>
             )}

@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
+import { SelectField } from '@repo/ui/components/select-field';
 import { saveVisitorOnboardingPreferences } from '@/lib/visitor-onboarding';
 
 type VisitorOnboardingFormProps = {
@@ -64,7 +65,7 @@ export function VisitorOnboardingForm({
             </span>
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
-            <Label htmlFor="visitor-display-name" className="text-[13px] font-medium">
+            <Label htmlFor="visitor-display-name" className="text-sm font-medium">
               Display name
             </Label>
             <Input
@@ -75,26 +76,16 @@ export function VisitorOnboardingForm({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="visitor-city" className="text-[13px] font-medium">
-            City
-          </Label>
-          <select
-            id="visitor-city"
-            value={city}
-            onChange={(event) => setCity(event.target.value as typeof city)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            {cityOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SelectField
+          label="City"
+          value={city}
+          onValueChange={(value) => setCity(value as typeof city)}
+          options={cityOptions}
+          placeholder="Select city"
+        />
 
         <div className="space-y-1.5">
-          <Label htmlFor="visitor-whatsapp" className="text-[13px] font-medium">
+          <Label htmlFor="visitor-whatsapp" className="text-sm font-medium">
             WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
           </Label>
           <div className="flex">

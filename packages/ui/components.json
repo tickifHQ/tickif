@@ -12,8 +12,11 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@repo/ui/components",
-    "lib": "@repo/ui/lib",
     "utils": "@repo/ui/lib/utils",
-    "ui": "@repo/ui/components"
+    "ui": "@repo/ui/components",
+    "lib": "@repo/ui/lib"
+  },
+  "registries": {
+    "@reui": "https://reui.io/r/{style}/{name}.json"
   }
 }
