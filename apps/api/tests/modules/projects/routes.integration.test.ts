@@ -20,7 +20,7 @@ import {
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
-import { createRoleSession } from '../../helpers/auth.js';
+import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
 const client = testClient(app);
 
@@ -34,7 +34,8 @@ async function makeDesignerSession(phoneNumber = '+919800002001') {
     role: 'owner',
     createdAt: new Date(),
   });
-  return { cookie, userId, designer };
+  const activeCookie = await activateOrganization(cookie, designer.orgId);
+  return { cookie: activeCookie, userId, designer };
 }
 
 async function requestJson(path: string, method: string, cookie: string | undefined, body: unknown) {
@@ -52,6 +53,30 @@ describe('GET /api/projects', () => {
   it('rejects unauthenticated project listing requests', async () => {
     const res = await client.api.projects.$get({ query: {} });
     expect(res.status).toBe(401);
+  });
+
+  it('does not guess an organization for a multi-org project listing', async () => {
+    const { cookie, userId } = await createRoleSession('+919800002046', 'designer');
+    const designer = await makeDesigner({ userId });
+    await db.insert(schema.member).values({
+      id: `mem-no-active-${userId}`,
+      organizationId: designer.orgId,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const secondOrganization = await makeOrganization();
+    await db.insert(schema.member).values({
+      id: `mem-no-active-second-${userId}`,
+      organizationId: secondOrganization.id,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+
+    const res = await client.api.projects.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(422);
   });
 
   it('returns an org-scoped project page with dashboard list fields', async () => {
@@ -356,6 +381,28 @@ describe('POST /api/projects', () => {
       json: { title: 'New Project' },
     });
     expect(res.status).toBe(401);
+  });
+
+  it('creates the project in the selected organization for a multi-org designer', async () => {
+    const { cookie, userId } = await makeDesignerSession('+919800002047');
+    const selectedDesigner = await makeDesigner();
+    await db.insert(schema.member).values({
+      id: `mem-selected-${userId}`,
+      organizationId: selectedDesigner.orgId,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const selectedCookie = await activateOrganization(cookie, selectedDesigner.orgId);
+
+    const res = await client.api.projects.$post(
+      { json: { title: 'Selected Studio Project' } },
+      { headers: { cookie: selectedCookie } },
+    );
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as ProjectDetailResponse;
+    expect(body.designerId).toBe(selectedDesigner.id);
   });
 
   it('creates a project for the authenticated user designer profile (201)', async () => {
@@ -879,9 +926,13 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const { cookie, designer, userId } = await makeDesignerSession('+919800002010');
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+    const freshCookie = cookie
+      .split('; ')
+      .filter((c) => !c.startsWith('better-auth.session_data'))
+      .join('; ');
 
     const res = await app.request(`/api/projects/${project.id}`, {
-      headers: { cookie },
+      headers: { cookie: freshCookie },
     });
 
     expect(res.status).toBe(403);

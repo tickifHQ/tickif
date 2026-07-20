@@ -14,13 +14,8 @@ export type ProjectStatusCount = {
 export const dashboardRepository = {
   async findProfileContext(input: {
     userId: string;
-    orgId: string | null;
+    orgId: string;
   }): Promise<DashboardProfileContext | null> {
-    const filters = [
-      eq(schema.member.userId, input.userId),
-      input.orgId ? eq(schema.designerProfile.orgId, input.orgId) : undefined,
-    ].filter((filter) => filter !== undefined);
-
     const [row] = await db
       .select({
         profileId: schema.designerProfile.id,
@@ -33,7 +28,12 @@ export const dashboardRepository = {
         schema.member,
         eq(schema.member.organizationId, schema.designerProfile.orgId),
       )
-      .where(and(...filters))
+      .where(
+        and(
+          eq(schema.member.userId, input.userId),
+          eq(schema.designerProfile.orgId, input.orgId),
+        ),
+      )
       .orderBy(desc(schema.designerProfile.updatedAt))
       .limit(1);
 

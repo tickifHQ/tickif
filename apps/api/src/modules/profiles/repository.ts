@@ -48,16 +48,6 @@ export const profilesRepository = {
     return !!row;
   },
 
-  /** Check if the user belongs to any organization. */
-  async hasOrganization(userId: string): Promise<string | null> {
-    const [row] = await db
-      .select({ orgId: schema.member.organizationId })
-      .from(schema.member)
-      .where(eq(schema.member.userId, userId))
-      .limit(1);
-    return row?.orgId ?? null;
-  },
-
   /** Count footprint entries via SQL count(*) — no row streaming. */
   async countFootprintByKind(
     profileId: string,

@@ -9,7 +9,10 @@ import {
 import { onError } from '../../src/lib/errors.js';
 
 const { isOrgMemberMock } = vi.hoisted(() => ({ isOrgMemberMock: vi.fn() }));
-vi.mock('../../src/modules/orgs/repository.js', () => ({ isOrgMember: isOrgMemberMock }));
+vi.mock('../../src/modules/orgs/repository.js', () => ({
+  findSoleOrganizationForUser: vi.fn(),
+  isOrgMember: isOrgMemberMock,
+}));
 
 type StubUser = {
   id: string;

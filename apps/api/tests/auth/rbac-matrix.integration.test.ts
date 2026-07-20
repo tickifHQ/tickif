@@ -14,7 +14,12 @@ import {
   type AuthVariables,
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
-import { createRoleSession, createAuthedSession, backdateSession } from '../helpers/auth.js';
+import {
+  activateOrganization,
+  backdateSession,
+  createAuthedSession,
+  createRoleSession,
+} from '../helpers/auth.js';
 import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
 
 /**
@@ -195,7 +200,15 @@ describe('RBAC matrix: real app routes (E-89)', () => {
     const actors = await mintActors(12);
     const designerSession = await getSession(new Headers({ cookie: actors.designer! }));
     if (!designerSession) throw new Error('expected designer session');
-    await makeDesigner({ userId: designerSession.user.id });
+    const designer = await makeDesigner({ userId: designerSession.user.id });
+    await db.insert(schema.member).values({
+      id: `mem-matrix-designer-${designerSession.user.id}`,
+      organizationId: designer.orgId,
+      userId: designerSession.user.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    actors.designer = await activateOrganization(actors.designer!, designer.orgId);
 
     // public routes: everyone, including anon
     for (const actor of ACTOR_NAMES) {
@@ -212,10 +225,10 @@ describe('RBAC matrix: real app routes (E-89)', () => {
     expect((await getProjects(actors.anon)).status, 'anon → GET /api/projects').toBe(401);
     expect((await getProjects(actors.expired)).status, 'expired → GET /api/projects').toBe(401);
     expect((await getProjects(actors.banned)).status, 'banned → GET /api/projects').toBe(403);
-    expect((await getProjects(actors.visitor)).status, 'visitor → GET /api/projects').toBe(200);
+    expect((await getProjects(actors.visitor)).status, 'visitor → GET /api/projects').toBe(422);
     expect((await getProjects(actors.designer)).status, 'designer → GET /api/projects').toBe(200);
-    expect((await getProjects(actors.admin)).status, 'admin → GET /api/projects').toBe(200);
-    expect((await getProjects(actors.superadmin)).status, 'superadmin → GET /api/projects').toBe(200);
+    expect((await getProjects(actors.admin)).status, 'admin → GET /api/projects').toBe(422);
+    expect((await getProjects(actors.superadmin)).status, 'superadmin → GET /api/projects').toBe(422);
 
     // POST /api/projects is authenticated and requires a designer profile owned by the caller.
     const post = (label: string, cookie?: string) =>

@@ -1,8 +1,11 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { getSession, type Session } from '@repo/auth';
+import { getSession, setActiveOrganization, type Session } from '@repo/auth';
 import type { schema } from '@repo/db';
 import { AppError } from './errors.js';
-import { isOrgMember } from '../modules/orgs/repository.js';
+import {
+  findSoleOrganizationForUser,
+  isOrgMember,
+} from '../modules/orgs/repository.js';
 
 export type AuthVariables = {
   user: Session['user'] | null;
@@ -30,6 +33,18 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
+  if (result?.session && !result.session.activeOrganizationId) {
+    const organizationId = await findSoleOrganizationForUser(result.user.id);
+    if (organizationId) {
+      const response = await setActiveOrganization(c.req.raw.headers, organizationId);
+      if (response.ok) {
+        for (const cookie of response.headers.getSetCookie()) {
+          c.header('Set-Cookie', cookie, { append: true });
+        }
+        result.session.activeOrganizationId = organizationId;
+      }
+    }
+  }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
   await next();

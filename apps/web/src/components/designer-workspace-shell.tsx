@@ -162,36 +162,38 @@ function SidebarContent({
         </Link>
       </div>
 
-      <div className="border-b border-border px-4 pb-4">
-        <DesignerOrganizationSwitcher
-          activeOrganizationId={activeOrganizationId}
-          studioName={studioName}
-          studioLocation={studioLocation}
-        />
-      </div>
-
       <div className="flex flex-1 flex-col justify-between px-4 py-5">
         <div className="space-y-6">
           <SidebarSection title="Studio" items={studioItems} pathname={pathname} />
           <SidebarSection title="Grow" items={growItems} pathname={pathname} />
         </div>
 
-        <div className="space-y-1">
-          <Link
-            href="mailto:support@tickif.in"
-            className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <BadgeHelp className="size-4" />
-            <span>Contact support</span>
-          </Link>
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <MessagesSquare className="size-4" />
-            <span>Explore Tickif</span>
-            <ArrowUpRight className="ml-auto size-4" />
-          </Link>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Link
+              href="mailto:support@tickif.in"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <BadgeHelp className="size-4" />
+              <span>Contact support</span>
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <MessagesSquare className="size-4" />
+              <span>Explore Tickif</span>
+              <ArrowUpRight className="ml-auto size-4" />
+            </Link>
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <DesignerOrganizationSwitcher
+              activeOrganizationId={activeOrganizationId}
+              studioName={studioName}
+              studioLocation={studioLocation}
+            />
+          </div>
         </div>
       </div>
     </>

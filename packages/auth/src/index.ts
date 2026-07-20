@@ -131,7 +131,13 @@ export const auth = betterAuth({
     // set-role still does no role-value validation upstream — the user_role pgEnum is
     // the write backstop (pinned by set-role.integration.test.ts).
     admin({ defaultRole: 'visitor', ac, roles, adminRoles: ['admin', 'superadmin'] }),
-    organization(),
+    organization({
+      // Organization lifecycle is owned by the transactional designer onboarding
+      // flow. Generic create/delete endpoints would allow profile-less orgs or
+      // destructive deletion outside that workflow.
+      allowUserToCreateOrganization: false,
+      disableOrganizationDeletion: true,
+    }),
     emailOTP({
       otpLength: 6,
       expiresIn: 300,

@@ -73,6 +73,30 @@ describe('DesignerWorkspaceShell', () => {
     }
   });
 
+  it('places the organization switcher below Explore Tickif without moving the header account menu', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const exploreTickif = screen.getByRole('link', { name: /explore tickif/i });
+    const organizationSwitcher = screen.getByTestId('organization-switcher');
+    const accountMenu = screen.getByTestId('account-menu');
+    const addProject = screen.getByRole('link', { name: /add new project/i });
+
+    expect(
+      exploreTickif.compareDocumentPosition(organizationSwitcher) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(accountMenu.closest('header')).toContainElement(addProject);
+    expect(
+      addProject.compareDocumentPosition(accountMenu) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('highlights nested routes without highlighting Overview for other designer pages', () => {
     mock.pathname = '/designer/projects/project-1/edit';
 

@@ -59,6 +59,7 @@ const listRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot list these projects'),
+    422: errorJson('No active organization selected'),
   },
 });
 
@@ -141,8 +142,8 @@ const createProjectRoute = createRoute({
       content: { 'application/json': { schema: projectDetailResponseSchema } },
     },
     401: errorJson('Unauthorized'),
-    403: errorJson('Designer profile required'),
-    422: errorJson('Invalid taxonomy refs'),
+    403: errorJson('Designer role, organization write access, and profile required'),
+    422: errorJson('No active organization or invalid taxonomy refs'),
   },
 });
 
@@ -468,7 +469,10 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     return c.json(project, 200);
   })
   .openapi(createProjectRoute, async (c) => {
-    const project = await projectsService.create(c.req.valid('json'), caller(c.get('user')));
+    const project = await projectsService.create(
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(project, 201);
   })
   .openapi(updateProjectRoute, async (c) => {

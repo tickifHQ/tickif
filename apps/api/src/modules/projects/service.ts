@@ -30,6 +30,7 @@ import type {
 } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
+import { isOrgMember, isOrgWriter } from '../orgs/repository.js';
 import {
   projectsRepository,
   type ProjectCoverImageRecord,
@@ -294,6 +295,13 @@ export type Caller = {
   isBanned: boolean;
   activeOrgId?: string | null;
 };
+
+function requireActiveOrganization(caller: Caller): string {
+  if (!caller.activeOrgId) {
+    throw AppError.unprocessable('No active organization selected');
+  }
+  return caller.activeOrgId;
+}
 
 function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
@@ -648,11 +656,15 @@ function buildCompleteness(
 export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await isOrgMember(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await projectsRepository.list({
       userId: caller.userId,
-      activeOrgId: caller.activeOrgId,
+      activeOrgId,
       statuses: statusesForList(query.status),
       q: query.q,
       limit,
@@ -753,9 +765,17 @@ export const projectsService = {
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    if (caller.userRole !== 'designer') {
+      throw AppError.forbidden('Designer role required');
+    }
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await isOrgWriter(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization write access required');
+    }
     await validateProjectTaxonomy(input);
 
-    const designer = await projectsRepository.findDesignerByUserId(caller.userId);
+    const designer = await projectsRepository.findDesignerByOrgId(activeOrgId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }

@@ -173,3 +173,35 @@ export async function createRoleSession(
     .join('; ');
   return { cookie: fresh, userId };
 }
+
+/** Merge Set-Cookie response values into a Cookie request header for follow-up requests. */
+export function mergeResponseCookies(cookie: string, response: Response): string {
+  const values = new Map<string, string>();
+  for (const pair of cookie.split('; ')) {
+    const separator = pair.indexOf('=');
+    if (separator > 0) values.set(pair.slice(0, separator), pair);
+  }
+  for (const setCookie of response.headers.getSetCookie()) {
+    const pair = setCookie.split(';')[0];
+    if (!pair) continue;
+    const separator = pair.indexOf('=');
+    if (separator > 0) values.set(pair.slice(0, separator), pair);
+  }
+  return [...values.values()].join('; ');
+}
+
+/** Select an organization through Better Auth and return the refreshed Cookie header. */
+export async function activateOrganization(
+  cookie: string,
+  organizationId: string,
+): Promise<string> {
+  const response = await auth.api.setActiveOrganization({
+    headers: new Headers({ cookie }),
+    body: { organizationId },
+    asResponse: true,
+  });
+  if (!response.ok) {
+    throw new Error(`activateOrganization: Better Auth returned ${response.status}`);
+  }
+  return mergeResponseCookies(cookie, response);
+}

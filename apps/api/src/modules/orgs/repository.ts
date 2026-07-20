@@ -13,6 +13,19 @@ export async function isOrgMember(userId: string, organizationId: string): Promi
   return !!row;
 }
 
+/**
+ * Resolve a legacy session only when membership is unambiguous. Multi-org users
+ * must choose explicitly through the organization switcher.
+ */
+export async function findSoleOrganizationForUser(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ organizationId: schema.member.organizationId })
+    .from(schema.member)
+    .where(eq(schema.member.userId, userId))
+    .limit(2);
+  return rows.length === 1 ? rows[0]!.organizationId : null;
+}
+
 /** Org roles that grant write access to org-owned resources. */
 const WRITE_ROLES = ['owner', 'admin'];
 

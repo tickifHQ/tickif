@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { db, schema, eq } from '@repo/db';
 import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
-import { signInWithGoogle, createAuthedSession, createRoleSession } from '../../helpers/auth.js';
+import {
+  activateOrganization,
+  createAuthedSession,
+  createRoleSession,
+  mergeResponseCookies,
+  signInWithGoogle,
+} from '../../helpers/auth.js';
 import { getSession } from '@repo/auth';
 
 /**
@@ -193,17 +199,18 @@ describe('GET /api/profiles/me/completion', () => {
       sub: 'g-comp-unverified',
       email: 'unverified@test.com',
     });
-    await request('POST', '/api/profiles/me', {
+    const onboarding = await request('POST', '/api/profiles/me', {
       cookie,
       body: { entityType: 'individual', userName: 'Unverified Phone User' },
     });
+    const activeCookie = mergeResponseCookies(cookie, onboarding);
     const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
     await db
       .update(schema.user)
       .set({ phoneNumber: '+919999999999', phoneNumberVerified: false, emailVerified: false })
       .where(eq(schema.user.id, session!.user.id));
 
-    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    const res = await request('GET', '/api/profiles/me/completion', { cookie: activeCookie });
     const body = await json(res);
     expect(body.missing).toContain('contact');
   });
@@ -213,17 +220,18 @@ describe('GET /api/profiles/me/completion', () => {
       sub: 'g-comp-verified',
       email: 'verified@test.com',
     });
-    await request('POST', '/api/profiles/me', {
+    const onboarding = await request('POST', '/api/profiles/me', {
       cookie,
       body: { entityType: 'individual', userName: 'Verified Phone User' },
     });
+    const activeCookie = mergeResponseCookies(cookie, onboarding);
     const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
     await db
       .update(schema.user)
       .set({ phoneNumber: '+919999999998', phoneNumberVerified: true })
       .where(eq(schema.user.id, session!.user.id));
 
-    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    const res = await request('GET', '/api/profiles/me/completion', { cookie: activeCookie });
     const body = await json(res);
     expect(body.missing).not.toContain('contact');
   });
@@ -233,12 +241,13 @@ describe('GET /api/profiles/me/completion', () => {
       sub: 'g-comp-score',
       email: 'score@test.com',
     });
-    await request('POST', '/api/profiles/me', {
+    const onboarding = await request('POST', '/api/profiles/me', {
       cookie,
       body: { entityType: 'individual', userName: 'Score User' },
     });
+    const activeCookie = mergeResponseCookies(cookie, onboarding);
 
-    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    const res = await request('GET', '/api/profiles/me/completion', { cookie: activeCookie });
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.steps).toHaveLength(4);
@@ -252,7 +261,7 @@ describe('GET /api/profiles/me/completion', () => {
       sub: 'g-comp-addr',
       email: 'comp-addr@test.com',
     });
-    await request('POST', '/api/profiles/me', {
+    const onboarding = await request('POST', '/api/profiles/me', {
       cookie,
       body: {
         entityType: 'individual',
@@ -260,8 +269,9 @@ describe('GET /api/profiles/me/completion', () => {
         address: 'Koramangala, Bengaluru',
       },
     });
+    const activeCookie = mergeResponseCookies(cookie, onboarding);
 
-    const res = await request('GET', '/api/profiles/me/completion', { cookie });
+    const res = await request('GET', '/api/profiles/me/completion', { cookie: activeCookie });
     expect(res.status).toBe(200);
     const body = await json(res);
     // displayName + contact + location (via address) = 3/6 = 50%
@@ -281,7 +291,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       sub: 'g-dashboard-summary',
       email: 'dashboard-summary@test.com',
     });
-    await request('POST', '/api/profiles/me', {
+    const onboarding = await request('POST', '/api/profiles/me', {
       cookie,
       body: {
         entityType: 'individual',
@@ -289,6 +299,7 @@ describe('GET /api/profiles/me/dashboard', () => {
         address: 'Indiranagar, Bangalore',
       },
     });
+    const activeCookie = mergeResponseCookies(cookie, onboarding);
     const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
     const [profile] = await db
       .select()
@@ -307,7 +318,7 @@ describe('GET /api/profiles/me/dashboard', () => {
     await makeLead({ organizationId: profile!.orgId, status: 'contacted' });
     await makeLead({ status: 'new' });
 
-    const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie: activeCookie });
 
     expect(res.status).toBe(200);
     const body = await json(res);
@@ -336,10 +347,27 @@ describe('GET /api/profiles/me/dashboard', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects authenticated users without a designer organization', async () => {
+  it('rejects authenticated users without an active organization', async () => {
     const { cookie } = await createRoleSession('+919800001020', 'designer');
 
     const res = await request('GET', '/api/profiles/me/dashboard', { cookie });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects active organization members without a designer profile', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001022', 'designer');
+    const organization = await makeOrganization({ name: 'No Profile Studio' });
+    await db.insert(schema.member).values({
+      id: `mem-no-profile-${userId}`,
+      organizationId: organization.id,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const activeCookie = await activateOrganization(cookie, organization.id);
+
+    const res = await request('GET', '/api/profiles/me/dashboard', { cookie: activeCookie });
 
     expect(res.status).toBe(403);
   });

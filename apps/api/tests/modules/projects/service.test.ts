@@ -28,7 +28,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
       deleteProject: vi.fn(),
-      findDesignerByUserId: vi.fn(),
+      findDesignerByOrgId: vi.fn(),
       findOwnership: vi.fn(),
       taxonomyExists: vi.fn(),
       findTaxonomyTermBySlug: vi.fn(),
@@ -64,9 +64,15 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
   };
 });
 
+vi.mock('../../../src/modules/orgs/repository.js', () => ({
+  isOrgMember: vi.fn(),
+  isOrgWriter: vi.fn(),
+}));
+
 // Import AFTER the mock is registered.
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
+const { isOrgMember, isOrgWriter } = await import('../../../src/modules/orgs/repository.js');
 const { deleteObject } = await import('@repo/storage');
 
 const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
@@ -133,11 +139,14 @@ const caller = {
   userId: '99999999-9999-4999-8999-999999999999',
   userRole: 'designer',
   isBanned: false,
+  activeOrgId: 'org_1',
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
+  vi.mocked(isOrgMember).mockResolvedValue(true);
+  vi.mocked(isOrgWriter).mockResolvedValue(true);
 });
 
 describe('projectsService.list', () => {
@@ -152,7 +161,7 @@ describe('projectsService.list', () => {
 
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
-      activeOrgId: undefined,
+      activeOrgId: 'org_1',
       statuses: ['draft', 'changes_requested'],
       q: 'bandra',
       limit: 20,
@@ -165,6 +174,16 @@ describe('projectsService.list', () => {
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('rejects listing without an active organization', async () => {
+    await expect(
+      projectsService.list(
+        { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
+        { ...caller, activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(projectsRepository.list).not.toHaveBeenCalled();
   });
 });
 
@@ -293,9 +312,19 @@ describe('projectsService.getById', () => {
 });
 
 describe('projectsService.create', () => {
+  it('rejects callers without the designer role before resolving an organization', async () => {
+    await expect(
+      projectsService.create(
+        { title: 'Visitor Project' },
+        { ...caller, userRole: 'visitor', activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(isOrgWriter).not.toHaveBeenCalled();
+  });
+
   it('uses the base slug when free', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
@@ -312,7 +341,7 @@ describe('projectsService.create', () => {
 
   it('appends a suffix when the slug already exists', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(row());
-    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
@@ -330,7 +359,7 @@ describe('projectsService.create', () => {
 
   it('retries slug creation when another draft wins the insert race', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
@@ -348,7 +377,7 @@ describe('projectsService.create', () => {
 
   it('generates a title and room prefill when title is omitted', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
@@ -412,11 +441,30 @@ describe('projectsService.create', () => {
   });
 
   it('requires the authenticated user to have a designer profile', async () => {
-    vi.mocked(projectsRepository.findDesignerByUserId).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue(null);
 
     await expect(projectsService.create({ title: 'New Project' }, caller)).rejects.toMatchObject({
       status: 403,
     });
+  });
+
+  it('creates in the active organization and rejects a missing active organization', async () => {
+    vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      orgId: 'org_1',
+    });
+    vi.mocked(projectsRepository.createDraft).mockImplementation(async (_input, _designerId, slug) =>
+      row({ slug }),
+    );
+
+    await projectsService.create({ title: 'Active Org Project' }, caller);
+
+    expect(isOrgWriter).toHaveBeenCalledWith(caller.userId, 'org_1');
+    expect(projectsRepository.findDesignerByOrgId).toHaveBeenCalledWith('org_1');
+    await expect(
+      projectsService.create({ title: 'No Org Project' }, { ...caller, activeOrgId: null }),
+    ).rejects.toMatchObject({ status: 422 });
   });
 });
 

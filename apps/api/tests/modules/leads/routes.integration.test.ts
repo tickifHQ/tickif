@@ -5,11 +5,12 @@ import { db, schema } from '@repo/db';
 import {
   makeDesigner,
   makeLead,
+  makeOrganization,
   makeProject,
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
-import { createRoleSession } from '../../helpers/auth.js';
+import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
 const client = testClient(app);
 
@@ -23,7 +24,8 @@ async function makeDesignerSession(phoneNumber: string) {
     role: 'owner',
     createdAt: new Date(),
   });
-  return { cookie, userId, designer };
+  const activeCookie = await activateOrganization(cookie, designer.orgId);
+  return { cookie: activeCookie, userId, designer };
 }
 
 async function requestJson(path: string, method: string, cookie: string | undefined, body: unknown) {
@@ -41,6 +43,30 @@ describe('GET /api/leads', () => {
   it('rejects unauthenticated lead listing requests', async () => {
     const res = await client.api.leads.$get({ query: {} });
     expect(res.status).toBe(401);
+  });
+
+  it('does not guess an organization for a multi-org lead listing', async () => {
+    const { cookie, userId } = await createRoleSession('+919800003008', 'designer');
+    const designer = await makeDesigner({ userId });
+    await db.insert(schema.member).values({
+      id: `mem-no-active-${userId}`,
+      organizationId: designer.orgId,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const secondOrganization = await makeOrganization();
+    await db.insert(schema.member).values({
+      id: `mem-no-active-second-${userId}`,
+      organizationId: secondOrganization.id,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+
+    const res = await client.api.leads.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(422);
   });
 
   it('returns an org-scoped lead page with filters, search, and pagination', async () => {

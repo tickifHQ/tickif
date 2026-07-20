@@ -67,7 +67,7 @@ const emptyUploadImageCounts: UploadImageCounts = {
 
 export type ListProjectsParams = {
   userId: string;
-  activeOrgId?: string | null;
+  activeOrgId: string;
   statuses?: ProjectStatus[];
   q?: string;
   limit: number;
@@ -143,7 +143,7 @@ export const projectsRepository = {
     const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
       eq(schema.member.userId, params.userId),
-      params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+      eq(schema.designerProfile.orgId, params.activeOrgId),
       params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
       searchPattern
         ? or(
@@ -634,11 +634,11 @@ export const projectsRepository = {
     return rows.length > 0;
   },
 
-  async findDesignerByUserId(userId: string): Promise<{ id: string; orgId: string } | null> {
+  async findDesignerByOrgId(orgId: string): Promise<{ id: string; orgId: string } | null> {
     const [row] = await db
       .select({ id: schema.designerProfile.id, orgId: schema.designerProfile.orgId })
       .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.userId, userId))
+      .where(eq(schema.designerProfile.orgId, orgId))
       .limit(1);
     return row ?? null;
   },

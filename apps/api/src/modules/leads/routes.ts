@@ -44,6 +44,7 @@ const listRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot list these leads'),
+    422: errorJson('No active organization selected'),
   },
 });
 

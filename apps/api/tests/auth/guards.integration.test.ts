@@ -23,6 +23,9 @@ function sampleApp() {
   app.use('*', withSession);
   app.get('/admin-area', requireAnyRole(['admin']), (c) => c.json({ ok: true }));
   app.get('/designer-area', requireRole('designer'), (c) => c.json({ ok: true }));
+  app.get('/session-org', requireRole('designer'), (c) =>
+    c.json({ activeOrganizationId: c.get('session')?.activeOrganizationId ?? null }),
+  );
   app.get(
     '/projects/:id/manage',
     requireOwnership(async (c) => {
@@ -113,6 +116,47 @@ describe('RBAC guards (integration, E-87)', () => {
 
     expect((await get(app, `/org-resources/${orgA}/manage`, member.cookie)).status).toBe(200);
     expect((await get(app, `/org-resources/${orgA}/manage`, outsider.cookie)).status).toBe(403);
+  });
+
+  it('activates the sole organization for a legacy session with no active organization', async () => {
+    const app = sampleApp();
+    const designer = await createRoleSession('+919800000060', 'designer');
+    const organizationId = await seedOrgWithMember(designer.userId);
+
+    const response = await get(app, '/session-org', designer.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ activeOrganizationId: organizationId });
+    const [session] = await db
+      .select({ activeOrganizationId: schema.session.activeOrganizationId })
+      .from(schema.session)
+      .where(eq(schema.session.userId, designer.userId));
+    expect(session?.activeOrganizationId).toBe(organizationId);
+  });
+
+  it('does not guess an active organization for a multi-org legacy session', async () => {
+    const app = sampleApp();
+    const designer = await createRoleSession('+919800000061', 'designer');
+    const firstOrgId = await seedOrgWithMember(designer.userId);
+    const secondOrgId = `${firstOrgId}-second`;
+    await db.insert(schema.organization).values({
+      id: secondOrgId,
+      name: 'Second Studio',
+      slug: secondOrgId,
+      createdAt: new Date(),
+    });
+    await db.insert(schema.member).values({
+      id: `mem-second-${designer.userId}`,
+      organizationId: secondOrgId,
+      userId: designer.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+
+    const response = await get(app, '/session-org', designer.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ activeOrganizationId: null });
   });
 
   it('denies a banned account on a live session', async () => {

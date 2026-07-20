@@ -13,7 +13,6 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
     updateStatus: vi.fn(),
     create: vi.fn(),
     isOrgMember: vi.fn(),
-    findFirstOrganizationForUser: vi.fn(),
     findProjectOrganization: vi.fn(),
     budgetBandExists: vi.fn(),
     countByStatus: vi.fn(),
@@ -54,6 +53,7 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(leadsRepository.isOrgMember).mockResolvedValue(true);
 });
 
 describe('leadsService.list', () => {
@@ -80,6 +80,16 @@ describe('leadsService.list', () => {
       referredProjectTitle: 'Bandra Apartment',
       receivedAt: '2026-06-26T10:00:00.000Z',
     });
+  });
+
+  it('rejects listing without an active organization', async () => {
+    await expect(
+      leadsService.list(
+        { status: 'all', page: 1, limit: 12 },
+        { ...caller, activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(leadsRepository.list).not.toHaveBeenCalled();
   });
 });
 
@@ -129,6 +139,16 @@ describe('leadsService.create', () => {
         caller,
       ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('does not fall back to an arbitrary membership when no organization is active', async () => {
+    await expect(
+      leadsService.create(
+        { name: 'Priya Shah', contactNumber: '+919800000001' },
+        { ...caller, activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(leadsRepository.create).not.toHaveBeenCalled();
   });
 });
 

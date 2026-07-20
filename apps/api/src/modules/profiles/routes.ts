@@ -48,6 +48,14 @@ const completionRoute = createRoute({
       description: 'Unauthorized',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
+    403: {
+      description: 'Caller is not a member of the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
   },
 });
 
@@ -69,6 +77,10 @@ const dashboardRoute = createRoute({
     },
     403: {
       description: 'No designer profile for the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },

@@ -70,10 +70,9 @@ async function resolveTargetOrganization(
   input: Pick<CreateLeadInput, 'organizationId'>,
   caller: Caller,
 ): Promise<string> {
-  const organizationId =
-    input.organizationId ?? caller.activeOrgId ?? (await leadsRepository.findFirstOrganizationForUser(caller.userId));
+  const organizationId = input.organizationId ?? caller.activeOrgId;
   if (!organizationId) {
-    throw AppError.forbidden('Organization membership required');
+    throw AppError.unprocessable('No active organization selected');
   }
   await assertOrgMember(caller.userId, organizationId);
   return organizationId;
@@ -82,6 +81,10 @@ async function resolveTargetOrganization(
 export const leadsService = {
   async list(query: ListLeadsQuery, caller: Caller): Promise<ListLeadsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    if (!caller.activeOrgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+    await assertOrgMember(caller.userId, caller.activeOrgId);
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await leadsRepository.list({

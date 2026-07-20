@@ -12,7 +12,7 @@ import type {
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
-import { isOrgWriter } from '../orgs/repository.js';
+import { isOrgMember, isOrgWriter } from '../orgs/repository.js';
 
 /**
  * Profile completion use-cases. Business logic lives here — no Hono, no Drizzle.
@@ -186,11 +186,16 @@ export const profilesService = {
   // --- Completion (E-36) ---
 
   async getCompletion(input: CompletionInput): Promise<ProfileCompletionResponse> {
-    // Resolve orgId if not provided
-    const orgId = input.orgId ?? (await profilesRepository.hasOrganization(input.userId));
+    const orgId = input.orgId;
+    if (!orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+    if (!(await isOrgMember(input.userId, orgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
 
     // Fetch profile ONCE and thread through (avoids duplicate DB hits)
-    const profile = orgId ? await profilesRepository.findByOrgId(orgId) : null;
+    const profile = await profilesRepository.findByOrgId(orgId);
 
     // Parallelize independent reads
     const [hasGoogle, hasProject, fieldCheck] = await Promise.all([
@@ -294,17 +299,16 @@ export const profilesService = {
 
   /** Current owner read for authenticated designer workspace context. */
   async getCurrentProfile(userId: string, activeOrgId: string | null): Promise<CurrentProfileResponse> {
-    const orgId = activeOrgId ?? (await profilesRepository.hasOrganization(userId));
-    if (!orgId) {
+    if (!activeOrgId) {
       throw AppError.unprocessable('No active organization selected');
     }
 
-    const canRead = await isOrgWriter(userId, orgId);
+    const canRead = await isOrgWriter(userId, activeOrgId);
     if (!canRead) {
       throw AppError.forbidden('Insufficient org role to read this profile');
     }
 
-    const current = await profilesRepository.findByOrgIdWithOrg(orgId);
+    const current = await profilesRepository.findByOrgIdWithOrg(activeOrgId);
     if (!current) {
       throw AppError.notFound('No profile found for the active organization');
     }
