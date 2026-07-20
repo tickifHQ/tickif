@@ -114,6 +114,9 @@ catalogs:
     lucide-react:
       specifier: ^0.552.0
       version: 0.552.0
+    meilisearch:
+      specifier: ^0.59.0
+      version: 0.59.0
     next:
       specifier: ^16.2.7
       version: 16.2.7
@@ -201,6 +204,9 @@ importers:
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@repo/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@repo/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -222,6 +228,9 @@ importers:
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      meilisearch:
+        specifier: 'catalog:'
+        version: 0.59.0
       pg:
         specifier: 'catalog:'
         version: 8.22.0
@@ -374,6 +383,9 @@ importers:
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@repo/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@repo/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -383,6 +395,9 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      meilisearch:
+        specifier: 'catalog:'
+        version: 0.59.0
       sharp:
         specifier: 'catalog:'
         version: 0.34.5
@@ -578,6 +593,40 @@ importers:
       eslint:
         specifier: ^9.18.0
         version: 9.39.4(jiti@2.7.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@26.0.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.10.6)(msw@2.14.6(@types/node@26.0.0)(typescript@5.9.3))(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/search:
+    dependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../config
+      meilisearch:
+        specifier: 'catalog:'
+        version: 0.59.0
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@repo/vitest-config':
+        specifier: workspace:*
+        version: link:../vitest-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.0.0
+      eslint:
+        specifier: ^9.18.0
+        version: 9.39.4(jiti@2.7.0)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.22.4
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -4258,6 +4307,10 @@ packages:
   media-typer@1.1.0:
     resolution: {integrity: sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw==}
     engines: {node: '>= 0.8'}
+
+  meilisearch@0.59.0:
+    resolution: {integrity: sha512-9KxasX98+qYhOVa4PPeaX/yY/ukM9DMuJlUJRgJVwrdCkWw+mkkiIh6EJmYyCxU8nXhj0VEzdYr3dNUJT1BQow==}
+    engines: {node: ^20.19.0 || >=22.12.0}
 
   merge-descriptors@2.0.0:
     resolution: {integrity: sha512-Snk314V5ayFLhp3fkUREub6WtjBfPdCPY1Ln8/8munuLuiYhsABgBVWsozAG+MWMbVEvcdcpbi9R7ww22l9Q3g==}
@@ -8652,6 +8705,8 @@ snapshots:
   math-intrinsics@1.1.0: {}
 
   media-typer@1.1.0: {}
+
+  meilisearch@0.59.0: {}
 
   merge-descriptors@2.0.0: {}
 

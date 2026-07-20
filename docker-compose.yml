@@ -33,6 +33,24 @@ services:
       timeout: 5s
       retries: 5
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    container_name: tickif-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-tickif-local-master-key}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:7700/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # Local S3-compatible store standing in for Cloudflare R2. Point R2_ENDPOINT at
   # http://localhost:9000 and create the R2_BUCKET via the console (:9001) or mc.
   minio:
@@ -58,4 +76,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  meilisearch_data:
   minio_data:
