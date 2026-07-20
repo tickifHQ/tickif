@@ -231,6 +231,56 @@ describe('projectsService.portfolio', () => {
       },
     });
   });
+
+  it('rejects banned callers before touching the repository', async () => {
+    await expect(
+      projectsService.portfolio(
+        { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
+        { ...caller, isBanned: true },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.list).not.toHaveBeenCalled();
+    expect(projectsRepository.countByStatus).not.toHaveBeenCalled();
+  });
+
+  it('nulls cover media when the cover image is not ready or has no derivatives', async () => {
+    const processingCoverId = '66666666-6666-4666-8666-666666666666';
+    const bareCoverId = '77777777-7777-4777-8777-777777777777';
+    vi.mocked(projectsRepository.list).mockResolvedValue({
+      items: [
+        row({ id: '11111111-1111-4111-8111-111111111112', coverImageId: processingCoverId }),
+        row({ id: '11111111-1111-4111-8111-111111111113', coverImageId: bareCoverId }),
+      ],
+      total: 2,
+    });
+    vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
+      { status: 'published', count: 2 },
+    ]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
+      [processingCoverId, {
+        id: processingCoverId,
+        status: 'processing',
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: 'derivatives/project/cover/thumb.webp',
+            width: 320,
+            height: 240,
+          },
+        ],
+      }],
+      [bareCoverId, { id: bareCoverId, status: 'ready', derivatives: [] }],
+    ]));
+
+    const result = await projectsService.portfolio(
+      { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
+      caller,
+    );
+
+    expect(result.items.map((item) => item.coverImage)).toEqual([null, null]);
+    expect(result.items.map((item) => item.coverImageUrl)).toEqual([null, null]);
+  });
 });
 
 describe('projectsService.getById', () => {

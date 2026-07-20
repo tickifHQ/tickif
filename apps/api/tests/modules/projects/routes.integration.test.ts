@@ -251,6 +251,41 @@ describe('GET /api/projects/portfolio', () => {
     expect(draftBody.items.map((item) => item.title)).toEqual(['Draft']);
   });
 
+  it('rejects banned users on portfolio reads', async () => {
+    const { cookie, userId, designer } = await makeDesignerSession('+919800002046');
+    await makeProject({ designerId: designer.id, title: 'Banned Draft', status: 'draft' });
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+
+    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('paginates portfolio pages past the first with stable ordering', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002047');
+    await makeProject({ designerId: designer.id, title: 'Alpha', status: 'draft' });
+    await makeProject({ designerId: designer.id, title: 'Beta', status: 'published' });
+    await makeProject({ designerId: designer.id, title: 'Gamma', status: 'rejected' });
+
+    const res = await client.api.projects.portfolio.$get(
+      { query: { page: 2, limit: 1, sort: 'title' } },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PortfolioProjectsResponse;
+    expect(body).toMatchObject({ page: 2, limit: 1, total: 3, totalPages: 3 });
+    expect(body.items.map((item) => item.title)).toEqual(['Beta']);
+    expect(body.statusCounts).toEqual({
+      total: 3,
+      draft: 1,
+      inReview: 0,
+      published: 1,
+      changesRequested: 0,
+      rejected: 1,
+    });
+  });
+
   it('returns the complete empty portfolio shape', async () => {
     const { cookie } = await makeDesignerSession('+919800002043');
 

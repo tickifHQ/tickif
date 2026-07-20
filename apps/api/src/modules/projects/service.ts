@@ -216,13 +216,7 @@ function feedLocalityPairs(row: ProjectFeedItemRecord): { citySlug: string; loca
     : [];
 }
 
-async function toListItem(
-  row: ProjectListItemRecord,
-  coverImages: Map<string, ProjectCoverImageRecord>,
-): Promise<ProjectListItem> {
-  const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
-  const url = await coverImageUrl(cover);
-
+function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | null): ProjectListItem {
   return {
     id: row.id,
     slug: row.slug,
@@ -231,27 +225,38 @@ async function toListItem(
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
-    coverImageUrl: url,
+    coverImageUrl,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+async function toListItem(
+  row: ProjectListItemRecord,
+  coverImages: Map<string, ProjectCoverImageRecord>,
+): Promise<ProjectListItem> {
+  const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
+  return toListItemFields(row, await coverImageUrl(cover));
 }
 
 async function toPortfolioItem(
   row: ProjectListItemRecord,
   coverImages: Map<string, ProjectCoverImageRecord>,
 ): Promise<PortfolioProjectItem> {
-  const item = await toListItem(row, coverImages);
   const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
-  const preview = cover?.derivatives ? pickPreviewDerivative(cover.derivatives) : null;
+  const preview =
+    cover?.status === 'ready' && cover.derivatives
+      ? pickPreviewDerivative(cover.derivatives)
+      : null;
+  const url = preview ? await presignDownload({ key: preview.key }) : null;
 
   return {
-    ...item,
+    ...toListItemFields(row, url),
     statusGroup: portfolioStatusGroup(row.status),
-    coverImage: cover && preview && item.coverImageUrl
+    coverImage: cover && preview && url
       ? {
           id: cover.id,
-          url: item.coverImageUrl,
+          url,
           width: preview.width,
           height: preview.height,
         }
@@ -273,7 +278,7 @@ function buildPortfolioStatusCounts(
       .reduce((sum, item) => sum + item.count, 0);
 
   return {
-    total: count(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested']),
+    total: counts.reduce((sum, item) => sum + item.count, 0),
     draft: count(['draft']),
     inReview: count(['submitted', 'in_review']),
     published: count(['published']),
