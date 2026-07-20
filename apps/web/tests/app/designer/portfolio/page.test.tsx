@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/components/designer-portfolio', () => ({
-  DesignerPortfolio: () => <div data-testid="designer-portfolio" />,
+vi.mock('@/components/designer-portfolio-settings', () => ({
+  DesignerPortfolioSettings: () => <div data-testid="designer-portfolio-settings" />,
 }));
 
 describe('DesignerPortfolioPage', () => {
@@ -13,6 +13,9 @@ describe('DesignerPortfolioPage', () => {
 
     render(<Page />);
 
-    expect(screen.getByTestId('designer-portfolio')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /portfolio settings/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('designer-portfolio-settings')).toBeInTheDocument();
   });
 });
