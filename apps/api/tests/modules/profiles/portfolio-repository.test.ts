@@ -138,39 +138,6 @@ describe('portfolioRepository', () => {
     });
   });
 
-  describe('upsert', () => {
-    it('creates a new portfolio when none exists (create path)', async () => {
-      const newRow = mockPortfolioRow({ accentColor: '#000000' });
-      vi.mocked(
-        db
-          .insert(undefined as never)
-          .values(undefined as never)
-          .onConflictDoUpdate(undefined as never).returning as ReturnType<typeof vi.fn>,
-      ).mockResolvedValueOnce([newRow]);
-
-      const result = await portfolioRepository.upsert('profile-1', {
-        accentColor: '#000000',
-      });
-      expect(result).toEqual(newRow);
-    });
-
-    it('updates existing portfolio when one exists (update path)', async () => {
-      const updatedRow = mockPortfolioRow({ tagline: 'Updated tagline' });
-      vi.mocked(
-        db
-          .insert(undefined as never)
-          .values(undefined as never)
-          .onConflictDoUpdate(undefined as never).returning as ReturnType<typeof vi.fn>,
-      ).mockResolvedValueOnce([updatedRow]);
-
-      const result = await portfolioRepository.upsert('profile-1', {
-        tagline: 'Updated tagline',
-      });
-      expect(result).toEqual(updatedRow);
-      expect(result.tagline).toBe('Updated tagline');
-    });
-  });
-
   describe('isSlugAvailable', () => {
     it('returns false for reserved slugs', async () => {
       const result = await portfolioRepository.isSlugAvailable('admin');
@@ -224,33 +191,6 @@ describe('portfolioRepository', () => {
       expect(portfolioRepository.isReservedSlug('my-studio')).toBe(false);
       expect(portfolioRepository.isReservedSlug('design-works')).toBe(false);
       expect(portfolioRepository.isReservedSlug('creative-space')).toBe(false);
-    });
-  });
-
-  describe('findProjectForDesigner', () => {
-    it('returns the project when it belongs to the designer', async () => {
-      const project = { id: 'project-1', status: 'published' };
-      vi.mocked(db.select().from(undefined as never).where(undefined as never).limit as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce([project]);
-
-      const result = await portfolioRepository.findProjectForDesigner('project-1', 'designer-1');
-      expect(result).toEqual(project);
-    });
-
-    it('returns null when project does not belong to the designer', async () => {
-      const result = await portfolioRepository.findProjectForDesigner(
-        'project-1',
-        'wrong-designer',
-      );
-      expect(result).toBeNull();
-    });
-
-    it('returns null when project does not exist', async () => {
-      const result = await portfolioRepository.findProjectForDesigner(
-        'nonexistent',
-        'designer-1',
-      );
-      expect(result).toBeNull();
     });
   });
 });

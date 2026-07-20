@@ -40,7 +40,11 @@ export const portfolioRepository = {
     return row ?? null;
   },
 
-  /** Find portfolio by slug. */
+  /**
+   * Find portfolio by slug.
+   * Not used by the settings endpoints yet — reserved for the public
+   * portfolio page epic (/p/:slug).
+   */
   async findBySlug(slug: string): Promise<PortfolioRecord | null> {
     const [row] = await db
       .select()
@@ -91,31 +95,38 @@ export const portfolioRepository = {
   },
 
   /**
-   * Upsert portfolio. Creates a new row if one doesn't exist,
-   * otherwise updates the existing row for the given profile.
+   * Transaction-aware find-or-create. Returns the existing portfolio row
+   * without mutating it (no updatedAt bump), or inserts a new row with
+   * defaults. Races are handled via onConflictDoNothing + re-select.
    */
-  async upsert(
-    profileId: string,
-    input: Partial<Omit<PortfolioRecord, 'id' | 'profileId' | 'createdAt'>>,
-  ): Promise<PortfolioRecord> {
-    const now = new Date();
-    const [row] = await db
+  async findOrCreateInTx(tx: Tx, profileId: string): Promise<PortfolioRecord> {
+    const [existing] = await tx
+      .select()
+      .from(schema.designerPortfolio)
+      .where(eq(schema.designerPortfolio.profileId, profileId))
+      .limit(1);
+    if (existing) return existing;
+
+    const [inserted] = await tx
       .insert(schema.designerPortfolio)
-      .values({
-        profileId,
-        ...input,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: schema.designerPortfolio.profileId,
-        set: { ...input, updatedAt: now },
-      })
+      .values({ profileId })
+      .onConflictDoNothing()
       .returning();
-    return row!;
+    if (inserted) return inserted;
+
+    // Concurrent insert won the race — re-select the committed row
+    const [row] = await tx
+      .select()
+      .from(schema.designerPortfolio)
+      .where(eq(schema.designerPortfolio.profileId, profileId))
+      .limit(1);
+    if (!row) throw new Error('portfolio row missing after conflict');
+    return row;
   },
 
   /**
-   * Transaction-aware upsert. Same logic as `upsert` but executes within
+   * Transaction-aware upsert. Creates a new row if one doesn't exist,
+   * otherwise updates the existing row for the given profile. Executes within
    * the provided transaction handle so multi-table writes are atomic.
    */
   async upsertInTx(
@@ -137,19 +148,6 @@ export const portfolioRepository = {
       })
       .returning();
     return row!;
-  },
-
-  /** Update an existing portfolio row by ID. */
-  async update(
-    id: string,
-    patch: Partial<Omit<PortfolioRecord, 'id' | 'profileId' | 'createdAt'>>,
-  ): Promise<PortfolioRecord | null> {
-    const [row] = await db
-      .update(schema.designerPortfolio)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(schema.designerPortfolio.id, id))
-      .returning();
-    return row ?? null;
   },
 
   /**
@@ -204,8 +202,8 @@ export const portfolioRepository = {
   },
 
   /**
-   * Transaction-aware project ownership check. Same logic as `findProjectForDesigner`
-   * but executes within the provided transaction handle.
+   * Transaction-aware project ownership check: finds a project by ID only if
+   * it belongs to the given designer. Executes within the provided transaction.
    */
   async findProjectForDesignerInTx(
     tx: Tx,
@@ -245,36 +243,6 @@ export const portfolioRepository = {
       .update(schema.designerProfile)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(schema.designerProfile.id, profileId));
-  },
-
-  /** Find the designer profile for a user (delegation helper). */
-  async findProfileByUserId(
-    userId: string,
-  ): Promise<{ id: string; orgId: string } | null> {
-    const [row] = await db
-      .select({ id: schema.designerProfile.id, orgId: schema.designerProfile.orgId })
-      .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.userId, userId))
-      .limit(1);
-    return row ?? null;
-  },
-
-  /** Find project by ID with ownership check via designerId. */
-  async findProjectForDesigner(
-    projectId: string,
-    designerId: string,
-  ): Promise<{ id: string; status: string } | null> {
-    const [row] = await db
-      .select({
-        id: schema.project.id,
-        status: schema.project.status,
-      })
-      .from(schema.project)
-      .where(
-        and(eq(schema.project.id, projectId), eq(schema.project.designerId, designerId)),
-      )
-      .limit(1);
-    return row ?? null;
   },
 
   /**

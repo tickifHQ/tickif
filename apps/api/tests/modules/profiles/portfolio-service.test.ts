@@ -10,14 +10,11 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     findBySlug: vi.fn(),
     create: vi.fn(),
     findOrCreate: vi.fn(),
-    upsert: vi.fn(),
+    findOrCreateInTx: vi.fn(),
     upsertInTx: vi.fn(),
-    update: vi.fn(),
     isSlugAvailable: vi.fn(),
     isSlugAvailableInTx: vi.fn(),
     isReservedSlug: vi.fn(),
-    findProfileByUserId: vi.fn(),
-    findProjectForDesigner: vi.fn(),
     findProjectForDesignerInTx: vi.fn(),
     updateProfileInTx: vi.fn(),
     clearLogoIfMatch: vi.fn(),
@@ -129,9 +126,11 @@ function setupResolveProfile(profile = makeProfile()) {
 }
 
 function setupGetPortfolio(portfolio = makePortfolio()) {
-  // getPortfolio now uses findOrCreate (non-mutating find-or-create pattern)
+  // getPortfolio uses findOrCreate; updatePortfolio ensures existence via
+  // findOrCreateInTx (both non-mutating find-or-create patterns)
   vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(portfolio);
-  // getPortfolio resolves logoUrl via presignDownload when profile has logoImageId
+  vi.mocked(portfolioRepository.findOrCreateInTx).mockResolvedValue(portfolio);
+  // logoUrl is resolved via presignDownload when profile has logoImageId
   vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
   return portfolio;
 }
@@ -172,16 +171,12 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.isReservedSlug).mockReturnValue(false);
     vi.mocked(portfolioRepository.isSlugAvailableInTx).mockResolvedValue(true);
 
-    // Simulate the DB unique constraint violation
+    // Simulate the DB unique constraint violation on the patch upsert
     const dbError = Object.assign(new Error('duplicate key'), {
       code: '23505',
       constraint: 'designer_portfolio_portfolio_slug_unique',
     });
-    // First call: initialization upsert (succeeds)
-    // Second call: actual update upsert (throws race condition)
-    vi.mocked(portfolioRepository.upsertInTx)
-      .mockResolvedValueOnce(makePortfolio())
-      .mockRejectedValueOnce(dbError);
+    vi.mocked(portfolioRepository.upsertInTx).mockRejectedValueOnce(dbError);
 
     await expect(
       portfolioService.updatePortfolio({ portfolioSlug: 'race-slug' }, caller),
@@ -231,10 +226,6 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ testimonialProjectId: null }),
     );
-    // getPortfolio is called after commit to return fresh state — uses findOrCreate now
-    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(
-      makePortfolio({ testimonialProjectId: null }),
-    );
 
     const result = await portfolioService.updatePortfolio(
       { testimonialProjectId: null },
@@ -250,14 +241,10 @@ describe('portfolioService.updatePortfolio', () => {
     expect(result.testimonialProjectId).toBeNull();
   });
 
-  it('successful update returns portfolio response', async () => {
+  it('successful update returns portfolio response assembled from the upserted row', async () => {
     setupResolveProfile();
     setupGetPortfolio(makePortfolio({ portfolioSlug: 'my-studio' }));
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
-      makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
-    );
-    // After commit, getPortfolio re-fetches via findOrCreate
-    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(
       makePortfolio({ tagline: 'New tagline', portfolioSlug: 'my-studio' }),
     );
 
@@ -268,6 +255,124 @@ describe('portfolioService.updatePortfolio', () => {
       tagline: 'New tagline',
       portfolioUrl: null,
     });
+    // The response comes from data in hand — no post-commit re-fetch
+    expect(portfolioRepository.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not upsert the portfolio row when only profile fields change', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+
+    const result = await portfolioService.updatePortfolio({ bio: 'New bio' }, caller);
+
+    // Ensure-exists is non-mutating; the portfolio upsert must be skipped
+    expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
+    expect(portfolioRepository.updateProfileInTx).toHaveBeenCalledWith(
+      expect.anything(),
+      'profile-1',
+      { bio: 'New bio' },
+    );
+    // Response reflects the in-memory profile update without a re-fetch
+    expect(result.bio).toBe('New bio');
+  });
+
+  it('reflects updated profile fields in the response', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+
+    const result = await portfolioService.updatePortfolio(
+      { displayName: 'Renamed Studio', websiteUrl: 'https://renamed.example.com' },
+      caller,
+    );
+
+    expect(result.displayName).toBe('Renamed Studio');
+    expect(result.websiteUrl).toBe('https://renamed.example.com');
+  });
+});
+
+// =============================================================================
+// getPortfolio — badges + logo resolution
+// =============================================================================
+
+describe('portfolioService.getPortfolio badges', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /** Baseline profile that earns no threshold badges (only "verified"). */
+  const baseline = () =>
+    makeProfile({
+      status: 'active',
+      createdAt: new Date(Date.now() - 400 * DAY_MS),
+      avgRating: '0',
+      reviewCount: 0,
+      yearsExperience: 0,
+      projectCount: 0,
+    });
+
+  async function badgesFor(profile: DesignerProfileRecord) {
+    setupResolveProfile(profile);
+    setupGetPortfolio();
+    const result = await portfolioService.getPortfolio(caller);
+    return result.badges;
+  }
+
+  it('includes "verified" only for active profiles', async () => {
+    expect(await badgesFor(baseline())).toEqual(['verified']);
+    expect(await badgesFor({ ...baseline(), status: 'draft' })).toEqual([]);
+  });
+
+  it('includes "new" below the 90-day boundary but not at it', async () => {
+    expect(
+      await badgesFor({ ...baseline(), createdAt: new Date(Date.now() - 89 * DAY_MS) }),
+    ).toContain('new');
+    expect(
+      await badgesFor({ ...baseline(), createdAt: new Date(Date.now() - 90 * DAY_MS) }),
+    ).not.toContain('new');
+  });
+
+  it('includes "top-performer" at exactly 4.5 rating and 10 reviews', async () => {
+    expect(
+      await badgesFor({ ...baseline(), avgRating: '4.5', reviewCount: 10 }),
+    ).toContain('top-performer');
+  });
+
+  it('coerces the avgRating string when computing "top-performer"', async () => {
+    // avgRating comes back from Postgres numeric as a string
+    expect(
+      await badgesFor({ ...baseline(), avgRating: '4.49', reviewCount: 10 }),
+    ).not.toContain('top-performer');
+    expect(
+      await badgesFor({ ...baseline(), avgRating: '4.90', reviewCount: 9 }),
+    ).not.toContain('top-performer');
+  });
+
+  it('includes "established" at exactly 5 years but not at 4', async () => {
+    expect(await badgesFor({ ...baseline(), yearsExperience: 5 })).toContain('established');
+    expect(await badgesFor({ ...baseline(), yearsExperience: 4 })).not.toContain(
+      'established',
+    );
+  });
+
+  it('includes "projects-published" at exactly 25 projects but not at 24', async () => {
+    expect(await badgesFor({ ...baseline(), projectCount: 25 })).toContain(
+      'projects-published',
+    );
+    expect(await badgesFor({ ...baseline(), projectCount: 24 })).not.toContain(
+      'projects-published',
+    );
+  });
+});
+
+describe('portfolioService.getPortfolio logo resolution', () => {
+  it('returns logoUrl: null when the stored key does not match the profile prefix', async () => {
+    setupResolveProfile(
+      makeProfile({ logoImageId: 'originals/logos/other-profile/stolen-key' }),
+    );
+    setupGetPortfolio();
+
+    const result = await portfolioService.getPortfolio(caller);
+
+    expect(result.logoUrl).toBeNull();
+    expect(presignDownload).not.toHaveBeenCalled();
   });
 });
 
@@ -505,7 +610,6 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(makePortfolio());
 
     await portfolioService.updatePortfolio({ tagline: 'Hello' }, caller);
 
@@ -532,13 +636,25 @@ describe('audit event emission', () => {
     setupResolveProfile();
     setupGetPortfolio();
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
-    vi.mocked(portfolioRepository.findOrCreate).mockResolvedValue(makePortfolio());
 
     // Should not throw despite audit failure
     const result = await portfolioService.updatePortfolio({ tagline: 'Test' }, caller);
     expect(result).toBeDefined();
     expect(result.id).toBe('portfolio-1');
 
+    consoleSpy.mockRestore();
+  });
+
+  it('does not emit an audit event for an empty patch', async () => {
+    const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    setupResolveProfile();
+    setupGetPortfolio();
+
+    const result = await portfolioService.updatePortfolio({}, caller);
+
+    expect(result.id).toBe('portfolio-1');
+    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 });

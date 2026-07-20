@@ -7,7 +7,12 @@ import type {
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../lib/errors.js';
-import { portfolioRepository, withTransaction, type Tx } from './portfolio-repository.js';
+import {
+  portfolioRepository,
+  withTransaction,
+  type PortfolioRecord,
+  type Tx,
+} from './portfolio-repository.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
 import { isOrgWriter } from '../orgs/repository.js';
 
@@ -48,6 +53,7 @@ type AuditEvent = {
 };
 
 /** Fire-and-forget audit log — never throws to caller. */
+// TODO: replace console.info with a real audit sink (structured log/event bus)
 function emitAuditEvent(event: AuditEvent): void {
   try {
     console.info(JSON.stringify(event));
@@ -109,6 +115,60 @@ async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
   return profile;
 }
 
+/**
+ * Assemble the contract response from a profile + portfolio row pair.
+ * Presigns the logo download URL (single storage round-trip).
+ */
+async function buildPortfolioResponse(
+  profile: DesignerProfileRecord,
+  portfolio: PortfolioRecord,
+): Promise<PortfolioResponse> {
+  const badges = computeBadges(profile);
+  // No public portfolio routes exist yet (/p/:slug and /d/:orgId are not shipped)
+  // portfolioUrl will be populated when the public page is implemented
+  const portfolioUrl = null;
+
+  // Resolve logo to a presigned download URL (or null)
+  // Validate prefix to prevent IDOR — only sign keys belonging to this profile
+  const expectedPrefix = `originals/logos/${profile.id}/`;
+  const logoUrl =
+    profile.logoImageId && profile.logoImageId.startsWith(expectedPrefix)
+      ? await presignDownload({ key: profile.logoImageId })
+      : null;
+
+  return {
+    id: portfolio.id,
+    publicLinkEnabled: portfolio.publicLinkEnabled,
+    portfolioSlug: portfolio.portfolioSlug,
+    accentColor: portfolio.accentColor,
+    showHero: portfolio.showHero,
+    showTrustCredentials: portfolio.showTrustCredentials,
+    showFeaturedTestimonial: portfolio.showFeaturedTestimonial,
+    showReviews: portfolio.showReviews,
+    showSocialLinks: portfolio.showSocialLinks,
+    showShareBlock: portfolio.showShareBlock,
+    tagline: portfolio.tagline,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    logoUrl,
+    websiteUrl: profile.websiteUrl,
+    instagramHandle: profile.instagramHandle,
+    linkedinHandle: profile.linkedinHandle,
+    youtubeHandle: profile.youtubeHandle,
+    testimonialWords: portfolio.testimonialWords,
+    testimonialAuthor: portfolio.testimonialAuthor,
+    testimonialProjectId: portfolio.testimonialProjectId,
+    showOverallRating: portfolio.showOverallRating,
+    showPositiveReviewsOnly: portfolio.showPositiveReviewsOnly,
+    showTickifBadge: portfolio.showTickifBadge,
+    badges,
+    portfolioUrl,
+    publishedAt: portfolio.publishedAt?.toISOString() ?? null,
+    createdAt: portfolio.createdAt.toISOString(),
+    updatedAt: portfolio.updatedAt.toISOString(),
+  };
+}
+
 export const portfolioService = {
   /**
    * GET portfolio. Creates default row if missing (atomic upsert to handle races).
@@ -120,50 +180,7 @@ export const portfolioService = {
     // Non-mutating find-or-create: avoids touching updatedAt on every GET
     const portfolio = await portfolioRepository.findOrCreate(profile.id);
 
-    const badges = computeBadges(profile);
-    // No public portfolio routes exist yet (/p/:slug and /d/:orgId are not shipped)
-    // portfolioUrl will be populated when the public page is implemented
-    const portfolioUrl = null;
-
-    // Resolve logo to a presigned download URL (or null)
-    // Validate prefix to prevent IDOR — only sign keys belonging to this profile
-    const expectedPrefix = `originals/logos/${profile.id}/`;
-    const logoUrl =
-      profile.logoImageId && profile.logoImageId.startsWith(expectedPrefix)
-        ? await presignDownload({ key: profile.logoImageId })
-        : null;
-
-    return {
-      id: portfolio.id,
-      publicLinkEnabled: portfolio.publicLinkEnabled,
-      portfolioSlug: portfolio.portfolioSlug,
-      accentColor: portfolio.accentColor,
-      showHero: portfolio.showHero,
-      showTrustCredentials: portfolio.showTrustCredentials,
-      showFeaturedTestimonial: portfolio.showFeaturedTestimonial,
-      showReviews: portfolio.showReviews,
-      showSocialLinks: portfolio.showSocialLinks,
-      showShareBlock: portfolio.showShareBlock,
-      tagline: portfolio.tagline,
-      displayName: profile.displayName,
-      bio: profile.bio,
-      logoUrl,
-      websiteUrl: profile.websiteUrl,
-      instagramHandle: profile.instagramHandle,
-      linkedinHandle: profile.linkedinHandle,
-      youtubeHandle: profile.youtubeHandle,
-      testimonialWords: portfolio.testimonialWords,
-      testimonialAuthor: portfolio.testimonialAuthor,
-      testimonialProjectId: portfolio.testimonialProjectId,
-      showOverallRating: portfolio.showOverallRating,
-      showPositiveReviewsOnly: portfolio.showPositiveReviewsOnly,
-      showTickifBadge: portfolio.showTickifBadge,
-      badges,
-      portfolioUrl,
-      publishedAt: portfolio.publishedAt?.toISOString() ?? null,
-      createdAt: portfolio.createdAt.toISOString(),
-      updatedAt: portfolio.updatedAt.toISOString(),
-    };
+    return buildPortfolioResponse(profile, portfolio);
   },
 
   /**
@@ -176,9 +193,9 @@ export const portfolioService = {
   ): Promise<PortfolioResponse> {
     const profile = await resolveProfile(caller);
 
-    await withTransaction(async (tx: Tx) => {
-      // Ensure portfolio row exists (atomic, uses tx to avoid partial commit on later failure)
-      await portfolioRepository.upsertInTx(tx, profile.id, {});
+    const portfolio = await withTransaction(async (tx: Tx) => {
+      // Ensure portfolio row exists without bumping updatedAt (non-mutating)
+      let row = await portfolioRepository.findOrCreateInTx(tx, profile.id);
 
       // Validate slug if provided (inside transaction to prevent TOCTOU races)
       if (input.portfolioSlug !== undefined && input.portfolioSlug !== null) {
@@ -222,7 +239,17 @@ export const portfolioService = {
       } = input;
 
       // Update profile fields if any provided (inside transaction)
-      const profileUpdates: Record<string, unknown> = {};
+      const profileUpdates: Partial<
+        Pick<
+          DesignerProfileRecord,
+          | 'displayName'
+          | 'bio'
+          | 'websiteUrl'
+          | 'instagramHandle'
+          | 'linkedinHandle'
+          | 'youtubeHandle'
+        >
+      > = {};
       if (displayName !== undefined) profileUpdates.displayName = displayName;
       if (bio !== undefined) profileUpdates.bio = bio;
       if (websiteUrl !== undefined) profileUpdates.websiteUrl = websiteUrl;
@@ -231,11 +258,9 @@ export const portfolioService = {
       if (youtubeHandle !== undefined) profileUpdates.youtubeHandle = youtubeHandle;
 
       if (Object.keys(profileUpdates).length > 0) {
-        await portfolioRepository.updateProfileInTx(
-          tx,
-          profile.id,
-          profileUpdates as Parameters<typeof portfolioRepository.updateProfileInTx>[2],
-        );
+        await portfolioRepository.updateProfileInTx(tx, profile.id, profileUpdates);
+        // Keep the in-memory profile in sync so the response reflects the update
+        Object.assign(profile, profileUpdates);
       }
 
       // Build portfolio update payload
@@ -277,7 +302,7 @@ export const portfolioService = {
 
       if (Object.keys(portfolioPatch).length > 0) {
         try {
-          await portfolioRepository.upsertInTx(tx, profile.id, portfolioPatch);
+          row = await portfolioRepository.upsertInTx(tx, profile.id, portfolioPatch);
         } catch (err: unknown) {
           if (isUniqueViolation(err, 'designer_portfolio_portfolio_slug_unique')) {
             throw AppError.conflict('This portfolio slug is already taken');
@@ -285,23 +310,30 @@ export const portfolioService = {
           throw err;
         }
       }
+
+      return row;
     });
 
-    // Emit audit event (fire-and-forget, AFTER commit — not inside transaction)
+    // Emit audit event (fire-and-forget, AFTER commit — not inside transaction).
+    // Skipped for no-op requests where nothing was provided.
     const changedFields = Object.keys(input).filter(
       (key) => input[key as keyof typeof input] !== undefined,
     );
-    emitAuditEvent({
-      userId: caller.userId,
-      activeOrgId: caller.activeOrgId!,
-      action: 'portfolio.updated',
-      timestamp: new Date().toISOString(),
-      resourceId: profile.id,
-      changedFields,
-    });
+    if (changedFields.length > 0) {
+      emitAuditEvent({
+        userId: caller.userId,
+        activeOrgId: caller.activeOrgId!,
+        action: 'portfolio.updated',
+        timestamp: new Date().toISOString(),
+        resourceId: profile.id,
+        changedFields,
+      });
+    }
 
-    // Return fresh state after commit
-    return this.getPortfolio(caller);
+    // Assemble the response from data already in hand (fresh row from the
+    // transaction + profile with in-memory updates applied) — avoids re-running
+    // the auth/profile/portfolio lookups that getPortfolio would repeat.
+    return buildPortfolioResponse(profile, portfolio);
   },
 
   /** Check slug availability for the current designer. */
