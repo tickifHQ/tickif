@@ -56,7 +56,10 @@ type FormState = {
   showTickifBadge: boolean;
 };
 
-type SlugStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'error';
+type SlugStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'invalid' | 'error';
+
+/** Mirrors the contract's portfolioSlugSchema regex (packages/contracts/src/profiles.ts). */
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,6 +100,12 @@ function computeChangedFields(
   for (const key of Object.keys(current) as Array<keyof FormState>) {
     if (current[key] !== saved[key]) {
       const value = current[key];
+      // displayName is required server-side (min 2 chars, not nullable):
+      // omit it from the patch when cleared instead of sending a value that
+      // is guaranteed to fail validation.
+      if (key === 'displayName' && typeof value === 'string' && value.trim() === '') {
+        continue;
+      }
       // Convert empty strings to null for nullable text fields
       if (
         typeof value === 'string' &&
@@ -194,7 +203,14 @@ export function DesignerPortfolioSettings() {
 
   const handleSlugChange = useCallback(
     (value: string) => {
-      const slug = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      // Sanitize toward the contract's slug shape: lowercase alphanumerics
+      // and hyphens, no consecutive hyphens, no leading hyphen. A trailing
+      // hyphen is allowed while typing and caught by the pattern check below.
+      const slug = value
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+/, '');
       updateField('portfolioSlug', slug);
 
       if (slugDebounceRef.current) {
@@ -203,6 +219,14 @@ export function DesignerPortfolioSettings() {
 
       if (!slug || slug.length < 3) {
         setSlugStatus('idle');
+        latestSlugRef.current = '';
+        return;
+      }
+
+      // Validate the final value against the contract regex before hitting
+      // the API — the server would reject it with a 422 anyway.
+      if (!SLUG_PATTERN.test(slug)) {
+        setSlugStatus('invalid');
         latestSlugRef.current = '';
         return;
       }
@@ -471,7 +495,31 @@ export function DesignerPortfolioSettings() {
                   Taken
                 </span>
               )}
+              {slugStatus === 'invalid' && (
+                <span className="flex items-center gap-1 text-sm font-medium text-destructive">
+                  <X className="size-4" />
+                  Invalid
+                </span>
+              )}
+              {slugStatus === 'error' && (
+                <span className="flex items-center gap-1 text-sm font-medium text-destructive">
+                  <AlertCircle className="size-4" />
+                  Check failed
+                </span>
+              )}
             </div>
+            {slugStatus === 'invalid' && (
+              <p className="text-xs text-destructive">
+                Use lowercase letters and numbers separated by single hyphens (no
+                leading or trailing hyphen).
+              </p>
+            )}
+            {slugStatus === 'error' && (
+              <p className="text-xs text-destructive">
+                Could not check slug availability. Check your connection and try
+                again.
+              </p>
+            )}
             {portfolio.portfolioUrl && (
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <ExternalLink className="size-3" />

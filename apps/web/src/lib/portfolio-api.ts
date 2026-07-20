@@ -21,6 +21,10 @@ import { api } from '@/lib/api';
 /**
  * Attempt to extract a user-friendly message from the standard Tickif error
  * envelope: `{ error: { code, message, details? } }`.
+ *
+ * For validation errors (422) the envelope's `message` is a generic
+ * "Request validation failed" — the actionable per-field messages live in
+ * `details`, so surface those instead when present.
  */
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (
@@ -32,9 +36,26 @@ function extractErrorMessage(body: unknown, fallback: string): string {
     'message' in body.error &&
     typeof body.error.message === 'string'
   ) {
-    return body.error.message;
+    const detailMessage = extractDetailMessage(body.error);
+    return detailMessage ?? body.error.message;
   }
   return fallback;
+}
+
+/**
+ * Format the first few `details` entries (`{ path, message }` from the API's
+ * validation hook) into a single human-readable message, or null if absent.
+ */
+function extractDetailMessage(error: object): string | null {
+  if (!('details' in error) || !Array.isArray(error.details)) return null;
+  const messages = error.details
+    .filter(
+      (d): d is { path?: unknown; message: string } =>
+        !!d && typeof d === 'object' && typeof (d as { message?: unknown }).message === 'string',
+    )
+    .slice(0, 3)
+    .map((d) => (typeof d.path === 'string' && d.path ? `${d.path}: ${d.message}` : d.message));
+  return messages.length > 0 ? messages.join('; ') : null;
 }
 
 /**
