@@ -1,8 +1,11 @@
 import type { EnqueuedTask, MeilisearchErrorResponse, Settings, Task } from 'meilisearch';
 import { describe, expect, it, vi } from 'vitest';
 import { bootstrapSearch, type SearchBootstrapClient } from '../src/bootstrap.js';
+import { searchIndexName } from '../src/client.js';
 
 const now = '2026-07-20T00:00:00.000Z';
+const projectIndexName = searchIndexName('projects');
+const designerIndexName = searchIndexName('designers');
 
 function enqueued(taskUid: number, indexUid: string): EnqueuedTask {
   return {
@@ -86,8 +89,8 @@ describe('bootstrapSearch', () => {
     const fake = fakeClient();
 
     await expect(bootstrapSearch({ client: fake.client })).resolves.toEqual({
-      createdIndexes: ['tickif_projects', 'tickif_designers'],
-      updatedIndexes: ['tickif_projects', 'tickif_designers'],
+      createdIndexes: [projectIndexName, designerIndexName],
+      updatedIndexes: [projectIndexName, designerIndexName],
     });
     expect(fake.createIndex).toHaveBeenCalledTimes(2);
     expect(fake.updateSettings).toHaveBeenCalledTimes(2);
@@ -104,7 +107,7 @@ describe('bootstrapSearch', () => {
     const fake = fakeClient();
 
     await expect(bootstrapSearch({ client: fake.client, check: true })).rejects.toThrow(
-      'Search settings drift: index tickif_projects does not exist',
+      `Search settings drift: index ${projectIndexName} does not exist`,
     );
     expect(fake.createIndex).not.toHaveBeenCalled();
     expect(fake.updateSettings).not.toHaveBeenCalled();
@@ -112,7 +115,7 @@ describe('bootstrapSearch', () => {
 
   it('fails bootstrap when a Meilisearch task is canceled', async () => {
     const fake = fakeClient();
-    const task = enqueued(1, 'tickif_projects');
+    const task = enqueued(1, projectIndexName);
     fake.waitForTask.mockResolvedValueOnce({ ...completed(task), status: 'canceled' });
 
     await expect(bootstrapSearch({ client: fake.client })).rejects.toThrow(
