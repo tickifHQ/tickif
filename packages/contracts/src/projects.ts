@@ -256,6 +256,66 @@ export const listProjectsResponseSchema = z
   .meta({ id: 'ProjectList' });
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
 
+export const portfolioProjectStatus = z
+  .enum(['all', 'draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .default('all')
+  .meta({ id: 'PortfolioProjectStatus' });
+export type PortfolioProjectStatus = z.infer<typeof portfolioProjectStatus>;
+
+export const portfolioProjectStatusGroup = z
+  .enum(['draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .meta({ id: 'PortfolioProjectStatusGroup' });
+export type PortfolioProjectStatusGroup = z.infer<typeof portfolioProjectStatusGroup>;
+
+export const portfolioProjectsQuerySchema = z
+  .object({
+    status: portfolioProjectStatus,
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(12),
+    sort: projectListSort,
+  })
+  .meta({ id: 'PortfolioProjectsQuery' });
+export type PortfolioProjectsQuery = z.infer<typeof portfolioProjectsQuerySchema>;
+
+export const portfolioProjectItemSchema = projectListItemSchema
+  .extend({
+    statusGroup: portfolioProjectStatusGroup,
+    coverImage: z
+      .object({
+        id: z.uuid(),
+        url: z.string().url(),
+        width: z.number().int(),
+        height: z.number().int(),
+      })
+      .nullable(),
+  })
+  .meta({ id: 'PortfolioProjectItem' });
+export type PortfolioProjectItem = z.infer<typeof portfolioProjectItemSchema>;
+
+export const portfolioProjectStatusCountsSchema = z
+  .object({
+    total: z.number().int().min(0),
+    draft: z.number().int().min(0),
+    inReview: z.number().int().min(0),
+    published: z.number().int().min(0),
+    changesRequested: z.number().int().min(0),
+    rejected: z.number().int().min(0),
+  })
+  .meta({ id: 'PortfolioProjectStatusCounts' });
+export type PortfolioProjectStatusCounts = z.infer<typeof portfolioProjectStatusCountsSchema>;
+
+export const portfolioProjectsResponseSchema = z
+  .object({
+    items: z.array(portfolioProjectItemSchema),
+    statusCounts: portfolioProjectStatusCountsSchema,
+    page: z.number().int(),
+    total: z.number().int(),
+    limit: z.number().int(),
+    totalPages: z.number().int(),
+  })
+  .meta({ id: 'PortfolioProjects' });
+export type PortfolioProjectsResponse = z.infer<typeof portfolioProjectsResponseSchema>;
+
 export const duplicateProjectResponseSchema = z
   .object({ project: projectDetailResponseSchema })
   .meta({ id: 'DuplicateProjectResponse' });

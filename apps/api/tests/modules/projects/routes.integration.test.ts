@@ -5,6 +5,7 @@ import type {
   ErrorResponse,
   ListProjectRoomsResponse,
   ListProjectsResponse,
+  PortfolioProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectRoom,
@@ -12,6 +13,7 @@ import type {
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
+  makeOrganization,
   makeProject,
   makeProjectImage,
   makeProjectRoom,
@@ -164,6 +166,187 @@ describe('GET /api/projects', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ListProjectsResponse;
     expect(body.items.map((item) => item.title)).toEqual(['100% Modular Kitchen']);
+  });
+});
+
+describe('GET /api/projects/portfolio', () => {
+  it('rejects unauthenticated portfolio requests', async () => {
+    const res = await client.api.projects.portfolio.$get({ query: {} });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns status-grouped summaries, counts, and representative cover media', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002042');
+    await makeProject({ designerId: designer.id, title: 'Draft', status: 'draft' });
+    const changesProject = await makeProject({
+      designerId: designer.id,
+      title: 'Changes Requested',
+      status: 'changes_requested',
+    });
+    await makeProject({ designerId: designer.id, title: 'Submitted', status: 'submitted' });
+    await makeProject({ designerId: designer.id, title: 'In Review', status: 'in_review' });
+    await makeProject({ designerId: designer.id, title: 'Published', status: 'published' });
+    await makeProject({ designerId: designer.id, title: 'Rejected', status: 'rejected' });
+    await makeProject({ title: 'Other Org Project', status: 'changes_requested' });
+    const coverImage = await makeProjectImage({
+      projectId: changesProject.id,
+      status: 'ready',
+      width: 1600,
+      height: 1200,
+      derivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/project/portfolio/thumb.webp', width: 320, height: 240 }],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: coverImage.id })
+      .where(eq(schema.project.id, changesProject.id));
+
+    const res = await client.api.projects.portfolio.$get(
+      { query: { status: 'changes_requested', sort: 'title' } },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PortfolioProjectsResponse;
+    expect(body).toMatchObject({
+      total: 1,
+      page: 1,
+      limit: 12,
+      totalPages: 1,
+      statusCounts: {
+        total: 6,
+        draft: 1,
+        inReview: 2,
+        published: 1,
+        changesRequested: 1,
+        rejected: 1,
+      },
+    });
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      id: changesProject.id,
+      status: 'changes_requested',
+      statusGroup: 'changes_requested',
+      coverImage: { id: coverImage.id, width: 320, height: 240 },
+    });
+    expect(body.items[0]?.coverImage?.url).toBe(body.items[0]?.coverImageUrl);
+    expect(body.items[0]?.coverImageUrl).toContain('X-Amz-Signature=');
+
+    const reviewRes = await client.api.projects.portfolio.$get(
+      { query: { status: 'in_review', sort: 'title' } },
+      { headers: { cookie } },
+    );
+    expect(reviewRes.status).toBe(200);
+    const reviewBody = (await reviewRes.json()) as PortfolioProjectsResponse;
+    expect(reviewBody.items.map((item) => [item.title, item.statusGroup])).toEqual([
+      ['In Review', 'in_review'],
+      ['Submitted', 'in_review'],
+    ]);
+
+    const draftRes = await client.api.projects.portfolio.$get(
+      { query: { status: 'draft' } },
+      { headers: { cookie } },
+    );
+    expect(draftRes.status).toBe(200);
+    const draftBody = (await draftRes.json()) as PortfolioProjectsResponse;
+    expect(draftBody.items.map((item) => item.title)).toEqual(['Draft']);
+  });
+
+  it('rejects banned users on portfolio reads', async () => {
+    const { cookie, userId, designer } = await makeDesignerSession('+919800002046');
+    await makeProject({ designerId: designer.id, title: 'Banned Draft', status: 'draft' });
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+
+    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('paginates portfolio pages past the first with stable ordering', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002047');
+    await makeProject({ designerId: designer.id, title: 'Alpha', status: 'draft' });
+    await makeProject({ designerId: designer.id, title: 'Beta', status: 'published' });
+    await makeProject({ designerId: designer.id, title: 'Gamma', status: 'rejected' });
+
+    const res = await client.api.projects.portfolio.$get(
+      { query: { page: 2, limit: 1, sort: 'title' } },
+      { headers: { cookie } },
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PortfolioProjectsResponse;
+    expect(body).toMatchObject({ page: 2, limit: 1, total: 3, totalPages: 3 });
+    expect(body.items.map((item) => item.title)).toEqual(['Beta']);
+    expect(body.statusCounts).toEqual({
+      total: 3,
+      draft: 1,
+      inReview: 0,
+      published: 1,
+      changesRequested: 0,
+      rejected: 1,
+    });
+  });
+
+  it('returns the complete empty portfolio shape', async () => {
+    const { cookie } = await makeDesignerSession('+919800002043');
+
+    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      items: [],
+      statusCounts: {
+        total: 0,
+        draft: 0,
+        inReview: 0,
+        published: 0,
+        changesRequested: 0,
+        rejected: 0,
+      },
+      page: 1,
+      total: 0,
+      limit: 12,
+      totalPages: 0,
+    });
+  });
+
+  it('scopes projects and counts to the active organization', async () => {
+    const { cookie, userId, designer } = await makeDesignerSession('+919800002044');
+    const secondOrg = await makeOrganization({ name: 'Second Studio' });
+    await db.insert(schema.member).values({
+      id: `mem-second-${userId}`,
+      organizationId: secondOrg.id,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const [secondDesigner] = await db
+      .insert(schema.designerProfile)
+      .values({ orgId: secondOrg.id, displayName: 'Second Studio' })
+      .returning();
+    await makeProject({ designerId: designer.id, title: 'First Org Draft', status: 'draft' });
+    await makeProject({
+      designerId: secondDesigner!.id,
+      title: 'Second Org Published',
+      status: 'published',
+    });
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: secondOrg.id })
+      .where(eq(schema.session.userId, userId));
+
+    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PortfolioProjectsResponse;
+    expect(body.items.map((item) => item.title)).toEqual(['Second Org Published']);
+    expect(body.statusCounts).toEqual({
+      total: 1,
+      draft: 0,
+      inReview: 0,
+      published: 1,
+      changesRequested: 0,
+      rejected: 0,
+    });
   });
 });
 
