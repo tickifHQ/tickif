@@ -27,11 +27,15 @@ function createMemoryStorage(): Storage {
   };
 }
 
-if (!globalThis.window.localStorage) {
-  Object.defineProperty(globalThis.window, 'localStorage', {
-    configurable: true,
-    value: createMemoryStorage(),
-  });
-}
+// Newer Node versions expose an unavailable experimental localStorage global
+// unless a backing file is configured. Give happy-dom a deterministic browser
+// implementation so tests do not depend on the host Node invocation.
+Object.defineProperty(globalThis.window, 'localStorage', {
+  configurable: true,
+  value: createMemoryStorage(),
+});
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  globalThis.window.localStorage.clear();
+});

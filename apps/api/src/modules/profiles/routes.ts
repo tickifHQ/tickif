@@ -20,6 +20,7 @@ import {
   uploadLogoResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
+import { setActiveOrganization } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
@@ -217,6 +218,16 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     const user = c.get('user')!;
     const input = c.req.valid('json');
     const { data, created } = await profilesService.onboardDesigner(user.id, input);
+    const activeOrganizationResponse = await setActiveOrganization(
+      c.req.raw.headers,
+      data.organization.id,
+    );
+    if (!activeOrganizationResponse.ok) {
+      throw new Error('Failed to activate the organization after onboarding');
+    }
+    for (const cookie of activeOrganizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
     return c.json(data, created ? 201 : 200);
   })
   .openapi(

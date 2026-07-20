@@ -59,6 +59,9 @@ describe('POST /api/profiles/me — onboarding', () => {
     const body = await json(res);
     expect(body.profile.displayName).toBe('Onboard User');
     expect(body.organization.name).toBe('Onboard User');
+
+    const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
+    expect(session?.session.activeOrganizationId).toBe(body.organization.id);
   });
 
   it('returns existing profile on re-submit (200 idempotent)', async () => {

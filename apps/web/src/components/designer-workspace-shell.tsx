@@ -4,15 +4,19 @@ import Link from 'next/link';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
-import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar } from '@repo/ui/components/avatar';
+import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from '@repo/ui/components/dialog';
 import {
   ArrowUpRight,
   BadgeHelp,
   CalendarDays,
   ChartLine,
-  ChevronsUpDown,
   CircleUserRound,
   FileBadge2,
   FolderKanban,
@@ -33,6 +37,7 @@ type NavItem = {
   label: string;
   href?: string;
   icon: ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
 };
 
 const studioItems: NavItem[] = [
@@ -46,7 +51,7 @@ const studioItems: NavItem[] = [
 
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/portfolio', icon: Link2 },
-  { label: 'Verification', icon: ShieldCheck },
+  { label: 'Verification', icon: ShieldCheck, comingSoon: true },
   { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
   { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
@@ -61,9 +66,11 @@ function isItemActive(pathname: string, href?: string) {
 function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon;
   const active = isItemActive(pathname, item.href);
-  const className = active
-    ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-[13px] leading-[1.1] font-medium text-foreground shadow-sm'
-    : 'flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground';
+  const className = item.href
+    ? active
+      ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-[13px] leading-[1.1] font-medium text-foreground shadow-sm'
+      : 'flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+    : 'flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground/60';
 
   if (item.href) {
     return (
@@ -75,9 +82,10 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   }
 
   return (
-    <span className={className} aria-disabled="true">
+    <span className={className} aria-disabled="true" title={item.comingSoon ? 'Coming soon' : undefined}>
       <Icon className="size-4" />
       <span>{item.label}</span>
+      {item.comingSoon ? <span className="sr-only">Coming soon</span> : null}
     </span>
   );
 }
@@ -136,10 +144,12 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
 }
 
 function SidebarContent({
+  activeOrganizationId,
   studioName,
   studioLocation,
   pathname,
 }: {
+  activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
   pathname: string;
@@ -153,21 +163,11 @@ function SidebarContent({
       </div>
 
       <div className="border-b border-border px-4 pb-4">
-        <div className="flex w-full items-center gap-3 px-2">
-          <Avatar className="size-10 rounded-xl">
-            <InitialsAvatar
-              seed={studioName}
-              fallbackSeed={studioLocation}
-              alt=""
-              size={40}
-            />
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
-            <div className="truncate text-xs leading-[1.1] text-muted-foreground">{studioLocation}</div>
-          </div>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
-        </div>
+        <DesignerOrganizationSwitcher
+          activeOrganizationId={activeOrganizationId}
+          studioName={studioName}
+          studioLocation={studioLocation}
+        />
       </div>
 
       <div className="flex flex-1 flex-col justify-between px-4 py-5">
@@ -199,10 +199,12 @@ function SidebarContent({
 }
 
 export function DesignerWorkspaceShell({
+  activeOrganizationId,
   studioName,
   studioLocation,
   children,
 }: {
+  activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
   children: ReactNode;
@@ -217,30 +219,30 @@ export function DesignerWorkspaceShell({
     <div className="fixed inset-0 overflow-hidden bg-muted/30">
       <div className="flex h-full overflow-hidden bg-muted/20">
         <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
-          <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
+          <SidebarContent activeOrganizationId={activeOrganizationId} studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
         </aside>
 
-        {mobileNavOpen ? (
-          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Designer navigation">
-            <button
-              type="button"
-              aria-label="Close navigation"
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setMobileNavOpen(false)}
-            />
-            <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-background shadow-xl">
+        <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <DialogContent
+            aria-describedby={undefined}
+            showCloseButton={false}
+            overlayClassName="lg:hidden"
+            className="left-0 top-0 flex h-full w-72 max-w-[85vw] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-l-0 border-r border-border bg-background p-0 shadow-xl lg:hidden"
+          >
+            <DialogTitle className="sr-only">Designer navigation</DialogTitle>
+            <DialogClose asChild>
               <button
                 type="button"
                 aria-label="Close navigation"
-                className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                onClick={() => setMobileNavOpen(false)}
+                autoFocus
+                className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-4" />
               </button>
-              <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
-            </aside>
-          </div>
-        ) : null}
+            </DialogClose>
+            <SidebarContent activeOrganizationId={activeOrganizationId} studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
+          </DialogContent>
+        </Dialog>
 
         <div className="flex min-w-0 flex-1 flex-col p-2">
           <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-[22px] border border-border/80 bg-background/80 px-6 backdrop-blur">

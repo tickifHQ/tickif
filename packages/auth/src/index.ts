@@ -178,3 +178,15 @@ export function getSession(headers: Headers, opts?: { disableCookieCache?: boole
     query: opts?.disableCookieCache ? { disableCookieCache: true } : undefined,
   });
 }
+
+/**
+ * Select an authenticated user's active organization through better-auth so
+ * membership is validated and both the session row and session cookie agree.
+ */
+export function setActiveOrganization(headers: Headers, organizationId: string) {
+  return auth.api.setActiveOrganization({
+    headers,
+    body: { organizationId },
+    asResponse: true,
+  });
+}
