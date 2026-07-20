@@ -63,11 +63,17 @@ function extractDetailMessage(error: object): string | null {
  * descriptive error on failure.
  */
 async function handleResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
-  const body: unknown = await response.json();
   if (!response.ok) {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      // Non-JSON error body (e.g. an HTML gateway error page) — fall back to
+      // the generic message instead of leaking a JSON parse error.
+    }
     throw new Error(extractErrorMessage(body, fallbackMessage));
   }
-  return body as T;
+  return (await response.json()) as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,12 +125,10 @@ export async function uploadLogo(file: File): Promise<UploadLogoResponse> {
     },
   });
 
-  const presignBody: unknown = await presignResponse.json();
-  if (!presignResponse.ok) {
-    throw new Error(extractErrorMessage(presignBody, 'Could not prepare logo upload.'));
-  }
-
-  const { uploadUrl, key } = presignBody as { uploadUrl: string; key: string };
+  const { uploadUrl, key } = await handleResponse<{ uploadUrl: string; key: string }>(
+    presignResponse,
+    'Could not prepare logo upload.',
+  );
 
   // Step 2: Upload the file directly to storage via presigned URL
   const storageResponse = await fetch(uploadUrl, {
