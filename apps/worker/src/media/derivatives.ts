@@ -80,12 +80,11 @@ export async function* eachDerivative(
       limitInputPixels,
     };
     const resized = sharp(resizedRaw, resizedInput);
-    const base =
-      watermark && resizedInfo.width >= watermark.minImageWidth
-        ? resized.composite([
-            { input: buildWatermarkSvg(resizedInfo.width, resizedInfo.height, watermark) },
-          ])
-        : resized;
+    const base = watermark
+      ? resized.composite([
+          { input: buildWatermarkSvg(resizedInfo.width, resizedInfo.height, watermark) },
+        ])
+      : resized;
 
     for (const format of formats) {
       const { data, info: out } = await encode(base.clone(), format).toBuffer({

@@ -10,8 +10,11 @@ vi.mock('@repo/config', () => ({
     MEDIA_MAX_UPLOAD_BYTES: 15_000_000,
     MEDIA_MAX_IMAGE_DIMENSION: 12_000,
     WATERMARK_ENABLED: true,
-    WATERMARK_TEXT: 'Tickif',
-    WATERMARK_OPACITY: 0.6,
+    WATERMARK_TEXT: 'tickif',
+    WATERMARK_OPACITY: 0.22,
+    WATERMARK_SCALE: 0.16,
+    WATERMARK_ROTATION: -30,
+    WATERMARK_REVISION: 'wm-v2',
   },
   isProduction: false,
   isDevelopment: false,
@@ -37,6 +40,7 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../src/media/repository.js', () => ({
   getImageForProcessing: vi.fn(),
   markReady: vi.fn(async () => true),
+  refreshReadyDerivatives: vi.fn(async () => true),
   markFailed: vi.fn(async () => {}),
   findProjectPhashes: vi.fn(async () => []),
 }));
@@ -52,14 +56,23 @@ const putObjectMock = vi.mocked(putObject);
 const deleteObjectMock = vi.mocked(deleteObject);
 const repoMock = vi.mocked(repo);
 
-const job = (imageId: string): Job<{ imageId: string }> =>
-  ({ id: 'j1', data: { imageId } }) as Job<{ imageId: string }>;
+const job = (imageId: string, mode?: 'reprocess'): Job<{ imageId: string; mode?: 'reprocess' }> =>
+  ({ id: 'j1', data: { imageId, mode } }) as Job<{ imageId: string; mode?: 'reprocess' }>;
 
 const processing = {
   id: 'img-1',
   projectId: 'proj-1',
   originalKey: 'originals/proj-1/abc',
   contentType: 'image/jpeg',
+  derivatives: [
+    {
+      variant: 'thumb',
+      format: 'webp' as const,
+      key: 'derivatives/proj-1/img-1/thumb.webp',
+      width: 320,
+      height: 240,
+    },
+  ],
   status: 'processing' as const,
 };
 
@@ -74,6 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   config.MEDIA_DEDUP_ACTION = 'reject';
   repoMock.markReady.mockResolvedValue(true);
+  repoMock.refreshReadyDerivatives.mockResolvedValue(true);
 });
 
 describe('processMedia', () => {
@@ -87,6 +101,89 @@ describe('processMedia', () => {
     repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
     expect(await processMedia(job('img-1'))).toEqual({ ok: true, skipped: 'already-ready' });
     expect(getObjectMock).not.toHaveBeenCalled();
+  });
+
+  it('regenerates derivatives for an already-ready image in reprocess mode', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
+    getObjectMock.mockResolvedValue(jpeg);
+
+    const result = await processMedia(job('img-1', 'reprocess'));
+
+    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    expect(repoMock.refreshReadyDerivatives).toHaveBeenCalledTimes(1);
+    expect(repoMock.findProjectPhashes).not.toHaveBeenCalled();
+    expect(repoMock.markReady).not.toHaveBeenCalled();
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
+    expect(deleteObjectMock).toHaveBeenCalledWith('derivatives/proj-1/img-1/thumb.webp');
+    expect(deleteObjectMock).not.toHaveBeenCalledWith(processing.originalKey);
+  });
+
+  it('deletes the freshly uploaded derivatives when reprocess loses the refresh race', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
+    getObjectMock.mockResolvedValue(jpeg);
+    repoMock.refreshReadyDerivatives.mockResolvedValue(false);
+
+    expect(await processMedia(job('img-1', 'reprocess'))).toEqual({
+      ok: true,
+      skipped: 'lost-race',
+    });
+    // Nothing references the new revisioned objects, so every upload is cleaned up…
+    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    for (const [{ key }] of putObjectMock.mock.calls) {
+      expect(deleteObjectMock).toHaveBeenCalledWith(key);
+    }
+    // …but the derivatives still referenced by the row (and the original) survive.
+    expect(deleteObjectMock).not.toHaveBeenCalledWith('derivatives/proj-1/img-1/thumb.webp');
+    expect(deleteObjectMock).not.toHaveBeenCalledWith(processing.originalKey);
+  });
+
+  it('warns when reprocess regenerates identical keys (WATERMARK_REVISION unchanged)', async () => {
+    const revisionedDerivatives = ['thumb', 'small', 'medium', 'large'].flatMap((variant) =>
+      (['webp', 'avif'] as const).map((format) => ({
+        variant,
+        format,
+        key: `derivatives/proj-1/img-1/${variant}-wm-v2.${format}`,
+        width: 320,
+        height: 240,
+      })),
+    );
+    repoMock.getImageForProcessing.mockResolvedValue({
+      ...processing,
+      status: 'ready',
+      derivatives: revisionedDerivatives,
+    });
+    getObjectMock.mockResolvedValue(jpeg);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: true, derivatives: 8 });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('WATERMARK_REVISION'));
+      // Same keys ⇒ in-place overwrites: nothing is stale and nothing may be deleted.
+      expect(deleteObjectMock).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not overlap reprocessing with initial processing', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue(processing);
+
+    expect(await processMedia(job('img-1', 'reprocess'))).toEqual({
+      ok: true,
+      skipped: 'not-ready',
+    });
+    expect(getObjectMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing ready image intact when reprocessing finds invalid bytes', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
+    getObjectMock.mockResolvedValue(Buffer.from('not an image'));
+
+    expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: false, reason: 'corrupt' });
+    expect(repoMock.markFailed).not.toHaveBeenCalled();
+    expect(deleteObjectMock).not.toHaveBeenCalled();
+    expect(repoMock.refreshReadyDerivatives).not.toHaveBeenCalled();
   });
 
   it('does not reprocess an already-failed image (no flapping on re-enqueue)', async () => {

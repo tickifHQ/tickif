@@ -103,12 +103,17 @@ const envSchema = z.object({
   WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(3002),
 
   // Watermark on public derivatives only (E-109); originals stay clean.
-  WATERMARK_ENABLED: z
-    .stringbool()
-    .optional()
-    .default(true),
-  WATERMARK_TEXT: z.string().default('Tickif'),
-  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.6),
+  WATERMARK_ENABLED: z.stringbool().optional().default(true),
+  WATERMARK_TEXT: z.string().trim().min(1).default('tickif'),
+  // Bounds stay [0, 1] so envs configured under the pre-revision schema (e.g. 0.6)
+  // still boot; 0.22 is the recommended restrained default.
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.22),
+  WATERMARK_SCALE: z.coerce.number().min(0.08).max(0.3).default(0.16),
+  WATERMARK_ROTATION: z.coerce.number().min(-60).max(60).default(-30),
+  WATERMARK_REVISION: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
+    .default('wm-v2'),
 
   // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
   // Action on a duplicate: reject (status=failed) or flag for moderation.
@@ -132,8 +137,7 @@ const refinedEnvSchema = envSchema.refine(
     return hasId === hasSecret;
   },
   {
-    message:
-      'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
+    message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
     path: ['GOOGLE_CLIENT_ID'],
   },
 );

@@ -8,6 +8,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "enqueue:demo": "tsx src/enqueue-demo.ts",
+    "media:reprocess": "tsx src/reprocess-media.ts",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

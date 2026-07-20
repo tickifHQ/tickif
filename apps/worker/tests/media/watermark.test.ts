@@ -4,10 +4,10 @@ import { buildWatermarkSvg, type WatermarkConfig } from '../../src/media/waterma
 import { generateDerivatives } from '../../src/media/derivatives.js';
 
 const wm: WatermarkConfig = {
-  text: 'Tickif',
-  opacity: 0.8,
-  scale: 0.3,
-  minImageWidth: 200,
+  text: 'tickif',
+  opacity: 0.22,
+  scale: 0.16,
+  rotation: -30,
 };
 
 async function meanStdev(buffer: Buffer): Promise<number> {
@@ -23,15 +23,57 @@ beforeAll(async () => {
 });
 
 describe('buildWatermarkSvg', () => {
-  it('produces a full-canvas tiled SVG sharp can rasterize', async () => {
+  it('produces a restrained, staggered full-canvas pattern sharp can rasterize', async () => {
     const svg = buildWatermarkSvg(800, 600, wm);
     const text = svg.toString();
-    expect(text.match(/Tickif/g)?.length).toBeGreaterThan(6);
+    expect(text).toContain('<pattern');
+    expect(text).toContain('patternTransform="rotate(-30)"');
+    expect(text.match(/<text[^>]*>tickif<\/text>/g)?.length).toBe(3);
+    expect(text).toContain('fill-opacity="0.22"');
+
+    const fontSize = Number(text.match(/font-size="([\d.]+)"/)?.[1]);
+    expect(fontSize).toBeGreaterThanOrEqual(20);
+    expect(fontSize).toBeLessThanOrEqual(40);
 
     const meta = await sharp(svg).metadata();
     expect(meta.format).toBe('svg');
     expect(meta.width).toBe(800);
     expect(meta.height).toBe(600);
+  });
+
+  it('composes the seam-spanning staggered mark across tile edges (not half-clipped)', async () => {
+    const svg = buildWatermarkSvg(800, 600, { ...wm, rotation: 0 });
+    const text = svg.toString();
+
+    // Pattern content clips at tile edges, so the staggered mark must be drawn on both
+    // sides of the seam (x=0 and x=tileWidth) for neighbors to compose the full word.
+    const pattern = text.match(/<pattern[^>]* width="(\d+)" height="(\d+)"/);
+    const tileWidth = Number(pattern?.[1]);
+    const rowHeight = Number(pattern?.[2]) / 2;
+    const marks = [...text.matchAll(/<text x="(\d+)" y="(\d+)"/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+    }));
+    const staggered = marks.filter((mark) => mark.y === Math.round(rowHeight * 1.5));
+    expect(staggered.map((mark) => mark.x).sort((a, b) => a - b)).toEqual([0, tileWidth]);
+
+    // Rasterized regression: at rotation 0 the staggered row must carry ink coverage
+    // comparable to the aligned row (the half-clipped bug rendered ~half the glyphs).
+    const png = await sharp(svg).png().toBuffer();
+    const rowCoverage = async (top: number): Promise<number> => {
+      const { data, info } = await sharp(png)
+        .extract({ left: 0, top, width: 800, height: rowHeight })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let inked = 0;
+      for (let i = 3; i < data.length; i += info.channels) if (data[i]! > 0) inked += 1;
+      return inked;
+    };
+    const alignedRow = await rowCoverage(0);
+    const staggeredRow = await rowCoverage(rowHeight);
+    expect(alignedRow).toBeGreaterThan(0);
+    expect(staggeredRow).toBeGreaterThan(alignedRow * 0.85);
   });
 
   it('escapes XML-significant characters in the text', () => {
@@ -55,7 +97,7 @@ describe('generateDerivatives with watermark', () => {
     expect(await meanStdev(marked!.buffer)).toBeGreaterThan((await meanStdev(plain!.buffer)) + 2);
   });
 
-  it('skips the watermark for images below minImageWidth', async () => {
+  it('keeps small public derivatives protected with a scaled-down pattern', async () => {
     const small = await sharp({
       create: { width: 150, height: 100, channels: 3, background: 'blue' },
     })
@@ -72,7 +114,7 @@ describe('generateDerivatives with watermark', () => {
       watermark: wm,
     });
 
-    expect(Math.abs((await meanStdev(marked!.buffer)) - (await meanStdev(plain!.buffer)))).toBeLessThan(0.5);
+    expect(await meanStdev(marked!.buffer)).toBeGreaterThan((await meanStdev(plain!.buffer)) + 0.5);
   });
 
   it('uses the actual resized dimensions when compositing the watermark', async () => {
@@ -85,7 +127,7 @@ describe('generateDerivatives with watermark', () => {
     const [marked] = await generateDerivatives(halfPixelResize, {
       variants: [{ variant: 'thumb', width: 320 }],
       formats: ['webp'],
-      watermark: { ...wm, minImageWidth: 1 },
+      watermark: wm,
     });
 
     expect(marked).toMatchObject({ width: 320 });

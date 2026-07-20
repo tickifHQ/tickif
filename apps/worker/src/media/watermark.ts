@@ -5,16 +5,15 @@ export type WatermarkConfig = {
   opacity: number;
   /** Single mark width as a fraction of the image width. */
   scale: number;
-  /** Images narrower than this skip the watermark — it would be illegible. */
-  minImageWidth: number;
+  rotation: number;
 };
 
 export const defaultWatermarkConfig: WatermarkConfig | null = config.WATERMARK_ENABLED
   ? {
       text: config.WATERMARK_TEXT,
       opacity: config.WATERMARK_OPACITY,
-      scale: 0.22,
-      minImageWidth: 200,
+      scale: config.WATERMARK_SCALE,
+      rotation: config.WATERMARK_ROTATION,
     }
   : null;
 
@@ -24,37 +23,36 @@ function escapeXml(s: string): string {
   );
 }
 
-/** A full-canvas, evenly tiled watermark overlay for public preview derivatives. */
-export function buildWatermarkSvg(imageWidth: number, imageHeight: number, cfg: WatermarkConfig): Buffer {
+/** A restrained, staggered full-canvas watermark pattern for public preview derivatives. */
+export function buildWatermarkSvg(
+  imageWidth: number,
+  imageHeight: number,
+  cfg: WatermarkConfig,
+): Buffer {
   const text = escapeXml(cfg.text);
-  const markWidth = Math.max(96, Math.round(imageWidth * cfg.scale));
-  const fontSize = Math.max(14, Math.round(markWidth / Math.max(cfg.text.length * 0.58, 1)));
-  const horizontalGap = Math.max(markWidth * 1.45, fontSize * 6);
-  const verticalGap = Math.max(fontSize * 4.4, 96);
-  const rotation = -24;
-  const rowCount = Math.ceil(imageHeight / verticalGap) + 3;
-  const columnCount = Math.ceil(imageWidth / horizontalGap) + 3;
-  const marks: string[] = [];
-
-  for (let row = -1; row < rowCount; row += 1) {
-    const y = Math.round(row * verticalGap + verticalGap / 2);
-    const rowOffset = row % 2 === 0 ? 0 : horizontalGap / 2;
-
-    for (let column = -1; column < columnCount; column += 1) {
-      const x = Math.round(column * horizontalGap + rowOffset + horizontalGap / 2);
-      marks.push(
-        `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${text}</text>`,
-      );
-    }
-  }
+  const markWidth = Math.max(36, Math.round(imageWidth * cfg.scale));
+  const fontSize = Math.max(11, Math.round(markWidth / Math.max(cfg.text.length * 0.62, 1)));
+  const tileWidth = Math.round(markWidth * 2.6);
+  const rowHeight = Math.round(fontSize * 4.8);
+  const strokeOpacity = Number((cfg.opacity * 0.25).toFixed(3));
+  const strokeWidth = Math.max(0.35, fontSize * 0.012).toFixed(2);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}" viewBox="0 0 ${imageWidth} ${imageHeight}">
-  <g transform="rotate(${rotation} ${imageWidth / 2} ${imageHeight / 2})"
-    font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700"
-    fill="#ffffff" fill-opacity="${cfg.opacity}"
-    stroke="#000000" stroke-opacity="${cfg.opacity * 0.45}" stroke-width="1" paint-order="stroke">
-    ${marks.join('\n    ')}
-  </g>
+  <defs>
+    <pattern id="tickif-watermark" width="${tileWidth}" height="${rowHeight * 2}" patternUnits="userSpaceOnUse" patternTransform="rotate(${cfg.rotation})">
+      <g font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="600"
+        fill="#ffffff" fill-opacity="${cfg.opacity}"
+        stroke="#000000" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidth}" paint-order="stroke">
+        <text x="${Math.round(tileWidth / 2)}" y="${Math.round(rowHeight / 2)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
+        <!-- Pattern content clips at tile edges (neighbors do NOT complete it), so the
+             seam-spanning staggered mark is drawn at both x=0 and x=tileWidth: adjacent
+             tiles each contribute their half and compose the full word across the seam. -->
+        <text x="0" y="${Math.round(rowHeight * 1.5)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
+        <text x="${tileWidth}" y="${Math.round(rowHeight * 1.5)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
+      </g>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#tickif-watermark)" />
 </svg>`;
   return Buffer.from(svg);
 }

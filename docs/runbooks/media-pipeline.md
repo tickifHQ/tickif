@@ -53,6 +53,25 @@ keys and the CAS protects against a concurrent finisher. To reprocess an image:
 > Never delete-and-recreate the row to "retry" — that changes the imageId and orphans
 > any derivatives. Reset status + re-enqueue instead.
 
+## Regenerating public derivatives
+
+Use the dedicated reprocessing mode when watermark or encoding settings change. It keeps
+the existing image `ready`, rebuilds derivatives from the private original, and replaces
+the derivative keys with the current revision so immutable caches are bypassed. Superseded
+objects are removed only after the database swap succeeds. Reprocessing does not rerun
+duplicate detection or turn a ready image into `failed` when a legacy original is invalid.
+
+```bash
+# Selected images
+pnpm --filter @repo/worker media:reprocess -- <image-id> [image-id...]
+
+# Confirmed full backfill
+pnpm --filter @repo/worker media:reprocess -- --all --confirm
+```
+
+The worker must be running to consume the queued jobs. The `--confirm` requirement prevents
+an accidental full-library regeneration.
+
 ## Migration 0005 — rollback / forward-fix
 
 0005 is **one-way** (`room_slug` is dropped, unrecoverable). There is no rollback.

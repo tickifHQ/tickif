@@ -23,6 +23,7 @@ export const JOBS = {
 
 export type MediaProcessJob = {
   imageId: string;
+  mode?: 'reprocess';
 };
 
 export type SmsJob = {
@@ -60,13 +61,13 @@ function getMediaQueue(): Queue<MediaProcessJob> {
   return mediaQueue;
 }
 
-/** jobId keyed on imageId so at-least-once re-delivery of the same image collapses. */
-function mediaJobId(imageId: string): string {
-  return `media-${imageId}`;
+/** Job IDs are stable per image and operation so duplicate delivery collapses. */
+function mediaJobId(job: MediaProcessJob): string {
+  return job.mode === 'reprocess' ? `media-reprocess-${job.imageId}` : `media-${job.imageId}`;
 }
 
 export async function enqueueMedia(job: MediaProcessJob): Promise<void> {
-  await getMediaQueue().add(JOBS.processMedia, job, { jobId: mediaJobId(job.imageId) });
+  await getMediaQueue().add(JOBS.processMedia, job, { jobId: mediaJobId(job) });
 }
 
 /** Normalize a phone number to bare digits — for stable dedupe keys and provider APIs. */
