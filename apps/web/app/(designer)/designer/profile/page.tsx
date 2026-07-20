@@ -1,5 +1,4 @@
 import { Container } from '@/components/container';
-import { DesignerPortfolioSettings } from '@/components/designer-portfolio-settings';
 import { DesignerProfileEditorPlaceholder } from '@/components/designer-profile-editor-placeholder';
 
 export const metadata = {
@@ -17,21 +16,7 @@ export default function DesignerProfilePage() {
         </p>
       </div>
 
-      <div className="grid gap-10">
-        <section>
-          <h2 className="mb-4 text-xl font-semibold tracking-tight">
-            Portfolio settings
-          </h2>
-          <DesignerPortfolioSettings />
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-xl font-semibold tracking-tight">
-            Profile details
-          </h2>
-          <DesignerProfileEditorPlaceholder />
-        </section>
-      </div>
+      <DesignerProfileEditorPlaceholder />
     </Container>
   );
 }
