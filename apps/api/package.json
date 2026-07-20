@@ -29,6 +29,7 @@
     "@repo/db": "workspace:*",
     "@repo/google-places": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
@@ -36,6 +37,7 @@
     "dotenv": "^16.4.7",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "meilisearch": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
   },

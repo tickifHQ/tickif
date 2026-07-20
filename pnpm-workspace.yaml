@@ -63,6 +63,9 @@ catalog:
   "@aws-sdk/s3-request-presigner": ^3.700.0
   sharp: ^0.35.3
 
+  # Search
+  meilisearch: ^0.59.0
+
   # Frontend
   next: ^16.2.11
   react: ^19.0.0

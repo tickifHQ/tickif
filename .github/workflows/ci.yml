@@ -80,6 +80,9 @@ jobs:
       DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_test
       REDIS_HOST: localhost
       REDIS_PORT: "6379"
+      MEILI_HOST: http://localhost:7700
+      MEILI_MASTER_KEY: ci-meili-master-key
+      MEILI_INDEX_PREFIX: tickif_ci
       R2_ENDPOINT: http://localhost:9000
       R2_ACCESS_KEY_ID: minioadmin
       R2_SECRET_ACCESS_KEY: minioadmin
@@ -107,6 +110,20 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      meilisearch:
+        image: getmeili/meilisearch:v1.13
+        env:
+          MEILI_ENV: development
+          MEILI_MASTER_KEY: ci-meili-master-key
+          MEILI_NO_ANALYTICS: "true"
+        ports:
+          - 7700:7700
+        options: >-
+          --health-cmd "curl --fail http://localhost:7700/health"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -165,6 +182,12 @@ jobs:
           PGPASSWORD=tickif psql -h localhost -p 5432 -U tickif -d tickif \
             -c "CREATE DATABASE tickif_test;" \
             -c "CREATE DATABASE tickif_worker_test;"
+
+      # Apply the checked-in settings once, then prove a second pass is a no-op.
+      - name: Bootstrap search indexes
+        run: |
+          pnpm --filter @repo/search bootstrap
+          pnpm --filter @repo/search bootstrap -- --check
 
       - name: Typecheck
         run: pnpm typecheck

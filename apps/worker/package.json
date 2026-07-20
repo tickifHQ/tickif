@@ -22,9 +22,11 @@
     "@repo/db": "workspace:*",
     "@repo/google-places": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
+    "meilisearch": "catalog:",
     "sharp": "catalog:"
   },
   "devDependencies": {
