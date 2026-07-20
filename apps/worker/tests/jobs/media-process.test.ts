@@ -87,6 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   config.MEDIA_DEDUP_ACTION = 'reject';
   repoMock.markReady.mockResolvedValue(true);
+  repoMock.refreshReadyDerivatives.mockResolvedValue(true);
 });
 
 describe('processMedia', () => {
@@ -116,6 +117,53 @@ describe('processMedia', () => {
     expect(repoMock.markFailed).not.toHaveBeenCalled();
     expect(deleteObjectMock).toHaveBeenCalledWith('derivatives/proj-1/img-1/thumb.webp');
     expect(deleteObjectMock).not.toHaveBeenCalledWith(processing.originalKey);
+  });
+
+  it('deletes the freshly uploaded derivatives when reprocess loses the refresh race', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue({ ...processing, status: 'ready' });
+    getObjectMock.mockResolvedValue(jpeg);
+    repoMock.refreshReadyDerivatives.mockResolvedValue(false);
+
+    expect(await processMedia(job('img-1', 'reprocess'))).toEqual({
+      ok: true,
+      skipped: 'lost-race',
+    });
+    // Nothing references the new revisioned objects, so every upload is cleaned up…
+    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    for (const [{ key }] of putObjectMock.mock.calls) {
+      expect(deleteObjectMock).toHaveBeenCalledWith(key);
+    }
+    // …but the derivatives still referenced by the row (and the original) survive.
+    expect(deleteObjectMock).not.toHaveBeenCalledWith('derivatives/proj-1/img-1/thumb.webp');
+    expect(deleteObjectMock).not.toHaveBeenCalledWith(processing.originalKey);
+  });
+
+  it('warns when reprocess regenerates identical keys (WATERMARK_REVISION unchanged)', async () => {
+    const revisionedDerivatives = ['thumb', 'small', 'medium', 'large'].flatMap((variant) =>
+      (['webp', 'avif'] as const).map((format) => ({
+        variant,
+        format,
+        key: `derivatives/proj-1/img-1/${variant}-wm-v2.${format}`,
+        width: 320,
+        height: 240,
+      })),
+    );
+    repoMock.getImageForProcessing.mockResolvedValue({
+      ...processing,
+      status: 'ready',
+      derivatives: revisionedDerivatives,
+    });
+    getObjectMock.mockResolvedValue(jpeg);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: true, derivatives: 8 });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('WATERMARK_REVISION'));
+      // Same keys ⇒ in-place overwrites: nothing is stale and nothing may be deleted.
+      expect(deleteObjectMock).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('does not overlap reprocessing with initial processing', async () => {

@@ -3,4 +3,4 @@ export * as schema from './schema/index.js';
 
 // Re-export commonly used drizzle operators so consumers don't depend on
 // drizzle-orm directly for simple queries.
-export { eq, and, or, ne, isNotNull, desc, asc, sql } from 'drizzle-orm';
+export { eq, and, or, ne, inArray, isNotNull, desc, asc, sql } from 'drizzle-orm';

@@ -119,12 +119,37 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
 
   if (isReprocess) {
     const derivatives = await generateAndStoreDerivatives(image, original);
+    const storedKeys = new Set(image.derivatives.map((derivative) => derivative.key));
+    if (derivatives.every((derivative) => storedKeys.has(derivative.key))) {
+      // Same WATERMARK_REVISION ⇒ same keys: uploads overwrote in place, but immutable
+      // CDN caches keep serving the old bytes. Bump WATERMARK_REVISION to take effect.
+      console.warn(
+        `[worker] media ${imageId}: reprocess regenerated the same derivative keys ` +
+          `(WATERMARK_REVISION ${config.WATERMARK_REVISION} unchanged); immutable CDN caches ` +
+          'will keep serving old content until the revision is bumped',
+      );
+    }
     const refreshed = await refreshReadyDerivatives(imageId, {
       derivatives,
       width: validation.width,
       height: validation.height,
     });
-    if (!refreshed) return { ok: true, skipped: 'lost-race' };
+    if (!refreshed) {
+      // Lost the CAS: nothing references the freshly uploaded revisioned objects, so
+      // best-effort delete them rather than leaving orphans in R2. Keys already stored
+      // on the row (same-revision overwrite) must survive — the live image uses them.
+      const orphanKeys = derivatives
+        .map((derivative) => derivative.key)
+        .filter((key) => !storedKeys.has(key));
+      await Promise.all(
+        orphanKeys.map((key) =>
+          deleteObject(key).catch((error: unknown) =>
+            console.error(`[worker] media ${imageId}: orphaned derivative cleanup failed`, error),
+          ),
+        ),
+      );
+      return { ok: true, skipped: 'lost-race' };
+    }
 
     const refreshedKeys = new Set(derivatives.map((derivative) => derivative.key));
     const staleKeys = image.derivatives

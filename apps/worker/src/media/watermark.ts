@@ -44,7 +44,11 @@ export function buildWatermarkSvg(
         fill="#ffffff" fill-opacity="${cfg.opacity}"
         stroke="#000000" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidth}" paint-order="stroke">
         <text x="${Math.round(tileWidth / 2)}" y="${Math.round(rowHeight / 2)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
+        <!-- Pattern content clips at tile edges (neighbors do NOT complete it), so the
+             seam-spanning staggered mark is drawn at both x=0 and x=tileWidth: adjacent
+             tiles each contribute their half and compose the full word across the seam. -->
         <text x="0" y="${Math.round(rowHeight * 1.5)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
+        <text x="${tileWidth}" y="${Math.round(rowHeight * 1.5)}" text-anchor="middle" dominant-baseline="middle">${text}</text>
       </g>
     </pattern>
   </defs>

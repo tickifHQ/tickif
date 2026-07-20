@@ -28,7 +28,7 @@ describe('buildWatermarkSvg', () => {
     const text = svg.toString();
     expect(text).toContain('<pattern');
     expect(text).toContain('patternTransform="rotate(-30)"');
-    expect(text.match(/<text[^>]*>tickif<\/text>/g)?.length).toBe(2);
+    expect(text.match(/<text[^>]*>tickif<\/text>/g)?.length).toBe(3);
     expect(text).toContain('fill-opacity="0.22"');
 
     const fontSize = Number(text.match(/font-size="([\d.]+)"/)?.[1]);
@@ -39,6 +39,41 @@ describe('buildWatermarkSvg', () => {
     expect(meta.format).toBe('svg');
     expect(meta.width).toBe(800);
     expect(meta.height).toBe(600);
+  });
+
+  it('composes the seam-spanning staggered mark across tile edges (not half-clipped)', async () => {
+    const svg = buildWatermarkSvg(800, 600, { ...wm, rotation: 0 });
+    const text = svg.toString();
+
+    // Pattern content clips at tile edges, so the staggered mark must be drawn on both
+    // sides of the seam (x=0 and x=tileWidth) for neighbors to compose the full word.
+    const pattern = text.match(/<pattern[^>]* width="(\d+)" height="(\d+)"/);
+    const tileWidth = Number(pattern?.[1]);
+    const rowHeight = Number(pattern?.[2]) / 2;
+    const marks = [...text.matchAll(/<text x="(\d+)" y="(\d+)"/g)].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+    }));
+    const staggered = marks.filter((mark) => mark.y === Math.round(rowHeight * 1.5));
+    expect(staggered.map((mark) => mark.x).sort((a, b) => a - b)).toEqual([0, tileWidth]);
+
+    // Rasterized regression: at rotation 0 the staggered row must carry ink coverage
+    // comparable to the aligned row (the half-clipped bug rendered ~half the glyphs).
+    const png = await sharp(svg).png().toBuffer();
+    const rowCoverage = async (top: number): Promise<number> => {
+      const { data, info } = await sharp(png)
+        .extract({ left: 0, top, width: 800, height: rowHeight })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let inked = 0;
+      for (let i = 3; i < data.length; i += info.channels) if (data[i]! > 0) inked += 1;
+      return inked;
+    };
+    const alignedRow = await rowCoverage(0);
+    const staggeredRow = await rowCoverage(rowHeight);
+    expect(alignedRow).toBeGreaterThan(0);
+    expect(staggeredRow).toBeGreaterThan(alignedRow * 0.85);
   });
 
   it('escapes XML-significant characters in the text', () => {

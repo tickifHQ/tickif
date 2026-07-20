@@ -1,4 +1,4 @@
-import { db, schema, eq, and, or, ne, isNotNull, sql } from '@repo/db';
+import { db, schema, eq, and, or, ne, inArray, isNotNull, sql } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
 export type ProcessingImage = {
@@ -67,7 +67,7 @@ export async function listReadyImageIds(imageIds?: readonly string[]): Promise<s
 
   const ready = eq(schema.projectImage.status, 'ready');
   const filter = imageIds
-    ? and(ready, or(...imageIds.map((imageId) => eq(schema.projectImage.id, imageId))))
+    ? and(ready, inArray(schema.projectImage.id, [...imageIds]))
     : ready;
   const rows = await db
     .select({ id: schema.projectImage.id })

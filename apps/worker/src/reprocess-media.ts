@@ -17,6 +17,13 @@ async function main(): Promise<void> {
   const confirmed = args.includes('--confirm');
   const imageIds = args.filter((arg) => !arg.startsWith('--'));
 
+  // A typo like --comfirm must fail loudly, not be silently discarded.
+  const knownFlags = new Set(['--all', '--confirm']);
+  const unknownFlags = args.filter((arg) => arg.startsWith('--') && !knownFlags.has(arg));
+  if (unknownFlags.length > 0) {
+    throw new Error(`Unknown flag(s): ${unknownFlags.join(', ')}\n${usage()}`);
+  }
+
   if (all && (!confirmed || imageIds.length > 0)) {
     throw new Error(`Reprocessing all ready images requires exactly --all --confirm.\n${usage()}`);
   }
