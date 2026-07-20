@@ -12,6 +12,7 @@ export type SelectFieldOption = {
 };
 
 type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
+  allowEmpty?: boolean;
   label: string;
   onValueChange: (value: string) => void;
   options: readonly SelectFieldOption[];
@@ -20,6 +21,7 @@ type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
 };
 
 export function SelectField({
+  allowEmpty = false,
   className,
   label,
   onValueChange,
@@ -46,9 +48,13 @@ export function SelectField({
           )}
           {...props}
         >
-          <option value="" disabled hidden>
-            {placeholder}
-          </option>
+          {allowEmpty ? (
+            <option value="">{placeholder}</option>
+          ) : (
+            <option value="" disabled hidden>
+              {placeholder}
+            </option>
+          )}
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

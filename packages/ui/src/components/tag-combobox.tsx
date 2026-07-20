@@ -55,6 +55,7 @@ export function TagCombobox({
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const blurTimeoutRef = useRef<number | null>(null);
   const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(null);
 
   const normalizedValue = normalizeTag(value);
@@ -82,7 +83,7 @@ export function TagCombobox({
     );
 
   const menuItems = [
-    ...filteredOptions.map((option) => ({ type: 'option' as const, label: option.label, value: option.label })),
+    ...filteredOptions.map((option) => ({ type: 'option' as const, label: option.label, value: option.value })),
     ...(canCreate ? [{ type: 'create' as const, label: createLabel(normalizedValue), value: normalizedValue }] : []),
   ];
   const showMenu = focused && (menuItems.length > 0 || normalizedValue.length > 0 || options.length > 0);
@@ -113,7 +114,13 @@ export function TagCombobox({
       window.removeEventListener('resize', updateMenuRect);
       window.removeEventListener('scroll', updateMenuRect, true);
     };
-  }, [showMenu, updateMenuRect]);
+  }, [showMenu, tags, updateMenuRect, value]);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current !== null) window.clearTimeout(blurTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showMenu || menuItems.length === 0 || clampedActiveIndex === null) return;
@@ -202,13 +209,30 @@ export function TagCombobox({
             aria-controls={listboxId}
             aria-expanded={showMenu}
             aria-autocomplete="list"
+            aria-activedescendant={
+              showMenu && clampedActiveIndex !== null && menuItems.length > 0
+                ? `${listboxId}-option-${clampedActiveIndex}`
+                : undefined
+            }
             value={value}
             onChange={(event) => {
               onValueChange(event.target.value);
+              setFocused(true);
               setActiveIndex(normalizeTag(event.target.value).length > 0 ? 0 : null);
             }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+            onFocus={() => {
+              if (blurTimeoutRef.current !== null) {
+                window.clearTimeout(blurTimeoutRef.current);
+                blurTimeoutRef.current = null;
+              }
+              setFocused(true);
+            }}
+            onBlur={() => {
+              blurTimeoutRef.current = window.setTimeout(() => {
+                blurTimeoutRef.current = null;
+                setFocused(false);
+              }, 120);
+            }}
             onKeyDown={handleKeyDown}
             className="h-8 border-0 px-0 py-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder={placeholder}
@@ -230,6 +254,7 @@ export function TagCombobox({
                     ref={(element) => {
                       itemRefs.current[index] = element;
                     }}
+                    id={`${listboxId}-option-${index}`}
                     type="button"
                     role="option"
                     aria-selected={index === clampedActiveIndex}

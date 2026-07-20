@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 import { Button } from './button';
 import { Input } from './input';
@@ -40,6 +40,7 @@ export function MonthPickerField({
   placeholder = 'YYYY-MM',
   value,
 }: MonthPickerFieldProps) {
+  const inputId = useId();
   const currentYear = new Date().getFullYear();
   const [open, setOpen] = useState(false);
   const [visibleYear, setVisibleYear] = useState(() => parseYear(value, currentYear));
@@ -95,9 +96,10 @@ export function MonthPickerField({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label className="text-sm font-medium text-foreground">{label}</Label>
+      <Label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</Label>
       <div ref={containerRef} className="relative">
         <Input
+          id={inputId}
           type="month"
           value={value}
           onChange={(event) => onChange(event.target.value)}

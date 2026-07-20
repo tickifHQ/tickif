@@ -633,6 +633,7 @@ function FormSelect({
   options,
   placeholder,
   className,
+  allowEmpty,
 }: {
   label: string;
   value: string;
@@ -640,8 +641,9 @@ function FormSelect({
   options: SelectFieldOption[];
   placeholder: string;
   className?: string;
+  allowEmpty?: boolean;
 }) {
-  return <SelectField label={label} value={value} onValueChange={onChange} options={options} placeholder={placeholder} className={className} />;
+  return <SelectField label={label} value={value} onValueChange={onChange} options={options} placeholder={placeholder} className={className} allowEmpty={allowEmpty} />;
 }
 
 function FormField({
@@ -880,7 +882,7 @@ function ChecklistCard({
         <span className="text-muted-foreground">{icon}</span>
         {title}
       </div>
-      <Card className="overflow-hidden">
+      <Card radius="2xl" className="overflow-hidden">
         <div className="p-0">
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0">
@@ -915,7 +917,7 @@ function TipsCard() {
         <ShieldPlus className="size-3.5 text-muted-foreground" />
         TIPS FOR BETTER VISIBILITY
       </div>
-      <Card variant="accent" className="border-border/80">
+      <Card variant="accent" radius="2xl" className="border-border/80">
         <div className="space-y-2 p-3">
           {tips.map((tip) => (
             <div key={tip} className="flex items-start gap-3">
@@ -936,7 +938,7 @@ function WhyItMattersCard() {
         <Lightbulb className="size-3.5 text-muted-foreground" />
         TIP
       </div>
-      <Card variant="accent" className="border-primary/10">
+      <Card variant="accent" radius="2xl" className="border-primary/10">
         <div className="p-4">
           <div className="mb-6 overflow-hidden rounded-2xl">
             <Image
@@ -2742,6 +2744,7 @@ export function DesignerProjectUpload({
                       onValueChange={setLocality}
                       options={localityOptions}
                       placeholder="e.g. Adyar, Koramangala"
+                      allowEmpty
                     />
                   ) : (
                     <div className="space-y-1.5">
@@ -2808,6 +2811,7 @@ export function DesignerProjectUpload({
                     onChange={setProjectDuration}
                     options={fallbackDurationOptions.map((option) => ({ value: option, label: option }))}
                     placeholder="e.g. 4 months"
+                    allowEmpty
                   />
                 </div>
               </div>

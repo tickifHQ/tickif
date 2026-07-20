@@ -11,6 +11,12 @@ describe('MonthPickerField', () => {
     expect(screen.getByDisplayValue('2026-03')).toHaveAttribute('type', 'month');
   });
 
+  it('associates the label with the input', () => {
+    render(<MonthPickerField label="Project completed by" value="2026-03" onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText('Project completed by')).toHaveAttribute('type', 'month');
+  });
+
   it('emits a YYYY-MM value when a month is selected', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
