@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronsUpDown, Copy, Globe, Lightbulb } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Switch } from '@repo/ui/components/switch';
@@ -628,37 +634,11 @@ function AccentColorDropdown({
   value: string;
   onChange: (hex: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const selected = accentColors.find((c) => c.hex === value) ?? accentColors[0]!;
 
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 shadow-md transition-colors hover:bg-accent/50"
-      >
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 shadow-md transition-colors hover:bg-accent/50">
         <div className="flex items-center gap-2.5">
           <span
             className="size-5 shrink-0 rounded-full border border-border"
@@ -670,30 +650,30 @@ function AccentColorDropdown({
           <span className="text-xs text-muted-foreground">{selected.hex}</span>
           <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden />
         </div>
-      </button>
-
-      {open && (
-        <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-background p-1 shadow-lg">
-          {accentColors.map((color) => (
-            <button
-              key={color.hex}
-              type="button"
-              onClick={() => { onChange(color.hex); setOpen(false); }}
-              className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left transition-colors hover:bg-accent/50 ${color.hex === value ? 'bg-accent/30' : ''}`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="size-5 shrink-0 rounded-full border border-border"
-                  style={{ backgroundColor: color.hex }}
-                />
-                <span className="text-sm text-foreground">{color.name}</span>
-              </div>
-              <span className="text-xs text-muted-foreground">{color.hex}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-dropdown-menu-trigger-width)]"
+      >
+        {accentColors.map((color) => (
+          <DropdownMenuItem
+            key={color.hex}
+            onSelect={() => onChange(color.hex)}
+            className={`justify-between px-3 py-2 ${color.hex === value ? 'bg-accent/30' : ''}`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span
+                className="size-5 shrink-0 rounded-full border border-border"
+                style={{ backgroundColor: color.hex }}
+              />
+              <span className="text-sm text-foreground">{color.name}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">{color.hex}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

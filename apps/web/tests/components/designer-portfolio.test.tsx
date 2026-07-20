@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DesignerPortfolio } from '../../src/components/designer-portfolio';
 
@@ -51,6 +51,24 @@ describe('DesignerPortfolio', () => {
     expect(sectionSwitch).toHaveAttribute('aria-checked', 'false');
     expect(titleButton).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByAltText('Verified')).not.toBeInTheDocument();
+  });
+
+  it('selects an accent colour from the dropdown and closes the menu', async () => {
+    const user = userEvent.setup();
+    render(<DesignerPortfolio />);
+
+    const trigger = screen.getByRole('button', { name: /coral red/i });
+    expect(trigger).toHaveTextContent('#FF8F73');
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole('menuitem', { name: /ocean blue/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+    const updatedTrigger = screen.getByRole('button', { name: /ocean blue/i });
+    expect(updatedTrigger).toHaveTextContent('#4A90D9');
+    expect(screen.queryByRole('button', { name: /coral red/i })).not.toBeInTheDocument();
   });
 
   it('sanitizes the slug input and reflects it in the preview URLs', async () => {
