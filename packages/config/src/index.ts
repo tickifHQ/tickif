@@ -105,7 +105,9 @@ const envSchema = z.object({
   // Watermark on public derivatives only (E-109); originals stay clean.
   WATERMARK_ENABLED: z.stringbool().optional().default(true),
   WATERMARK_TEXT: z.string().trim().min(1).default('tickif'),
-  WATERMARK_OPACITY: z.coerce.number().min(0.05).max(0.5).default(0.22),
+  // Bounds stay [0, 1] so envs configured under the pre-revision schema (e.g. 0.6)
+  // still boot; 0.22 is the recommended restrained default.
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.22),
   WATERMARK_SCALE: z.coerce.number().min(0.08).max(0.3).default(0.16),
   WATERMARK_ROTATION: z.coerce.number().min(-60).max(60).default(-30),
   WATERMARK_REVISION: z
