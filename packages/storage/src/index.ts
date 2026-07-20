@@ -165,6 +165,6 @@ export async function presignDownload(params: {
     Key: params.key,
   });
   return getSignedUrl(r2Client(), command, {
-    expiresIn: params.expiresIn ?? config.R2_UPLOAD_URL_EXPIRY_SECONDS,
+    expiresIn: params.expiresIn ?? config.R2_DOWNLOAD_URL_EXPIRY_SECONDS,
   });
 }

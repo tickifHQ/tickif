@@ -191,21 +191,25 @@ export const profileSlugParamSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a URL-safe profile slug'),
 });
 
+// Shared profile field schemas (single source of truth for both endpoints)
+const sharedProfileFields = {
+  displayName: z.string().trim().min(2).max(100).optional(),
+  bio: z.string().max(500).nullable().optional(),
+  websiteUrl: z.string().url().max(200).nullable().optional(),
+  instagramHandle: z.string().trim().max(60).nullable().optional(),
+  linkedinHandle: z.string().trim().max(60).nullable().optional(),
+  youtubeHandle: z.string().trim().max(60).nullable().optional(),
+};
+
 /**
  * PATCH /api/profiles/me — partial update.
  * Taxonomy arrays use replace semantics: present → replace, absent → untouched.
  */
 export const updateProfileSchema = z.object({
-  displayName: z.string().trim().min(2).max(100).optional(),
-  bio: z.string().max(500).optional().nullable(),
-  logoImageId: z.string().optional().nullable(),
+  ...sharedProfileFields,
   entityType: z.enum(['individual', 'company']).optional(),
-  websiteUrl: z.string().url().max(200).optional().nullable(),
   googleBusinessUrl: z.string().url().max(200).optional().nullable(),
   phone: z.string().trim().min(7).max(20).optional().nullable(),
-  instagramHandle: z.string().trim().max(60).optional().nullable(),
-  linkedinHandle: z.string().trim().max(60).optional().nullable(),
-  youtubeHandle: z.string().trim().max(60).optional().nullable(),
   firmType: z.string().trim().max(60).optional().nullable(),
   foundedYear: z.number().int().min(1900).max(2100).optional().nullable(),
   staffCount: z.number().int().min(0).optional().nullable(),
@@ -216,3 +220,130 @@ export const updateProfileSchema = z.object({
   themeIds: z.array(z.string().uuid()).max(10).optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+
+// --- Portfolio (E-222) ---
+
+const portfolioSlugSchema = z.string().trim().min(3).max(60)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers, and hyphens only');
+
+export const portfolioBadgeSchema = z
+  .enum(['verified', 'new', 'top-performer', 'established', 'projects-published'])
+  .meta({ id: 'PortfolioBadge' });
+export type PortfolioBadge = z.infer<typeof portfolioBadgeSchema>;
+
+export const portfolioResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    publicLinkEnabled: z.boolean(),
+    portfolioSlug: z.string().nullable(),
+    accentColor: z.string(),
+    showHero: z.boolean(),
+    showTrustCredentials: z.boolean(),
+    showFeaturedTestimonial: z.boolean(),
+    showReviews: z.boolean(),
+    showSocialLinks: z.boolean(),
+    showShareBlock: z.boolean(),
+    tagline: z.string().nullable(),
+    displayName: z.string(),
+    bio: z.string().nullable(),
+    logoUrl: z.string().url().nullable(),
+    websiteUrl: z.string().nullable(),
+    instagramHandle: z.string().nullable(),
+    linkedinHandle: z.string().nullable(),
+    youtubeHandle: z.string().nullable(),
+    testimonialWords: z.string().nullable(),
+    testimonialAuthor: z.string().nullable(),
+    testimonialProjectId: z.string().uuid().nullable(),
+    showOverallRating: z.boolean(),
+    showPositiveReviewsOnly: z.boolean(),
+    showTickifBadge: z.boolean(),
+    badges: z.array(portfolioBadgeSchema),
+    portfolioUrl: z.string().nullable(),
+    publishedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .meta({ id: 'PortfolioResponse' });
+export type PortfolioResponse = z.infer<typeof portfolioResponseSchema>;
+
+export const updatePortfolioSchema = z
+  .object({
+    publicLinkEnabled: z.boolean().optional(),
+    portfolioSlug: portfolioSlugSchema.nullable().optional(),
+    accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color').optional(),
+    showHero: z.boolean().optional(),
+    showTrustCredentials: z.boolean().optional(),
+    showFeaturedTestimonial: z.boolean().optional(),
+    showReviews: z.boolean().optional(),
+    showSocialLinks: z.boolean().optional(),
+    showShareBlock: z.boolean().optional(),
+    tagline: z.string().max(200).nullable().optional(),
+    ...sharedProfileFields,
+    testimonialWords: z.string().max(500).nullable().optional(),
+    testimonialAuthor: z.string().max(100).nullable().optional(),
+    testimonialProjectId: z.string().uuid().nullable().optional(),
+    showOverallRating: z.boolean().optional(),
+    showPositiveReviewsOnly: z.boolean().optional(),
+    showTickifBadge: z.boolean().optional(),
+  })
+  .meta({ id: 'UpdatePortfolio' });
+export type UpdatePortfolioInput = z.infer<typeof updatePortfolioSchema>;
+
+export const slugAvailabilitySchema = z
+  .object({
+    slug: portfolioSlugSchema,
+  })
+  .meta({ id: 'SlugAvailabilityRequest' });
+
+export const slugAvailabilityResponseSchema = z
+  .object({
+    slug: z.string(),
+    available: z.boolean(),
+  })
+  .meta({ id: 'SlugAvailabilityResponse' });
+export type SlugAvailabilityResponse = z.infer<typeof slugAvailabilityResponseSchema>;
+
+// --- Logo Upload (E-222) ---
+
+/** POST /api/profiles/me/portfolio/logo/upload — request body. */
+export const logoUploadRequestSchema = z
+  .object({
+    contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif']),
+    contentLength: z.number().int().min(1).max(5_000_000),
+  })
+  .meta({ id: 'LogoUploadRequest' });
+export type LogoUploadRequest = z.infer<typeof logoUploadRequestSchema>;
+
+/** POST /api/profiles/me/portfolio/logo/upload — response with presigned URL. */
+export const logoUploadUrlResponseSchema = z
+  .object({
+    uploadUrl: z.string().url(),
+    key: z.string(),
+  })
+  .meta({ id: 'LogoUploadUrlResponse' });
+export type LogoUploadUrlResponse = z.infer<typeof logoUploadUrlResponseSchema>;
+
+/** POST /api/profiles/me/portfolio/logo/commit — response with public logo URL. */
+export const uploadLogoResponseSchema = z
+  .object({
+    logoUrl: z.string().url(),
+  })
+  .meta({ id: 'UploadLogoResponse' });
+export type UploadLogoResponse = z.infer<typeof uploadLogoResponseSchema>;
+
+/** POST /api/profiles/me/portfolio/logo/commit — request body. */
+export const logoCommitRequestSchema = z
+  .object({
+    // Keys are minted by the presign endpoint as `originals/logos/<profileId>/<uuid>`;
+    // reject anything outside that shape before it reaches the service.
+    objectKey: z
+      .string()
+      .max(512)
+      .regex(
+        /^originals\/logos\/[^/]+\/[^/]+$/,
+        'Must be an originals/logos/ object key',
+      ),
+  })
+  .meta({ id: 'LogoCommitRequest' });
+export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;

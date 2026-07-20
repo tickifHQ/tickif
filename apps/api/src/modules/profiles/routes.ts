@@ -10,12 +10,22 @@ import {
   profileIdParamSchema,
   profileSlugParamSchema,
   updateProfileSchema,
+  portfolioResponseSchema,
+  updatePortfolioSchema,
+  slugAvailabilityResponseSchema,
+  slugAvailabilitySchema,
+  logoUploadRequestSchema,
+  logoUploadUrlResponseSchema,
+  logoCommitRequestSchema,
+  uploadLogoResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
+import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
+import { portfolioService } from './portfolio-service.js';
 
 /**
  * Profiles HTTP routes. Authenticated endpoints for the current user's profile.
@@ -95,7 +105,7 @@ const onboardRoute = createRoute({
   },
 });
 
-export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook })
   .openapi(
     createRoute({
       method: 'get',
@@ -243,6 +253,202 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
         input,
       );
       return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/me/portfolio',
+      tags: ['Portfolio'],
+      summary: 'Get portfolio settings for the active designer',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        200: {
+          description: 'Portfolio settings with merged profile data and badges',
+          content: { 'application/json': { schema: portfolioResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'No active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await portfolioService.getPortfolio({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'patch',
+      path: '/me/portfolio',
+      tags: ['Portfolio'],
+      summary: 'Update portfolio settings',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: updatePortfolioSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Updated portfolio settings',
+          content: { 'application/json': { schema: portfolioResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        409: { description: 'Slug conflict', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const input = c.req.valid('json');
+      const result = await portfolioService.updatePortfolio(input, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/slug-check',
+      tags: ['Portfolio'],
+      summary: 'Check if a portfolio slug is available',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: slugAvailabilitySchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Slug availability result',
+          content: { 'application/json': { schema: slugAvailabilityResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const { slug } = c.req.valid('json');
+      const result = await portfolioService.checkSlugAvailability(slug, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/logo/upload',
+      tags: ['Portfolio'],
+      summary: 'Get a presigned upload URL for the portfolio logo',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: logoUploadRequestSchema } },
+        },
+      },
+      responses: {
+        201: {
+          description: 'Presigned upload URL and object key',
+          content: { 'application/json': { schema: logoUploadUrlResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const input = c.req.valid('json');
+      const result = await portfolioService.createLogoUploadUrl(input, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 201);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/logo/commit',
+      tags: ['Portfolio'],
+      summary: 'Commit an uploaded logo and persist the association',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: {
+          content: { 'application/json': { schema: logoCommitRequestSchema } },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Logo committed successfully with public URL',
+          content: { 'application/json': { schema: uploadLogoResponseSchema } },
+        },
+        400: { description: 'No uploaded object found in storage', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        409: { description: 'Logo was modified concurrently', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const { objectKey } = c.req.valid('json');
+      const result = await portfolioService.commitLogoUpload({ objectKey }, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'delete',
+      path: '/me/portfolio/logo',
+      tags: ['Portfolio'],
+      summary: 'Delete the portfolio logo',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        204: {
+          description: 'Logo deleted successfully',
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No logo exists to delete', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      await portfolioService.deleteLogo({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.body(null, 204);
     },
   );
 
