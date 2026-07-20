@@ -335,7 +335,15 @@ export type UploadLogoResponse = z.infer<typeof uploadLogoResponseSchema>;
 /** POST /api/profiles/me/portfolio/logo/commit — request body. */
 export const logoCommitRequestSchema = z
   .object({
-    objectKey: z.string(),
+    // Keys are minted by the presign endpoint as `originals/logos/<profileId>/<uuid>`;
+    // reject anything outside that shape before it reaches the service.
+    objectKey: z
+      .string()
+      .max(512)
+      .regex(
+        /^originals\/logos\/[^/]+\/[^/]+$/,
+        'Must be an originals/logos/ object key',
+      ),
   })
   .meta({ id: 'LogoCommitRequest' });
 export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;

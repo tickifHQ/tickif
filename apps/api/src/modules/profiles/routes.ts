@@ -409,6 +409,8 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
         400: { description: 'No uploaded object found in storage', content: { 'application/json': { schema: errorResponseSchema } } },
         401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
         403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        409: { description: 'Logo was modified concurrently', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
       },
     }),
     async (c) => {
