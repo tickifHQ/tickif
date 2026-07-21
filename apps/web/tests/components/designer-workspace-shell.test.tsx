@@ -24,6 +24,25 @@ vi.mock('@/components/designer-organization-switcher', () => ({
 }));
 
 describe('DesignerWorkspaceShell', () => {
+  it('shows the product icon beside Tickif with the standard ten-pixel gap', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    for (const brandLink of screen.getAllByRole('link', { name: 'Tickif' })) {
+      expect(brandLink).toHaveClass('gap-2.5');
+      expect(brandLink.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    }
+  });
+
   it('links every implemented designer dashboard section from the sidebar', () => {
     mock.pathname = '/designer/analytics';
 
@@ -123,6 +142,7 @@ describe('DesignerWorkspaceShell', () => {
     const accountMenu = screen.getByTestId('account-menu');
     const addProject = screen.getByRole('link', { name: /add new project/i });
 
+    expect(exploreTickif.querySelector('img')).toHaveAttribute('src', '/icon.svg');
     expect(
       exploreTickif.compareDocumentPosition(organizationSwitcher) &
         Node.DOCUMENT_POSITION_FOLLOWING,

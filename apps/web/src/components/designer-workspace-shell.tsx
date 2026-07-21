@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
@@ -19,7 +20,6 @@ import {
   House,
   Link2,
   Menu,
-  MessagesSquare,
   Plus,
   ShieldCheck,
   SlidersHorizontal,
@@ -160,8 +160,9 @@ function SidebarContent({
       <div className="px-6 py-5">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground"
+          className="inline-flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground"
         >
+          <Image src="/icon.svg" alt="" width={20} height={20} className="size-5" aria-hidden />
           <span>Tickif</span>
         </Link>
       </div>
@@ -185,7 +186,7 @@ function SidebarContent({
               href="/"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <MessagesSquare className="size-4" />
+              <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
               <span>Explore Tickif</span>
               <ArrowUpRight className="ml-auto size-4" />
             </Link>
