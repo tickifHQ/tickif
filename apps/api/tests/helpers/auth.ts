@@ -106,8 +106,7 @@ export async function signInWithGoogle(profile: {
   // 2. Mock Google's token endpoint to return our crafted id_token; pass everything else through.
   const realFetch = globalThis.fetch;
   const stub = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    const href =
-      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (href.includes('oauth2.googleapis.com/token')) {
       return new Response(
         JSON.stringify({

@@ -9,7 +9,8 @@ export default async function DesignerLayout({ children }: { children: ReactNode
   const session = await requireAuth({ requiredRole: 'designer' });
   const profile = await requireCurrentDesignerProfile();
   const studioName = profile.displayName.trim() || session.user.name?.trim() || 'Your studio';
-  const studioLocation = profile.address?.trim() || profile.organization.name.trim() || 'Designer workspace';
+  const studioLocation =
+    profile.address?.trim() || profile.organization.name.trim() || 'Designer workspace';
 
   return (
     <DesignerWorkspaceShell

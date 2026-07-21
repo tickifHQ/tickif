@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
+import { getSession } from '@repo/auth';
 import { db, schema } from '@repo/db';
 import {
   withSession,
@@ -10,7 +11,7 @@ import {
   type AuthVariables,
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
-import { createRoleSession, backdateSession } from '../helpers/auth.js';
+import { backdateSession, createRoleSession, mergeResponseCookies } from '../helpers/auth.js';
 import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
 
 /**
@@ -34,10 +35,7 @@ function sampleApp() {
       const [row] = await db
         .select({ ownerUserId: schema.designerProfile.userId })
         .from(schema.project)
-        .innerJoin(
-          schema.designerProfile,
-          eq(schema.project.designerId, schema.designerProfile.id),
-        )
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .where(eq(schema.project.id, id))
         .limit(1);
       return row ?? null;
@@ -96,13 +94,8 @@ describe('RBAC guards (integration, E-87)', () => {
     expect((await get(app, `/projects/${projectId}/manage`, stranger.cookie)).status).toBe(403);
     expect((await get(app, `/projects/${projectId}/manage`, superadmin.cookie)).status).toBe(200);
     expect(
-      (
-        await get(
-          app,
-          '/projects/00000000-0000-4000-8000-000000000000/manage',
-          owner.cookie,
-        )
-      ).status,
+      (await get(app, '/projects/00000000-0000-4000-8000-000000000000/manage', owner.cookie))
+        .status,
     ).toBe(404);
   });
 
@@ -122,11 +115,21 @@ describe('RBAC guards (integration, E-87)', () => {
     const app = sampleApp();
     const designer = await createRoleSession('+919800000060', 'designer');
     const organizationId = await seedOrgWithMember(designer.userId);
+    await db.insert(schema.member).values({
+      id: `duplicate-membership-${designer.userId}`,
+      organizationId,
+      userId: designer.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
 
     const response = await get(app, '/session-org', designer.cookie);
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ activeOrganizationId: organizationId });
+    const repairedCookie = mergeResponseCookies(designer.cookie, response);
+    const repairedSession = await getSession(new Headers({ cookie: repairedCookie }));
+    expect(repairedSession?.session.activeOrganizationId).toBe(organizationId);
     const [session] = await db
       .select({ activeOrganizationId: schema.session.activeOrganizationId })
       .from(schema.session)

@@ -25,8 +25,7 @@ export function DesignerOrganizationSwitcher({
   studioLocation: string;
 }) {
   const router = useRouter();
-  const { data: organizations, isPending, error: listError } =
-    authClient.useListOrganizations();
+  const { data: organizations, isPending, error: listError } = authClient.useListOrganizations();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -61,18 +60,13 @@ export function DesignerOrganizationSwitcher({
           className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Avatar className="size-10 rounded-xl">
-            <InitialsAvatar
-              seed={studioName}
-              fallbackSeed={studioLocation}
-              alt=""
-              size={40}
-            />
+            <InitialsAvatar seed={studioName} fallbackSeed={studioLocation} alt="" size={40} />
           </Avatar>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm leading-[1.1] font-medium text-foreground">
+            <span className="block truncate text-sm leading-none font-medium text-foreground">
               {studioName}
             </span>
-            <span className="mt-1 block truncate text-xs leading-[1.1] text-muted-foreground">
+            <span className="mt-1 block truncate text-xs leading-none text-muted-foreground">
               {studioLocation}
             </span>
           </span>
@@ -121,7 +115,10 @@ export function DesignerOrganizationSwitcher({
           </div>
         )}
         {switchError ? (
-          <div role="alert" className="mt-1 border-t border-border px-2 py-2 text-sm text-destructive">
+          <div
+            role="alert"
+            className="mt-1 border-t border-border px-2 py-2 text-sm text-destructive"
+          >
             {switchError}
           </div>
         ) : null}

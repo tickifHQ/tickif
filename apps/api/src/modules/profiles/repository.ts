@@ -20,19 +20,17 @@ export const profilesRepository = {
   },
 
   /** Find the designer profile and organization by organization id. */
-  async findByOrgIdWithOrg(
-    orgId: string,
-  ): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect } | null> {
+  async findByOrgIdWithOrg(orgId: string): Promise<{
+    profile: DesignerProfileRecord;
+    org: typeof schema.organization.$inferSelect;
+  } | null> {
     const [row] = await db
       .select({
         profile: schema.designerProfile,
         org: schema.organization,
       })
       .from(schema.designerProfile)
-      .innerJoin(
-        schema.organization,
-        eq(schema.designerProfile.orgId, schema.organization.id),
-      )
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .where(eq(schema.designerProfile.orgId, orgId))
       .limit(1);
     return row ?? null;
@@ -95,28 +93,23 @@ export const profilesRepository = {
       .where(eq(schema.user.id, userId))
       .limit(1);
     if (!row) return false;
-    return (
-      (!!row.phoneNumber && !!row.phoneNumberVerified) ||
-      (!!row.email && row.emailVerified)
-    );
+    return (!!row.phoneNumber && !!row.phoneNumberVerified) || (!!row.email && row.emailVerified);
   },
 
   // --- Onboarding (E-35) ---
 
   /** Find existing profile + org by the creating user (idempotency check). */
-  async findByUserId(
-    userId: string,
-  ): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect } | null> {
+  async findByUserId(userId: string): Promise<{
+    profile: DesignerProfileRecord;
+    org: typeof schema.organization.$inferSelect;
+  } | null> {
     const [row] = await db
       .select({
         profile: schema.designerProfile,
         org: schema.organization,
       })
       .from(schema.designerProfile)
-      .innerJoin(
-        schema.organization,
-        eq(schema.designerProfile.orgId, schema.organization.id),
-      )
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .where(eq(schema.designerProfile.userId, userId))
       .limit(1);
     return row ?? null;
@@ -337,14 +330,12 @@ export const profilesRepository = {
         );
 
       if (existingIds.length > 0) {
-        await tx
-          .delete(schema.designerProfileFootprint)
-          .where(
-            inArray(
-              schema.designerProfileFootprint.id,
-              existingIds.map((e) => e.id),
-            ),
-          );
+        await tx.delete(schema.designerProfileFootprint).where(
+          inArray(
+            schema.designerProfileFootprint.id,
+            existingIds.map((e) => e.id),
+          ),
+        );
       }
 
       // Insert new entries with conflict guard

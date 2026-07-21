@@ -98,7 +98,9 @@ describe('dashboardService.getProfileDashboard', () => {
   });
 
   it('resolves completion against the same active organization as the dashboard context', async () => {
-    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(profile({ orgId: 'org_2' }));
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ orgId: 'org_2' }),
+    );
 
     await dashboardService.getProfileDashboard({ userId: 'user_1', orgId: 'org_2' });
 
@@ -119,6 +121,8 @@ describe('dashboardService.getProfileDashboard', () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(null);
 
     await expect(dashboardService.getProfileDashboard(input)).rejects.toBeInstanceOf(AppError);
-    await expect(dashboardService.getProfileDashboard(input)).rejects.toMatchObject({ status: 403 });
+    await expect(dashboardService.getProfileDashboard(input)).rejects.toMatchObject({
+      status: 403,
+    });
   });
 });

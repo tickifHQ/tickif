@@ -1,10 +1,7 @@
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import {
-  currentProfileResponseSchema,
-  type CurrentProfileResponse,
-} from '@repo/contracts';
+import { currentProfileResponseSchema, type CurrentProfileResponse } from '@repo/contracts';
 import { api } from '@/lib/api';
 
 async function getRequestCookie() {
@@ -28,9 +25,7 @@ const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfi
 
     const payload = await response.json();
     const parsed = currentProfileResponseSchema.safeParse(payload);
-    return parsed.success
-      ? { status: 'ok', data: parsed.data }
-      : { status: 'unavailable' };
+    return parsed.success ? { status: 'ok', data: parsed.data } : { status: 'unavailable' };
   } catch {
     return { status: 'unavailable' };
   }

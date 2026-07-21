@@ -64,6 +64,7 @@ const getRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot read this lead'),
     404: errorJson('Lead not found'),
+    422: errorJson('No active organization selected'),
   },
 });
 
@@ -111,7 +112,7 @@ const updateRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot update this lead'),
     404: errorJson('Lead not found'),
-    422: errorJson('Invalid lead status'),
+    422: errorJson('No active organization selected or invalid lead status'),
   },
 });
 

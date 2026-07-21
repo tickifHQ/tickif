@@ -1,19 +1,15 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { getSession, setActiveOrganization, type Session } from '@repo/auth';
-import type { schema } from '@repo/db';
+import { getSession, setActiveOrganization, type PlatformRole, type Session } from '@repo/auth';
 import { AppError } from './errors.js';
-import {
-  findSoleOrganizationForUser,
-  isOrgMember,
-} from '../modules/orgs/repository.js';
+import { orgsService } from '../modules/orgs/service.js';
 
 export type AuthVariables = {
   user: Session['user'] | null;
   session: Session['session'] | null;
 };
 
-/** Platform role union, derived from the DB enum (single source of truth). */
-export type UserRole = (typeof schema.userRole.enumValues)[number];
+/** Platform role union, derived from the configured Better Auth role map. */
+export type UserRole = PlatformRole;
 
 /** Who may act on a resource: its owning user and/or its owning organization. */
 export type Ownership = {
@@ -34,7 +30,7 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
   if (result?.session && !result.session.activeOrganizationId) {
-    const organizationId = await findSoleOrganizationForUser(result.user.id);
+    const organizationId = await orgsService.findSoleOrganizationForUser(result.user.id);
     if (organizationId) {
       const response = await setActiveOrganization(c.req.raw.headers, organizationId);
       if (response.ok) {
@@ -125,7 +121,7 @@ export function requireOwnership(
     const isOwner = !!ownership.ownerUserId && ownership.ownerUserId === user.id;
     const isMember =
       !isOwner && ownership.organizationId
-        ? await isOrgMember(user.id, ownership.organizationId)
+        ? await orgsService.isMember(user.id, ownership.organizationId)
         : false;
     if (!isOwner && !isMember) {
       throw AppError.forbidden();

@@ -24,15 +24,9 @@ export const dashboardRepository = {
       })
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
-      .innerJoin(
-        schema.member,
-        eq(schema.member.organizationId, schema.designerProfile.orgId),
-      )
+      .innerJoin(schema.member, eq(schema.member.organizationId, schema.designerProfile.orgId))
       .where(
-        and(
-          eq(schema.member.userId, input.userId),
-          eq(schema.designerProfile.orgId, input.orgId),
-        ),
+        and(eq(schema.member.userId, input.userId), eq(schema.designerProfile.orgId, input.orgId)),
       )
       .orderBy(desc(schema.designerProfile.updatedAt))
       .limit(1);

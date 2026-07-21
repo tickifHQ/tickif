@@ -28,7 +28,12 @@ async function makeDesignerSession(phoneNumber: string) {
   return { cookie: activeCookie, userId, designer };
 }
 
-async function requestJson(path: string, method: string, cookie: string | undefined, body: unknown) {
+async function requestJson(
+  path: string,
+  method: string,
+  cookie: string | undefined,
+  body: unknown,
+) {
   return app.request(path, {
     method,
     headers: {
@@ -125,10 +130,7 @@ describe('GET /api/leads', () => {
     expect(unfiltered.status).toBe(200);
     const unfilteredBody = (await unfiltered.json()) as ListLeadsResponse;
     expect(unfilteredBody.total).toBe(2);
-    expect(unfilteredBody.items.map((item) => item.name)).toEqual([
-      'Rahul Mehta',
-      'Priya Shah',
-    ]);
+    expect(unfilteredBody.items.map((item) => item.name)).toEqual(['Rahul Mehta', 'Priya Shah']);
   });
 });
 
@@ -206,7 +208,7 @@ describe('GET/PATCH /api/leads/:id', () => {
     expect(await update.json()).toMatchObject({ id: lead.id, status: 'contacted' });
   });
 
-  it('returns 403 for cross-org lead access and 422 for invalid status', async () => {
+  it('hides cross-org leads and returns 422 for invalid status', async () => {
     const { cookie: ownerCookie, designer } = await makeDesignerSession('+919800003005');
     const stranger = await makeDesignerSession('+919800003006');
     const lead = await makeLead({ organizationId: designer.orgId });
@@ -214,7 +216,7 @@ describe('GET/PATCH /api/leads/:id', () => {
     const crossOrg = await app.request(`/api/leads/${lead.id}`, {
       headers: { cookie: stranger.cookie },
     });
-    expect(crossOrg.status).toBe(403);
+    expect(crossOrg.status).toBe(404);
 
     const invalidStatus = await requestJson(`/api/leads/${lead.id}`, 'PATCH', ownerCookie, {
       status: 'pending',

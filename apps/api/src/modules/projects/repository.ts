@@ -139,7 +139,9 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
-  async list(params: ListProjectsParams): Promise<{ items: ProjectListItemRecord[]; total: number }> {
+  async list(
+    params: ListProjectsParams,
+  ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
     const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
       eq(schema.member.userId, params.userId),
@@ -246,40 +248,47 @@ export const projectsRepository = {
    * Public landing feed: published projects only, newest first, joined to their
    * designer (studio name + rating) and cover image. No auth/org scoping.
    */
-  async listPublishedFeed(params: { limit: number; offset: number }): Promise<ProjectFeedItemRecord[]> {
+  async listPublishedFeed(params: {
+    limit: number;
+    offset: number;
+  }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
-    return db
-      .select({
-        id: schema.project.id,
-        slug: schema.project.slug,
-        title: schema.project.title,
-        citySlug: schema.project.citySlug,
-        localitySlug: schema.project.localitySlug,
-        budgetBandSlug: schema.project.budgetBandSlug,
-        scopeSlug: schema.project.scopeSlug,
-        bhkSlug: schema.project.bhkSlug,
-        propertySubtypeSlug: schema.project.propertySubtypeSlug,
-        studio: schema.designerProfile.displayName,
-        rating: schema.designerProfile.avgRating,
-        reviewCount: schema.designerProfile.reviewCount,
-        coverStatus: cover.status,
-        coverDerivatives: cover.derivatives,
-        coverWidth: cover.width,
-        coverHeight: cover.height,
-      })
-      .from(schema.project)
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      // Only active designers: suspended studios 404 on their public profile, so their
-      // projects must not surface here either. `id` is the stable tiebreaker for paging.
-      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-        desc(schema.project.id),
-      )
-      .limit(params.limit)
-      .offset(params.offset);
+    return (
+      db
+        .select({
+          id: schema.project.id,
+          slug: schema.project.slug,
+          title: schema.project.title,
+          citySlug: schema.project.citySlug,
+          localitySlug: schema.project.localitySlug,
+          budgetBandSlug: schema.project.budgetBandSlug,
+          scopeSlug: schema.project.scopeSlug,
+          bhkSlug: schema.project.bhkSlug,
+          propertySubtypeSlug: schema.project.propertySubtypeSlug,
+          studio: schema.designerProfile.displayName,
+          rating: schema.designerProfile.avgRating,
+          reviewCount: schema.designerProfile.reviewCount,
+          coverStatus: cover.status,
+          coverDerivatives: cover.derivatives,
+          coverWidth: cover.width,
+          coverHeight: cover.height,
+        })
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+        // Only active designers: suspended studios 404 on their public profile, so their
+        // projects must not surface here either. `id` is the stable tiebreaker for paging.
+        .where(
+          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+        )
+        .orderBy(
+          sql`${schema.project.publishedAt} desc nulls last`,
+          desc(schema.project.createdAt),
+          desc(schema.project.id),
+        )
+        .limit(params.limit)
+        .offset(params.offset)
+    );
   },
 
   /**
@@ -289,7 +298,9 @@ export const projectsRepository = {
    * are NOT resolvable here (slug is only unique within a parent city) — use
    * `findLocalityLabels`. Keyed `${kind}:${slug}`; unresolved pairs are simply absent.
    */
-  async findTaxonomyLabels(pairs: { kind: TaxonomyKind; slug: string }[]): Promise<Map<string, string>> {
+  async findTaxonomyLabels(
+    pairs: { kind: TaxonomyKind; slug: string }[],
+  ): Promise<Map<string, string>> {
     const unique = [...new Map(pairs.map((p) => [`${p.kind}:${p.slug}`, p])).values()];
     if (unique.length === 0) return new Map();
     const rows = await db
@@ -302,7 +313,11 @@ export const projectsRepository = {
       .where(
         and(
           eq(schema.taxonomy.isActive, true),
-          or(...unique.map((p) => and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)))),
+          or(
+            ...unique.map((p) =>
+              and(eq(schema.taxonomy.kind, p.kind), eq(schema.taxonomy.slug, p.slug)),
+            ),
+          ),
         ),
       );
     return new Map(rows.map((row) => [`${row.kind}:${row.slug}`, row.label]));
@@ -472,7 +487,7 @@ export const projectsRepository = {
           .insert(schema.projectImage)
           .values({
             projectId: project.id,
-            roomId: image.roomId ? roomIdBySourceId.get(image.roomId) ?? null : null,
+            roomId: image.roomId ? (roomIdBySourceId.get(image.roomId) ?? null) : null,
             originalKey: image.originalKey,
             contentType: image.contentType,
             derivatives: image.derivatives,
@@ -512,7 +527,8 @@ export const projectsRepository = {
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
     if (input.propertyTypeSlug !== undefined) patch.propertyTypeSlug = input.propertyTypeSlug;
-    if (input.propertySubtypeSlug !== undefined) patch.propertySubtypeSlug = input.propertySubtypeSlug;
+    if (input.propertySubtypeSlug !== undefined)
+      patch.propertySubtypeSlug = input.propertySubtypeSlug;
     if (input.scopeSlug !== undefined) patch.scopeSlug = input.scopeSlug;
     if (input.bhkSlug !== undefined) patch.bhkSlug = input.bhkSlug;
     if (input.sizeSqft !== undefined) patch.sizeSqft = input.sizeSqft;
@@ -595,7 +611,12 @@ export const projectsRepository = {
       const [submitted] = await tx
         .update(schema.project)
         .set({ status: 'submitted', submittedAt: now, updatedAt: now })
-        .where(and(eq(schema.project.id, id), inArray(schema.project.status, ['draft', 'changes_requested'])))
+        .where(
+          and(
+            eq(schema.project.id, id),
+            inArray(schema.project.status, ['draft', 'changes_requested']),
+          ),
+        )
         .returning();
 
       return { project, counts, submitted: submitted ?? null };
@@ -666,7 +687,11 @@ export const projectsRepository = {
       'id' in value
         ? and(eq(schema.taxonomy.kind, kind), eq(schema.taxonomy.id, value.id))
         : and(eq(schema.taxonomy.kind, kind), eq(schema.taxonomy.slug, value.slug));
-    const [row] = await db.select({ id: schema.taxonomy.id }).from(schema.taxonomy).where(where).limit(1);
+    const [row] = await db
+      .select({ id: schema.taxonomy.id })
+      .from(schema.taxonomy)
+      .where(where)
+      .limit(1);
     return !!row;
   },
 
@@ -838,7 +863,9 @@ export const projectsRepository = {
         await tx
           .update(schema.projectRoom)
           .set({ sortOrder: room.sortOrder, updatedAt: new Date() })
-          .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, room.id)));
+          .where(
+            and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, room.id)),
+          );
       }
     });
 
@@ -853,7 +880,10 @@ export const projectsRepository = {
     return rows.length > 0;
   },
 
-  async findImage(projectId: string, imageId: string): Promise<ProjectImageAttachmentRecord | null> {
+  async findImage(
+    projectId: string,
+    imageId: string,
+  ): Promise<ProjectImageAttachmentRecord | null> {
     const [row] = await db
       .select({
         id: schema.projectImage.id,
@@ -891,7 +921,10 @@ export const projectsRepository = {
     return row ?? null;
   },
 
-  async deleteImage(projectId: string, imageId: string): Promise<ProjectImageDeletionRecord | null> {
+  async deleteImage(
+    projectId: string,
+    imageId: string,
+  ): Promise<ProjectImageDeletionRecord | null> {
     return db.transaction(async (tx) => {
       const [image] = await tx
         .select({
@@ -901,7 +934,9 @@ export const projectsRepository = {
           derivatives: schema.projectImage.derivatives,
         })
         .from(schema.projectImage)
-        .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)))
+        .where(
+          and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)),
+        )
         .limit(1);
 
       if (!image) return null;
@@ -913,21 +948,25 @@ export const projectsRepository = {
 
       await tx
         .delete(schema.projectImage)
-        .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)));
+        .where(
+          and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)),
+        );
 
       return image;
     });
   },
 
   /** Public gallery: all ready images for a published project, ordered by sortOrder. */
-  async listPublicGalleryImages(projectId: string): Promise<Array<{
-    id: string;
-    derivatives: typeof schema.projectImage.$inferSelect.derivatives;
-    width: number | null;
-    height: number | null;
-    sortOrder: number;
-    roomName: string | null;
-  }>> {
+  async listPublicGalleryImages(projectId: string): Promise<
+    Array<{
+      id: string;
+      derivatives: typeof schema.projectImage.$inferSelect.derivatives;
+      width: number | null;
+      height: number | null;
+      sortOrder: number;
+      roomName: string | null;
+    }>
+  > {
     return db
       .select({
         id: schema.projectImage.id,
@@ -940,10 +979,7 @@ export const projectsRepository = {
       .from(schema.projectImage)
       .leftJoin(schema.projectRoom, eq(schema.projectImage.roomId, schema.projectRoom.id))
       .where(
-        and(
-          eq(schema.projectImage.projectId, projectId),
-          eq(schema.projectImage.status, 'ready'),
-        ),
+        and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
       )
       .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
   },
@@ -952,8 +988,9 @@ export const projectsRepository = {
     if (keys.length === 0) return [];
 
     const keySet = new Set(keys);
-    const derivativeKeyFilters = keys.map((key) =>
-      sql<boolean>`${schema.projectImage.derivatives} @> ${JSON.stringify([{ key }])}::jsonb`,
+    const derivativeKeyFilters = keys.map(
+      (key) =>
+        sql<boolean>`${schema.projectImage.derivatives} @> ${JSON.stringify([{ key }])}::jsonb`,
     );
     const rows = await db
       .select({

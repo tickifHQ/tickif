@@ -28,17 +28,43 @@ describe('DesignerWorkspaceShell', () => {
     mock.pathname = '/designer/analytics';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Studio One" studioLocation="Mumbai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.getAllByRole('link', { name: /consultations/i })[0]).toHaveAttribute('href', '/designer/consultations');
-    expect(screen.getAllByRole('link', { name: /reviews/i })[0]).toHaveAttribute('href', '/designer/reviews');
-    expect(screen.getAllByRole('link', { name: /analytics/i })[0]).toHaveAttribute('href', '/designer/analytics');
-    expect(screen.getAllByRole('link', { name: /terms & roles/i })[0]).toHaveAttribute('href', '/designer/terms-roles');
-    expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute('href', '/designer/plan-billing');
-    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute('href', '/designer/profile');
+    expect(screen.getAllByRole('link', { name: /consultations/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/consultations',
+    );
+    expect(screen.getAllByRole('link', { name: /reviews/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/reviews',
+    );
+    expect(screen.getAllByRole('link', { name: /analytics/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/analytics',
+    );
+    expect(screen.getAllByRole('link', { name: /portfolio/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/portfolio',
+    );
+    expect(screen.getAllByRole('link', { name: /terms & roles/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/terms-roles',
+    );
+    expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/profile',
+    );
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
   });
 
@@ -46,7 +72,11 @@ describe('DesignerWorkspaceShell', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
@@ -57,27 +87,33 @@ describe('DesignerWorkspaceShell', () => {
     );
   });
 
-  it('keeps unimplemented Portfolio and Verification items non-interactive', () => {
+  it('keeps the unimplemented Verification item non-interactive', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
 
-    for (const label of ['Portfolio', 'Verification']) {
-      const item = screen.getAllByText(label)[0]?.closest('[aria-disabled="true"]');
-      expect(item).toBeInTheDocument();
-      expect(item?.closest('a')).toBeNull();
-    }
+    const item = screen.getAllByText('Verification')[0]?.closest('[aria-disabled="true"]');
+    expect(item).toBeInTheDocument();
+    expect(item?.closest('a')).toBeNull();
   });
 
   it('places the organization switcher below Explore Tickif without moving the header account menu', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
@@ -101,7 +137,11 @@ describe('DesignerWorkspaceShell', () => {
     mock.pathname = '/designer/projects/project-1/edit';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
@@ -120,7 +160,11 @@ describe('DesignerWorkspaceShell', () => {
     const user = userEvent.setup();
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
@@ -136,7 +180,11 @@ describe('DesignerWorkspaceShell', () => {
     mock.pathname = '/designer/projects/upload';
 
     render(
-      <DesignerWorkspaceShell activeOrganizationId="org-1" studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Upload content</div>
       </DesignerWorkspaceShell>,
     );

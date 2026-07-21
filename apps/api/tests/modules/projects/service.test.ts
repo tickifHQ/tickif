@@ -64,15 +64,17 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
   };
 });
 
-vi.mock('../../../src/modules/orgs/repository.js', () => ({
-  isOrgMember: vi.fn(),
-  isOrgWriter: vi.fn(),
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    isMember: vi.fn(),
+    isWriter: vi.fn(),
+  },
 }));
 
 // Import AFTER the mock is registered.
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
-const { isOrgMember, isOrgWriter } = await import('../../../src/modules/orgs/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { deleteObject } = await import('@repo/storage');
 
 const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
@@ -115,7 +117,9 @@ const roomRow = (over: Partial<ProjectRoomRecord> = {}): ProjectRoomRecord => ({
   ...over,
 });
 
-const imageRow = (over: Partial<ProjectImageAttachmentRecord> = {}): ProjectImageAttachmentRecord => ({
+const imageRow = (
+  over: Partial<ProjectImageAttachmentRecord> = {},
+): ProjectImageAttachmentRecord => ({
   id: '55555555-5555-4555-8555-555555555555',
   projectId: '11111111-1111-4111-8111-111111111111',
   roomId: null,
@@ -124,13 +128,27 @@ const imageRow = (over: Partial<ProjectImageAttachmentRecord> = {}): ProjectImag
   ...over,
 });
 
-const deletedImageRow = (over: Partial<ProjectImageDeletionRecord> = {}): ProjectImageDeletionRecord => ({
+const deletedImageRow = (
+  over: Partial<ProjectImageDeletionRecord> = {},
+): ProjectImageDeletionRecord => ({
   id: '55555555-5555-4555-8555-555555555555',
   projectId: '11111111-1111-4111-8111-111111111111',
   originalKey: 'originals/project/image',
   derivatives: [
-    { variant: 'thumb', format: 'webp', key: 'derivatives/project/image/thumb.webp', width: 320, height: 240 },
-    { variant: 'large', format: 'avif', key: 'derivatives/project/image/large.avif', width: 1600, height: 1200 },
+    {
+      variant: 'thumb',
+      format: 'webp',
+      key: 'derivatives/project/image/thumb.webp',
+      width: 320,
+      height: 240,
+    },
+    {
+      variant: 'large',
+      format: 'avif',
+      key: 'derivatives/project/image/large.avif',
+      width: 1600,
+      height: 1200,
+    },
   ],
   ...over,
 });
@@ -145,8 +163,8 @@ const caller = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
-  vi.mocked(isOrgMember).mockResolvedValue(true);
-  vi.mocked(isOrgWriter).mockResolvedValue(true);
+  vi.mocked(orgsService.isMember).mockResolvedValue(true);
+  vi.mocked(orgsService.isWriter).mockResolvedValue(true);
 });
 
 describe('projectsService.list', () => {
@@ -225,7 +243,7 @@ describe('projectsService.portfolio', () => {
 
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
-      activeOrgId: undefined,
+      activeOrgId: 'org_1',
       statuses: ['changes_requested'],
       limit: 12,
       offset: 0,
@@ -258,6 +276,17 @@ describe('projectsService.portfolio', () => {
         { ...caller, isBanned: true },
       ),
     ).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.list).not.toHaveBeenCalled();
+    expect(projectsRepository.countByStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects portfolio listing without an active organization', async () => {
+    await expect(
+      projectsService.portfolio(
+        { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
+        { ...caller, activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
     expect(projectsRepository.list).not.toHaveBeenCalled();
     expect(projectsRepository.countByStatus).not.toHaveBeenCalled();
   });
@@ -319,7 +348,7 @@ describe('projectsService.create', () => {
         { ...caller, userRole: 'visitor', activeOrgId: null },
       ),
     ).rejects.toMatchObject({ status: 403 });
-    expect(isOrgWriter).not.toHaveBeenCalled();
+    expect(orgsService.isWriter).not.toHaveBeenCalled();
   });
 
   it('uses the base slug when free', async () => {
@@ -328,13 +357,16 @@ describe('projectsService.create', () => {
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
-    vi.mocked(projectsRepository.createDraft).mockImplementation(async (_input, _designerId, slug) =>
-      row({ slug }),
+    vi.mocked(projectsRepository.createDraft).mockImplementation(
+      async (_input, _designerId, slug) => row({ slug }),
     );
 
-    const created = await projectsService.create({
-      title: 'Sunlit Bandra Apartment',
-    }, caller);
+    const created = await projectsService.create(
+      {
+        title: 'Sunlit Bandra Apartment',
+      },
+      caller,
+    );
 
     expect(created.slug).toBe('sunlit-bandra-apartment');
   });
@@ -345,13 +377,16 @@ describe('projectsService.create', () => {
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
-    vi.mocked(projectsRepository.createDraft).mockImplementation(async (_input, _designerId, slug) =>
-      row({ slug }),
+    vi.mocked(projectsRepository.createDraft).mockImplementation(
+      async (_input, _designerId, slug) => row({ slug }),
     );
 
-    const created = await projectsService.create({
-      title: 'Sunlit Bandra Apartment',
-    }, caller);
+    const created = await projectsService.create(
+      {
+        title: 'Sunlit Bandra Apartment',
+      },
+      caller,
+    );
 
     expect(created.slug).not.toBe('sunlit-bandra-apartment');
     expect(created.slug).toMatch(/^sunlit-bandra-apartment-/);
@@ -367,9 +402,12 @@ describe('projectsService.create', () => {
       .mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }))
       .mockImplementationOnce(async (_input, _designerId, slug) => row({ slug }));
 
-    const created = await projectsService.create({
-      title: 'Sunlit Bandra Apartment',
-    }, caller);
+    const created = await projectsService.create(
+      {
+        title: 'Sunlit Bandra Apartment',
+      },
+      caller,
+    );
 
     expect(projectsRepository.createDraft).toHaveBeenCalledTimes(2);
     expect(created.slug).toMatch(/^sunlit-bandra-apartment-/);
@@ -383,20 +421,27 @@ describe('projectsService.create', () => {
     });
     vi.mocked(projectsRepository.taxonomyExists).mockResolvedValue(true);
     vi.mocked(projectsRepository.propertySubtypeExists).mockResolvedValue(true);
-    vi.mocked(projectsRepository.findTaxonomyTermBySlug).mockImplementation(async (_kind, slug) => ({
-      id: `term-${slug}`,
-      kind: _kind,
-      slug,
-      label: {
-        bengaluru: 'Bengaluru',
-        apartment: 'Apartment / flat',
-        '2-bhk': '2 BHK',
-        luxury: 'Luxury',
-      }[slug] ?? slug,
-      metadata: slug === 'apartment'
-        ? { propertyTypeSlug: 'residential', defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom'] }
-        : {},
-    }));
+    vi.mocked(projectsRepository.findTaxonomyTermBySlug).mockImplementation(
+      async (_kind, slug) => ({
+        id: `term-${slug}`,
+        kind: _kind,
+        slug,
+        label:
+          {
+            bengaluru: 'Bengaluru',
+            apartment: 'Apartment / flat',
+            '2-bhk': '2 BHK',
+            luxury: 'Luxury',
+          }[slug] ?? slug,
+        metadata:
+          slug === 'apartment'
+            ? {
+                propertyTypeSlug: 'residential',
+                defaultRoomSlugs: ['kitchen', 'bedroom', 'bathroom'],
+              }
+            : {},
+      }),
+    );
     vi.mocked(projectsRepository.createDraft).mockImplementation(async (input, _designerId, slug) =>
       row({
         title: input.title,
@@ -411,9 +456,27 @@ describe('projectsService.create', () => {
       }),
     );
     vi.mocked(projectsRepository.findRoomTypesBySlugs).mockResolvedValue([
-      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', kind: 'room', slug: 'kitchen', label: 'Kitchen', metadata: {} },
-      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', kind: 'room', slug: 'bedroom', label: 'Bedroom', metadata: {} },
-      { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', kind: 'room', slug: 'bathroom', label: 'Bathroom', metadata: {} },
+      {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        kind: 'room',
+        slug: 'kitchen',
+        label: 'Kitchen',
+        metadata: {},
+      },
+      {
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        kind: 'room',
+        slug: 'bedroom',
+        label: 'Bedroom',
+        metadata: {},
+      },
+      {
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        kind: 'room',
+        slug: 'bathroom',
+        label: 'Bathroom',
+        metadata: {},
+      },
     ]);
     vi.mocked(projectsRepository.createRooms).mockResolvedValue([
       roomRow({ name: 'Kitchen', sortOrder: 0 }),
@@ -422,14 +485,17 @@ describe('projectsService.create', () => {
       roomRow({ name: 'Bathroom', sortOrder: 3 }),
     ]);
 
-    const created = await projectsService.create({
-      buildingName: 'Maitri Apartments',
-      propertyTypeSlug: 'residential',
-      propertySubtypeSlug: 'apartment',
-      bhkSlug: '2-bhk',
-      citySlug: 'bengaluru',
-      budgetBandSlug: 'luxury',
-    }, caller);
+    const created = await projectsService.create(
+      {
+        buildingName: 'Maitri Apartments',
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+        bhkSlug: '2-bhk',
+        citySlug: 'bengaluru',
+        budgetBandSlug: 'luxury',
+      },
+      caller,
+    );
 
     expect(created.title).toBe('Maitri Apartments - 2 BHK Luxury Apartment / flat in Bengaluru');
     expect(created.rooms.map((room) => room.name)).toEqual([
@@ -454,13 +520,13 @@ describe('projectsService.create', () => {
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
     });
-    vi.mocked(projectsRepository.createDraft).mockImplementation(async (_input, _designerId, slug) =>
-      row({ slug }),
+    vi.mocked(projectsRepository.createDraft).mockImplementation(
+      async (_input, _designerId, slug) => row({ slug }),
     );
 
     await projectsService.create({ title: 'Active Org Project' }, caller);
 
-    expect(isOrgWriter).toHaveBeenCalledWith(caller.userId, 'org_1');
+    expect(orgsService.isWriter).toHaveBeenCalledWith(caller.userId, 'org_1');
     expect(projectsRepository.findDesignerByOrgId).toHaveBeenCalledWith('org_1');
     await expect(
       projectsService.create({ title: 'No Org Project' }, { ...caller, activeOrgId: null }),
@@ -539,12 +605,7 @@ describe('projectsService.linkImage', () => {
     vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
 
     await expect(
-      projectsService.linkImage(
-        row().id,
-        imageRow().id,
-        { roomId: roomRow().id },
-        caller,
-      ),
+      projectsService.linkImage(row().id, imageRow().id, { roomId: roomRow().id }, caller),
     ).rejects.toMatchObject({ status: 404 });
     expect(projectsRepository.findRoom).not.toHaveBeenCalled();
   });
@@ -613,8 +674,9 @@ describe('projectsService.getCompleteness', () => {
     expect(result.complete).toBe(false);
     expect(result.missing).toContain('property-type');
     expect(result.missing).toContain('at-least-three-photos');
-    expect(result.requirements.find((requirement) => requirement.key === 'at-least-three-photos')?.label)
-      .toBe('At least 3 photos');
+    expect(
+      result.requirements.find((requirement) => requirement.key === 'at-least-three-photos')?.label,
+    ).toBe('At least 3 photos');
   });
 
   it('reports completeness for published projects without owner access', async () => {
@@ -650,7 +712,11 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.submitWithUploadCounts).mockResolvedValue({
       project: complete,
       counts: { imageCount: 3, taggedImageCount: 3 },
-      submitted: row({ ...complete, status: 'submitted', submittedAt: new Date('2026-01-02T00:00:00Z') }),
+      submitted: row({
+        ...complete,
+        status: 'submitted',
+        submittedAt: new Date('2026-01-02T00:00:00Z'),
+      }),
     });
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
 
@@ -738,7 +804,13 @@ describe('projectsService.feed', () => {
     reviewCount: 12,
     coverStatus: 'ready',
     coverDerivatives: [
-      { variant: 'thumb', format: 'webp', key: 'derivatives/cover/thumb.webp', width: 320, height: 240 },
+      {
+        variant: 'thumb',
+        format: 'webp',
+        key: 'derivatives/cover/thumb.webp',
+        width: 320,
+        height: 240,
+      },
     ],
     coverWidth: 480,
     coverHeight: 640,
@@ -746,7 +818,10 @@ describe('projectsService.feed', () => {
   });
 
   it('maps rows to cards, resolving labels and signing the cover, with hasMore from limit+1', async () => {
-    vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([feedRow(), feedRow({ id: 'x' })]);
+    vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([
+      feedRow(),
+      feedRow({ id: 'x' }),
+    ]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
       new Map([
         ['city:mumbai', 'Mumbai'],
@@ -755,7 +830,9 @@ describe('projectsService.feed', () => {
         ['scope:full-home', 'Full Home'],
       ]),
     );
-    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map([['mumbai:bandra', 'Bandra']]));
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(
+      new Map([['mumbai:bandra', 'Bandra']]),
+    );
 
     const result = await projectsService.feed({ page: 1, limit: 1 });
 
@@ -781,7 +858,9 @@ describe('projectsService.feed', () => {
     vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([
       feedRow({ coverStatus: 'processing', localitySlug: null, budgetBandSlug: null }),
     ]);
-    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map([['city:mumbai', 'Mumbai']]));
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
+      new Map([['city:mumbai', 'Mumbai']]),
+    );
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
 
     const result = await projectsService.feed({ page: 1, limit: 12 });

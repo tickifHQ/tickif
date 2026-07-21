@@ -31,6 +31,14 @@ describe('requireCurrentDesignerProfile', () => {
     mock.getProfile.mockReset();
   });
 
+  it('redirects requests without a session cookie to login', async () => {
+    mock.headers.mockResolvedValue({ get: vi.fn(() => null) });
+
+    await expect(requireCurrentDesignerProfile()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/login');
+    expect(mock.getProfile).not.toHaveBeenCalled();
+  });
+
   it('redirects an authenticated user without an active designer membership', async () => {
     mock.getProfile.mockResolvedValue({ ok: false, status: 422 });
 

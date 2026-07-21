@@ -60,7 +60,11 @@ describe('DesignerDashboardOverview', () => {
     );
 
     expect(screen.getAllByRole('link', { name: /add new project/i })).toHaveLength(1);
-    expect(screen.getAllByRole('link', { name: /add new project/i }).every((link) => link.getAttribute('href') === '/designer/projects/new')).toBe(true);
+    expect(
+      screen
+        .getAllByRole('link', { name: /add new project/i })
+        .every((link) => link.getAttribute('href') === '/designer/projects/new'),
+    ).toBe(true);
     expect(screen.getByRole('link', { name: /add first project/i })).toHaveAttribute(
       'href',
       '/designer/projects/new',
@@ -70,6 +74,20 @@ describe('DesignerDashboardOverview', () => {
       '/designer/profile',
     );
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+  });
+
+  it('keeps verification non-interactive until that flow ships', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByText(/start verification/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /start verification/i })).not.toBeInTheDocument();
   });
 
   it('shows setup complete once all tracked backend steps are done', () => {

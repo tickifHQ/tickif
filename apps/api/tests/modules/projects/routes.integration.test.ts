@@ -38,7 +38,12 @@ async function makeDesignerSession(phoneNumber = '+919800002001') {
   return { cookie: activeCookie, userId, designer };
 }
 
-async function requestJson(path: string, method: string, cookie: string | undefined, body: unknown) {
+async function requestJson(
+  path: string,
+  method: string,
+  cookie: string | undefined,
+  body: unknown,
+) {
   return app.request(path, {
     method,
     headers: {
@@ -100,7 +105,15 @@ describe('GET /api/projects', () => {
     const coverImage = await makeProjectImage({
       projectId: draftProject.id,
       status: 'ready',
-      derivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/project/cover/thumb.webp', width: 320, height: 240 }],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/project/cover/thumb.webp',
+          width: 320,
+          height: 240,
+        },
+      ],
     });
     await db
       .update(schema.project)
@@ -116,10 +129,7 @@ describe('GET /api/projects', () => {
 
     const body = (await res.json()) as ListProjectsResponse;
     expect(body).toMatchObject({ total: 2, page: 1, limit: 12, totalPages: 1 });
-    expect(body.items.map((item) => item.title)).toEqual([
-      'Andheri Apartment',
-      'Bandra Apartment',
-    ]);
+    expect(body.items.map((item) => item.title)).toEqual(['Andheri Apartment', 'Bandra Apartment']);
     expect(body.items[0]).toMatchObject({
       propertyType: 'apartment',
       city: 'mumbai',
@@ -280,8 +290,15 @@ describe('GET /api/projects/portfolio', () => {
     const { cookie, userId, designer } = await makeDesignerSession('+919800002046');
     await makeProject({ designerId: designer.id, title: 'Banned Draft', status: 'draft' });
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, userId));
+    const freshCookie = cookie
+      .split('; ')
+      .filter((value) => !value.startsWith('better-auth.session_data'))
+      .join('; ');
 
-    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+    const res = await client.api.projects.portfolio.$get(
+      { query: {} },
+      { headers: { cookie: freshCookie } },
+    );
 
     expect(res.status).toBe(403);
   });
@@ -354,12 +371,12 @@ describe('GET /api/projects/portfolio', () => {
       title: 'Second Org Published',
       status: 'published',
     });
-    await db
-      .update(schema.session)
-      .set({ activeOrganizationId: secondOrg.id })
-      .where(eq(schema.session.userId, userId));
+    const secondOrgCookie = await activateOrganization(cookie, secondOrg.id);
 
-    const res = await client.api.projects.portfolio.$get({ query: {} }, { headers: { cookie } });
+    const res = await client.api.projects.portfolio.$get(
+      { query: {} },
+      { headers: { cookie: secondOrgCookie } },
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as PortfolioProjectsResponse;
@@ -566,12 +583,17 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(createKitchen.status).toBe(201);
     const kitchenRoom = (await createKitchen.json()) as ProjectRoom;
 
-    const reorder = await requestJson(`/api/projects/${project.id}/rooms/reorder`, 'PATCH', cookie, {
-      rooms: [
-        { id: livingRoom.id, sortOrder: 0 },
-        { id: kitchenRoom.id, sortOrder: 1 },
-      ],
-    });
+    const reorder = await requestJson(
+      `/api/projects/${project.id}/rooms/reorder`,
+      'PATCH',
+      cookie,
+      {
+        rooms: [
+          { id: livingRoom.id, sortOrder: 0 },
+          { id: kitchenRoom.id, sortOrder: 1 },
+        ],
+      },
+    );
     expect(reorder.status).toBe(200);
 
     const update = await requestJson(
@@ -588,10 +610,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
     expect(list.status).toBe(200);
     const listed = (await list.json()) as ListProjectRoomsResponse;
-    expect(listed.items.map((room) => room.id)).toEqual([
-      livingRoom.id,
-      kitchenRoom.id,
-    ]);
+    expect(listed.items.map((room) => room.id)).toEqual([livingRoom.id, kitchenRoom.id]);
 
     const del = await app.request(`/api/projects/${project.id}/rooms/${kitchenRoom.id}`, {
       method: 'DELETE',
@@ -621,10 +640,15 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const room = await makeProjectRoom({ projectId: project.id });
     const image = await makeProjectImage({ projectId: project.id });
 
-    const res = await requestJson(`/api/projects/${project.id}/images/${image.id}`, 'PATCH', cookie, {
-      roomId: room.id,
-      sortOrder: 3,
-    });
+    const res = await requestJson(
+      `/api/projects/${project.id}/images/${image.id}`,
+      'PATCH',
+      cookie,
+      {
+        roomId: room.id,
+        sortOrder: 3,
+      },
+    );
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
@@ -642,9 +666,14 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const otherProject = await makeProject({ designerId: designer.id, status: 'draft' });
     const otherRoom = await makeProjectRoom({ projectId: otherProject.id });
 
-    const res = await requestJson(`/api/projects/${project.id}/images/${image.id}`, 'PATCH', cookie, {
-      roomId: otherRoom.id,
-    });
+    const res = await requestJson(
+      `/api/projects/${project.id}/images/${image.id}`,
+      'PATCH',
+      cookie,
+      {
+        roomId: otherRoom.id,
+      },
+    );
 
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { message: string } };
@@ -721,7 +750,9 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       roomId: room.id,
       originalKey: 'orig/source.jpg',
       contentType: 'image/jpeg',
-      derivatives: [{ variant: 'thumb', format: 'webp', key: 'thumb/source.webp', width: 320, height: 240 }],
+      derivatives: [
+        { variant: 'thumb', format: 'webp', key: 'thumb/source.webp', width: 320, height: 240 },
+      ],
       themeSlugs: ['modern'],
       materialSlugs: ['wood'],
       finishSlugs: ['matte'],
@@ -732,7 +763,10 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       status: 'ready',
       sortOrder: 4,
     });
-    await db.update(schema.project).set({ coverImageId: image.id }).where(eq(schema.project.id, project.id));
+    await db
+      .update(schema.project)
+      .set({ coverImageId: image.id })
+      .where(eq(schema.project.id, project.id));
 
     const res = await app.request(`/api/projects/${project.id}/duplicate`, {
       method: 'POST',
@@ -824,13 +858,10 @@ describe('Project draft CRUD + rooms (E-102)', () => {
   it('returns 404 when duplicating a missing project', async () => {
     const { cookie } = await makeDesignerSession('+919800002038');
 
-    const res = await app.request(
-      '/api/projects/11111111-1111-4111-8111-111111111111/duplicate',
-      {
-        method: 'POST',
-        headers: { cookie },
-      },
-    );
+    const res = await app.request('/api/projects/11111111-1111-4111-8111-111111111111/duplicate', {
+      method: 'POST',
+      headers: { cookie },
+    });
 
     expect(res.status).toBe(404);
   });
@@ -1035,8 +1066,11 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(completeness.status).toBe(200);
     const completenessBody = (await completeness.json()) as ProjectCompletenessResponse;
     expect(completenessBody).toMatchObject({ complete: true, missing: [] });
-    expect(completenessBody.requirements.find((requirement) => requirement.key === 'at-least-three-photos'))
-      .toMatchObject({ label: 'At least 3 photos', complete: true });
+    expect(
+      completenessBody.requirements.find(
+        (requirement) => requirement.key === 'at-least-three-photos',
+      ),
+    ).toMatchObject({ label: 'At least 3 photos', complete: true });
 
     const submit = await app.request(`/api/projects/${project.id}/submit`, {
       method: 'POST',

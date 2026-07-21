@@ -6,12 +6,7 @@ import { usePathname } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-} from '@repo/ui/components/dialog';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import {
   ArrowUpRight,
   BadgeHelp,
@@ -68,9 +63,9 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = isItemActive(pathname, item.href);
   const className = item.href
     ? active
-      ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-[13px] leading-[1.1] font-medium text-foreground shadow-sm'
-      : 'flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
-    : 'flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground/60';
+      ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-sm leading-none font-medium text-foreground shadow-sm'
+      : 'flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+    : 'flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground/60';
 
   if (item.href) {
     return (
@@ -82,7 +77,11 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   }
 
   return (
-    <span className={className} aria-disabled="true" title={item.comingSoon ? 'Coming soon' : undefined}>
+    <span
+      className={className}
+      aria-disabled="true"
+      title={item.comingSoon ? 'Coming soon' : undefined}
+    >
       <Icon className="size-4" />
       <span>{item.label}</span>
       {item.comingSoon ? <span className="sr-only">Coming soon</span> : null}
@@ -101,7 +100,7 @@ function SidebarSection({
 }) {
   return (
     <section className="space-y-2">
-      <div className="text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
+      <div className="text-xs leading-none font-normal text-muted-foreground uppercase">
         {title}
       </div>
       <div className="space-y-0.5">
@@ -116,7 +115,7 @@ function SidebarSection({
 function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
+      <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-muted-foreground sm:inline-flex">
         <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
           <SlidersHorizontal className="size-4" />
           <span className="font-medium">Projects</span>
@@ -127,13 +126,15 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     );
   }
 
-  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
+  const navigationItem = [...studioItems, ...growItems].find((item) =>
+    isItemActive(pathname, item.href),
+  );
 
   if (navigationItem?.href) {
     const Icon = navigationItem.icon;
 
     return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+      <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-foreground sm:inline-flex">
         <Icon className="size-4" />
         <span className="font-medium">{navigationItem.label}</span>
       </div>
@@ -157,12 +158,15 @@ function SidebarContent({
   return (
     <>
       <div className="px-6 py-5">
-        <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground"
+        >
           <span>Tickif</span>
         </Link>
       </div>
 
-      <div className="flex flex-1 flex-col justify-between px-4 py-5">
+      <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 py-5">
         <div className="space-y-6">
           <SidebarSection title="Studio" items={studioItems} pathname={pathname} />
           <SidebarSection title="Grow" items={growItems} pathname={pathname} />
@@ -172,14 +176,14 @@ function SidebarContent({
           <div className="space-y-1">
             <Link
               href="mailto:support@tickif.in"
-              className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <BadgeHelp className="size-4" />
               <span>Contact support</span>
             </Link>
             <Link
               href="/"
-              className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <MessagesSquare className="size-4" />
               <span>Explore Tickif</span>
@@ -221,7 +225,12 @@ export function DesignerWorkspaceShell({
     <div className="fixed inset-0 overflow-hidden bg-muted/30">
       <div className="flex h-full overflow-hidden bg-muted/20">
         <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
-          <SidebarContent activeOrganizationId={activeOrganizationId} studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
+          <SidebarContent
+            activeOrganizationId={activeOrganizationId}
+            studioName={studioName}
+            studioLocation={studioLocation}
+            pathname={pathname}
+          />
         </aside>
 
         <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
@@ -229,7 +238,7 @@ export function DesignerWorkspaceShell({
             aria-describedby={undefined}
             showCloseButton={false}
             overlayClassName="lg:hidden"
-            className="left-0 top-0 flex h-full w-72 max-w-[85vw] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-l-0 border-r border-border bg-background p-0 shadow-xl lg:hidden"
+            className="left-0 top-0 flex h-full w-4/5 max-w-72 translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-l-0 border-r border-border bg-background p-0 shadow-xl lg:hidden"
           >
             <DialogTitle className="sr-only">Designer navigation</DialogTitle>
             <DialogClose asChild>
@@ -242,12 +251,17 @@ export function DesignerWorkspaceShell({
                 <X className="size-4" />
               </button>
             </DialogClose>
-            <SidebarContent activeOrganizationId={activeOrganizationId} studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
+            <SidebarContent
+              activeOrganizationId={activeOrganizationId}
+              studioName={studioName}
+              studioLocation={studioLocation}
+              pathname={pathname}
+            />
           </DialogContent>
         </Dialog>
 
         <div className="flex min-w-0 flex-1 flex-col p-2">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-[22px] border border-border/80 bg-background/80 px-6 backdrop-blur">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-3xl border border-border/80 bg-background/80 px-6 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 type="button"
@@ -262,25 +276,25 @@ export function DesignerWorkspaceShell({
               <WorkspaceHeaderTitle pathname={pathname} />
             </div>
             <div className="flex items-center gap-2.5">
-              {pathname === '/designer/dashboard' || pathname === '/designer/projects' || pathname === '/designer/leads' ? (
+              {pathname === '/designer/dashboard' ||
+              pathname === '/designer/projects' ||
+              pathname === '/designer/leads' ? (
                 <Button
                   asChild
                   variant="emphasis"
-                  className="h-10 cursor-pointer rounded-full"
+                  className="size-10 cursor-pointer rounded-full p-0 sm:w-auto sm:px-4"
                 >
-                  <Link href="/designer/projects/new">
+                  <Link href="/designer/projects/new" aria-label="Add new project">
                     <Plus className="size-4" />
-                    Add new project
+                    <span className="hidden sm:inline">Add new project</span>
                   </Link>
                 </Button>
               ) : null}
               <AccountMenu showLabel avatarSeed={studioName} />
             </div>
           </header>
-          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto">
-              {children}
-            </main>
+          <section className="min-h-0 flex-1 overflow-hidden rounded-b-3xl border-x border-b border-border/80 bg-background shadow-sm">
+            <main className="h-full min-w-0 overflow-y-auto">{children}</main>
           </section>
         </div>
       </div>

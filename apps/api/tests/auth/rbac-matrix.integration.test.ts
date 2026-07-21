@@ -28,14 +28,7 @@ import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
  * are data — changing who may do what MUST show up as a diff in these tables.
  */
 
-type ActorName =
-  | 'anon'
-  | 'expired'
-  | 'banned'
-  | 'visitor'
-  | 'designer'
-  | 'admin'
-  | 'superadmin';
+type ActorName = 'anon' | 'expired' | 'banned' | 'visitor' | 'designer' | 'admin' | 'superadmin';
 type Actors = Record<ActorName, string | undefined>;
 
 const ROLES = ['visitor', 'designer', 'admin', 'superadmin'] as const;
@@ -90,11 +83,56 @@ function request(target: Hono<{ Variables: AuthVariables }>, path: string, cooki
 // The gate-class matrix: expected status per actor per gate. The banned actor holds
 // the admin role — a ban beats any role (403 everywhere except public routes).
 const GATE_MATRIX: Array<{ path: string } & Record<ActorName, number>> = [
-  { path: '/public', anon: 200, expired: 200, banned: 200, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
-  { path: '/authed', anon: 401, expired: 401, banned: 403, visitor: 200, designer: 200, admin: 200, superadmin: 200 },
-  { path: '/designer-only', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 200, admin: 403, superadmin: 200 },
-  { path: '/admin-only', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 403, admin: 200, superadmin: 200 },
-  { path: '/staff', anon: 401, expired: 401, banned: 403, visitor: 403, designer: 200, admin: 200, superadmin: 200 },
+  {
+    path: '/public',
+    anon: 200,
+    expired: 200,
+    banned: 200,
+    visitor: 200,
+    designer: 200,
+    admin: 200,
+    superadmin: 200,
+  },
+  {
+    path: '/authed',
+    anon: 401,
+    expired: 401,
+    banned: 403,
+    visitor: 200,
+    designer: 200,
+    admin: 200,
+    superadmin: 200,
+  },
+  {
+    path: '/designer-only',
+    anon: 401,
+    expired: 401,
+    banned: 403,
+    visitor: 403,
+    designer: 200,
+    admin: 403,
+    superadmin: 200,
+  },
+  {
+    path: '/admin-only',
+    anon: 401,
+    expired: 401,
+    banned: 403,
+    visitor: 403,
+    designer: 403,
+    admin: 200,
+    superadmin: 200,
+  },
+  {
+    path: '/staff',
+    anon: 401,
+    expired: 401,
+    banned: 403,
+    visitor: 403,
+    designer: 200,
+    admin: 200,
+    superadmin: 200,
+  },
 ];
 
 const ACTOR_NAMES: ActorName[] = [
@@ -228,7 +266,9 @@ describe('RBAC matrix: real app routes (E-89)', () => {
     expect((await getProjects(actors.visitor)).status, 'visitor → GET /api/projects').toBe(422);
     expect((await getProjects(actors.designer)).status, 'designer → GET /api/projects').toBe(200);
     expect((await getProjects(actors.admin)).status, 'admin → GET /api/projects').toBe(422);
-    expect((await getProjects(actors.superadmin)).status, 'superadmin → GET /api/projects').toBe(422);
+    expect((await getProjects(actors.superadmin)).status, 'superadmin → GET /api/projects').toBe(
+      422,
+    );
 
     // POST /api/projects is authenticated and requires a designer profile owned by the caller.
     const post = (label: string, cookie?: string) =>
@@ -238,12 +278,21 @@ describe('RBAC matrix: real app routes (E-89)', () => {
         body: JSON.stringify({ title: `Matrix ${label}` }),
       });
     expect((await post('anon', actors.anon)).status, 'anon → POST /api/projects').toBe(401);
-    expect((await post('expired', actors.expired)).status, 'expired → POST /api/projects').toBe(401);
+    expect((await post('expired', actors.expired)).status, 'expired → POST /api/projects').toBe(
+      401,
+    );
     expect((await post('banned', actors.banned)).status, 'banned → POST /api/projects').toBe(403);
-    expect((await post('visitor', actors.visitor)).status, 'visitor → POST /api/projects').toBe(403);
-    expect((await post('designer', actors.designer)).status, 'designer → POST /api/projects').toBe(201);
+    expect((await post('visitor', actors.visitor)).status, 'visitor → POST /api/projects').toBe(
+      403,
+    );
+    expect((await post('designer', actors.designer)).status, 'designer → POST /api/projects').toBe(
+      201,
+    );
     expect((await post('admin', actors.admin)).status, 'admin → POST /api/projects').toBe(403);
-    expect((await post('superadmin', actors.superadmin)).status, 'superadmin → POST /api/projects').toBe(403);
+    expect(
+      (await post('superadmin', actors.superadmin)).status,
+      'superadmin → POST /api/projects',
+    ).toBe(403);
   });
 });
 
@@ -338,10 +387,7 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     const ok = await update({ name: 'Innocent Rename' });
     expect(ok.status, 'name-only update must work').toBe(200);
 
-    const [row] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, me!.user.id));
+    const [row] = await db.select().from(schema.user).where(eq(schema.user.id, me!.user.id));
     expect(row!.name).toBe('Innocent Rename');
     expect(row!.role).toBe('visitor');
   });

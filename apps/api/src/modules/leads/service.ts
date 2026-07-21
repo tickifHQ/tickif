@@ -8,6 +8,7 @@ import type {
   UpdateLeadInput,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { orgsService } from '../orgs/service.js';
 import {
   leadsRepository,
   type LeadDetailRecord,
@@ -18,7 +19,7 @@ import {
 export type Caller = {
   userId: string;
   isBanned: boolean;
-  activeOrgId?: string | null;
+  activeOrgId: string | null;
 };
 
 export type LeadCounts = {
@@ -61,35 +62,51 @@ function countLeadBucket(counts: LeadStatusCount[], status: LeadStatus): number 
 }
 
 async function assertOrgMember(userId: string, organizationId: string): Promise<void> {
-  if (!(await leadsRepository.isOrgMember(userId, organizationId))) {
+  if (!(await orgsService.isMember(userId, organizationId))) {
     throw AppError.forbidden();
   }
+}
+
+function requireActiveOrganization(caller: Caller): string {
+  if (!caller.activeOrgId) {
+    throw AppError.unprocessable('No active organization selected');
+  }
+  return caller.activeOrgId;
+}
+
+async function assertLeadInActiveOrganization(
+  caller: Caller,
+  organizationId: string,
+): Promise<void> {
+  const activeOrganizationId = requireActiveOrganization(caller);
+  if (organizationId !== activeOrganizationId) {
+    throw AppError.notFound('Lead not found');
+  }
+  await assertOrgMember(caller.userId, activeOrganizationId);
 }
 
 async function resolveTargetOrganization(
   input: Pick<CreateLeadInput, 'organizationId'>,
   caller: Caller,
 ): Promise<string> {
-  const organizationId = input.organizationId ?? caller.activeOrgId;
-  if (!organizationId) {
-    throw AppError.unprocessable('No active organization selected');
+  const activeOrganizationId = requireActiveOrganization(caller);
+  if (input.organizationId && input.organizationId !== activeOrganizationId) {
+    throw AppError.forbidden('Lead organization must match the active organization');
   }
-  await assertOrgMember(caller.userId, organizationId);
-  return organizationId;
+  await assertOrgMember(caller.userId, activeOrganizationId);
+  return activeOrganizationId;
 }
 
 export const leadsService = {
   async list(query: ListLeadsQuery, caller: Caller): Promise<ListLeadsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
-    if (!caller.activeOrgId) {
-      throw AppError.unprocessable('No active organization selected');
-    }
-    await assertOrgMember(caller.userId, caller.activeOrgId);
+    const activeOrganizationId = requireActiveOrganization(caller);
+    await assertOrgMember(caller.userId, activeOrganizationId);
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await leadsRepository.list({
       userId: caller.userId,
-      activeOrgId: caller.activeOrgId,
+      activeOrgId: activeOrganizationId,
       status: listStatus(query.status),
       q: query.q,
       limit,
@@ -109,7 +126,7 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const row = await leadsRepository.findById(id);
     if (!row) throw AppError.notFound('Lead not found');
-    await assertOrgMember(caller.userId, row.organizationId);
+    await assertLeadInActiveOrganization(caller, row.organizationId);
     return toDetail(row);
   },
 
@@ -117,7 +134,7 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const existing = await leadsRepository.findById(id);
     if (!existing) throw AppError.notFound('Lead not found');
-    await assertOrgMember(caller.userId, existing.organizationId);
+    await assertLeadInActiveOrganization(caller, existing.organizationId);
 
     const row = await leadsRepository.updateStatus(id, input.status);
     if (!row) throw AppError.notFound('Lead not found');

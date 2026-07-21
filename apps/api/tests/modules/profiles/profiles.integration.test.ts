@@ -66,7 +66,8 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.profile.displayName).toBe('Onboard User');
     expect(body.organization.name).toBe('Onboard User');
 
-    const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
+    const activeCookie = mergeResponseCookies(cookie, res);
+    const session = await getSession(new Headers({ cookie: activeCookie }));
     expect(session?.session.activeOrganizationId).toBe(body.organization.id);
   });
 
@@ -118,10 +119,7 @@ describe('POST /api/profiles/me — onboarding', () => {
       email: 'banned@test.com',
     });
     const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
-    await db
-      .update(schema.user)
-      .set({ banned: true })
-      .where(eq(schema.user.id, session!.user.id));
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, session!.user.id));
     const freshCookie = cookie
       .split('; ')
       .filter((c) => !c.startsWith('better-auth.session_data'))
@@ -160,10 +158,7 @@ describe('POST /api/profiles/me — onboarding', () => {
       body: { entityType: 'individual', userName: 'Designer' },
     });
     const session = await getSession(new Headers({ cookie }), { disableCookieCache: true });
-    const [user] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, session!.user.id));
+    const [user] = await db.select().from(schema.user).where(eq(schema.user.id, session!.user.id));
     expect(user!.role).toBe('designer');
     expect(user!.status).toBe('active');
   });
@@ -406,7 +401,11 @@ describe('GET /api/profiles/me/dashboard', () => {
       })
       .returning();
     await makeProject({ designerId: alphaProfile.id, status: 'published', title: 'Alpha' });
-    await makeProject({ designerId: betaProfile!.id, status: 'published', title: 'Beta Published' });
+    await makeProject({
+      designerId: betaProfile!.id,
+      status: 'published',
+      title: 'Beta Published',
+    });
     await makeProject({ designerId: betaProfile!.id, status: 'draft', title: 'Beta Draft' });
     await db
       .update(schema.session)
@@ -544,6 +543,25 @@ describe('PATCH /api/profiles/me — update', () => {
     expect(body.organization.name).toBe('Patch User');
     expect(body.organization.slug).toMatch(/^patch-user/);
     expect(new URL(body.shareUrl).pathname).toBe(`/d/${body.organization.slug}`);
+  });
+
+  it('allows a read-only organization member to load the active workspace profile', async () => {
+    const { orgId } = await setupDesignerWithSession();
+    const { cookie, userId } = await createRoleSession('+919800001023', 'designer');
+    await db.insert(schema.member).values({
+      id: `mem-read-only-${userId}`,
+      organizationId: orgId,
+      userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    const activeCookie = await activateOrganization(cookie, orgId);
+
+    const res = await request('GET', '/api/profiles/me', { cookie: activeCookie });
+
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.orgId).toBe(orgId);
   });
 
   it('updates profile fields (partial — bio only)', async () => {

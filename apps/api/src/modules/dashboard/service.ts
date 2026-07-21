@@ -2,10 +2,7 @@ import type { ProfileDashboardResponse } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
 import { profilesService } from '../profiles/service.js';
-import {
-  dashboardRepository,
-  type ProjectStatusCount,
-} from './repository.js';
+import { dashboardRepository, type ProjectStatusCount } from './repository.js';
 
 const PUBLIC_SITE_ORIGIN = 'https://tickif.com';
 

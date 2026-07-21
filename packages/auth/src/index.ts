@@ -77,7 +77,13 @@ export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
       const escapedName = (user.name ?? '').replace(/[&<>"']/g, (ch) => {
-        const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        const map: Record<string, string> = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        };
         return map[ch] ?? ch;
       });
       await sendEmail({
@@ -169,6 +175,7 @@ export const auth = betterAuth({
 
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
+export type { PlatformRole } from './permissions.js';
 
 /**
  * Resolve the current better-auth session (user + session) from request headers.

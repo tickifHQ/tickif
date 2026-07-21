@@ -30,7 +30,7 @@ import type {
 } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
-import { isOrgMember, isOrgWriter } from '../orgs/repository.js';
+import { orgsService } from '../orgs/service.js';
 import {
   projectsRepository,
   type ProjectCoverImageRecord,
@@ -118,10 +118,13 @@ function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageRes
 }
 
 async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
-  const keys = [...new Set([
-    row.originalKey,
-    ...row.derivatives.map((derivative) => derivative.key),
-  ].filter((key): key is string => Boolean(key)))];
+  const keys = [
+    ...new Set(
+      [row.originalKey, ...row.derivatives.map((derivative) => derivative.key)].filter(
+        (key): key is string => Boolean(key),
+      ),
+    ),
+  ];
   const referencedKeys = new Set(await projectsRepository.findReferencedImageObjectKeys(keys));
   const unusedKeys = keys.filter((key) => !referencedKeys.has(key));
 
@@ -140,11 +143,15 @@ function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
 /** Pick the best derivative for fullscreen gallery display (largest available, never original). */
 function pickGalleryDerivative(derivatives: Derivative[]): string | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'large')?.key ??
-    derivatives.find((derivative) => derivative.variant === 'medium' && derivative.format === 'webp')?.key ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
     derivatives[0]?.key ??
     null
@@ -172,7 +179,7 @@ function toFeedProject(
   coverImageUrl: string | null,
 ): FeedProjectsResponse['projects'][number] {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
-    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+    slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 
   const tags = [
     labelOf('bhk', row.bhkSlug),
@@ -187,7 +194,7 @@ function toFeedProject(
     city: labelOf('city', row.citySlug),
     locality:
       row.citySlug && row.localitySlug
-        ? localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null
+        ? (localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null)
         : null,
     rating: Number(row.rating) || 0,
     reviewCount: row.reviewCount,
@@ -206,12 +213,15 @@ function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; sl
   if (row.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: row.budgetBandSlug });
   if (row.bhkSlug) pairs.push({ kind: 'bhk', slug: row.bhkSlug });
   if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
-  if (row.propertySubtypeSlug) pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
+  if (row.propertySubtypeSlug)
+    pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
   return pairs;
 }
 
 /** City-scoped locality pairs; empty unless the row has both a city and a locality. */
-function feedLocalityPairs(row: ProjectFeedItemRecord): { citySlug: string; localitySlug: string }[] {
+function feedLocalityPairs(
+  row: ProjectFeedItemRecord,
+): { citySlug: string; localitySlug: string }[] {
   return row.citySlug && row.localitySlug
     ? [{ citySlug: row.citySlug, localitySlug: row.localitySlug }]
     : [];
@@ -293,7 +303,7 @@ export type Caller = {
   userId: string;
   userRole: string;
   isBanned: boolean;
-  activeOrgId?: string | null;
+  activeOrgId: string | null;
 };
 
 function requireActiveOrganization(caller: Caller): string {
@@ -314,7 +324,10 @@ function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
   return status === 'draft' || status === 'changes_requested';
 }
 
-async function requireEditableProject(projectId: string, caller: Caller): Promise<ProjectOwnership> {
+async function requireEditableProject(
+  projectId: string,
+  caller: Caller,
+): Promise<ProjectOwnership> {
   const ownership = await projectsRepository.findOwnership(projectId);
   if (!ownership) throw AppError.notFound('Project not found');
   await assertAccess(ownership, caller);
@@ -335,15 +348,21 @@ async function requireReadableProject(projectId: string, caller: Caller): Promis
   return project;
 }
 
-async function validateProjectTaxonomy(input: {
-  propertyTypeSlug?: string | null;
-  propertySubtypeSlug?: string | null;
-  scopeSlug?: string | null;
-  bhkSlug?: string | null;
-  citySlug?: string | null;
-  localitySlug?: string | null;
-  budgetBandSlug?: string | null;
-}, existing?: Pick<ProjectRecord, 'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'>): Promise<void> {
+async function validateProjectTaxonomy(
+  input: {
+    propertyTypeSlug?: string | null;
+    propertySubtypeSlug?: string | null;
+    scopeSlug?: string | null;
+    bhkSlug?: string | null;
+    citySlug?: string | null;
+    localitySlug?: string | null;
+    budgetBandSlug?: string | null;
+  },
+  existing?: Pick<
+    ProjectRecord,
+    'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'
+  >,
+): Promise<void> {
   if (
     input.propertyTypeSlug !== undefined &&
     input.propertyTypeSlug !== null &&
@@ -355,10 +374,12 @@ async function validateProjectTaxonomy(input: {
   const propertySubtypeTouched =
     input.propertySubtypeSlug !== undefined || input.propertyTypeSlug !== undefined;
   const nextPropertyTypeSlug =
-    input.propertyTypeSlug === undefined ? existing?.propertyTypeSlug ?? null : input.propertyTypeSlug;
+    input.propertyTypeSlug === undefined
+      ? (existing?.propertyTypeSlug ?? null)
+      : input.propertyTypeSlug;
   const nextPropertySubtypeSlug =
     input.propertySubtypeSlug === undefined
-      ? existing?.propertySubtypeSlug ?? null
+      ? (existing?.propertySubtypeSlug ?? null)
       : input.propertySubtypeSlug;
   if (
     propertySubtypeTouched &&
@@ -396,9 +417,9 @@ async function validateProjectTaxonomy(input: {
   }
 
   const localityTouched = input.localitySlug !== undefined || input.citySlug !== undefined;
-  const nextCitySlug = input.citySlug === undefined ? existing?.citySlug ?? null : input.citySlug;
+  const nextCitySlug = input.citySlug === undefined ? (existing?.citySlug ?? null) : input.citySlug;
   const nextLocalitySlug =
-    input.localitySlug === undefined ? existing?.localitySlug ?? null : input.localitySlug;
+    input.localitySlug === undefined ? (existing?.localitySlug ?? null) : input.localitySlug;
   if (localityTouched && nextLocalitySlug !== null) {
     if (!nextCitySlug) {
       throw AppError.unprocessable('citySlug is required with localitySlug');
@@ -425,7 +446,9 @@ async function validateProjectTaxonomy(input: {
 function humanizeSlug(slug: string): string {
   return slug
     .split('-')
-    .map((part) => (part.toLowerCase() === 'bhk' ? 'BHK' : part.charAt(0).toUpperCase() + part.slice(1)))
+    .map((part) =>
+      part.toLowerCase() === 'bhk' ? 'BHK' : part.charAt(0).toUpperCase() + part.slice(1),
+    )
     .join(' ');
 }
 
@@ -492,11 +515,14 @@ function expandRoomPrefillSlugs(
 ): RoomPrefillSpec[] {
   return slugs.flatMap((slug): RoomPrefillSpec[] => {
     if (slug === 'bedroom') {
-      return Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
-        slug,
-        name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
-        metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
-      }));
+      return Array.from(
+        { length: bhkCount(project.bhkSlug) },
+        (_, index): RoomPrefillSpec => ({
+          slug,
+          name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+          metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+        }),
+      );
     }
     return [{ slug, metadata: prefillMetadata(slug) }];
   });
@@ -515,7 +541,10 @@ async function buildRoomPrefillSpecs(
   ]);
   const subtypeDefaults = defaultRoomSlugs(subtypeTerm?.metadata);
   const typeDefaults = defaultRoomSlugs(typeTerm?.metadata);
-  return expandRoomPrefillSlugs(subtypeDefaults.length > 0 ? subtypeDefaults : typeDefaults, project);
+  return expandRoomPrefillSlugs(
+    subtypeDefaults.length > 0 ? subtypeDefaults : typeDefaults,
+    project,
+  );
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -603,12 +632,14 @@ async function prefillRoomsIfEmpty(
   const inputs = specs.flatMap((spec, index): CreateProjectRoomInput[] => {
     const term = roomTypeBySlug.get(spec.slug);
     if (!term) return [];
-    return [{
-      roomTypeId: term.id,
-      name: spec.name ?? term.label,
-      sortOrder: index,
-      metadata: spec.metadata,
-    }];
+    return [
+      {
+        roomTypeId: term.id,
+        name: spec.name ?? term.label,
+        sortOrder: index,
+        metadata: spec.metadata,
+      },
+    ];
   });
   return projectsRepository.createRooms(project.id, inputs);
 }
@@ -638,8 +669,7 @@ function buildCompleteness(
       key: 'image-metadata',
       label: 'Room, theme, and finish metadata on each photo',
       complete:
-        imageCounts.imageCount >= 3 &&
-        imageCounts.taggedImageCount === imageCounts.imageCount,
+        imageCounts.imageCount >= 3 && imageCounts.taggedImageCount === imageCounts.imageCount,
     },
   ];
   const completeCount = requirements.filter((requirement) => requirement.complete).length;
@@ -657,7 +687,7 @@ export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
-    if (!(await isOrgMember(caller.userId, activeOrgId))) {
+    if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
     const limit = query.limit;
@@ -689,11 +719,15 @@ export const projectsService = {
     caller: Caller,
   ): Promise<PortfolioProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
     const { page, limit } = query;
     const [{ items, total }, statusCounts] = await Promise.all([
       projectsRepository.list({
         userId: caller.userId,
-        activeOrgId: caller.activeOrgId,
+        activeOrgId,
         statuses: statusesForPortfolio(query.status),
         limit,
         offset: (page - 1) * limit,
@@ -701,7 +735,7 @@ export const projectsService = {
       }),
       projectsRepository.countByStatus({
         userId: caller.userId,
-        activeOrgId: caller.activeOrgId,
+        activeOrgId,
       }),
     ]);
     const coverImages = await projectsRepository.findCoverImages(
@@ -770,7 +804,7 @@ export const projectsService = {
       throw AppError.forbidden('Designer role required');
     }
     const activeOrgId = requireActiveOrganization(caller);
-    if (!(await isOrgWriter(caller.userId, activeOrgId))) {
+    if (!(await orgsService.isWriter(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization write access required');
     }
     await validateProjectTaxonomy(input);
@@ -925,14 +959,13 @@ export const projectsService = {
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
 
-    const metadataCompleteness = buildCompleteness(
-      project,
-      {
-        imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
-        taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
-      },
+    const metadataCompleteness = buildCompleteness(project, {
+      imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+      taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+    });
+    const metadataMissing = metadataCompleteness.missing.filter(
+      (key) => !PHOTO_COMPLETENESS_KEYS.has(key),
     );
-    const metadataMissing = metadataCompleteness.missing.filter((key) => !PHOTO_COMPLETENESS_KEYS.has(key));
     if (metadataMissing.length > 0) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: metadataMissing,
@@ -958,13 +991,15 @@ export const projectsService = {
   },
 
   /** Public gallery: returns presigned URLs for all ready images of a published project. */
-  async getGallery(projectId: string): Promise<Array<{
-    id: string;
-    url: string;
-    width: number | null;
-    height: number | null;
-    roomName: string | null;
-  }>> {
+  async getGallery(projectId: string): Promise<
+    Array<{
+      id: string;
+      url: string;
+      width: number | null;
+      height: number | null;
+      roomName: string | null;
+    }>
+  > {
     // Verify project exists and is published
     const project = await projectsRepository.findById(projectId);
     if (!project || project.status !== 'published') {

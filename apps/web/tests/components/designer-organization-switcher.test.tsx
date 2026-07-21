@@ -92,4 +92,22 @@ describe('DesignerOrganizationSwitcher', () => {
     expect(mock.router.refresh).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch organization');
   });
+
+  it('handles a rejected switch request without refreshing the workspace', async () => {
+    mock.setActive.mockRejectedValue(new Error('Network unavailable'));
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
+
+    expect(mock.router.refresh).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch organization');
+  });
 });

@@ -67,10 +67,7 @@ export const leadsRepository = {
       eq(schema.lead.organizationId, params.activeOrgId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
       params.q
-        ? or(
-            ilike(schema.lead.name, `%${params.q}%`),
-            ilike(schema.project.title, `%${params.q}%`),
-          )
+        ? or(ilike(schema.lead.name, `%${params.q}%`), ilike(schema.project.title, `%${params.q}%`))
         : undefined,
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
@@ -141,15 +138,6 @@ export const leadsRepository = {
     const created = await this.findById(row.id);
     if (!created) throw new Error('inserted lead not found');
     return created;
-  },
-
-  async isOrgMember(userId: string, organizationId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: schema.member.id })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)))
-      .limit(1);
-    return !!row;
   },
 
   async findProjectOrganization(projectId: string): Promise<string | null> {

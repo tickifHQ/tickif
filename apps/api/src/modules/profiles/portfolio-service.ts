@@ -14,7 +14,7 @@ import {
   type Tx,
 } from './portfolio-repository.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
-import { isOrgWriter } from '../orgs/repository.js';
+import { orgsService } from '../orgs/service.js';
 
 /**
  * Portfolio business logic (E-222).
@@ -104,7 +104,7 @@ async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
   }
-  const canWrite = await isOrgWriter(caller.userId, caller.activeOrgId);
+  const canWrite = await orgsService.isWriter(caller.userId, caller.activeOrgId);
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }
