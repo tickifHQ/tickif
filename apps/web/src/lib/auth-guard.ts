@@ -19,7 +19,13 @@ type SessionUser = {
 };
 
 type SessionData = {
-  session: { id: string; token: string; expiresAt: string; [key: string]: unknown };
+  session: {
+    id: string;
+    token: string;
+    expiresAt: string;
+    activeOrganizationId?: string | null;
+    [key: string]: unknown;
+  };
   user: SessionUser;
 };
 

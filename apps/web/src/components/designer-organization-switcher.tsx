@@ -20,7 +20,7 @@ export function DesignerOrganizationSwitcher({
   studioName,
   studioLocation,
 }: {
-  activeOrganizationId: string;
+  activeOrganizationId: string | null;
   studioName: string;
   studioLocation: string;
 }) {

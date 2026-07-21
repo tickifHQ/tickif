@@ -39,8 +39,15 @@ describe('requireCurrentDesignerProfile', () => {
     expect(mock.getProfile).not.toHaveBeenCalled();
   });
 
-  it('redirects an authenticated user without an active designer membership', async () => {
+  it('redirects an authenticated user without an active organization to studio selection', async () => {
     mock.getProfile.mockResolvedValue({ ok: false, status: 422 });
+
+    await expect(requireCurrentDesignerProfile()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding');
+  });
+
+  it('keeps genuine profile authorization failures on the unauthorized page', async () => {
+    mock.getProfile.mockResolvedValue({ ok: false, status: 403 });
 
     await expect(requireCurrentDesignerProfile()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');

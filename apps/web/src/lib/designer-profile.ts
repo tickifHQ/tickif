@@ -11,7 +11,7 @@ async function getRequestCookie() {
 
 type CurrentDesignerProfileResult =
   | { status: 'ok'; data: CurrentProfileResponse }
-  | { status: 'unauthenticated' | 'forbidden' | 'unavailable' };
+  | { status: 'unauthenticated' | 'missing-active-organization' | 'forbidden' | 'unavailable' };
 
 const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfileResult> => {
   const cookie = await getRequestCookie();
@@ -20,7 +20,8 @@ const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfi
   try {
     const response = await api.api.profiles.me.$get({}, { headers: { cookie } });
     if (response.status === 401) return { status: 'unauthenticated' };
-    if ([403, 404, 422].includes(response.status)) return { status: 'forbidden' };
+    if (response.status === 422) return { status: 'missing-active-organization' };
+    if ([403, 404].includes(response.status)) return { status: 'forbidden' };
     if (!response.ok) return { status: 'unavailable' };
 
     const payload = await response.json();
@@ -40,6 +41,7 @@ export async function requireCurrentDesignerProfile(): Promise<CurrentProfileRes
   const result = await fetchCurrentDesignerProfile();
   if (result.status !== 'ok') {
     if (result.status === 'unauthenticated') redirect('/login');
+    if (result.status === 'missing-active-organization') redirect('/designer/onboarding');
     if (result.status === 'forbidden') redirect('/unauthorized');
     throw new Error('Unable to load the active designer organization');
   }
