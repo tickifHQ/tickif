@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { DesignerOnboarding } from '@/components/designer-onboarding';
-import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
-import { Card } from '@repo/ui/components/card';
 
 export const metadata = {
   title: 'Designer onboarding · Tickif',
@@ -12,30 +10,8 @@ export default async function DesignerOnboardingPage() {
   const session = await getServerSession({ disableCookieCache: true });
 
   if (rolePassesCheck(session?.user.role ?? null, 'designer')) {
-    if (session?.session.activeOrganizationId) {
-      redirect('/designer/dashboard');
-    }
-
-    const accountName = session?.user.name?.trim() || 'Your account';
-
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-        <Card radius="2xl" className="w-full max-w-md p-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Choose your studio
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Select the studio you want to manage. You can switch studios later from the sidebar.
-          </p>
-          <div className="mt-6 rounded-xl border border-border bg-background p-2">
-            <DesignerOrganizationSwitcher
-              activeOrganizationId={null}
-              studioName={accountName}
-              studioLocation="Choose a studio to continue"
-            />
-          </div>
-        </Card>
-      </main>
+    redirect(
+      session?.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
     );
   }
 

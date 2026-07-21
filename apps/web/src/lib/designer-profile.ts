@@ -41,7 +41,7 @@ export async function requireCurrentDesignerProfile(): Promise<CurrentProfileRes
   const result = await fetchCurrentDesignerProfile();
   if (result.status !== 'ok') {
     if (result.status === 'unauthenticated') redirect('/login');
-    if (result.status === 'missing-active-organization') redirect('/designer/onboarding');
+    if (result.status === 'missing-active-organization') redirect('/designer/select-studio');
     if (result.status === 'forbidden') redirect('/unauthorized');
     throw new Error('Unable to load the active designer organization');
   }

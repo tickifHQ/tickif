@@ -43,7 +43,7 @@ describe('requireCurrentDesignerProfile', () => {
     mock.getProfile.mockResolvedValue({ ok: false, status: 422 });
 
     await expect(requireCurrentDesignerProfile()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding');
+    expect(mock.redirect).toHaveBeenCalledWith('/designer/select-studio');
   });
 
   it('keeps genuine profile authorization failures on the unauthorized page', async () => {

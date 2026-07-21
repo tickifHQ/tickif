@@ -19,12 +19,6 @@ vi.mock('@/components/designer-onboarding', () => ({
   DesignerOnboarding: () => <div data-testid="designer-onboarding">Onboarding form</div>,
 }));
 
-vi.mock('@/components/designer-organization-switcher', () => ({
-  DesignerOrganizationSwitcher: () => (
-    <div data-testid="designer-organization-switcher">Organization switcher</div>
-  ),
-}));
-
 import { rolePassesCheck } from '@/lib/auth-guard';
 
 describe('DesignerOnboardingPage', () => {
@@ -49,7 +43,7 @@ describe('DesignerOnboardingPage', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
 
-  it('renders studio selection when a designer session has no active organization', async () => {
+  it('redirects designers without an active organization to studio selection', async () => {
     mock.getServerSession.mockResolvedValue({
       session: {
         id: 's1',
@@ -62,12 +56,8 @@ describe('DesignerOnboardingPage', () => {
     vi.mocked(rolePassesCheck).mockReturnValue(true);
 
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
-    const page = await Page();
-    render(page);
-
-    expect(screen.getByRole('heading', { name: 'Choose your studio' })).toBeInTheDocument();
-    expect(screen.getByTestId('designer-organization-switcher')).toBeInTheDocument();
-    expect(mock.redirect).not.toHaveBeenCalled();
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/designer/select-studio');
   });
 
   it('renders onboarding form when user is not yet a designer', async () => {
