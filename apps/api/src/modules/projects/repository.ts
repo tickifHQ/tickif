@@ -643,6 +643,15 @@ export const projectsRepository = {
     return row ?? null;
   },
 
+  async findDesignerById(designerId: string): Promise<{ id: string; status: string } | null> {
+    const [row] = await db
+      .select({ id: schema.designerProfile.id, status: schema.designerProfile.status })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, designerId))
+      .limit(1);
+    return row ?? null;
+  },
+
   async findOwnership(projectId: string): Promise<ProjectOwnership | null> {
     const [row] = await db
       .select({
