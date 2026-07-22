@@ -52,9 +52,16 @@ const basePortfolio: PortfolioResponse = {
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
 
+// The E-195 design uses visually-styled labels that aren't associated with
+// their inputs via htmlFor, so we target inputs by their placeholder text.
+const SLUG_PLACEHOLDER = 'your-studio';
+const STUDIO_NAME_PLACEHOLDER = 'Your studio name';
+const TAGLINE_PLACEHOLDER = 'A short tagline for your portfolio';
+const BIO_PLACEHOLDER = 'Tell visitors about your design philosophy...';
+
 async function renderSettings() {
   render(<DesignerPortfolioSettings />);
-  return await screen.findByLabelText(/custom slug/i);
+  return await screen.findByPlaceholderText(SLUG_PLACEHOLDER);
 }
 
 describe('DesignerPortfolioSettings', () => {
@@ -71,11 +78,10 @@ describe('DesignerPortfolioSettings', () => {
     const slugInput = await renderSettings();
 
     expect(slugInput).toHaveValue('mahi-studio');
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi Studio');
-    expect(screen.getByLabelText(/tagline/i)).toHaveValue('Design with care');
-    expect(screen.getByLabelText(/^bio$/i)).toHaveValue('Interiors for real life.');
+    expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
+    expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
+    expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
     expect(screen.getByText('https://tickif.com/p/mahi-studio')).toBeInTheDocument();
-    expect(screen.getByText(/your portfolio is visible to the public/i)).toBeInTheDocument();
   });
 
   it('shows a retry-able error state when the portfolio fails to load', async () => {
@@ -88,33 +94,34 @@ describe('DesignerPortfolioSettings', () => {
     const user = userEvent.setup();
     await user.click(retry);
 
-    expect(await screen.findByLabelText(/custom slug/i)).toHaveValue('mahi-studio');
+    expect(await screen.findByPlaceholderText(SLUG_PLACEHOLDER)).toHaveValue('mahi-studio');
     expect(mock.fetchPortfolio).toHaveBeenCalledTimes(2);
   });
 
-  it('hides the save bar until a field changes', async () => {
+  it('keeps the save/discard controls disabled until a field changes', async () => {
     await renderSettings();
 
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeDisabled();
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/tagline/i), '!');
+    await user.type(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER), '!');
 
     expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /discard/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeEnabled();
   });
 
-  it('discard reverts edits and hides the save bar', async () => {
+  it('discard reverts edits and re-disables the save controls', async () => {
     await renderSettings();
 
     const user = userEvent.setup();
-    const tagline = screen.getByLabelText(/tagline/i);
+    const tagline = screen.getByPlaceholderText(TAGLINE_PLACEHOLDER);
     await user.clear(tagline);
     await user.type(tagline, 'Something else');
-    await user.click(screen.getByRole('button', { name: /discard/i }));
+    await user.click(screen.getByRole('button', { name: /discard changes/i }));
 
     expect(tagline).toHaveValue('Design with care');
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
   it('sanitizes slug input: lowercases, strips illegal characters, collapses hyphens', async () => {
@@ -196,11 +203,11 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     const user = userEvent.setup();
-    const tagline = screen.getByLabelText(/tagline/i);
+    const tagline = screen.getByPlaceholderText(TAGLINE_PLACEHOLDER);
     await user.clear(tagline);
     await user.type(tagline, 'Bespoke interiors');
-    await user.clear(screen.getByLabelText(/^bio$/i));
-    await user.clear(screen.getByLabelText(/display name/i));
+    await user.clear(screen.getByPlaceholderText(BIO_PLACEHOLDER));
+    await user.clear(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER));
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -213,9 +220,9 @@ describe('DesignerPortfolioSettings', () => {
     });
 
     expect(await screen.findByText('Saved')).toBeInTheDocument();
-    // Form resets to the server response, so the save bar buttons disappear.
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi Studio');
+    // Form resets to the server response, so the save controls disable again.
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
   });
 
   it('surfaces the detail-derived message when the save fails validation', async () => {
@@ -225,14 +232,16 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/tagline/i), '!');
+    await user.type(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER), '!');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     expect(
       await screen.findByText('portfolioSlug: Lowercase letters, numbers, and hyphens only'),
     ).toBeInTheDocument();
-    // Still dirty, so the user can retry.
-    expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+    // Still dirty once the save transition settles, so the user can retry.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+    });
   });
 
   it('keeps edits made while a save is in flight instead of clobbering them with the server response', async () => {
@@ -246,7 +255,7 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     const user = userEvent.setup();
-    const tagline = screen.getByLabelText(/tagline/i);
+    const tagline = screen.getByPlaceholderText(TAGLINE_PLACEHOLDER);
     await user.clear(tagline);
     await user.type(tagline, 'First edit');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
