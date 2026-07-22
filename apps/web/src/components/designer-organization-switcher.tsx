@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar } from '@repo/ui/components/avatar';
@@ -19,19 +19,24 @@ export function DesignerOrganizationSwitcher({
   activeOrganizationId,
   studioName,
   studioLocation,
+  isWorkspaceRefreshing = false,
+  onSwitchSuccess,
 }: {
   activeOrganizationId: string | null;
   studioName: string;
   studioLocation: string;
+  isWorkspaceRefreshing?: boolean;
+  onSwitchSuccess?: (organizationId: string) => void;
 }) {
   const router = useRouter();
   const { data: organizations, isPending, error: listError } = authClient.useListOrganizations();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const isBusy = switchingId !== null || isWorkspaceRefreshing;
 
   async function handleSwitch(organizationId: string) {
-    if (organizationId === activeOrganizationId || switchingId) return;
+    if (organizationId === activeOrganizationId || isBusy) return;
 
     setSwitchError(null);
     setSwitchingId(organizationId);
@@ -43,7 +48,11 @@ export function DesignerOrganizationSwitcher({
       }
 
       setOpen(false);
-      router.refresh();
+      if (onSwitchSuccess) {
+        onSwitchSuccess(organizationId);
+      } else {
+        router.refresh();
+      }
     } catch {
       setSwitchError('Could not switch organization. Please try again.');
     } finally {
@@ -57,7 +66,9 @@ export function DesignerOrganizationSwitcher({
         <button
           type="button"
           aria-label="Switch organization"
-          className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+          aria-busy={isBusy}
+          disabled={isBusy}
+          className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Avatar className="size-10 rounded-xl">
             <InitialsAvatar seed={studioName} fallbackSeed={studioLocation} alt="" size={40} />
@@ -70,7 +81,17 @@ export function DesignerOrganizationSwitcher({
               {studioLocation}
             </span>
           </span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+          {isBusy ? (
+            <Loader2
+              aria-hidden="true"
+              className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+            />
+          ) : (
+            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          {isWorkspaceRefreshing ? (
+            <span className="sr-only">Loading {studioName} workspace</span>
+          ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="bottom" className="w-56">
@@ -90,8 +111,8 @@ export function DesignerOrganizationSwitcher({
             return (
               <DropdownMenuItem
                 key={organization.id}
-                disabled={isActive || switchingId !== null}
-                className="cursor-pointer"
+                disabled={isActive || isBusy}
+                className="cursor-pointer data-[disabled]:cursor-not-allowed"
                 onSelect={(event) => {
                   event.preventDefault();
                   void handleSwitch(organization.id);
@@ -104,7 +125,17 @@ export function DesignerOrganizationSwitcher({
                     Current
                   </span>
                 ) : isSwitching ? (
-                  <span className="ml-auto text-xs text-muted-foreground">Switching…</span>
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"
+                  >
+                    <Loader2
+                      aria-hidden="true"
+                      className="size-3.5 animate-spin motion-reduce:animate-none"
+                    />
+                    Switching…
+                  </span>
                 ) : null}
               </DropdownMenuItem>
             );

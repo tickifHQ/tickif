@@ -2,19 +2,20 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState, useTransition, type ComponentType, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
+import { Skeleton } from '@repo/ui/components/skeleton';
 import {
   ArrowUpRight,
   BadgeHelp,
   CalendarDays,
   ChartLine,
   CircleUserRound,
-  FileBadge2,
+  FileUser,
   FolderKanban,
   HandCoins,
   House,
@@ -24,7 +25,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Star,
-  Users,
+  UsersRound,
   X,
 } from 'lucide-react';
 
@@ -38,7 +39,7 @@ type NavItem = {
 const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: House },
   { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
-  { label: 'Leads', href: '/designer/leads', icon: Users },
+  { label: 'Leads', href: '/designer/leads', icon: FileUser },
   { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
   { label: 'Reviews', href: '/designer/reviews', icon: Star },
   { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
@@ -47,7 +48,7 @@ const studioItems: NavItem[] = [
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/portfolio', icon: Link2 },
   { label: 'Verification', icon: ShieldCheck, comingSoon: true },
-  { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
+  { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
   { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
 ];
@@ -149,11 +150,15 @@ function SidebarContent({
   studioName,
   studioLocation,
   pathname,
+  isWorkspaceRefreshing,
+  onSwitchSuccess,
 }: {
   activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
   pathname: string;
+  isWorkspaceRefreshing: boolean;
+  onSwitchSuccess: (organizationId: string) => void;
 }) {
   return (
     <>
@@ -197,11 +202,33 @@ function SidebarContent({
               activeOrganizationId={activeOrganizationId}
               studioName={studioName}
               studioLocation={studioLocation}
+              isWorkspaceRefreshing={isWorkspaceRefreshing}
+              onSwitchSuccess={onSwitchSuccess}
             />
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+function WorkspaceContentSkeleton() {
+  return (
+    <div role="status" aria-label="Loading workspace" className="h-full overflow-hidden p-6 md:p-8">
+      <span className="sr-only">Loading the selected workspace</span>
+      <div className="mx-auto max-w-5xl space-y-6" aria-hidden="true">
+        <div className="space-y-3">
+          <Skeleton className="h-7 w-48 motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-72 max-w-full motion-reduce:animate-none" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+        </div>
+        <Skeleton className="min-h-64 rounded-2xl motion-reduce:animate-none" />
+      </div>
+    </div>
   );
 }
 
@@ -217,20 +244,40 @@ export function DesignerWorkspaceShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [refreshingOrganizationId, setRefreshingOrganizationId] = useState<string | null>(null);
+  const [isRefreshPending, startRefreshTransition] = useTransition();
+  const isWorkspaceRefreshing = refreshingOrganizationId !== null || isRefreshPending;
+
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (refreshingOrganizationId === activeOrganizationId) {
+      setRefreshingOrganizationId(null);
+    }
+  }, [activeOrganizationId, refreshingOrganizationId]);
+
+  function handleSwitchSuccess(organizationId: string) {
+    setRefreshingOrganizationId(organizationId);
+    startRefreshTransition(() => {
+      router.refresh();
+    });
+  }
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-muted/30">
       <div className="flex h-full overflow-hidden bg-muted/20">
-        <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
+        <aside className="hidden h-full w-64 shrink-0 flex-col lg:flex">
           <SidebarContent
             activeOrganizationId={activeOrganizationId}
             studioName={studioName}
             studioLocation={studioLocation}
             pathname={pathname}
+            isWorkspaceRefreshing={isWorkspaceRefreshing}
+            onSwitchSuccess={handleSwitchSuccess}
           />
         </aside>
 
@@ -257,6 +304,8 @@ export function DesignerWorkspaceShell({
               studioName={studioName}
               studioLocation={studioLocation}
               pathname={pathname}
+              isWorkspaceRefreshing={isWorkspaceRefreshing}
+              onSwitchSuccess={handleSwitchSuccess}
             />
           </DialogContent>
         </Dialog>
@@ -295,7 +344,9 @@ export function DesignerWorkspaceShell({
             </div>
           </header>
           <section className="min-h-0 flex-1 overflow-hidden rounded-b-3xl border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto">{children}</main>
+            <main className="h-full min-w-0 overflow-y-auto" aria-busy={isWorkspaceRefreshing}>
+              {isWorkspaceRefreshing ? <WorkspaceContentSkeleton /> : children}
+            </main>
           </section>
         </div>
       </div>

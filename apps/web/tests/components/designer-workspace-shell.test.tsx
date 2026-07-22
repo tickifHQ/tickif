@@ -5,10 +5,12 @@ import { DesignerWorkspaceShell } from '../../src/components/designer-workspace-
 
 const mock = vi.hoisted(() => ({
   pathname: '/designer/dashboard',
+  router: { refresh: vi.fn() },
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mock.pathname,
+  useRouter: () => mock.router,
 }));
 
 vi.mock('@/components/account-menu', () => ({
@@ -20,10 +22,80 @@ vi.mock('@/components/initials-avatar', () => ({
 }));
 
 vi.mock('@/components/designer-organization-switcher', () => ({
-  DesignerOrganizationSwitcher: () => <div data-testid="organization-switcher" />,
+  DesignerOrganizationSwitcher: ({
+    isWorkspaceRefreshing,
+    onSwitchSuccess,
+  }: {
+    isWorkspaceRefreshing?: boolean;
+    onSwitchSuccess?: (organizationId: string) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="organization-switcher"
+      data-refreshing={isWorkspaceRefreshing ? 'true' : 'false'}
+      onClick={() => onSwitchSuccess?.('org-2')}
+    >
+      Organization switcher
+    </button>
+  ),
 }));
 
 describe('DesignerWorkspaceShell', () => {
+  it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
+    mock.pathname = '/designer/dashboard';
+    mock.router.refresh.mockReset();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Studio One dashboard</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    await user.click(screen.getByTestId('organization-switcher'));
+
+    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status', { name: 'Loading workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('Studio One dashboard')).not.toBeInTheDocument();
+    expect(screen.getByTestId('organization-switcher')).toHaveAttribute('data-refreshing', 'true');
+
+    rerender(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-2"
+        studioName="Studio Two"
+        studioLocation="Pune"
+      >
+        <div>Studio Two dashboard</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(await screen.findByText('Studio Two dashboard')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading workspace' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('organization-switcher')).toHaveAttribute('data-refreshing', 'false');
+  });
+
+  it('renders the desktop sidebar without its own background or border', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const sidebar = screen.getByRole('complementary');
+
+    expect(sidebar).not.toHaveClass('bg-background/70');
+    expect(sidebar).not.toHaveClass('border-r');
+  });
+
   it('shows the product icon beside Tickif with the standard ten-pixel gap', () => {
     mock.pathname = '/designer/dashboard';
 
@@ -68,14 +140,16 @@ describe('DesignerWorkspaceShell', () => {
       'href',
       '/designer/analytics',
     );
+    const leadsLink = screen.getAllByRole('link', { name: /^leads$/i })[0];
+    expect(leadsLink).toHaveAttribute('href', '/designer/leads');
+    expect(leadsLink?.querySelector('svg')).toHaveClass('lucide-file-user');
     expect(screen.getAllByRole('link', { name: /portfolio/i })[0]).toHaveAttribute(
       'href',
       '/designer/portfolio',
     );
-    expect(screen.getAllByRole('link', { name: /terms & roles/i })[0]).toHaveAttribute(
-      'href',
-      '/designer/terms-roles',
-    );
+    const teamsAndRolesLink = screen.getAllByRole('link', { name: /teams & roles/i })[0];
+    expect(teamsAndRolesLink).toHaveAttribute('href', '/designer/terms-roles');
+    expect(teamsAndRolesLink?.querySelector('svg')).toHaveClass('lucide-users-round');
     expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute(
       'href',
       '/designer/plan-billing',

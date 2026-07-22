@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DesignerOrganizationSwitcher } from '../../src/components/designer-organization-switcher';
 
@@ -73,6 +73,82 @@ describe('DesignerOrganizationSwitcher', () => {
 
     expect(mock.setActive).toHaveBeenCalledWith({ organizationId: 'org-2' });
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a busy state and blocks repeated switches while the request is pending', async () => {
+    let resolveSwitch:
+      | ((value: { data: (typeof mock.organizations)[number]; error: null }) => void)
+      | undefined;
+    mock.setActive.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSwitch = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    await user.click(trigger);
+    await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
+
+    expect(trigger).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Switching…')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Studio One.*Current/i })).toHaveAttribute(
+      'data-disabled',
+    );
+    expect(screen.getByRole('menuitem', { name: /Studio Two.*Switching/i })).toHaveAttribute(
+      'data-disabled',
+    );
+
+    await act(async () => {
+      resolveSwitch?.({ data: mock.organizations[1]!, error: null });
+    });
+    await waitFor(() => {
+      expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('delegates the workspace refresh after a successful switch', async () => {
+    const onSwitchSuccess = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+        onSwitchSuccess={onSwitchSuccess}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
+
+    expect(onSwitchSuccess).toHaveBeenCalledWith('org-2');
+    expect(mock.router.refresh).not.toHaveBeenCalled();
+  });
+
+  it('keeps the switcher disabled while the refreshed workspace is loading', () => {
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+        isWorkspaceRefreshing
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Loading Studio One workspace')).toBeInTheDocument();
   });
 
   it('does not refresh or hide an error when switching fails', async () => {
