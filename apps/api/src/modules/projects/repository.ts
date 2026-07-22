@@ -975,4 +975,159 @@ export const projectsRepository = {
   },
 
   slugify,
+
+  // ---------------------------------------------------------------------------
+  // Public read endpoints (E-195)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Published project by slug with joined designer + org for slug resolution.
+   * Returns raw data — service handles URL signing and response composition.
+   */
+  async findPublicProjectBySlug(slug: string): Promise<{
+    project: ProjectRecord;
+    designer: {
+      id: string;
+      displayName: string;
+      orgSlug: string | null;
+      avgRating: string;
+      reviewCount: number;
+      entityType: string;
+      logoImageId: string | null;
+    };
+  } | null> {
+    const [row] = await db
+      .select({
+        project: schema.project,
+        designerId: schema.designerProfile.id,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+        designerAvgRating: schema.designerProfile.avgRating,
+        designerReviewCount: schema.designerProfile.reviewCount,
+        designerEntityType: schema.designerProfile.entityType,
+        designerLogoImageId: schema.designerProfile.logoImageId,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(
+        and(
+          eq(schema.project.slug, slug),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      project: row.project,
+      designer: {
+        id: row.designerId,
+        displayName: row.designerDisplayName,
+        orgSlug: row.designerOrgSlug,
+        avgRating: row.designerAvgRating,
+        reviewCount: row.designerReviewCount,
+        entityType: row.designerEntityType,
+        logoImageId: row.designerLogoImageId,
+      },
+    };
+  },
+
+  /**
+   * Published projects by designer ID — same feed projection as listPublishedFeed
+   * but filtered to a single designer. Used for the public profile page grid.
+   */
+  async listPublishedByDesigner(
+    designerId: string,
+    params: { limit: number; offset: number },
+  ): Promise<ProjectFeedItemRecord[]> {
+    const cover = alias(schema.projectImage, 'cover');
+    return db
+      .select({
+        id: schema.project.id,
+        slug: schema.project.slug,
+        title: schema.project.title,
+        citySlug: schema.project.citySlug,
+        localitySlug: schema.project.localitySlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
+        scopeSlug: schema.project.scopeSlug,
+        bhkSlug: schema.project.bhkSlug,
+        propertySubtypeSlug: schema.project.propertySubtypeSlug,
+        studio: schema.designerProfile.displayName,
+        rating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
+        coverStatus: cover.status,
+        coverDerivatives: cover.derivatives,
+        coverWidth: cover.width,
+        coverHeight: cover.height,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .where(
+        and(
+          eq(schema.project.designerId, designerId),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+        desc(schema.project.id),
+      )
+      .limit(params.limit)
+      .offset(params.offset);
+  },
+
+  /**
+   * Similar published projects: same city + scope + budget band + room type overlap.
+   * Rule-based matching exactly as specified — no relaxation for null values.
+   */
+  async findSimilarPublished(
+    sourceProject: Pick<ProjectRecord, 'id' | 'citySlug' | 'scopeSlug' | 'budgetBandSlug' | 'bhkSlug'>,
+    limit: number,
+  ): Promise<ProjectFeedItemRecord[]> {
+    const cover = alias(schema.projectImage, 'cover');
+    return db
+      .select({
+        id: schema.project.id,
+        slug: schema.project.slug,
+        title: schema.project.title,
+        citySlug: schema.project.citySlug,
+        localitySlug: schema.project.localitySlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
+        scopeSlug: schema.project.scopeSlug,
+        bhkSlug: schema.project.bhkSlug,
+        propertySubtypeSlug: schema.project.propertySubtypeSlug,
+        studio: schema.designerProfile.displayName,
+        rating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
+        coverStatus: cover.status,
+        coverDerivatives: cover.derivatives,
+        coverWidth: cover.width,
+        coverHeight: cover.height,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .where(
+        and(
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+          sql`${schema.project.id} != ${sourceProject.id}`,
+          sql`${schema.project.citySlug} = ${sourceProject.citySlug}`,
+          sql`${schema.project.scopeSlug} = ${sourceProject.scopeSlug}`,
+          sql`${schema.project.budgetBandSlug} = ${sourceProject.budgetBandSlug}`,
+          sql`${schema.project.bhkSlug} = ${sourceProject.bhkSlug}`,
+        ),
+      )
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+      )
+      .limit(limit);
+  },
 };
