@@ -425,3 +425,77 @@ export const deleteProjectImageResponseSchema = z
   .object({ id: z.uuid(), deleted: z.literal(true) })
   .meta({ id: 'DeleteProjectImageResponse' });
 export type DeleteProjectImageResponse = z.infer<typeof deleteProjectImageResponseSchema>;
+
+// --- Public read endpoints (E-195) ------------------------------------------
+
+/** Designer summary card embedded in the public project-by-slug response. */
+export const designerSummarySchema = z
+  .object({
+    id: z.uuid(),
+    displayName: z.string(),
+    slug: z.string().nullable(),
+    avgRating: z.string(),
+    reviewCount: z.number().int(),
+    entityType: z.enum(['individual', 'company']),
+    logoUrl: z.string().url().nullable(),
+  })
+  .meta({ id: 'DesignerSummary' });
+export type DesignerSummary = z.infer<typeof designerSummarySchema>;
+
+/** Slug path parameter for public project lookup. */
+export const projectSlugParamSchema = z
+  .object({ slug: z.string().trim().min(1).max(200) })
+  .meta({ id: 'ProjectSlugParam' });
+
+/**
+ * GET /api/projects/slug/{slug} — published-only project detail.
+ * Composed from existing schemas: project detail + designer summary + gallery.
+ */
+export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
+  .omit({ designerId: true, coverImageId: true, metadata: true, submittedAt: true, updatedAt: true })
+  .extend({
+    designer: designerSummarySchema,
+    images: z.array(galleryImageSchema),
+    coverImageUrl: z.string().url().nullable(),
+  })
+  .meta({ id: 'PublicProjectBySlug' });
+export type PublicProjectBySlugResponse = z.infer<typeof publicProjectBySlugResponseSchema>;
+
+// --- Designer's published projects (paginated) ---
+
+/** GET /api/profiles/{id}/projects?page=&limit= — query params. */
+export const designerProjectsQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+    limit: z.coerce.number().int().min(1).max(30).default(12),
+  })
+  .meta({ id: 'DesignerProjectsQuery' });
+export type DesignerProjectsQuery = z.infer<typeof designerProjectsQuerySchema>;
+
+/**
+ * GET /api/profiles/{id}/projects — response.
+ * Reuses `feedProjectSchema` for the card projection (same shape as the home feed).
+ */
+export const designerProjectsResponseSchema = z
+  .object({
+    projects: z.array(feedProjectSchema),
+    page: z.number().int(),
+    limit: z.number().int(),
+    hasMore: z.boolean(),
+  })
+  .meta({ id: 'DesignerProjectsResponse' });
+export type DesignerProjectsResponse = z.infer<typeof designerProjectsResponseSchema>;
+
+// --- Similar projects ---
+
+/**
+ * GET /api/discovery/similar/{projectId} — response.
+ * Rule-based: same city + room + budget band + scope. Limit 8.
+ * Reuses `feedProjectSchema` for the card projection.
+ */
+export const similarProjectsResponseSchema = z
+  .object({
+    projects: z.array(feedProjectSchema),
+  })
+  .meta({ id: 'SimilarProjectsResponse' });
+export type SimilarProjectsResponse = z.infer<typeof similarProjectsResponseSchema>;
