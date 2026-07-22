@@ -5,6 +5,8 @@ import {
   deleteProjectImageResponseSchema,
   deleteProjectResponseSchema,
   deleteProjectRoomResponseSchema,
+  designerProjectsQuerySchema,
+  designerProjectsResponseSchema,
   duplicateProjectResponseSchema,
   feedProjectsQuerySchema,
   feedProjectsResponseSchema,
@@ -22,6 +24,8 @@ import {
   projectIdParamSchema,
   projectRoomIdParamSchema,
   projectRoomSchema,
+  projectSlugParamSchema,
+  publicProjectBySlugResponseSchema,
   reorderProjectRoomsSchema,
   updateProjectRoomSchema,
   updateProjectSchema,
@@ -540,6 +544,29 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const { id } = c.req.valid('param');
     const result = await projectsService.submit(id, caller(c.get('user')));
     return c.json(result, 200);
-  });
+  })
+  // --- Public read endpoints (E-195) ---
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/slug/{slug}',
+      tags: ['Projects'],
+      summary: 'Public project detail by slug (published only)',
+      request: { params: projectSlugParamSchema },
+      responses: {
+        200: {
+          description: 'Published project with rooms, gallery, and designer summary',
+          content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
+        },
+        404: errorJson('Project not found or not published'),
+      },
+    }),
+    async (c) => {
+      const { slug } = c.req.valid('param');
+      const result = await projectsService.getPublicBySlug(slug);
+      c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      return c.json(result, 200);
+    },
+  );
 
 export type ProjectsRoutes = typeof projectsRoutes;
