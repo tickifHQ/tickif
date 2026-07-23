@@ -14,6 +14,7 @@ import {
   Lightbulb,
   Loader2,
   RefreshCw,
+  Star,
   X,
 } from 'lucide-react';
 import type { PortfolioResponse, UpdatePortfolioInput } from '@repo/contracts';
@@ -81,6 +82,12 @@ type SlugStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'invalid' 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const PORTFOLIO_URL_BASE = 'tickif.in';
+
+// The portfolio settings contract does not expose Google review metrics yet.
+const GOOGLE_REVIEWS_PREVIEW = {
+  averageRating: '4.8',
+  reviewCount: 42,
+} as const;
 
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey =
@@ -798,29 +805,63 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >
-                <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
-                  <div className="space-y-5">
-                    {/* Google card */}
-                    <div className="flex items-center justify-between rounded-2xl border border-border p-3 bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background border border-border">
-                          <GoogleBrandIcon className="size-6" />
+                <div className="mt-0.5 overflow-hidden rounded-xl bg-background shadow-sm">
+                  <div
+                    className="space-y-5 border-b border-border p-5"
+                    data-testid="reviews-integration"
+                  >
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/50 p-3 shadow-sm">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+                          <GoogleBrandIcon className="size-6" aria-hidden />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground">Google</p>
-                          <p className="text-[13px] text-muted-foreground">For fetching reviews from your google maps locations.</p>
+                          <p className="text-xs text-muted-foreground">
+                            For fetching reviews from your google maps locations.
+                          </p>
                         </div>
                       </div>
-                      <Badge variant="success" className="gap-2 rounded-sm p-1 font-normal">
-                        <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <Badge
+                        variant="success"
+                        className="shrink-0 gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
+                      >
+                        <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
+                          <Check aria-hidden />
+                        </span>
                         Connected
                       </Badge>
                     </div>
 
-                    <div className="h-px w-full bg-border" />
+                    <div
+                      className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground"
+                      data-testid="reviews-summary"
+                    >
+                      <Badge
+                        variant="success"
+                        className="gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
+                      >
+                        <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
+                          <Check aria-hidden />
+                        </span>
+                        Connected
+                      </Badge>
+                      <span aria-hidden>·</span>
+                      <span className="flex items-center gap-1">
+                        <span>{GOOGLE_REVIEWS_PREVIEW.averageRating}</span>
+                        <Star
+                          className="size-3.5 fill-current"
+                          data-testid="review-rating-star"
+                          aria-hidden
+                        />
+                      </span>
+                      <span aria-hidden>·</span>
+                      <span>{GOOGLE_REVIEWS_PREVIEW.reviewCount} reviews</span>
+                    </div>
+                  </div>
 
-                    {/* Toggle options */}
-                    <div className="space-y-4">
+                  <div className="p-5">
+                    <div className="space-y-5">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">Show overall ratings on your profile</p>

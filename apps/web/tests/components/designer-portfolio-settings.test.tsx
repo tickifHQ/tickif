@@ -240,6 +240,40 @@ describe('DesignerPortfolioSettings', () => {
     }
   });
 
+  it('shows the complete Google reviews connection summary', async () => {
+    await renderSettings();
+    const reviewsHeading = screen.getByRole('heading', { name: 'Reviews' });
+    const reviewsToggle = reviewsHeading.closest('button');
+
+    expect(reviewsToggle).not.toBeNull();
+    await userEvent.click(reviewsToggle!);
+
+    expect(screen.getAllByText('Connected')).toHaveLength(2);
+    expect(screen.getByText('4.8')).toBeInTheDocument();
+    expect(screen.getByText('42 reviews')).toBeInTheDocument();
+    expect(screen.getByTestId('review-rating-star')).toHaveClass(
+      'lucide-star',
+      'size-3.5',
+      'fill-current',
+    );
+    expect(
+      screen.getByTestId('reviews-summary').querySelectorAll(
+        'span[aria-hidden="true"]',
+      ),
+    ).toHaveLength(2);
+    expect(
+      Array.from(
+        screen.getByTestId('reviews-summary').querySelectorAll(
+          'span[aria-hidden="true"]',
+        ),
+      ).every((separator) => separator.textContent === '·'),
+    ).toBe(true);
+    expect(screen.getByTestId('reviews-integration')).toHaveClass(
+      'border-b',
+      'border-border',
+    );
+  });
+
   it('shows a retry-able error state when the portfolio fails to load', async () => {
     mock.fetchPortfolio.mockRejectedValueOnce(new Error('Could not load portfolio settings.'));
     render(<DesignerPortfolioSettings />);
