@@ -10,6 +10,8 @@ import type {
   LinkProjectImageInput,
   ListProjectRoomsResponse,
   ListProjectsQuery,
+  ModerationAction,
+  ModerationHistoryResponse,
   FeedProjectsQuery,
   FeedProjectsResponse,
   ProjectCompletenessResponse,
@@ -41,6 +43,7 @@ import {
   type ProjectImageAttachmentRecord,
   type ProjectImageDeletionRecord,
   type ProjectListItemRecord,
+  type ProjectModerationEventRecord,
   type ProjectOwnership,
   type ProjectRecord,
   type ProjectRoomRecord,
@@ -298,6 +301,127 @@ export type Caller = {
   isBanned: boolean;
   activeOrgId?: string | null;
 };
+
+type TransitionRule = {
+  actorRole: 'designer' | 'admin' | 'superadmin';
+  fromStatus: ProjectStatus;
+  toStatus: ProjectStatus;
+  action: ModerationAction;
+};
+
+const transitionRules: TransitionRule[] = [
+  { actorRole: 'designer', fromStatus: 'draft', toStatus: 'submitted', action: 'submit' },
+  {
+    actorRole: 'designer',
+    fromStatus: 'changes_requested',
+    toStatus: 'submitted',
+    action: 'resubmit',
+  },
+  { actorRole: 'designer', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
+  { actorRole: 'admin', fromStatus: 'submitted', toStatus: 'in_review', action: 'start_review' },
+  { actorRole: 'admin', fromStatus: 'in_review', toStatus: 'published', action: 'publish' },
+  {
+    actorRole: 'admin',
+    fromStatus: 'in_review',
+    toStatus: 'changes_requested',
+    action: 'request_changes',
+  },
+  { actorRole: 'admin', fromStatus: 'in_review', toStatus: 'rejected', action: 'reject' },
+  { actorRole: 'admin', fromStatus: 'published', toStatus: 'in_review', action: 'unpublish' },
+  {
+    actorRole: 'superadmin',
+    fromStatus: 'submitted',
+    toStatus: 'in_review',
+    action: 'start_review',
+  },
+  {
+    actorRole: 'superadmin',
+    fromStatus: 'in_review',
+    toStatus: 'published',
+    action: 'publish',
+  },
+  {
+    actorRole: 'superadmin',
+    fromStatus: 'in_review',
+    toStatus: 'changes_requested',
+    action: 'request_changes',
+  },
+  {
+    actorRole: 'superadmin',
+    fromStatus: 'in_review',
+    toStatus: 'rejected',
+    action: 'reject',
+  },
+  {
+    actorRole: 'superadmin',
+    fromStatus: 'published',
+    toStatus: 'in_review',
+    action: 'unpublish',
+  },
+];
+
+export function assertTransition(
+  fromStatus: ProjectStatus,
+  toStatus: ProjectStatus,
+  actorRole: string,
+): ModerationAction {
+  const rule = transitionRules.find(
+    (candidate) =>
+      candidate.actorRole === actorRole &&
+      candidate.fromStatus === fromStatus &&
+      candidate.toStatus === toStatus,
+  );
+  if (!rule) {
+    throw AppError.invalidTransition(
+      `${actorRole || 'unknown'} cannot transition a project from ${fromStatus} to ${toStatus}`,
+    );
+  }
+  return rule.action;
+}
+
+export async function transitionProject(
+  input: {
+    projectId: string;
+    toStatus: ProjectStatus;
+    note?: string | null;
+    reasonCode?: string | null;
+    patch?: Parameters<typeof projectsRepository.transition>[0]['patch'];
+  },
+  caller: Caller,
+): Promise<ProjectRecord> {
+  const project = await projectsRepository.findById(input.projectId);
+  if (!project) throw AppError.notFound('Project not found');
+  const action = assertTransition(project.status, input.toStatus, caller.userRole);
+
+  const transitioned = await projectsRepository.transition({
+    id: input.projectId,
+    fromStatus: project.status,
+    toStatus: input.toStatus,
+    actorUserId: caller.userId,
+    action,
+    note: input.note,
+    reasonCode: input.reasonCode,
+    patch: input.patch,
+  });
+  if (!transitioned) throw AppError.invalidTransition();
+  return transitioned;
+}
+
+function toModerationHistoryItem(
+  row: ProjectModerationEventRecord,
+): ModerationHistoryResponse['items'][number] {
+  return {
+    id: row.id,
+    action: row.action,
+    fromStatus: row.fromStatus,
+    toStatus: row.toStatus,
+    actorLabel: 'Tickif Review Team',
+    note: row.note,
+    reasonCode: row.reasonCode,
+    fieldDiff: row.fieldDiff,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
@@ -795,7 +919,11 @@ export const projectsService = {
 
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {
     await requireEditableProject(projectId, caller);
-    if (!(await projectsRepository.deleteProject(projectId))) {
+    const outcome = await projectsRepository.deleteProject(projectId);
+    if (outcome === 'moderated') {
+      throw AppError.conflict('Projects with moderation history cannot be deleted');
+    }
+    if (outcome === 'missing') {
       throw AppError.notFound('Project not found');
     }
     return { id: projectId, deleted: true };
@@ -908,6 +1036,10 @@ export const projectsService = {
     await requireEditableProject(projectId, caller);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
+    assertTransition(project.status, 'submitted', caller.userRole);
+    if (project.status !== 'draft' && project.status !== 'changes_requested') {
+      throw AppError.invalidTransition();
+    }
 
     const metadataCompleteness = buildCompleteness(
       project,
@@ -925,6 +1057,8 @@ export const projectsService = {
 
     const submission = await projectsRepository.submitWithUploadCounts(projectId, {
       minImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+      actorUserId: caller.userId,
+      expectedStatus: project.status,
     });
     if (!submission.project) throw AppError.notFound('Project not found');
 
@@ -935,10 +1069,43 @@ export const projectsService = {
       });
     }
     if (!submission.submitted) {
-      throw AppError.conflict('Only draft or changes-requested projects can be submitted');
+      throw AppError.invalidTransition();
     }
 
     return toDetailResponse(submission.submitted, await projectsRepository.listRooms(projectId));
+  },
+
+  async withdraw(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+
+    const withdrawn = await transitionProject(
+      {
+        projectId,
+        toStatus: 'draft',
+        patch: {
+          submittedAt: null,
+          moderationNote: null,
+          rejectionReasonCode: null,
+        },
+      },
+      caller,
+    );
+
+    return toDetailResponse(withdrawn, await projectsRepository.listRooms(projectId));
+  },
+
+  async moderationHistory(
+    projectId: string,
+    caller: Caller,
+  ): Promise<ModerationHistoryResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+
+    const events = await projectsRepository.listModerationHistory(projectId);
+    return { items: events.map(toModerationHistoryItem) };
   },
 
   /** Public gallery: returns presigned URLs for all ready images of a published project. */

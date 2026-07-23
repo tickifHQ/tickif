@@ -35,6 +35,18 @@ export const projectStatusEnum = pgEnum('project_status', [
   'changes_requested',
 ]);
 
+export const moderationActionEnum = pgEnum('moderation_action', [
+  'submit',
+  'resubmit',
+  'withdraw',
+  'start_review',
+  'publish',
+  'request_changes',
+  'reject',
+  'unpublish',
+  'metadata_corrected',
+]);
+
 export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
 
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
@@ -205,6 +217,11 @@ export const project = pgTable(
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
     submittedAt: timestamp('submitted_at'),
+    reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
+    reviewStartedAt: timestamp('review_started_at'),
+    rejectionReasonCode: text('rejection_reason_code'),
+    moderationNote: text('moderation_note'),
+    featuredAt: timestamp('featured_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -217,6 +234,34 @@ export const project = pgTable(
     index('project_property_type_idx').on(t.propertyTypeSlug),
     index('project_property_subtype_idx').on(t.propertySubtypeSlug),
     index('project_scope_idx').on(t.scopeSlug),
+    index('project_reviewed_by_idx').on(t.reviewedBy),
+    index('project_featured_at_idx').on(t.featuredAt),
+  ],
+);
+
+export type ModerationFieldDiff = Record<string, { from: unknown; to: unknown }>;
+
+export const projectModerationEvent = pgTable(
+  'project_moderation_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'restrict' }),
+    actorUserId: text('actor_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    action: moderationActionEnum('action').notNull(),
+    fromStatus: projectStatusEnum('from_status').notNull(),
+    toStatus: projectStatusEnum('to_status').notNull(),
+    note: text('note'),
+    reasonCode: text('reason_code'),
+    fieldDiff: jsonb('field_diff').$type<ModerationFieldDiff>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('project_moderation_event_project_created_idx').on(t.projectId, t.createdAt),
+    index('project_moderation_event_actor_idx').on(t.actorUserId),
   ],
 );
 

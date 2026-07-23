@@ -946,6 +946,18 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const body = (await submit.json()) as ProjectDetailResponse;
     expect(body).toMatchObject({ id: project.id, status: 'submitted' });
     expect(body.submittedAt).toEqual(expect.any(String));
+
+    const events = await db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, project.id));
+    expect(events).toEqual([
+      expect.objectContaining({
+        action: 'submit',
+        fromStatus: 'draft',
+        toStatus: 'submitted',
+      }),
+    ]);
   });
 
   it('counts linked processing images as complete so upload processing can finish in the background', async () => {

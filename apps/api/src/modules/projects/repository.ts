@@ -5,6 +5,8 @@ import type {
   CreateProjectInput,
   CreateProjectRoomInput,
   LinkProjectImageInput,
+  ModerationAction,
+  ModerationFieldDiff,
   ProjectListSort,
   ProjectStatus,
   ReorderProjectRoomsInput,
@@ -48,6 +50,33 @@ export type SubmitWithUploadCountsResult = {
   project: ProjectRecord | null;
   counts: UploadImageCounts;
   submitted: ProjectRecord | null;
+};
+
+export type ProjectModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
+
+export type ProjectTransitionPatch = Partial<
+  Pick<
+    ProjectRecord,
+    | 'submittedAt'
+    | 'publishedAt'
+    | 'reviewedBy'
+    | 'reviewStartedAt'
+    | 'rejectionReasonCode'
+    | 'moderationNote'
+    | 'featuredAt'
+  >
+>;
+
+export type TransitionProjectParams = {
+  id: string;
+  fromStatus: ProjectStatus;
+  toStatus: ProjectStatus;
+  actorUserId: string;
+  action: ModerationAction;
+  note?: string | null;
+  reasonCode?: string | null;
+  fieldDiff?: ModerationFieldDiff | null;
+  patch?: ProjectTransitionPatch;
 };
 
 const freshProcessingImageFilter = sql`
@@ -533,20 +562,13 @@ export const projectsRepository = {
     return row ?? null;
   },
 
-  async submit(id: string): Promise<ProjectRecord> {
-    const now = new Date();
-    const [row] = await db
-      .update(schema.project)
-      .set({ status: 'submitted', submittedAt: now, updatedAt: now })
-      .where(eq(schema.project.id, id))
-      .returning();
-    if (!row) throw new Error('update returned no row');
-    return row;
-  },
-
   async submitWithUploadCounts(
     id: string,
-    requirements: { minImageCount: number },
+    requirements: {
+      minImageCount: number;
+      actorUserId: string;
+      expectedStatus: 'draft' | 'changes_requested';
+    },
   ): Promise<SubmitWithUploadCountsResult> {
     return db.transaction(async (tx) => {
       const [project] = await tx
@@ -594,12 +616,87 @@ export const projectsRepository = {
       const now = new Date();
       const [submitted] = await tx
         .update(schema.project)
-        .set({ status: 'submitted', submittedAt: now, updatedAt: now })
-        .where(and(eq(schema.project.id, id), inArray(schema.project.status, ['draft', 'changes_requested'])))
+        .set({
+          status: 'submitted',
+          submittedAt: now,
+          reviewedBy: null,
+          reviewStartedAt: null,
+          rejectionReasonCode: null,
+          moderationNote: null,
+          updatedAt: now,
+        })
+        .where(
+          and(eq(schema.project.id, id), eq(schema.project.status, requirements.expectedStatus)),
+        )
         .returning();
+
+      if (submitted) {
+        await tx.insert(schema.projectModerationEvent).values({
+          projectId: id,
+          actorUserId: requirements.actorUserId,
+          action: requirements.expectedStatus === 'changes_requested' ? 'resubmit' : 'submit',
+          fromStatus: requirements.expectedStatus,
+          toStatus: 'submitted',
+        });
+      }
 
       return { project, counts, submitted: submitted ?? null };
     });
+  },
+
+  async transition(params: TransitionProjectParams): Promise<ProjectRecord | null> {
+    return db.transaction(async (tx) => {
+      const [transitioned] = await tx
+        .update(schema.project)
+        .set({
+          ...params.patch,
+          status: params.toStatus,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.project.id, params.id), eq(schema.project.status, params.fromStatus)))
+        .returning();
+
+      if (!transitioned) return null;
+
+      await tx.insert(schema.projectModerationEvent).values({
+        projectId: params.id,
+        actorUserId: params.actorUserId,
+        action: params.action,
+        fromStatus: params.fromStatus,
+        toStatus: params.toStatus,
+        note: params.note ?? null,
+        reasonCode: params.reasonCode ?? null,
+        fieldDiff: params.fieldDiff ?? null,
+      });
+
+      if (params.fromStatus !== 'published' && params.toStatus === 'published') {
+        await tx
+          .update(schema.designerProfile)
+          .set({
+            projectCount: sql`${schema.designerProfile.projectCount} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.designerProfile.id, transitioned.designerId));
+      } else if (params.fromStatus === 'published' && params.toStatus !== 'published') {
+        await tx
+          .update(schema.designerProfile)
+          .set({
+            projectCount: sql`greatest(${schema.designerProfile.projectCount} - 1, 0)`,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.designerProfile.id, transitioned.designerId));
+      }
+
+      return transitioned;
+    });
+  },
+
+  async listModerationHistory(projectId: string): Promise<ProjectModerationEventRecord[]> {
+    return db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, projectId))
+      .orderBy(asc(schema.projectModerationEvent.createdAt), asc(schema.projectModerationEvent.id));
   },
 
   async getUploadImageCounts(projectId: string): Promise<UploadImageCounts> {
@@ -627,11 +724,26 @@ export const projectsRepository = {
     };
   },
 
-  async deleteProject(id: string): Promise<boolean> {
-    const rows = await db.delete(schema.project).where(eq(schema.project.id, id)).returning({
-      id: schema.project.id,
+  async deleteProject(id: string): Promise<'deleted' | 'moderated' | 'missing'> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ id: schema.project.id })
+        .from(schema.project)
+        .where(eq(schema.project.id, id))
+        .for('update')
+        .limit(1);
+      if (!project) return 'missing';
+
+      const [event] = await tx
+        .select({ id: schema.projectModerationEvent.id })
+        .from(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, id))
+        .limit(1);
+      if (event) return 'moderated';
+
+      await tx.delete(schema.project).where(eq(schema.project.id, id));
+      return 'deleted';
     });
-    return rows.length > 0;
   },
 
   async findDesignerByUserId(userId: string): Promise<{ id: string; orgId: string } | null> {

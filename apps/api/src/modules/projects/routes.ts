@@ -13,6 +13,7 @@ import {
   listProjectRoomsResponseSchema,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
+  moderationHistoryResponseSchema,
   portfolioProjectsQuerySchema,
   portfolioProjectsResponseSchema,
   projectCompletenessResponseSchema,
@@ -417,6 +418,45 @@ const submitRoute = createRoute({
   },
 });
 
+const withdrawRoute = createRoute({
+  method: 'post',
+  path: '/{id}/withdraw',
+  tags: ['Projects'],
+  summary: 'Withdraw an owned submitted project back to draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Withdrawn project',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot withdraw this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Project is not submitted or changed concurrently'),
+  },
+});
+
+const moderationHistoryRoute = createRoute({
+  method: 'get',
+  path: '/{id}/moderation-history',
+  tags: ['Projects'],
+  summary: 'Get moderation history for an owned project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Project moderation history',
+      content: { 'application/json': { schema: moderationHistoryResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot read this moderation history'),
+    404: errorJson('Project not found'),
+  },
+});
+
 export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -541,6 +581,16 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(submitRoute, async (c) => {
     const { id } = c.req.valid('param');
     const result = await projectsService.submit(id, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(withdrawRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.withdraw(id, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(moderationHistoryRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.moderationHistory(id, caller(c.get('user')));
     return c.json(result, 200);
   })
   // --- Public read endpoints (E-195) ---
