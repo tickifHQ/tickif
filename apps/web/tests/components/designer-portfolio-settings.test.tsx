@@ -238,8 +238,26 @@ describe('DesignerPortfolioSettings', () => {
       });
 
       expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      expect(section.getContent()).toBeInTheDocument();
+      const content = section.getContent();
+      expect(content).toBeInTheDocument();
+      expect(content.closest('[data-slot="portfolio-section-content"]')).toHaveClass(
+        'border',
+        'border-border',
+      );
     }
+  });
+
+  it('applies the section border to every expanded dropdown content card', async () => {
+    await renderSettings();
+
+    const initiallyExpandedContent = document.querySelectorAll(
+      '[data-slot="portfolio-section-content"]',
+    );
+
+    expect(initiallyExpandedContent).toHaveLength(3);
+    initiallyExpandedContent.forEach((content) => {
+      expect(content).toHaveClass('border', 'border-border');
+    });
   });
 
   it('shows the complete Google reviews connection summary', async () => {

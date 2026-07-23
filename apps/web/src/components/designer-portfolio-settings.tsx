@@ -509,7 +509,10 @@ export function DesignerPortfolioSettings() {
               onToggleExpanded={() => toggleExpanded('linkUrl')}
               compact
             >
-              <div className="mt-0.5 overflow-hidden rounded-xl bg-background shadow-sm">
+              <div
+                data-slot="portfolio-section-content"
+                className="mt-0.5 overflow-hidden rounded-xl border border-border bg-background shadow-sm"
+              >
                 <div className="flex items-start justify-between gap-5 border-b border-border p-5">
                   <div>
                     <Label className="text-sm font-medium text-foreground">Public link</Label>
@@ -593,7 +596,10 @@ export function DesignerPortfolioSettings() {
               onToggleExpanded={() => toggleExpanded('customizations')}
               compact
             >
-              <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
+              <div
+                data-slot="portfolio-section-content"
+                className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+              >
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <Label className="text-sm font-medium mt-2 text-muted-foreground">Accent colour</Label>
@@ -634,7 +640,10 @@ export function DesignerPortfolioSettings() {
                 onToggleExpanded={() => toggleExpanded('hero')}
                 compact
               >
-                <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+                >
                   <div className="space-y-4">
                     {/* Logo upload + Studio name */}
                     <div className="flex items-start gap-3">
@@ -729,7 +738,10 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.trust}
                 onToggleExpanded={() => toggleExpanded('trust')}
               >
-                <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+                >
                   {portfolio.badges.length > 0 ? (
                     <div className="flex flex-wrap gap-4">
                       {portfolio.badges.map((badge) => {
@@ -759,7 +771,10 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.testimonial}
                 onToggleExpanded={() => toggleExpanded('testimonial')}
               >
-                <div className="mt-0.5 rounded-xl bg-background p-6 shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-6 shadow-sm"
+                >
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Their words</Label>
@@ -810,7 +825,10 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >
-                <div className="mt-0.5 overflow-hidden rounded-xl bg-background shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 overflow-hidden rounded-xl border border-border bg-background shadow-sm"
+                >
                   <div
                     className="space-y-5 border-b border-border p-5"
                     data-testid="reviews-integration"
@@ -901,7 +919,10 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.socialLinks}
                 onToggleExpanded={() => toggleExpanded('socialLinks')}
               >
-                <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+                >
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Website</Label>
@@ -965,7 +986,10 @@ export function DesignerPortfolioSettings() {
                 expanded={sectionExpanded.shareBlock}
                 onToggleExpanded={() => toggleExpanded('shareBlock')}
               >
-                <div className="mt-0.5 rounded-xl bg-background p-4 shadow-sm">
+                <div
+                  data-slot="portfolio-section-content"
+                  className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
+                >
                   <div className="space-y-4">
                     <p className="text-[15px] text-muted-foreground font-medium mt-1.5">
                       Encourages visitors to copy and share your portfolio link. Uses your studio name, cover, and accent colour.
