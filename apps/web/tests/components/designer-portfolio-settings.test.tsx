@@ -57,7 +57,7 @@ const basePortfolio: PortfolioResponse = {
   showPositiveReviewsOnly: false,
   showTickifBadge: true,
   badges: ['verified'],
-  portfolioUrl: 'https://tickif.com/p/mahi-studio',
+  portfolioUrl: 'https://tickif.com/d/mahi-studio',
   publishedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
@@ -92,7 +92,7 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
-    expect(screen.getByText('https://tickif.com/p/mahi-studio')).toBeInTheDocument();
+    expect(screen.getByText('https://tickif.com/d/mahi-studio')).toBeInTheDocument();
   });
 
   it('copies the canonical preview URL when the backend portfolio URL is not available yet', async () => {
@@ -103,7 +103,7 @@ describe('DesignerPortfolioSettings', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
     await user.click(screen.getByRole('button', { name: 'Copy link' }));
 
-    expect(writeText).toHaveBeenCalledWith('https://tickif.in/mahi-studio');
+    expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/mahi-studio');
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 

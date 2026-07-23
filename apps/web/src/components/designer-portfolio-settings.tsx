@@ -40,6 +40,7 @@ import {
   YouTubeBrandIcon,
 } from '@/components/brand-icons';
 import { CopyLinkButton } from '@/components/copy-link-button';
+import { env } from '@/env';
 import {
   checkSlugAvailability,
   deleteLogo,
@@ -81,7 +82,8 @@ type SlugStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'invalid' 
 /** Mirrors the contract's portfolioSlugSchema regex (packages/contracts/src/profiles.ts). */
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-const PORTFOLIO_URL_BASE = 'tickif.in';
+const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
+const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
 
 // The portfolio settings contract does not expose Google review metrics yet.
 const GOOGLE_REVIEWS_PREVIEW = {
@@ -471,8 +473,11 @@ export function DesignerPortfolioSettings() {
   const initials = form.displayName
     ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'SM';
-  const previewUrl = `${PORTFOLIO_URL_BASE}/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl = portfolio.portfolioUrl ?? `https://${previewUrl}`;
+  const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
+  const previewUrl = `${PORTFOLIO_URL_BASE}${portfolioPath}`;
+  const copyUrl =
+    portfolio.portfolioUrl ??
+    new URL(portfolioPath, portfolioWebUrl).toString();
 
   // -------------------------------------------------------------------------
   // Render
@@ -524,7 +529,7 @@ export function DesignerPortfolioSettings() {
                     <div className="flex h-8 min-w-0 flex-1 overflow-hidden rounded-md border border-input bg-background shadow-xs focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                       <span className="flex shrink-0 items-center gap-1 bg-muted/50 px-2 text-sm font-medium text-muted-foreground">
                         <Globe className="size-4" aria-hidden />
-                        {PORTFOLIO_URL_BASE}/
+                        {PORTFOLIO_URL_BASE}/d/
                       </span>
                       <Input
                         value={form.portfolioSlug}
