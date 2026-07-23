@@ -1093,7 +1093,7 @@ export function DesignerPortfolioSettings() {
             type="button"
             onClick={handleDiscard}
             disabled={!isDirty || isSaving}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            className="text-sm font-medium text-foreground"
           >
             Discard changes
           </button>

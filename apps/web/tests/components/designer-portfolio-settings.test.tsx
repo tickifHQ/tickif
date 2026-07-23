@@ -120,6 +120,8 @@ describe('DesignerPortfolioSettings', () => {
     const discardButton = screen.getByRole('button', { name: 'Discard changes' });
     const actionBar = discardButton.parentElement?.parentElement;
 
+    expect(discardButton).toHaveClass('text-foreground');
+    expect(discardButton).not.toHaveClass('text-muted-foreground', 'disabled:opacity-50');
     expect(actionBar).toHaveClass('bottom-6');
     expect(actionBar).not.toHaveClass('bottom-0');
   });
