@@ -19,6 +19,8 @@ overrides:
   "fast-uri@<3.1.4": 3.1.4
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.3
+  # postcss arbitrary file read (GHSA-6g55-p6wh-862q): Next pins an older 8.x.
+  "postcss@<8.5.12": 8.5.15
 
 onlyBuiltDependencies:
   - msw
@@ -65,7 +67,7 @@ catalog:
   typesense: ^3.0.6
 
   # Frontend
-  next: ^16.2.7
+  next: ^16.2.11
   react: ^19.0.0
   react-dom: ^19.0.0
   "@types/react": ^19.2.17
