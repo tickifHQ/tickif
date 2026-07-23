@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "enqueue:demo": "tsx src/enqueue-demo.ts",
     "media:reprocess": "tsx src/reprocess-media.ts",
+    "media:backfill-duplicates": "tsx src/backfill-duplicate-flags.ts",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

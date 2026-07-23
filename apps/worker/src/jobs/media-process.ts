@@ -188,6 +188,8 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
     width: validation.width,
     height: validation.height,
     phash,
+    duplicateOfImageId: duplicate?.imageId ?? null,
+    duplicateDistance: duplicate?.distance ?? null,
   });
   // Another run already finished this image; its derivatives overwrote ours (idempotent keys).
   if (!flipped) return { ok: true, skipped: 'lost-race' };

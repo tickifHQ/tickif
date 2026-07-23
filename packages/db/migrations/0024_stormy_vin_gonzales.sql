@@ -1,0 +1,1 @@
+ALTER TABLE "project_image" ADD COLUMN "duplicate_checked_at" timestamp;

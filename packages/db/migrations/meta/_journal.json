@@ -155,6 +155,27 @@
       "when": 1784831447575,
       "tag": "0021_aspiring_dormammu",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784832961518,
+      "tag": "0022_last_cargill",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784833037145,
+      "tag": "0023_fresh_prowler",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784833570501,
+      "tag": "0024_stormy_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

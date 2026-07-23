@@ -386,6 +386,7 @@ export async function transitionProject(
     note?: string | null;
     reasonCode?: string | null;
     patch?: Parameters<typeof projectsRepository.transition>[0]['patch'];
+    expectedModerationRevision?: number;
   },
   caller: Caller,
 ): Promise<ProjectRecord> {
@@ -402,6 +403,7 @@ export async function transitionProject(
     note: input.note,
     reasonCode: input.reasonCode,
     patch: input.patch,
+    expectedModerationRevision: input.expectedModerationRevision,
   });
   if (!transitioned) throw AppError.invalidTransition();
   return transitioned;
@@ -455,7 +457,7 @@ async function requireReadableProject(projectId: string, caller: Caller): Promis
   return project;
 }
 
-async function validateProjectTaxonomy(input: {
+export async function validateProjectTaxonomy(input: {
   propertyTypeSlug?: string | null;
   propertySubtypeSlug?: string | null;
   scopeSlug?: string | null;
@@ -739,8 +741,11 @@ async function validateRoomType(roomTypeId: string): Promise<void> {
   }
 }
 
-function buildCompleteness(
-  project: ProjectRecord,
+export function buildCompleteness(
+  project: Pick<
+    ProjectRecord,
+    'title' | 'citySlug' | 'propertyTypeSlug' | 'scopeSlug' | 'budgetBandSlug'
+  >,
   imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
   const requirements = [
