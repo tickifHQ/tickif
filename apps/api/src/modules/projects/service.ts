@@ -4,6 +4,8 @@ import type {
   DeleteProjectImageResponse,
   DeleteProjectResponse,
   DeleteProjectRoomResponse,
+  DesignerProjectsQuery,
+  DesignerProjectsResponse,
   DuplicateProjectResponse,
   LinkProjectImageInput,
   ListProjectRoomsResponse,
@@ -20,10 +22,12 @@ import type {
   PortfolioProjectStatusCounts,
   PortfolioProjectStatusGroup,
   ProjectResponse,
+  PublicProjectBySlugResponse,
   ListProjectsResponse,
   ProjectRoom,
   ProjectStatus,
   ReorderProjectRoomsInput,
+  SimilarProjectsResponse,
   UpdateProjectInput,
   UpdateProjectRoomInput,
   Derivative,
@@ -1026,5 +1030,161 @@ export const projectsService = {
     );
 
     return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Public read endpoints (E-195)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /api/projects/slug/{slug} — published project detail with designer summary,
+   * rooms, and gallery images. Public, no auth.
+   */
+  async getPublicBySlug(slug: string): Promise<PublicProjectBySlugResponse> {
+    const result = await projectsRepository.findPublicProjectBySlug(slug);
+    if (!result) throw AppError.notFound('Project not found');
+
+    const { project, designer } = result;
+
+    // Load rooms, gallery images, cover image, and logo URL in parallel
+    const [rooms, rawGalleryImages, coverImages, logoUrl] = await Promise.all([
+      projectsRepository.listRooms(project.id),
+      projectsRepository.listPublicGalleryImages(project.id),
+      project.coverImageId
+        ? projectsRepository.findCoverImages([project.coverImageId])
+        : Promise.resolve(new Map()),
+      designer.logoImageId
+        ? presignDownload({ key: designer.logoImageId }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    // Presign gallery images (parallel)
+    const galleryImages = (
+      await Promise.all(
+        rawGalleryImages.map(async (img) => {
+          const key = pickGalleryDerivative(img.derivatives ?? []);
+          if (!key) return null;
+          const url = await presignDownload({ key }).catch(() => null);
+          if (!url) return null;
+          return { id: img.id, url, width: img.width, height: img.height, roomName: img.roomName };
+        }),
+      )
+    ).filter((item): item is NonNullable<typeof item> => item !== null);
+
+    // Resolve cover URL
+    let resolvedCoverUrl: string | null = null;
+    if (project.coverImageId) {
+      const coverImg = coverImages.get(project.coverImageId);
+      if (coverImg) {
+        resolvedCoverUrl = await coverImageUrl({
+          status: coverImg.status,
+          derivatives: coverImg.derivatives,
+        }).catch(() => null);
+      }
+    }
+
+    return {
+      id: project.id,
+      title: project.title,
+      slug: project.slug,
+      description: project.description,
+      status: project.status,
+      propertyTypeSlug: project.propertyTypeSlug,
+      propertySubtypeSlug: project.propertySubtypeSlug,
+      scopeSlug: project.scopeSlug,
+      bhkSlug: project.bhkSlug,
+      sizeSqft: project.sizeSqft,
+      citySlug: project.citySlug,
+      localitySlug: project.localitySlug,
+      buildingName: project.buildingName,
+      budgetBandSlug: project.budgetBandSlug,
+      completedMonth: project.completedMonth,
+      durationMonths: project.durationMonths,
+      publishedAt: project.publishedAt?.toISOString() ?? null,
+      createdAt: project.createdAt.toISOString(),
+      rooms: rooms.map(toRoomResponse),
+      images: galleryImages,
+      coverImageUrl: resolvedCoverUrl,
+      designer: {
+        id: designer.id,
+        displayName: designer.displayName,
+        slug: designer.orgSlug,
+        avgRating: designer.avgRating,
+        reviewCount: designer.reviewCount,
+        entityType: designer.entityType as 'individual' | 'company',
+        logoUrl,
+      },
+    };
+  },
+
+  /**
+   * GET /api/profiles/{id}/projects — paginated published projects for a designer.
+   * Reuses feed projection (same card shape as the home feed).
+   */
+  async designerProjects(
+    designerId: string,
+    query: DesignerProjectsQuery,
+  ): Promise<DesignerProjectsResponse> {
+    // Verify the designer profile exists and is active
+    const profile = await projectsRepository.findDesignerById(designerId);
+    if (!profile || profile.status !== 'active') {
+      throw AppError.notFound('Designer profile not found');
+    }
+
+    const { page, limit } = query;
+    const rows = await projectsRepository.listPublishedByDesigner(designerId, {
+      limit: limit + 1,
+      offset: (page - 1) * limit,
+    });
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const [labels, localityLabels] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(pageRows.flatMap(feedTaxonomyPairs)),
+      projectsRepository.findLocalityLabels(pageRows.flatMap(feedLocalityPairs)),
+    ]);
+
+    const projects = await Promise.all(
+      pageRows.map(async (row) => {
+        const cover = await coverImageUrl({
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        }).catch(() => null);
+        return toFeedProject(row, labels, localityLabels, cover);
+      }),
+    );
+
+    return { projects, page, limit, hasMore };
+  },
+
+  /**
+   * GET /api/discovery/similar/{projectId} — similar published projects.
+   * Rule-based: same city + bhk + budget band + scope on denormalized slug columns.
+   */
+  async similarProjects(projectId: string): Promise<SimilarProjectsResponse> {
+    const project = await projectsRepository.findById(projectId);
+    if (!project || project.status !== 'published') {
+      throw AppError.notFound('Project not found');
+    }
+
+    const rows = await projectsRepository.findSimilarPublished(project, 8);
+
+    const [labels, localityLabels] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(rows.flatMap(feedTaxonomyPairs)),
+      projectsRepository.findLocalityLabels(rows.flatMap(feedLocalityPairs)),
+    ]);
+
+    const projects = await Promise.all(
+      rows.map(async (row) => {
+        const cover = await coverImageUrl({
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        }).catch(() => null);
+        return toFeedProject(row, labels, localityLabels, cover);
+      }),
+    );
+
+    return { projects };
   },
 };

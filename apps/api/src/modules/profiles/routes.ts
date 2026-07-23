@@ -18,6 +18,8 @@ import {
   logoUploadUrlResponseSchema,
   logoCommitRequestSchema,
   uploadLogoResponseSchema,
+  designerProjectsQuerySchema,
+  designerProjectsResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
 import { setActiveOrganization } from '@repo/auth';
@@ -27,6 +29,7 @@ import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
 import { portfolioService } from './portfolio-service.js';
+import { projectsService } from '../projects/service.js';
 
 /**
  * Profiles HTTP routes. Authenticated endpoints for the current user's profile.
@@ -484,6 +487,36 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
         activeOrgId: session?.activeOrganizationId ?? null,
       });
       return c.body(null, 204);
+    },
+  )
+  // --- Public read endpoints (E-195) ---
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/{id}/projects',
+      tags: ['Profiles'],
+      summary: 'Published projects for a designer profile (public, paginated)',
+      request: {
+        params: profileIdParamSchema,
+        query: designerProjectsQuerySchema,
+      },
+      responses: {
+        200: {
+          description: 'Paginated published projects (feed card projection)',
+          content: { 'application/json': { schema: designerProjectsResponseSchema } },
+        },
+        404: {
+          description: 'Designer profile not found or inactive',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const query = c.req.valid('query');
+      const result = await projectsService.designerProjects(id, query);
+      c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      return c.json(result, 200);
     },
   );
 

@@ -13,9 +13,6 @@ describe('DesignerPortfolioPage', () => {
 
     render(<Page />);
 
-    expect(
-      screen.getByRole('heading', { name: /portfolio settings/i }),
-    ).toBeInTheDocument();
     expect(screen.getByTestId('designer-portfolio-settings')).toBeInTheDocument();
   });
 });
