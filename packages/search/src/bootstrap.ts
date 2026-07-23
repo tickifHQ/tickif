@@ -1,154 +1,315 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
-  MeilisearchApiError,
-  type EnqueuedTask,
-  type Health,
-  type Settings,
-  type Task,
-} from 'meilisearch';
+  Errors,
+  type Client,
+  type CollectionAliasCreateSchema,
+  type CollectionAliasSchema,
+  type CollectionCreateSchema,
+  type CollectionFieldSchema,
+  type CollectionSchema,
+  type CollectionUpdateSchema,
+  type HealthResponse,
+  type SynonymSetCreateSchema,
+} from 'typesense';
 import {
   assertSearchConfig,
-  searchClient,
-  searchIndexName,
-  type SearchIndexKind,
+  initialSearchCollectionName,
+  SEARCH_COLLECTION_KINDS,
+  searchBootstrapClient,
+  searchCollectionName,
+  searchSynonymSetName,
 } from './client.js';
-import { DESIGNER_SEARCH_SETTINGS, PROJECT_SEARCH_SETTINGS } from './settings.js';
-
-const MANAGED_SETTINGS = {
-  projects: PROJECT_SEARCH_SETTINGS,
-  designers: DESIGNER_SEARCH_SETTINGS,
-} satisfies Record<SearchIndexKind, Settings>;
-
-type SearchSettingsIndex = {
-  getSettings(): Promise<Settings>;
-  updateSettings(settings: Settings): Promise<EnqueuedTask>;
-};
+import { searchCollectionSchema } from './settings.js';
+import { SEARCH_SYNONYM_SET } from './synonyms.js';
 
 export type SearchBootstrapClient = {
-  health(): Promise<Health>;
-  getIndex(uid: string): Promise<unknown>;
-  createIndex(uid: string, options: { primaryKey: string }): Promise<EnqueuedTask>;
-  index(uid: string): SearchSettingsIndex;
-  tasks: {
-    waitForTask(task: EnqueuedTask): Promise<Task>;
-  };
+  health(): Promise<HealthResponse>;
+  getCollection(name: string): Promise<CollectionSchema>;
+  createCollection(schema: CollectionCreateSchema): Promise<CollectionSchema>;
+  updateCollection(name: string, schema: CollectionUpdateSchema): Promise<CollectionSchema>;
+  getAlias(name: string): Promise<CollectionAliasSchema>;
+  upsertAlias(
+    name: string,
+    alias: CollectionAliasCreateSchema,
+  ): Promise<CollectionAliasSchema>;
+  getSynonymSet(name: string): Promise<SynonymSetCreateSchema>;
+  upsertSynonymSet(
+    name: string,
+    synonymSet: SynonymSetCreateSchema,
+  ): Promise<SynonymSetCreateSchema>;
 };
 
 export type SearchBootstrapResult = {
-  createdIndexes: string[];
-  updatedIndexes: string[];
+  createdCollections: string[];
+  updatedCollections: string[];
+  createdAliases: string[];
+  updatedSynonymSet: boolean;
 };
 
-function errorCode(error: unknown): string | undefined {
-  if (error instanceof MeilisearchApiError) return error.cause?.code;
-  if (typeof error !== 'object' || error === null || !('cause' in error)) return undefined;
-  const cause = error.cause;
-  if (typeof cause !== 'object' || cause === null || !('code' in cause)) return undefined;
-  return typeof cause.code === 'string' ? cause.code : undefined;
-}
-
-function selectedSettings(actual: Settings, expected: Settings): Settings {
-  return Object.fromEntries(
-    Object.keys(expected).map((key) => [key, actual[key as keyof Settings]]),
-  ) as Settings;
-}
-
-function sortedStringArray(value: unknown): unknown {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string')
-    ? [...value].sort()
-    : value;
-}
-
-function normalizedManagedSettings(actual: Settings, expected: Settings): Settings {
-  const selected = selectedSettings(actual, expected);
-  const synonyms = selected.synonyms
-    ? Object.fromEntries(
-        Object.entries(selected.synonyms)
-          .sort(([left], [right]) => left.localeCompare(right))
-          .map(([term, alternatives]) => [term, [...alternatives].sort()]),
-      )
-    : selected.synonyms;
-
+function typesenseBootstrapClient(instance: Client): SearchBootstrapClient {
   return {
-    ...selected,
-    // Meilisearch v1.13 returns these set-like attributes alphabetically.
-    // Searchable attributes and ranking rules intentionally retain order.
-    filterableAttributes: sortedStringArray(
-      selected.filterableAttributes,
-    ) as Settings['filterableAttributes'],
-    sortableAttributes: sortedStringArray(
-      selected.sortableAttributes,
-    ) as Settings['sortableAttributes'],
-    synonyms,
+    health: () => instance.health.retrieve(),
+    getCollection: (name) => instance.collections(name).retrieve(),
+    createCollection: (schema) => instance.collections().create(schema),
+    updateCollection: (name, schema) => instance.collections(name).update(schema),
+    getAlias: (name) => instance.aliases(name).retrieve(),
+    upsertAlias: (name, alias) => instance.aliases().upsert(name, alias),
+    getSynonymSet: (name) => instance.synonymSets(name).retrieve(),
+    upsertSynonymSet: (name, synonymSet) =>
+      instance.synonymSets(name).upsert(synonymSet),
   };
 }
 
-async function waitForSuccess(instance: SearchBootstrapClient, task: EnqueuedTask): Promise<Task> {
-  const completed = await instance.tasks.waitForTask(task);
-  if (completed.status !== 'succeeded') {
-    throw new Error(
-      `Meilisearch task ${completed.uid} ${completed.status}: ${completed.error?.message ?? 'unknown error'}`,
-      { cause: completed.error },
-    );
-  }
-  return completed;
+function httpStatus(error: unknown): number | undefined {
+  if (error instanceof Errors.TypesenseError) return error.httpStatus;
+  if (typeof error !== 'object' || error === null || !('httpStatus' in error)) return undefined;
+  return typeof error.httpStatus === 'number' ? error.httpStatus : undefined;
 }
 
-async function ensureIndex(
+function isNotFound(error: unknown): boolean {
+  return error instanceof Errors.ObjectNotFound || httpStatus(error) === 404;
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return error instanceof Errors.ObjectAlreadyExists || httpStatus(error) === 409;
+}
+
+function defaultSortable(type: CollectionFieldSchema['type']): boolean {
+  return ['int32', 'int64', 'float'].includes(type);
+}
+
+function normalizedField(field: CollectionFieldSchema) {
+  return {
+    name: field.name,
+    type: field.type,
+    optional: field.optional ?? false,
+    facet: field.facet ?? false,
+    index: field.index ?? true,
+    sort: field.sort ?? defaultSortable(field.type),
+    infix: field.infix ?? false,
+    stem: field.stem ?? false,
+    store: field.store ?? true,
+    range_index: field.range_index ?? false,
+  };
+}
+
+function normalizedSchema(schema: CollectionCreateSchema | CollectionSchema) {
+  return {
+    fields: schema.fields.map(normalizedField).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    ),
+    default_sorting_field: schema.default_sorting_field ?? '',
+    synonym_sets: [...(schema.synonym_sets ?? [])].sort(),
+    token_separators: [...(schema.token_separators ?? [])].sort(),
+    symbols_to_index: [...(schema.symbols_to_index ?? [])].sort(),
+  };
+}
+
+function normalizedSynonymSet(synonymSet: SynonymSetCreateSchema) {
+  return {
+    items: synonymSet.items
+      .map((item) => ({
+        ...item,
+        root: item.root || undefined,
+        synonyms: [...item.synonyms].sort(),
+        symbols_to_index: item.symbols_to_index
+          ? [...item.symbols_to_index].sort()
+          : undefined,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  };
+}
+
+function collectionUpdate(
+  current: CollectionSchema,
+  expected: CollectionCreateSchema,
+): CollectionUpdateSchema {
+  const fields: NonNullable<CollectionUpdateSchema['fields']> = [];
+  const currentFields = new Map(current.fields.map((field) => [field.name, field]));
+  const expectedFields = new Map(expected.fields.map((field) => [field.name, field]));
+
+  for (const field of current.fields) {
+    const next = expectedFields.get(field.name);
+    if (!next) {
+      fields.push({ name: field.name, drop: true });
+      continue;
+    }
+    if (!isDeepStrictEqual(normalizedField(field), normalizedField(next))) {
+      fields.push({ name: field.name, drop: true }, next);
+    }
+  }
+
+  for (const field of expected.fields) {
+    if (!currentFields.has(field.name)) fields.push(field);
+  }
+
+  const update: CollectionUpdateSchema = {};
+  if (fields.length > 0) update.fields = fields;
+  if (
+    (current.default_sorting_field ?? '') !==
+    (expected.default_sorting_field ?? '')
+  ) {
+    update.default_sorting_field = expected.default_sorting_field;
+  }
+  if (
+    !isDeepStrictEqual(
+      [...(current.synonym_sets ?? [])].sort(),
+      [...(expected.synonym_sets ?? [])].sort(),
+    )
+  ) {
+    update.synonym_sets = expected.synonym_sets ?? [];
+  }
+  if (
+    !isDeepStrictEqual(
+      [...(current.token_separators ?? [])].sort(),
+      [...(expected.token_separators ?? [])].sort(),
+    )
+  ) {
+    update.token_separators = expected.token_separators ?? [];
+  }
+  if (
+    !isDeepStrictEqual(
+      [...(current.symbols_to_index ?? [])].sort(),
+      [...(expected.symbols_to_index ?? [])].sort(),
+    )
+  ) {
+    update.symbols_to_index = expected.symbols_to_index ?? [];
+  }
+  return update;
+}
+
+async function ensureSynonymSet(
   instance: SearchBootstrapClient,
-  uid: string,
   check: boolean,
+  applyUpdates: boolean,
 ): Promise<boolean> {
+  const name = searchSynonymSetName();
+  let current: SynonymSetCreateSchema | undefined;
+
   try {
-    await instance.getIndex(uid);
+    current = await instance.getSynonymSet(name);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+
+  if (
+    current &&
+    isDeepStrictEqual(
+      normalizedSynonymSet(current),
+      normalizedSynonymSet(SEARCH_SYNONYM_SET),
+    )
+  ) {
     return false;
-  } catch (error) {
-    if (errorCode(error) !== 'index_not_found') throw error;
   }
 
-  if (check) throw new Error(`Search settings drift: index ${uid} does not exist`);
-
-  const task = await instance.createIndex(uid, { primaryKey: 'id' });
-  try {
-    await waitForSuccess(instance, task);
-  } catch (error) {
-    // Multiple API replicas may bootstrap concurrently. A completed competing
-    // create is equivalent to success; every other task failure remains fatal.
-    if (errorCode(error) !== 'index_already_exists') throw error;
+  if (check || (current && !applyUpdates)) {
+    throw new Error(
+      `Search configuration drift: synonym set ${name} ${
+        current ? 'does not match checked-in configuration' : 'does not exist'
+      }${current && !check ? '; run bootstrap with --apply-updates' : ''}`,
+    );
   }
+
+  await instance.upsertSynonymSet(name, SEARCH_SYNONYM_SET);
   return true;
+}
+
+async function ensureCollection(
+  instance: SearchBootstrapClient,
+  expected: CollectionCreateSchema,
+  check: boolean,
+  applyUpdates: boolean,
+): Promise<{ created: boolean; updated: boolean }> {
+  let current: CollectionSchema | undefined;
+
+  try {
+    current = await instance.getCollection(expected.name);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+
+  if (!current) {
+    if (check) {
+      throw new Error(`Search configuration drift: collection ${expected.name} does not exist`);
+    }
+
+    try {
+      await instance.createCollection(expected);
+      return { created: true, updated: false };
+    } catch (error) {
+      // Multiple API replicas may bootstrap concurrently. A competing create
+      // is equivalent to success; every other failure remains fatal.
+      if (!isAlreadyExists(error)) throw error;
+      current = await instance.getCollection(expected.name);
+    }
+  }
+
+  if (isDeepStrictEqual(normalizedSchema(current), normalizedSchema(expected))) {
+    return { created: false, updated: false };
+  }
+
+  if (check || !applyUpdates) {
+    throw new Error(
+      `Search configuration drift: collection ${expected.name} does not match checked-in schema${
+        check ? '' : '; run bootstrap with --apply-updates'
+      }`,
+    );
+  }
+
+  await instance.updateCollection(expected.name, collectionUpdate(current, expected));
+  return { created: false, updated: true };
 }
 
 export async function bootstrapSearch(
   options: {
+    applyUpdates?: boolean;
     check?: boolean;
     client?: SearchBootstrapClient;
   } = {},
 ): Promise<SearchBootstrapResult> {
   assertSearchConfig();
-  const instance = options.client ?? searchClient();
-  await instance.health();
+  const instance = options.client ?? typesenseBootstrapClient(searchBootstrapClient());
+  const health = await instance.health();
+  if (!health.ok) throw new Error('Typesense is not healthy');
 
-  const result: SearchBootstrapResult = { createdIndexes: [], updatedIndexes: [] };
+  const check = options.check ?? false;
+  const applyUpdates = options.applyUpdates ?? false;
+  const result: SearchBootstrapResult = {
+    createdCollections: [],
+    updatedCollections: [],
+    createdAliases: [],
+    updatedSynonymSet: await ensureSynonymSet(instance, check, applyUpdates),
+  };
 
-  for (const kind of ['projects', 'designers'] as const) {
-    const uid = searchIndexName(kind);
-    if (await ensureIndex(instance, uid, options.check ?? false)) {
-      result.createdIndexes.push(uid);
+  for (const kind of SEARCH_COLLECTION_KINDS) {
+    const aliasName = searchCollectionName(kind);
+    let collectionName: string;
+    let aliasExists = true;
+
+    try {
+      collectionName = (await instance.getAlias(aliasName)).collection_name;
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+      if (check) {
+        throw new Error(`Search configuration drift: collection alias ${aliasName} does not exist`);
+      }
+      aliasExists = false;
+      collectionName = initialSearchCollectionName(kind);
     }
 
-    const index = instance.index(uid);
-    const expected = MANAGED_SETTINGS[kind];
-    const current = normalizedManagedSettings(await index.getSettings(), expected);
-    const normalizedExpected = normalizedManagedSettings(expected, expected);
-    if (isDeepStrictEqual(current, normalizedExpected)) continue;
+    const outcome = await ensureCollection(
+      instance,
+      searchCollectionSchema(kind, collectionName),
+      check,
+      applyUpdates,
+    );
+    if (outcome.created) result.createdCollections.push(collectionName);
+    if (outcome.updated) result.updatedCollections.push(collectionName);
 
-    if (options.check) {
-      throw new Error(`Search settings drift: index ${uid} does not match checked-in settings`);
+    if (!aliasExists) {
+      await instance.upsertAlias(aliasName, { collection_name: collectionName });
+      result.createdAliases.push(aliasName);
     }
-
-    await waitForSuccess(instance, await index.updateSettings(expected));
-    result.updatedIndexes.push(uid);
   }
 
   return result;

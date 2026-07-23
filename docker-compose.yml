@@ -33,20 +33,23 @@ services:
       timeout: 5s
       retries: 5
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.13
-    container_name: tickif-meilisearch
+  typesense:
+    image: typesense/typesense:30.2
+    container_name: tickif-typesense
     restart: unless-stopped
-    environment:
-      MEILI_ENV: development
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-tickif-local-master-key}
-      MEILI_NO_ANALYTICS: "true"
+    command: >-
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-tickif-local-typesense-key}
     ports:
-      - "${MEILI_PORT:-7700}:7700"
+      - "${TYPESENSE_PORT:-8108}:8108"
     volumes:
-      - meilisearch_data:/meili_data
+      - typesense_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail http://localhost:7700/health >/dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8108; printf \"GET /health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; grep -q ok <&3'",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -76,5 +79,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  meilisearch_data:
+  typesense_data:
   minio_data:

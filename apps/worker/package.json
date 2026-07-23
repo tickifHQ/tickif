@@ -15,6 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@babel/runtime": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@repo/config": "workspace:*",
@@ -25,8 +26,8 @@
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
-    "meilisearch": "catalog:",
-    "sharp": "catalog:"
+    "sharp": "catalog:",
+    "typesense": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

@@ -1,46 +1,72 @@
 import { config, isProduction } from '@repo/config';
-import { Meilisearch, type Index } from 'meilisearch';
+import { Client } from 'typesense';
 import type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
 
-const LOCAL_MASTER_KEY = 'tickif-local-master-key';
+const LOCAL_API_KEY = 'tickif-local-typesense-key';
 
-export const SEARCH_INDEX_KINDS = ['projects', 'designers'] as const;
-export type SearchIndexKind = (typeof SEARCH_INDEX_KINDS)[number];
+export const SEARCH_COLLECTION_KINDS = ['projects', 'designers'] as const;
+export type SearchCollectionKind = (typeof SEARCH_COLLECTION_KINDS)[number];
 
 /** Fail before startup work if production is using the checked-in local credential. */
 export function assertSearchConfig(): void {
-  if (isProduction && config.MEILI_MASTER_KEY === LOCAL_MASTER_KEY) {
-    throw new Error('MEILI_MASTER_KEY must be replaced in production');
+  if (isProduction && config.TYPESENSE_API_KEY === LOCAL_API_KEY) {
+    throw new Error('TYPESENSE_API_KEY must be replaced in production');
   }
 }
 
-export function searchIndexName(
-  kind: SearchIndexKind,
-  prefix: string = config.MEILI_INDEX_PREFIX,
+export function searchCollectionName(
+  kind: SearchCollectionKind,
+  prefix: string = config.TYPESENSE_COLLECTION_PREFIX,
 ): string {
   return `${prefix}_${kind}`;
 }
 
-let client: Meilisearch | undefined;
+export function initialSearchCollectionName(
+  kind: SearchCollectionKind,
+  prefix: string = config.TYPESENSE_COLLECTION_PREFIX,
+): string {
+  return `${searchCollectionName(kind, prefix)}_v1`;
+}
+
+export function searchSynonymSetName(
+  prefix: string = config.TYPESENSE_COLLECTION_PREFIX,
+): string {
+  return `${prefix}_search_synonyms`;
+}
+
+let client: Client | undefined;
+let bootstrapClient: Client | undefined;
 
 /** Lazily constructed so importing document types never opens a network connection. */
-export function searchClient(): Meilisearch {
-  client ??= new Meilisearch({
-    host: config.MEILI_HOST,
-    apiKey: config.MEILI_MASTER_KEY,
-    defaultWaitOptions: { timeout: 30_000, interval: 50 },
+export function searchClient(): Client {
+  client ??= new Client({
+    nodes: [{ url: config.TYPESENSE_HOST }],
+    apiKey: config.TYPESENSE_API_KEY,
+    connectionTimeoutSeconds: 10,
+    numRetries: 3,
+    retryIntervalSeconds: 0.1,
   });
   return client;
 }
 
-export function projectsIndex(
-  instance: Meilisearch = searchClient(),
-): Index<ProjectSearchDocument> {
-  return instance.index<ProjectSearchDocument>(searchIndexName('projects'));
+/**
+ * Admin client for startup/bootstrap work. Schema alterations are synchronous,
+ * so retries are disabled to avoid replaying a long-running request.
+ */
+export function searchBootstrapClient(): Client {
+  bootstrapClient ??= new Client({
+    nodes: [{ url: config.TYPESENSE_HOST }],
+    apiKey: config.TYPESENSE_API_KEY,
+    connectionTimeoutSeconds: 120,
+    numRetries: 0,
+  });
+  return bootstrapClient;
 }
 
-export function designersIndex(
-  instance: Meilisearch = searchClient(),
-): Index<DesignerSearchDocument> {
-  return instance.index<DesignerSearchDocument>(searchIndexName('designers'));
+export function projectsCollection(instance: Client = searchClient()) {
+  return instance.collections<ProjectSearchDocument>(searchCollectionName('projects'));
+}
+
+export function designersCollection(instance: Client = searchClient()) {
+  return instance.collections<DesignerSearchDocument>(searchCollectionName('designers'));
 }

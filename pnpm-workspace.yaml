@@ -61,7 +61,8 @@ catalog:
   sharp: ^0.35.3
 
   # Search
-  meilisearch: ^0.59.0
+  "@babel/runtime": ^7.29.0
+  typesense: ^3.0.6
 
   # Frontend
   next: ^16.2.7

@@ -7,7 +7,7 @@ import { app } from './app.js';
 // The API mints presigned upload URLs, so a prod boot must have R2 wired — fail fast here.
 if (isProduction) assertMediaStorageConfig();
 
-// Search indexes are disposable projections, but their settings are part of
+// Search collections are disposable projections, but their schemas are part of
 // the application contract. Reconcile them before accepting API traffic.
 await bootstrapSearch();
 

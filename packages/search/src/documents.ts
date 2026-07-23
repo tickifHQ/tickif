@@ -1,4 +1,4 @@
-/** Disposable Meilisearch projection of a published project. Postgres is authoritative. */
+/** Disposable Typesense projection of a published project. Postgres is authoritative. */
 export type ProjectSearchDocument = {
   id: string;
   slug: string;
@@ -27,7 +27,7 @@ export type ProjectSearchDocument = {
   publishedAt: number;
 };
 
-/** Disposable Meilisearch projection of an active designer profile. */
+/** Disposable Typesense projection of an active designer profile. */
 export type DesignerSearchDocument = {
   id: string;
   slug: string | null;

@@ -17,8 +17,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@babel/runtime": "catalog:",
     "@repo/config": "workspace:*",
-    "meilisearch": "catalog:"
+    "typesense": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

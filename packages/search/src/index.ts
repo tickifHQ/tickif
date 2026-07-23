@@ -1,11 +1,14 @@
 export {
-  SEARCH_INDEX_KINDS,
+  SEARCH_COLLECTION_KINDS,
   assertSearchConfig,
-  designersIndex,
-  projectsIndex,
+  designersCollection,
+  initialSearchCollectionName,
+  projectsCollection,
+  searchBootstrapClient,
   searchClient,
-  searchIndexName,
-  type SearchIndexKind,
+  searchCollectionName,
+  searchSynonymSetName,
+  type SearchCollectionKind,
 } from './client.js';
 export type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
 export {
@@ -13,5 +16,13 @@ export {
   type SearchBootstrapClient,
   type SearchBootstrapResult,
 } from './bootstrap.js';
-export { DESIGNER_SEARCH_SETTINGS, PROJECT_SEARCH_SETTINGS } from './settings.js';
-export { SEARCH_SYNONYMS } from './synonyms.js';
+export {
+  DESIGNER_DEFAULT_SORT,
+  DESIGNER_QUERY_BY,
+  DESIGNER_SEARCH_SETTINGS,
+  PROJECT_DEFAULT_SORT,
+  PROJECT_QUERY_BY,
+  PROJECT_SEARCH_SETTINGS,
+  searchCollectionSchema,
+} from './settings.js';
+export { SEARCH_SYNONYMS, SEARCH_SYNONYM_SET } from './synonyms.js';

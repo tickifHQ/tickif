@@ -53,11 +53,11 @@ const envSchema = z.object({
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
 
-  // Meilisearch. The local key matches docker-compose; production startup
+  // Typesense. The local key matches docker-compose; production startup
   // rejects it in @repo/search so a development credential cannot leak through.
-  MEILI_HOST: z.string().url().default('http://localhost:7700'),
-  MEILI_MASTER_KEY: z.string().min(16).default('tickif-local-master-key'),
-  MEILI_INDEX_PREFIX: z
+  TYPESENSE_HOST: z.string().url().default('http://localhost:8108'),
+  TYPESENSE_API_KEY: z.string().min(16).default('tickif-local-typesense-key'),
+  TYPESENSE_COLLECTION_PREFIX: z
     .string()
     .trim()
     .min(1)
