@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 import { config } from '@repo/config';
 import { buildWatermarkSvg, type WatermarkConfig } from './watermark.js';
 
@@ -39,7 +39,7 @@ export type GenerateOptions = {
   limitInputPixels?: number;
 };
 
-function encode(pipeline: sharp.Sharp, format: DerivativeFormat): sharp.Sharp {
+function encode(pipeline: Sharp, format: DerivativeFormat): Sharp {
   return format === 'webp' ? pipeline.webp({ quality: 82 }) : pipeline.avif({ quality: 50 });
 }
 
