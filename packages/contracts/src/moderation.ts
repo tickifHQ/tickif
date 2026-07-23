@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { projectStatus } from './projects.js';
+import { projectStatus } from './projects';
 
 export const moderationAction = z
   .enum([
