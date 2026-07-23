@@ -18,6 +18,8 @@ import {
   logoUploadUrlResponseSchema,
   logoCommitRequestSchema,
   uploadLogoResponseSchema,
+  connectGooglePlaceSchema,
+  googleReviewsResponseSchema,
   designerProjectsQuerySchema,
   designerProjectsResponseSchema,
   errorResponseSchema,
@@ -28,6 +30,7 @@ import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
 import { portfolioService } from './portfolio-service.js';
+import { googleReviewsService } from './google-service.js';
 import { projectsService } from '../projects/service.js';
 
 /**
@@ -448,6 +451,123 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const user = c.get('user')!;
       const session = c.get('session');
       await portfolioService.deleteLogo({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.body(null, 204);
+    },
+  )
+  // --- Google reviews (portfolio Google Business integration) ---
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/me/portfolio/google',
+      tags: ['Portfolio'],
+      summary: 'Get the Google review connection + cached reviews',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        200: {
+          description: 'Connection state, availability, and cached reviews',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'No active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await googleReviewsService.get({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/google/connect',
+      tags: ['Portfolio'],
+      summary: 'Connect a Google Business location and fetch its reviews',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: { content: { 'application/json': { schema: connectGooglePlaceSchema } } },
+      },
+      responses: {
+        200: {
+          description: 'Connection stored (pending first fetch)',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        400: { description: 'Invalid Google Business reference', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Feature unavailable or location not found', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const input = c.req.valid('json');
+      const result = await googleReviewsService.connect(input, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/google/refresh',
+      tags: ['Portfolio'],
+      summary: 'Re-fetch the connected Google location in the background',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        202: {
+          description: 'Refresh enqueued; returns the current cached state',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No Google location connected', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await googleReviewsService.refresh({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 202);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'delete',
+      path: '/me/portfolio/google',
+      tags: ['Portfolio'],
+      summary: 'Disconnect the Google Business location',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        204: { description: 'Disconnected' },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      await googleReviewsService.disconnect({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
       });

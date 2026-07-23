@@ -10,6 +10,10 @@ const mock = vi.hoisted(() => ({
   checkSlugAvailability: vi.fn(),
   uploadLogo: vi.fn(),
   deleteLogo: vi.fn(),
+  fetchGoogleReviews: vi.fn(),
+  connectGoogleReviews: vi.fn(),
+  refreshGoogleReviews: vi.fn(),
+  disconnectGoogleReviews: vi.fn(),
 }));
 
 vi.mock('@/lib/portfolio-api', () => ({
@@ -18,6 +22,10 @@ vi.mock('@/lib/portfolio-api', () => ({
   checkSlugAvailability: mock.checkSlugAvailability,
   uploadLogo: mock.uploadLogo,
   deleteLogo: mock.deleteLogo,
+  fetchGoogleReviews: mock.fetchGoogleReviews,
+  connectGoogleReviews: mock.connectGoogleReviews,
+  refreshGoogleReviews: mock.refreshGoogleReviews,
+  disconnectGoogleReviews: mock.disconnectGoogleReviews,
 }));
 
 const basePortfolio: PortfolioResponse = {
@@ -47,10 +55,13 @@ const basePortfolio: PortfolioResponse = {
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: 'https://tickif.com/p/mahi-studio',
+  googleConnection: null,
   publishedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
+
+const NOT_CONNECTED_GOOGLE = { available: true, connection: null, reviews: [] };
 
 // The E-195 design uses visually-styled labels that aren't associated with
 // their inputs via htmlFor, so we target inputs by their placeholder text.
@@ -68,6 +79,7 @@ describe('DesignerPortfolioSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock.fetchPortfolio.mockResolvedValue(basePortfolio);
+    mock.fetchGoogleReviews.mockResolvedValue(NOT_CONNECTED_GOOGLE);
   });
 
   afterEach(() => {
@@ -275,5 +287,65 @@ describe('DesignerPortfolioSettings', () => {
     // The in-flight edit is preserved, so the form stays dirty and savable.
     expect(tagline).toHaveValue('First edit plus more');
     expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+  });
+
+  describe('Google reviews', () => {
+    // The Reviews section is collapsed by default; expand it to reveal the card.
+    async function expandReviews() {
+      const user = userEvent.setup();
+      await renderSettings();
+      await user.click(screen.getByRole('button', { name: 'Toggle Reviews details' }));
+      return user;
+    }
+
+    it('shows a Connect input when no location is linked', async () => {
+      await expandReviews();
+      expect(
+        await screen.findByPlaceholderText('Google Maps link or business name'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /connect/i })).toBeDisabled();
+    });
+
+    it('connects a location and shows the pending state', async () => {
+      mock.connectGoogleReviews.mockResolvedValue({
+        available: true,
+        connection: { status: 'pending', placeId: 'ChIJabc', rating: null, userRatingsTotal: null, lastFetchedAt: null },
+        reviews: [],
+      });
+
+      const user = await expandReviews();
+      const input = await screen.findByPlaceholderText('Google Maps link or business name');
+      await user.type(input, 'Studio Aakar, Bengaluru');
+      await user.click(screen.getByRole('button', { name: /connect/i }));
+
+      await waitFor(() => {
+        expect(mock.connectGoogleReviews).toHaveBeenCalledWith('Studio Aakar, Bengaluru');
+      });
+      expect(await screen.findByText('Connecting')).toBeInTheDocument();
+    });
+
+    it('renders the connected rating from the loaded snapshot', async () => {
+      mock.fetchGoogleReviews.mockResolvedValue({
+        available: true,
+        connection: {
+          status: 'connected',
+          placeId: 'ChIJabc',
+          rating: 4.8,
+          userRatingsTotal: 132,
+          lastFetchedAt: '2026-07-23T00:00:00.000Z',
+        },
+        reviews: [],
+      });
+
+      await expandReviews();
+      expect(await screen.findByText(/132 Google reviews/i)).toBeInTheDocument();
+      expect(screen.getByText('Connected')).toBeInTheDocument();
+    });
+
+    it('reports the feature as unavailable when the platform has no key', async () => {
+      mock.fetchGoogleReviews.mockResolvedValue({ available: false, connection: null, reviews: [] });
+      await expandReviews();
+      expect(await screen.findByText(/isn.t enabled on this workspace/i)).toBeInTheDocument();
+    });
   });
 });

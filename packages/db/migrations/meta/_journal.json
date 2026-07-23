@@ -148,6 +148,13 @@
       "when": 1783878597141,
       "tag": "0020_tan_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784829036855,
+      "tag": "0021_unique_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }

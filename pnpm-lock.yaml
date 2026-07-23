@@ -200,6 +200,9 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@repo/google-places':
+        specifier: workspace:*
+        version: link:../../packages/google-places
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -373,6 +376,9 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@repo/google-places':
+        specifier: workspace:*
+        version: link:../../packages/google-places
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -555,6 +561,34 @@ importers:
       typescript-eslint:
         specifier: ^8.20.0
         version: 8.60.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+
+  packages/google-places:
+    dependencies:
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../config
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@repo/vitest-config':
+        specifier: workspace:*
+        version: link:../vitest-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.0.0
+      eslint:
+        specifier: ^9.18.0
+        version: 9.39.4(jiti@2.7.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@26.0.0)(@vitest/coverage-v8@4.1.8)(happy-dom@20.10.6)(msw@2.14.6(@types/node@26.0.0)(typescript@5.9.3))(vite@8.0.16(@types/node@26.0.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/queue:
     dependencies:
