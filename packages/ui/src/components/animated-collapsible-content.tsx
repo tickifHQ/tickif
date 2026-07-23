@@ -18,7 +18,6 @@ export function AnimatedCollapsibleContent({
 }) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isVisible, setIsVisible] = useState(open);
-  const isRenderedRef = useRef(open);
   const hasHandledInitialStateRef = useRef(false);
   const openFrameRef = useRef<number | null>(null);
   const openSecondFrameRef = useRef<number | null>(null);
@@ -50,36 +49,44 @@ export function AnimatedCollapsibleContent({
     clearScheduledAnimationWork();
 
     if (open) {
-      if (isRenderedRef.current) {
-        setIsVisible(true);
-        return clearScheduledAnimationWork;
-      }
-
-      isRenderedRef.current = true;
       setShouldRender(true);
       setIsVisible(false);
-
-      openFrameRef.current = window.requestAnimationFrame(() => {
-        openSecondFrameRef.current = window.requestAnimationFrame(() => {
-          setIsVisible(true);
-          openFrameRef.current = null;
-          openSecondFrameRef.current = null;
-        });
-      });
-
       return clearScheduledAnimationWork;
     }
 
     setIsVisible(false);
 
     closeTimerRef.current = window.setTimeout(() => {
-      isRenderedRef.current = false;
       setShouldRender(false);
       closeTimerRef.current = null;
     }, UNMOUNT_FALLBACK_MS);
 
     return clearScheduledAnimationWork;
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !shouldRender || isVisible) return;
+
+    openFrameRef.current = window.requestAnimationFrame(() => {
+      openSecondFrameRef.current = window.requestAnimationFrame(() => {
+        setIsVisible(true);
+        openFrameRef.current = null;
+        openSecondFrameRef.current = null;
+      });
+    });
+
+    return () => {
+      if (openFrameRef.current !== null) {
+        window.cancelAnimationFrame(openFrameRef.current);
+        openFrameRef.current = null;
+      }
+
+      if (openSecondFrameRef.current !== null) {
+        window.cancelAnimationFrame(openSecondFrameRef.current);
+        openSecondFrameRef.current = null;
+      }
+    };
+  }, [isVisible, open, shouldRender]);
 
   if (!shouldRender) return null;
 
@@ -99,7 +106,6 @@ export function AnimatedCollapsibleContent({
           closeTimerRef.current = null;
         }
 
-        isRenderedRef.current = false;
         setShouldRender(false);
       }}
     >

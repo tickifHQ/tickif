@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Image from 'next/image';
 import {
   AlertCircle,
+  ArrowRight,
   Check,
   ChevronsUpDown,
   Copy,
@@ -37,6 +38,7 @@ import {
   LinkedInBrandIcon,
   YouTubeBrandIcon,
 } from '@/components/brand-icons';
+import { CopyLinkButton } from '@/components/copy-link-button';
 import {
   checkSlugAvailability,
   deleteLogo,
@@ -463,6 +465,7 @@ export function DesignerPortfolioSettings() {
     ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'SM';
   const previewUrl = `${PORTFOLIO_URL_BASE}/${form.portfolioSlug || 'your-studio'}`;
+  const copyUrl = portfolio.portfolioUrl ?? `https://${previewUrl}`;
 
   // -------------------------------------------------------------------------
   // Render
@@ -623,38 +626,40 @@ export function DesignerPortfolioSettings() {
                   <div className="space-y-4">
                     {/* Logo upload + Studio name */}
                     <div className="flex items-start gap-3">
-                      <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
-                        {portfolio.logoUrl ? (
-                          <Image
-                            src={portfolio.logoUrl}
-                            alt="Portfolio logo"
-                            fill
-                            unoptimized
-                            className="object-cover"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleLogoUploadClick}
-                            disabled={isUploadingLogo}
-                            className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                            aria-label="Upload logo"
-                          >
-                            {isUploadingLogo ? (
-                              <Loader2 className="size-6 animate-spin" />
-                            ) : (
-                              <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                              </svg>
-                            )}
-                          </button>
-                        )}
+                      <div className="relative size-16.5 shrink-0">
+                        <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
+                          {portfolio.logoUrl ? (
+                            <Image
+                              src={portfolio.logoUrl}
+                              alt="Portfolio logo"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleLogoUploadClick}
+                              disabled={isUploadingLogo}
+                              className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                              aria-label="Upload logo"
+                            >
+                              {isUploadingLogo ? (
+                                <Loader2 className="size-6 animate-spin" />
+                              ) : (
+                                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                </svg>
+                              )}
+                            </button>
+                          )}
+                        </div>
                         {portfolio.logoUrl && (
                           <button
                             type="button"
                             onClick={handleLogoDelete}
                             disabled={isDeletingLogo}
-                            className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white disabled:opacity-50"
+                            className="absolute -right-1 -top-1 z-10 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white disabled:opacity-50"
                             aria-label="Remove logo"
                           >
                             {isDeletingLogo ? (
@@ -720,7 +725,7 @@ export function DesignerPortfolioSettings() {
                         if (!meta) return null;
                         return (
                           <div key={badge} className="flex flex-col items-center">
-                            <img src={meta.src} alt={meta.label} className="h-20 w-auto" />
+                            <img src={meta.src} alt={meta.label} className="h-22 w-auto" />
                           </div>
                         );
                       })}
@@ -956,19 +961,14 @@ export function DesignerPortfolioSettings() {
                 </svg>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Live preview</span>
               </div>
-              {portfolio.portfolioUrl ? (
-                <a
-                  href={portfolio.portfolioUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-sm font-medium text-foreground transition-colors hover:text-primary"
-                >
-                  Open full
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </a>
-              ) : null}
+              <button
+                type="button"
+                disabled
+                className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-foreground transition-colors"
+              >
+                Open full
+                <ArrowRight className="size-3.5" aria-hidden />
+              </button>
             </div>
 
             {/* URL bar */}
@@ -1029,18 +1029,11 @@ export function DesignerPortfolioSettings() {
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (portfolio.portfolioUrl) {
-                      void navigator.clipboard?.writeText(portfolio.portfolioUrl);
-                    }
-                  }}
+                <CopyLinkButton
+                  value={copyUrl}
+                  variant="emphasis"
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] py-3 text-sm font-medium text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:from-[#3e4148] hover:to-[#1f2228]"
-                >
-                  <Copy className="size-4" />
-                  Copy link
-                </button>
+                />
               </div>
             </Card>
           </div>
@@ -1048,7 +1041,7 @@ export function DesignerPortfolioSettings() {
       </div>
 
       {/* Footer */}
-      <div className="sticky bottom-0 z-10 mx-6 mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-6 py-4 shadow-md">
+      <div className="sticky bottom-6 z-10 mx-6 mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-6 py-4 shadow-md">
         <div className="flex items-center gap-3">
           <button
             type="button"

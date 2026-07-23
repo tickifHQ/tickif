@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +20,15 @@ vi.mock('@/lib/portfolio-api', () => ({
   checkSlugAvailability: mock.checkSlugAvailability,
   uploadLogo: mock.uploadLogo,
   deleteLogo: mock.deleteLogo,
+}));
+
+vi.mock('next/image', () => ({
+  default: ({
+    fill: _fill,
+    unoptimized: _unoptimized,
+    ...imageProps
+  }: ComponentProps<'img'> & { fill?: boolean; unoptimized?: boolean }) =>
+    createElement('img', imageProps),
 }));
 
 const basePortfolio: PortfolioResponse = {
@@ -82,6 +93,49 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
     expect(screen.getByText('https://tickif.com/p/mahi-studio')).toBeInTheDocument();
+  });
+
+  it('copies the canonical preview URL when the backend portfolio URL is not available yet', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
+    await renderSettings();
+
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+
+    expect(writeText).toHaveBeenCalledWith('https://tickif.in/mahi-studio');
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
+
+  it('disables the full portfolio control while the public page is unavailable', async () => {
+    await renderSettings();
+
+    expect(screen.getByRole('button', { name: 'Open full' })).toBeDisabled();
+    expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the sticky action bar inset from the viewport bottom', async () => {
+    await renderSettings();
+
+    const discardButton = screen.getByRole('button', { name: 'Discard changes' });
+    const actionBar = discardButton.parentElement?.parentElement;
+
+    expect(actionBar).toHaveClass('bottom-6');
+    expect(actionBar).not.toHaveClass('bottom-0');
+  });
+
+  it('keeps the remove-logo control outside the clipped image layer', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
+    await renderSettings();
+
+    const logo = screen.getAllByAltText('Portfolio logo')[0];
+    const removeLogo = screen.getByRole('button', { name: 'Remove logo' });
+
+    expect(logo?.parentElement).toHaveClass('overflow-hidden');
+    expect(removeLogo.parentElement).not.toHaveClass('overflow-hidden');
   });
 
   it('keeps collapsible content mounted while the close transition runs', async () => {
