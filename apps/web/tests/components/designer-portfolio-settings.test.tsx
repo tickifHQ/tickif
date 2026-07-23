@@ -84,6 +84,108 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByText('https://tickif.com/p/mahi-studio')).toBeInTheDocument();
   });
 
+  it('keeps collapsible content mounted while the close transition runs', async () => {
+    const slugInput = await renderSettings();
+    const linkSectionToggle = screen.getByRole('button', { name: /link & url/i });
+
+    vi.useFakeTimers();
+    fireEvent.click(linkSectionToggle);
+
+    expect(linkSectionToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(slugInput).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(320);
+    });
+
+    expect(slugInput).not.toBeInTheDocument();
+  });
+
+  it('opens the Link & URL content with one click after it has fully collapsed', async () => {
+    await renderSettings();
+    const linkSectionToggle = screen.getByRole('button', { name: /link & url/i });
+
+    vi.useFakeTimers();
+    fireEvent.click(linkSectionToggle);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(320);
+    });
+
+    expect(screen.queryByPlaceholderText(SLUG_PLACEHOLDER)).not.toBeInTheDocument();
+
+    fireEvent.click(linkSectionToggle);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+
+    expect(linkSectionToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByPlaceholderText(SLUG_PLACEHOLDER)).toBeInTheDocument();
+  });
+
+  it('reverses the Link & URL close transition when reopened immediately', async () => {
+    const slugInput = await renderSettings();
+    const linkSectionToggle = screen.getByRole('button', { name: /link & url/i });
+    vi.useFakeTimers();
+    fireEvent.click(linkSectionToggle);
+    fireEvent.click(linkSectionToggle);
+
+    expect(linkSectionToggle).toHaveAttribute('aria-expanded', 'true');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(320);
+    });
+
+    expect(slugInput).toBeInTheDocument();
+  });
+
+  it('opens every initially collapsed portfolio section with one click', async () => {
+    await renderSettings();
+    const sections = [
+      {
+        name: 'Trust & credentials',
+        getContent: () => screen.getByAltText('Verified'),
+      },
+      {
+        name: 'Featured testimonial',
+        getContent: () => screen.getByPlaceholderText('Select a project'),
+      },
+      {
+        name: 'Reviews',
+        getContent: () => screen.getByText(/for fetching reviews from your google maps locations/i),
+      },
+      {
+        name: 'Social links',
+        getContent: () => screen.getByText(/^website$/i),
+      },
+      {
+        name: 'Share block',
+        getContent: () =>
+          screen.getByText(/encourages visitors to copy and share your portfolio link/i),
+      },
+    ];
+
+    vi.useFakeTimers();
+
+    for (const section of sections) {
+      const heading = screen.getByRole('heading', { name: section.name });
+      const toggle = heading.closest('button');
+
+      expect(toggle).not.toBeNull();
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+      if (!toggle) continue;
+      fireEvent.click(toggle);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(32);
+      });
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(section.getContent()).toBeInTheDocument();
+    }
+  });
+
   it('shows a retry-able error state when the portfolio fails to load', async () => {
     mock.fetchPortfolio.mockRejectedValueOnce(new Error('Could not load portfolio settings.'));
     render(<DesignerPortfolioSettings />);
