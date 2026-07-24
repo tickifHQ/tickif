@@ -1,7 +1,7 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import {
-  ArrowDown,
   BadgeCheck,
   Bookmark,
   CalendarDays,
@@ -15,7 +15,6 @@ import {
   Quote,
   Shield,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkle,
   Star,
 } from 'lucide-react';
@@ -27,7 +26,7 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { GoogleBrandIcon, InstagramBrandIcon, LinkedInBrandIcon } from '@/components/brand-icons';
 import { TrustStrip, type TrustStripItem } from '@/components/trust-strip';
 import { env } from '@/env';
-import { PublicProjectCard } from '@/components/public-project-card';
+import { PublicProjectGallery } from '@/components/public-project-gallery';
 import type {
   PublicDesignerProfileViewModel,
   PublicDesignerReview,
@@ -56,42 +55,41 @@ const credentials = [
   },
 ];
 
-const projectSortOptions = ['Featured', 'Newest', 'Most viewed', 'Top rated', 'Largest'];
-
 const profileTrustItems = [
   { icon: Check, label: '12,400+ verified projects' },
   { icon: Shield, label: 'Every designer phone-verified' },
   { icon: Sparkle, label: 'Free to browse · No middlemen' },
 ] satisfies TrustStripItem[];
 
-function DisabledAction({
+function LoginGatedAction({
   children,
   className,
   variant = 'default',
   ariaLabel,
+  href,
 }: {
   children: ReactNode;
   className?: string;
   variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost';
   ariaLabel?: string;
+  href: string;
 }) {
   return (
     <Button
-      type="button"
+      asChild
       variant={variant}
       className={className}
-      disabled
-      title="Available when the profile is connected to live services"
-      aria-label={ariaLabel}
     >
-      {children}
+      <Link href={href} aria-label={ariaLabel}>
+        {children}
+      </Link>
     </Button>
   );
 }
 
 function SectionEyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="font-mono text-xs font-medium tracking-widest text-primary uppercase">
+    <p className="font-mono text-xs font-medium tracking-widest text-muted-foreground uppercase">
       {children}
     </p>
   );
@@ -100,9 +98,11 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
 function StudioBar({
   profile,
   publicProfileHref,
+  loginHref,
 }: {
   profile: PublicDesignerProfileViewModel;
   publicProfileHref: string;
+  loginHref: string;
 }) {
   return (
     <div className="border-b bg-background/95">
@@ -117,8 +117,12 @@ function StudioBar({
               <BadgeCheck className="size-4 shrink-0 fill-primary text-primary-foreground" />
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {profile.studioType} · <Star className="inline size-3 fill-warning text-warning" />{' '}
-              {profile.rating} · {profile.location.split(' · ')[0]}
+              {profile.studioType} ·{' '}
+              <span className="inline-flex -translate-y-px items-center gap-1 align-middle">
+                <Star className="size-3 fill-warning text-warning" />
+                <span>{profile.rating}</span>
+              </span>{' '}
+              · {profile.location.split(' · ')[0]}
             </p>
           </div>
         </div>
@@ -130,22 +134,29 @@ function StudioBar({
             variant="outline"
             className="hidden h-9 rounded-full px-4 sm:inline-flex"
           />
-          <DisabledAction
+          <LoginGatedAction
             variant="emphasis"
             ariaLabel="Start a conversation"
-            className="h-9 rounded-full px-4 disabled:opacity-100"
+            className="h-9 rounded-full px-4"
+            href={loginHref}
           >
             <MessageCircle className="size-4" />
             <span className="hidden sm:inline">Start a conversation</span>
             <span className="sm:hidden">Start</span>
-          </DisabledAction>
+          </LoginGatedAction>
         </div>
       </div>
     </div>
   );
 }
 
-function HeroSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
+function HeroSection({
+  profile,
+  loginHref,
+}: {
+  profile: PublicDesignerProfileViewModel;
+  loginHref: string;
+}) {
   const stats = [
     {
       value: profile.rating,
@@ -186,7 +197,7 @@ function HeroSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
               </div>
             </div>
             <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-3 text-xs">
-              <Shield className="size-3 text-primary" />
+              <Shield className="size-3" />
               Verified
             </span>
           </div>
@@ -215,14 +226,19 @@ function HeroSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
           </dl>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <DisabledAction variant="emphasis" className="min-w-36 disabled:opacity-100">
+            <LoginGatedAction variant="emphasis" className="min-w-36" href={loginHref}>
               <MessageSquare className="size-4" />
               Enquire
-            </DisabledAction>
-            <DisabledAction variant="outline" className="text-primary disabled:opacity-100">
+            </LoginGatedAction>
+            <LoginGatedAction
+              variant="outline"
+              className="text-primary"
+              href={loginHref}
+              ariaLabel="Save profile"
+            >
               <Bookmark className="size-4 fill-current" />
               {profile.bookmarkCount}
-            </DisabledAction>
+            </LoginGatedAction>
           </div>
         </div>
       </div>
@@ -304,58 +320,19 @@ function PortfolioSection({ profile }: { profile: PublicDesignerProfileViewModel
           </div>
         </div>
 
-        <div className="mt-9 flex flex-wrap items-center justify-between gap-3 border-b py-3">
-          <p className="text-sm font-medium">
-            {projects.length}{' '}
-            <span className="font-normal text-muted-foreground">of {projects.length} projects</span>
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-0.5" aria-label="Project sorting">
-              {projectSortOptions.map((option, index) => (
-                <Button
-                  key={option}
-                  type="button"
-                  variant={index === 0 ? 'emphasis' : 'ghost'}
-                  size="sm"
-                  disabled
-                  className="h-8 disabled:opacity-100"
-                >
-                  {option}
-                </Button>
-              ))}
-            </div>
-            <DisabledAction
-              variant="outline"
-              className="h-8 px-3 disabled:opacity-100"
-              ariaLabel="Filter projects"
-            >
-              <SlidersHorizontal className="size-3" />
-              Filters
-            </DisabledAction>
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
-            <PublicProjectCard key={project.id} project={project} />
-          ))}
-        </div>
-
-        <div className="mt-12 flex justify-center">
-          <DisabledAction
-            variant="outline"
-            className="h-11 gap-1 px-5 shadow-sm disabled:opacity-100"
-          >
-            View all projects
-            <ArrowDown className="size-3" />
-          </DisabledAction>
-        </div>
+        <PublicProjectGallery projects={projects} />
       </div>
     </section>
   );
 }
 
-function StorySection({ profile }: { profile: PublicDesignerProfileViewModel }) {
+function StorySection({
+  profile,
+  loginHref,
+}: {
+  profile: PublicDesignerProfileViewModel;
+  loginHref: string;
+}) {
   return (
     <section className="overflow-hidden px-4 pt-0 pb-24 sm:px-6">
       <div className="mx-auto max-w-6xl">
@@ -452,10 +429,14 @@ function StorySection({ profile }: { profile: PublicDesignerProfileViewModel }) 
                   </p>
                 </div>
 
-                <DisabledAction variant="emphasis" className="mt-5 h-8 w-full disabled:opacity-100">
+                <LoginGatedAction
+                  variant="emphasis"
+                  className="mt-5 h-8 w-full"
+                  href={loginHref}
+                >
                   <MessageSquare className="size-4" />
                   Enquire
-                </DisabledAction>
+                </LoginGatedAction>
               </div>
 
               <div className="flex items-center justify-between border-t px-5 py-3 text-primary">
@@ -636,10 +617,12 @@ function ShareSection({
   profile,
   publicProfileHref,
   publicProfileLabel,
+  loginHref,
 }: {
   profile: PublicDesignerProfileViewModel;
   publicProfileHref: string;
   publicProfileLabel: string;
+  loginHref: string;
 }) {
   return (
     <section className="overflow-hidden bg-muted px-4 py-20 sm:px-6">
@@ -693,10 +676,14 @@ function ShareSection({
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <DisabledAction variant="emphasis" className="h-10 px-6 shadow-sm disabled:opacity-100">
+            <LoginGatedAction
+              variant="emphasis"
+              className="h-10 px-6 shadow-sm"
+              href={loginHref}
+            >
               <MessageSquare className="size-4" />
               Enquire
-            </DisabledAction>
+            </LoginGatedAction>
             <CopyLinkButton
               value={publicProfileHref}
               variant="outline"
@@ -709,7 +696,13 @@ function ShareSection({
   );
 }
 
-function ConsultationSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
+function ConsultationSection({
+  profile,
+  loginHref,
+}: {
+  profile: PublicDesignerProfileViewModel;
+  loginHref: string;
+}) {
   return (
     <section className="bg-surface-inverse px-6 py-24 text-surface-inverse-foreground">
       <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
@@ -730,17 +723,22 @@ function ConsultationSection({ profile }: { profile: PublicDesignerProfileViewMo
           Anika Spaces typically replies in under 4 hours. The first conversation is always free.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <DisabledAction className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse disabled:opacity-100 hover:bg-surface-inverse-foreground/90">
+          <LoginGatedAction
+            className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse hover:bg-surface-inverse-foreground/90"
+            href={loginHref}
+          >
             <MessageSquare className="size-5" />
             Get free consultation
-          </DisabledAction>
-          <DisabledAction
+          </LoginGatedAction>
+          <LoginGatedAction
             variant="outline"
-            className="h-12 rounded-full border-surface-inverse-foreground bg-transparent px-7 text-surface-inverse-foreground disabled:opacity-100 hover:bg-surface-inverse-foreground/10 hover:text-surface-inverse-foreground"
+            className="h-12 rounded-full border-surface-inverse-foreground bg-transparent px-7 text-surface-inverse-foreground hover:bg-surface-inverse-foreground/10 hover:text-surface-inverse-foreground"
+            href={loginHref}
+            ariaLabel="Save profile"
           >
             <Bookmark className="size-5" />
             {profile.bookmarkCount}
-          </DisabledAction>
+          </LoginGatedAction>
         </div>
         <p className="mt-7 font-mono text-xs tracking-wider text-surface-inverse-foreground/55 uppercase">
           No commitment · No middlemen · No sales calls
@@ -754,23 +752,29 @@ export function PublicDesignerProfile({ profile }: { profile: PublicDesignerProf
   const publicProfileUrl = new URL(`/d/${profile.slug}`, env.NEXT_PUBLIC_WEB_URL);
   const publicProfileHref = publicProfileUrl.toString();
   const publicProfileLabel = `${publicProfileUrl.host}${publicProfileUrl.pathname}`;
+  const loginHref = `/login?next=${encodeURIComponent(publicProfileUrl.pathname)}`;
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <TrustStrip items={profileTrustItems} />
-      <StudioBar profile={profile} publicProfileHref={publicProfileHref} />
-      <HeroSection profile={profile} />
+      <StudioBar
+        profile={profile}
+        publicProfileHref={publicProfileHref}
+        loginHref={loginHref}
+      />
+      <HeroSection profile={profile} loginHref={loginHref} />
       <CredentialsSection />
       <PortfolioSection profile={profile} />
-      <StorySection profile={profile} />
+      <StorySection profile={profile} loginHref={loginHref} />
       <ReviewsSection profile={profile} />
       <StudioDetailsSection profile={profile} />
       <ShareSection
         profile={profile}
         publicProfileHref={publicProfileHref}
         publicProfileLabel={publicProfileLabel}
+        loginHref={loginHref}
       />
-      <ConsultationSection profile={profile} />
+      <ConsultationSection profile={profile} loginHref={loginHref} />
     </main>
   );
 }

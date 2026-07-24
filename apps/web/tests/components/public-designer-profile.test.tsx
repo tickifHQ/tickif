@@ -26,16 +26,18 @@ describe('PublicDesignerProfile', () => {
   it('renders the complete project and credential collections', () => {
     const { container } = render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
 
-    expect(screen.getAllByRole('article')).toHaveLength(6);
-    expect(screen.getAllByText('Adyar Penthouse')).toHaveLength(6);
+    expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
     expect(within(container).getByAltText('Identity verified')).toBeInTheDocument();
     expect(within(container).getByAltText('New on Tickif')).toBeInTheDocument();
     expect(within(container).getByAltText('Top performer')).toBeInTheDocument();
     expect(within(container).getByAltText('Established studio')).toBeInTheDocument();
     expect(within(container).getByAltText('Projects published')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '4.7 out of 5 stars' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '4.5 out of 5 stars' })).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: '4.5 out of 5 stars' })).toHaveLength(2);
     expect(screen.getByRole('img', { name: '5 out of 5 stars' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/They sent my daughter’s wedding silk saree to London/i),
+    ).toBeInTheDocument();
   });
 
   it('renders the studio identity, stats, and social details', () => {
@@ -85,15 +87,21 @@ describe('PublicDesignerProfile', () => {
     expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/anika-spaces');
   });
 
-  it('keeps service-dependent actions disabled until backend wiring lands', () => {
+  it('routes service-dependent actions through login gating', () => {
     render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
 
-    expect(screen.getByRole('button', { name: 'Start a conversation' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Start a conversation' })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fd%2Fanika-spaces',
+    );
     screen
-      .getAllByRole('button', { name: 'Enquire' })
-      .forEach((button) => expect(button).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Filter projects' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'View all projects' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeDisabled();
+      .getAllByRole('link', { name: 'Enquire' })
+      .forEach((link) =>
+        expect(link).toHaveAttribute('href', '/login?next=%2Fd%2Fanika-spaces'),
+      );
+    expect(screen.getByRole('link', { name: 'Get free consultation' })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fd%2Fanika-spaces',
+    );
   });
 });
