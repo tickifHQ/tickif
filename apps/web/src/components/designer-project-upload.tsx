@@ -44,6 +44,7 @@ import {
   type UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
+import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import {
@@ -762,70 +763,6 @@ function SectionFrame({
   onToggle: () => void;
   children: ReactNode;
 }) {
-  const [shouldRenderBody, setShouldRenderBody] = useState(open);
-  const [isBodyVisible, setIsBodyVisible] = useState(open);
-  const hasHandledInitialStateRef = useRef(false);
-  const openFrameRef = useRef<number | null>(null);
-  const openSecondFrameRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    function clearScheduledAnimationWork() {
-      if (openFrameRef.current !== null) {
-        window.cancelAnimationFrame(openFrameRef.current);
-        openFrameRef.current = null;
-      }
-
-      if (openSecondFrameRef.current !== null) {
-        window.cancelAnimationFrame(openSecondFrameRef.current);
-        openSecondFrameRef.current = null;
-      }
-
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    }
-
-    if (!hasHandledInitialStateRef.current) {
-      hasHandledInitialStateRef.current = true;
-      return clearScheduledAnimationWork;
-    }
-
-    clearScheduledAnimationWork();
-
-    if (open) {
-      setShouldRenderBody(true);
-      setIsBodyVisible(false);
-
-      openFrameRef.current = window.requestAnimationFrame(() => {
-        openSecondFrameRef.current = window.requestAnimationFrame(() => {
-          setIsBodyVisible(true);
-          openFrameRef.current = null;
-          openSecondFrameRef.current = null;
-        });
-      });
-
-      return clearScheduledAnimationWork;
-    }
-
-    setIsBodyVisible(false);
-
-    closeTimerRef.current = window.setTimeout(() => {
-      setShouldRenderBody(false);
-      closeTimerRef.current = null;
-    }, 320);
-
-    return clearScheduledAnimationWork;
-  }, [open]);
-
-  useEffect(() => {
-    if (!shouldRenderBody) {
-      setIsBodyVisible(false);
-      return;
-    }
-  }, [shouldRenderBody]);
-
   return (
     <section>
       <Card radius="2xl" className="overflow-hidden">
@@ -844,29 +781,12 @@ function SectionFrame({
           <ChevronsUpDown className="mt-1 size-4 text-muted-foreground" />
         </button>
 
-        {shouldRenderBody ? (
-          <div
-            className={cn(
-              'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
-              isBodyVisible ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-            )}
-            onTransitionEnd={(event) => {
-              if (event.currentTarget !== event.target || open) return;
-              if (closeTimerRef.current !== null) {
-                window.clearTimeout(closeTimerRef.current);
-                closeTimerRef.current = null;
-              }
-              setShouldRenderBody(false);
-            }}
-          >
-            <div className="min-h-0 overflow-hidden">
-              <div className="p-0">
-                <Divider />
-                {children}
-              </div>
-            </div>
+        <AnimatedCollapsibleContent open={open}>
+          <div className="p-0">
+            <Divider />
+            {children}
           </div>
-        ) : null}
+        </AnimatedCollapsibleContent>
       </Card>
     </section>
   );

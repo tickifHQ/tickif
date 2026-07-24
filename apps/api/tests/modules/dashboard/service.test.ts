@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '@repo/config';
 import type { ProfileCompletionResponse } from '@repo/contracts';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
@@ -92,7 +93,7 @@ describe('dashboardService.getProfileDashboard', () => {
         total: 7,
         new: 3,
       },
-      shareUrl: 'https://tickif.com/d/studio-noir',
+      shareUrl: new URL('/d/studio-noir', config.PUBLIC_WEB_URL).toString(),
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1');
   });

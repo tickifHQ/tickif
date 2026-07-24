@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
 import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -332,8 +333,11 @@ describe('GET /api/profiles/me/dashboard', () => {
         total: 2,
         new: 1,
       },
-      shareUrl: expect.stringMatching(/^https:\/\/tickif\.com\/d\/summary-studio-[a-z0-9]+$/),
+      shareUrl: expect.any(String),
     });
+    const shareUrl = new URL(body.shareUrl);
+    expect(shareUrl.origin).toBe(new URL(config.PUBLIC_WEB_URL).origin);
+    expect(shareUrl.pathname).toMatch(/^\/d\/summary-studio-[a-z0-9]+$/);
     expect(body.profileCompletion).not.toHaveProperty('steps');
   });
 
@@ -428,7 +432,9 @@ describe('GET /api/profiles/me/dashboard', () => {
       inReview: 0,
       draft: 1,
     });
-    expect(body.shareUrl).toBe('https://tickif.com/d/beta-studio');
+    expect(body.shareUrl).toBe(
+      new URL('/d/beta-studio', config.PUBLIC_WEB_URL).toString(),
+    );
   });
 });
 
