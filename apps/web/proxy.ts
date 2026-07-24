@@ -3,8 +3,8 @@ import { getSessionCookie } from 'better-auth/cookies';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
 
-function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname);
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.has(pathname) || pathname.startsWith('/d/');
 }
 
 export function proxy(req: NextRequest) {
@@ -17,7 +17,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url));
   }
 
-  if (!hasSession && !isPublic(pathname)) {
+  if (!hasSession && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 

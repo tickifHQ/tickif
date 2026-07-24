@@ -22,6 +22,10 @@
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.21 0.006 286);
+  --surface-subtle: #eef2f0;
+  --surface-subtle-border: #e2e8e5;
+  --surface-inverse: #0f1a16;
+  --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.21 0.006 286);
   --popover: oklch(1 0 0);
@@ -61,6 +65,10 @@
 [data-theme='tickif'].dark {
   --background: oklch(0.183 0.02 266);
   --foreground: oklch(0.985 0.001 286);
+  --surface-subtle: oklch(0.23 0.012 170);
+  --surface-subtle-border: oklch(0.3 0.012 170);
+  --surface-inverse: #0f1a16;
+  --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(0.23 0.012 280);
   --card-foreground: oklch(0.985 0.001 286);
   --popover: oklch(0.23 0.012 280);
