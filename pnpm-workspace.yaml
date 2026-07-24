@@ -19,8 +19,8 @@ overrides:
   "fast-uri@<3.1.4": 3.1.4
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.3
-  # postcss arbitrary file read (GHSA-6g55-p6wh-862q): Next pins an older 8.x.
-  "postcss@<8.5.12": 8.5.15
+  # postcss arbitrary file read (GHSA-r28c-9q8g-f849): patch all older 8.x copies.
+  "postcss@<8.5.18": 8.5.18
 
 onlyBuiltDependencies:
   - msw
@@ -45,7 +45,7 @@ catalog:
   "@scalar/hono-api-reference": ^0.10.20
 
   # Auth
-  better-auth: ^1.6.18
+  better-auth: ^1.6.22
 
   # Data layer
   drizzle-orm: ^0.45.2
