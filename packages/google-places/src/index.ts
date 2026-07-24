@@ -1,17 +1,21 @@
 import { config } from '@repo/config';
 
 /**
- * Thin wrapper over the Google Places API (legacy Place Details + Find Place),
+ * Thin wrapper over the Google Places API (New) — Text Search + Place Details,
  * used to fetch a designer's Google rating and recent reviews for their portfolio.
+ *
+ * Uses the v1 `places.googleapis.com` endpoints (the legacy `maps/api/place`
+ * API is closed to new GCP projects). Auth is via the `X-Goog-Api-Key` header
+ * and every request declares an `X-Goog-FieldMask` (required by the New API).
  *
  * ToS note: `place_id` may be stored indefinitely, but review content
  * (text/author/photo) must not be cached longer than 30 days. The caller is
  * responsible for honouring that — see the worker sweep + read-time guard.
  */
 
-const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
+const PLACES_BASE = 'https://places.googleapis.com/v1';
 const REQUEST_TIMEOUT_MS = 10_000;
-/** Google's Place Details returns at most 5 reviews; we never keep more. */
+/** Place Details (New) returns at most 5 reviews; we never keep more. */
 export const MAX_GOOGLE_REVIEWS = 5;
 
 /** A single Google review as surfaced to the portfolio. */
@@ -77,44 +81,62 @@ function requireApiKey(): string {
   return config.GOOGLE_PLACES_API_KEY;
 }
 
-/** Map a Google `status` string onto our error taxonomy. */
-function statusToError(status: string, errorMessage?: string): GooglePlacesError {
-  const detail = errorMessage ? `: ${errorMessage}` : '';
+/** Map an HTTP status (New API uses standard codes) onto our error taxonomy. */
+function httpStatusToError(status: number, message: string): GooglePlacesError {
+  const detail = message ? `: ${message}` : '';
   switch (status) {
-    case 'ZERO_RESULTS':
-    case 'NOT_FOUND':
-      return new GooglePlacesError('not_found', `Place not found${detail}`);
-    case 'INVALID_REQUEST':
+    case 400:
       return new GooglePlacesError('invalid_input', `Invalid Places request${detail}`);
-    case 'OVER_QUERY_LIMIT':
-      return new GooglePlacesError('rate_limited', `Places quota exceeded${detail}`);
-    case 'REQUEST_DENIED':
+    case 403:
       return new GooglePlacesError('request_denied', `Places request denied${detail}`);
+    case 404:
+      return new GooglePlacesError('not_found', `Place not found${detail}`);
+    case 429:
+      return new GooglePlacesError('rate_limited', `Places quota exceeded${detail}`);
     default:
-      return new GooglePlacesError('unknown', `Places error ${status}${detail}`);
+      // 5xx (and anything else) is treated as transient/unknown upstream failure.
+      return new GooglePlacesError(
+        status >= 500 ? 'network' : 'unknown',
+        `Places error ${status}${detail}`,
+      );
   }
 }
 
-async function placesGet<T>(path: string, params: Record<string, string>): Promise<T> {
+/** Issue a Places API (New) request with the field mask and typed error handling. */
+async function placesRequest<T>(
+  method: 'GET' | 'POST',
+  path: string,
+  fieldMask: string,
+  body?: unknown,
+): Promise<T> {
   const apiKey = requireApiKey();
-  const url = new URL(`${PLACES_BASE}/${path}`);
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  url.searchParams.set('key', apiKey);
+  const headers: Record<string, string> = {
+    'X-Goog-Api-Key': apiKey,
+    'X-Goog-FieldMask': fieldMask,
+  };
+  if (body !== undefined) headers['content-type'] = 'application/json';
 
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    response = await fetch(`${PLACES_BASE}/${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
   } catch (err) {
     throw new GooglePlacesError('network', `Places request failed: ${(err as Error).message}`);
   }
+
   if (!response.ok) {
-    throw new GooglePlacesError('network', `Places request failed with status ${response.status}`);
+    // New API returns { error: { code, status, message } } on failure.
+    const errBody = (await response.json().catch(() => null)) as
+      | { error?: { message?: string } }
+      | null;
+    throw httpStatusToError(response.status, errBody?.error?.message ?? '');
   }
 
-  const body = (await response.json()) as { status: string; error_message?: string } & T;
-  // Places encodes success/failure in the JSON `status`, not the HTTP status.
-  if (body.status !== 'OK') throw statusToError(body.status, body.error_message);
-  return body;
+  return (await response.json()) as T;
 }
 
 // A Google Maps place-id always begins with this prefix; used to short-circuit resolution.
@@ -127,7 +149,7 @@ const PLACE_ID_RE = /^ChI[A-Za-z0-9_-]+$/;
  * - A value that already looks like a place-id is returned as-is.
  * - A maps URL carrying `?place_id=...` or a `!1s<place_id>` data segment is
  *   parsed directly (no API call).
- * - Anything else is sent to Find Place From Text.
+ * - Anything else is sent to Text Search (New).
  */
 export async function resolvePlaceId(input: string): Promise<string> {
   const trimmed = input.trim();
@@ -139,11 +161,13 @@ export async function resolvePlaceId(input: string): Promise<string> {
   const embedded = extractPlaceIdFromUrl(trimmed);
   if (embedded) return embedded;
 
-  const body = await placesGet<{ candidates: Array<{ place_id: string }> }>(
-    'findplacefromtext/json',
-    { input: trimmed, inputtype: 'textquery', fields: 'place_id' },
+  const body = await placesRequest<{ places?: Array<{ id: string }> }>(
+    'POST',
+    'places:searchText',
+    'places.id',
+    { textQuery: trimmed, maxResultCount: 1 },
   );
-  const placeId = body.candidates?.[0]?.place_id;
+  const placeId = body.places?.[0]?.id;
   if (!placeId) throw new GooglePlacesError('not_found', 'No place matched the given reference');
   return placeId;
 }
@@ -163,51 +187,55 @@ export function extractPlaceIdFromUrl(value: string): string | null {
   return null;
 }
 
-type RawReview = {
-  author_name?: string;
-  author_url?: string;
-  profile_photo_url?: string;
+type NewReview = {
   rating?: number;
-  relative_time_description?: string;
-  text?: string;
-  time?: number;
+  relativePublishTimeDescription?: string;
+  text?: { text?: string };
+  originalText?: { text?: string };
+  authorAttribution?: { displayName?: string; uri?: string; photoUri?: string };
+  publishTime?: string;
 };
+
+/** ISO-8601 publish time → unix seconds (0 when absent/unparseable). */
+function toUnixSeconds(iso?: string): number {
+  if (!iso) return 0;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? 0 : Math.floor(ms / 1000);
+}
 
 /** Fetch the aggregate rating + up to 5 recent reviews for a place. */
 export async function fetchPlaceDetails(placeId: string): Promise<GooglePlaceDetails> {
-  const body = await placesGet<{
-    result: {
-      name?: string;
-      rating?: number;
-      user_ratings_total?: number;
-      url?: string;
-      reviews?: RawReview[];
-    };
-  }>('details/json', {
-    place_id: placeId,
-    fields: 'name,rating,user_ratings_total,url,reviews',
-    reviews_sort: 'newest',
-  });
+  const result = await placesRequest<{
+    id?: string;
+    displayName?: { text?: string };
+    rating?: number;
+    userRatingCount?: number;
+    googleMapsUri?: string;
+    reviews?: NewReview[];
+  }>(
+    'GET',
+    `places/${encodeURIComponent(placeId)}`,
+    'id,displayName,rating,userRatingCount,googleMapsUri,reviews',
+  );
 
-  const result = body.result ?? {};
   const reviews: GooglePlaceReview[] = (result.reviews ?? [])
     .slice(0, MAX_GOOGLE_REVIEWS)
     .map((r) => ({
-      author: r.author_name ?? 'Google user',
-      authorUrl: r.author_url ?? null,
-      profilePhotoUrl: r.profile_photo_url ?? null,
+      author: r.authorAttribution?.displayName ?? 'Google user',
+      authorUrl: r.authorAttribution?.uri ?? null,
+      profilePhotoUrl: r.authorAttribution?.photoUri ?? null,
       rating: typeof r.rating === 'number' ? r.rating : 0,
-      relativeTime: r.relative_time_description ?? '',
-      text: r.text ?? '',
-      time: typeof r.time === 'number' ? r.time : 0,
+      relativeTime: r.relativePublishTimeDescription ?? '',
+      text: r.text?.text ?? r.originalText?.text ?? '',
+      time: toUnixSeconds(r.publishTime),
     }));
 
   return {
     placeId,
-    name: result.name ?? null,
+    name: result.displayName?.text ?? null,
     rating: typeof result.rating === 'number' ? result.rating : null,
-    userRatingsTotal: typeof result.user_ratings_total === 'number' ? result.user_ratings_total : null,
-    url: result.url ?? null,
+    userRatingsTotal: typeof result.userRatingCount === 'number' ? result.userRatingCount : null,
+    url: result.googleMapsUri ?? null,
     reviews,
   };
 }
