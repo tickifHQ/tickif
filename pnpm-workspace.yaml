@@ -7,7 +7,7 @@ packages:
 # package.json `pnpm` field (which newer pnpm silently ignores).
 overrides:
   esbuild: 0.28.1
-  hono: ^4.12.25
+  hono: ^4.12.27
   # Security patches for transitive advisories (pnpm audit, high severity).
   # brace-expansion DoS (GHSA-v6h2-p8h4-qcjw): 1.x tree (via eslint>minimatch)
   # and 3.x+ tree (via typescript-eslint>minimatch) each need a patched line.
@@ -37,7 +37,7 @@ catalog:
   "@t3-oss/env-nextjs": ^0.13.8
 
   # Hono stack
-  hono: ^4.12.25
+  hono: ^4.12.27
   "@hono/node-server": ^2.0.5
   "@hono/zod-openapi": ^1.4.0
   "@scalar/hono-api-reference": ^0.10.20
