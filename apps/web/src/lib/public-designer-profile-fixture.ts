@@ -181,13 +181,5 @@ export const publicDesignerProfileFixture = {
       rating: 5,
       imageSrc: '/illustrations/public-profile/reviewer.png',
     },
-    {
-      id: 'review-03',
-      author: 'Rahul S.',
-      date: 'Feb 2026',
-      body: 'They sent my daughter’s wedding silk saree to London in 3 days flat. Their packing for the delicate jewelry was exceptional.',
-      rating: 4.5,
-      imageSrc: '/illustrations/public-profile/reviewer-rahul.png',
-    },
   ],
 } satisfies PublicDesignerProfileViewModel;

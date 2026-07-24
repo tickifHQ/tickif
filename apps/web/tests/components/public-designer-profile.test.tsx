@@ -33,11 +33,8 @@ describe('PublicDesignerProfile', () => {
     expect(within(container).getByAltText('Established studio')).toBeInTheDocument();
     expect(within(container).getByAltText('Projects published')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '4.7 out of 5 stars' })).toBeInTheDocument();
-    expect(screen.getAllByRole('img', { name: '4.5 out of 5 stars' })).toHaveLength(2);
+    expect(screen.getByRole('img', { name: '4.5 out of 5 stars' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '5 out of 5 stars' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/They sent my daughter’s wedding silk saree to London/i),
-    ).toBeInTheDocument();
   });
 
   it('renders the studio identity, stats, and social details', () => {
