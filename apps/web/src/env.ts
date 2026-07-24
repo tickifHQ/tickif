@@ -12,6 +12,8 @@ export const env = createEnv({
   client: {
     // Public base URL the web app uses to reach the API.
     NEXT_PUBLIC_API_URL: z.url().default('http://localhost:8008'),
+    // Public origin of the web app, used to build browser-visible links.
+    NEXT_PUBLIC_WEB_URL: z.url().default('http://localhost:3000'),
     // Cumulative downward scroll-units (400px each) before anon users hit the
     // login wall on the public feed. 0 disables the gate entirely.
     // Strict digits-only shape: z.coerce would turn ' ' into 0 and silently
@@ -27,6 +29,7 @@ export const env = createEnv({
   // referenced literally here for the client bundle to see them.
   experimental__runtimeEnv: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_WEB_URL: process.env.NEXT_PUBLIC_WEB_URL,
     NEXT_PUBLIC_SCROLL_GATE_LIMIT: process.env.NEXT_PUBLIC_SCROLL_GATE_LIMIT,
   },
   emptyStringAsUndefined: true,

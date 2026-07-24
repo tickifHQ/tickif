@@ -1,4 +1,5 @@
 import type { ProfileDashboardResponse } from '@repo/contracts';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
 import { profilesService } from '../profiles/service.js';
@@ -7,15 +8,13 @@ import {
   type ProjectStatusCount,
 } from './repository.js';
 
-const PUBLIC_SITE_ORIGIN = 'https://tickif.com';
-
 type OverviewInput = {
   userId: string;
   orgId: string | null;
 };
 
 function shareUrl(orgSlug: string): string {
-  return `${PUBLIC_SITE_ORIGIN}/d/${orgSlug}`;
+  return new URL(`/d/${orgSlug}`, config.PUBLIC_WEB_URL).toString();
 }
 
 function countProjectBucket(

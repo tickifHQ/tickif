@@ -126,7 +126,7 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   const badges = computeBadges(profile);
-  // No public portfolio routes exist yet (/p/:slug and /d/:orgId are not shipped)
+  // The public portfolio route (/d/:slug) is not shipped yet.
   // portfolioUrl will be populated when the public page is implemented
   const portfolioUrl = null;
 
