@@ -1,5 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { publicDesignerProfileFixture } from '../../src/lib/public-designer-profile-fixture';
 
@@ -14,12 +14,8 @@ describe('PublicDesignerProfile', () => {
     expect(
       screen.getByRole('heading', { name: 'What it’s like to work with us.' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Anika Spaces', level: 2 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: /A portfolio worth sharing/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /A portfolio worth sharing/i })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
         name: "Let's build something you can't imagine living without.",
@@ -28,9 +24,7 @@ describe('PublicDesignerProfile', () => {
   });
 
   it('renders the complete project and credential collections', () => {
-    const { container } = render(
-      <PublicDesignerProfile profile={publicDesignerProfileFixture} />,
-    );
+    const { container } = render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
 
     expect(screen.getAllByRole('article')).toHaveLength(6);
     expect(screen.getAllByText('Adyar Penthouse')).toHaveLength(6);
@@ -62,6 +56,33 @@ describe('PublicDesignerProfile', () => {
     expect(studio.getByText('₹10L+')).toBeInTheDocument();
     expect(studio.getAllByText('@anika')).toHaveLength(3);
     expect(studio.getByText('anikaspaces.in')).toBeInTheDocument();
+  });
+
+  it('keeps the rating-card shadow visible instead of clipping it into a block', () => {
+    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+
+    const ratingSummary = screen
+      .getByText('Based on 42 verified reviews')
+      .closest('[data-slot="card"]');
+
+    expect(ratingSummary).toHaveClass('shadow-floating-card');
+    expect(ratingSummary?.parentElement).toHaveClass('pb-20');
+  });
+
+  it('builds displayed and copied profile links from the public web URL', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+
+    expect(screen.getByText('localhost:3000/d/anika-spaces')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/anika-spaces');
   });
 
   it('keeps service-dependent actions disabled until backend wiring lands', () => {

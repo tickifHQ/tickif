@@ -24,11 +24,9 @@ import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
 import { CopyLinkButton } from '@/components/copy-link-button';
-import {
-  GoogleBrandIcon,
-  InstagramBrandIcon,
-  LinkedInBrandIcon,
-} from '@/components/brand-icons';
+import { GoogleBrandIcon, InstagramBrandIcon, LinkedInBrandIcon } from '@/components/brand-icons';
+import { TrustStrip, type TrustStripItem } from '@/components/trust-strip';
+import { env } from '@/env';
 import { PublicProjectCard } from '@/components/public-project-card';
 import type {
   PublicDesignerProfileViewModel,
@@ -59,6 +57,12 @@ const credentials = [
 ];
 
 const projectSortOptions = ['Featured', 'Newest', 'Most viewed', 'Top rated', 'Largest'];
+
+const profileTrustItems = [
+  { icon: Check, label: '12,400+ verified projects' },
+  { icon: Shield, label: 'Every designer phone-verified' },
+  { icon: Sparkle, label: 'Free to browse · No middlemen' },
+] satisfies TrustStripItem[];
 
 function DisabledAction({
   children,
@@ -93,28 +97,13 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-function TrustStrip() {
-  return (
-    <div className="bg-surface-inverse px-4 py-2 text-surface-inverse-foreground">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs">
-        <span className="inline-flex items-center gap-1.5">
-          <Check className="size-3" />
-          12,400+ verified projects
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Shield className="size-3" />
-          Every designer phone-verified
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Sparkle className="size-3" />
-          Free to browse · No middlemen
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function StudioBar({ profile }: { profile: PublicDesignerProfileViewModel }) {
+function StudioBar({
+  profile,
+  publicProfileHref,
+}: {
+  profile: PublicDesignerProfileViewModel;
+  publicProfileHref: string;
+}) {
   return (
     <div className="border-b bg-background/95">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
@@ -128,15 +117,14 @@ function StudioBar({ profile }: { profile: PublicDesignerProfileViewModel }) {
               <BadgeCheck className="size-4 shrink-0 fill-primary text-primary-foreground" />
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {profile.studioType} ·{' '}
-              <Star className="inline size-3 fill-warning text-warning" /> {profile.rating} ·{' '}
-              {profile.location.split(' · ')[0]}
+              {profile.studioType} · <Star className="inline size-3 fill-warning text-warning" />{' '}
+              {profile.rating} · {profile.location.split(' · ')[0]}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <CopyLinkButton
-            value={`/d/${profile.slug}`}
+            value={publicProfileHref}
             label="Share"
             icon="share"
             variant="outline"
@@ -194,9 +182,7 @@ function HeroSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
                 <Badge variant="secondary" className="rounded-sm uppercase">
                   {profile.studioType}
                 </Badge>
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {profile.location}
-                </p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{profile.location}</p>
               </div>
             </div>
             <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-3 text-xs">
@@ -233,10 +219,7 @@ function HeroSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
               <MessageSquare className="size-4" />
               Enquire
             </DisabledAction>
-            <DisabledAction
-              variant="outline"
-              className="text-primary disabled:opacity-100"
-            >
+            <DisabledAction variant="outline" className="text-primary disabled:opacity-100">
               <Bookmark className="size-4 fill-current" />
               {profile.bookmarkCount}
             </DisabledAction>
@@ -324,9 +307,7 @@ function PortfolioSection({ profile }: { profile: PublicDesignerProfileViewModel
         <div className="mt-9 flex flex-wrap items-center justify-between gap-3 border-b py-3">
           <p className="text-sm font-medium">
             {projects.length}{' '}
-            <span className="font-normal text-muted-foreground">
-              of {projects.length} projects
-            </span>
+            <span className="font-normal text-muted-foreground">of {projects.length} projects</span>
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap gap-0.5" aria-label="Project sorting">
@@ -421,7 +402,10 @@ function StorySection({ profile }: { profile: PublicDesignerProfileViewModel }) 
               </footer>
             </div>
 
-            <Card className="mx-auto w-full max-w-72 -rotate-2 overflow-hidden shadow-sm lg:col-span-4 lg:-my-16 lg:-translate-y-8 lg:justify-self-end" radius="lg">
+            <Card
+              className="mx-auto w-full max-w-72 -rotate-2 overflow-hidden shadow-sm lg:col-span-4 lg:-my-16 lg:-translate-y-8 lg:justify-self-end"
+              radius="lg"
+            >
               <div className="p-5">
                 <div className="flex items-start gap-3">
                   <Image
@@ -468,10 +452,7 @@ function StorySection({ profile }: { profile: PublicDesignerProfileViewModel }) 
                   </p>
                 </div>
 
-                <DisabledAction
-                  variant="emphasis"
-                  className="mt-5 h-8 w-full disabled:opacity-100"
-                >
+                <DisabledAction variant="emphasis" className="mt-5 h-8 w-full disabled:opacity-100">
                   <MessageSquare className="size-4" />
                   Enquire
                 </DisabledAction>
@@ -535,19 +516,18 @@ function ReviewsSection({ profile }: { profile: PublicDesignerProfileViewModel }
           className="mt-2 max-w-2xl text-4xl font-medium"
           aria-label="What it’s like to work with us."
         >
-          What it’s like to{' '}
-          <span className="font-light text-primary italic">work with us</span>.
+          What it’s like to <span className="font-light text-primary italic">work with us</span>.
         </h2>
-        <div className="mt-9 flex gap-8 overflow-x-auto pb-4">
+        <div className="mt-9 flex gap-8 overflow-x-auto pb-20">
           <Card
-            className="relative flex min-h-56 min-w-60 flex-col justify-between overflow-hidden border-white/15 bg-surface-inverse p-5 text-surface-inverse-foreground shadow-2xl"
+            className="shadow-floating-card relative flex min-h-56 min-w-60 flex-col justify-between overflow-hidden border-surface-inverse-foreground/15 bg-surface-inverse p-5 text-surface-inverse-foreground"
             radius="xl"
           >
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -inset-y-24 left-4 w-8 rotate-12 -skew-x-6 bg-linear-to-r from-transparent via-surface-inverse-foreground/20 to-transparent opacity-80"
             />
-            <div className="relative border-b border-white/10 pb-3">
+            <div className="relative border-b border-surface-inverse-foreground/10 pb-3">
               <p className="font-mono text-xs tracking-widest text-surface-inverse-foreground/40 uppercase">
                 {profile.studioName}
               </p>
@@ -599,9 +579,9 @@ function StudioDetailsSection({ profile }: { profile: PublicDesignerProfileViewM
             </div>
             <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground">
               Anika Spaces is a boutique residential design studio led by Anika Subramanian. We
-              focus on full-home interiors for thoughtful homeowners, projects where
-              craftsmanship, daylight, and material honesty matter more than trends. Our studio
-              operates out of Adyar with site teams across Chennai and Coimbatore.
+              focus on full-home interiors for thoughtful homeowners, projects where craftsmanship,
+              daylight, and material honesty matter more than trends. Our studio operates out of
+              Adyar with site teams across Chennai and Coimbatore.
             </p>
           </div>
           <dl className="grid grid-cols-3 gap-6 border-t pt-8 lg:w-72 lg:grid-cols-1 lg:gap-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
@@ -652,7 +632,15 @@ function StudioDetailsSection({ profile }: { profile: PublicDesignerProfileViewM
   );
 }
 
-function ShareSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
+function ShareSection({
+  profile,
+  publicProfileHref,
+  publicProfileLabel,
+}: {
+  profile: PublicDesignerProfileViewModel;
+  publicProfileHref: string;
+  publicProfileLabel: string;
+}) {
   return (
     <section className="overflow-hidden bg-muted px-4 py-20 sm:px-6">
       <div className="mx-auto grid max-w-6xl gap-16 lg:grid-cols-5 lg:items-center">
@@ -685,7 +673,7 @@ function ShareSection({ profile }: { profile: PublicDesignerProfileViewModel }) 
 
               <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-4 py-2 font-mono text-xs">
                 <Link2 className="size-3" />
-                tickif.in/d/{profile.slug}
+                {publicProfileLabel}
               </span>
             </div>
           </Card>
@@ -705,15 +693,12 @@ function ShareSection({ profile }: { profile: PublicDesignerProfileViewModel }) 
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <DisabledAction
-              variant="emphasis"
-              className="h-10 px-6 shadow-sm disabled:opacity-100"
-            >
+            <DisabledAction variant="emphasis" className="h-10 px-6 shadow-sm disabled:opacity-100">
               <MessageSquare className="size-4" />
               Enquire
             </DisabledAction>
             <CopyLinkButton
-              value={`/d/${profile.slug}`}
+              value={publicProfileHref}
               variant="outline"
               className="h-10 px-4 shadow-sm"
             />
@@ -742,13 +727,10 @@ function ConsultationSection({ profile }: { profile: PublicDesignerProfileViewMo
           <span className="block">living without.</span>
         </h2>
         <p className="mt-6 max-w-md leading-6 text-surface-inverse-foreground/80">
-          Anika Spaces typically replies in under 4 hours. The first conversation is always
-          free.
+          Anika Spaces typically replies in under 4 hours. The first conversation is always free.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <DisabledAction
-            className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse disabled:opacity-100 hover:bg-surface-inverse-foreground/90"
-          >
+          <DisabledAction className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse disabled:opacity-100 hover:bg-surface-inverse-foreground/90">
             <MessageSquare className="size-5" />
             Get free consultation
           </DisabledAction>
@@ -768,22 +750,26 @@ function ConsultationSection({ profile }: { profile: PublicDesignerProfileViewMo
   );
 }
 
-export function PublicDesignerProfile({
-  profile,
-}: {
-  profile: PublicDesignerProfileViewModel;
-}) {
+export function PublicDesignerProfile({ profile }: { profile: PublicDesignerProfileViewModel }) {
+  const publicProfileUrl = new URL(`/d/${profile.slug}`, env.NEXT_PUBLIC_WEB_URL);
+  const publicProfileHref = publicProfileUrl.toString();
+  const publicProfileLabel = `${publicProfileUrl.host}${publicProfileUrl.pathname}`;
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      <TrustStrip />
-      <StudioBar profile={profile} />
+      <TrustStrip items={profileTrustItems} />
+      <StudioBar profile={profile} publicProfileHref={publicProfileHref} />
       <HeroSection profile={profile} />
       <CredentialsSection />
       <PortfolioSection profile={profile} />
       <StorySection profile={profile} />
       <ReviewsSection profile={profile} />
       <StudioDetailsSection profile={profile} />
-      <ShareSection profile={profile} />
+      <ShareSection
+        profile={profile}
+        publicProfileHref={publicProfileHref}
+        publicProfileLabel={publicProfileLabel}
+      />
       <ConsultationSection profile={profile} />
     </main>
   );

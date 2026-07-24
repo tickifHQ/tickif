@@ -74,9 +74,7 @@ function Rating({
   ...props
 }: RatingProps) {
   const safeMaxRating = Number.isFinite(maxRating) ? Math.max(0, Math.floor(maxRating)) : 5;
-  const safeRating = Number.isFinite(rating)
-    ? Math.min(safeMaxRating, Math.max(0, rating))
-    : 0;
+  const safeRating = Number.isFinite(rating) ? Math.min(safeMaxRating, Math.max(0, rating)) : 0;
 
   return (
     <div
@@ -115,10 +113,7 @@ function Rating({
         })}
       </div>
       {showValue && (
-        <span
-          data-slot="rating-value"
-          className={cn(valueVariants({ size }), valueClassName)}
-        >
+        <span data-slot="rating-value" className={cn(valueVariants({ size }), valueClassName)}>
           {safeRating.toFixed(1)}
         </span>
       )}
