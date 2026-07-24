@@ -43,9 +43,12 @@ export async function persistError(profileId: string, message: string): Promise<
 }
 
 /**
- * Profiles due for a refresh: not `stale`, and either never fetched or last
- * fetched before `cutoff`. Bounded by `limit` so one sweep tick can't fan out
- * unboundedly.
+ * Profiles due for a refresh: awaiting their first fetch, connected-but-aging,
+ * or `stale` (purged for the ToS window but still holding a valid `placeId`, so
+ * a re-fetch can repopulate them). Terminally-`error` rows are intentionally
+ * excluded — they re-fail deterministically and would burn Places quota every
+ * tick; the UI surfaces them as "needs attention" for a manual refresh instead.
+ * Bounded by `limit` so one sweep tick can't fan out unboundedly.
  */
 export async function findDueForRefresh(cutoff: Date, limit: number): Promise<string[]> {
   const rows = await db
@@ -53,7 +56,7 @@ export async function findDueForRefresh(cutoff: Date, limit: number): Promise<st
     .from(schema.googlePlaceCache)
     .where(
       and(
-        inArray(schema.googlePlaceCache.status, ['pending', 'connected', 'error']),
+        inArray(schema.googlePlaceCache.status, ['pending', 'connected', 'stale']),
         or(
           isNull(schema.googlePlaceCache.lastFetchedAt),
           lt(schema.googlePlaceCache.lastFetchedAt, cutoff),

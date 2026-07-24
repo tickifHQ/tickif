@@ -136,7 +136,11 @@ async function placesRequest<T>(
     throw httpStatusToError(response.status, errBody?.error?.message ?? '');
   }
 
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new GooglePlacesError('network', 'Places returned an unreadable response body');
+  }
 }
 
 // A Google Maps place-id always begins with this prefix; used to short-circuit resolution.

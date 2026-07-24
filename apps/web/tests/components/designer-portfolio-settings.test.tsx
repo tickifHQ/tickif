@@ -574,5 +574,26 @@ describe('DesignerPortfolioSettings', () => {
       await expandReviews();
       expect(await screen.findByText(/isn.t enabled on this workspace/i)).toBeInTheDocument();
     });
+
+    it('surfaces the error state with a needs-attention badge and guidance', async () => {
+      mock.fetchGoogleReviews.mockResolvedValue({
+        available: true,
+        connection: {
+          status: 'error',
+          placeId: 'ChIJabc',
+          rating: null,
+          userRatingsTotal: null,
+          lastFetchedAt: null,
+        },
+        reviews: [],
+      });
+
+      await expandReviews();
+      expect(await screen.findByText('Needs attention')).toBeInTheDocument();
+      expect(screen.getByText(/couldn.t fetch reviews for this location/i)).toBeInTheDocument();
+      // Refresh/disconnect controls remain available so the designer can recover.
+      expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /disconnect/i })).toBeInTheDocument();
+    });
   });
 });
