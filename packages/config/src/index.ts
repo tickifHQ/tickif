@@ -126,6 +126,15 @@ const envSchema = z.object({
   // Email delivery via Resend (E-203). Optional in dev (logs to console).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
+
+  // Google Places API key for designer-portfolio Google review fetching.
+  // Distinct from the GOOGLE_CLIENT_* OAuth creds above (those are Gmail SSO).
+  // Optional: when absent the feature is disabled and the Connect action reports
+  // "unavailable" rather than erroring — mirrors the SMS/media optional-config style.
+  GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
+  // How stale a cached place row may get before the worker sweep re-fetches it.
+  // Kept well inside Google's 30-day content-caching ToS window.
+  GOOGLE_PLACES_REFRESH_DAYS: z.coerce.number().int().min(1).max(29).default(7),
 });
 
 /**

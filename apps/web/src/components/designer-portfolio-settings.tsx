@@ -17,7 +17,11 @@ import {
   Star,
   X,
 } from 'lucide-react';
-import type { PortfolioResponse, UpdatePortfolioInput } from '@repo/contracts';
+import type {
+  PortfolioResponse,
+  UpdatePortfolioInput,
+  GoogleReviewsResponse,
+} from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
@@ -43,8 +47,12 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { env } from '@/env';
 import {
   checkSlugAvailability,
+  connectGoogleReviews,
   deleteLogo,
+  disconnectGoogleReviews,
+  fetchGoogleReviews,
   fetchPortfolio,
+  refreshGoogleReviews,
   updatePortfolio,
   uploadLogo,
 } from '@/lib/portfolio-api';
@@ -84,12 +92,6 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
-
-// The portfolio settings contract does not expose Google review metrics yet.
-const GOOGLE_REVIEWS_PREVIEW = {
-  averageRating: '4.8',
-  reviewCount: 42,
-} as const;
 
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey =
@@ -202,6 +204,14 @@ export function DesignerPortfolioSettings() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Google reviews connection (fetched separately from portfolio settings)
+  const [googleReviews, setGoogleReviews] = useState<GoogleReviewsResponse | null>(null);
+  const [googleRef, setGoogleRef] = useState('');
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [isConnectingGoogle, startGoogleConnectTransition] = useTransition();
+  const [isRefreshingGoogle, setIsRefreshingGoogle] = useState(false);
+  const googlePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Collapsible/expanded UI state (local only — presentation, not persisted)
   const [sectionExpanded, setSectionExpanded] = useState<Record<SectionKey, boolean>>({
     linkUrl: true,
@@ -246,6 +256,88 @@ export function DesignerPortfolioSettings() {
   useEffect(() => {
     void loadPortfolio();
   }, [loadPortfolio]);
+
+  // -------------------------------------------------------------------------
+  // Google reviews
+  // -------------------------------------------------------------------------
+
+  const loadGoogleReviews = useCallback(async () => {
+    try {
+      setGoogleReviews(await fetchGoogleReviews());
+    } catch (err) {
+      setGoogleError(err instanceof Error ? err.message : 'Could not load Google reviews.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGoogleReviews();
+    // Cancel any in-flight poll on unmount.
+    return () => {
+      if (googlePollRef.current) clearTimeout(googlePollRef.current);
+    };
+  }, [loadGoogleReviews]);
+
+  /**
+   * Connect/refresh persist a `pending` row and enqueue a background fetch, so
+   * poll a few times to surface the worker's result without a manual reload.
+   */
+  const pollGoogleReviews = useCallback((attempt = 0) => {
+    googlePollRef.current = setTimeout(() => {
+      void (async () => {
+        const data = await fetchGoogleReviews().catch(() => null);
+        if (data) setGoogleReviews(data);
+        if (data?.connection?.status === 'pending' && attempt < 4) {
+          pollGoogleReviews(attempt + 1);
+        } else {
+          setIsRefreshingGoogle(false);
+        }
+      })();
+    }, 2000);
+  }, []);
+
+  function handleConnectGoogle() {
+    const reference = googleRef.trim();
+    if (!reference) return;
+    setGoogleError(null);
+    startGoogleConnectTransition(async () => {
+      try {
+        const data = await connectGoogleReviews(reference);
+        setGoogleReviews(data);
+        setGoogleRef('');
+        setIsRefreshingGoogle(true);
+        pollGoogleReviews();
+      } catch (err) {
+        setGoogleError(err instanceof Error ? err.message : 'Could not connect that location.');
+      }
+    });
+  }
+
+  function handleRefreshGoogle() {
+    setGoogleError(null);
+    setIsRefreshingGoogle(true);
+    void (async () => {
+      try {
+        const data = await refreshGoogleReviews();
+        setGoogleReviews(data);
+        pollGoogleReviews();
+      } catch (err) {
+        setGoogleError(err instanceof Error ? err.message : 'Could not refresh Google reviews.');
+        setIsRefreshingGoogle(false);
+      }
+    })();
+  }
+
+  function handleDisconnectGoogle() {
+    setGoogleError(null);
+    void (async () => {
+      try {
+        await disconnectGoogleReviews();
+        await loadGoogleReviews();
+      } catch (err) {
+        setGoogleError(err instanceof Error ? err.message : 'Could not disconnect.');
+      }
+    })();
+  }
 
   // -------------------------------------------------------------------------
   // Dirty state
@@ -480,6 +572,12 @@ export function DesignerPortfolioSettings() {
   // Derive the on-screen preview from the copy target so the displayed link
   // and the copied link never diverge once the backend populates portfolioUrl.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
+
+  // Google connection derived state (default `available` true until first load,
+  // so the Connect UI doesn't flicker to "unavailable" on mount).
+  const googleConnection = googleReviews?.connection ?? null;
+  const googleAvailable = googleReviews?.available ?? true;
+  const googleStatus = googleConnection?.status ?? null;
 
   // -------------------------------------------------------------------------
   // Render
@@ -846,43 +944,105 @@ export function DesignerPortfolioSettings() {
                             For fetching reviews from your google maps locations.
                           </p>
                         </div>
+                        {googleStatus === 'connected' ? (
+                          <Badge variant="success" className="gap-2 rounded-sm p-1 font-normal">
+                            <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            Connected
+                          </Badge>
+                        ) : googleStatus === 'pending' ? (
+                          <Badge variant="secondary" className="gap-2 rounded-sm p-1 font-normal">
+                            <Loader2 className="size-3.5 animate-spin" /> Connecting
+                          </Badge>
+                        ) : googleStatus === 'error' ? (
+                          <Badge variant="destructive" className="gap-2 rounded-sm p-1 font-normal">
+                            <AlertCircle className="size-3.5" /> Needs attention
+                          </Badge>
+                        ) : googleStatus === 'stale' ? (
+                          <Badge variant="secondary" className="gap-2 rounded-sm p-1 font-normal">
+                            <RefreshCw className="size-3.5" /> Needs refresh
+                          </Badge>
+                        ) : null}
                       </div>
-                      <Badge
-                        variant="success"
-                        className="shrink-0 gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
-                      >
-                        <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
-                          <Check aria-hidden />
-                        </span>
-                        Connected
-                      </Badge>
                     </div>
 
-                    <div
-                      className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground"
-                      data-testid="reviews-summary"
-                    >
-                      <Badge
-                        variant="success"
-                        className="gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
-                      >
-                        <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
-                          <Check aria-hidden />
-                        </span>
-                        Connected
-                      </Badge>
-                      <span aria-hidden>·</span>
-                      <span className="flex items-center gap-1">
-                        <span>{GOOGLE_REVIEWS_PREVIEW.averageRating}</span>
-                        <Star
-                          className="size-3.5 fill-current"
-                          data-testid="review-rating-star"
-                          aria-hidden
+                    {!googleAvailable ? (
+                      <p className="text-[13px] text-muted-foreground">
+                        Google review fetching isn&rsquo;t enabled on this workspace yet.
+                      </p>
+                    ) : googleConnection ? (
+                      <div className="space-y-3">
+                        {googleStatus === 'connected' ? (
+                          <div
+                            className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground"
+                            data-testid="reviews-summary"
+                          >
+                            <Badge
+                              variant="success"
+                              className="gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
+                            >
+                              <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
+                                <Check aria-hidden />
+                              </span>
+                              Connected
+                            </Badge>
+                            <span aria-hidden>·</span>
+                            <span className="flex items-center gap-1">
+                              <span>{(googleConnection.rating ?? 0).toFixed(1)}</span>
+                              <Star
+                                className="size-3.5 fill-current"
+                                data-testid="review-rating-star"
+                                aria-hidden
+                              />
+                            </span>
+                            <span aria-hidden>·</span>
+                            <span>{googleConnection.userRatingsTotal ?? 0} reviews</span>
+                          </div>
+                        ) : googleStatus === 'pending' ? (
+                          <p className="text-[13px] text-muted-foreground">
+                            Fetching your reviews from Google&hellip;
+                          </p>
+                        ) : googleStatus === 'stale' ? (
+                          <p className="text-[13px] text-muted-foreground">
+                            These reviews are older than 30 days &mdash; refresh to update them.
+                          </p>
+                        ) : null}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRefreshGoogle}
+                            disabled={isRefreshingGoogle}
+                          >
+                            <RefreshCw className={`size-3.5 ${isRefreshingGoogle ? 'animate-spin' : ''}`} />
+                            Refresh
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={handleDisconnectGoogle}>
+                            Disconnect
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={googleRef}
+                          onChange={(e) => setGoogleRef(e.target.value)}
+                          placeholder="Google Maps link or business name"
+                          className="shadow-sm"
                         />
-                      </span>
-                      <span aria-hidden>·</span>
-                      <span>{GOOGLE_REVIEWS_PREVIEW.reviewCount} reviews</span>
-                    </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleConnectGoogle}
+                          disabled={isConnectingGoogle || !googleRef.trim()}
+                        >
+                          {isConnectingGoogle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                          Connect
+                        </Button>
+                      </div>
+                    )}
+
+                    {googleError ? <p className="text-xs text-destructive">{googleError}</p> : null}
                   </div>
 
                   <div className="p-5">
