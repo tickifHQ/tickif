@@ -45,6 +45,25 @@ function buildResponse(row: GooglePlaceCacheRecord | null): GoogleReviewsRespons
   return { available, connection: summary, reviews };
 }
 
+/**
+ * Minimum gap between a designer's own connect/refresh actions. Each triggers a
+ * billable Google Places call on the shared platform key, so a per-profile
+ * cooldown stops one account from looping them to exhaust the quota (a cheap
+ * cost-DoS that would also degrade every other tenant). Legitimate use — connect
+ * once, refresh occasionally — never hits this.
+ */
+const ATTEMPT_COOLDOWN_MS = 10_000;
+
+function assertNotThrottled(row: GooglePlaceCacheRecord | null): void {
+  if (!row?.lastAttemptAt) return;
+  const elapsed = Date.now() - new Date(row.lastAttemptAt).getTime();
+  if (elapsed < ATTEMPT_COOLDOWN_MS) {
+    throw AppError.tooManyRequests(
+      'You just updated this Google connection — wait a few seconds and try again.',
+    );
+  }
+}
+
 export const googleReviewsService = {
   /** Owner view of the connection + cached reviews. */
   async get(caller: Caller): Promise<GoogleReviewsResponse> {
@@ -64,6 +83,15 @@ export const googleReviewsService = {
     }
     const profile = await resolveProfile(caller);
 
+    // Per-profile rate limit on the billable resolve. The first connect (no row
+    // yet) is allowed; every later attempt is gated and the clock is stamped
+    // *before* the outbound call so a failing reference can't be looped for free.
+    const existing = await googleReviewsRepository.findByProfileId(profile.id);
+    if (existing) {
+      assertNotThrottled(existing);
+      await googleReviewsRepository.touchAttempt(profile.id);
+    }
+
     let placeId: string;
     try {
       placeId = await resolvePlaceId(input.reference);
@@ -78,6 +106,7 @@ export const googleReviewsService = {
       userRatingsTotal: null,
       reviews: [],
       lastFetchedAt: null,
+      lastAttemptAt: new Date(),
       lastError: null,
     });
     await enqueueGoogleReviewsRefresh({ profileId: profile.id });
@@ -95,6 +124,8 @@ export const googleReviewsService = {
     const profile = await resolveProfile(caller);
     const row = await googleReviewsRepository.findByProfileId(profile.id);
     if (!row) throw AppError.notFound('No Google location is connected');
+    assertNotThrottled(row);
+    await googleReviewsRepository.touchAttempt(profile.id);
     await enqueueGoogleReviewsRefresh({ profileId: profile.id });
     return buildResponse(row);
   },

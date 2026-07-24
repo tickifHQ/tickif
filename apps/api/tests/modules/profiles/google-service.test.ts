@@ -20,6 +20,7 @@ const queue = vi.hoisted(() => ({ enqueueGoogleReviewsRefresh: vi.fn() }));
 const repo = vi.hoisted(() => ({
   findByProfileId: vi.fn(),
   upsert: vi.fn(),
+  touchAttempt: vi.fn(),
   delete: vi.fn(),
 }));
 
@@ -95,6 +96,30 @@ describe('googleReviewsService', () => {
         googleReviewsService.connect({ reference: 'x' }, CALLER),
       ).rejects.toMatchObject({ status: 422 });
     });
+
+    it('throttles a rapid repeat connect without making a billable call', async () => {
+      // An existing row stamped moments ago is inside the cooldown window.
+      repo.findByProfileId.mockResolvedValue(cacheRow({ lastAttemptAt: new Date() }));
+      await expect(
+        googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER),
+      ).rejects.toMatchObject({ status: 429 });
+      expect(places.resolvePlaceId).not.toHaveBeenCalled();
+      expect(queue.enqueueGoogleReviewsRefresh).not.toHaveBeenCalled();
+    });
+
+    it('stamps the attempt clock before resolving when a row already exists', async () => {
+      // Past the cooldown, so the attempt proceeds and is re-stamped first.
+      repo.findByProfileId.mockResolvedValue(
+        cacheRow({ lastAttemptAt: new Date(Date.now() - 60_000) }),
+      );
+      places.resolvePlaceId.mockResolvedValue('ChIJresolved');
+      repo.upsert.mockResolvedValue(cacheRow({ placeId: 'ChIJresolved', status: 'pending' }));
+
+      await googleReviewsService.connect({ reference: 'Studio Aakar' }, CALLER);
+
+      expect(repo.touchAttempt).toHaveBeenCalledWith('profile-1');
+      expect(places.resolvePlaceId).toHaveBeenCalledWith('Studio Aakar');
+    });
   });
 
   describe('refresh', () => {
@@ -106,7 +131,14 @@ describe('googleReviewsService', () => {
     it('enqueues a refresh when connected', async () => {
       repo.findByProfileId.mockResolvedValue(cacheRow());
       await googleReviewsService.refresh(CALLER);
+      expect(repo.touchAttempt).toHaveBeenCalledWith('profile-1');
       expect(queue.enqueueGoogleReviewsRefresh).toHaveBeenCalledWith({ profileId: 'profile-1' });
+    });
+
+    it('throttles a rapid repeat refresh without enqueuing', async () => {
+      repo.findByProfileId.mockResolvedValue(cacheRow({ lastAttemptAt: new Date() }));
+      await expect(googleReviewsService.refresh(CALLER)).rejects.toMatchObject({ status: 429 });
+      expect(queue.enqueueGoogleReviewsRefresh).not.toHaveBeenCalled();
     });
   });
 
