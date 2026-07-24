@@ -1,13 +1,33 @@
+import { pathToFileURL } from 'node:url';
 import { bootstrapSearch } from './bootstrap.js';
 
-const check = process.argv.slice(2).includes('--check');
-const applyUpdates = process.argv.slice(2).includes('--apply-updates');
-const result = await bootstrapSearch({ applyUpdates, check });
+type Bootstrap = typeof bootstrapSearch;
 
-if (check) {
-  console.log('[search] Typesense collections match checked-in configuration');
-} else {
-  console.log(
-    `[search] bootstrap complete: ${result.createdCollections.length} collections created, ${result.updatedCollections.length} collections updated, ${result.createdAliases.length} aliases created, synonym set ${result.updatedSynonymSet ? 'updated' : 'unchanged'}`,
-  );
+export async function runBootstrapCli(
+  args: string[],
+  dependencies: {
+    bootstrap?: Bootstrap;
+    log?: (message: string) => void;
+  } = {},
+): Promise<void> {
+  const check = args.includes('--check');
+  const applyUpdates = args.includes('--apply-updates');
+  if (check && applyUpdates) {
+    throw new Error('--check and --apply-updates cannot be used together');
+  }
+
+  const result = await (dependencies.bootstrap ?? bootstrapSearch)({
+    applyUpdates,
+    check,
+  });
+  (dependencies.log ?? console.log)(`[search] Bootstrap complete: ${JSON.stringify(result)}`);
+}
+
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
+  runBootstrapCli(process.argv.slice(2)).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[search] Bootstrap failed: ${message}`);
+    process.exitCode = 1;
+  });
 }

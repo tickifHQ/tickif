@@ -88,6 +88,8 @@ function normalizedField(field: CollectionFieldSchema) {
     sort: field.sort ?? defaultSortable(field.type),
     infix: field.infix ?? false,
     stem: field.stem ?? false,
+    locale: field.locale || undefined,
+    num_dim: field.num_dim || undefined,
     store: field.store ?? true,
     range_index: field.range_index ?? false,
   };
@@ -102,6 +104,7 @@ function normalizedSchema(schema: CollectionCreateSchema | CollectionSchema) {
     synonym_sets: [...(schema.synonym_sets ?? [])].sort(),
     token_separators: [...(schema.token_separators ?? [])].sort(),
     symbols_to_index: [...(schema.symbols_to_index ?? [])].sort(),
+    enable_nested_fields: schema.enable_nested_fields ?? false,
   };
 }
 
@@ -109,15 +112,52 @@ function normalizedSynonymSet(synonymSet: SynonymSetCreateSchema) {
   return {
     items: synonymSet.items
       .map((item) => ({
-        ...item,
+        id: item.id,
         root: item.root || undefined,
         synonyms: [...item.synonyms].sort(),
+        locale: item.locale || undefined,
         symbols_to_index: item.symbols_to_index
           ? [...item.symbols_to_index].sort()
           : undefined,
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   };
+}
+
+function immutableCollectionDrift(
+  current: CollectionSchema,
+  expected: CollectionCreateSchema,
+): string[] {
+  const differences: string[] = [];
+  if (
+    (current.default_sorting_field ?? '') !==
+    (expected.default_sorting_field ?? '')
+  ) {
+    differences.push('default_sorting_field');
+  }
+  if (
+    !isDeepStrictEqual(
+      [...(current.token_separators ?? [])].sort(),
+      [...(expected.token_separators ?? [])].sort(),
+    )
+  ) {
+    differences.push('token_separators');
+  }
+  if (
+    !isDeepStrictEqual(
+      [...(current.symbols_to_index ?? [])].sort(),
+      [...(expected.symbols_to_index ?? [])].sort(),
+    )
+  ) {
+    differences.push('symbols_to_index');
+  }
+  if (
+    (current.enable_nested_fields ?? false) !==
+    (expected.enable_nested_fields ?? false)
+  ) {
+    differences.push('enable_nested_fields');
+  }
+  return differences;
 }
 
 function collectionUpdate(
@@ -146,34 +186,12 @@ function collectionUpdate(
   const update: CollectionUpdateSchema = {};
   if (fields.length > 0) update.fields = fields;
   if (
-    (current.default_sorting_field ?? '') !==
-    (expected.default_sorting_field ?? '')
-  ) {
-    update.default_sorting_field = expected.default_sorting_field;
-  }
-  if (
     !isDeepStrictEqual(
       [...(current.synonym_sets ?? [])].sort(),
       [...(expected.synonym_sets ?? [])].sort(),
     )
   ) {
     update.synonym_sets = expected.synonym_sets ?? [];
-  }
-  if (
-    !isDeepStrictEqual(
-      [...(current.token_separators ?? [])].sort(),
-      [...(expected.token_separators ?? [])].sort(),
-    )
-  ) {
-    update.token_separators = expected.token_separators ?? [];
-  }
-  if (
-    !isDeepStrictEqual(
-      [...(current.symbols_to_index ?? [])].sort(),
-      [...(expected.symbols_to_index ?? [])].sort(),
-    )
-  ) {
-    update.symbols_to_index = expected.symbols_to_index ?? [];
   }
   return update;
 }
@@ -248,6 +266,15 @@ async function ensureCollection(
     return { created: false, updated: false };
   }
 
+  const immutableDrift = immutableCollectionDrift(current, expected);
+  if (immutableDrift.length > 0) {
+    throw new Error(
+      `Search configuration drift: collection ${expected.name} has immutable changes (${immutableDrift.join(
+        ', ',
+      )}) and requires a versioned collection rebuild`,
+    );
+  }
+
   if (check || !applyUpdates) {
     throw new Error(
       `Search configuration drift: collection ${expected.name} does not match checked-in schema${
@@ -307,8 +334,20 @@ export async function bootstrapSearch(
     if (outcome.updated) result.updatedCollections.push(collectionName);
 
     if (!aliasExists) {
-      await instance.upsertAlias(aliasName, { collection_name: collectionName });
-      result.createdAliases.push(aliasName);
+      // A rebuild may have installed an alias while this process prepared the
+      // initial collection. Re-check so bootstrap never points it back to v1.
+      let aliasCreatedElsewhere = false;
+      try {
+        await instance.getAlias(aliasName);
+        aliasCreatedElsewhere = true;
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+
+      if (!aliasCreatedElsewhere) {
+        await instance.upsertAlias(aliasName, { collection_name: collectionName });
+        result.createdAliases.push(aliasName);
+      }
     }
   }
 

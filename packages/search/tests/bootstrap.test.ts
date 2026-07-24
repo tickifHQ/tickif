@@ -7,6 +7,7 @@ import type {
   CollectionUpdateSchema,
   SynonymSetCreateSchema,
 } from 'typesense';
+import { Errors } from 'typesense';
 import { describe, expect, it, vi } from 'vitest';
 import { bootstrapSearch, type SearchBootstrapClient } from '../src/bootstrap.js';
 import {
@@ -22,12 +23,12 @@ const projectCollectionName = initialSearchCollectionName('projects');
 const designerCollectionName = initialSearchCollectionName('designers');
 const synonymSetName = searchSynonymSetName();
 
-function notFound(): Error & { httpStatus: number } {
-  return Object.assign(new Error('Object not found'), { httpStatus: 404 });
+function notFound(): Error {
+  return new Errors.ObjectNotFound('Object not found', undefined, 404);
 }
 
-function alreadyExists(): Error & { httpStatus: number } {
-  return Object.assign(new Error('Object already exists'), { httpStatus: 409 });
+function alreadyExists(): Error {
+  return new Errors.ObjectAlreadyExists('Object already exists', undefined, 409);
 }
 
 function storedCollection(schema: CollectionCreateSchema): CollectionSchema {
@@ -52,6 +53,13 @@ function applyCollectionUpdate(
   current: CollectionSchema,
   update: CollectionUpdateSchema,
 ): CollectionSchema {
+  const unsupportedKeys = Object.keys(update).filter(
+    (key) => key !== 'fields' && key !== 'synonym_sets',
+  );
+  if (unsupportedKeys.length > 0) {
+    throw new Error(`Unsupported collection update keys: ${unsupportedKeys.join(', ')}`);
+  }
+
   const fields = new Map(current.fields.map((field) => [field.name, field]));
   for (const field of update.fields ?? []) {
     if ('drop' in field) fields.delete(field.name);
@@ -60,7 +68,7 @@ function applyCollectionUpdate(
 
   return {
     ...current,
-    ...update,
+    synonym_sets: update.synonym_sets ?? current.synonym_sets,
     fields: [...fields.values()],
   };
 }
@@ -207,6 +215,64 @@ describe('bootstrapSearch', () => {
     );
   });
 
+  it('drops fields that are no longer present in the checked-in schema', async () => {
+    const fake = fakeClient();
+    await bootstrapSearch({ client: fake.client });
+
+    const projects = fake.collections.get(projectCollectionName);
+    if (!projects) throw new Error('Expected projects collection');
+    projects.fields.push({ name: 'legacyField', type: 'string', optional: true });
+
+    await expect(
+      bootstrapSearch({ client: fake.client, applyUpdates: true }),
+    ).resolves.toEqual({
+      createdCollections: [],
+      updatedCollections: [projectCollectionName],
+      createdAliases: [],
+      updatedSynonymSet: false,
+    });
+    expect(fake.updateCollection).toHaveBeenCalledWith(projectCollectionName, {
+      fields: [{ name: 'legacyField', drop: true }],
+    });
+  });
+
+  it('requires a versioned rebuild instead of patching immutable collection settings', async () => {
+    const fake = fakeClient();
+    await bootstrapSearch({ client: fake.client });
+
+    const projects = fake.collections.get(projectCollectionName);
+    if (!projects) throw new Error('Expected projects collection');
+    projects.token_separators = ['_'];
+
+    await expect(
+      bootstrapSearch({ client: fake.client, applyUpdates: true }),
+    ).rejects.toThrow('requires a versioned collection rebuild');
+    expect(fake.updateCollection).not.toHaveBeenCalled();
+  });
+
+  it('ignores server-only synonym properties while detecting supported drift', async () => {
+    const fake = fakeClient();
+    await bootstrapSearch({ client: fake.client });
+
+    const synonymSet = fake.synonymSets.get(synonymSetName);
+    if (!synonymSet) throw new Error('Expected synonym set');
+    const first = synonymSet.items[0];
+    if (!first) throw new Error('Expected synonym item');
+    Object.assign(first, { locale: '', server_generated: true });
+
+    await expect(bootstrapSearch({ client: fake.client, check: true })).resolves.toEqual({
+      createdCollections: [],
+      updatedCollections: [],
+      createdAliases: [],
+      updatedSynonymSet: false,
+    });
+
+    first.locale = 'hi';
+    await expect(bootstrapSearch({ client: fake.client, check: true })).rejects.toThrow(
+      'does not match checked-in configuration',
+    );
+  });
+
   it('accepts a collection created concurrently by another API replica', async () => {
     const fake = fakeClient();
     await fake.client.upsertSynonymSet(synonymSetName, SEARCH_SYNONYM_SET);
@@ -245,6 +311,32 @@ describe('bootstrapSearch', () => {
       updatedSynonymSet: false,
     });
     expect(fake.upsertAlias).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not overwrite an alias created while bootstrap is preparing a collection', async () => {
+    const fake = fakeClient();
+    await fake.client.upsertSynonymSet(synonymSetName, SEARCH_SYNONYM_SET);
+    fake.upsertSynonymSet.mockClear();
+
+    const rebuiltName = `${projectAliasName}_v2`;
+    fake.createCollection.mockImplementationOnce(async (schema) => {
+      const stored = storedCollection(schema);
+      fake.collections.set(schema.name, stored);
+      fake.collections.set(rebuiltName, { ...stored, name: rebuiltName });
+      fake.aliases.set(projectAliasName, {
+        name: projectAliasName,
+        collection_name: rebuiltName,
+      });
+      return stored;
+    });
+
+    await bootstrapSearch({ client: fake.client });
+
+    expect(fake.aliases.get(projectAliasName)?.collection_name).toBe(rebuiltName);
+    expect(fake.upsertAlias).toHaveBeenCalledTimes(1);
+    expect(fake.upsertAlias).toHaveBeenCalledWith(designerAliasName, {
+      collection_name: designerCollectionName,
+    });
   });
 
   it('fails bootstrap when Typesense reports an unhealthy node', async () => {

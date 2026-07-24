@@ -15,9 +15,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@babel/runtime": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@babel/runtime": "catalog:",
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
