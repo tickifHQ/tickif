@@ -306,8 +306,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@next/env':
-        specifier: ^16.2.7
-        version: 16.2.7
+        specifier: ^16.2.11
+        version: 16.2.11
       '@repo/api':
         specifier: workspace:*
         version: link:../api
@@ -1673,9 +1673,6 @@ packages:
 
   '@next/env@16.2.11':
     resolution: {integrity: sha512-0do5A3BJ2gxWr0ZCMcD6BhW+e595jyxdTl3rXTS6lOtD8ektMiW6CO+EPwt1Eca1DBnm90r/7GdiKWBKxH++DA==}
-
-  '@next/env@16.2.7':
-    resolution: {integrity: sha512-tMJizPlj6ZYpBMMdK8S0LJufrP4QTdR6pcv9KQ/bVETPAmg0j1mlHE9G2c38UyGHxoBapgwuj7XjbGJ2RcDFOg==}
 
   '@next/swc-darwin-arm64@16.2.11':
     resolution: {integrity: sha512-wryL4pjKmDwGv2ox6+GZDFxvmtSRLqApBR8kL1j4+vhB7Z5vJC/zAnXpiR9Xkfzl0AS8WLMnsuGV/UKI67/rrw==}
@@ -6462,8 +6459,6 @@ snapshots:
     optional: true
 
   '@next/env@16.2.11': {}
-
-  '@next/env@16.2.7': {}
 
   '@next/swc-darwin-arm64@16.2.11':
     optional: true
