@@ -17,6 +17,7 @@ export type GooglePlaceCacheWrite = {
   userRatingsTotal?: number | null;
   reviews?: GooglePlaceCacheRecord['reviews'];
   lastFetchedAt?: Date | null;
+  lastAttemptAt?: Date | null;
   lastError?: string | null;
 };
 
@@ -43,6 +44,17 @@ export const googleReviewsRepository = {
       .returning();
     if (!row) throw new Error('google_place_cache upsert returned no row');
     return row;
+  },
+
+  /**
+   * Stamp the per-profile attempt clock (drives the connect/refresh cooldown).
+   * No-op if the profile has no cache row yet — the first connect creates it.
+   */
+  async touchAttempt(profileId: string): Promise<void> {
+    await db
+      .update(schema.googlePlaceCache)
+      .set({ lastAttemptAt: new Date() })
+      .where(eq(schema.googlePlaceCache.profileId, profileId));
   },
 
   async delete(profileId: string): Promise<void> {
