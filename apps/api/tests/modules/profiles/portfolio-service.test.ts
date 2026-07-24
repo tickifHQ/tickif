@@ -38,6 +38,16 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
   },
 }));
 
+// buildPortfolioResponse embeds a Google connection snapshot; default to "no row"
+// so these unit tests never touch a real DB via the Google cache repository.
+vi.mock('../../../src/modules/profiles/google-repository.js', () => ({
+  googleReviewsRepository: {
+    findByProfileId: vi.fn(async () => null),
+    upsert: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
 vi.mock('@repo/storage', () => ({
   presignUpload: vi.fn(),
   presignDownload: vi.fn(),

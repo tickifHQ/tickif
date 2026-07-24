@@ -15,13 +15,15 @@ import {
 } from './portfolio-repository.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
 import { orgsService } from '../orgs/service.js';
+import { googleReviewsRepository } from './google-repository.js';
+import { readState } from './google-mapper.js';
 
 /**
  * Portfolio business logic (E-222).
  * No Hono, no Drizzle — only domain operations.
  */
 
-type Caller = {
+export type Caller = {
   userId: string;
   activeOrgId: string | null;
 };
@@ -100,7 +102,7 @@ function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
   return badges;
 }
 
-async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
+export async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
   }
@@ -136,6 +138,11 @@ async function buildPortfolioResponse(
       ? await presignDownload({ key: profile.logoImageId })
       : null;
 
+  // Embed a lightweight Google connection snapshot so the settings page renders
+  // the real connection state (badge + rating) without a second round-trip.
+  const googleRow = await googleReviewsRepository.findByProfileId(profile.id);
+  const googleConnection = googleRow ? readState(googleRow).summary : null;
+
   return {
     id: portfolio.id,
     publicLinkEnabled: portfolio.publicLinkEnabled,
@@ -163,6 +170,7 @@ async function buildPortfolioResponse(
     showTickifBadge: portfolio.showTickifBadge,
     badges,
     portfolioUrl,
+    googleConnection,
     publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     createdAt: portfolio.createdAt.toISOString(),
     updatedAt: portfolio.updatedAt.toISOString(),

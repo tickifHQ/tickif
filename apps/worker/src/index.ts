@@ -3,12 +3,25 @@ import sharp from 'sharp';
 import { Worker } from 'bullmq';
 import { config, isProduction } from '@repo/config';
 import { assertMediaStorageConfig } from '@repo/storage';
-import { closeQueues } from '@repo/queue';
-import { connection, QUEUES, type MediaProcessJob, type SmsJob } from './connection.js';
+import { isGooglePlacesConfigured } from '@repo/google-places';
+import { closeQueues, scheduleGoogleReviewsSweep } from '@repo/queue';
+import {
+  connection,
+  QUEUES,
+  JOBS,
+  type MediaProcessJob,
+  type SmsJob,
+  type GoogleReviewsRefreshJob,
+  type GoogleReviewsSweepJob,
+} from './connection.js';
 import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
 import { selectSmsSender } from './jobs/sms-sender.js';
 import { SmsService } from './jobs/sms-service.js';
+import {
+  processGoogleReviewRefresh,
+  processGoogleReviewSweep,
+} from './jobs/google-reviews.js';
 
 /**
  * Worker process. Each queue gets a Worker; handlers live under ./jobs.
@@ -40,6 +53,36 @@ const smsWorker = new Worker<SmsJob>(QUEUES.sms, (job) => smsService.send(job.da
   connection,
   concurrency: 4,
 });
+
+// Google reviews worker + periodic sweep — only when a Places API key is set.
+let googleReviewsWorker: Worker<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
+if (isGooglePlacesConfigured()) {
+  googleReviewsWorker = new Worker<GoogleReviewsRefreshJob | GoogleReviewsSweepJob>(
+    QUEUES.googleReviews,
+    async (job) => {
+      if (job.name === JOBS.sweepGoogleReviews) {
+        const result = await processGoogleReviewSweep();
+        console.log(
+          `[worker] google-reviews sweep: purged ${result.purged}, enqueued ${result.enqueued}`,
+        );
+        return;
+      }
+      await processGoogleReviewRefresh((job.data as GoogleReviewsRefreshJob).profileId);
+    },
+    { connection, concurrency: 4 },
+  );
+  googleReviewsWorker.on('completed', (job) =>
+    console.log(`[worker] google-reviews completed job ${job.id}`),
+  );
+  googleReviewsWorker.on('failed', (job, err) =>
+    console.error(`[worker] google-reviews failed job ${job?.id}:`, err),
+  );
+  // Register the repeatable hourly sweep (idempotent via stable scheduler id).
+  void scheduleGoogleReviewsSweep(60 * 60 * 1000).catch((err) =>
+    console.error('[worker] failed to register google-reviews sweep:', err),
+  );
+  console.log('[worker] google-reviews worker + hourly sweep registered');
+}
 
 mediaWorker.on('completed', (job) => console.log(`[worker] media completed job ${job.id}`));
 mediaWorker.on('failed', async (job, err) => {
@@ -73,7 +116,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`[worker] ${signal} received, draining...`);
   let code = 0;
   try {
-    await Promise.all([mediaWorker.close(), smsWorker.close()]);
+    await Promise.all([mediaWorker.close(), smsWorker.close(), googleReviewsWorker?.close()]);
     await closeQueues();
   } catch (err) {
     console.error('[worker] error during shutdown:', err);

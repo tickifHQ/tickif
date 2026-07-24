@@ -14,11 +14,14 @@ export const connection: ConnectionOptions = {
 export const QUEUES = {
   media: 'media',
   sms: 'sms',
+  googleReviews: 'google-reviews',
 } as const;
 
 export const JOBS = {
   sendSms: 'send-sms',
   processMedia: 'process-media',
+  refreshGoogleReviews: 'refresh-google-reviews',
+  sweepGoogleReviews: 'sweep-google-reviews',
 } as const;
 
 export type MediaProcessJob = {
@@ -30,6 +33,17 @@ export type SmsJob = {
   phoneNumber: string;
   code: string;
 };
+
+/** Refresh one designer's cached Google reviews. */
+export type GoogleReviewsRefreshJob = {
+  profileId: string;
+};
+
+/** Periodic sweep: refetch stale rows + purge ToS-expired review payloads. */
+export type GoogleReviewsSweepJob = Record<string, never>;
+
+/** Stable scheduler id so re-registering the repeatable sweep is idempotent. */
+export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -44,6 +58,7 @@ export const defaultJobOptions = {
 
 let smsQueue: Queue<SmsJob> | undefined;
 let mediaQueue: Queue<MediaProcessJob> | undefined;
+let googleReviewsQueue: Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
 
 function getSmsQueue(): Queue<SmsJob> {
   smsQueue ??= new Queue<SmsJob>(QUEUES.sms, {
@@ -85,6 +100,36 @@ function smsJobId(job: SmsJob): string {
   return `otp-${phone}-${digest}`;
 }
 
+function getGoogleReviewsQueue(): Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> {
+  googleReviewsQueue ??= new Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob>(
+    QUEUES.googleReviews,
+    { connection, defaultJobOptions },
+  );
+  return googleReviewsQueue;
+}
+
+/**
+ * Enqueue a refresh for one profile. JobId is per-profile so a burst of
+ * connect/refresh clicks collapses to a single in-flight job.
+ */
+export async function enqueueGoogleReviewsRefresh(job: GoogleReviewsRefreshJob): Promise<void> {
+  await getGoogleReviewsQueue().add(JOBS.refreshGoogleReviews, job, {
+    jobId: `google-refresh-${job.profileId}`,
+  });
+}
+
+/**
+ * Register (or update) the repeatable sweep. Idempotent via a stable scheduler
+ * id, so calling this on every worker boot never stacks duplicate schedules.
+ */
+export async function scheduleGoogleReviewsSweep(everyMs: number): Promise<void> {
+  await getGoogleReviewsQueue().upsertJobScheduler(
+    GOOGLE_REVIEWS_SWEEP_SCHEDULER,
+    { every: everyMs },
+    { name: JOBS.sweepGoogleReviews, data: {} },
+  );
+}
+
 export async function enqueueSms(job: SmsJob): Promise<void> {
   // Normalize the phone once, up front, so the stored job, the dedupe key, and the
   // provider all agree — identical requests with different formatting now collapse.
@@ -94,7 +139,8 @@ export async function enqueueSms(job: SmsJob): Promise<void> {
 }
 
 export async function closeQueues(): Promise<void> {
-  await Promise.all([smsQueue?.close(), mediaQueue?.close()]);
+  await Promise.all([smsQueue?.close(), mediaQueue?.close(), googleReviewsQueue?.close()]);
   smsQueue = undefined;
   mediaQueue = undefined;
+  googleReviewsQueue = undefined;
 }
