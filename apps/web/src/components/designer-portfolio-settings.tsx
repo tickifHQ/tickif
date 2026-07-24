@@ -264,6 +264,7 @@ export function DesignerPortfolioSettings() {
   const loadGoogleReviews = useCallback(async () => {
     try {
       setGoogleReviews(await fetchGoogleReviews());
+      setGoogleError(null);
     } catch (err) {
       setGoogleError(err instanceof Error ? err.message : 'Could not load Google reviews.');
     }
@@ -282,13 +283,20 @@ export function DesignerPortfolioSettings() {
    * poll a few times to surface the worker's result without a manual reload.
    */
   const pollGoogleReviews = useCallback((attempt = 0) => {
+    // Drop any timer still pending from an earlier connect/refresh so overlapping
+    // actions can't orphan a timer that later fires on an unmounted component.
+    if (googlePollRef.current) clearTimeout(googlePollRef.current);
     googlePollRef.current = setTimeout(() => {
       void (async () => {
         const data = await fetchGoogleReviews().catch(() => null);
-        if (data) setGoogleReviews(data);
+        if (data) {
+          setGoogleReviews(data);
+          setGoogleError(null);
+        }
         if (data?.connection?.status === 'pending' && attempt < 4) {
           pollGoogleReviews(attempt + 1);
         } else {
+          googlePollRef.current = null;
           setIsRefreshingGoogle(false);
         }
       })();
@@ -945,21 +953,38 @@ export function DesignerPortfolioSettings() {
                           </p>
                         </div>
                         {googleStatus === 'connected' ? (
-                          <Badge variant="success" className="gap-2 rounded-sm p-1 font-normal">
-                            <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <Badge
+                            variant="success"
+                            className="shrink-0 gap-1.5 rounded-md bg-success/15 px-2 py-1 font-normal text-success"
+                          >
+                            <span className="flex size-4 items-center justify-center rounded-full bg-success text-success-foreground">
+                              <Check aria-hidden />
+                            </span>
                             Connected
                           </Badge>
                         ) : googleStatus === 'pending' ? (
-                          <Badge variant="secondary" className="gap-2 rounded-sm p-1 font-normal">
-                            <Loader2 className="size-3.5 animate-spin" /> Connecting
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 gap-1.5 rounded-md bg-muted px-2 py-1 font-normal text-muted-foreground"
+                          >
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                            Connecting
                           </Badge>
                         ) : googleStatus === 'error' ? (
-                          <Badge variant="destructive" className="gap-2 rounded-sm p-1 font-normal">
-                            <AlertCircle className="size-3.5" /> Needs attention
+                          <Badge
+                            variant="destructive"
+                            className="shrink-0 gap-1.5 rounded-md bg-destructive/15 px-2 py-1 font-normal text-destructive"
+                          >
+                            <AlertCircle className="size-3.5" aria-hidden />
+                            Needs attention
                           </Badge>
                         ) : googleStatus === 'stale' ? (
-                          <Badge variant="secondary" className="gap-2 rounded-sm p-1 font-normal">
-                            <RefreshCw className="size-3.5" /> Needs refresh
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 gap-1.5 rounded-md bg-muted px-2 py-1 font-normal text-muted-foreground"
+                          >
+                            <RefreshCw className="size-3.5" aria-hidden />
+                            Needs refresh
                           </Badge>
                         ) : null}
                       </div>
@@ -1004,6 +1029,11 @@ export function DesignerPortfolioSettings() {
                         ) : googleStatus === 'stale' ? (
                           <p className="text-[13px] text-muted-foreground">
                             These reviews are older than 30 days &mdash; refresh to update them.
+                          </p>
+                        ) : googleStatus === 'error' ? (
+                          <p className="text-[13px] text-destructive">
+                            We couldn&rsquo;t fetch reviews for this location. Try refreshing, or
+                            disconnect and reconnect.
                           </p>
                         ) : null}
                         <div className="flex items-center gap-2">

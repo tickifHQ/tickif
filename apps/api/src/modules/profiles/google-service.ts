@@ -89,6 +89,9 @@ export const googleReviewsService = {
    * cached state (202-style); the UI re-reads after a short delay.
    */
   async refresh(caller: Caller): Promise<GoogleReviewsResponse> {
+    if (!isGooglePlacesConfigured()) {
+      throw AppError.unprocessable('Google review fetching is not available');
+    }
     const profile = await resolveProfile(caller);
     const row = await googleReviewsRepository.findByProfileId(profile.id);
     if (!row) throw AppError.notFound('No Google location is connected');
