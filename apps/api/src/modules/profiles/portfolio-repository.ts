@@ -1,4 +1,5 @@
-import { db, schema, eq, and, sql } from '@repo/db';
+import { db, schema, eq, and, or, sql } from '@repo/db';
+import type { DesignerProfileRecord } from './repository.js';
 
 /**
  * Data-access for designer portfolio (E-222).
@@ -6,6 +7,14 @@ import { db, schema, eq, and, sql } from '@repo/db';
  */
 
 export type PortfolioRecord = typeof schema.designerPortfolio.$inferSelect;
+
+/** Everything needed to resolve a public `/d/{slug}` portfolio URL. */
+export type PublicPortfolioRecord = {
+  profile: DesignerProfileRecord;
+  orgSlug: string;
+  /** Null when the designer has never opened the portfolio settings page. */
+  portfolio: PortfolioRecord | null;
+};
 
 /**
  * Transaction handle type. Exported so the service layer can reference it
@@ -40,11 +49,7 @@ export const portfolioRepository = {
     return row ?? null;
   },
 
-  /**
-   * Find portfolio by slug.
-   * Not used by the settings endpoints yet — reserved for the public
-   * portfolio page epic (/p/:slug).
-   */
+  /** Find portfolio by slug. */
   async findBySlug(slug: string): Promise<PortfolioRecord | null> {
     const [row] = await db
       .select()
@@ -52,6 +57,83 @@ export const portfolioRepository = {
       .where(eq(schema.designerPortfolio.portfolioSlug, slug))
       .limit(1);
     return row ?? null;
+  },
+
+  /**
+   * Resolve a public `/d/{slug}` URL to its profile, org slug, and portfolio row.
+   *
+   * Matches the designer-chosen `portfolioSlug` **or** the owning organization
+   * slug, so share links minted before the designer picked a custom slug keep
+   * working. A `portfolioSlug` hit wins if both could match. The portfolio join
+   * is a LEFT JOIN because designers who never opened the settings page have no
+   * row yet — the service falls back to the column defaults.
+   */
+  async findPublicBySlug(slug: string): Promise<PublicPortfolioRecord | null> {
+    const [row] = await db
+      .select({
+        profile: schema.designerProfile,
+        orgSlug: schema.organization.slug,
+        portfolio: schema.designerPortfolio,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .leftJoin(
+        schema.designerPortfolio,
+        eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+      )
+      .where(
+        or(eq(schema.designerPortfolio.portfolioSlug, slug), eq(schema.organization.slug, slug)),
+      )
+      .orderBy(sql`case when ${schema.designerPortfolio.portfolioSlug} = ${slug} then 0 else 1 end`)
+      .limit(1);
+    if (!row) return null;
+    return { profile: row.profile, orgSlug: row.orgSlug, portfolio: row.portfolio };
+  },
+
+  /** Title of a published project owned by this designer, for the featured quote. */
+  async findPublishedProjectTitle(projectId: string, designerId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ title: schema.project.title })
+      .from(schema.project)
+      .where(
+        and(
+          eq(schema.project.id, projectId),
+          eq(schema.project.designerId, designerId),
+          eq(schema.project.status, 'published'),
+        ),
+      )
+      .limit(1);
+    return row?.title ?? null;
+  },
+
+  /** City footprint labels for a profile, in taxonomy display order. */
+  async findCityLabels(profileId: string): Promise<string[]> {
+    const rows = await db
+      .select({ label: schema.taxonomy.label })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+      )
+      .where(
+        and(
+          eq(schema.designerProfileFootprint.profileId, profileId),
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .orderBy(schema.taxonomy.sortOrder, schema.taxonomy.label);
+    return rows.map((r) => r.label);
+  },
+
+  /** Organization slug for a profile's owning org — used to build the canonical URL. */
+  async findOrgSlug(orgId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ slug: schema.organization.slug })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, orgId))
+      .limit(1);
+    return row?.slug ?? null;
   },
 
   /** Create a new portfolio row for a profile. */

@@ -115,7 +115,37 @@ export type ProjectFeedItemRecord = {
   coverDerivatives: ProjectImageRecord['derivatives'] | null;
   coverWidth: number | null;
   coverHeight: number | null;
+  // Only the designer-portfolio card projection reads these three; the home feed
+  // selects them too so all three feed queries share one row shape.
+  sizeSqft: number | null;
+  completedMonth: string | null;
+  publishedAt: Date | null;
 };
+
+/** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
+function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.projectImage, 'cover'>>) {
+  return {
+    id: schema.project.id,
+    slug: schema.project.slug,
+    title: schema.project.title,
+    citySlug: schema.project.citySlug,
+    localitySlug: schema.project.localitySlug,
+    budgetBandSlug: schema.project.budgetBandSlug,
+    scopeSlug: schema.project.scopeSlug,
+    bhkSlug: schema.project.bhkSlug,
+    propertySubtypeSlug: schema.project.propertySubtypeSlug,
+    studio: schema.designerProfile.displayName,
+    rating: schema.designerProfile.avgRating,
+    reviewCount: schema.designerProfile.reviewCount,
+    coverStatus: cover.status,
+    coverDerivatives: cover.derivatives,
+    coverWidth: cover.width,
+    coverHeight: cover.height,
+    sizeSqft: schema.project.sizeSqft,
+    completedMonth: schema.project.completedMonth,
+    publishedAt: schema.project.publishedAt,
+  };
+}
 
 export type DuplicateProjectParams = {
   source: ProjectRecord;
@@ -253,42 +283,22 @@ export const projectsRepository = {
     offset: number;
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
-    return (
-      db
-        .select({
-          id: schema.project.id,
-          slug: schema.project.slug,
-          title: schema.project.title,
-          citySlug: schema.project.citySlug,
-          localitySlug: schema.project.localitySlug,
-          budgetBandSlug: schema.project.budgetBandSlug,
-          scopeSlug: schema.project.scopeSlug,
-          bhkSlug: schema.project.bhkSlug,
-          propertySubtypeSlug: schema.project.propertySubtypeSlug,
-          studio: schema.designerProfile.displayName,
-          rating: schema.designerProfile.avgRating,
-          reviewCount: schema.designerProfile.reviewCount,
-          coverStatus: cover.status,
-          coverDerivatives: cover.derivatives,
-          coverWidth: cover.width,
-          coverHeight: cover.height,
-        })
-        .from(schema.project)
-        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-        // Only active designers: suspended studios 404 on their public profile, so their
-        // projects must not surface here either. `id` is the stable tiebreaker for paging.
-        .where(
-          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
-        )
-        .orderBy(
-          sql`${schema.project.publishedAt} desc nulls last`,
-          desc(schema.project.createdAt),
-          desc(schema.project.id),
-        )
-        .limit(params.limit)
-        .offset(params.offset)
-    );
+
+    return db
+      .select(feedProjectColumns(cover))
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      // Only active designers: suspended studios 404 on their public profile, so their
+      // projects must not surface here either. `id` is the stable tiebreaker for paging.
+      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+        desc(schema.project.id),
+      )
+      .limit(params.limit)
+      .offset(params.offset);
   },
 
   /**
@@ -1082,6 +1092,29 @@ export const projectsRepository = {
   },
 
   /**
+   * Lowest budget band across a designer's published projects, by taxonomy
+   * `sortOrder` (bands are ordered cheapest-first). Powers the "starting at"
+   * stat on the public portfolio. Null when no published project carries a band.
+   */
+  async findLowestBudgetBandLabel(designerId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ label: schema.taxonomy.label })
+      .from(schema.project)
+      .innerJoin(
+        schema.taxonomy,
+        and(
+          eq(schema.taxonomy.slug, schema.project.budgetBandSlug),
+          eq(schema.taxonomy.kind, 'budget_band'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .where(and(eq(schema.project.designerId, designerId), eq(schema.project.status, 'published')))
+      .orderBy(schema.taxonomy.sortOrder)
+      .limit(1);
+    return row?.label ?? null;
+  },
+
+  /**
    * Published projects by designer ID — same feed projection as listPublishedFeed
    * but filtered to a single designer. Used for the public profile page grid.
    */
@@ -1091,24 +1124,7 @@ export const projectsRepository = {
   ): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
     return db
-      .select({
-        id: schema.project.id,
-        slug: schema.project.slug,
-        title: schema.project.title,
-        citySlug: schema.project.citySlug,
-        localitySlug: schema.project.localitySlug,
-        budgetBandSlug: schema.project.budgetBandSlug,
-        scopeSlug: schema.project.scopeSlug,
-        bhkSlug: schema.project.bhkSlug,
-        propertySubtypeSlug: schema.project.propertySubtypeSlug,
-        studio: schema.designerProfile.displayName,
-        rating: schema.designerProfile.avgRating,
-        reviewCount: schema.designerProfile.reviewCount,
-        coverStatus: cover.status,
-        coverDerivatives: cover.derivatives,
-        coverWidth: cover.width,
-        coverHeight: cover.height,
-      })
+      .select(feedProjectColumns(cover))
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
@@ -1138,24 +1154,7 @@ export const projectsRepository = {
   ): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
     return db
-      .select({
-        id: schema.project.id,
-        slug: schema.project.slug,
-        title: schema.project.title,
-        citySlug: schema.project.citySlug,
-        localitySlug: schema.project.localitySlug,
-        budgetBandSlug: schema.project.budgetBandSlug,
-        scopeSlug: schema.project.scopeSlug,
-        bhkSlug: schema.project.bhkSlug,
-        propertySubtypeSlug: schema.project.propertySubtypeSlug,
-        studio: schema.designerProfile.displayName,
-        rating: schema.designerProfile.avgRating,
-        reviewCount: schema.designerProfile.reviewCount,
-        coverStatus: cover.status,
-        coverDerivatives: cover.derivatives,
-        coverWidth: cover.width,
-        coverHeight: cover.height,
-      })
+      .select(feedProjectColumns(cover))
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .leftJoin(cover, eq(schema.project.coverImageId, cover.id))

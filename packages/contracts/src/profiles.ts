@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { designerProjectsResponseSchema } from './projects';
 
 /** A single onboarding checklist step. */
 export const completionStepSchema = z.object({
@@ -416,3 +417,136 @@ export const connectGooglePlaceSchema = z
   })
   .meta({ id: 'ConnectGooglePlace' });
 export type ConnectGooglePlaceInput = z.infer<typeof connectGooglePlaceSchema>;
+
+// --- Public portfolio page (E-203) ---
+
+/**
+ * Path parameter for `GET /api/portfolios/{slug}`.
+ *
+ * Accepts either the designer-chosen `portfolioSlug` or the owning organization
+ * slug, so links minted before the designer picked a custom slug keep resolving.
+ * Shares `profileSlugParamSchema`'s URL-safe shape.
+ */
+export const portfolioSlugParamSchema = profileSlugParamSchema.meta({
+  id: 'PortfolioSlugParam',
+});
+
+/** Provider backing the public reviews rail. Only Google today. */
+export const publicReviewSourceSchema = z.enum(['google']);
+export type PublicReviewSource = z.infer<typeof publicReviewSourceSchema>;
+
+/**
+ * A review as rendered on the public portfolio — provider-agnostic so a second
+ * source can be added without changing the page.
+ */
+export const publicPortfolioReviewSchema = z
+  .object({
+    /** Stable within a response; composed from the provider payload for React keys. */
+    id: z.string(),
+    author: z.string(),
+    avatarUrl: z.string().url().nullable(),
+    rating: z.number().min(0).max(5),
+    relativeTime: z.string(),
+    text: z.string(),
+    source: publicReviewSourceSchema,
+  })
+  .meta({ id: 'PublicPortfolioReview' });
+export type PublicPortfolioReview = z.infer<typeof publicPortfolioReviewSchema>;
+
+/**
+ * Which sections the designer has enabled. Mirrors the `show*` portfolio
+ * settings so the public page never has to know the settings field names.
+ */
+export const publicPortfolioSectionsSchema = z
+  .object({
+    hero: z.boolean(),
+    trustCredentials: z.boolean(),
+    featuredTestimonial: z.boolean(),
+    reviews: z.boolean(),
+    socialLinks: z.boolean(),
+    shareBlock: z.boolean(),
+    overallRating: z.boolean(),
+    tickifBadge: z.boolean(),
+  })
+  .meta({ id: 'PublicPortfolioSections' });
+export type PublicPortfolioSections = z.infer<typeof publicPortfolioSectionsSchema>;
+
+/** Headline proof numbers shown in the hero and studio strips. */
+export const publicPortfolioStatsSchema = z
+  .object({
+    /** Google's aggregate when connected and fresh, else the Tickif profile rating. */
+    rating: z.number().min(0).max(5),
+    reviewCount: z.number().int(),
+    projectCount: z.number().int(),
+    yearsExperience: z.number().int(),
+    /**
+     * Label of the lowest budget band across published projects (taxonomy
+     * `sortOrder`), or null when no published project carries a band.
+     */
+    startingBudget: z.string().nullable(),
+  })
+  .meta({ id: 'PublicPortfolioStats' });
+export type PublicPortfolioStats = z.infer<typeof publicPortfolioStatsSchema>;
+
+/** The designer's public links, already filtered by `sections.socialLinks`. */
+export const publicPortfolioSocialSchema = z
+  .object({
+    websiteUrl: z.string().nullable(),
+    instagramHandle: z.string().nullable(),
+    linkedinHandle: z.string().nullable(),
+    youtubeHandle: z.string().nullable(),
+  })
+  .meta({ id: 'PublicPortfolioSocial' });
+export type PublicPortfolioSocial = z.infer<typeof publicPortfolioSocialSchema>;
+
+/** The designer-curated pull quote, when set and enabled. */
+export const publicPortfolioTestimonialSchema = z
+  .object({
+    words: z.string(),
+    author: z.string().nullable(),
+    /** Title of the linked published project, when the designer picked one. */
+    projectTitle: z.string().nullable(),
+  })
+  .meta({ id: 'PublicPortfolioTestimonial' });
+export type PublicPortfolioTestimonial = z.infer<typeof publicPortfolioTestimonialSchema>;
+
+/**
+ * GET /api/portfolios/{slug} — everything the public designer page renders, in
+ * one request.
+ *
+ * Composite by design: the page is a single server-rendered screen, so one
+ * round-trip keeps it fast and lets the whole payload share one cache policy and
+ * one `publicLinkEnabled` gate. The embedded first page of projects is enough
+ * for the initial grid; `GET /api/profiles/{profileId}/projects` serves the rest.
+ */
+export const publicPortfolioResponseSchema = z
+  .object({
+    profileId: z.string().uuid(),
+    /** The slug that resolved this portfolio (may be the org slug). */
+    slug: z.string(),
+    /** Canonical `/d/{slug}` URL — prefers the designer's chosen portfolio slug. */
+    canonicalUrl: z.string().url(),
+    displayName: z.string(),
+    entityType: z.enum(['individual', 'company']),
+    tagline: z.string().nullable(),
+    bio: z.string().nullable(),
+    /** Free-text studio type, e.g. "Interior Design Studio". */
+    firmType: z.string().nullable(),
+    foundedYear: z.number().int().nullable(),
+    /** City footprint labels. The street address stays private. */
+    cities: z.array(z.string()),
+    logoUrl: z.string().url().nullable(),
+    accentColor: z.string(),
+    badges: z.array(portfolioBadgeSchema),
+    sections: publicPortfolioSectionsSchema,
+    stats: publicPortfolioStatsSchema,
+    social: publicPortfolioSocialSchema,
+    testimonial: publicPortfolioTestimonialSchema.nullable(),
+    reviews: z.array(publicPortfolioReviewSchema),
+    /** Null when no provider is connected or reviews are hidden. */
+    reviewSource: publicReviewSourceSchema.nullable(),
+    projects: designerProjectsResponseSchema,
+    publishedAt: z.string().datetime().nullable(),
+  })
+  .meta({ id: 'PublicPortfolio' });
+export type PublicPortfolioResponse = z.infer<typeof publicPortfolioResponseSchema>;

@@ -8,6 +8,11 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
   portfolioRepository: {
     findByProfileId: vi.fn(),
     findBySlug: vi.fn(),
+    findPublicBySlug: vi.fn(),
+    findPublishedProjectTitle: vi.fn(),
+    findCityLabels: vi.fn(async () => []),
+    // buildPortfolioResponse resolves the org slug to build the public /d/ URL.
+    findOrgSlug: vi.fn(async () => 'anika-spaces-a1b2c3'),
     create: vi.fn(),
     findOrCreate: vi.fn(),
     findOrCreateInTx: vi.fn(),
@@ -265,10 +270,23 @@ describe('portfolioService.updatePortfolio', () => {
     expect(result).toMatchObject({
       id: 'portfolio-1',
       tagline: 'New tagline',
-      portfolioUrl: null,
+      // The public page is live, so the designer gets a real link to share.
+      portfolioUrl: 'http://localhost:3000/d/my-studio',
     });
     // The response comes from data in hand — no post-commit re-fetch
     expect(portfolioRepository.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the org slug in portfolioUrl before a custom slug is chosen', async () => {
+    setupResolveProfile();
+    setupGetPortfolio(makePortfolio({ portfolioSlug: null }));
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ tagline: 'New tagline', portfolioSlug: null }),
+    );
+
+    const result = await portfolioService.updatePortfolio({ tagline: 'New tagline' }, caller);
+
+    expect(result.portfolioUrl).toBe('http://localhost:3000/d/anika-spaces-a1b2c3');
   });
 
   it('does not upsert the portfolio row when only profile fields change', async () => {

@@ -10,6 +10,7 @@ import { withSession, type AuthVariables } from './lib/auth-middleware.js';
 import { projectsRoutes } from './modules/projects/routes.js';
 import { mediaRoutes, projectImagesRoutes } from './modules/media/routes.js';
 import { profilesRoutes } from './modules/profiles/routes.js';
+import { publicPortfolioRoutes } from './modules/profiles/public-portfolio-routes.js';
 import { taxonomyRoutes } from './modules/taxonomy/routes.js';
 import { leadsRoutes } from './modules/leads/routes.js';
 import { discoveryRoutes } from './modules/discovery/routes.js';
@@ -58,6 +59,7 @@ export const app = base
   .route('/api/projects', projectImagesRoutes)
   .route('/api/media', mediaRoutes)
   .route('/api/profiles', profilesRoutes)
+  .route('/api/portfolios', publicPortfolioRoutes)
   .route('/api/taxonomy', taxonomyRoutes)
   .route('/api/leads', leadsRoutes)
   .route('/api/discovery', discoveryRoutes)

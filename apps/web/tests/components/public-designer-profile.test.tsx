@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
-import { publicDesignerProfileFixture } from '../../src/lib/public-designer-profile-fixture';
+import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
 describe('PublicDesignerProfile', () => {
-  it('renders every section of the public designer profile', () => {
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+  it('renders every section from the API payload', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
@@ -23,36 +23,94 @@ describe('PublicDesignerProfile', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the complete project and credential collections', () => {
-    const { container } = render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+  it('renders only the badges the API awarded, not the full badge set', () => {
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ badges: ['verified', 'top-performer'] })}
+      />,
+    );
 
-    expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
     expect(within(container).getByAltText('Identity verified')).toBeInTheDocument();
-    expect(within(container).getByAltText('New on Tickif')).toBeInTheDocument();
     expect(within(container).getByAltText('Top performer')).toBeInTheDocument();
-    expect(within(container).getByAltText('Established studio')).toBeInTheDocument();
-    expect(within(container).getByAltText('Projects published')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '4.7 out of 5 stars' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '4.5 out of 5 stars' })).toBeInTheDocument();
-    expect(screen.getAllByRole('img', { name: '5 out of 5 stars' })).toHaveLength(2);
+    expect(within(container).queryByAltText('New on Tickif')).not.toBeInTheDocument();
+    expect(within(container).queryByAltText('Established studio')).not.toBeInTheDocument();
+    expect(within(container).queryByAltText('Projects published')).not.toBeInTheDocument();
   });
 
-  it('renders three reviews once to assistive technology and hides the repeating rail', () => {
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+  it('renders the reviews the API returned, once to assistive technology', () => {
+    const reviews = [
+      makeReview({ id: 'r1', author: 'Rahul S.' }),
+      makeReview({ id: 'r2', author: 'Meera & Karthik', rating: 5 }),
+    ];
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
 
     const primaryReviews = within(screen.getByTestId('review-marquee-primary'));
-    const repeatedReviews = screen.getByTestId('review-marquee-copy');
     const reviewCards = primaryReviews.getAllByRole('article');
 
-    expect(reviewCards).toHaveLength(3);
-    publicDesignerProfileFixture.reviews.forEach((review, index) => {
-      expect(within(reviewCards[index]!).getAllByText(review.author)).toHaveLength(1);
-    });
-    expect(repeatedReviews).toHaveAttribute('aria-hidden', 'true');
+    expect(reviewCards).toHaveLength(2);
+    expect(within(reviewCards[0]!).getByText('Rahul S.')).toBeInTheDocument();
+    expect(screen.getByTestId('review-marquee-copy')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('renders the studio identity, stats, and social details', () => {
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+  it('explains the empty state instead of an empty rail when there are no reviews', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ reviews: [], reviewSource: null })}
+      />,
+    );
+
+    expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Anika Spaces hasn’t collected reviews on Tickif yet.'),
+    ).toBeInTheDocument();
+  });
+
+  it('hides sections the designer switched off in portfolio settings', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          sections: {
+            ...portfolio.sections,
+            trustCredentials: false,
+            featuredTestimonial: false,
+            reviews: false,
+            shareBlock: false,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /their words/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /A portfolio worth sharing/i }),
+    ).not.toBeInTheDocument();
+    // The studio section still renders — it isn't gated.
+    expect(screen.getByRole('heading', { name: 'Anika Spaces', level: 2 })).toBeInTheDocument();
+  });
+
+  it('withholds the rating everywhere when showOverallRating is off', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          sections: { ...portfolio.sections, overallRating: false },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Based on 42 verified reviews')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rating')).not.toBeInTheDocument();
+  });
+
+  it('renders the studio identity, real stats, and real social handles', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     const studioSection = screen
       .getByRole('heading', { name: 'Anika Spaces', level: 2 })
@@ -65,14 +123,52 @@ describe('PublicDesignerProfile', () => {
     const studio = within(studioSection);
     expect(studio.getByLabelText('Verified studio')).toBeInTheDocument();
     expect(studio.getByText('Established')).toBeInTheDocument();
+    expect(studio.getByText('2018')).toBeInTheDocument();
     expect(studio.getByText('Projects published')).toBeInTheDocument();
     expect(studio.getByText('₹10L+')).toBeInTheDocument();
-    expect(studio.getAllByText('@anika')).toHaveLength(3);
-    expect(studio.getByText('anikaspaces.in')).toBeInTheDocument();
+    expect(studio.getAllByText('@anika')).toHaveLength(2);
+    expect(studio.getByRole('link', { name: 'anikaspaces.in' })).toHaveAttribute(
+      'href',
+      'https://anikaspaces.in',
+    );
+  });
+
+  it('omits studio facts the designer has not filled in', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          foundedYear: null,
+          social: {
+            websiteUrl: null,
+            instagramHandle: null,
+            linkedinHandle: null,
+            youtubeHandle: null,
+          },
+          stats: {
+            rating: 0,
+            reviewCount: 0,
+            projectCount: 3,
+            yearsExperience: 0,
+            startingBudget: null,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('Established')).not.toBeInTheDocument();
+    expect(screen.queryByText('Typical budget')).not.toBeInTheDocument();
+    expect(screen.queryByText('anikaspaces.in')).not.toBeInTheDocument();
+    expect(screen.getByText('Projects published')).toBeInTheDocument();
+  });
+
+  it('falls back to initials when the designer has no logo', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ logoUrl: null })} />);
+
+    expect(screen.getAllByText('AS').length).toBeGreaterThan(0);
   });
 
   it('keeps the rating-card shadow visible instead of clipping it into a block', () => {
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     const ratingSummary = screen
       .getByText('Based on 42 verified reviews')
@@ -82,14 +178,14 @@ describe('PublicDesignerProfile', () => {
     expect(ratingSummary?.parentElement).toHaveClass('pb-20');
   });
 
-  it('builds displayed and copied profile links from the public web URL', async () => {
+  it('builds displayed and copied profile links from the API canonical URL', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText },
     });
 
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getByText('localhost:3000/d/anika-spaces')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
@@ -99,7 +195,7 @@ describe('PublicDesignerProfile', () => {
   });
 
   it('routes service-dependent actions through login gating', () => {
-    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getByRole('link', { name: 'Start a conversation' })).toHaveAttribute(
       'href',
@@ -114,5 +210,30 @@ describe('PublicDesignerProfile', () => {
       'href',
       '/login?next=%2Fd%2Fanika-spaces',
     );
+  });
+
+  it('renders the API-supplied project page in the gallery', () => {
+    const projects = makeProjects(6);
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          projects: { projects, page: 1, limit: 30, hasMore: false },
+        })}
+      />,
+    );
+
+    expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
+  });
+
+  it('tells visitors when a designer has published nothing yet', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          projects: { projects: [], page: 1, limit: 30, hasMore: false },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/no published projects yet/i)).toBeInTheDocument();
   });
 });
