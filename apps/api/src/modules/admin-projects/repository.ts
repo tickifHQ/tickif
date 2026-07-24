@@ -34,16 +34,6 @@ type CorrectionPatch = Omit<AdminCorrectProjectInput, 'featuredAt'> & {
   featuredAt?: Date | null;
 };
 
-const countedImageFilter = sql`
-  (
-    ${schema.projectImage.status} = 'ready'
-    or (
-      ${schema.projectImage.status} = 'processing'
-      and ${schema.projectImage.updatedAt} >= now() - interval '30 minutes'
-    )
-  )
-`;
-
 export const adminProjectsRepository = {
   async list(
     query: AdminModerationQueueQuery,
@@ -87,7 +77,7 @@ export const adminProjectsRepository = {
       .where(
         and(
           eq(schema.projectImage.projectId, queuePage.id),
-          countedImageFilter,
+          eq(schema.projectImage.status, 'ready'),
           isNotNull(schema.projectImage.roomId),
         ),
       )
@@ -192,10 +182,16 @@ export const adminProjectsRepository = {
     expectedRevision: number;
   }): Promise<AdminProjectRecord | null> {
     return db.transaction(async (tx) => {
+      const { metadata, ...patch } = input.patch;
       const [updated] = await tx
         .update(schema.project)
         .set({
-          ...input.patch,
+          ...patch,
+          ...(metadata === undefined
+            ? {}
+            : {
+                metadata: sql`coalesce(${schema.project.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
+              }),
           moderationRevision: sql`${schema.project.moderationRevision} + 1`,
           updatedAt: new Date(),
         })

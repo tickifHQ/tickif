@@ -11,6 +11,7 @@ import type {
   RejectProjectInput,
 } from '@repo/contracts';
 import { presignDownload } from '@repo/storage';
+import { isDeepStrictEqual } from 'node:util';
 import { AppError } from '../../lib/errors.js';
 import {
   buildCompleteness,
@@ -114,22 +115,6 @@ async function toImage(row: AdminImageRecord): Promise<AdminModerationImage> {
   };
 }
 
-function imageCounts(images: AdminImageRecord[]): { imageCount: number; taggedImageCount: number } {
-  const freshAfter = Date.now() - 30 * 60 * 1000;
-  const counted = images.filter(
-    (image) =>
-      image.roomId !== null &&
-      (image.status === 'ready' ||
-        (image.status === 'processing' && image.updatedAt.getTime() >= freshAfter)),
-  );
-  return {
-    imageCount: counted.length,
-    taggedImageCount: counted.filter(
-      (image) => image.themeSlugs.length > 0 && image.finishSlugs.length > 0,
-    ).length,
-  };
-}
-
 function correctionPatch(
   input: AdminCorrectProjectInput,
 ): Omit<AdminCorrectProjectInput, 'featuredAt'> & { featuredAt?: Date | null } {
@@ -148,8 +133,12 @@ function correctionDiff(
       field === 'featuredAt'
         ? (existing.featuredAt?.toISOString() ?? null)
         : existing[field as keyof AdminProjectRecord];
-    if (JSON.stringify(previousValue) !== JSON.stringify(nextValue)) {
-      diff[field] = { from: previousValue, to: nextValue };
+    const correctedValue =
+      field === 'metadata'
+        ? { ...(existing.metadata ?? {}), ...(nextValue as Record<string, unknown>) }
+        : nextValue;
+    if (!isDeepStrictEqual(previousValue, correctedValue)) {
+      diff[field] = { from: previousValue, to: correctedValue };
     }
   }
   return diff;
@@ -195,16 +184,17 @@ export const adminProjectsService = {
   async getById(projectId: string): Promise<AdminModerationDetailResponse> {
     const project = await adminProjectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
-    const [rooms, images, history] = await Promise.all([
+    const [rooms, images, readyImageCounts, history] = await Promise.all([
       adminProjectsRepository.listRooms(projectId),
       adminProjectsRepository.listImages(projectId),
+      adminProjectsRepository.getReadyImageCounts(projectId),
       adminProjectsRepository.listHistory(projectId),
     ]);
     return {
       project: toProject(project),
       rooms: rooms.map(toRoom),
       images: await Promise.all(images.map(toImage)),
-      completeness: buildCompleteness(project, imageCounts(images)),
+      completeness: buildCompleteness(project, readyImageCounts),
       history: history.map(toHistory),
     };
   },
@@ -213,6 +203,9 @@ export const adminProjectsService = {
     projectId: string,
     caller: AdminCaller,
   ): Promise<AdminModerationDetailResponse> {
+    const project = await adminProjectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    if (project.status !== 'submitted') throw AppError.invalidTransition();
     await transitionProject(
       {
         projectId,
@@ -223,6 +216,7 @@ export const adminProjectsService = {
           moderationNote: null,
           rejectionReasonCode: null,
         },
+        expectedModerationRevision: project.moderationRevision,
       },
       caller,
     );
@@ -305,6 +299,9 @@ export const adminProjectsService = {
     input: ModerationNoteInput,
     caller: AdminCaller,
   ): Promise<AdminModerationDetailResponse> {
+    const project = await adminProjectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    if (project.status !== 'published') throw AppError.invalidTransition();
     await transitionProject(
       {
         projectId,
@@ -315,6 +312,7 @@ export const adminProjectsService = {
           reviewStartedAt: new Date(),
           moderationNote: input.note,
         },
+        expectedModerationRevision: project.moderationRevision,
       },
       caller,
     );
@@ -330,12 +328,14 @@ export const adminProjectsService = {
     if (!existing) throw AppError.notFound('Project not found');
     assertReviewOwner(existing, caller);
     await validateProjectTaxonomy(input, existing);
+    const fieldDiff = correctionDiff(existing, input);
+    if (Object.keys(fieldDiff).length === 0) return this.getById(projectId);
 
     const updated = await adminProjectsRepository.correctMetadata({
       projectId,
       actorUserId: caller.userId,
       patch: correctionPatch(input),
-      fieldDiff: correctionDiff(existing, input),
+      fieldDiff,
       expectedRevision: existing.moderationRevision,
     });
     if (!updated) throw AppError.invalidTransition();

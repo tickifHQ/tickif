@@ -177,6 +177,74 @@ describe('admin project moderation API', () => {
     expect(events.map((event) => event.action)).toEqual(['start_review', 'publish']);
   });
 
+  it('rejects start-review for a published project without changing publication state', async () => {
+    const admin = await roleSession('+919800002114', 'admin');
+    const published = await makeCompleteProject({
+      status: 'published',
+      publishedAt: new Date('2026-07-24T10:00:00.000Z'),
+    });
+    await db
+      .update(schema.designerProfile)
+      .set({ projectCount: 1 })
+      .where(eq(schema.designerProfile.id, published.designer.id));
+
+    const response = await app.request(
+      `/api/admin/projects/${published.project.id}/start-review`,
+      {
+        method: 'POST',
+        headers: { cookie: admin.cookie },
+      },
+    );
+
+    expect(response.status).toBe(409);
+    const [project, profile, events] = await Promise.all([
+      db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.id, published.project.id))
+        .then(([row]) => row),
+      db
+        .select()
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, published.designer.id))
+        .then(([row]) => row),
+      db
+        .select()
+        .from(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, published.project.id)),
+    ]);
+    expect(project?.status).toBe('published');
+    expect(profile?.projectCount).toBe(1);
+    expect(events).toHaveLength(0);
+  });
+
+  it('rejects unpublish for a submitted project without claiming it', async () => {
+    const admin = await roleSession('+919800002115', 'admin');
+    const submitted = await makeCompleteProject();
+
+    const response = await app.request(`/api/admin/projects/${submitted.project.id}/unpublish`, {
+      method: 'POST',
+      headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ note: 'This endpoint must only unpublish live projects.' }),
+    });
+
+    expect(response.status).toBe(409);
+    const [project] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, submitted.project.id));
+    expect(project).toMatchObject({
+      status: 'submitted',
+      reviewedBy: null,
+      reviewStartedAt: null,
+    });
+    const events = await db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, submitted.project.id));
+    expect(events).toHaveLength(0);
+  });
+
   it('supports change requests, rejection, and symmetric unpublish behavior', async () => {
     const admin = await roleSession('+919800002106', 'admin');
     const changes = await makeCompleteProject({ status: 'in_review', reviewedBy: admin.userId });
@@ -287,6 +355,37 @@ describe('admin project moderation API', () => {
     expect(restricted.status).toBe(422);
   });
 
+  it('merges metadata corrections without removing existing processing provenance', async () => {
+    const admin = await roleSession('+919800002116', 'admin');
+    const mediaProcessingFailure = {
+      imageId: '77777777-7777-4777-8777-777777777777',
+      reason: 'Image processing failed.',
+      recordedAt: '2026-07-24T10:00:00.000Z',
+    };
+    const review = await makeCompleteProject({
+      status: 'in_review',
+      reviewedBy: admin.userId,
+      metadata: { mediaProcessingFailure, source: 'worker' },
+    });
+
+    const response = await app.request(`/api/admin/projects/${review.project.id}`, {
+      method: 'PATCH',
+      headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ metadata: { reviewed: true } }),
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as AdminModerationDetailResponse).toMatchObject({
+      project: {
+        metadata: {
+          mediaProcessingFailure,
+          source: 'worker',
+          reviewed: true,
+        },
+      },
+    });
+  });
+
   it('enforces claim ownership while allowing a superadmin override', async () => {
     const owner = await roleSession('+919800002109', 'admin');
     const otherAdmin = await roleSession('+919800002110', 'admin');
@@ -319,6 +418,28 @@ describe('admin project moderation API', () => {
       .update(schema.projectImage)
       .set({ status: 'processing', updatedAt: new Date() })
       .where(eq(schema.projectImage.id, review.images[0]!.id));
+
+    const queueResponse = await app.request('/api/admin/projects?status=in_review', {
+      headers: { cookie: admin.cookie },
+    });
+    expect(queueResponse.status).toBe(200);
+    expect((await queueResponse.json()) as AdminModerationQueueResponse).toMatchObject({
+      items: [
+        {
+          id: review.project.id,
+          imageCount: 2,
+          completeness: { complete: false },
+        },
+      ],
+    });
+
+    const detailResponse = await app.request(`/api/admin/projects/${review.project.id}`, {
+      headers: { cookie: admin.cookie },
+    });
+    expect(detailResponse.status).toBe(200);
+    expect((await detailResponse.json()) as AdminModerationDetailResponse).toMatchObject({
+      completeness: { complete: false },
+    });
 
     const response = await app.request(`/api/admin/projects/${review.project.id}/publish`, {
       method: 'POST',

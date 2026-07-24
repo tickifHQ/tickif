@@ -200,8 +200,28 @@ describe('adminProjectsService', () => {
     getById.mockRestore();
   });
 
+  it('checks the source status before start-review and unpublish', async () => {
+    repo.findById.mockResolvedValueOnce(project({ status: 'published' }));
+    await expect(adminProjectsService.startReview(project().id, admin)).rejects.toMatchObject({
+      status: 409,
+      code: 'INVALID_TRANSITION',
+    });
+
+    repo.findById.mockResolvedValueOnce(project({ status: 'submitted' }));
+    await expect(
+      adminProjectsService.unpublish(project().id, { note: 'Not a live project' }, admin),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'INVALID_TRANSITION',
+    });
+    expect(transition).not.toHaveBeenCalled();
+  });
+
   it('passes the observed version and field diff into the atomic correction', async () => {
-    const existing = project({ title: 'Before', metadata: {} });
+    const existing = project({
+      title: 'Before',
+      metadata: { mediaProcessingFailure: { imageId: 'image-1' } },
+    });
     repo.findById.mockResolvedValue(existing);
     repo.correctMetadata.mockResolvedValue(null);
 
@@ -223,9 +243,31 @@ describe('adminProjectsService', () => {
       expectedRevision: existing.moderationRevision,
       fieldDiff: {
         title: { from: 'Before', to: 'After' },
-        metadata: { from: {}, to: { reviewed: true } },
+        metadata: {
+          from: { mediaProcessingFailure: { imageId: 'image-1' } },
+          to: {
+            mediaProcessingFailure: { imageId: 'image-1' },
+            reviewed: true,
+          },
+        },
       },
     });
+  });
+
+  it('does not audit a metadata patch that only changes object key order', async () => {
+    const existing = project({ metadata: { source: 'worker', reviewed: true } });
+    repo.findById.mockResolvedValue(existing);
+    const getById = vi.spyOn(adminProjectsService, 'getById').mockResolvedValue({} as never);
+
+    await adminProjectsService.correct(
+      existing.id,
+      { metadata: { reviewed: true, source: 'worker' } },
+      admin,
+    );
+
+    expect(repo.correctMetadata).not.toHaveBeenCalled();
+    expect(getById).toHaveBeenCalledWith(existing.id);
+    getById.mockRestore();
   });
 
   it('surfaces persisted duplicate provenance and tolerates an original signing failure', async () => {
@@ -239,6 +281,7 @@ describe('adminProjectsService', () => {
         status: 'failed',
       }),
     ]);
+    repo.getReadyImageCounts.mockResolvedValue({ imageCount: 0, taggedImageCount: 0 });
     repo.listHistory.mockResolvedValue([]);
     signDownload.mockRejectedValue(new Error('R2 unavailable'));
 
