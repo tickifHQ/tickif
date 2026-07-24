@@ -474,10 +474,12 @@ export function DesignerPortfolioSettings() {
     ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const previewUrl = `${PORTFOLIO_URL_BASE}${portfolioPath}`;
   const copyUrl =
     portfolio.portfolioUrl ??
     new URL(portfolioPath, portfolioWebUrl).toString();
+  // Derive the on-screen preview from the copy target so the displayed link
+  // and the copied link never diverge once the backend populates portfolioUrl.
+  const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
   // -------------------------------------------------------------------------
   // Render
@@ -1111,13 +1113,16 @@ export function DesignerPortfolioSettings() {
       </div>
 
       {/* Footer */}
-      <div className="sticky bottom-6 z-10 mx-6 mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-6 py-4 shadow-md">
+      <div
+        data-testid="portfolio-action-bar"
+        className="sticky bottom-6 z-10 mx-6 mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-6 py-4 shadow-md"
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleDiscard}
             disabled={!isDirty || isSaving}
-            className="text-sm font-medium text-foreground"
+            className="text-sm font-medium text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             Discard changes
           </button>
