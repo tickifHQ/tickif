@@ -1,13 +1,16 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DesignerWorkspaceShell } from '../../src/components/designer-workspace-shell';
 
 const mock = vi.hoisted(() => ({
   pathname: '/designer/dashboard',
+  router: { refresh: vi.fn() },
 }));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mock.pathname,
+  useRouter: () => mock.router,
 }));
 
 vi.mock('@/components/account-menu', () => ({
@@ -18,22 +21,143 @@ vi.mock('@/components/initials-avatar', () => ({
   InitialsAvatar: () => <div>Avatar</div>,
 }));
 
+vi.mock('@/components/designer-organization-switcher', () => ({
+  DesignerOrganizationSwitcher: ({
+    isWorkspaceRefreshing,
+    onSwitchSuccess,
+  }: {
+    isWorkspaceRefreshing?: boolean;
+    onSwitchSuccess?: (organizationId: string) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="organization-switcher"
+      data-refreshing={isWorkspaceRefreshing ? 'true' : 'false'}
+      onClick={() => onSwitchSuccess?.('org-2')}
+    >
+      Organization switcher
+    </button>
+  ),
+}));
+
 describe('DesignerWorkspaceShell', () => {
-  it('links every implemented designer dashboard section from the sidebar', () => {
-    mock.pathname = '/designer/analytics';
+  it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
+    mock.pathname = '/designer/dashboard';
+    mock.router.refresh.mockReset();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Studio One dashboard</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    await user.click(screen.getByTestId('organization-switcher'));
+
+    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status', { name: 'Loading workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('Studio One dashboard')).not.toBeInTheDocument();
+    expect(screen.getByTestId('organization-switcher')).toHaveAttribute('data-refreshing', 'true');
+
+    rerender(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-2"
+        studioName="Studio Two"
+        studioLocation="Pune"
+      >
+        <div>Studio Two dashboard</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(await screen.findByText('Studio Two dashboard')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading workspace' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('organization-switcher')).toHaveAttribute('data-refreshing', 'false');
+  });
+
+  it('renders the desktop sidebar without its own background or border', () => {
+    mock.pathname = '/designer/dashboard';
 
     render(
-      <DesignerWorkspaceShell studioName="Studio One" studioLocation="Mumbai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.getAllByRole('link', { name: /consultations/i })[0]).toHaveAttribute('href', '/designer/consultations');
-    expect(screen.getAllByRole('link', { name: /reviews/i })[0]).toHaveAttribute('href', '/designer/reviews');
-    expect(screen.getAllByRole('link', { name: /analytics/i })[0]).toHaveAttribute('href', '/designer/analytics');
-    expect(screen.getAllByRole('link', { name: /terms & roles/i })[0]).toHaveAttribute('href', '/designer/terms-roles');
-    expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute('href', '/designer/plan-billing');
-    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute('href', '/designer/profile');
+    const sidebar = screen.getByRole('complementary');
+
+    expect(sidebar).not.toHaveClass('bg-background/70');
+    expect(sidebar).not.toHaveClass('border-r');
+  });
+
+  it('shows the product icon beside Tickif with the standard ten-pixel gap', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    for (const brandLink of screen.getAllByRole('link', { name: 'Tickif' })) {
+      expect(brandLink).toHaveClass('gap-2.5');
+      expect(brandLink.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    }
+  });
+
+  it('links every implemented designer dashboard section from the sidebar', () => {
+    mock.pathname = '/designer/analytics';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getAllByRole('link', { name: /consultations/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/consultations',
+    );
+    expect(screen.getAllByRole('link', { name: /reviews/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/reviews',
+    );
+    expect(screen.getAllByRole('link', { name: /analytics/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/analytics',
+    );
+    const leadsLink = screen.getAllByRole('link', { name: /^leads$/i })[0];
+    expect(leadsLink).toHaveAttribute('href', '/designer/leads');
+    expect(leadsLink?.querySelector('svg')).toHaveClass('lucide-file-user');
+    expect(screen.getAllByRole('link', { name: /portfolio/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/portfolio',
+    );
+    const teamsAndRolesLink = screen.getAllByRole('link', { name: /teams & roles/i })[0];
+    expect(teamsAndRolesLink).toHaveAttribute('href', '/designer/terms-roles');
+    expect(teamsAndRolesLink?.querySelector('svg')).toHaveClass('lucide-users-round');
+    expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute(
+      'href',
+      '/designer/profile',
+    );
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
   });
 
@@ -41,7 +165,11 @@ describe('DesignerWorkspaceShell', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
-      <DesignerWorkspaceShell studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
     );
@@ -52,11 +180,105 @@ describe('DesignerWorkspaceShell', () => {
     );
   });
 
+  it('keeps the unimplemented Verification item non-interactive', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const item = screen.getAllByText('Verification')[0]?.closest('[aria-disabled="true"]');
+    expect(item).toBeInTheDocument();
+    expect(item?.closest('a')).toBeNull();
+  });
+
+  it('places the organization switcher below Explore Tickif without moving the header account menu', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const exploreTickif = screen.getByRole('link', { name: /explore tickif/i });
+    const organizationSwitcher = screen.getByTestId('organization-switcher');
+    const accountMenu = screen.getByTestId('account-menu');
+    const addProject = screen.getByRole('link', { name: /add new project/i });
+
+    expect(exploreTickif.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    expect(
+      exploreTickif.compareDocumentPosition(organizationSwitcher) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(accountMenu.closest('header')).toContainElement(addProject);
+    expect(
+      addProject.compareDocumentPosition(accountMenu) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('highlights nested routes without highlighting Overview for other designer pages', () => {
+    mock.pathname = '/designer/projects/project-1/edit';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Projects' })[0]).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getAllByRole('link', { name: 'Overview' })[0]).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('opens and closes the mobile navigation drawer', async () => {
+    mock.pathname = '/designer/dashboard';
+    const user = userEvent.setup();
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    expect(screen.getByRole('dialog', { name: 'Designer navigation' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(screen.queryByRole('dialog', { name: 'Designer navigation' })).not.toBeInTheDocument();
+  });
+
   it('keeps project upload scrolling inside the shell so the sidebar stays fixed', () => {
     mock.pathname = '/designer/projects/upload';
 
     render(
-      <DesignerWorkspaceShell studioName="Antika Interiors" studioLocation="Chennai">
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
         <div>Upload content</div>
       </DesignerWorkspaceShell>,
     );

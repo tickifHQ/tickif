@@ -23,3 +23,5 @@ export const roles = {
   admin: ac.newRole({ ...adminAc.statements }),
   superadmin: ac.newRole({ ...adminAc.statements }),
 };
+
+export type PlatformRole = keyof typeof roles;

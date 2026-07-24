@@ -1,13 +1,9 @@
 import type { ProfileDashboardResponse } from '@repo/contracts';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
 import { profilesService } from '../profiles/service.js';
-import {
-  dashboardRepository,
-  type ProjectStatusCount,
-} from './repository.js';
-
-const PUBLIC_SITE_ORIGIN = 'https://tickif.com';
+import { dashboardRepository, type ProjectStatusCount } from './repository.js';
 
 type OverviewInput = {
   userId: string;
@@ -15,7 +11,7 @@ type OverviewInput = {
 };
 
 function shareUrl(orgSlug: string): string {
-  return `${PUBLIC_SITE_ORIGIN}/d/${orgSlug}`;
+  return new URL(`/d/${orgSlug}`, config.PUBLIC_WEB_URL).toString();
 }
 
 function countProjectBucket(
@@ -29,7 +25,13 @@ function countProjectBucket(
 
 export const dashboardService = {
   async getProfileDashboard(input: OverviewInput): Promise<ProfileDashboardResponse> {
-    const profile = await dashboardRepository.findProfileContext(input);
+    if (!input.orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+    const profile = await dashboardRepository.findProfileContext({
+      userId: input.userId,
+      orgId: input.orgId,
+    });
     if (!profile) {
       throw AppError.forbidden('Designer profile required');
     }

@@ -18,16 +18,20 @@ import {
   logoUploadUrlResponseSchema,
   logoCommitRequestSchema,
   uploadLogoResponseSchema,
+  connectGooglePlaceSchema,
+  googleReviewsResponseSchema,
   designerProjectsQuerySchema,
   designerProjectsResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
+import { setActiveOrganization } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
 import { portfolioService } from './portfolio-service.js';
+import { googleReviewsService } from './google-service.js';
 import { projectsService } from '../projects/service.js';
 
 /**
@@ -48,6 +52,14 @@ const completionRoute = createRoute({
     },
     401: {
       description: 'Unauthorized',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    403: {
+      description: 'Caller is not a member of the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -71,6 +83,10 @@ const dashboardRoute = createRoute({
     },
     403: {
       description: 'No designer profile for the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -119,7 +135,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       middleware: [requireAuth] as const,
       responses: {
         200: {
-          description: 'Current owner profile context',
+          description: 'Current organization member profile context',
           content: { 'application/json': { schema: currentProfileResponseSchema } },
         },
         401: {
@@ -127,7 +143,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           content: { 'application/json': { schema: errorResponseSchema } },
         },
         403: {
-          description: 'Forbidden — not a writer in the active organization',
+          description: 'Forbidden — not a member of the active organization',
           content: { 'application/json': { schema: errorResponseSchema } },
         },
         404: {
@@ -220,6 +236,16 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     const user = c.get('user')!;
     const input = c.req.valid('json');
     const { data, created } = await profilesService.onboardDesigner(user.id, input);
+    const activeOrganizationResponse = await setActiveOrganization(
+      c.req.raw.headers,
+      data.organization.id,
+    );
+    if (!activeOrganizationResponse.ok) {
+      throw new Error('Failed to activate the organization after onboarding');
+    }
+    for (const cookie of activeOrganizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
     return c.json(data, created ? 201 : 200);
   })
   .openapi(
@@ -240,10 +266,22 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Updated profile (owner projection)',
           content: { 'application/json': { schema: profileOwnerResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden — not a writer in the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile for the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'No active organization or invalid taxonomy IDs', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden — not a writer in the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile for the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'No active organization or invalid taxonomy IDs',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -448,6 +486,123 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const user = c.get('user')!;
       const session = c.get('session');
       await portfolioService.deleteLogo({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.body(null, 204);
+    },
+  )
+  // --- Google reviews (portfolio Google Business integration) ---
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/me/portfolio/google',
+      tags: ['Portfolio'],
+      summary: 'Get the Google review connection + cached reviews',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        200: {
+          description: 'Connection state, availability, and cached reviews',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'No active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await googleReviewsService.get({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/google/connect',
+      tags: ['Portfolio'],
+      summary: 'Connect a Google Business location and fetch its reviews',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      request: {
+        body: { content: { 'application/json': { schema: connectGooglePlaceSchema } } },
+      },
+      responses: {
+        200: {
+          description: 'Connection stored (pending first fetch)',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        400: { description: 'Invalid Google Business reference', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        422: { description: 'Feature unavailable or location not found', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const input = c.req.valid('json');
+      const result = await googleReviewsService.connect(input, {
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'post',
+      path: '/me/portfolio/google/refresh',
+      tags: ['Portfolio'],
+      summary: 'Re-fetch the connected Google location in the background',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        202: {
+          description: 'Refresh enqueued; returns the current cached state',
+          content: { 'application/json': { schema: googleReviewsResponseSchema } },
+        },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No Google location connected', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      const result = await googleReviewsService.refresh({
+        userId: user.id,
+        activeOrgId: session?.activeOrganizationId ?? null,
+      });
+      return c.json(result, 202);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'delete',
+      path: '/me/portfolio/google',
+      tags: ['Portfolio'],
+      summary: 'Disconnect the Google Business location',
+      security: [{ cookieAuth: [] }],
+      middleware: [requireAuth] as const,
+      responses: {
+        204: { description: 'Disconnected' },
+        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
+        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
+        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+      },
+    }),
+    async (c) => {
+      const user = c.get('user')!;
+      const session = c.get('session');
+      await googleReviewsService.disconnect({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
       });

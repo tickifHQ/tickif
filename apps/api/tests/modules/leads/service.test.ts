@@ -12,16 +12,19 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
     findById: vi.fn(),
     updateStatus: vi.fn(),
     create: vi.fn(),
-    isOrgMember: vi.fn(),
-    findFirstOrganizationForUser: vi.fn(),
     findProjectOrganization: vi.fn(),
     budgetBandExists: vi.fn(),
     countByStatus: vi.fn(),
   },
 }));
 
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: { isMember: vi.fn() },
+}));
+
 const { leadsService } = await import('../../../src/modules/leads/service.js');
 const { leadsRepository } = await import('../../../src/modules/leads/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 
 const caller = {
   userId: 'user_1',
@@ -54,6 +57,7 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(orgsService.isMember).mockResolvedValue(true);
 });
 
 describe('leadsService.list', () => {
@@ -81,23 +85,41 @@ describe('leadsService.list', () => {
       receivedAt: '2026-06-26T10:00:00.000Z',
     });
   });
+
+  it('rejects listing without an active organization', async () => {
+    await expect(
+      leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeOrgId: null }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(leadsRepository.list).not.toHaveBeenCalled();
+  });
 });
 
 describe('leadsService.getById', () => {
   it('requires organization membership for lead reads', async () => {
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
-    vi.mocked(leadsRepository.isOrgMember).mockResolvedValue(false);
+    vi.mocked(orgsService.isMember).mockResolvedValue(false);
 
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toBeInstanceOf(AppError);
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
       status: 403,
     });
   });
+
+  it('does not expose a lead from a different active organization', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ organizationId: 'org_2' }),
+    );
+
+    await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(orgsService.isMember).not.toHaveBeenCalled();
+  });
 });
 
 describe('leadsService.create', () => {
   it('validates organization membership, budget taxonomy, and referred project org', async () => {
-    vi.mocked(leadsRepository.isOrgMember).mockResolvedValue(true);
+    vi.mocked(orgsService.isMember).mockResolvedValue(true);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(true);
     vi.mocked(leadsRepository.findProjectOrganization).mockResolvedValue('org_1');
     vi.mocked(leadsRepository.create).mockResolvedValue(leadDetailRow());
@@ -113,14 +135,16 @@ describe('leadsService.create', () => {
     );
 
     expect(result.id).toBe('11111111-1111-4111-8111-111111111111');
-    expect(leadsRepository.create).toHaveBeenCalledWith(expect.objectContaining({
-      organizationId: 'org_1',
-      budgetBandSlug: 'premium',
-    }));
+    expect(leadsRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: 'org_1',
+        budgetBandSlug: 'premium',
+      }),
+    );
   });
 
   it('rejects invalid budget bands', async () => {
-    vi.mocked(leadsRepository.isOrgMember).mockResolvedValue(true);
+    vi.mocked(orgsService.isMember).mockResolvedValue(true);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(false);
 
     await expect(
@@ -129,6 +153,30 @@ describe('leadsService.create', () => {
         caller,
       ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('does not fall back to an arbitrary membership when no organization is active', async () => {
+    await expect(
+      leadsService.create(
+        { name: 'Priya Shah', contactNumber: '+919800000001' },
+        { ...caller, activeOrgId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(leadsRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('does not create a lead in a membership other than the active organization', async () => {
+    await expect(
+      leadsService.create(
+        {
+          name: 'Priya Shah',
+          contactNumber: '+919800000001',
+          organizationId: 'org_2',
+        },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(leadsRepository.create).not.toHaveBeenCalled();
   });
 });
 

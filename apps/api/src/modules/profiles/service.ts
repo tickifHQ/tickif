@@ -12,7 +12,7 @@ import type {
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
-import { isOrgWriter } from '../orgs/repository.js';
+import { orgsService } from '../orgs/service.js';
 
 /**
  * Profile completion use-cases. Business logic lives here — no Hono, no Drizzle.
@@ -93,16 +93,15 @@ export const profilesService = {
     }
 
     // 4. Derive org and profile fields
-    const orgName =
-      input.entityType === 'company' ? input.companyName! : input.userName;
+    const orgName = input.entityType === 'company' ? input.companyName! : input.userName;
     const displayName = orgName;
     const orgSlug = `${slugify(orgName)}-${crypto.randomUUID().slice(0, 6)}`;
     const orgId = crypto.randomUUID();
     const memberId = crypto.randomUUID();
 
-    const footprintIds = [
-      ...new Set([...input.scopeIds, ...input.themeIds]),
-    ].map((id) => ({ taxonomyId: id }));
+    const footprintIds = [...new Set([...input.scopeIds, ...input.themeIds])].map((id) => ({
+      taxonomyId: id,
+    }));
 
     // 5. Execute transaction — catch unique violation for race-safe idempotency
     try {
@@ -186,11 +185,16 @@ export const profilesService = {
   // --- Completion (E-36) ---
 
   async getCompletion(input: CompletionInput): Promise<ProfileCompletionResponse> {
-    // Resolve orgId if not provided
-    const orgId = input.orgId ?? (await profilesRepository.hasOrganization(input.userId));
+    const orgId = input.orgId;
+    if (!orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+    if (!(await orgsService.isMember(input.userId, orgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
 
     // Fetch profile ONCE and thread through (avoids duplicate DB hits)
-    const profile = orgId ? await profilesRepository.findByOrgId(orgId) : null;
+    const profile = await profilesRepository.findByOrgId(orgId);
 
     // Parallelize independent reads
     const [hasGoogle, hasProject, fieldCheck] = await Promise.all([
@@ -224,9 +228,7 @@ export const profilesService = {
     ];
 
     // Score is based on profile FIELDS, not steps
-    const score = Math.round(
-      (fieldCheck.filled.length / REQUIRED_FIELDS.length) * 100,
-    );
+    const score = Math.round((fieldCheck.filled.length / REQUIRED_FIELDS.length) * 100);
 
     return { steps, score, missing: fieldCheck.missing };
   },
@@ -292,19 +294,21 @@ export const profilesService = {
 
   // --- Read/Update (E-37) ---
 
-  /** Current owner read for authenticated designer workspace context. */
-  async getCurrentProfile(userId: string, activeOrgId: string | null): Promise<CurrentProfileResponse> {
-    const orgId = activeOrgId ?? (await profilesRepository.hasOrganization(userId));
-    if (!orgId) {
+  /** Current member read for authenticated designer workspace context. */
+  async getCurrentProfile(
+    userId: string,
+    activeOrgId: string | null,
+  ): Promise<CurrentProfileResponse> {
+    if (!activeOrgId) {
       throw AppError.unprocessable('No active organization selected');
     }
 
-    const canRead = await isOrgWriter(userId, orgId);
+    const canRead = await orgsService.isMember(userId, activeOrgId);
     if (!canRead) {
-      throw AppError.forbidden('Insufficient org role to read this profile');
+      throw AppError.forbidden('Organization membership required');
     }
 
-    const current = await profilesRepository.findByOrgIdWithOrg(orgId);
+    const current = await profilesRepository.findByOrgIdWithOrg(activeOrgId);
     if (!current) {
       throw AppError.notFound('No profile found for the active organization');
     }
@@ -399,7 +403,7 @@ export const profilesService = {
   /**
    * Owner update — requires write-capable org role.
    *
-   * Access policy: uses isOrgWriter (owner/admin on the org membership) rather than
+   * Access policy: uses the organization writer policy (owner/admin membership) rather than
    * the platform requireOwnership guard. This is intentionally more restrictive —
    * superadmin does NOT have implicit write access to designer profiles. Superadmin
    * moderation should use a dedicated admin endpoint if needed (not this self-service path).
@@ -416,7 +420,7 @@ export const profilesService = {
     }
 
     // Authz FIRST — don't leak profile existence to non-writers
-    const canWrite = await isOrgWriter(userId, activeOrgId);
+    const canWrite = await orgsService.isWriter(userId, activeOrgId);
     if (!canWrite) {
       throw AppError.forbidden('Insufficient org role to update this profile');
     }

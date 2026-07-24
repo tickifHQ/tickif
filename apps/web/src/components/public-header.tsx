@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { Button } from '@repo/ui/components/button';
+import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
 
 const navLinks = [
@@ -39,15 +41,12 @@ export function PublicHeader({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Link
-            href={listYourWorkHref}
-            className="hidden h-8 items-center gap-1.5 rounded-md border border-border bg-white px-2.5 text-[13px] font-medium text-foreground shadow-sm transition-colors hover:bg-accent sm:inline-flex"
-          >
-            <svg viewBox="0 0 24 24" className="size-[15px]" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" />
-            </svg>
-            List your work
-          </Link>
+          <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
+            <Link href={listYourWorkHref}>
+              <ListChevronsUpDown className="size-4" aria-hidden />
+              List your work
+            </Link>
+          </Button>
           {isAuthenticated ? (
             <AccountMenu />
           ) : (
@@ -55,9 +54,7 @@ export function PublicHeader({
               href="/login"
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#27272a] px-2.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#27272a]/90"
             >
-              <svg viewBox="0 0 24 24" className="size-[15px]" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" />
-              </svg>
+              <UserRound className="size-4" aria-hidden />
               Sign in
             </Link>
           )}

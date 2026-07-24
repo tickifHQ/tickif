@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '@repo/config';
 import type { ProfileCompletionResponse } from '@repo/contracts';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
@@ -92,15 +93,17 @@ describe('dashboardService.getProfileDashboard', () => {
         total: 7,
         new: 3,
       },
-      shareUrl: 'https://tickif.com/d/studio-noir',
+      shareUrl: new URL('/d/studio-noir', config.PUBLIC_WEB_URL).toString(),
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1');
   });
 
-  it('resolves completion against the same organization as the dashboard context', async () => {
-    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(profile({ orgId: 'org_2' }));
+  it('resolves completion against the same active organization as the dashboard context', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ orgId: 'org_2' }),
+    );
 
-    await dashboardService.getProfileDashboard({ userId: 'user_1', orgId: null });
+    await dashboardService.getProfileDashboard({ userId: 'user_1', orgId: 'org_2' });
 
     expect(profilesService.getCompletion).toHaveBeenCalledWith({
       userId: 'user_1',
@@ -108,10 +111,19 @@ describe('dashboardService.getProfileDashboard', () => {
     });
   });
 
+  it('rejects a missing active organization before querying dashboard data', async () => {
+    await expect(
+      dashboardService.getProfileDashboard({ userId: 'user_1', orgId: null }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(dashboardRepository.findProfileContext).not.toHaveBeenCalled();
+  });
+
   it('requires a designer profile', async () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(null);
 
     await expect(dashboardService.getProfileDashboard(input)).rejects.toBeInstanceOf(AppError);
-    await expect(dashboardService.getProfileDashboard(input)).rejects.toMatchObject({ status: 403 });
+    await expect(dashboardService.getProfileDashboard(input)).rejects.toMatchObject({
+      status: 403,
+    });
   });
 });

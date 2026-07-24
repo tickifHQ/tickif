@@ -6,6 +6,7 @@ import {
   type ProfileDashboardResponse,
 } from '@repo/contracts';
 import { DesignerDashboardOverview } from '@/components/designer-dashboard-overview';
+import { env } from '@/env';
 import { requireAuth } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 import { getCurrentDesignerProfile } from '@/lib/designer-profile';
@@ -26,7 +27,7 @@ const emptyDashboard: ProfileDashboardResponse = {
   profileCompletion: { score: 0, missing: [] },
   projects: { total: 0, published: 0, inReview: 0, draft: 0 },
   leads: { total: 0, new: 0 },
-  shareUrl: 'https://tickif.com/d/studio',
+  shareUrl: new URL('/d/studio', env.NEXT_PUBLIC_WEB_URL).toString(),
 };
 
 async function getDashboardSummary(): Promise<DashboardResult> {

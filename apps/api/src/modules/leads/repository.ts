@@ -1,5 +1,5 @@
 import { ilike } from 'drizzle-orm';
-import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
+import { db, schema, eq, and, or, desc, sql } from '@repo/db';
 import type { CreateLeadInput, LeadStatus } from '@repo/contracts';
 
 export type LeadRecord = typeof schema.lead.$inferSelect;
@@ -25,7 +25,7 @@ export type LeadStatusCount = {
 
 export type ListLeadsParams = {
   userId: string;
-  activeOrgId?: string | null;
+  activeOrgId: string;
   status?: LeadStatus;
   q?: string;
   limit: number;
@@ -64,13 +64,10 @@ export const leadsRepository = {
         where ${schema.member.organizationId} = ${schema.lead.organizationId}
           and ${schema.member.userId} = ${params.userId}
       )`,
-      params.activeOrgId ? eq(schema.lead.organizationId, params.activeOrgId) : undefined,
+      eq(schema.lead.organizationId, params.activeOrgId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
       params.q
-        ? or(
-            ilike(schema.lead.name, `%${params.q}%`),
-            ilike(schema.project.title, `%${params.q}%`),
-          )
+        ? or(ilike(schema.lead.name, `%${params.q}%`), ilike(schema.project.title, `%${params.q}%`))
         : undefined,
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
@@ -141,25 +138,6 @@ export const leadsRepository = {
     const created = await this.findById(row.id);
     if (!created) throw new Error('inserted lead not found');
     return created;
-  },
-
-  async isOrgMember(userId: string, organizationId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: schema.member.id })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)))
-      .limit(1);
-    return !!row;
-  },
-
-  async findFirstOrganizationForUser(userId: string): Promise<string | null> {
-    const [row] = await db
-      .select({ organizationId: schema.member.organizationId })
-      .from(schema.member)
-      .where(eq(schema.member.userId, userId))
-      .orderBy(asc(schema.member.createdAt), asc(schema.member.organizationId))
-      .limit(1);
-    return row?.organizationId ?? null;
   },
 
   async findProjectOrganization(projectId: string): Promise<string | null> {

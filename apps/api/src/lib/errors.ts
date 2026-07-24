@@ -45,6 +45,10 @@ export class AppError extends Error {
   static unprocessable(message: string, details?: unknown) {
     return new AppError('validation_error', message, 422, details);
   }
+
+  static tooManyRequests(message = 'Too many requests; try again shortly', details?: unknown) {
+    return new AppError('rate_limited', message, 429, details);
+  }
 }
 
 /** Central error handler — single place that converts errors to the API envelope. */

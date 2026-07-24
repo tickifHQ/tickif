@@ -7,7 +7,7 @@ packages:
 # package.json `pnpm` field (which newer pnpm silently ignores).
 overrides:
   esbuild: 0.28.1
-  hono: ^4.12.25
+  hono: ^4.12.27
   # Security patches for transitive advisories (pnpm audit, high severity).
   # brace-expansion DoS (GHSA-v6h2-p8h4-qcjw): 1.x tree (via eslint>minimatch)
   # and 3.x+ tree (via typescript-eslint>minimatch) each need a patched line.
@@ -19,8 +19,9 @@ overrides:
   "fast-uri@<3.1.4": 3.1.4
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.3
-  # postcss arbitrary file read (GHSA-6g55-p6wh-862q): Next pins an older 8.x.
-  "postcss@<8.5.12": 8.5.15
+  # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
+  # GHSA-r28c-9q8g-f849 <=8.5.17): patch every copy, via next and via tsup.
+  postcss: ^8.5.18
 
 onlyBuiltDependencies:
   - msw
@@ -39,13 +40,13 @@ catalog:
   "@t3-oss/env-nextjs": ^0.13.8
 
   # Hono stack
-  hono: ^4.12.25
+  hono: ^4.12.27
   "@hono/node-server": ^2.0.5
   "@hono/zod-openapi": ^1.4.0
   "@scalar/hono-api-reference": ^0.10.20
 
   # Auth
-  better-auth: ^1.6.18
+  better-auth: ^1.6.22
 
   # Data layer
   drizzle-orm: ^0.45.2
@@ -68,20 +69,20 @@ catalog:
   react-dom: ^19.0.0
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.0.0
-  "@radix-ui/react-slot": ^1.2.4
+  "@radix-ui/react-slot": ^1.3.2
   "@radix-ui/react-avatar": ^1.2.0
   "@radix-ui/react-checkbox": ^1.3.3
   "@radix-ui/react-dialog": ^1.1.15
   "@radix-ui/react-dropdown-menu": ^2.1.18
   "@radix-ui/react-label": ^2.1.10
-  "@radix-ui/react-separator": ^1.1.8
+  "@radix-ui/react-separator": ^1.1.11
   "@radix-ui/react-switch": ^1.2.6
   "@radix-ui/react-tabs": ^1.1.13
   "@radix-ui/react-tooltip": ^1.2.8
   next-themes: ^0.4.6
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
-  lucide-react: ^0.552.0
+  lucide-react: ^1.24.0
   "@dicebear/core": ^10.3.0
   "@dicebear/styles": ^10.2.0
   shadcn: ^4.12.0
