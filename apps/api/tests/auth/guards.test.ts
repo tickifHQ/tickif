@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import type { AuthVariables, Ownership } from '../../src/lib/auth-middleware.js';
-import {
-  requireRole,
-  requireAnyRole,
-  requireOwnership,
-} from '../../src/lib/auth-middleware.js';
+import { requireRole, requireAnyRole, requireOwnership } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
 
 const { isOrgMemberMock } = vi.hoisted(() => ({ isOrgMemberMock: vi.fn() }));
-vi.mock('../../src/modules/orgs/repository.js', () => ({ isOrgMember: isOrgMemberMock }));
+vi.mock('../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    findSoleOrganizationForUser: vi.fn(),
+    isMember: isOrgMemberMock,
+  },
+}));
 
 type StubUser = {
   id: string;
@@ -30,7 +31,11 @@ function appWithUser(user: StubUser, ownership?: Ownership | null) {
   app.get('/designer', requireRole('designer'), (c) => c.json({ ok: true }));
   app.get('/staff', requireAnyRole(['admin', 'designer']), (c) => c.json({ ok: true }));
   app.get('/none', requireAnyRole([]), (c) => c.json({ ok: true }));
-  app.get('/owned', requireOwnership(async () => ownership ?? null), (c) => c.json({ ok: true }));
+  app.get(
+    '/owned',
+    requireOwnership(async () => ownership ?? null),
+    (c) => c.json({ ok: true }),
+  );
   app.get(
     '/owned-throws',
     requireOwnership(async () => {
@@ -71,9 +76,9 @@ describe('RBAC guards (unit)', () => {
     const su = { id: 'su', role: 'superadmin' };
     expect((await appWithUser(su).request('/admin')).status).toBe(200);
     expect((await appWithUser(su).request('/designer')).status).toBe(200);
-    expect(
-      (await appWithUser(su, { ownerUserId: 'someone-else' }).request('/owned')).status,
-    ).toBe(200);
+    expect((await appWithUser(su, { ownerUserId: 'someone-else' }).request('/owned')).status).toBe(
+      200,
+    );
   });
 
   it('ownership: owner passes, stranger 403, missing resource 404', async () => {
@@ -125,10 +130,20 @@ describe('RBAC guards (unit)', () => {
     expect((await appWithUser(banned).request('/admin')).status).toBe(403);
     expect((await appWithUser(banned, { ownerUserId: 'b1' }).request('/owned')).status).toBe(403);
     // lapsed ban no longer blocks
-    const lapsed = { id: 'b2', role: 'admin', banned: true, banExpires: new Date(Date.now() - 1000) };
+    const lapsed = {
+      id: 'b2',
+      role: 'admin',
+      banned: true,
+      banExpires: new Date(Date.now() - 1000),
+    };
     expect((await appWithUser(lapsed).request('/admin')).status).toBe(200);
     // future-dated ban still blocks
-    const active = { id: 'b4', role: 'admin', banned: true, banExpires: new Date(Date.now() + 60_000) };
+    const active = {
+      id: 'b4',
+      role: 'admin',
+      banned: true,
+      banExpires: new Date(Date.now() + 60_000),
+    };
     expect((await appWithUser(active).request('/admin')).status).toBe(403);
     // banned superadmin is still banned
     const bannedSu = { id: 'b3', role: 'superadmin', banned: true };

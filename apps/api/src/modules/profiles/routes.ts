@@ -24,6 +24,7 @@ import {
   designerProjectsResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
+import { setActiveOrganization } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
@@ -53,6 +54,14 @@ const completionRoute = createRoute({
       description: 'Unauthorized',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
+    403: {
+      description: 'Caller is not a member of the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
   },
 });
 
@@ -74,6 +83,10 @@ const dashboardRoute = createRoute({
     },
     403: {
       description: 'No designer profile for the active organization',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'No active organization selected',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -122,7 +135,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       middleware: [requireAuth] as const,
       responses: {
         200: {
-          description: 'Current owner profile context',
+          description: 'Current organization member profile context',
           content: { 'application/json': { schema: currentProfileResponseSchema } },
         },
         401: {
@@ -130,7 +143,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           content: { 'application/json': { schema: errorResponseSchema } },
         },
         403: {
-          description: 'Forbidden — not a writer in the active organization',
+          description: 'Forbidden — not a member of the active organization',
           content: { 'application/json': { schema: errorResponseSchema } },
         },
         404: {
@@ -223,6 +236,16 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     const user = c.get('user')!;
     const input = c.req.valid('json');
     const { data, created } = await profilesService.onboardDesigner(user.id, input);
+    const activeOrganizationResponse = await setActiveOrganization(
+      c.req.raw.headers,
+      data.organization.id,
+    );
+    if (!activeOrganizationResponse.ok) {
+      throw new Error('Failed to activate the organization after onboarding');
+    }
+    for (const cookie of activeOrganizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
     return c.json(data, created ? 201 : 200);
   })
   .openapi(
@@ -243,10 +266,22 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Updated profile (owner projection)',
           content: { 'application/json': { schema: profileOwnerResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden — not a writer in the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile for the active organization', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'No active organization or invalid taxonomy IDs', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden — not a writer in the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile for the active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'No active organization or invalid taxonomy IDs',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {

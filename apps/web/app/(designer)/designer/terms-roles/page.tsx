@@ -1,7 +1,7 @@
 import { DesignerDashboardSectionPage } from '@/components/designer-dashboard-section-page';
 
 export const metadata = {
-  title: 'Terms & roles · Tickif',
+  title: 'Teams & Roles · Tickif',
 };
 
 export default function DesignerTermsRolesPage() {

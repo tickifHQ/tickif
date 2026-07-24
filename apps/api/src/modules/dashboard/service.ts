@@ -3,10 +3,7 @@ import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
 import { profilesService } from '../profiles/service.js';
-import {
-  dashboardRepository,
-  type ProjectStatusCount,
-} from './repository.js';
+import { dashboardRepository, type ProjectStatusCount } from './repository.js';
 
 type OverviewInput = {
   userId: string;
@@ -28,7 +25,13 @@ function countProjectBucket(
 
 export const dashboardService = {
   async getProfileDashboard(input: OverviewInput): Promise<ProfileDashboardResponse> {
-    const profile = await dashboardRepository.findProfileContext(input);
+    if (!input.orgId) {
+      throw AppError.unprocessable('No active organization selected');
+    }
+    const profile = await dashboardRepository.findProfileContext({
+      userId: input.userId,
+      orgId: input.orgId,
+    });
     if (!profile) {
       throw AppError.forbidden('Designer profile required');
     }

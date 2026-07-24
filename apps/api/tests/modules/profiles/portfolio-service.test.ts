@@ -32,8 +32,10 @@ vi.mock('../../../src/modules/profiles/repository.js', () => ({
   },
 }));
 
-vi.mock('../../../src/modules/orgs/repository.js', () => ({
-  isOrgWriter: vi.fn(),
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    isWriter: vi.fn(),
+  },
 }));
 
 // buildPortfolioResponse embeds a Google connection snapshot; default to "no row"
@@ -63,7 +65,7 @@ const { portfolioRepository } = await import(
 const { profilesRepository } = await import(
   '../../../src/modules/profiles/repository.js'
 );
-const { isOrgWriter } = await import('../../../src/modules/orgs/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { presignUpload, presignDownload, objectExists, deleteObject } = await import(
   '@repo/storage'
 );
@@ -130,7 +132,7 @@ const caller = { userId: 'user-1', activeOrgId: 'org-1' };
 
 /** Setup happy-path mocks so resolveProfile + getPortfolio work. */
 function setupResolveProfile(profile = makeProfile()) {
-  vi.mocked(isOrgWriter).mockResolvedValue(true);
+  vi.mocked(orgsService.isWriter).mockResolvedValue(true);
   vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profile);
   return profile;
 }

@@ -47,7 +47,18 @@ describe('AccountMenu', () => {
   it('renders a generated avatar trigger when authenticated', () => {
     mock.session = { user: { name: 'Alice', email: 'alice@test.com' } };
     render(<AccountMenu />);
-    expect(screen.getByRole('button', { name: /open account menu for alice/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /open account menu for alice/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the labelled workspace trigger accessible when its label collapses on mobile', () => {
+    mock.session = { user: { name: 'Alice Example', email: 'alice@test.com' } };
+    render(<AccountMenu showLabel />);
+
+    const trigger = screen.getByRole('button', { name: /open account menu for alice example/i });
+    expect(trigger).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toHaveClass('hidden', 'sm:inline');
   });
 
   it('calls signOut on sign-out click', async () => {

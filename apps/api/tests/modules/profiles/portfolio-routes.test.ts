@@ -58,11 +58,6 @@ vi.mock('@repo/config', () => ({
   isTest: true,
 }));
 
-vi.mock('../../../src/modules/orgs/repository.js', () => ({
-  isOrgWriter: vi.fn(),
-  isOrgMember: vi.fn(),
-}));
-
 // Import AFTER mock registration
 const { portfolioService } = await import(
   '../../../src/modules/profiles/portfolio-service.js'
