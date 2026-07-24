@@ -23,6 +23,9 @@ function loadRootEnv(): void {
 }
 loadRootEnv();
 
+const LOCAL_TYPESENSE_HOST = 'http://localhost:8108';
+const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
+
 /**
  * Single source of truth for environment configuration.
  *
@@ -53,10 +56,11 @@ const envSchema = z.object({
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
 
-  // Typesense. The local key matches docker-compose; production startup
-  // rejects it in @repo/search so a development credential cannot leak through.
-  TYPESENSE_HOST: z.string().url().default('http://localhost:8108'),
-  TYPESENSE_API_KEY: z.string().min(16).default('tickif-local-typesense-key'),
+  // Typesense. Local defaults are applied after validation so production can
+  // require explicit values rather than silently pointing at localhost.
+  TYPESENSE_HOST: z.string().url().optional(),
+  TYPESENSE_API_KEY: z.string().min(16).optional(),
+  TYPESENSE_SEARCH_API_KEY: z.string().min(16).optional(),
   TYPESENSE_COLLECTION_PREFIX: z
     .string()
     .trim()
@@ -143,17 +147,55 @@ const envSchema = z.object({
  * be provided or both omitted. A single value without its pair is a
  * misconfiguration that should fail fast.
  */
-const refinedEnvSchema = envSchema.refine(
-  (env) => {
-    const hasId = Boolean(env.GOOGLE_CLIENT_ID);
-    const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
-    return hasId === hasSecret;
-  },
-  {
-    message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
-    path: ['GOOGLE_CLIENT_ID'],
-  },
-);
+const refinedEnvSchema = envSchema.superRefine((env, ctx) => {
+  const hasId = Boolean(env.GOOGLE_CLIENT_ID);
+  const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
+  if (hasId !== hasSecret) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
+      path: ['GOOGLE_CLIENT_ID'],
+    });
+  }
+
+  if (env.NODE_ENV !== 'production') return;
+
+  for (const key of [
+    'TYPESENSE_HOST',
+    'TYPESENSE_API_KEY',
+    'TYPESENSE_SEARCH_API_KEY',
+  ] as const) {
+    if (!env[key]) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${key} must be explicitly set when NODE_ENV=production`,
+        path: [key],
+      });
+    }
+  }
+
+  if (
+    env.TYPESENSE_API_KEY &&
+    env.TYPESENSE_SEARCH_API_KEY &&
+    env.TYPESENSE_API_KEY === env.TYPESENSE_SEARCH_API_KEY
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'TYPESENSE_SEARCH_API_KEY must differ from TYPESENSE_API_KEY in production',
+      path: ['TYPESENSE_SEARCH_API_KEY'],
+    });
+  }
+
+  for (const key of ['TYPESENSE_API_KEY', 'TYPESENSE_SEARCH_API_KEY'] as const) {
+    if (env[key] === LOCAL_TYPESENSE_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${key} must not use the checked-in local credential in production`,
+        path: [key],
+      });
+    }
+  }
+});
 
 type RawEnv = z.infer<typeof envSchema>;
 
@@ -161,10 +203,21 @@ type RawEnv = z.infer<typeof envSchema>;
  * Public config: the raw env plus the connection strings, which are always
  * present (built from parts when not explicitly provided).
  */
-export type Config = Omit<RawEnv, 'DATABASE_URL' | 'DATABASE_URL_TEST' | 'REDIS_URL'> & {
+export type Config = Omit<
+  RawEnv,
+  | 'DATABASE_URL'
+  | 'DATABASE_URL_TEST'
+  | 'REDIS_URL'
+  | 'TYPESENSE_HOST'
+  | 'TYPESENSE_API_KEY'
+  | 'TYPESENSE_SEARCH_API_KEY'
+> & {
   DATABASE_URL: string;
   DATABASE_URL_TEST: string;
   REDIS_URL: string;
+  TYPESENSE_HOST: string;
+  TYPESENSE_API_KEY: string;
+  TYPESENSE_SEARCH_API_KEY: string;
 };
 
 function postgresUrl(env: RawEnv, database: string): string {
@@ -191,8 +244,8 @@ function assertProductionMediaConfig(env: RawEnv): void {
   }
 }
 
-function loadConfig(): Config {
-  const parsed = refinedEnvSchema.safeParse(process.env);
+export function parseConfig(environment: NodeJS.ProcessEnv): Config {
+  const parsed = refinedEnvSchema.safeParse(environment);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -206,10 +259,14 @@ function loadConfig(): Config {
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
     DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
     REDIS_URL: env.REDIS_URL ?? `redis://${env.REDIS_HOST}:${env.REDIS_PORT}`,
+    TYPESENSE_HOST: env.TYPESENSE_HOST ?? LOCAL_TYPESENSE_HOST,
+    TYPESENSE_API_KEY: env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
+    TYPESENSE_SEARCH_API_KEY:
+      env.TYPESENSE_SEARCH_API_KEY ?? env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
   };
 }
 
-export const config: Config = loadConfig();
+export const config: Config = parseConfig(process.env);
 
 export const isProduction = config.NODE_ENV === 'production';
 export const isDevelopment = config.NODE_ENV === 'development';

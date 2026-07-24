@@ -3,14 +3,28 @@ import { Client } from 'typesense';
 import type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
 
 const LOCAL_API_KEY = 'tickif-local-typesense-key';
+type SearchCredentials = Pick<
+  typeof config,
+  'TYPESENSE_API_KEY' | 'TYPESENSE_SEARCH_API_KEY'
+>;
 
 export const SEARCH_COLLECTION_KINDS = ['projects', 'designers'] as const;
 export type SearchCollectionKind = (typeof SEARCH_COLLECTION_KINDS)[number];
 
 /** Fail before startup work if production is using the checked-in local credential. */
-export function assertSearchConfig(): void {
-  if (isProduction && config.TYPESENSE_API_KEY === LOCAL_API_KEY) {
+export function assertSearchConfig(
+  credentials: SearchCredentials = config,
+  production: boolean = isProduction,
+): void {
+  if (!production) return;
+  if (credentials.TYPESENSE_API_KEY === LOCAL_API_KEY) {
     throw new Error('TYPESENSE_API_KEY must be replaced in production');
+  }
+  if (credentials.TYPESENSE_SEARCH_API_KEY === LOCAL_API_KEY) {
+    throw new Error('TYPESENSE_SEARCH_API_KEY must be replaced in production');
+  }
+  if (credentials.TYPESENSE_API_KEY === credentials.TYPESENSE_SEARCH_API_KEY) {
+    throw new Error('TYPESENSE_SEARCH_API_KEY must be a separate search-only key');
   }
 }
 
@@ -41,9 +55,9 @@ let bootstrapClient: Client | undefined;
 export function searchClient(): Client {
   client ??= new Client({
     nodes: [{ url: config.TYPESENSE_HOST }],
-    apiKey: config.TYPESENSE_API_KEY,
-    connectionTimeoutSeconds: 10,
-    numRetries: 3,
+    apiKey: config.TYPESENSE_SEARCH_API_KEY,
+    connectionTimeoutSeconds: 1,
+    numRetries: 1,
     retryIntervalSeconds: 0.1,
   });
   return client;
