@@ -1,1 +1,30 @@
 @import '@repo/ui/globals.css';
+
+@keyframes review-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@layer utilities {
+  .review-marquee-track {
+    animation: review-marquee 36s linear infinite;
+    will-change: transform;
+  }
+
+  .review-marquee:hover .review-marquee-track,
+  .review-marquee:focus-within .review-marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-marquee-track {
+    animation: none;
+    transform: none;
+  }
+
+  .review-marquee-copy {
+    display: none;
+  }
+}

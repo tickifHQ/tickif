@@ -457,7 +457,11 @@ function StorySection({
 
 function ReviewCard({ review }: { review: PublicDesignerReview }) {
   return (
-    <Card className="flex min-w-100 flex-col gap-4 p-4 shadow-md" radius="xl">
+    <Card
+      role="article"
+      className="flex h-55 w-100 shrink-0 flex-col gap-4 p-4 shadow-md"
+      radius="xl"
+    >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Image
@@ -478,19 +482,14 @@ function ReviewCard({ review }: { review: PublicDesignerReview }) {
         <GoogleBrandIcon className="size-6" />
       </div>
       <p className="flex-1 text-sm leading-relaxed">“{review.body}”</p>
-      <div className="flex items-center justify-between gap-4">
-        <Rating rating={review.rating} size="lg" />
-        <span className="-rotate-3 font-display text-2xl italic tracking-wide text-muted-foreground">
-          {review.author}
-        </span>
-      </div>
+      <Rating rating={review.rating} size="lg" />
     </Card>
   );
 }
 
 function ReviewsSection({ profile }: { profile: PublicDesignerProfileViewModel }) {
   return (
-    <section className="border-t border-surface-subtle-border bg-surface-subtle px-4 py-22 sm:px-6">
+    <section className="overflow-hidden border-t border-surface-subtle-border bg-surface-subtle px-4 py-22 sm:px-6">
       <div className="mx-auto max-w-7xl">
         <SectionEyebrow>Ratings & client voices</SectionEyebrow>
         <h2
@@ -499,9 +498,9 @@ function ReviewsSection({ profile }: { profile: PublicDesignerProfileViewModel }
         >
           What it’s like to <span className="font-light text-primary italic">work with us</span>.
         </h2>
-        <div className="mt-9 flex gap-8 overflow-x-auto pb-20">
+        <div className="mt-9 flex flex-col gap-8 pb-20 md:flex-row">
           <Card
-            className="shadow-floating-card relative flex min-h-56 min-w-60 flex-col justify-between overflow-hidden border-surface-inverse-foreground/15 bg-surface-inverse p-5 text-surface-inverse-foreground"
+            className="shadow-floating-card relative flex min-h-56 w-60 shrink-0 flex-col justify-between overflow-hidden border-surface-inverse-foreground/15 bg-surface-inverse p-5 text-surface-inverse-foreground"
             radius="xl"
           >
             <div
@@ -521,10 +520,26 @@ function ReviewsSection({ profile }: { profile: PublicDesignerProfileViewModel }
               </p>
             </div>
           </Card>
-          <div className="flex gap-6">
-            {profile.reviews.map((review) => (
-              <ReviewCard key={review.id} review={review} />
-            ))}
+          <div
+            data-testid="review-marquee"
+            className="review-marquee w-screen shrink-0 overflow-hidden py-4"
+          >
+            <div className="review-marquee-track flex w-max">
+              <div data-testid="review-marquee-primary" className="flex shrink-0 gap-6 pr-6">
+                {profile.reviews.map((review) => (
+                  <ReviewCard key={review.id} review={review} />
+                ))}
+              </div>
+              <div
+                data-testid="review-marquee-copy"
+                className="review-marquee-copy flex shrink-0 gap-6 pr-6"
+                aria-hidden="true"
+              >
+                {profile.reviews.map((review) => (
+                  <ReviewCard key={review.id} review={review} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

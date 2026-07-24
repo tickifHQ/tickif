@@ -34,7 +34,21 @@ describe('PublicDesignerProfile', () => {
     expect(within(container).getByAltText('Projects published')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '4.7 out of 5 stars' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '4.5 out of 5 stars' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '5 out of 5 stars' })).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: '5 out of 5 stars' })).toHaveLength(2);
+  });
+
+  it('renders three reviews once to assistive technology and hides the repeating rail', () => {
+    render(<PublicDesignerProfile profile={publicDesignerProfileFixture} />);
+
+    const primaryReviews = within(screen.getByTestId('review-marquee-primary'));
+    const repeatedReviews = screen.getByTestId('review-marquee-copy');
+    const reviewCards = primaryReviews.getAllByRole('article');
+
+    expect(reviewCards).toHaveLength(3);
+    publicDesignerProfileFixture.reviews.forEach((review, index) => {
+      expect(within(reviewCards[index]!).getAllByText(review.author)).toHaveLength(1);
+    });
+    expect(repeatedReviews).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders the studio identity, stats, and social details', () => {

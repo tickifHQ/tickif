@@ -181,5 +181,13 @@ export const publicDesignerProfileFixture = {
       rating: 5,
       imageSrc: '/illustrations/public-profile/reviewer.png',
     },
+    {
+      id: 'review-03',
+      author: 'Nisha & Arjun',
+      date: 'Dec 2025',
+      body: 'The process felt considered from the first conversation to the final handover. Every room now feels connected, useful and unmistakably ours.',
+      rating: 5,
+      imageSrc: '/illustrations/public-profile/reviewer.png',
+    },
   ],
 } satisfies PublicDesignerProfileViewModel;
