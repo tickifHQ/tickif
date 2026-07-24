@@ -204,6 +204,7 @@ export const project = pgTable(
     // flexible metadata (themes, scope tags, etc.) per the blueprint's JSONB approach
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     publishedAt: timestamp('published_at'),
+    featuredAt: timestamp('featured_at', { withTimezone: true }),
     submittedAt: timestamp('submitted_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

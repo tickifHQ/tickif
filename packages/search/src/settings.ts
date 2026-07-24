@@ -36,7 +36,7 @@ export const PROJECT_SEARCH_SETTINGS = {
     'finishes',
     'roomSlugs',
   ],
-  sortableAttributes: ['publishedAt', 'sizeSqft'],
+  sortableAttributes: ['publishedAt', 'sizeSqft', 'featuredAt'],
   rankingRules: [...DEFAULT_RANKING_RULES, 'publishedAt:desc'],
   synonyms: SEARCH_SYNONYMS,
 } satisfies Settings;

@@ -25,6 +25,8 @@ export type ProjectSearchDocument = {
   coverImageKey: string | null;
   /** Unix epoch milliseconds, kept numeric for deterministic sorting. */
   publishedAt: number;
+  /** Unix epoch milliseconds for featured sort. null = not featured. */
+  featuredAt: number | null;
 };
 
 /** Disposable Meilisearch projection of an active designer profile. */
