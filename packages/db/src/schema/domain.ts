@@ -248,9 +248,9 @@ export const projectModerationEvent = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'restrict' }),
-    actorUserId: text('actor_user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'restrict' }),
+    // Nulled rather than restricted on user deletion: the audit row must outlive the
+    // actor (account closure, GDPR erasure), and `actorLabel` is masked on read anyway.
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
     action: moderationActionEnum('action').notNull(),
     fromStatus: projectStatusEnum('from_status').notNull(),
     toStatus: projectStatusEnum('to_status').notNull(),

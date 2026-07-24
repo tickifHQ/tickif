@@ -568,6 +568,8 @@ export const projectsRepository = {
       minImageCount: number;
       actorUserId: string;
       expectedStatus: 'draft' | 'changes_requested';
+      /** Derived from the transition matrix by the caller — never re-derived here. */
+      action: ModerationAction;
     },
   ): Promise<SubmitWithUploadCountsResult> {
     return db.transaction(async (tx) => {
@@ -634,7 +636,7 @@ export const projectsRepository = {
         await tx.insert(schema.projectModerationEvent).values({
           projectId: id,
           actorUserId: requirements.actorUserId,
-          action: requirements.expectedStatus === 'changes_requested' ? 'resubmit' : 'submit',
+          action: requirements.action,
           fromStatus: requirements.expectedStatus,
           toStatus: 'submitted',
         });

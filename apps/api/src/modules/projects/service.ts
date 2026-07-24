@@ -1036,7 +1036,9 @@ export const projectsService = {
     await requireEditableProject(projectId, caller);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
-    assertTransition(project.status, 'submitted', caller.userRole);
+    const action = assertTransition(project.status, 'submitted', caller.userRole);
+    // Narrows `project.status` for `expectedStatus` below. The matrix already rejects
+    // every other source status, so this is a type guard rather than a second rule.
     if (project.status !== 'draft' && project.status !== 'changes_requested') {
       throw AppError.invalidTransition();
     }
@@ -1059,6 +1061,7 @@ export const projectsService = {
       minImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
       actorUserId: caller.userId,
       expectedStatus: project.status,
+      action,
     });
     if (!submission.project) throw AppError.notFound('Project not found');
 

@@ -1,5 +1,5 @@
 {
-  "id": "90be45e8-bd73-4605-ade6-6673258966f2",
+  "id": "c846e430-c1ba-422d-9902-0c2787840d10",
   "prevId": "6ae5fb0b-9bba-4913-ada1-912ea84cb894",
   "version": "7",
   "dialect": "postgresql",
@@ -2089,7 +2089,7 @@
           "name": "actor_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "action": {
           "name": "action",
@@ -2200,7 +2200,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

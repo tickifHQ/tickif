@@ -39,7 +39,7 @@ export class AppError extends Error {
   }
 
   static invalidTransition(message = 'Project status changed or transition is not allowed') {
-    return new AppError('INVALID_TRANSITION', message, 409);
+    return new AppError('invalid_transition', message, 409);
   }
 
   static unprocessable(message: string, details?: unknown) {

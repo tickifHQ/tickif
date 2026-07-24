@@ -8,6 +8,7 @@ import type {
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
+  makeUser,
   makeProject,
   makeProjectImage,
   makeProjectRoom,
@@ -88,7 +89,7 @@ describe('project moderation transitions', () => {
 
     const conflict = responses.find((response) => response.status === 409);
     const body = (await conflict?.json()) as ErrorResponse;
-    expect(body.error.code).toBe('INVALID_TRANSITION');
+    expect(body.error.code).toBe('invalid_transition');
 
     const events = await db
       .select()
@@ -213,5 +214,38 @@ describe('project moderation transitions', () => {
       .from(schema.projectModerationEvent)
       .where(eq(schema.projectModerationEvent.projectId, project.id));
     expect(events).toHaveLength(1);
+  });
+
+  // Schema-level guarantee, so this drives the repository directly rather than the HTTP
+  // + OTP path — no session is needed to prove what the foreign key does.
+  it('keeps the audit row and anonymizes the actor when the acting user is deleted', async () => {
+    const actor = await makeUser();
+    const designer = await makeDesigner({ userId: actor.id });
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'submitted',
+      submittedAt: new Date(),
+    });
+    const withdrawn = await projectsRepository.transition({
+      id: project.id,
+      fromStatus: 'submitted',
+      toStatus: 'draft',
+      actorUserId: actor.id,
+      action: 'withdraw',
+    });
+    expect(withdrawn).not.toBeNull();
+
+    // Account closure / GDPR erasure must not be blocked by the audit trail, and must not
+    // take the audit row with it — the FK is ON DELETE SET NULL, not RESTRICT.
+    // `designer_profile.user_id` nulls on the same delete, so this needs no cleanup.
+    await db.delete(schema.user).where(eq(schema.user.id, actor.id));
+
+    const events = await db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, project.id));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.action).toBe('withdraw');
+    expect(events[0]?.actorUserId).toBeNull();
   });
 });

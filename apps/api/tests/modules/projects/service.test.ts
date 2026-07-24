@@ -652,6 +652,8 @@ describe('projectsService.submit', () => {
       minImageCount: 3,
       actorUserId: caller.userId,
       expectedStatus: 'changes_requested',
+      // Derived from the transition matrix, not re-derived from expectedStatus.
+      action: 'resubmit',
     });
   });
 
@@ -718,7 +720,7 @@ describe('assertTransition', () => {
             expect(assertTransition(fromStatus, toStatus, role), key).toBe(action);
           } else {
             expect(() => assertTransition(fromStatus, toStatus, role), key).toThrowError(
-              expect.objectContaining({ code: 'INVALID_TRANSITION', status: 409 }),
+              expect.objectContaining({ code: 'invalid_transition', status: 409 }),
             );
           }
         }
