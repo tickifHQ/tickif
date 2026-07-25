@@ -1,32 +1,9 @@
-import { config, isProduction } from '@repo/config';
+import { config } from '@repo/config';
 import { Client } from 'typesense';
 import type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
 
-const LOCAL_API_KEY = 'tickif-local-typesense-key';
-type SearchCredentials = Pick<
-  typeof config,
-  'TYPESENSE_API_KEY' | 'TYPESENSE_SEARCH_API_KEY'
->;
-
 export const SEARCH_COLLECTION_KINDS = ['projects', 'designers'] as const;
 export type SearchCollectionKind = (typeof SEARCH_COLLECTION_KINDS)[number];
-
-/** Fail before startup work if production is using the checked-in local credential. */
-export function assertSearchConfig(
-  credentials: SearchCredentials = config,
-  production: boolean = isProduction,
-): void {
-  if (!production) return;
-  if (credentials.TYPESENSE_API_KEY === LOCAL_API_KEY) {
-    throw new Error('TYPESENSE_API_KEY must be replaced in production');
-  }
-  if (credentials.TYPESENSE_SEARCH_API_KEY === LOCAL_API_KEY) {
-    throw new Error('TYPESENSE_SEARCH_API_KEY must be replaced in production');
-  }
-  if (credentials.TYPESENSE_API_KEY === credentials.TYPESENSE_SEARCH_API_KEY) {
-    throw new Error('TYPESENSE_SEARCH_API_KEY must be a separate search-only key');
-  }
-}
 
 export function searchCollectionName(
   kind: SearchCollectionKind,

@@ -56,8 +56,8 @@ const envSchema = z.object({
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
 
-  // Typesense. Local defaults are applied after validation so production can
-  // require explicit values rather than silently pointing at localhost.
+  // Typesense. Local defaults keep non-search processes self-contained; the
+  // search boundary separately requires explicit production credentials.
   TYPESENSE_HOST: z.string().url().optional(),
   TYPESENSE_API_KEY: z.string().min(16).optional(),
   TYPESENSE_SEARCH_API_KEY: z.string().min(16).optional(),
@@ -158,44 +158,33 @@ const refinedEnvSchema = envSchema.superRefine((env, ctx) => {
     });
   }
 
-  if (env.NODE_ENV !== 'production') return;
-
-  for (const key of [
-    'TYPESENSE_HOST',
-    'TYPESENSE_API_KEY',
-    'TYPESENSE_SEARCH_API_KEY',
-  ] as const) {
-    if (!env[key]) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `${key} must be explicitly set when NODE_ENV=production`,
-        path: [key],
-      });
-    }
-  }
-
-  if (
-    env.TYPESENSE_API_KEY &&
-    env.TYPESENSE_SEARCH_API_KEY &&
-    env.TYPESENSE_API_KEY === env.TYPESENSE_SEARCH_API_KEY
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'TYPESENSE_SEARCH_API_KEY must differ from TYPESENSE_API_KEY in production',
-      path: ['TYPESENSE_SEARCH_API_KEY'],
-    });
-  }
-
-  for (const key of ['TYPESENSE_API_KEY', 'TYPESENSE_SEARCH_API_KEY'] as const) {
-    if (env[key] === LOCAL_TYPESENSE_API_KEY) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `${key} must not use the checked-in local credential in production`,
-        path: [key],
-      });
-    }
-  }
 });
+
+const productionSearchEnvSchema = z
+  .object({
+    TYPESENSE_HOST: z.string().url(),
+    TYPESENSE_API_KEY: z.string().min(16),
+    TYPESENSE_SEARCH_API_KEY: z.string().min(16),
+  })
+  .superRefine((env, ctx) => {
+    if (env.TYPESENSE_API_KEY === env.TYPESENSE_SEARCH_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'TYPESENSE_SEARCH_API_KEY must differ from TYPESENSE_API_KEY in production',
+        path: ['TYPESENSE_SEARCH_API_KEY'],
+      });
+    }
+
+    for (const key of ['TYPESENSE_API_KEY', 'TYPESENSE_SEARCH_API_KEY'] as const) {
+      if (env[key] === LOCAL_TYPESENSE_API_KEY) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} must not use the checked-in local credential in production`,
+          path: [key],
+        });
+      }
+    }
+  });
 
 type RawEnv = z.infer<typeof envSchema>;
 
@@ -264,6 +253,20 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     TYPESENSE_SEARCH_API_KEY:
       env.TYPESENSE_SEARCH_API_KEY ?? env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
   };
+}
+
+/** Validate search credentials only in processes that actually use Typesense. */
+export function assertProductionSearchConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  if (environment.NODE_ENV !== 'production') return;
+  const parsed = productionSearchEnvSchema.safeParse(environment);
+  if (parsed.success) return;
+
+  const issues = parsed.error.issues
+    .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('\n');
+  throw new Error(`Invalid search environment configuration:\n${issues}`);
 }
 
 export const config: Config = parseConfig(process.env);

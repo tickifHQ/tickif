@@ -1,6 +1,5 @@
 export {
   SEARCH_COLLECTION_KINDS,
-  assertSearchConfig,
   designersCollection,
   initialSearchCollectionName,
   projectsCollection,

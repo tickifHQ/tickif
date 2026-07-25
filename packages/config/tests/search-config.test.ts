@@ -1,5 +1,5 @@
-import { parseConfig } from '@repo/config';
 import { describe, expect, it } from 'vitest';
+import { assertProductionSearchConfig, parseConfig } from '../src/index.js';
 
 const productionEnvironment = {
   NODE_ENV: 'production',
@@ -12,11 +12,17 @@ const productionEnvironment = {
 } satisfies NodeJS.ProcessEnv;
 
 describe('Typesense environment configuration', () => {
-  it('requires explicit host and separate admin and search keys in production', () => {
-    expect(() => parseConfig(productionEnvironment)).toThrow('TYPESENSE_HOST');
+  it('does not make unrelated production processes depend on search credentials', () => {
+    expect(() => parseConfig(productionEnvironment)).not.toThrow();
+  });
+
+  it('requires explicit host and separate admin and search keys at the search boundary', () => {
+    expect(() => assertProductionSearchConfig(productionEnvironment)).toThrow(
+      'TYPESENSE_HOST',
+    );
 
     expect(() =>
-      parseConfig({
+      assertProductionSearchConfig({
         ...productionEnvironment,
         TYPESENSE_HOST: 'https://search.tickif.com',
         TYPESENSE_API_KEY: 'production-admin-key',
@@ -24,7 +30,7 @@ describe('Typesense environment configuration', () => {
     ).toThrow('TYPESENSE_SEARCH_API_KEY');
 
     expect(() =>
-      parseConfig({
+      assertProductionSearchConfig({
         ...productionEnvironment,
         TYPESENSE_HOST: 'https://search.tickif.com',
         TYPESENSE_API_KEY: 'production-shared-key',
@@ -33,7 +39,7 @@ describe('Typesense environment configuration', () => {
     ).toThrow('must differ from TYPESENSE_API_KEY');
 
     expect(() =>
-      parseConfig({
+      assertProductionSearchConfig({
         ...productionEnvironment,
         TYPESENSE_HOST: 'https://search.tickif.com',
         TYPESENSE_API_KEY: 'production-admin-key',
@@ -52,5 +58,10 @@ describe('Typesense environment configuration', () => {
     expect(parsed.TYPESENSE_HOST).toBe('http://localhost:8108');
     expect(parsed.TYPESENSE_API_KEY).toBe('tickif-local-typesense-key');
     expect(parsed.TYPESENSE_SEARCH_API_KEY).toBe('tickif-local-typesense-key');
+    expect(() =>
+      assertProductionSearchConfig({
+        NODE_ENV: 'development',
+      }),
+    ).not.toThrow();
   });
 });

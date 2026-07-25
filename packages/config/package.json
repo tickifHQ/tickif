@@ -10,7 +10,9 @@
     }
   },
   "scripts": {
-    "lint": "eslint src",
+    "lint": "eslint src tests",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -20,8 +22,10 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/tsconfig": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "^9.18.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

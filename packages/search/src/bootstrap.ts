@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { assertProductionSearchConfig } from '@repo/config';
 import {
   Errors,
   type Client,
@@ -12,7 +13,6 @@ import {
   type SynonymSetCreateSchema,
 } from 'typesense';
 import {
-  assertSearchConfig,
   initialSearchCollectionName,
   SEARCH_COLLECTION_KINDS,
   searchBootstrapClient,
@@ -294,7 +294,7 @@ export async function bootstrapSearch(
     client?: SearchBootstrapClient;
   } = {},
 ): Promise<SearchBootstrapResult> {
-  assertSearchConfig();
+  assertProductionSearchConfig();
   const instance = options.client ?? typesenseBootstrapClient(searchBootstrapClient());
   const health = await instance.health();
   if (!health.ok) throw new Error('Typesense is not healthy');
