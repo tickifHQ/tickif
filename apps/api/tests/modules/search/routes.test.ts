@@ -30,6 +30,10 @@ vi.mock('../../../src/modules/leads/routes.js', async () => {
   const { OpenAPIHono } = await import('@hono/zod-openapi');
   return { leadsRoutes: new OpenAPIHono() };
 });
+vi.mock('../../../src/modules/discovery/index.js', async () => {
+  const { OpenAPIHono } = await import('@hono/zod-openapi');
+  return { discoveryRoutes: new OpenAPIHono() };
+});
 vi.mock('@repo/auth', () => ({
   getSession: vi.fn(),
   auth: { handler: vi.fn(() => new Response(null, { status: 404 })) },
