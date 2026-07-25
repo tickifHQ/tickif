@@ -1,6 +1,6 @@
 {
-  "id": "23954bc9-bc88-4247-a094-8a889641dda8",
-  "prevId": "b194e7ca-103f-4cd2-af0a-669de309ad05",
+  "id": "25b82c88-ac31-4444-8741-12d4fcffe626",
+  "prevId": "dc80beea-e660-42b2-8878-63e8daa207ae",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1295,6 +1295,126 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.google_place_cache": {
+      "name": "google_place_cache",
+      "schema": "",
+      "columns": {
+        "profile_id": {
+          "name": "profile_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "place_id": {
+          "name": "place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "numeric(2, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_ratings_total": {
+          "name": "user_ratings_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviews": {
+          "name": "reviews",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "google_place_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "last_fetched_at": {
+          "name": "last_fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_attempt_at": {
+          "name": "last_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "google_place_cache_status_fetched_idx": {
+          "name": "google_place_cache_status_fetched_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_fetched_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "google_place_cache_profile_id_designer_profile_id_fk": {
+          "name": "google_place_cache_profile_id_designer_profile_id_fk",
+          "tableFrom": "google_place_cache",
+          "tableTo": "designer_profile",
+          "columnsFrom": [
+            "profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.lead": {
       "name": "lead",
       "schema": "",
@@ -1636,13 +1756,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "moderation_revision": {
-          "name": "moderation_revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1820,56 +1933,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "project_submitted_moderation_queue_idx": {
-          "name": "project_submitted_moderation_queue_idx",
-          "columns": [
-            {
-              "expression": "submitted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project\".\"status\" = 'submitted'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_in_review_moderation_queue_idx": {
-          "name": "project_in_review_moderation_queue_idx",
-          "columns": [
-            {
-              "expression": "reviewed_by",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "submitted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project\".\"status\" = 'in_review'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -2002,18 +2065,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "duplicate_of_image_id": {
-          "name": "duplicate_of_image_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duplicate_distance": {
-          "name": "duplicate_distance",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "project_image_status",
@@ -2134,12 +2185,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "project_image_duplicate_distance_nonnegative": {
-          "name": "project_image_duplicate_distance_nonnegative",
-          "value": "\"project_image\".\"duplicate_distance\" is null or \"project_image\".\"duplicate_distance\" >= 0"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.project_moderation_event": {
@@ -2163,7 +2209,7 @@
           "name": "actor_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "action": {
           "name": "action",
@@ -2274,7 +2320,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2664,6 +2710,16 @@
       "values": [
         "individual",
         "company"
+      ]
+    },
+    "public.google_place_status": {
+      "name": "google_place_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "connected",
+        "error",
+        "stale"
       ]
     },
     "public.lead_status": {

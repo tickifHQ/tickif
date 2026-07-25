@@ -6,18 +6,27 @@ vi.mock('../../../src/modules/profiles/repository.js', () => {
   return {
     profilesRepository: {
       findByOrgId: vi.fn(),
+      findByOrgIdWithOrg: vi.fn(),
       hasGoogleAccount: vi.fn(),
-      hasOrganization: vi.fn(),
       countFootprintByKind: vi.fn(),
       hasProject: vi.fn(),
       hasContact: vi.fn(),
+      getFootprint: vi.fn(),
     },
   };
 });
 
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    isMember: vi.fn(),
+    isWriter: vi.fn(),
+  },
+}));
+
 // Import AFTER mock registration.
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
 const { profilesRepository } = await import('../../../src/modules/profiles/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 
 const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -49,17 +58,19 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
   ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(orgsService.isMember).mockResolvedValue(true);
+});
 
 describe('profilesService.getCompletion', () => {
   describe('steps', () => {
     it('returns all 4 steps', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(false);
-      vi.mocked(profilesRepository.hasOrganization).mockResolvedValue(null);
       vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: null });
+      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
 
       expect(result.steps).toHaveLength(4);
       expect(result.steps.map((s) => s.key)).toEqual([
@@ -72,11 +83,10 @@ describe('profilesService.getCompletion', () => {
 
     it('marks signed-in-with-google as done when user has google account', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.hasOrganization).mockResolvedValue(null);
       vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: null });
+      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
 
       expect(result.steps.find((s) => s.key === 'signed-in-with-google')?.done).toBe(true);
     });
@@ -91,15 +101,11 @@ describe('profilesService.getCompletion', () => {
       expect(result.steps.find((s) => s.key === 'org-created')?.done).toBe(true);
     });
 
-    it('marks org-created as done when user has an org membership', async () => {
-      vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(false);
-      vi.mocked(profilesRepository.hasOrganization).mockResolvedValue('org-1');
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
-      vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
-
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: null });
-
-      expect(result.steps.find((s) => s.key === 'org-created')?.done).toBe(true);
+    it('requires an active organization instead of falling back to a membership', async () => {
+      await expect(
+        profilesService.getCompletion({ userId: 'u1', orgId: null }),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(profilesRepository.findByOrgId).not.toHaveBeenCalled();
     });
 
     it('marks profile-completed when all required fields are filled', async () => {
@@ -140,15 +146,13 @@ describe('profilesService.getCompletion', () => {
   });
 
   describe('score (based on profile fields, not steps)', () => {
-    it('returns 0 when no org exists', async () => {
-      vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.hasOrganization).mockResolvedValue(null);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
-      vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
+    it('rejects an active organization that does not belong to the caller', async () => {
+      vi.mocked(orgsService.isMember).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: null });
-
-      expect(result.score).toBe(0);
+      await expect(
+        profilesService.getCompletion({ userId: 'u1', orgId: 'org-2' }),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(profilesRepository.findByOrgId).not.toHaveBeenCalled();
     });
 
     it('returns 0 when org exists but no profile', async () => {
@@ -239,16 +243,45 @@ describe('profilesService.getCompletion', () => {
       expect(gate.reason).toContain('Missing:');
     });
 
-    it('fails when no org/profile exists (score 0)', async () => {
-      vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.hasOrganization).mockResolvedValue(null);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
-      vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
-
-      const gate = await profilesService.isComplete({ userId: 'u1', orgId: null });
-
-      expect(gate.pass).toBe(false);
-      expect(gate.reason).toContain('0%');
+    it('rejects publishing checks without an active organization', async () => {
+      await expect(profilesService.isComplete({ userId: 'u1', orgId: null })).rejects.toMatchObject(
+        { status: 422 },
+      );
     });
+  });
+});
+
+describe('profilesService.getCurrentProfile', () => {
+  it('allows any active organization member to read the workspace profile', async () => {
+    vi.mocked(profilesRepository.findByOrgIdWithOrg).mockResolvedValue({
+      profile: profileRow(),
+      org: {
+        id: 'org-1',
+        name: 'Test Studio',
+        slug: 'test-studio',
+        logo: null,
+        metadata: null,
+        createdAt: new Date('2026-01-01'),
+      },
+    });
+    vi.mocked(profilesRepository.getFootprint).mockResolvedValue([]);
+
+    const result = await profilesService.getCurrentProfile('user-1', 'org-1');
+
+    expect(orgsService.isMember).toHaveBeenCalledWith('user-1', 'org-1');
+    expect(result.organization).toEqual({
+      id: 'org-1',
+      name: 'Test Studio',
+      slug: 'test-studio',
+    });
+  });
+
+  it('rejects non-members before reading an organization profile', async () => {
+    vi.mocked(orgsService.isMember).mockResolvedValue(false);
+
+    await expect(profilesService.getCurrentProfile('user-1', 'org-2')).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(profilesRepository.findByOrgIdWithOrg).not.toHaveBeenCalled();
   });
 });

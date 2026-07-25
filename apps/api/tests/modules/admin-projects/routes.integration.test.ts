@@ -162,7 +162,7 @@ describe('admin project moderation API', () => {
     });
     expect(duplicatePublish.status).toBe(409);
     const conflict = (await duplicatePublish.json()) as ErrorResponse;
-    expect(conflict.error.code).toBe('INVALID_TRANSITION');
+    expect(conflict.error.code).toBe('invalid_transition');
 
     const [profile] = await db
       .select()

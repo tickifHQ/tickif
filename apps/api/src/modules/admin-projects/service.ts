@@ -17,7 +17,7 @@ import {
   buildCompleteness,
   transitionProject,
   validateProjectTaxonomy,
-  type Caller as ProjectCaller,
+  type TransitionCaller,
 } from '../projects/service.js';
 import {
   adminProjectsRepository,
@@ -27,7 +27,7 @@ import {
   type AdminRoomRecord,
 } from './repository.js';
 
-export type AdminCaller = ProjectCaller;
+export type AdminCaller = TransitionCaller;
 
 function toProject(row: AdminProjectRecord): AdminModerationProject {
   return {
@@ -184,6 +184,7 @@ export const adminProjectsService = {
   async getById(projectId: string): Promise<AdminModerationDetailResponse> {
     const project = await adminProjectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
+    // Admin completeness is ready-only so it matches the publish gate, unlike designer grace.
     const [rooms, images, readyImageCounts, history] = await Promise.all([
       adminProjectsRepository.listRooms(projectId),
       adminProjectsRepository.listImages(projectId),

@@ -1,0 +1,1 @@
+ALTER TABLE "google_place_cache" ADD COLUMN "last_attempt_at" timestamp with time zone;

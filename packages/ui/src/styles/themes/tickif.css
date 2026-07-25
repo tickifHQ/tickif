@@ -12,7 +12,10 @@
 :root,
 [data-theme='tickif'] {
   --font-body: var(--font-sans-base, ui-sans-serif, system-ui, sans-serif);
-  --font-heading: var(--font-display-base, var(--font-sans-base, ui-sans-serif, system-ui, sans-serif));
+  --font-heading: var(
+    --font-display-base,
+    var(--font-sans-base, ui-sans-serif, system-ui, sans-serif)
+  );
   --font-code: var(--font-mono-base, ui-monospace, 'SF Mono', monospace);
 
   --radius: 0.5rem;
@@ -42,6 +45,10 @@
   --border: oklch(0.92 0.004 286);
   --input: oklch(0.92 0.004 286);
   --ring: oklch(0.616 0.116 170);
+  --button-neutral: oklch(1 0 0);
+  --button-neutral-foreground: oklch(0.21 0.006 286);
+  --button-neutral-hover: oklch(0.967 0.001 286);
+  --button-neutral-shadow: 0 0 0 1px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.12);
 
   --chart-1: oklch(0.616 0.116 170);
   --chart-2: oklch(0.508 0.105 166);

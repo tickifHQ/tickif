@@ -1,5 +1,5 @@
 {
-  "id": "90be45e8-bd73-4605-ade6-6673258966f2",
+  "id": "ad3367e2-c330-48c6-a843-5a4a9b3e641d",
   "prevId": "6ae5fb0b-9bba-4913-ada1-912ea84cb894",
   "version": "7",
   "dialect": "postgresql",
@@ -1295,6 +1295,120 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.google_place_cache": {
+      "name": "google_place_cache",
+      "schema": "",
+      "columns": {
+        "profile_id": {
+          "name": "profile_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "place_id": {
+          "name": "place_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating": {
+          "name": "rating",
+          "type": "numeric(2, 1)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_ratings_total": {
+          "name": "user_ratings_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviews": {
+          "name": "reviews",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "google_place_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "last_fetched_at": {
+          "name": "last_fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "google_place_cache_status_fetched_idx": {
+          "name": "google_place_cache_status_fetched_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_fetched_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "google_place_cache_profile_id_designer_profile_id_fk": {
+          "name": "google_place_cache_profile_id_designer_profile_id_fk",
+          "tableFrom": "google_place_cache",
+          "tableTo": "designer_profile",
+          "columnsFrom": [
+            "profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.lead": {
       "name": "lead",
       "schema": "",
@@ -1606,36 +1720,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "reviewed_by": {
-          "name": "reviewed_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review_started_at": {
-          "name": "review_started_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rejection_reason_code": {
-          "name": "rejection_reason_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "moderation_note": {
-          "name": "moderation_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "featured_at": {
-          "name": "featured_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1783,36 +1867,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "project_reviewed_by_idx": {
-          "name": "project_reviewed_by_idx",
-          "columns": [
-            {
-              "expression": "reviewed_by",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_featured_at_idx": {
-          "name": "project_featured_at_idx",
-          "columns": [
-            {
-              "expression": "featured_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1827,19 +1881,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_reviewed_by_user_id_fk": {
-          "name": "project_reviewed_by_user_id_fk",
-          "tableFrom": "project",
-          "tableTo": "user",
-          "columnsFrom": [
-            "reviewed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2059,148 +2100,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.project_moderation_event": {
-      "name": "project_moderation_event",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_user_id": {
-          "name": "actor_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "moderation_action",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_status": {
-          "name": "from_status",
-          "type": "project_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "to_status": {
-          "name": "to_status",
-          "type": "project_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reason_code": {
-          "name": "reason_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "field_diff": {
-          "name": "field_diff",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "project_moderation_event_project_created_idx": {
-          "name": "project_moderation_event_project_created_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_moderation_event_actor_idx": {
-          "name": "project_moderation_event_actor_idx",
-          "columns": [
-            {
-              "expression": "actor_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "project_moderation_event_project_id_project_id_fk": {
-          "name": "project_moderation_event_project_id_project_id_fk",
-          "tableFrom": "project_moderation_event",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "project_moderation_event_actor_user_id_user_id_fk": {
-          "name": "project_moderation_event_actor_user_id_user_id_fk",
-          "tableFrom": "project_moderation_event",
-          "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -2592,6 +2491,16 @@
         "company"
       ]
     },
+    "public.google_place_status": {
+      "name": "google_place_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "connected",
+        "error",
+        "stale"
+      ]
+    },
     "public.lead_status": {
       "name": "lead_status",
       "schema": "public",
@@ -2600,21 +2509,6 @@
         "contacted",
         "closed",
         "spam"
-      ]
-    },
-    "public.moderation_action": {
-      "name": "moderation_action",
-      "schema": "public",
-      "values": [
-        "submit",
-        "resubmit",
-        "withdraw",
-        "start_review",
-        "publish",
-        "request_changes",
-        "reject",
-        "unpublish",
-        "metadata_corrected"
       ]
     },
     "public.profile_status": {

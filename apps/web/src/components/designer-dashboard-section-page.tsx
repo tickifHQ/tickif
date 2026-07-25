@@ -52,7 +52,8 @@ const pageConfigs = {
   consultations: {
     eyebrow: 'Consultations',
     title: 'Manage homeowner consultations',
-    description: 'Track booked calls, prepare context before a meeting, and keep consultation follow-ups in one workspace.',
+    description:
+      'Track booked calls, prepare context before a meeting, and keep consultation follow-ups in one workspace.',
     icon: CalendarClock,
     badge: 'No consultations yet',
     primaryAction: { label: 'View leads', href: '/designer/leads' },
@@ -65,12 +66,14 @@ const pageConfigs = {
     sections: [
       {
         title: 'Call queue',
-        description: 'New homeowner requests will appear here with contact status and preferred timings.',
+        description:
+          'New homeowner requests will appear here with contact status and preferred timings.',
         icon: UsersRound,
       },
       {
         title: 'Meeting notes',
-        description: 'Use lead context and project references to keep every consultation actionable.',
+        description:
+          'Use lead context and project references to keep every consultation actionable.',
         icon: FileText,
       },
       {
@@ -88,7 +91,8 @@ const pageConfigs = {
   reviews: {
     eyebrow: 'Reviews',
     title: 'Collect and manage client reviews',
-    description: 'Review requests, testimonials, and moderation status will be managed from this page.',
+    description:
+      'Review requests, testimonials, and moderation status will be managed from this page.',
     icon: Star,
     badge: 'Reviews pending',
     primaryAction: { label: 'Update profile', href: '/designer/profile' },
@@ -124,7 +128,8 @@ const pageConfigs = {
   analytics: {
     eyebrow: 'Analytics',
     title: 'Understand portfolio performance',
-    description: 'Monitor profile visits, project interest, and lead activity as your Tickif presence grows.',
+    description:
+      'Monitor profile visits, project interest, and lead activity as your Tickif presence grows.',
     icon: BarChart3,
     badge: 'Early data',
     primaryAction: { label: 'View projects', href: '/designer/projects' },
@@ -137,7 +142,8 @@ const pageConfigs = {
     sections: [
       {
         title: 'Traffic sources',
-        description: 'See whether homeowners find you from Tickif discovery, shared links, or project pages.',
+        description:
+          'See whether homeowners find you from Tickif discovery, shared links, or project pages.',
         icon: Sparkles,
       },
       {
@@ -158,28 +164,30 @@ const pageConfigs = {
     ],
   },
   'terms-roles': {
-    eyebrow: 'Terms & roles',
-    title: 'Control studio access and operating terms',
-    description: 'Manage internal responsibilities, public-facing terms, and role expectations for your designer workspace.',
-    icon: FileText,
+    eyebrow: 'Teams & Roles',
+    title: 'Manage your studio team and roles',
+    description:
+      'View how team access and responsibilities will be managed for your designer workspace.',
+    icon: UsersRound,
     badge: 'Workspace owner',
     primaryAction: { label: 'Update profile', href: '/designer/profile' },
     secondaryAction: { label: 'Contact support', href: 'mailto:support@tickif.in' },
     metrics: [
       { label: 'Admins', value: '1', helper: 'Workspace owner' },
       { label: 'Roles', value: 'Owner', helper: 'Current access' },
-      { label: 'Terms', value: 'Draft', helper: 'Profile status' },
+      { label: 'Invitations', value: 'Not available', helper: 'Coming soon' },
     ],
     sections: [
       {
         title: 'Workspace roles',
-        description: 'Keep ownership and team responsibilities clear before adding more collaborators.',
+        description:
+          'Keep ownership and team responsibilities clear before adding more collaborators.',
         icon: UsersRound,
       },
       {
-        title: 'Client terms',
-        description: 'Maintain public expectations for consultation, site visits, and project engagement.',
-        icon: FileText,
+        title: 'Team access',
+        description: 'Manage who can access this studio and what they are responsible for.',
+        icon: UsersRound,
       },
       {
         title: 'Support handoff',
@@ -190,13 +198,14 @@ const pageConfigs = {
     timeline: [
       { label: 'Current role', value: 'Owner' },
       { label: 'Team support', value: 'Phase 2' },
-      { label: 'Public terms', value: 'Profile-driven' },
+      { label: 'Team management', value: 'Coming soon' },
     ],
   },
   'plan-billing': {
     eyebrow: 'Plan & billing',
     title: 'Track plan access and billing readiness',
-    description: 'Your subscription, billing status, and plan capabilities will live here as billing rolls into the workspace.',
+    description:
+      'Your subscription, billing status, and plan capabilities will live here as billing rolls into the workspace.',
     icon: CircleDollarSign,
     badge: 'Phase 2 billing',
     primaryAction: { label: 'Contact support', href: 'mailto:support@tickif.in' },
@@ -209,12 +218,14 @@ const pageConfigs = {
     sections: [
       {
         title: 'Current plan',
-        description: 'See your active tier and the profile features currently available to your studio.',
+        description:
+          'See your active tier and the profile features currently available to your studio.',
         icon: CheckCircle2,
       },
       {
         title: 'Billing setup',
-        description: 'Payment methods and invoices will be available once subscriptions are enabled.',
+        description:
+          'Payment methods and invoices will be available once subscriptions are enabled.',
         icon: CircleDollarSign,
       },
       {
@@ -235,7 +246,13 @@ type DesignerDashboardSectionPageProps = {
   section: keyof typeof pageConfigs;
 };
 
-function ActionLink({ action, variant }: { action: DashboardAction; variant: 'default' | 'outline' }) {
+function ActionLink({
+  action,
+  variant,
+}: {
+  action: DashboardAction;
+  variant: 'default' | 'outline';
+}) {
   const isMailto = action.href.startsWith('mailto:');
   const content = (
     <>
@@ -264,10 +281,7 @@ function EmptyChart({ children }: { children: ReactNode }) {
     <div className="flex h-52 items-end gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
       {[38, 52, 44, 68, 58, 74, 63].map((height, index) => (
         <div key={`${height}-${index}`} className="flex h-full flex-1 items-end">
-          <div
-            className="w-full rounded-t-md bg-primary/25"
-            style={{ height: `${height}%` }}
-          />
+          <div className="w-full rounded-t-md bg-primary/25" style={{ height: `${height}%` }} />
         </div>
       ))}
       <div className="absolute sr-only">{children}</div>
@@ -302,8 +316,12 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {config.secondaryAction ? <ActionLink action={config.secondaryAction} variant="outline" /> : null}
-          {config.primaryAction ? <ActionLink action={config.primaryAction} variant="default" /> : null}
+          {config.secondaryAction ? (
+            <ActionLink action={config.secondaryAction} variant="outline" />
+          ) : null}
+          {config.primaryAction ? (
+            <ActionLink action={config.primaryAction} variant="default" />
+          ) : null}
         </div>
       </div>
 
@@ -312,7 +330,9 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
           <Card key={metric.label} radius="2xl">
             <div className="px-5 py-5">
               <div className="text-sm font-medium text-muted-foreground">{metric.label}</div>
-              <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{metric.value}</div>
+              <div className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                {metric.value}
+              </div>
               <div className="mt-1 text-sm text-muted-foreground">{metric.helper}</div>
             </div>
           </Card>
@@ -325,9 +345,12 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
             <div className="px-6 py-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold tracking-tight text-foreground">Workspace snapshot</h2>
+                  <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                    Workspace snapshot
+                  </h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    This page is ready for live data once the matching backend surfaces are connected.
+                    This page is ready for live data once the matching backend surfaces are
+                    connected.
                   </p>
                 </div>
                 <Badge variant="secondary">{config.badge}</Badge>
@@ -349,7 +372,9 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                       <ItemIcon className="size-5" />
                     </span>
                     <h3 className="mt-4 text-base font-semibold text-foreground">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {item.description}
+                    </p>
                   </div>
                 </Card>
               );
@@ -363,9 +388,14 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
               <h2 className="text-base font-semibold text-foreground">Current setup</h2>
               <div className="mt-5 space-y-4">
                 {config.timeline.map((item) => (
-                  <div key={item.label} className="flex items-start justify-between gap-4 border-b border-border pb-4 last:border-b-0 last:pb-0">
+                  <div
+                    key={item.label}
+                    className="flex items-start justify-between gap-4 border-b border-border pb-4 last:border-b-0 last:pb-0"
+                  >
                     <div className="text-sm text-muted-foreground">{item.label}</div>
-                    <div className="text-right text-sm font-medium text-foreground">{item.value}</div>
+                    <div className="text-right text-sm font-medium text-foreground">
+                      {item.value}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -381,7 +411,8 @@ export function DesignerDashboardSectionPage({ section }: DesignerDashboardSecti
                 <div>
                   <h2 className="text-base font-semibold text-foreground">Recommended next step</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Keep your portfolio current. The dashboard will become more useful as projects, leads, and profile data build up.
+                    Keep your portfolio current. The dashboard will become more useful as projects,
+                    leads, and profile data build up.
                   </p>
                 </div>
               </div>

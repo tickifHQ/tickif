@@ -39,11 +39,15 @@ export class AppError extends Error {
   }
 
   static invalidTransition(message = 'Project status changed or transition is not allowed') {
-    return new AppError('INVALID_TRANSITION', message, 409);
+    return new AppError('invalid_transition', message, 409);
   }
 
   static unprocessable(message: string, details?: unknown) {
     return new AppError('validation_error', message, 422, details);
+  }
+
+  static tooManyRequests(message = 'Too many requests; try again shortly', details?: unknown) {
+    return new AppError('rate_limited', message, 429, details);
   }
 }
 

@@ -44,10 +44,18 @@ import {
   type UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
+import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
+import { NumberInput } from '@repo/ui/components/number-input';
 import { Label } from '@repo/ui/components/label';
 import { MonthPickerField } from '@repo/ui/components/month-picker-field';
 import { SelectField, type SelectFieldOption } from '@repo/ui/components/select-field';
@@ -122,7 +130,10 @@ type RoomDraft = {
   uploadError: string;
 };
 
-type ProjectImagePreview = Pick<ProjectImageDto, 'id' | 'status' | 'sortOrder' | 'width' | 'height'> & {
+type ProjectImagePreview = Pick<
+  ProjectImageDto,
+  'id' | 'status' | 'sortOrder' | 'width' | 'height'
+> & {
   fileName: string;
   previewUrl?: string;
   viewerUrl?: string;
@@ -194,7 +205,15 @@ const fallbackProjectTypeLabels: Record<string, string> = {
 };
 const projectDeliveryScopeSlugs = ['design', 'interior-execution', 'construction'];
 
-const fallbackDurationOptions = ['1 month', '2 months', '3 months', '4 months', '6 months', '9 months', '12+ months'];
+const fallbackDurationOptions = [
+  '1 month',
+  '2 months',
+  '3 months',
+  '4 months',
+  '6 months',
+  '9 months',
+  '12+ months',
+];
 
 const roomTagOptions: TagComboboxOption[] = [
   'Accent wall',
@@ -344,7 +363,13 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
       { slug: 'conference-room', title: 'Conference Room' },
     ],
     suggestedRooms: () => [
-      { slug: 'cabin', title: 'Cabin', allowMultiple: true, numberedPrefix: 'Cabin', alwaysNumber: true },
+      {
+        slug: 'cabin',
+        title: 'Cabin',
+        allowMultiple: true,
+        numberedPrefix: 'Cabin',
+        alwaysNumber: true,
+      },
       { slug: 'workstation-open-seating', title: 'Workstation / Open Seating Area' },
       { slug: 'conference-room', title: 'Conference Room' },
       { slug: 'cafeteria-pantry', title: 'Cafeteria / Pantry' },
@@ -366,7 +391,12 @@ const projectTypeBehaviors: Record<string, ProjectTypeBehavior> = {
     ],
     suggestedRooms: () => [
       { slug: 'lobby-reception', title: 'Lobby / Reception' },
-      { slug: 'guest-room', title: 'Guest Room', allowMultiple: true, numberedPrefix: 'Guest Room' },
+      {
+        slug: 'guest-room',
+        title: 'Guest Room',
+        allowMultiple: true,
+        numberedPrefix: 'Guest Room',
+      },
       { slug: 'restaurant-dining', title: 'Restaurant / Dining' },
       { slug: 'spa-wellness', title: 'Spa / Wellness' },
       { slug: 'banquet-event-space', title: 'Banquet / Event Space' },
@@ -474,7 +504,8 @@ function extractApiMessage(payload: unknown, fallback: string) {
             .map((detail) => {
               if (!detail || typeof detail !== 'object') return null;
               const path = 'path' in detail && typeof detail.path === 'string' ? detail.path : '';
-              const message = 'message' in detail && typeof detail.message === 'string' ? detail.message : '';
+              const message =
+                'message' in detail && typeof detail.message === 'string' ? detail.message : '';
               return [path, message].filter(Boolean).join(': ');
             })
             .filter(Boolean)
@@ -489,7 +520,11 @@ function extractApiMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-function parseApiPayload<T>(payload: unknown, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }, fallback: string): T {
+function parseApiPayload<T>(
+  payload: unknown,
+  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
+  fallback: string,
+): T {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(fallback);
@@ -507,7 +542,7 @@ function isLocalPreviewImage(image: ProjectImagePreview) {
 
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 
@@ -516,7 +551,9 @@ function metadataString(value: unknown) {
 }
 
 function metadataStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function metadataNumberString(value: unknown) {
@@ -550,20 +587,25 @@ function inferUiProjectType(project: ProjectDetailResponse) {
   }
 }
 
-function firstAttributeLabel(
-  metadata: ProjectRoom['metadata'],
-  key: string,
-) {
+function firstAttributeLabel(metadata: ProjectRoom['metadata'], key: string) {
   const attributes = metadataRecord(metadata.attributeLabels);
   return metadataStringArray(attributes[key])[0] ?? '';
 }
 
 function roomSlugFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
-  return roomTerms.find((term) => term.id === room.roomTypeId)?.slug ?? room.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return (
+    roomTerms.find((term) => term.id === room.roomTypeId)?.slug ??
+    room.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  );
 }
 
 function roomTitleFromRoom(room: ProjectRoom, roomTerms: TaxonomyTerm[]) {
-  return room.name || roomTerms.find((term) => term.id === room.roomTypeId)?.label || 'Project room';
+  return (
+    room.name || roomTerms.find((term) => term.id === room.roomTypeId)?.label || 'Project room'
+  );
 }
 
 function attachExistingProjectRoomsToDrafts(
@@ -574,15 +616,20 @@ function attachExistingProjectRoomsToDrafts(
   const usedProjectRoomIds = new Set<string>();
 
   function findMatch(room: RoomDraft) {
-    const candidates = projectRooms.filter((projectRoom) => !usedProjectRoomIds.has(projectRoom.id));
+    const candidates = projectRooms.filter(
+      (projectRoom) => !usedProjectRoomIds.has(projectRoom.id),
+    );
 
     const titleMatch = candidates.find(
       (projectRoom) =>
-        normalizeRoomSearchValue(room.title) === normalizeRoomSearchValue(roomTitleFromRoom(projectRoom, roomTerms)),
+        normalizeRoomSearchValue(room.title) ===
+        normalizeRoomSearchValue(roomTitleFromRoom(projectRoom, roomTerms)),
     );
     if (titleMatch) return titleMatch;
 
-    return candidates.find((projectRoom) => roomSlugsMatch(room.roomSlug, roomSlugFromRoom(projectRoom, roomTerms)));
+    return candidates.find((projectRoom) =>
+      roomSlugsMatch(room.roomSlug, roomSlugFromRoom(projectRoom, roomTerms)),
+    );
   }
 
   return draftRooms.map((room) => {
@@ -603,7 +650,11 @@ function attachExistingProjectRoomsToDrafts(
   });
 }
 
-function toProjectImagePreview(image: ProjectImageDto, index: number, existing?: ProjectImagePreview): ProjectImagePreview {
+function toProjectImagePreview(
+  image: ProjectImageDto,
+  index: number,
+  existing?: ProjectImagePreview,
+): ProjectImagePreview {
   return {
     id: image.id,
     status: image.status,
@@ -643,7 +694,17 @@ function FormSelect({
   className?: string;
   allowEmpty?: boolean;
 }) {
-  return <SelectField label={label} value={value} onValueChange={onChange} options={options} placeholder={placeholder} className={className} allowEmpty={allowEmpty} />;
+  return (
+    <SelectField
+      label={label}
+      value={value}
+      onValueChange={onChange}
+      options={options}
+      placeholder={placeholder}
+      className={className}
+      allowEmpty={allowEmpty}
+    />
+  );
 }
 
 function FormField({
@@ -666,13 +727,22 @@ function FormField({
   return (
     <div className={cn('space-y-1.5', className)}>
       <Label className={cn(typography.label, 'text-foreground')}>{label}</Label>
-      <Input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className={typography.control}
-      />
+      {type === 'number' ? (
+        <NumberInput
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={typography.control}
+        />
+      ) : (
+        <Input
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={typography.control}
+        />
+      )}
       {helperText ? (
         <p className={cn(typography.bodySmall, 'text-muted-foreground')}>{helperText}</p>
       ) : null}
@@ -693,70 +763,6 @@ function SectionFrame({
   onToggle: () => void;
   children: ReactNode;
 }) {
-  const [shouldRenderBody, setShouldRenderBody] = useState(open);
-  const [isBodyVisible, setIsBodyVisible] = useState(open);
-  const hasHandledInitialStateRef = useRef(false);
-  const openFrameRef = useRef<number | null>(null);
-  const openSecondFrameRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    function clearScheduledAnimationWork() {
-      if (openFrameRef.current !== null) {
-        window.cancelAnimationFrame(openFrameRef.current);
-        openFrameRef.current = null;
-      }
-
-      if (openSecondFrameRef.current !== null) {
-        window.cancelAnimationFrame(openSecondFrameRef.current);
-        openSecondFrameRef.current = null;
-      }
-
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    }
-
-    if (!hasHandledInitialStateRef.current) {
-      hasHandledInitialStateRef.current = true;
-      return clearScheduledAnimationWork;
-    }
-
-    clearScheduledAnimationWork();
-
-    if (open) {
-      setShouldRenderBody(true);
-      setIsBodyVisible(false);
-
-      openFrameRef.current = window.requestAnimationFrame(() => {
-        openSecondFrameRef.current = window.requestAnimationFrame(() => {
-          setIsBodyVisible(true);
-          openFrameRef.current = null;
-          openSecondFrameRef.current = null;
-        });
-      });
-
-      return clearScheduledAnimationWork;
-    }
-
-    setIsBodyVisible(false);
-
-    closeTimerRef.current = window.setTimeout(() => {
-      setShouldRenderBody(false);
-      closeTimerRef.current = null;
-    }, 320);
-
-    return clearScheduledAnimationWork;
-  }, [open]);
-
-  useEffect(() => {
-    if (!shouldRenderBody) {
-      setIsBodyVisible(false);
-      return;
-    }
-  }, [shouldRenderBody]);
-
   return (
     <section>
       <Card radius="2xl" className="overflow-hidden">
@@ -770,36 +776,17 @@ function SectionFrame({
         >
           <div>
             <div className={cn(typography.stepLabel, 'text-primary')}>{step}</div>
-            <h2 className={cn(typography.sectionTitle, 'mt-0 text-foreground')}>
-              {title}
-            </h2>
+            <h2 className={cn(typography.sectionTitle, 'mt-0 text-foreground')}>{title}</h2>
           </div>
           <ChevronsUpDown className="mt-1 size-4 text-muted-foreground" />
         </button>
 
-        {shouldRenderBody ? (
-          <div
-            className={cn(
-              'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
-              isBodyVisible ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-            )}
-            onTransitionEnd={(event) => {
-              if (event.currentTarget !== event.target || open) return;
-              if (closeTimerRef.current !== null) {
-                window.clearTimeout(closeTimerRef.current);
-                closeTimerRef.current = null;
-              }
-              setShouldRenderBody(false);
-            }}
-          >
-            <div className="min-h-0 overflow-hidden">
-              <div className="p-0">
-                <Divider />
-                {children}
-              </div>
-            </div>
+        <AnimatedCollapsibleContent open={open}>
+          <div className="p-0">
+            <Divider />
+            {children}
           </div>
-        ) : null}
+        </AnimatedCollapsibleContent>
       </Card>
     </section>
   );
@@ -859,7 +846,9 @@ function ScopeChip({
       className={cn(
         'rounded-xl border px-4 py-2 transition-colors',
         typography.navText,
-        active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground hover:text-foreground',
+        active
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-border bg-background text-muted-foreground hover:text-foreground',
       )}
     >
       {label}
@@ -878,14 +867,22 @@ function ChecklistCard({
 }) {
   return (
     <div>
-      <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 text-muted-foreground',
+        )}
+      >
         <span className="text-muted-foreground">{icon}</span>
         {title}
       </div>
       <Card radius="2xl" className="overflow-hidden">
         <div className="p-0">
           {items.map((item) => (
-            <div key={item.label} className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0">
+            <div
+              key={item.label}
+              className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0"
+            >
               {item.done ? (
                 <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-white">
                   <Check className="size-3.5" />
@@ -893,7 +890,14 @@ function ChecklistCard({
               ) : (
                 <CircleDashed className="size-5 text-muted-foreground" />
               )}
-              <span className={cn(typography.bodyMedium, item.done ? 'text-primary' : 'text-muted-foreground')}>{item.label}</span>
+              <span
+                className={cn(
+                  typography.bodyMedium,
+                  item.done ? 'text-primary' : 'text-muted-foreground',
+                )}
+              >
+                {item.label}
+              </span>
             </div>
           ))}
         </div>
@@ -913,7 +917,12 @@ function TipsCard() {
 
   return (
     <div>
-      <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 text-muted-foreground',
+        )}
+      >
         <ShieldPlus className="size-3.5 text-muted-foreground" />
         TIPS FOR BETTER VISIBILITY
       </div>
@@ -934,7 +943,12 @@ function TipsCard() {
 function WhyItMattersCard() {
   return (
     <div>
-      <div className={cn(typography.monoEyebrow, 'mb-3 flex items-center gap-2 px-1 text-muted-foreground')}>
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 text-muted-foreground',
+        )}
+      >
         <Lightbulb className="size-3.5 text-muted-foreground" />
         TIP
       </div>
@@ -951,11 +965,24 @@ function WhyItMattersCard() {
           </div>
           <h3 className={cn(typography.sectionTitle, 'text-muted-foreground')}>Why it matters?</h3>
           <p className={cn(typography.bodySmall, 'mt-2 text-muted-foreground')}>
-            Complete projects with photos, metadata, and cost info get 3× more enquiries.
-            Homeowners trust designers who show real work.
+            Complete projects with photos, metadata, and cost info get 3× more enquiries. Homeowners
+            trust designers who show real work.
           </p>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function TipCallout({ children }: { children: ReactNode }) {
+  return (
+    <div data-slot="tip-callout" className="flex gap-1">
+      <span aria-hidden="true" className="w-1 shrink-0 self-stretch rounded-full bg-primary" />
+      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-primary/5 px-4 py-3">
+        <Lightbulb className="size-4 shrink-0 text-primary" />
+        <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
+        <span className={cn(typography.bodyMedium, 'text-muted-foreground')}>{children}</span>
+      </div>
     </div>
   );
 }
@@ -1009,7 +1036,9 @@ function RoomCard({
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className={cn(typography.subsectionTitle, 'text-foreground')}>{room.title}</div>
           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
-            {imageCount > 0 ? `${imageCount} photo${imageCount === 1 ? '' : 's'} added` : 'No photos yet'}
+            {imageCount > 0
+              ? `${imageCount} photo${imageCount === 1 ? '' : 's'} added`
+              : 'No photos yet'}
           </div>
         </button>
         <div className="flex items-center gap-2">
@@ -1029,7 +1058,9 @@ function RoomCard({
             className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label={`Toggle ${room.title}`}
           >
-            <ChevronDown className={cn('size-4 transition-transform', room.expanded && 'rotate-180')} />
+            <ChevronDown
+              className={cn('size-4 transition-transform', room.expanded && 'rotate-180')}
+            />
           </button>
         </div>
       </div>
@@ -1040,7 +1071,12 @@ function RoomCard({
           room.expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
       >
-        <div className={cn('min-h-0 overflow-hidden', !room.expanded && 'invisible pointer-events-none')}>
+        <div
+          className={cn(
+            'min-h-0 overflow-hidden',
+            !room.expanded && 'invisible pointer-events-none',
+          )}
+        >
           <Divider />
           <div className="space-y-4 px-5 py-4">
             <div className="space-y-1.5">
@@ -1075,7 +1111,12 @@ function RoomCard({
                 Drag and drop files here or click to upload
               </div>
               {room.uploading ? (
-                <div className={cn(typography.bodyMedium, 'mt-3 inline-flex items-center gap-2 text-primary')}>
+                <div
+                  className={cn(
+                    typography.bodyMedium,
+                    'mt-3 inline-flex items-center gap-2 text-primary',
+                  )}
+                >
                   <Loader2 className="size-4 animate-spin" />
                   Uploading…
                 </div>
@@ -1093,7 +1134,11 @@ function RoomCard({
               <div className="grid gap-2 sm:grid-cols-2">
                 {room.images.map((image, index) => {
                   const statusLabel =
-                    image.status === 'ready' ? 'Ready' : image.status === 'processing' ? 'Processing' : 'Failed';
+                    image.status === 'ready'
+                      ? 'Ready'
+                      : image.status === 'processing'
+                        ? 'Processing'
+                        : 'Failed';
                   const canPersistImage = !isLocalPreviewImage(image);
                   const isCover = coverImageId === image.id;
 
@@ -1137,10 +1182,16 @@ function RoomCard({
                             </div>
                           )}
                           {image.status === 'processing' ? (
-                            <span className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70" aria-hidden="true" />
+                            <span
+                              className="absolute inset-x-0 bottom-0 h-1 animate-pulse bg-primary/70"
+                              aria-hidden="true"
+                            />
                           ) : null}
                           {image.status === 'failed' ? (
-                            <span className="absolute inset-0 bg-destructive/20" aria-hidden="true" />
+                            <span
+                              className="absolute inset-0 bg-destructive/20"
+                              aria-hidden="true"
+                            />
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1148,7 +1199,9 @@ function RoomCard({
                             <span className={cn(typography.bodyMedium, 'truncate text-foreground')}>
                               {image.fileName}
                             </span>
-                            {isCover ? <Star className="size-3.5 shrink-0 fill-primary text-primary" /> : null}
+                            {isCover ? (
+                              <Star className="size-3.5 shrink-0 fill-primary text-primary" />
+                            ) : null}
                           </div>
                           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
                             {statusLabel}
@@ -1223,11 +1276,10 @@ function RoomCard({
               placeholder="accent wall, marble counter"
             />
 
-            <div className="flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3">
-              <Lightbulb className="size-4 shrink-0 text-primary" />
-              <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
-              <span className={cn(typography.bodyMedium, 'text-muted-foreground text-[13px]')}>Tagging photos gets you 2× more search appearances. Use keywords like accent wall, marble counter, window — the more specific, the better your reach.</span>
-            </div>
+            <TipCallout>
+              Tagging photos gets you 2× more search appearances. Use keywords like accent wall,
+              marble counter, window — the more specific, the better your reach.
+            </TipCallout>
           </div>
         </div>
       </div>
@@ -1235,11 +1287,7 @@ function RoomCard({
   );
 }
 
-export function DesignerProjectUpload({
-  initialProjectId,
-}: {
-  initialProjectId?: string;
-}) {
+export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?: string }) {
   const router = useRouter();
   const [loadingTaxonomy, setLoadingTaxonomy] = useState(true);
   const [cities, setCities] = useState<TaxonomyTerm[]>([]);
@@ -1292,7 +1340,9 @@ export function DesignerProjectUpload({
   const previewUrlsRef = useRef(new Set<string>());
   const uploadingRoomIdsRef = useRef(new Set<string>());
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
-  const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(null);
+  const ensureProjectPromiseRef = useRef<Promise<{ projectId: string; rooms: RoomDraft[] }> | null>(
+    null,
+  );
   const uploadStateRefreshVersionRef = useRef(0);
   const imageListRefreshVersionRef = useRef(0);
   const projectNameAutoManagedRef = useRef(true);
@@ -1309,18 +1359,15 @@ export function DesignerProjectUpload({
     () => new Set(propertySubtypes.map((term) => term.slug)),
     [propertySubtypes],
   );
-  const projectTypeOptions = useMemo<ProjectTypeOption[]>(
-    () => {
-      const termsBySlug = new Map(propertyTypes.map((term) => [term.slug, term]));
+  const projectTypeOptions = useMemo<ProjectTypeOption[]>(() => {
+    const termsBySlug = new Map(propertyTypes.map((term) => [term.slug, term]));
 
-      return supportedProjectTypeSlugs.map((slug) => ({
-        slug,
-        label: termsBySlug.get(slug)?.label ?? fallbackProjectTypeLabels[slug] ?? slug,
-        ...projectTypeVisuals[slug]!,
-      }));
-    },
-    [propertyTypes],
-  );
+    return supportedProjectTypeSlugs.map((slug) => ({
+      slug,
+      label: termsBySlug.get(slug)?.label ?? fallbackProjectTypeLabels[slug] ?? slug,
+      ...projectTypeVisuals[slug]!,
+    }));
+  }, [propertyTypes]);
   const scopeOptions = useMemo(
     () =>
       scopeTerms
@@ -1340,8 +1387,14 @@ export function DesignerProjectUpload({
     () => propertyTypeLabel(projectType, projectTypeOptions),
     [projectType, projectTypeOptions],
   );
-  const selectedProjectTypeBehavior = useMemo(() => getProjectTypeBehavior(projectType), [projectType]);
-  const suggestedRooms = useMemo(() => buildSuggestedRooms(projectType, bhkSlug), [bhkSlug, projectType]);
+  const selectedProjectTypeBehavior = useMemo(
+    () => getProjectTypeBehavior(projectType),
+    [projectType],
+  );
+  const suggestedRooms = useMemo(
+    () => buildSuggestedRooms(projectType, bhkSlug),
+    [bhkSlug, projectType],
+  );
   const detailSubtypeOptions = useMemo(
     () =>
       (selectedProjectTypeBehavior.subtypeOptions ?? []).map((option) => ({
@@ -1350,32 +1403,35 @@ export function DesignerProjectUpload({
       })),
     [propertySubtypeLabelBySlug, selectedProjectTypeBehavior],
   );
-  const defaultRoomCount = useMemo(() => buildDefaultRooms(projectType, bhkSlug).length, [bhkSlug, projectType]);
+  const defaultRoomCount = useMemo(
+    () => buildDefaultRooms(projectType, bhkSlug).length,
+    [bhkSlug, projectType],
+  );
   const selectedProjectSubtypeLabel = useMemo(
     () => detailSubtypeOptions.find((option) => option.value === projectSubtype)?.label ?? '',
     [detailSubtypeOptions, projectSubtype],
   );
-  const backendProjectSelectionState = useMemo<BackendProjectSelectionState>(
-    () => {
-      try {
-        return {
-          selection: getBackendProjectSelection({
-            projectType,
-            projectSubtype,
-            availablePropertyTypeSlugs,
-            availablePropertySubtypeSlugs,
-          }),
-          error: '',
-        };
-      } catch (selectionError) {
-        return {
-          selection: null,
-          error: selectionError instanceof Error ? selectionError.message : 'Project type taxonomy is not ready. Please refresh and try again.',
-        };
-      }
-    },
-    [availablePropertySubtypeSlugs, availablePropertyTypeSlugs, projectSubtype, projectType],
-  );
+  const backendProjectSelectionState = useMemo<BackendProjectSelectionState>(() => {
+    try {
+      return {
+        selection: getBackendProjectSelection({
+          projectType,
+          projectSubtype,
+          availablePropertyTypeSlugs,
+          availablePropertySubtypeSlugs,
+        }),
+        error: '',
+      };
+    } catch (selectionError) {
+      return {
+        selection: null,
+        error:
+          selectionError instanceof Error
+            ? selectionError.message
+            : 'Project type taxonomy is not ready. Please refresh and try again.',
+      };
+    }
+  }, [availablePropertySubtypeSlugs, availablePropertyTypeSlugs, projectSubtype, projectType]);
   const backendProjectSelection = backendProjectSelectionState.selection;
   const backendProjectSelectionError = backendProjectSelectionState.error;
 
@@ -1386,7 +1442,11 @@ export function DesignerProjectUpload({
 
   useEffect(() => {
     if (backendProjectSelectionError || !error) return;
-    if (!error.startsWith('Project type taxonomy is missing') && !error.startsWith('Project subtype taxonomy is missing')) return;
+    if (
+      !error.startsWith('Project type taxonomy is missing') &&
+      !error.startsWith('Project subtype taxonomy is missing')
+    )
+      return;
     setError('');
   }, [backendProjectSelectionError, error]);
 
@@ -1463,12 +1523,15 @@ export function DesignerProjectUpload({
   );
 
   async function loadTerms(kind: string, parentId?: string) {
-    const response = await api.api.taxonomy.terms.$get({ query: parentId ? { kind, parentId } : { kind } });
+    const response = await api.api.taxonomy.terms.$get({
+      query: parentId ? { kind, parentId } : { kind },
+    });
     if (!response.ok) {
       throw new Error(`Could not load ${kind} options.`);
     }
     const payload = await response.json();
-    return parseApiPayload(payload, listTaxonomyResponseSchema, `Could not load ${kind} options.`).terms;
+    return parseApiPayload(payload, listTaxonomyResponseSchema, `Could not load ${kind} options.`)
+      .terms;
   }
 
   useEffect(() => {
@@ -1531,7 +1594,9 @@ export function DesignerProjectUpload({
         setBudgetBandTerms(budgetBandTypeTerms);
       } catch (loadError) {
         if (!cancelled) {
-          setTaxonomyError(loadError instanceof Error ? loadError.message : 'Could not load project form options.');
+          setTaxonomyError(
+            loadError instanceof Error ? loadError.message : 'Could not load project form options.',
+          );
         }
       } finally {
         if (!cancelled) setLoadingTaxonomy(false);
@@ -1601,7 +1666,9 @@ export function DesignerProjectUpload({
         const imagesPayload = await imagesResponse.json();
 
         if (!imagesResponse.ok) {
-          throw new Error(extractApiMessage(imagesPayload, 'Could not load this project draft images.'));
+          throw new Error(
+            extractApiMessage(imagesPayload, 'Could not load this project draft images.'),
+          );
         }
 
         if (cancelled) return;
@@ -1623,31 +1690,40 @@ export function DesignerProjectUpload({
           imagesByRoom.set(image.roomId, roomImages);
         }
 
-        const hydratedRooms = project.rooms.length > 0
-          ? project.rooms
-            .sort((left, right) => left.sortOrder - right.sortOrder)
-            .map((room, index) => {
-              const roomImages = imagesByRoom.get(room.id) ?? [];
-              return {
-                clientId: `room-${index}-${room.id}`,
-                id: room.id,
-                roomSlug: roomSlugFromRoom(room, roomTerms),
-                roomTypeId: room.roomTypeId,
-                title: roomTitleFromRoom(room, roomTerms),
-                description: room.description ?? '',
-                expanded: index === 0,
-                designStyle: firstAttributeLabel(room.metadata, 'theme') || roomImages[0]?.themeSlugs[0] || '',
-                materialFinish: firstAttributeLabel(room.metadata, 'finish') || roomImages[0]?.finishSlugs[0] || '',
-                tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
-                tagInput: '',
-                images: roomImages.map((image, imageIndex) => toProjectImagePreview(image, imageIndex)),
-                uploading: false,
-                uploadError: '',
-              } satisfies RoomDraft;
-            })
-          : buildDefaultRooms(inferUiProjectType(project), project.bhkSlug ?? '').map((seed, index) =>
-            makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
-          );
+        const hydratedRooms =
+          project.rooms.length > 0
+            ? project.rooms
+                .sort((left, right) => left.sortOrder - right.sortOrder)
+                .map((room, index) => {
+                  const roomImages = imagesByRoom.get(room.id) ?? [];
+                  return {
+                    clientId: `room-${index}-${room.id}`,
+                    id: room.id,
+                    roomSlug: roomSlugFromRoom(room, roomTerms),
+                    roomTypeId: room.roomTypeId,
+                    title: roomTitleFromRoom(room, roomTerms),
+                    description: room.description ?? '',
+                    expanded: index === 0,
+                    designStyle:
+                      firstAttributeLabel(room.metadata, 'theme') ||
+                      roomImages[0]?.themeSlugs[0] ||
+                      '',
+                    materialFinish:
+                      firstAttributeLabel(room.metadata, 'finish') ||
+                      roomImages[0]?.finishSlugs[0] ||
+                      '',
+                    tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
+                    tagInput: '',
+                    images: roomImages.map((image, imageIndex) =>
+                      toProjectImagePreview(image, imageIndex),
+                    ),
+                    uploading: false,
+                    uploadError: '',
+                  } satisfies RoomDraft;
+                })
+            : buildDefaultRooms(inferUiProjectType(project), project.bhkSlug ?? '').map(
+                (seed, index) => makeRoomDraft({ roomSlug: seed.slug, title: seed.title }, index),
+              );
 
         setProjectId(project.id);
         setLoadedProjectId(project.id);
@@ -1655,7 +1731,9 @@ export function DesignerProjectUpload({
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
         setProjectType(inferUiProjectType(project));
-        setProjectSubtype(project.propertySubtypeSlug ?? metadataString(projectMetadata.projectSubtypeSlug));
+        setProjectSubtype(
+          project.propertySubtypeSlug ?? metadataString(projectMetadata.projectSubtypeSlug),
+        );
         setBhkSlug(project.bhkSlug ?? '');
         setSizeSqft(metadataNumberString(project.sizeSqft));
         setCitySlug(project.citySlug ?? '');
@@ -1672,10 +1750,11 @@ export function DesignerProjectUpload({
         setCoverImageId(project.coverImageId);
         setRooms(hydratedRooms);
         setSections({ classification: true, timeline: true, metadata: true, images: true });
-        setNotice('Draft loaded. You can continue editing from here.');
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : 'Could not load this project draft.');
+          setError(
+            loadError instanceof Error ? loadError.message : 'Could not load this project draft.',
+          );
         }
       } finally {
         if (!cancelled) setLoadingProject(false);
@@ -1749,7 +1828,9 @@ export function DesignerProjectUpload({
       const imageListRefreshVersion = beginImageListRefresh();
       refreshProjectImages(projectId, imageListRefreshVersion).catch(() => {
         if (!cancelled && isCurrentImageListRefresh(imageListRefreshVersion)) {
-          setError('Could not refresh image processing status. Save the draft or refresh the page in a moment.');
+          setError(
+            'Could not refresh image processing status. Save the draft or refresh the page in a moment.',
+          );
         }
       });
     }, 4000);
@@ -1775,7 +1856,9 @@ export function DesignerProjectUpload({
   }
 
   function updateRoom(clientId: string, updater: (room: RoomDraft) => RoomDraft) {
-    setRooms((current) => current.map((room) => (room.clientId === clientId ? updater(room) : room)));
+    setRooms((current) =>
+      current.map((room) => (room.clientId === clientId ? updater(room) : room)),
+    );
   }
 
   function beginUploadStateRefresh() {
@@ -1894,7 +1977,11 @@ export function DesignerProjectUpload({
     setError('');
   }
 
-  async function handleMoveImage(room: RoomDraft, imageId: string, direction: ProjectImageMoveDirection) {
+  async function handleMoveImage(
+    room: RoomDraft,
+    imageId: string,
+    direction: ProjectImageMoveDirection,
+  ) {
     const nextImages = moveProjectImage(room.images, imageId, direction);
     if (nextImages === room.images) return;
 
@@ -1913,19 +2000,25 @@ export function DesignerProjectUpload({
         nextImages
           .filter((image) => !isLocalPreviewImage(image))
           .map((image, index) =>
-            api.api.projects[':id'].images[':imageId'].$patch({
-              param: { id: projectId, imageId: image.id },
-              json: { roomId: room.id, sortOrder: index },
-            }).then(async (response) => {
-              if (!response.ok) {
-                const payload = await response.json();
-                throw new Error(extractApiMessage(payload, `Could not reorder ${image.fileName}.`));
-              }
-            }),
+            api.api.projects[':id'].images[':imageId']
+              .$patch({
+                param: { id: projectId, imageId: image.id },
+                json: { roomId: room.id, sortOrder: index },
+              })
+              .then(async (response) => {
+                if (!response.ok) {
+                  const payload = await response.json();
+                  throw new Error(
+                    extractApiMessage(payload, `Could not reorder ${image.fileName}.`),
+                  );
+                }
+              }),
           ),
       );
     } catch (moveError) {
-      setError(moveError instanceof Error ? moveError.message : 'Could not save the new image order.');
+      setError(
+        moveError instanceof Error ? moveError.message : 'Could not save the new image order.',
+      );
       const imageListRefreshVersion = beginImageListRefresh();
       void refreshProjectImages(projectId, imageListRefreshVersion);
     }
@@ -1994,7 +2087,9 @@ export function DesignerProjectUpload({
       if (removedImage) {
         updateRoom(room.clientId, (current) => ({
           ...current,
-          images: [...current.images, removedImage].sort((left, right) => left.sortOrder - right.sortOrder),
+          images: [...current.images, removedImage].sort(
+            (left, right) => left.sortOrder - right.sortOrder,
+          ),
         }));
       }
       setError(deleteError instanceof Error ? deleteError.message : 'Could not remove this image.');
@@ -2028,7 +2123,10 @@ export function DesignerProjectUpload({
 
   function buildCreateProjectPayload() {
     if (!backendProjectSelection) {
-      throw new Error(backendProjectSelectionError || 'Project type taxonomy is not ready. Please refresh and try again.');
+      throw new Error(
+        backendProjectSelectionError ||
+          'Project type taxonomy is not ready. Please refresh and try again.',
+      );
     }
 
     return buildCreateProjectPayloadInput({
@@ -2056,7 +2154,8 @@ export function DesignerProjectUpload({
 
   function buildUpdateProjectPayload(): UpdateProjectInput {
     const createPayload = buildCreateProjectPayload();
-    const fallbackCoverImageId = rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
+    const fallbackCoverImageId =
+      rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
 
     return {
       title: createPayload.title,
@@ -2150,8 +2249,16 @@ export function DesignerProjectUpload({
         throw new Error(extractApiMessage(payloadJson, `Could not create ${room.title}.`));
       }
 
-      const created = parseApiPayload(payloadJson, projectRoomSchema, `Could not create ${room.title}.`);
-      updateRoom(room.clientId, (current) => ({ ...current, id: created.id, roomTypeId: created.roomTypeId }));
+      const created = parseApiPayload(
+        payloadJson,
+        projectRoomSchema,
+        `Could not create ${room.title}.`,
+      );
+      updateRoom(room.clientId, (current) => ({
+        ...current,
+        id: created.id,
+        roomTypeId: created.roomTypeId,
+      }));
       return created.id;
     }
 
@@ -2190,7 +2297,9 @@ export function DesignerProjectUpload({
       const metadataPayload = await metadataResponse.json();
 
       if (!metadataResponse.ok) {
-        throw new Error(extractApiMessage(metadataPayload, `Could not update metadata for ${image.fileName}.`));
+        throw new Error(
+          extractApiMessage(metadataPayload, `Could not update metadata for ${image.fileName}.`),
+        );
       }
 
       const updatedImage = parseApiPayload(
@@ -2230,7 +2339,8 @@ export function DesignerProjectUpload({
       projectCompletenessResponseSchema,
       'Could not check project completeness.',
     );
-    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion)) return nextCompletion;
+    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion))
+      return nextCompletion;
     setCompletion(nextCompletion);
     return nextCompletion;
   }
@@ -2241,15 +2351,15 @@ export function DesignerProjectUpload({
     void Promise.all([
       refreshProjectImages(currentProjectId, imageListRefreshVersion),
       fetchCompleteness(currentProjectId, uploadStateRefreshVersion),
-    ]).catch(
-      (refreshError: unknown) => {
-        if (!isCurrentUploadStateRefresh(uploadStateRefreshVersion)) return;
-        setError(
-          refreshErrorMessage ??
-            (refreshError instanceof Error ? refreshError.message : 'Could not refresh image processing status.'),
-        );
-      },
-    );
+    ]).catch((refreshError: unknown) => {
+      if (!isCurrentUploadStateRefresh(uploadStateRefreshVersion)) return;
+      setError(
+        refreshErrorMessage ??
+          (refreshError instanceof Error
+            ? refreshError.message
+            : 'Could not refresh image processing status.'),
+      );
+    });
   }
 
   async function syncDraft() {
@@ -2279,7 +2389,9 @@ export function DesignerProjectUpload({
       }
       return currentProjectId;
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save this project draft.');
+      setError(
+        saveError instanceof Error ? saveError.message : 'Could not save this project draft.',
+      );
       requestAnimationFrame(() => {
         errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -2334,7 +2446,9 @@ export function DesignerProjectUpload({
           : 'Project submitted. Review status will update shortly.',
       );
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Could not submit this project.');
+      setError(
+        submitError instanceof Error ? submitError.message : 'Could not submit this project.',
+      );
       requestAnimationFrame(() => {
         errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -2389,7 +2503,8 @@ export function DesignerProjectUpload({
       }
       updateRoom(room.clientId, (current) => ({
         ...current,
-        uploadError: previewError instanceof Error ? previewError.message : 'Could not read selected files.',
+        uploadError:
+          previewError instanceof Error ? previewError.message : 'Could not read selected files.',
       }));
       return;
     }
@@ -2427,7 +2542,9 @@ export function DesignerProjectUpload({
           const uploadPayload = await uploadResponse.json();
 
           if (!uploadResponse.ok) {
-            throw new Error(extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`));
+            throw new Error(
+              extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`),
+            );
           }
 
           const uploaded = parseApiPayload(
@@ -2464,7 +2581,9 @@ export function DesignerProjectUpload({
           const linkedPayload = await linkResponse.json();
 
           if (!linkResponse.ok) {
-            throw new Error(extractApiMessage(linkedPayload, `Could not attach ${file.name} to ${room.title}.`));
+            throw new Error(
+              extractApiMessage(linkedPayload, `Could not attach ${file.name} to ${room.title}.`),
+            );
           }
 
           const linkedImage = parseApiPayload(
@@ -2519,11 +2638,14 @@ export function DesignerProjectUpload({
       }
 
       refreshUploadStateInBackground(currentProjectId);
-      setNotice('Images uploaded and linked to the draft. Processing will continue in the background.');
+      setNotice(
+        'Images uploaded and linked to the draft. Processing will continue in the background.',
+      );
     } catch (uploadError) {
       updateRoom(room.clientId, (current) => ({
         ...current,
-        uploadError: uploadError instanceof Error ? uploadError.message : 'Could not upload images.',
+        uploadError:
+          uploadError instanceof Error ? uploadError.message : 'Could not upload images.',
       }));
     } finally {
       uploadingRoomIdsRef.current.delete(room.clientId);
@@ -2549,45 +2671,58 @@ export function DesignerProjectUpload({
 
     return Array.from(templatesBySlug.values()).filter((template) => {
       if (template.allowMultiple) return true;
-      return !rooms.some((room) => room.title === template.title || room.roomSlug === template.slug);
+      return !rooms.some(
+        (room) => room.title === template.title || room.roomSlug === template.slug,
+      );
     });
   }, [rooms, suggestedRooms]);
-  const normalizedRoomSearchQuery = useMemo(() => normalizeRoomSearchValue(roomSearchQuery), [roomSearchQuery]);
+  const normalizedRoomSearchQuery = useMemo(
+    () => normalizeRoomSearchValue(roomSearchQuery),
+    [roomSearchQuery],
+  );
   const roomSearchResults = useMemo(() => {
     const matchesQuery = (template: RoomTemplate) => {
       if (!normalizedRoomSearchQuery) return true;
 
       const normalizedTitle = normalizeRoomSearchValue(template.title);
       const normalizedSlug = template.slug.replaceAll('-', ' ').toLowerCase();
-      return normalizedTitle.includes(normalizedRoomSearchQuery) || normalizedSlug.includes(normalizedRoomSearchQuery);
+      return (
+        normalizedTitle.includes(normalizedRoomSearchQuery) ||
+        normalizedSlug.includes(normalizedRoomSearchQuery)
+      );
     };
 
-    return availableRoomTemplates
-      .filter(matchesQuery)
-      .sort((left, right) => {
-        const leftSuggested = roomAddOptions.some((template) => template.slug === left.slug);
-        const rightSuggested = roomAddOptions.some((template) => template.slug === right.slug);
+    return availableRoomTemplates.filter(matchesQuery).sort((left, right) => {
+      const leftSuggested = roomAddOptions.some((template) => template.slug === left.slug);
+      const rightSuggested = roomAddOptions.some((template) => template.slug === right.slug);
 
-        if (leftSuggested !== rightSuggested) {
-          return leftSuggested ? -1 : 1;
-        }
+      if (leftSuggested !== rightSuggested) {
+        return leftSuggested ? -1 : 1;
+      }
 
-        const leftStartsWith = normalizeRoomSearchValue(left.title).startsWith(normalizedRoomSearchQuery);
-        const rightStartsWith = normalizeRoomSearchValue(right.title).startsWith(normalizedRoomSearchQuery);
+      const leftStartsWith = normalizeRoomSearchValue(left.title).startsWith(
+        normalizedRoomSearchQuery,
+      );
+      const rightStartsWith = normalizeRoomSearchValue(right.title).startsWith(
+        normalizedRoomSearchQuery,
+      );
 
-        if (leftStartsWith !== rightStartsWith) {
-          return leftStartsWith ? -1 : 1;
-        }
+      if (leftStartsWith !== rightStartsWith) {
+        return leftStartsWith ? -1 : 1;
+      }
 
-        return left.title.localeCompare(right.title);
-      });
+      return left.title.localeCompare(right.title);
+    });
   }, [availableRoomTemplates, normalizedRoomSearchQuery, roomAddOptions]);
   const exactRoomSearchMatch = useMemo(
     () =>
       availableRoomTemplates.find((template) => {
         const normalizedTitle = normalizeRoomSearchValue(template.title);
         const normalizedSlug = template.slug.replaceAll('-', ' ').toLowerCase();
-        return normalizedTitle === normalizedRoomSearchQuery || normalizedSlug === normalizedRoomSearchQuery;
+        return (
+          normalizedTitle === normalizedRoomSearchQuery ||
+          normalizedSlug === normalizedRoomSearchQuery
+        );
       }) ?? null,
     [availableRoomTemplates, normalizedRoomSearchQuery],
   );
@@ -2620,7 +2755,9 @@ export function DesignerProjectUpload({
     <div className="px-6 py-6 md:px-8 md:py-8 xl:px-10 xl:py-8">
       <div>
         <h1 className={cn(typography.pageTitle, 'text-foreground')}>Upload project</h1>
-        <p className={cn(typography.pageSubtitle, 'mt-2 text-muted-foreground')}>Let&apos;s get your profile ready to go live.</p>
+        <p className={cn(typography.pageSubtitle, 'mt-2 text-muted-foreground')}>
+          Let&apos;s get your profile ready to go live.
+        </p>
       </div>
 
       {taxonomyError ? (
@@ -2700,7 +2837,11 @@ export function DesignerProjectUpload({
                       value={bhkSlug}
                       onChange={setBhkSlug}
                       options={bhkSelectOptions}
-                      placeholder={loadingTaxonomy ? 'Loading…' : selectedProjectTypeBehavior.primaryPlaceholder}
+                      placeholder={
+                        loadingTaxonomy
+                          ? 'Loading…'
+                          : selectedProjectTypeBehavior.primaryPlaceholder
+                      }
                     />
                   ) : (
                     <FormSelect
@@ -2725,7 +2866,9 @@ export function DesignerProjectUpload({
 
               <div className="px-5 py-5 sm:px-6">
                 <h3 className={cn(typography.subsectionTitle, 'text-foreground')}>Location</h3>
-                <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>Where is this project located?</p>
+                <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
+                  Where is this project located?
+                </p>
                 <div className="mt-5 grid gap-5 md:grid-cols-2">
                   <FormSelect
                     label="City"
@@ -2748,7 +2891,9 @@ export function DesignerProjectUpload({
                     />
                   ) : (
                     <div className="space-y-1.5">
-                      <Label className={cn(typography.label, 'text-foreground')}>Locality / Area</Label>
+                      <Label className={cn(typography.label, 'text-foreground')}>
+                        Locality / Area
+                      </Label>
                       <Input
                         value={locality}
                         onChange={(event) => setLocality(event.target.value)}
@@ -2774,7 +2919,9 @@ export function DesignerProjectUpload({
 
               <div className="px-5 py-5 sm:px-6">
                 <h3 className={cn(typography.subsectionTitle, 'text-foreground')}>Project scope</h3>
-                <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>What did you deliver on this project?</p>
+                <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
+                  What did you deliver on this project?
+                </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   {scopeOptions.map((scope) => (
                     <ScopeChip
@@ -2809,7 +2956,10 @@ export function DesignerProjectUpload({
                     label="Project duration"
                     value={projectDuration}
                     onChange={setProjectDuration}
-                    options={fallbackDurationOptions.map((option) => ({ value: option, label: option }))}
+                    options={fallbackDurationOptions.map((option) => ({
+                      value: option,
+                      label: option,
+                    }))}
                     placeholder="e.g. 4 months"
                     allowEmpty
                   />
@@ -2821,8 +2971,12 @@ export function DesignerProjectUpload({
               <div className="px-5 py-5 sm:px-6">
                 <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_14.5rem]">
                   <div>
-                    <h3 className={cn(typography.subsectionTitle, 'text-foreground')}>Project budget</h3>
-                    <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>What did you deliver on this project?</p>
+                    <h3 className={cn(typography.subsectionTitle, 'text-foreground')}>
+                      Project budget
+                    </h3>
+                    <p className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
+                      What did you deliver on this project?
+                    </p>
                   </div>
                   <FormSelect
                     label="Cost range"
@@ -2832,10 +2986,8 @@ export function DesignerProjectUpload({
                     placeholder="Select"
                   />
                 </div>
-                <div className="mt-5 flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3">
-                  <Lightbulb className="size-4 shrink-0 text-primary" />
-                  <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
-                  <span className={cn(typography.bodyMedium, 'text-muted-foreground text-[13px]')}>Project with a cost range get 3x more enquiries</span>
+                <div className="mt-5">
+                  <TipCallout>Project with a cost range get 3x more enquiries</TipCallout>
                 </div>
               </div>
             </div>
@@ -2856,7 +3008,9 @@ export function DesignerProjectUpload({
                   placeholder={defaultProjectName}
                 />
                 <div className="space-y-1.5">
-                  <Label className={cn(typography.label, 'text-foreground')}>About the project</Label>
+                  <Label className={cn(typography.label, 'text-foreground')}>
+                    About the project
+                  </Label>
                   <Textarea
                     value={aboutProject}
                     onChange={(event) => setAboutProject(event.target.value)}
@@ -2881,12 +3035,25 @@ export function DesignerProjectUpload({
                   room={room}
                   styleOptions={styleOptions}
                   finishOptions={finishOptions}
-                  onToggle={() => updateRoom(room.clientId, (current) => ({ ...current, expanded: !current.expanded }))}
+                  onToggle={() =>
+                    updateRoom(room.clientId, (current) => ({
+                      ...current,
+                      expanded: !current.expanded,
+                    }))
+                  }
                   onDelete={() => void handleDeleteRoom(room)}
-                  onDescriptionChange={(value) => updateRoom(room.clientId, (current) => ({ ...current, description: value }))}
-                  onDesignStyleChange={(value) => updateRoom(room.clientId, (current) => ({ ...current, designStyle: value }))}
-                  onMaterialFinishChange={(value) => updateRoom(room.clientId, (current) => ({ ...current, materialFinish: value }))}
-                  onTagInputChange={(value) => updateRoom(room.clientId, (current) => ({ ...current, tagInput: value }))}
+                  onDescriptionChange={(value) =>
+                    updateRoom(room.clientId, (current) => ({ ...current, description: value }))
+                  }
+                  onDesignStyleChange={(value) =>
+                    updateRoom(room.clientId, (current) => ({ ...current, designStyle: value }))
+                  }
+                  onMaterialFinishChange={(value) =>
+                    updateRoom(room.clientId, (current) => ({ ...current, materialFinish: value }))
+                  }
+                  onTagInputChange={(value) =>
+                    updateRoom(room.clientId, (current) => ({ ...current, tagInput: value }))
+                  }
                   onAddTag={(tag) =>
                     updateRoom(room.clientId, (current) => ({
                       ...current,
@@ -2903,7 +3070,9 @@ export function DesignerProjectUpload({
                   onUpload={(event) => void handleUpload(room, event)}
                   onSetCover={handleSetCover}
                   onOpenImage={openImageViewer}
-                  onMoveImage={(imageId, direction) => void handleMoveImage(room, imageId, direction)}
+                  onMoveImage={(imageId, direction) =>
+                    void handleMoveImage(room, imageId, direction)
+                  }
                   onRemoveImage={(imageId) => void handleDeleteImage(room, imageId)}
                   coverImageId={coverImageId}
                   allowDelete={rooms.length > defaultRoomCount}
@@ -2916,11 +3085,21 @@ export function DesignerProjectUpload({
                 className="group relative flex w-full items-center justify-between gap-3 overflow-hidden rounded-2xl border border-dashed border-border/80 bg-background px-4 py-3 text-left transition-colors hover:border-primary/40"
               >
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(110deg,transparent,hsl(var(--primary)/0.08),transparent)] bg-[length:200%_100%] animate-pulse" />
-                <div className={cn('relative flex items-center gap-2 text-muted-foreground', typography.subsectionTitle)}>
+                <div
+                  className={cn(
+                    'relative flex items-center gap-2 text-muted-foreground',
+                    typography.subsectionTitle,
+                  )}
+                >
                   <Plus className="size-4 text-primary" />
                   Add new room type
                 </div>
-                <div className={cn('relative text-muted-foreground transition-colors group-hover:text-foreground', typography.bodySmall)}>
+                <div
+                  className={cn(
+                    'relative text-muted-foreground transition-colors group-hover:text-foreground',
+                    typography.bodySmall,
+                  )}
+                >
                   Search room taxonomy
                 </div>
               </button>
@@ -2934,7 +3113,11 @@ export function DesignerProjectUpload({
                 variant="outline"
                 onClick={() => {
                   void saveDraft().catch((saveError: unknown) => {
-                    setError(saveError instanceof Error ? saveError.message : 'Could not save this project draft.');
+                    setError(
+                      saveError instanceof Error
+                        ? saveError.message
+                        : 'Could not save this project draft.',
+                    );
                   });
                 }}
                 disabled={saving || loadingProject}
@@ -2951,7 +3134,11 @@ export function DesignerProjectUpload({
                 disabled={saving || loadingProject}
                 className="text-sm leading-[1.6] font-medium"
               >
-                {saving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {saving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
                 Preview &amp; Submit Project
               </Button>
             </div>
@@ -3035,7 +3222,10 @@ export function DesignerProjectUpload({
                 value={roomSearchQuery}
                 onChange={(event) => setRoomSearchQuery(event.target.value)}
                 placeholder="Search room types"
-                className={cn('h-auto border-none bg-transparent px-0 py-0 shadow-none focus-visible:ring-0', typography.control)}
+                className={cn(
+                  'h-auto border-none bg-transparent px-0 py-0 shadow-none focus-visible:ring-0',
+                  typography.control,
+                )}
               />
             </div>
           </div>
@@ -3056,7 +3246,9 @@ export function DesignerProjectUpload({
                     onClick={() => handleRoomSearchSelect(template)}
                     className="flex h-[38px] w-full items-center rounded-md px-2 text-left transition-colors hover:bg-muted/70"
                   >
-                    <div className={cn('flex items-center gap-2 text-foreground', typography.navText)}>
+                    <div
+                      className={cn('flex items-center gap-2 text-foreground', typography.navText)}
+                    >
                       <ArrowRight className="size-4 text-muted-foreground" />
                       <span>{template.title}</span>
                     </div>

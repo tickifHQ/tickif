@@ -258,9 +258,9 @@ export const projectModerationEvent = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'restrict' }),
-    actorUserId: text('actor_user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'restrict' }),
+    // Nulled rather than restricted on user deletion: the audit row must outlive the
+    // actor (account closure, GDPR erasure), and `actorLabel` is masked on read anyway.
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
     action: moderationActionEnum('action').notNull(),
     fromStatus: projectStatusEnum('from_status').notNull(),
     toStatus: projectStatusEnum('to_status').notNull(),
@@ -441,4 +441,66 @@ export const designerPortfolio = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   // No explicit indexes needed — UNIQUE constraints create B-tree indexes
+);
+
+// Connection lifecycle for a designer's linked Google Business place.
+//   pending   — place_id resolved, first fetch not completed yet
+//   connected — last fetch succeeded and cached payload is fresh
+//   error     — last fetch failed (retryable; payload may still be usable)
+//   stale     — cached review payload purged (>30d ToS window or repeated failure);
+//               place_id is retained (ToS-safe to keep indefinitely)
+export const googlePlaceStatusEnum = pgEnum('google_place_status', [
+  'pending',
+  'connected',
+  'error',
+  'stale',
+]);
+
+/**
+ * Persisted shape of a cached Google review. Mirrors `GooglePlaceReview` in
+ * `@repo/google-places` — kept structural here so the db package takes no
+ * runtime dependency on the Places client.
+ */
+export type GooglePlaceReviewRecord = {
+  author: string;
+  authorUrl: string | null;
+  profilePhotoUrl: string | null;
+  rating: number;
+  relativeTime: string;
+  text: string;
+  time: number;
+};
+
+/**
+ * Cache of a designer's Google rating + recent reviews (E — Google reviews).
+ *
+ * One row per profile (profileId is the PK). Google's Places ToS forbids caching
+ * review *content* beyond 30 days, so `reviews`/`rating` are treated as a
+ * short-lived cache refreshed by the worker sweep; `placeId` alone is durable.
+ */
+export const googlePlaceCache = pgTable(
+  'google_place_cache',
+  {
+    profileId: uuid('profile_id')
+      .primaryKey()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    placeId: text('place_id').notNull(),
+    // Google aggregate rating (0.0–5.0) and total number of ratings.
+    rating: numeric('rating', { precision: 2, scale: 1 }),
+    userRatingsTotal: integer('user_ratings_total'),
+    // Up to 5 recent reviews (Google's Place Details cap). ToS-limited to ≤30d.
+    reviews: jsonb('reviews').$type<GooglePlaceReviewRecord[]>().default([]).notNull(),
+    status: googlePlaceStatusEnum('status').default('pending').notNull(),
+    lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+    // Last time the designer triggered a connect/refresh. Drives a per-profile
+    // cooldown so nobody can loop the (billable) Places calls on the shared key.
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // Drives the worker sweep: "rows of status X not fetched since T".
+    index('google_place_cache_status_fetched_idx').on(t.status, t.lastFetchedAt),
+  ],
 );

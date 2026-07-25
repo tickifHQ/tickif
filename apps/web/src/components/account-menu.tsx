@@ -32,7 +32,7 @@ export function AccountMenu({
     return (
       <Skeleton
         role="status"
-        className={showLabel ? 'h-10 w-28 rounded-full' : 'size-8 rounded-full'}
+        className={showLabel ? 'size-10 rounded-full sm:w-28' : 'size-8 rounded-full'}
       />
     );
   }
@@ -70,10 +70,10 @@ export function AccountMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={showLabel ? undefined : `Open account menu for ${displayName}`}
+          aria-label={`Open account menu for ${displayName}`}
           className={
             showLabel
-              ? 'inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-1.5 py-1 pr-3 text-[13px] leading-[1.1] font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground'
+              ? 'inline-flex cursor-pointer items-center gap-0 rounded-full border border-border bg-background p-1 text-sm leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground sm:gap-2 sm:pr-3'
               : 'cursor-pointer outline-none'
           }
         >
@@ -87,10 +87,10 @@ export function AccountMenu({
           </Avatar>
           {showLabel ? (
             <>
-              <span className="max-w-24 truncate text-[13px] leading-[1.1] font-medium">
+              <span className="hidden max-w-24 truncate text-sm leading-none font-medium sm:inline">
                 {firstName}
               </span>
-              <ChevronDown className="size-4 text-muted-foreground" />
+              <ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
             </>
           ) : null}
         </button>
@@ -98,9 +98,7 @@ export function AccountMenu({
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="truncate">
           <p className="font-medium">{user.name}</p>
-          {user.email && (
-            <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
-          )}
+          {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleSignOut} variant="destructive" className="cursor-pointer">

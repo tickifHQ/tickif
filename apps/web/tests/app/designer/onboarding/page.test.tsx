@@ -28,7 +28,12 @@ describe('DesignerOnboardingPage', () => {
 
   it('redirects to dashboard when user is already a designer', async () => {
     mock.getServerSession.mockResolvedValue({
-      session: { id: 's1', token: 't1', expiresAt: '2026-06-30T00:00:00.000Z' },
+      session: {
+        id: 's1',
+        token: 't1',
+        expiresAt: '2026-06-30T00:00:00.000Z',
+        activeOrganizationId: 'org-1',
+      },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
     vi.mocked(rolePassesCheck).mockReturnValue(true);
@@ -36,6 +41,23 @@ describe('DesignerOnboardingPage', () => {
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
+  });
+
+  it('redirects designers without an active organization to studio selection', async () => {
+    mock.getServerSession.mockResolvedValue({
+      session: {
+        id: 's1',
+        token: 't1',
+        expiresAt: '2026-06-30T00:00:00.000Z',
+        activeOrganizationId: null,
+      },
+      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+    });
+    vi.mocked(rolePassesCheck).mockReturnValue(true);
+
+    const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/designer/select-studio');
   });
 
   it('renders onboarding form when user is not yet a designer', async () => {

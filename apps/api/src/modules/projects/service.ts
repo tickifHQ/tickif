@@ -36,6 +36,7 @@ import type {
 } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
+import { orgsService } from '../orgs/service.js';
 import {
   projectsRepository,
   type ProjectCoverImageRecord,
@@ -124,10 +125,13 @@ function toImageDeletion(row: ProjectImageDeletionRecord): DeleteProjectImageRes
 }
 
 async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void> {
-  const keys = [...new Set([
-    row.originalKey,
-    ...row.derivatives.map((derivative) => derivative.key),
-  ].filter((key): key is string => Boolean(key)))];
+  const keys = [
+    ...new Set(
+      [row.originalKey, ...row.derivatives.map((derivative) => derivative.key)].filter(
+        (key): key is string => Boolean(key),
+      ),
+    ),
+  ];
   const referencedKeys = new Set(await projectsRepository.findReferencedImageObjectKeys(keys));
   const unusedKeys = keys.filter((key) => !referencedKeys.has(key));
 
@@ -146,11 +150,15 @@ function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
 /** Pick the best derivative for fullscreen gallery display (largest available, never original). */
 function pickGalleryDerivative(derivatives: Derivative[]): string | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'large')?.key ??
-    derivatives.find((derivative) => derivative.variant === 'medium' && derivative.format === 'webp')?.key ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
     derivatives[0]?.key ??
     null
@@ -178,7 +186,7 @@ function toFeedProject(
   coverImageUrl: string | null,
 ): FeedProjectsResponse['projects'][number] {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
-    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+    slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 
   const tags = [
     labelOf('bhk', row.bhkSlug),
@@ -193,7 +201,7 @@ function toFeedProject(
     city: labelOf('city', row.citySlug),
     locality:
       row.citySlug && row.localitySlug
-        ? localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null
+        ? (localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null)
         : null,
     rating: Number(row.rating) || 0,
     reviewCount: row.reviewCount,
@@ -212,12 +220,15 @@ function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; sl
   if (row.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: row.budgetBandSlug });
   if (row.bhkSlug) pairs.push({ kind: 'bhk', slug: row.bhkSlug });
   if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
-  if (row.propertySubtypeSlug) pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
+  if (row.propertySubtypeSlug)
+    pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
   return pairs;
 }
 
 /** City-scoped locality pairs; empty unless the row has both a city and a locality. */
-function feedLocalityPairs(row: ProjectFeedItemRecord): { citySlug: string; localitySlug: string }[] {
+function feedLocalityPairs(
+  row: ProjectFeedItemRecord,
+): { citySlug: string; localitySlug: string }[] {
   return row.citySlug && row.localitySlug
     ? [{ citySlug: row.citySlug, localitySlug: row.localitySlug }]
     : [];
@@ -299,8 +310,10 @@ export type Caller = {
   userId: string;
   userRole: string;
   isBanned: boolean;
-  activeOrgId?: string | null;
+  activeOrgId: string | null;
 };
+
+export type TransitionCaller = Pick<Caller, 'userId' | 'userRole'>;
 
 type TransitionRule = {
   actorRole: 'designer' | 'admin' | 'superadmin';
@@ -388,7 +401,7 @@ export async function transitionProject(
     patch?: Parameters<typeof projectsRepository.transition>[0]['patch'];
     expectedModerationRevision?: number;
   },
-  caller: Caller,
+  caller: TransitionCaller,
 ): Promise<ProjectRecord> {
   const project = await projectsRepository.findById(input.projectId);
   if (!project) throw AppError.notFound('Project not found');
@@ -425,6 +438,13 @@ function toModerationHistoryItem(
   };
 }
 
+function requireActiveOrganization(caller: Caller): string {
+  if (!caller.activeOrgId) {
+    throw AppError.unprocessable('No active organization selected');
+  }
+  return caller.activeOrgId;
+}
+
 function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
@@ -436,7 +456,10 @@ function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
   return status === 'draft' || status === 'changes_requested';
 }
 
-async function requireEditableProject(projectId: string, caller: Caller): Promise<ProjectOwnership> {
+async function requireEditableProject(
+  projectId: string,
+  caller: Caller,
+): Promise<ProjectOwnership> {
   const ownership = await projectsRepository.findOwnership(projectId);
   if (!ownership) throw AppError.notFound('Project not found');
   await assertAccess(ownership, caller);
@@ -457,15 +480,21 @@ async function requireReadableProject(projectId: string, caller: Caller): Promis
   return project;
 }
 
-export async function validateProjectTaxonomy(input: {
-  propertyTypeSlug?: string | null;
-  propertySubtypeSlug?: string | null;
-  scopeSlug?: string | null;
-  bhkSlug?: string | null;
-  citySlug?: string | null;
-  localitySlug?: string | null;
-  budgetBandSlug?: string | null;
-}, existing?: Pick<ProjectRecord, 'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'>): Promise<void> {
+export async function validateProjectTaxonomy(
+  input: {
+    propertyTypeSlug?: string | null;
+    propertySubtypeSlug?: string | null;
+    scopeSlug?: string | null;
+    bhkSlug?: string | null;
+    citySlug?: string | null;
+    localitySlug?: string | null;
+    budgetBandSlug?: string | null;
+  },
+  existing?: Pick<
+    ProjectRecord,
+    'citySlug' | 'localitySlug' | 'propertyTypeSlug' | 'propertySubtypeSlug'
+  >,
+): Promise<void> {
   if (
     input.propertyTypeSlug !== undefined &&
     input.propertyTypeSlug !== null &&
@@ -477,10 +506,12 @@ export async function validateProjectTaxonomy(input: {
   const propertySubtypeTouched =
     input.propertySubtypeSlug !== undefined || input.propertyTypeSlug !== undefined;
   const nextPropertyTypeSlug =
-    input.propertyTypeSlug === undefined ? existing?.propertyTypeSlug ?? null : input.propertyTypeSlug;
+    input.propertyTypeSlug === undefined
+      ? (existing?.propertyTypeSlug ?? null)
+      : input.propertyTypeSlug;
   const nextPropertySubtypeSlug =
     input.propertySubtypeSlug === undefined
-      ? existing?.propertySubtypeSlug ?? null
+      ? (existing?.propertySubtypeSlug ?? null)
       : input.propertySubtypeSlug;
   if (
     propertySubtypeTouched &&
@@ -518,9 +549,9 @@ export async function validateProjectTaxonomy(input: {
   }
 
   const localityTouched = input.localitySlug !== undefined || input.citySlug !== undefined;
-  const nextCitySlug = input.citySlug === undefined ? existing?.citySlug ?? null : input.citySlug;
+  const nextCitySlug = input.citySlug === undefined ? (existing?.citySlug ?? null) : input.citySlug;
   const nextLocalitySlug =
-    input.localitySlug === undefined ? existing?.localitySlug ?? null : input.localitySlug;
+    input.localitySlug === undefined ? (existing?.localitySlug ?? null) : input.localitySlug;
   if (localityTouched && nextLocalitySlug !== null) {
     if (!nextCitySlug) {
       throw AppError.unprocessable('citySlug is required with localitySlug');
@@ -547,7 +578,9 @@ export async function validateProjectTaxonomy(input: {
 function humanizeSlug(slug: string): string {
   return slug
     .split('-')
-    .map((part) => (part.toLowerCase() === 'bhk' ? 'BHK' : part.charAt(0).toUpperCase() + part.slice(1)))
+    .map((part) =>
+      part.toLowerCase() === 'bhk' ? 'BHK' : part.charAt(0).toUpperCase() + part.slice(1),
+    )
     .join(' ');
 }
 
@@ -614,11 +647,14 @@ function expandRoomPrefillSlugs(
 ): RoomPrefillSpec[] {
   return slugs.flatMap((slug): RoomPrefillSpec[] => {
     if (slug === 'bedroom') {
-      return Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
-        slug,
-        name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
-        metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
-      }));
+      return Array.from(
+        { length: bhkCount(project.bhkSlug) },
+        (_, index): RoomPrefillSpec => ({
+          slug,
+          name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+          metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+        }),
+      );
     }
     return [{ slug, metadata: prefillMetadata(slug) }];
   });
@@ -637,7 +673,10 @@ async function buildRoomPrefillSpecs(
   ]);
   const subtypeDefaults = defaultRoomSlugs(subtypeTerm?.metadata);
   const typeDefaults = defaultRoomSlugs(typeTerm?.metadata);
-  return expandRoomPrefillSlugs(subtypeDefaults.length > 0 ? subtypeDefaults : typeDefaults, project);
+  return expandRoomPrefillSlugs(
+    subtypeDefaults.length > 0 ? subtypeDefaults : typeDefaults,
+    project,
+  );
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -725,12 +764,14 @@ async function prefillRoomsIfEmpty(
   const inputs = specs.flatMap((spec, index): CreateProjectRoomInput[] => {
     const term = roomTypeBySlug.get(spec.slug);
     if (!term) return [];
-    return [{
-      roomTypeId: term.id,
-      name: spec.name ?? term.label,
-      sortOrder: index,
-      metadata: spec.metadata,
-    }];
+    return [
+      {
+        roomTypeId: term.id,
+        name: spec.name ?? term.label,
+        sortOrder: index,
+        metadata: spec.metadata,
+      },
+    ];
   });
   return projectsRepository.createRooms(project.id, inputs);
 }
@@ -763,8 +804,7 @@ export function buildCompleteness(
       key: 'image-metadata',
       label: 'Room, theme, and finish metadata on each photo',
       complete:
-        imageCounts.imageCount >= 3 &&
-        imageCounts.taggedImageCount === imageCounts.imageCount,
+        imageCounts.imageCount >= 3 && imageCounts.taggedImageCount === imageCounts.imageCount,
     },
   ];
   const completeCount = requirements.filter((requirement) => requirement.complete).length;
@@ -781,11 +821,15 @@ export function buildCompleteness(
 export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await projectsRepository.list({
       userId: caller.userId,
-      activeOrgId: caller.activeOrgId,
+      activeOrgId,
       statuses: statusesForList(query.status),
       q: query.q,
       limit,
@@ -810,11 +854,15 @@ export const projectsService = {
     caller: Caller,
   ): Promise<PortfolioProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
     const { page, limit } = query;
     const [{ items, total }, statusCounts] = await Promise.all([
       projectsRepository.list({
         userId: caller.userId,
-        activeOrgId: caller.activeOrgId,
+        activeOrgId,
         statuses: statusesForPortfolio(query.status),
         limit,
         offset: (page - 1) * limit,
@@ -822,7 +870,7 @@ export const projectsService = {
       }),
       projectsRepository.countByStatus({
         userId: caller.userId,
-        activeOrgId: caller.activeOrgId,
+        activeOrgId,
       }),
     ]);
     const coverImages = await projectsRepository.findCoverImages(
@@ -886,9 +934,17 @@ export const projectsService = {
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    if (caller.userRole !== 'designer') {
+      throw AppError.forbidden('Designer role required');
+    }
+    const activeOrgId = requireActiveOrganization(caller);
+    if (!(await orgsService.isWriter(caller.userId, activeOrgId))) {
+      throw AppError.forbidden('Organization write access required');
+    }
     await validateProjectTaxonomy(input);
 
-    const designer = await projectsRepository.findDesignerByUserId(caller.userId);
+    const designer = await projectsRepository.findDesignerByOrgId(activeOrgId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }
@@ -1041,19 +1097,20 @@ export const projectsService = {
     await requireEditableProject(projectId, caller);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
-    assertTransition(project.status, 'submitted', caller.userRole);
+    const action = assertTransition(project.status, 'submitted', caller.userRole);
+    // Narrows `project.status` for `expectedStatus` below. The matrix already rejects
+    // every other source status, so this is a type guard rather than a second rule.
     if (project.status !== 'draft' && project.status !== 'changes_requested') {
       throw AppError.invalidTransition();
     }
 
-    const metadataCompleteness = buildCompleteness(
-      project,
-      {
-        imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
-        taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
-      },
+    const metadataCompleteness = buildCompleteness(project, {
+      imageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+      taggedImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
+    });
+    const metadataMissing = metadataCompleteness.missing.filter(
+      (key) => !PHOTO_COMPLETENESS_KEYS.has(key),
     );
-    const metadataMissing = metadataCompleteness.missing.filter((key) => !PHOTO_COMPLETENESS_KEYS.has(key));
     if (metadataMissing.length > 0) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: metadataMissing,
@@ -1064,6 +1121,7 @@ export const projectsService = {
       minImageCount: REQUIRED_PROJECT_PHOTO_COUNT,
       actorUserId: caller.userId,
       expectedStatus: project.status,
+      action,
     });
     if (!submission.project) throw AppError.notFound('Project not found');
 
@@ -1114,13 +1172,15 @@ export const projectsService = {
   },
 
   /** Public gallery: returns presigned URLs for all ready images of a published project. */
-  async getGallery(projectId: string): Promise<Array<{
-    id: string;
-    url: string;
-    width: number | null;
-    height: number | null;
-    roomName: string | null;
-  }>> {
+  async getGallery(projectId: string): Promise<
+    Array<{
+      id: string;
+      url: string;
+      width: number | null;
+      height: number | null;
+      roomName: string | null;
+    }>
+  > {
     // Verify project exists and is published
     const project = await projectsRepository.findById(projectId);
     if (!project || project.status !== 'published') {

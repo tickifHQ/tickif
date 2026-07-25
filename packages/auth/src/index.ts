@@ -77,7 +77,13 @@ export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
       const escapedName = (user.name ?? '').replace(/[&<>"']/g, (ch) => {
-        const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        const map: Record<string, string> = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        };
         return map[ch] ?? ch;
       });
       await sendEmail({
@@ -131,7 +137,13 @@ export const auth = betterAuth({
     // set-role still does no role-value validation upstream — the user_role pgEnum is
     // the write backstop (pinned by set-role.integration.test.ts).
     admin({ defaultRole: 'visitor', ac, roles, adminRoles: ['admin', 'superadmin'] }),
-    organization(),
+    organization({
+      // Organization lifecycle is owned by the transactional designer onboarding
+      // flow. Generic create/delete endpoints would allow profile-less orgs or
+      // destructive deletion outside that workflow.
+      allowUserToCreateOrganization: false,
+      disableOrganizationDeletion: true,
+    }),
     emailOTP({
       otpLength: 6,
       expiresIn: 300,
@@ -163,6 +175,7 @@ export const auth = betterAuth({
 
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
+export type { PlatformRole } from './permissions.js';
 
 /**
  * Resolve the current better-auth session (user + session) from request headers.
@@ -176,5 +189,17 @@ export function getSession(headers: Headers, opts?: { disableCookieCache?: boole
   return auth.api.getSession({
     headers,
     query: opts?.disableCookieCache ? { disableCookieCache: true } : undefined,
+  });
+}
+
+/**
+ * Select an authenticated user's active organization through better-auth so
+ * membership is validated and both the session row and session cookie agree.
+ */
+export function setActiveOrganization(headers: Headers, organizationId: string) {
+  return auth.api.setActiveOrganization({
+    headers,
+    body: { organizationId },
+    asResponse: true,
   });
 }

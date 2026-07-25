@@ -204,7 +204,7 @@ describe('adminProjectsService', () => {
     repo.findById.mockResolvedValueOnce(project({ status: 'published' }));
     await expect(adminProjectsService.startReview(project().id, admin)).rejects.toMatchObject({
       status: 409,
-      code: 'INVALID_TRANSITION',
+      code: 'invalid_transition',
     });
 
     repo.findById.mockResolvedValueOnce(project({ status: 'submitted' }));
@@ -212,7 +212,7 @@ describe('adminProjectsService', () => {
       adminProjectsService.unpublish(project().id, { note: 'Not a live project' }, admin),
     ).rejects.toMatchObject({
       status: 409,
-      code: 'INVALID_TRANSITION',
+      code: 'invalid_transition',
     });
     expect(transition).not.toHaveBeenCalled();
   });
@@ -231,7 +231,7 @@ describe('adminProjectsService', () => {
         { title: 'After', metadata: { reviewed: true } },
         admin,
       ),
-    ).rejects.toMatchObject({ status: 409, code: 'INVALID_TRANSITION' });
+    ).rejects.toMatchObject({ status: 409, code: 'invalid_transition' });
     expect(validateTaxonomy).toHaveBeenCalledWith(
       { title: 'After', metadata: { reviewed: true } },
       existing,

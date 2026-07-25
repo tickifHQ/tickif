@@ -1,31 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { useEffect, useState, useTransition, type ComponentType, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
-import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar } from '@repo/ui/components/avatar';
+import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
+import { Skeleton } from '@repo/ui/components/skeleton';
 import {
   ArrowUpRight,
   BadgeHelp,
   CalendarDays,
   ChartLine,
-  ChevronsUpDown,
   CircleUserRound,
-  FileBadge2,
+  FileUser,
   FolderKanban,
   HandCoins,
   House,
   Link2,
   Menu,
-  MessagesSquare,
   Plus,
   ShieldCheck,
   SlidersHorizontal,
   Star,
-  Users,
+  UsersRound,
   X,
 } from 'lucide-react';
 
@@ -33,12 +33,13 @@ type NavItem = {
   label: string;
   href?: string;
   icon: ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
 };
 
 const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: House },
   { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
-  { label: 'Leads', href: '/designer/leads', icon: Users },
+  { label: 'Leads', href: '/designer/leads', icon: FileUser },
   { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
   { label: 'Reviews', href: '/designer/reviews', icon: Star },
   { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
@@ -46,8 +47,8 @@ const studioItems: NavItem[] = [
 
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/portfolio', icon: Link2 },
-  { label: 'Verification', icon: ShieldCheck },
-  { label: 'Terms & roles', href: '/designer/terms-roles', icon: FileBadge2 },
+  { label: 'Verification', icon: ShieldCheck, comingSoon: true },
+  { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
   { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
 ];
@@ -61,9 +62,11 @@ function isItemActive(pathname: string, href?: string) {
 function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon;
   const active = isItemActive(pathname, item.href);
-  const className = active
-    ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-[13px] leading-[1.1] font-medium text-foreground shadow-sm'
-    : 'flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground';
+  const className = item.href
+    ? active
+      ? 'flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-sm leading-none font-medium text-foreground shadow-sm'
+      : 'flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+    : 'flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground/60';
 
   if (item.href) {
     return (
@@ -75,9 +78,14 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   }
 
   return (
-    <span className={className} aria-disabled="true">
+    <span
+      className={className}
+      aria-disabled="true"
+      title={item.comingSoon ? 'Coming soon' : undefined}
+    >
       <Icon className="size-4" />
       <span>{item.label}</span>
+      {item.comingSoon ? <span className="sr-only">Coming soon</span> : null}
     </span>
   );
 }
@@ -93,7 +101,7 @@ function SidebarSection({
 }) {
   return (
     <section className="space-y-2">
-      <div className="text-xs leading-[1.1] font-normal text-muted-foreground uppercase">
+      <div className="text-xs leading-none font-normal text-muted-foreground uppercase">
         {title}
       </div>
       <div className="space-y-0.5">
@@ -108,7 +116,7 @@ function SidebarSection({
 function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   if (pathname.startsWith('/designer/projects/upload')) {
     return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-muted-foreground">
+      <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-muted-foreground sm:inline-flex">
         <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
           <SlidersHorizontal className="size-4" />
           <span className="font-medium">Projects</span>
@@ -119,13 +127,15 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     );
   }
 
-  const navigationItem = [...studioItems, ...growItems].find((item) => isItemActive(pathname, item.href));
+  const navigationItem = [...studioItems, ...growItems].find((item) =>
+    isItemActive(pathname, item.href),
+  );
 
   if (navigationItem?.href) {
     const Icon = navigationItem.icon;
 
     return (
-      <div className="inline-flex items-center gap-2 text-sm leading-5 font-medium tracking-[-0.006em] text-foreground">
+      <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-foreground sm:inline-flex">
         <Icon className="size-4" />
         <span className="font-medium">{navigationItem.label}</span>
       </div>
@@ -136,114 +146,172 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
 }
 
 function SidebarContent({
+  activeOrganizationId,
   studioName,
   studioLocation,
   pathname,
+  isWorkspaceRefreshing,
+  onSwitchSuccess,
 }: {
+  activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
   pathname: string;
+  isWorkspaceRefreshing: boolean;
+  onSwitchSuccess: (organizationId: string) => void;
 }) {
   return (
     <>
       <div className="px-6 py-5">
-        <Link href="/" className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground"
+        >
+          <Image src="/icon.svg" alt="" width={20} height={20} className="size-5" aria-hidden />
           <span>Tickif</span>
         </Link>
       </div>
 
-      <div className="border-b border-border px-4 pb-4">
-        <div className="flex w-full items-center gap-3 px-2">
-          <Avatar className="size-10 rounded-xl">
-            <InitialsAvatar
-              seed={studioName}
-              fallbackSeed={studioLocation}
-              alt=""
-              size={40}
-            />
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm leading-[1.1] font-medium text-foreground">{studioName}</div>
-            <div className="truncate text-xs leading-[1.1] text-muted-foreground">{studioLocation}</div>
-          </div>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col justify-between px-4 py-5">
+      <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 py-5">
         <div className="space-y-6">
           <SidebarSection title="Studio" items={studioItems} pathname={pathname} />
           <SidebarSection title="Grow" items={growItems} pathname={pathname} />
         </div>
 
-        <div className="space-y-1">
-          <Link
-            href="mailto:support@tickif.in"
-            className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <BadgeHelp className="size-4" />
-            <span>Contact support</span>
-          </Link>
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] leading-[1.1] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            <MessagesSquare className="size-4" />
-            <span>Explore Tickif</span>
-            <ArrowUpRight className="ml-auto size-4" />
-          </Link>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Link
+              href="mailto:support@tickif.in"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <BadgeHelp className="size-4" />
+              <span>Contact support</span>
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
+              <span>Explore Tickif</span>
+              <ArrowUpRight className="ml-auto size-4" />
+            </Link>
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <DesignerOrganizationSwitcher
+              activeOrganizationId={activeOrganizationId}
+              studioName={studioName}
+              studioLocation={studioLocation}
+              isWorkspaceRefreshing={isWorkspaceRefreshing}
+              onSwitchSuccess={onSwitchSuccess}
+            />
+          </div>
         </div>
       </div>
     </>
   );
 }
 
+function WorkspaceContentSkeleton() {
+  return (
+    <div role="status" aria-label="Loading workspace" className="h-full overflow-hidden p-6 md:p-8">
+      <span className="sr-only">Loading the selected workspace</span>
+      <div className="mx-auto max-w-5xl space-y-6" aria-hidden="true">
+        <div className="space-y-3">
+          <Skeleton className="h-7 w-48 motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-72 max-w-full motion-reduce:animate-none" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+          <Skeleton className="h-28 rounded-xl motion-reduce:animate-none" />
+        </div>
+        <Skeleton className="min-h-64 rounded-2xl motion-reduce:animate-none" />
+      </div>
+    </div>
+  );
+}
+
 export function DesignerWorkspaceShell({
+  activeOrganizationId,
   studioName,
   studioLocation,
   children,
 }: {
+  activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [refreshingOrganizationId, setRefreshingOrganizationId] = useState<string | null>(null);
+  const [isRefreshPending, startRefreshTransition] = useTransition();
+  const isWorkspaceRefreshing = refreshingOrganizationId !== null || isRefreshPending;
+
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (refreshingOrganizationId === activeOrganizationId) {
+      setRefreshingOrganizationId(null);
+    }
+  }, [activeOrganizationId, refreshingOrganizationId]);
+
+  function handleSwitchSuccess(organizationId: string) {
+    setRefreshingOrganizationId(organizationId);
+    startRefreshTransition(() => {
+      router.refresh();
+    });
+  }
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-muted/30">
       <div className="flex h-full overflow-hidden bg-muted/20">
-        <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border/80 bg-background/70 lg:flex">
-          <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
+        <aside className="hidden h-full w-64 shrink-0 flex-col lg:flex">
+          <SidebarContent
+            activeOrganizationId={activeOrganizationId}
+            studioName={studioName}
+            studioLocation={studioLocation}
+            pathname={pathname}
+            isWorkspaceRefreshing={isWorkspaceRefreshing}
+            onSwitchSuccess={handleSwitchSuccess}
+          />
         </aside>
 
-        {mobileNavOpen ? (
-          <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Designer navigation">
-            <button
-              type="button"
-              aria-label="Close navigation"
-              className="absolute inset-0 bg-black/40"
-              onClick={() => setMobileNavOpen(false)}
-            />
-            <aside className="relative flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-background shadow-xl">
+        <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <DialogContent
+            aria-describedby={undefined}
+            showCloseButton={false}
+            overlayClassName="lg:hidden"
+            className="left-0 top-0 flex h-full w-4/5 max-w-72 translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-l-0 border-r border-border bg-background p-0 shadow-xl lg:hidden"
+          >
+            <DialogTitle className="sr-only">Designer navigation</DialogTitle>
+            <DialogClose asChild>
               <button
                 type="button"
                 aria-label="Close navigation"
-                className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                onClick={() => setMobileNavOpen(false)}
+                autoFocus
+                className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-4" />
               </button>
-              <SidebarContent studioName={studioName} studioLocation={studioLocation} pathname={pathname} />
-            </aside>
-          </div>
-        ) : null}
+            </DialogClose>
+            <SidebarContent
+              activeOrganizationId={activeOrganizationId}
+              studioName={studioName}
+              studioLocation={studioLocation}
+              pathname={pathname}
+              isWorkspaceRefreshing={isWorkspaceRefreshing}
+              onSwitchSuccess={handleSwitchSuccess}
+            />
+          </DialogContent>
+        </Dialog>
 
         <div className="flex min-w-0 flex-1 flex-col p-2">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-[22px] border border-border/80 bg-background/80 px-6 backdrop-blur">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-3xl border border-border/80 bg-background/80 px-6 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
               <Button
                 type="button"
@@ -258,24 +326,26 @@ export function DesignerWorkspaceShell({
               <WorkspaceHeaderTitle pathname={pathname} />
             </div>
             <div className="flex items-center gap-2.5">
-              {pathname === '/designer/dashboard' || pathname === '/designer/projects' || pathname === '/designer/leads' ? (
+              {pathname === '/designer/dashboard' ||
+              pathname === '/designer/projects' ||
+              pathname === '/designer/leads' ? (
                 <Button
                   asChild
                   variant="emphasis"
-                  className="h-10 cursor-pointer rounded-full"
+                  className="size-10 cursor-pointer rounded-full p-0 sm:w-auto sm:px-4"
                 >
-                  <Link href="/designer/projects/new">
+                  <Link href="/designer/projects/new" aria-label="Add new project">
                     <Plus className="size-4" />
-                    Add new project
+                    <span className="hidden sm:inline">Add new project</span>
                   </Link>
                 </Button>
               ) : null}
               <AccountMenu showLabel avatarSeed={studioName} />
             </div>
           </header>
-          <section className="min-h-0 flex-1 overflow-hidden rounded-b-[22px] border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto">
-              {children}
+          <section className="min-h-0 flex-1 overflow-hidden rounded-b-3xl border-x border-b border-border/80 bg-background shadow-sm">
+            <main className="h-full min-w-0 overflow-y-auto" aria-busy={isWorkspaceRefreshing}>
+              {isWorkspaceRefreshing ? <WorkspaceContentSkeleton /> : children}
             </main>
           </section>
         </div>

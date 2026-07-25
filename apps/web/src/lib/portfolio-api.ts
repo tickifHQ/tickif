@@ -3,6 +3,7 @@ import type {
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
   UploadLogoResponse,
+  GoogleReviewsResponse,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 
@@ -164,6 +165,45 @@ export async function deleteLogo(): Promise<void> {
       message = extractErrorMessage(body, message);
     } catch {
       // response may have no body (e.g. network error shapes)
+    }
+    throw new Error(message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Google reviews
+// ---------------------------------------------------------------------------
+
+/** GET /api/profiles/me/portfolio/google — connection state + cached reviews. */
+export async function fetchGoogleReviews(): Promise<GoogleReviewsResponse> {
+  const response = await api.api.profiles.me.portfolio.google.$get();
+  return handleResponse<GoogleReviewsResponse>(response, 'Could not load Google reviews.');
+}
+
+/** POST /api/profiles/me/portfolio/google/connect — link a Google Business location. */
+export async function connectGoogleReviews(reference: string): Promise<GoogleReviewsResponse> {
+  const response = await api.api.profiles.me.portfolio.google.connect.$post({
+    json: { reference },
+  });
+  return handleResponse<GoogleReviewsResponse>(response, 'Could not connect that Google location.');
+}
+
+/** POST /api/profiles/me/portfolio/google/refresh — re-fetch in the background. */
+export async function refreshGoogleReviews(): Promise<GoogleReviewsResponse> {
+  const response = await api.api.profiles.me.portfolio.google.refresh.$post();
+  return handleResponse<GoogleReviewsResponse>(response, 'Could not refresh Google reviews.');
+}
+
+/** DELETE /api/profiles/me/portfolio/google — disconnect the location. */
+export async function disconnectGoogleReviews(): Promise<void> {
+  const response = await api.api.profiles.me.portfolio.google.$delete();
+  if (!response.ok) {
+    let message = 'Could not disconnect Google reviews.';
+    try {
+      const body: unknown = await response.json();
+      message = extractErrorMessage(body, message);
+    } catch {
+      // response may have no body
     }
     throw new Error(message);
   }

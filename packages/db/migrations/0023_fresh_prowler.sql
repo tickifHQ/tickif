@@ -1,1 +1,0 @@
-ALTER TABLE "project" ADD COLUMN "moderation_revision" integer DEFAULT 0 NOT NULL;

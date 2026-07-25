@@ -62,6 +62,7 @@ const listRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot list these projects'),
+    422: errorJson('No active organization selected'),
   },
 });
 
@@ -144,8 +145,8 @@ const createProjectRoute = createRoute({
       content: { 'application/json': { schema: projectDetailResponseSchema } },
     },
     401: errorJson('Unauthorized'),
-    403: errorJson('Designer profile required'),
-    422: errorJson('Invalid taxonomy refs'),
+    403: errorJson('Designer role, organization write access, and profile required'),
+    422: errorJson('No active organization or invalid taxonomy refs'),
   },
 });
 
@@ -506,41 +507,59 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(getRoute, async (c) => {
     const { id } = c.req.valid('param');
     const user = c.get('user');
-    const project = await projectsService.getById(id, user ? caller(user) : undefined);
+    const project = await projectsService.getById(
+      id,
+      user ? caller(user, c.get('session')) : undefined,
+    );
     return c.json(project, 200);
   })
   .openapi(createProjectRoute, async (c) => {
-    const project = await projectsService.create(c.req.valid('json'), caller(c.get('user')));
+    const project = await projectsService.create(
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(project, 201);
   })
   .openapi(updateProjectRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const project = await projectsService.update(id, c.req.valid('json'), caller(c.get('user')));
+    const project = await projectsService.update(
+      id,
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(project, 200);
   })
   .openapi(deleteProjectRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.delete(id, caller(c.get('user')));
+    const result = await projectsService.delete(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
   })
   .openapi(duplicateProjectRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.duplicate(id, caller(c.get('user')));
+    const result = await projectsService.duplicate(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 201);
   })
   .openapi(listRoomsRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.listRooms(id, caller(c.get('user')));
+    const result = await projectsService.listRooms(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
   })
   .openapi(createRoomRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const room = await projectsService.createRoom(id, c.req.valid('json'), caller(c.get('user')));
+    const room = await projectsService.createRoom(
+      id,
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(room, 201);
   })
   .openapi(reorderRoomsRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.reorderRooms(id, c.req.valid('json'), caller(c.get('user')));
+    const result = await projectsService.reorderRooms(
+      id,
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(updateRoomRoute, async (c) => {
@@ -549,13 +568,17 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       roomId,
       c.req.valid('json'),
-      caller(c.get('user')),
+      caller(c.get('user'), c.get('session')),
     );
     return c.json(room, 200);
   })
   .openapi(deleteRoomRoute, async (c) => {
     const { id, roomId } = c.req.valid('param');
-    const result = await projectsService.deleteRoom(id, roomId, caller(c.get('user')));
+    const result = await projectsService.deleteRoom(
+      id,
+      roomId,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(linkImageRoute, async (c) => {
@@ -564,23 +587,30 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       imageId,
       c.req.valid('json'),
-      caller(c.get('user')),
+      caller(c.get('user'), c.get('session')),
     );
     return c.json(result, 200);
   })
   .openapi(deleteImageRoute, async (c) => {
     const { id, imageId } = c.req.valid('param');
-    const result = await projectsService.deleteImage(id, imageId, caller(c.get('user')));
+    const result = await projectsService.deleteImage(
+      id,
+      imageId,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(completenessRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.getCompleteness(id, caller(c.get('user')));
+    const result = await projectsService.getCompleteness(
+      id,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(submitRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.submit(id, caller(c.get('user')));
+    const result = await projectsService.submit(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
   })
   .openapi(withdrawRoute, async (c) => {

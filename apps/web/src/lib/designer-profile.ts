@@ -1,9 +1,7 @@
 import { cache } from 'react';
 import { headers } from 'next/headers';
-import {
-  currentProfileResponseSchema,
-  type CurrentProfileResponse,
-} from '@repo/contracts';
+import { redirect } from 'next/navigation';
+import { currentProfileResponseSchema, type CurrentProfileResponse } from '@repo/contracts';
 import { api } from '@/lib/api';
 
 async function getRequestCookie() {
@@ -11,18 +9,41 @@ async function getRequestCookie() {
   return reqHeaders.get('cookie');
 }
 
-export const getCurrentDesignerProfile = cache(async (): Promise<CurrentProfileResponse | null> => {
+type CurrentDesignerProfileResult =
+  | { status: 'ok'; data: CurrentProfileResponse }
+  | { status: 'unauthenticated' | 'missing-active-organization' | 'forbidden' | 'unavailable' };
+
+const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfileResult> => {
   const cookie = await getRequestCookie();
-  if (!cookie) return null;
+  if (!cookie) return { status: 'unauthenticated' };
 
   try {
     const response = await api.api.profiles.me.$get({}, { headers: { cookie } });
-    if (!response.ok) return null;
+    if (response.status === 401) return { status: 'unauthenticated' };
+    if (response.status === 422) return { status: 'missing-active-organization' };
+    if ([403, 404].includes(response.status)) return { status: 'forbidden' };
+    if (!response.ok) return { status: 'unavailable' };
 
     const payload = await response.json();
     const parsed = currentProfileResponseSchema.safeParse(payload);
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? { status: 'ok', data: parsed.data } : { status: 'unavailable' };
   } catch {
-    return null;
+    return { status: 'unavailable' };
   }
 });
+
+export async function getCurrentDesignerProfile(): Promise<CurrentProfileResponse | null> {
+  const result = await fetchCurrentDesignerProfile();
+  return result.status === 'ok' ? result.data : null;
+}
+
+export async function requireCurrentDesignerProfile(): Promise<CurrentProfileResponse> {
+  const result = await fetchCurrentDesignerProfile();
+  if (result.status !== 'ok') {
+    if (result.status === 'unauthenticated') redirect('/login');
+    if (result.status === 'missing-active-organization') redirect('/designer/select-studio');
+    if (result.status === 'forbidden') redirect('/unauthorized');
+    throw new Error('Unable to load the active designer organization');
+  }
+  return result.data;
+}
