@@ -13,6 +13,7 @@ vi.mock('../../../src/modules/search/service.js', () => ({
 
 vi.mock('../../../src/modules/profiles/service.js', () => ({ profilesService: {} }));
 vi.mock('../../../src/modules/profiles/portfolio-service.js', () => ({ portfolioService: {} }));
+vi.mock('../../../src/modules/profiles/google-service.js', () => ({ googlePlacesService: {} }));
 vi.mock('../../../src/modules/dashboard/service.js', () => ({ dashboardService: {} }));
 vi.mock('../../../src/modules/projects/routes.js', async () => {
   const { OpenAPIHono } = await import('@hono/zod-openapi');
@@ -30,7 +31,7 @@ vi.mock('../../../src/modules/leads/routes.js', async () => {
   const { OpenAPIHono } = await import('@hono/zod-openapi');
   return { leadsRoutes: new OpenAPIHono() };
 });
-vi.mock('../../../src/modules/discovery/index.js', async () => {
+vi.mock('../../../src/modules/discovery/routes.js', async () => {
   const { OpenAPIHono } = await import('@hono/zod-openapi');
   return { discoveryRoutes: new OpenAPIHono() };
 });
