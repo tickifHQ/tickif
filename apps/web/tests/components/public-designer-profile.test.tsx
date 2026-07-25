@@ -21,6 +21,13 @@ describe('PublicDesignerProfile', () => {
         name: "Let's build something you can't imagine living without.",
       }),
     ).toBeInTheDocument();
+    const tickifLogo = screen.getByRole('img', { name: 'Tickif' });
+    expect(tickifLogo).toHaveClass('size-4', 'text-primary');
+    expect(screen.getByText('28 Projects').previousElementSibling).toHaveClass(
+      'size-3',
+      'shrink-0',
+      'text-muted-foreground',
+    );
   });
 
   it('renders only the badges the API awarded, not the full badge set', () => {
@@ -203,9 +210,7 @@ describe('PublicDesignerProfile', () => {
     );
     screen
       .getAllByRole('link', { name: 'Enquire' })
-      .forEach((link) =>
-        expect(link).toHaveAttribute('href', '/login?next=%2Fd%2Fanika-spaces'),
-      );
+      .forEach((link) => expect(link).toHaveAttribute('href', '/login?next=%2Fd%2Fanika-spaces'));
     expect(screen.getByRole('link', { name: 'Get free consultation' })).toHaveAttribute(
       'href',
       '/login?next=%2Fd%2Fanika-spaces',

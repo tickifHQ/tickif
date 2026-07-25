@@ -6,14 +6,12 @@ import {
   Bookmark,
   CalendarDays,
   Check,
-  FolderKanban,
   Globe,
   Link2,
   MessageCircle,
   MessageSquare,
   Quote,
   Shield,
-  ShieldCheck,
   Sparkle,
   Star,
 } from 'lucide-react';
@@ -23,14 +21,16 @@ import type {
   PublicPortfolioReview,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
-import { Button } from '@repo/ui/components/button';
+import { buttonVariants } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
+import { cn } from '@repo/ui/lib/utils';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
   LinkedInBrandIcon,
+  TickifBrandIcon,
   YouTubeBrandIcon,
 } from '@/components/brand-icons';
 import { TrustStrip, type TrustStripItem } from '@/components/trust-strip';
@@ -97,11 +97,9 @@ function LoginGatedAction({
   href: string;
 }) {
   return (
-    <Button asChild variant={variant} className={className}>
-      <Link href={href} aria-label={ariaLabel}>
-        {children}
-      </Link>
-    </Button>
+    <Link href={href} aria-label={ariaLabel} className={cn(buttonVariants({ variant }), className)}>
+      {children}
+    </Link>
   );
 }
 
@@ -347,13 +345,7 @@ function CredentialsSection({ portfolio }: SectionProps) {
             const { label, imageSrc } = BADGE_PRESENTATION[badge];
             return (
               <li key={badge}>
-                <Image
-                  src={imageSrc}
-                  alt={label}
-                  width={160}
-                  height={176}
-                  className="h-44 w-40"
-                />
+                <Image src={imageSrc} alt={label} width={160} height={176} className="h-44 w-40" />
               </li>
             );
           })}
@@ -486,7 +478,10 @@ function StorySection({ portfolio, view }: SectionProps) {
 
                 <div className="mt-5 space-y-2 text-sm">
                   <p className="flex items-center gap-1.5">
-                    <FolderKanban className="size-3.5 text-muted-foreground" />
+                    <TickifBrandIcon
+                      className="size-3 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                     <span>{portfolio.stats.projectCount} Projects</span>
                     <span className="text-muted-foreground">published</span>
                   </p>
@@ -503,7 +498,7 @@ function StorySection({ portfolio, view }: SectionProps) {
                   ) : null}
                   {portfolio.sections.overallRating && portfolio.stats.reviewCount > 0 ? (
                     <p className="flex items-center gap-1.5">
-                      <Star className="size-3.5 fill-muted-foreground text-muted-foreground" />
+                      <Star className="size-3 fill-muted-foreground text-muted-foreground" />
                       <span>{formatRating(portfolio.stats.rating)}</span>
                       <span className="text-muted-foreground">
                         ({portfolio.stats.reviewCount} verified reviews)
@@ -523,8 +518,8 @@ function StorySection({ portfolio, view }: SectionProps) {
               </div>
 
               {portfolio.sections.overallRating && portfolio.stats.reviewCount > 0 ? (
-                <div className="flex items-center justify-between border-t px-5 py-3 text-primary">
-                  <ShieldCheck className="size-4" aria-label="Verified by Tickif" />
+                <div className="flex items-center justify-between border-t px-5 py-3 text-muted-foreground">
+                  <TickifBrandIcon role="img" aria-label="Tickif" className="size-4 text-primary" />
                   <span className="inline-flex items-center gap-1 font-mono text-2xs leading-none tracking-wider uppercase">
                     <span>{formatRating(portfolio.stats.rating)}</span>
                     <Star className="block size-2.5 shrink-0 fill-current" aria-hidden="true" />
@@ -668,12 +663,12 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
     social.youtubeHandle
       ? { key: 'youtube', icon: YouTubeBrandIcon, label: socialLabel(social.youtubeHandle) }
       : null,
-  ].filter((link): link is { key: string; icon: typeof InstagramBrandIcon; label: string } => !!link);
+  ].filter(
+    (link): link is { key: string; icon: typeof InstagramBrandIcon; label: string } => !!link,
+  );
 
   const facts = [
-    portfolio.foundedYear
-      ? { label: 'Established', value: String(portfolio.foundedYear) }
-      : null,
+    portfolio.foundedYear ? { label: 'Established', value: String(portfolio.foundedYear) } : null,
     { label: 'Projects published', value: String(stats.projectCount) },
     stats.startingBudget ? { label: 'Typical budget', value: stats.startingBudget } : null,
   ].filter((fact): fact is { label: string; value: string } => !!fact);
