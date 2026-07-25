@@ -137,6 +137,7 @@ export const discoveryRepository = {
         id: schema.project.id,
         slug: schema.project.slug,
         title: schema.project.title,
+        designerId: schema.project.designerId,
         designerName: schema.designerProfile.displayName,
         designerSlug: schema.organization.slug,
         citySlug: schema.project.citySlug,
@@ -162,5 +163,26 @@ export const discoveryRepository = {
       .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
+  },
+
+  /**
+   * Batch-lookup designer rating and review count by designer ID.
+   * Used to enrich Meilisearch results (which don't carry designer stats).
+   * Returns a Map keyed by designer_profile.id.
+   */
+  async findDesignerStats(
+    designerIds: string[],
+  ): Promise<Map<string, { rating: string; reviewCount: number }>> {
+    if (designerIds.length === 0) return new Map();
+    const unique = [...new Set(designerIds)];
+    const rows = await db
+      .select({
+        id: schema.designerProfile.id,
+        rating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
+      })
+      .from(schema.designerProfile)
+      .where(inArray(schema.designerProfile.id, unique));
+    return new Map(rows.map((r) => [r.id, { rating: r.rating, reviewCount: r.reviewCount }]));
   },
 };

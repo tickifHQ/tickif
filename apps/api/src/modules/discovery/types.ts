@@ -17,6 +17,7 @@ export type DiscoveryIntermediateModel = {
   id: string;
   slug: string;
   title: string;
+  designerId: string;
   designerName: string;
   designerSlug: string | null;
   citySlug: string | null;
@@ -44,6 +45,7 @@ export type DiscoveryFeedRow = {
   id: string;
   slug: string;
   title: string;
+  designerId: string;
   designerName: string;
   designerSlug: string | null;
   citySlug: string | null;
