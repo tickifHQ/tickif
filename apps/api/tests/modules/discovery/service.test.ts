@@ -47,6 +47,7 @@ function makeMeiliHit(overrides: Partial<Record<string, unknown>> = {}) {
     id: 'project-1',
     slug: 'modern-living',
     title: 'Modern Living Room',
+    description: null,
     designerId: 'designer-1',
     designerName: 'Studio A',
     designerSlug: 'studio-a',

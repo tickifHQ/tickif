@@ -50,6 +50,7 @@ function makeProjectResult(count = 1) {
       tags: [],
       coverImageKey: 'derivatives/project/cover.webp',
       publishedAt: 1700000000000,
+      featuredAt: null,
     })),
     estimatedTotalHits: count,
     processingTimeMs: 5,

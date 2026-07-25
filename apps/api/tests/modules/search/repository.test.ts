@@ -77,6 +77,7 @@ const makeProjectHit = (overrides: Partial<ProjectSearchDocument> = {}): Project
   tags: [],
   coverImageKey: 'derivatives/project-1/cover.webp',
   publishedAt: 1700000000000,
+  featuredAt: null,
   ...overrides,
 });
 
