@@ -14,6 +14,7 @@
     "GOOGLE_PLACES_REFRESH_DAYS",
     "API_URL",
     "NEXT_PUBLIC_API_URL",
+    "NOVU_BOOKING_WORKFLOW_ID",
     "DATABASE_URL_TEST"
   ],
   "tasks": {

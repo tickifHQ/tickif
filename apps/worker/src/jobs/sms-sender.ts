@@ -5,6 +5,11 @@ const NOVU_TIMEOUT_MS = 10_000;
 /** A delivery strategy. Phone numbers arrive already normalized to digits (see @repo/queue). */
 export type SmsSender = {
   send(phoneNumber: string, code: string): Promise<void>;
+  sendBookingRequested(
+    phoneNumber: string,
+    bookingId: string,
+    requesterName: string,
+  ): Promise<void>;
 };
 
 /** Dev/local only: logs the code instead of sending. Never selected in production. */
@@ -12,11 +17,25 @@ export class ConsoleSmsSender implements SmsSender {
   async send(phoneNumber: string, code: string): Promise<void> {
     console.log(`[sms] OTP for ${phoneNumber}: ${code}`);
   }
+
+  async sendBookingRequested(
+    phoneNumber: string,
+    bookingId: string,
+    requesterName: string,
+  ): Promise<void> {
+    console.log(
+      `[sms] Booking ${bookingId} requested for ${phoneNumber} by ${requesterName}`,
+    );
+  }
 }
 
 /** Fail-closed: selected in production when the chosen provider has no credentials. */
 export class MissingSmsSender implements SmsSender {
   async send(): Promise<void> {
+    throw new Error('SMS provider is not configured (missing credentials in production)');
+  }
+
+  async sendBookingRequested(): Promise<void> {
     throw new Error('SMS provider is not configured (missing credentials in production)');
   }
 }
@@ -26,20 +45,43 @@ export class NovuSmsSender implements SmsSender {
     private readonly secretKey: string,
     private readonly workflowId: string,
     private readonly apiUrl: string,
+    private readonly bookingWorkflowId?: string,
   ) {}
 
   async send(phoneNumber: string, code: string): Promise<void> {
+    await this.triggerWorkflow(phoneNumber, this.workflowId, { code });
+  }
+
+  async sendBookingRequested(
+    phoneNumber: string,
+    bookingId: string,
+    requesterName: string,
+  ): Promise<void> {
+    if (!this.bookingWorkflowId) {
+      throw new Error('Novu booking SMS workflow is not configured');
+    }
+    await this.triggerWorkflow(phoneNumber, this.bookingWorkflowId, {
+      bookingId,
+      requesterName,
+    }, `booking-requested:${bookingId}`);
+  }
+
+  private async triggerWorkflow(
+    phoneNumber: string,
+    workflowId: string,
+    payload: Record<string, string>,
+    transactionId?: string,
+  ): Promise<void> {
     const endpoint = new URL('/v1/events/trigger', this.apiUrl);
     const e164Phone = `+${phoneNumber}`;
     const body = {
-      name: this.workflowId,
+      name: workflowId,
       to: {
         subscriberId: `phone:${phoneNumber}`,
         phone: e164Phone,
       },
-      payload: {
-        code,
-      },
+      payload,
+      ...(transactionId ? { transactionId } : {}),
     };
 
     let response: Response;
@@ -49,6 +91,7 @@ export class NovuSmsSender implements SmsSender {
         headers: {
           authorization: `ApiKey ${this.secretKey}`,
           'content-type': 'application/json',
+          ...(transactionId ? { 'idempotency-key': transactionId } : {}),
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(NOVU_TIMEOUT_MS),
@@ -63,6 +106,25 @@ export class NovuSmsSender implements SmsSender {
         `Novu SMS trigger failed with status ${response.status}: ${text.slice(0, 200)}`,
       );
     }
+
+    let result: unknown;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error('Novu SMS trigger returned an invalid response');
+    }
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      (result as Record<string, unknown>).acknowledged !== true ||
+      (result as Record<string, unknown>).status !== 'processed'
+    ) {
+      const status =
+        result && typeof result === 'object'
+          ? String((result as Record<string, unknown>).status ?? 'unknown')
+          : 'unknown';
+      throw new Error(`Novu SMS trigger was not processed: ${status}`);
+    }
   }
 }
 
@@ -72,6 +134,7 @@ export type SelectSmsSenderOptions = {
   provider: SmsProvider;
   novuSecretKey?: string;
   novuWorkflowId?: string;
+  novuBookingWorkflowId?: string;
   novuApiUrl: string;
   isProduction: boolean;
 };
@@ -89,7 +152,12 @@ export function selectSmsSender(options: SelectSmsSenderOptions): SmsSender {
       return options.isProduction ? new MissingSmsSender() : new ConsoleSmsSender();
     case 'novu':
       return options.novuSecretKey && options.novuWorkflowId
-        ? new NovuSmsSender(options.novuSecretKey, options.novuWorkflowId, options.novuApiUrl)
+        ? new NovuSmsSender(
+            options.novuSecretKey,
+            options.novuWorkflowId,
+            options.novuApiUrl,
+            options.novuBookingWorkflowId,
+          )
         : options.isProduction
           ? new MissingSmsSender()
           : new ConsoleSmsSender();

@@ -19,6 +19,8 @@ export const QUEUES = {
 
 export const JOBS = {
   sendSms: 'send-sms',
+  sendBookingRequestedSms: 'send-booking-requested-sms',
+  sweepBookingNotifications: 'sweep-booking-notifications',
   processMedia: 'process-media',
   refreshGoogleReviews: 'refresh-google-reviews',
   sweepGoogleReviews: 'sweep-google-reviews',
@@ -34,6 +36,30 @@ export type SmsJob = {
   code: string;
 };
 
+export type OtpSmsQueueJob = SmsJob & {
+  kind: 'otp';
+};
+
+export type BookingRequestedSmsJob = {
+  kind: 'booking-requested';
+  phoneNumber: string;
+  bookingId: string;
+  requesterName: string;
+};
+
+export type BookingNotification = Omit<BookingRequestedSmsJob, 'kind'>;
+
+export type BookingNotificationSweepJob = {
+  kind: 'booking-notification-sweep';
+};
+
+/** Includes the legacy OTP shape so jobs queued before this release still drain safely. */
+export type SmsQueueJob =
+  | SmsJob
+  | OtpSmsQueueJob
+  | BookingRequestedSmsJob
+  | BookingNotificationSweepJob;
+
 /** Refresh one designer's cached Google reviews. */
 export type GoogleReviewsRefreshJob = {
   profileId: string;
@@ -44,6 +70,7 @@ export type GoogleReviewsSweepJob = Record<string, never>;
 
 /** Stable scheduler id so re-registering the repeatable sweep is idempotent. */
 export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
+export const BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER = 'booking-notifications-sweep';
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -56,12 +83,12 @@ export const defaultJobOptions = {
   removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
 } satisfies JobsOptions;
 
-let smsQueue: Queue<SmsJob> | undefined;
+let smsQueue: Queue<SmsQueueJob> | undefined;
 let mediaQueue: Queue<MediaProcessJob> | undefined;
 let googleReviewsQueue: Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
 
-function getSmsQueue(): Queue<SmsJob> {
-  smsQueue ??= new Queue<SmsJob>(QUEUES.sms, {
+function getSmsQueue(): Queue<SmsQueueJob> {
+  smsQueue ??= new Queue<SmsQueueJob>(QUEUES.sms, {
     connection,
     defaultJobOptions,
   });
@@ -100,6 +127,14 @@ function smsJobId(job: SmsJob): string {
   return `otp-${phone}-${digest}`;
 }
 
+function bookingNotificationJobId(job: BookingRequestedSmsJob): string {
+  const digest = createHash('sha256')
+    .update(`${job.bookingId}:${job.phoneNumber}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `booking-requested-${digest}`;
+}
+
 function getGoogleReviewsQueue(): Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> {
   googleReviewsQueue ??= new Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob>(
     QUEUES.googleReviews,
@@ -133,9 +168,37 @@ export async function scheduleGoogleReviewsSweep(everyMs: number): Promise<void>
 export async function enqueueSms(job: SmsJob): Promise<void> {
   // Normalize the phone once, up front, so the stored job, the dedupe key, and the
   // provider all agree — identical requests with different formatting now collapse.
-  const normalized: SmsJob = { phoneNumber: normalizePhone(job.phoneNumber), code: job.code };
+  const normalized: OtpSmsQueueJob = {
+    kind: 'otp',
+    phoneNumber: normalizePhone(job.phoneNumber),
+    code: job.code,
+  };
   // defaultJobOptions is set on the Queue itself; only the per-job dedupe id here.
   await getSmsQueue().add(JOBS.sendSms, normalized, { jobId: smsJobId(normalized) });
+}
+
+export async function enqueueBookingNotification(job: BookingNotification): Promise<void> {
+  const normalized: BookingRequestedSmsJob = {
+    kind: 'booking-requested',
+    phoneNumber: normalizePhone(job.phoneNumber),
+    bookingId: job.bookingId,
+    requesterName: job.requesterName,
+  };
+  await getSmsQueue().add(JOBS.sendBookingRequestedSms, normalized, {
+    jobId: bookingNotificationJobId(normalized),
+    removeOnComplete: { age: 24 * 3600, count: 5000 },
+  });
+}
+
+export async function scheduleBookingNotificationSweep(everyMs: number): Promise<void> {
+  await getSmsQueue().upsertJobScheduler(
+    BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER,
+    { every: everyMs },
+    {
+      name: JOBS.sweepBookingNotifications,
+      data: { kind: 'booking-notification-sweep' },
+    },
+  );
 }
 
 export async function closeQueues(): Promise<void> {

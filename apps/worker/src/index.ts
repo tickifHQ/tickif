@@ -4,13 +4,17 @@ import { Worker } from 'bullmq';
 import { config, isProduction } from '@repo/config';
 import { assertMediaStorageConfig } from '@repo/storage';
 import { isGooglePlacesConfigured } from '@repo/google-places';
-import { closeQueues, scheduleGoogleReviewsSweep } from '@repo/queue';
+import {
+  closeQueues,
+  scheduleBookingNotificationSweep,
+  scheduleGoogleReviewsSweep,
+} from '@repo/queue';
 import {
   connection,
   QUEUES,
   JOBS,
   type MediaProcessJob,
-  type SmsJob,
+  type SmsQueueJob,
   type GoogleReviewsRefreshJob,
   type GoogleReviewsSweepJob,
 } from './connection.js';
@@ -18,6 +22,7 @@ import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
 import { selectSmsSender } from './jobs/sms-sender.js';
 import { SmsService } from './jobs/sms-service.js';
+import { processBookingNotificationSweep } from './jobs/booking-notifications.js';
 import {
   processGoogleReviewRefresh,
   processGoogleReviewSweep,
@@ -44,15 +49,30 @@ const smsService = new SmsService(
     provider: config.SMS_PROVIDER,
     novuSecretKey: config.NOVU_SECRET_KEY,
     novuWorkflowId: config.NOVU_OTP_WORKFLOW_ID,
+    novuBookingWorkflowId: config.NOVU_BOOKING_WORKFLOW_ID,
     novuApiUrl: config.NOVU_API_URL,
     isProduction,
   }),
 );
 
-const smsWorker = new Worker<SmsJob>(QUEUES.sms, (job) => smsService.send(job.data), {
-  connection,
-  concurrency: 4,
-});
+const smsWorker = new Worker<SmsQueueJob>(
+  QUEUES.sms,
+  async (job) => {
+    if (job.name === JOBS.sweepBookingNotifications) {
+      const enqueued = await processBookingNotificationSweep();
+      console.log(`[worker] booking-notifications sweep: enqueued ${enqueued}`);
+      return;
+    }
+    await smsService.send(job.data);
+  },
+  {
+    connection,
+    concurrency: 4,
+  },
+);
+void scheduleBookingNotificationSweep(30_000).catch((err) =>
+  console.error('[worker] failed to register booking-notifications sweep:', err),
+);
 
 // Google reviews worker + periodic sweep — only when a Places API key is set.
 let googleReviewsWorker: Worker<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
