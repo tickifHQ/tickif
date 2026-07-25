@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runBootstrapCli } from '../src/bootstrap-cli.js';
+import { runBootstrapCli } from '../src/bootstrap-cli-runner.js';
 
 describe('search bootstrap CLI', () => {
   it('rejects conflicting modes instead of silently choosing one', async () => {
@@ -11,7 +11,7 @@ describe('search bootstrap CLI', () => {
     expect(bootstrap).not.toHaveBeenCalled();
   });
 
-  it('passes the selected mode to bootstrap and prints a framed result', async () => {
+  it('passes check mode to bootstrap and prints a clear validation result', async () => {
     const bootstrap = vi.fn(async () => ({
       createdCollections: [],
       updatedCollections: [],
@@ -24,7 +24,7 @@ describe('search bootstrap CLI', () => {
 
     expect(bootstrap).toHaveBeenCalledWith({ applyUpdates: false, check: true });
     expect(log).toHaveBeenCalledWith(
-      '[search] Bootstrap complete: {"createdCollections":[],"updatedCollections":[],"createdAliases":[],"updatedSynonymSet":false}',
+      '[search] Typesense collections match checked-in configuration',
     );
   });
 });
