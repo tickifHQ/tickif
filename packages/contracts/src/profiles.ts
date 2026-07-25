@@ -232,6 +232,28 @@ export const portfolioBadgeSchema = z
   .meta({ id: 'PortfolioBadge' });
 export type PortfolioBadge = z.infer<typeof portfolioBadgeSchema>;
 
+// --- Google reviews (portfolio Google Business integration) ---
+
+/** Connection lifecycle mirrors the `google_place_status` DB enum. */
+export const googlePlaceStatusSchema = z.enum(['pending', 'connected', 'error', 'stale']);
+export type GooglePlaceStatus = z.infer<typeof googlePlaceStatusSchema>;
+
+/**
+ * Lightweight connection snapshot embedded in the portfolio response so the
+ * settings page renders real state (badge + rating) without a second call.
+ * Carries no review text — that comes from the dedicated reviews endpoint.
+ */
+export const googleConnectionSummarySchema = z
+  .object({
+    status: googlePlaceStatusSchema,
+    placeId: z.string().nullable(),
+    rating: z.number().min(0).max(5).nullable(),
+    userRatingsTotal: z.number().int().nullable(),
+    lastFetchedAt: z.string().datetime().nullable(),
+  })
+  .meta({ id: 'GoogleConnectionSummary' });
+export type GoogleConnectionSummary = z.infer<typeof googleConnectionSummarySchema>;
+
 export const portfolioResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -260,6 +282,8 @@ export const portfolioResponseSchema = z
     showTickifBadge: z.boolean(),
     badges: z.array(portfolioBadgeSchema),
     portfolioUrl: z.string().nullable(),
+    // Null when the designer has never connected a Google Business location.
+    googleConnection: googleConnectionSummarySchema.nullable(),
     publishedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -347,3 +371,48 @@ export const logoCommitRequestSchema = z
   })
   .meta({ id: 'LogoCommitRequest' });
 export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;
+
+// --- Google reviews endpoints ---
+
+/** A single Google review, as surfaced on the portfolio. */
+export const googleReviewSchema = z
+  .object({
+    author: z.string(),
+    authorUrl: z.string().url().nullable(),
+    profilePhotoUrl: z.string().url().nullable(),
+    rating: z.number().min(0).max(5),
+    relativeTime: z.string(),
+    text: z.string(),
+    /** Unix seconds when the review was written. */
+    time: z.number().int(),
+  })
+  .meta({ id: 'GoogleReview' });
+export type GoogleReview = z.infer<typeof googleReviewSchema>;
+
+/**
+ * GET /api/profiles/me/portfolio/google — owner view of the connection + cached
+ * reviews. Reviews are omitted (empty) when the payload has been purged for
+ * ToS staleness; `summary.status` then reads `stale`.
+ */
+export const googleReviewsResponseSchema = z
+  .object({
+    /** False when the platform has no Places API key — UI shows "unavailable". */
+    available: z.boolean(),
+    /** Null when the designer has never connected a Google Business location. */
+    connection: googleConnectionSummarySchema.nullable(),
+    reviews: z.array(googleReviewSchema),
+  })
+  .meta({ id: 'GoogleReviewsResponse' });
+export type GoogleReviewsResponse = z.infer<typeof googleReviewsResponseSchema>;
+
+/**
+ * POST /api/profiles/me/portfolio/google/connect — link a Google Business
+ * location. Accepts a Google Maps URL, a raw place-id, or free-text the Places
+ * API can resolve (e.g. "Studio Aakar, Bengaluru").
+ */
+export const connectGooglePlaceSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(500),
+  })
+  .meta({ id: 'ConnectGooglePlace' });
+export type ConnectGooglePlaceInput = z.infer<typeof connectGooglePlaceSchema>;

@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import type { CompletionStep, ProfileCompletionResponse, ProfileDashboardResponse } from '@repo/contracts';
+import type {
+  CompletionStep,
+  ProfileCompletionResponse,
+  ProfileDashboardResponse,
+} from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -25,13 +29,7 @@ type OverviewChecklistItem = {
   action?: React.ReactNode;
 };
 
-function ChecklistStep({
-  item,
-  isLast,
-}: {
-  item: OverviewChecklistItem;
-  isLast: boolean;
-}) {
+function ChecklistStep({ item, isLast }: { item: OverviewChecklistItem; isLast: boolean }) {
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-5 last:pb-0">
       <div className="relative flex justify-center">
@@ -46,7 +44,9 @@ function ChecklistStep({
             <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#77DB89] text-white">
               <Check className="size-3" />
             </span>
-          ) : <span className="size-2 rounded-full bg-muted-foreground/30" />}
+          ) : (
+            <span className="size-2 rounded-full bg-muted-foreground/30" />
+          )}
         </span>
       </div>
 
@@ -106,7 +106,11 @@ function RightRailInfoRow({
     );
   }
 
-  return <div className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">{content}</div>;
+  return (
+    <div className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
+      {content}
+    </div>
+  );
 }
 
 export function DesignerDashboardOverview({
@@ -132,10 +136,13 @@ export function DesignerDashboardOverview({
     : dashboard.projects.total > 0;
 
   function checklistDescription(step: CompletionStep) {
-    if (step.key === 'signed-in-with-google') return 'Use Google SSO so your designer workspace stays secure.';
+    if (step.key === 'signed-in-with-google')
+      return 'Use Google SSO so your designer workspace stays secure.';
     if (step.key === 'org-created') return 'Set up your workspace on Tickif.';
-    if (step.key === 'profile-completed') return 'Add your profile tags, social links, short bio, and customize your portfolio.';
-    if (step.key === 'first-project-uploaded') return 'Upload your first project to make your profile live and present it as a portfolio.';
+    if (step.key === 'profile-completed')
+      return 'Add your profile tags, social links, short bio, and customize your portfolio.';
+    if (step.key === 'first-project-uploaded')
+      return 'Upload your first project to make your profile live and present it as a portfolio.';
     return 'Complete this step to keep your designer workspace moving.';
   }
 
@@ -182,7 +189,8 @@ export function DesignerDashboardOverview({
         {
           key: 'first-project',
           title: 'Upload your first project',
-          description: 'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
+          description:
+            'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
           done: projectDone,
           action: projectDone ? null : (
             <Button asChild variant="outline">
@@ -196,7 +204,8 @@ export function DesignerDashboardOverview({
         {
           key: 'profile',
           title: 'Complete profile',
-          description: 'Add your profile tags, social links, short bio, and customize your portfolio.',
+          description:
+            'Add your profile tags, social links, short bio, and customize your portfolio.',
           done: profileDone,
           action: profileDone ? null : (
             <Button asChild variant="outline">
@@ -209,9 +218,13 @@ export function DesignerDashboardOverview({
         },
       ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
-  const trackedChecklistComplete = hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
+  const trackedChecklistComplete =
+    hasTrackedSteps && trackedChecklistItems.every((item) => item.done);
   const checklistProgressScore = hasTrackedSteps
-    ? Math.round((trackedChecklistItems.filter((item) => item.done).length / trackedChecklistItems.length) * 100)
+    ? Math.round(
+        (trackedChecklistItems.filter((item) => item.done).length / trackedChecklistItems.length) *
+          100,
+      )
     : dashboard.profileCompletion.score;
 
   return (
@@ -226,13 +239,16 @@ export function DesignerDashboardOverview({
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_23.5rem]">
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {dashboardError ? (
             <Card radius="2xl" className="border-destructive/30 bg-destructive/5">
               <div className="px-6 py-5">
-                <div className="text-base font-medium text-foreground">Could not load dashboard summary</div>
+                <div className="text-base font-medium text-foreground">
+                  Could not load dashboard summary
+                </div>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Refresh the page in a moment. Your dashboard and project upload actions are still available.
+                  Refresh the page in a moment. Your dashboard and project upload actions are still
+                  available.
                 </p>
               </div>
             </Card>
@@ -241,12 +257,8 @@ export function DesignerDashboardOverview({
           <Card radius="2xl" className="overflow-hidden">
             <div className="px-6 pt-6 pb-6">
               <div className="flex items-end justify-between gap-4">
-                <div className="text-base font-medium text-muted-foreground">
-                  Complete profile
-                </div>
-                <div className="text-base font-medium text-primary">
-                  {checklistProgressScore}%
-                </div>
+                <div className="text-base font-medium text-muted-foreground">Complete profile</div>
+                <div className="text-base font-medium text-primary">{checklistProgressScore}%</div>
               </div>
               <div className="mt-3 h-1.5 rounded-full bg-muted">
                 <div
@@ -267,7 +279,8 @@ export function DesignerDashboardOverview({
                   <div>
                     <div className="text-base font-medium text-foreground">Setup complete</div>
                     <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-                      Your core workspace setup is done. Keep your portfolio fresh by adding more projects and sharing your link.
+                      Your core workspace setup is done. Keep your portfolio fresh by adding more
+                      projects and sharing your link.
                     </p>
                   </div>
                 </div>
@@ -286,19 +299,23 @@ export function DesignerDashboardOverview({
           </Card>
         </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <Card variant="accent" radius="2xl" className="relative overflow-visible">
             <div className="relative px-4 pt-4 pb-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <Badge variant="outline" className="text-xs font-medium border-primary/20 bg-background/70 text-primary">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-medium border-primary/20 bg-background/70 text-primary"
+                  >
                     COMPLETE SETUP
                   </Badge>
                   <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
                     Add your first project
                   </div>
                   <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
-                    It goes public and gets indexed the moment your first project is approved. Usually 24–48 hours.
+                    It goes public and gets indexed the moment your first project is approved.
+                    Usually 24–48 hours.
                   </p>
                 </div>
                 <Image
@@ -339,7 +356,6 @@ export function DesignerDashboardOverview({
                 icon={<ShieldCheck className="size-4" />}
                 title="Start verification"
                 description="Get a head start on your KYC."
-                href="/designer/profile"
               />
             </Card>
           </div>

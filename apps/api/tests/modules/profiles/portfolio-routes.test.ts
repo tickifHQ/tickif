@@ -58,11 +58,6 @@ vi.mock('@repo/config', () => ({
   isTest: true,
 }));
 
-vi.mock('../../../src/modules/orgs/repository.js', () => ({
-  isOrgWriter: vi.fn(),
-  isOrgMember: vi.fn(),
-}));
-
 // Import AFTER mock registration
 const { portfolioService } = await import(
   '../../../src/modules/profiles/portfolio-service.js'
@@ -99,6 +94,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: null,
+  googleConnection: null,
   publishedAt: null,
   createdAt: '2025-01-01T00:00:00.000Z',
   updatedAt: '2025-01-01T00:00:00.000Z',

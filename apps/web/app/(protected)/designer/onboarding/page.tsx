@@ -10,7 +10,9 @@ export default async function DesignerOnboardingPage() {
   const session = await getServerSession({ disableCookieCache: true });
 
   if (rolePassesCheck(session?.user.role ?? null, 'designer')) {
-    redirect('/designer/dashboard');
+    redirect(
+      session?.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
+    );
   }
 
   return (

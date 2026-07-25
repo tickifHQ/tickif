@@ -14,14 +14,16 @@ import {
   type Tx,
 } from './portfolio-repository.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
-import { isOrgWriter } from '../orgs/repository.js';
+import { orgsService } from '../orgs/service.js';
+import { googleReviewsRepository } from './google-repository.js';
+import { readState } from './google-mapper.js';
 
 /**
  * Portfolio business logic (E-222).
  * No Hono, no Drizzle — only domain operations.
  */
 
-type Caller = {
+export type Caller = {
   userId: string;
   activeOrgId: string | null;
 };
@@ -100,11 +102,11 @@ function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
   return badges;
 }
 
-async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
+export async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
   }
-  const canWrite = await isOrgWriter(caller.userId, caller.activeOrgId);
+  const canWrite = await orgsService.isWriter(caller.userId, caller.activeOrgId);
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }
@@ -124,7 +126,7 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   const badges = computeBadges(profile);
-  // No public portfolio routes exist yet (/p/:slug and /d/:orgId are not shipped)
+  // The public portfolio route (/d/:slug) is not shipped yet.
   // portfolioUrl will be populated when the public page is implemented
   const portfolioUrl = null;
 
@@ -135,6 +137,11 @@ async function buildPortfolioResponse(
     profile.logoImageId && profile.logoImageId.startsWith(expectedPrefix)
       ? await presignDownload({ key: profile.logoImageId })
       : null;
+
+  // Embed a lightweight Google connection snapshot so the settings page renders
+  // the real connection state (badge + rating) without a second round-trip.
+  const googleRow = await googleReviewsRepository.findByProfileId(profile.id);
+  const googleConnection = googleRow ? readState(googleRow).summary : null;
 
   return {
     id: portfolio.id,
@@ -163,6 +170,7 @@ async function buildPortfolioResponse(
     showTickifBadge: portfolio.showTickifBadge,
     badges,
     portfolioUrl,
+    googleConnection,
     publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     createdAt: portfolio.createdAt.toISOString(),
     updatedAt: portfolio.updatedAt.toISOString(),

@@ -90,8 +90,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8008),
   NEXT_PUBLIC_API_URL: z.string().url().default('http://localhost:8008'),
 
-  // Public web origin for shareable URLs returned by the API.
-  PUBLIC_WEB_URL: z.string().url().default('https://tickif.com'),
+  // Public web origin for shareable URLs returned by the API. Mirrors the
+  // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links
+  // resolve to the same origin in every environment.
+  PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
 
   // SMS / OTP provider. Selection is explicit; creds are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
@@ -140,6 +142,15 @@ const envSchema = z.object({
   // Email delivery via Resend (E-203). Optional in dev (logs to console).
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
+
+  // Google Places API key for designer-portfolio Google review fetching.
+  // Distinct from the GOOGLE_CLIENT_* OAuth creds above (those are Gmail SSO).
+  // Optional: when absent the feature is disabled and the Connect action reports
+  // "unavailable" rather than erroring — mirrors the SMS/media optional-config style.
+  GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
+  // How stale a cached place row may get before the worker sweep re-fetches it.
+  // Kept well inside Google's 30-day content-caching ToS window.
+  GOOGLE_PLACES_REFRESH_DAYS: z.coerce.number().int().min(1).max(29).default(7),
 });
 
 /**

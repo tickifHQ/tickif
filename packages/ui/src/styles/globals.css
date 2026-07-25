@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 /* Consuming apps resolve this package through node_modules, which Tailwind's
  * auto content detection skips — without this, utilities used only inside
@@ -12,7 +12,7 @@
  * To add a theme: create themes/<name>.css scoped to [data-theme='<name>'],
  * import it after the default, and set data-theme on <html>.
  */
-@import "./themes/tickif.css";
+@import './themes/tickif.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -48,6 +48,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-button-neutral: var(--button-neutral);
+  --color-button-neutral-foreground: var(--button-neutral-foreground);
+  --color-button-neutral-hover: var(--button-neutral-hover);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -68,6 +71,7 @@
   --shadow-md: 0 4px 6px -1px oklch(0.3 0.04 50 / 0.08), 0 2px 4px -2px oklch(0.3 0.04 50 / 0.08);
   --shadow-lg: 0 10px 15px -3px oklch(0.3 0.04 50 / 0.09), 0 4px 6px -4px oklch(0.3 0.04 50 / 0.09);
   --shadow-xl: 0 20px 25px -5px oklch(0.3 0.04 50 / 0.1), 0 8px 10px -6px oklch(0.3 0.04 50 / 0.1);
+  --shadow-button-neutral: var(--button-neutral-shadow);
 }
 
 @layer base {
