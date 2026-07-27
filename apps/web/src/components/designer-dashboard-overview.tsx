@@ -12,13 +12,13 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
   ArrowRight,
+  CalendarDays,
   Check,
-  ClipboardCheck,
   Copy,
   Plus,
-  ShieldCheck,
+  Shield,
   ShieldPlus,
-  UserRoundCheck,
+  User,
 } from 'lucide-react';
 
 type OverviewChecklistItem = {
@@ -342,18 +342,18 @@ export function DesignerDashboardOverview({
             </div>
             <Card radius="2xl" className="overflow-hidden">
               <RightRailInfoRow
-                icon={<ClipboardCheck className="size-4" />}
+                icon={<CalendarDays className="size-4" />}
                 title="We review your project"
                 description="A human check, usually within 24–48 hours."
               />
               <RightRailInfoRow
-                icon={<UserRoundCheck className="size-4" />}
+                icon={<User className="size-4" />}
                 title="Round out your profile"
                 description="Add a bio and tags while you wait."
                 href="/designer/profile"
               />
               <RightRailInfoRow
-                icon={<ShieldCheck className="size-4" />}
+                icon={<Shield className="size-4" />}
                 title="Start verification"
                 description="Get a head start on your KYC."
               />

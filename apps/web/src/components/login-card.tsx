@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Asterisk,
+  BadgeCheck,
   Bookmark,
   Calendar,
   ChevronDown,
+  ChevronRight,
   House,
   Mail,
   MessageSquare,
@@ -72,7 +74,12 @@ function GoogleSignInButton({
   onClick: () => void;
 }) {
   return (
-    <Button variant="outline" className="w-full cursor-pointer" disabled={loading} onClick={onClick}>
+    <Button
+      variant="outline"
+      className="w-full cursor-pointer"
+      disabled={loading}
+      onClick={onClick}
+    >
       <GoogleBrandIcon className="size-5 shrink-0" />
       {label}
     </Button>
@@ -141,9 +148,10 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [emailMessage, setEmailMessage] = useState('');
 
   const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
-  const promoSubtitle = loginMode === 'designer'
-    ? 'One link to share your work, get discovered, and turn views into real enquiries.'
-    : 'Save the homes you love, message designers, and book free consultations.';
+  const promoSubtitle =
+    loginMode === 'designer'
+      ? 'One link to share your work, get discovered, and turn views into real enquiries.'
+      : 'Save the homes you love, message designers, and book free consultations.';
 
   const filteredCountries = countrySearch
     ? countries.filter((c) => {
@@ -176,8 +184,10 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => {
-      if (cooldownRef.current <= 1) { clearInterval(id); setCooldown(0); }
-      else setCooldown((prev) => prev - 1);
+      if (cooldownRef.current <= 1) {
+        clearInterval(id);
+        setCooldown(0);
+      } else setCooldown((prev) => prev - 1);
     }, 1000);
     return () => clearInterval(id);
   }, [cooldown > 0]);
@@ -186,8 +196,10 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   useEffect(() => {
     if (emailCooldown <= 0) return;
     const id = setInterval(() => {
-      if (emailCooldownRef.current <= 1) { clearInterval(id); setEmailCooldown(0); }
-      else setEmailCooldown((prev) => prev - 1);
+      if (emailCooldownRef.current <= 1) {
+        clearInterval(id);
+        setEmailCooldown(0);
+      } else setEmailCooldown((prev) => prev - 1);
     }, 1000);
     return () => clearInterval(id);
   }, [emailCooldown > 0]);
@@ -202,46 +214,76 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   async function handleSendOtp() {
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     const validationError = validatePhone(phone);
-    if (validationError) { setError(validationError); return; }
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
-      if (error) { setError(error.message || 'Failed to send OTP'); return; }
+      if (error) {
+        setError(error.message || 'Failed to send OTP');
+        return;
+      }
       setStep('otp');
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send OTP');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleVerify() {
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     const otp = code.join('');
-    if (otp.length !== 6) { setError('Enter the full 6-digit OTP'); return; }
+    if (otp.length !== 6) {
+      setError('Enter the full 6-digit OTP');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       const { error } = await authClient.phoneNumber.verify({ phoneNumber: fullPhone, code: otp });
-      if (error) { setError(error.message || 'Invalid or expired OTP'); setCode(['', '', '', '', '', '']); return; }
+      if (error) {
+        setError(error.message || 'Invalid or expired OTP');
+        setCode(['', '', '', '', '', '']);
+        return;
+      }
       setSuccess(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid or expired OTP');
       setCode(['', '', '', '', '', '']);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleResend() {
     if (cooldown > 0) return;
-    setError(''); setCode(['', '', '', '', '', '']); setLoading(true);
+    setError('');
+    setCode(['', '', '', '', '', '']);
+    setLoading(true);
     const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
-      if (error) { setError(error.message || 'Failed to resend OTP'); return; }
+      if (error) {
+        setError(error.message || 'Failed to resend OTP');
+        return;
+      }
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to resend OTP');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleCancelOtp() {
+    setStep('phone');
+    setError('');
+    setCode(['', '', '', '', '', '']);
   }
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -252,43 +294,58 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
   // ─── Google SSO handler ─────────────────────────────────────────────────
   async function handleGoogleLogin() {
-    setLoading(true); setError('');
-    const callbackURL = loginMode === 'designer'
-      ? `${window.location.origin}/designer/onboarding`
-      : `${window.location.origin}${visitorPostLoginPath()}`;
+    setLoading(true);
+    setError('');
+    const callbackURL =
+      loginMode === 'designer'
+        ? `${window.location.origin}/designer/onboarding`
+        : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
-      if (result?.error) setError('Couldn\'t sign in with Google');
-    } catch { setError('Couldn\'t sign in with Google'); }
-    finally { setLoading(false); }
+      if (result?.error) setError("Couldn't sign in with Google");
+    } catch {
+      setError("Couldn't sign in with Google");
+    } finally {
+      setLoading(false);
+    }
   }
 
   // ─── Email OTP handlers (designer tab) ──────────────────────────────────
   async function handleEmailOtpSend() {
     if (!designerEmail.trim() || !designerEmail.includes('@')) {
-      setError('Enter a valid email address'); return;
+      setError('Enter a valid email address');
+      return;
     }
-    setError(''); setEmailMessage(''); setLoading(true);
+    setError('');
+    setEmailMessage('');
+    setLoading(true);
     try {
       const { error: sendError } = await authClient.emailOtp.sendVerificationOtp({
         email: designerEmail.trim(),
         type: 'sign-in',
       });
-      if (sendError) { setError(sendError.message ?? 'Failed to send code'); }
-      else {
+      if (sendError) {
+        setError(sendError.message ?? 'Failed to send code');
+      } else {
         setEmailOtpStep('otp');
         setEmailCooldown(COOLDOWN_SECONDS);
         setEmailMessage(`Code sent to ${designerEmail.trim()}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send code');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleEmailOtpVerify() {
     const otp = emailOtp.join('');
-    if (otp.length !== 6) { setError('Enter the full 6-digit code'); return; }
-    setError(''); setLoading(true);
+    if (otp.length !== 6) {
+      setError('Enter the full 6-digit code');
+      return;
+    }
+    setError('');
+    setLoading(true);
     try {
       const { error: signInError } = await authClient.signIn.emailOtp({
         email: designerEmail.trim(),
@@ -297,26 +354,37 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
       if (signInError) {
         setError(signInError.message ?? 'Invalid or expired code');
         setEmailOtp(['', '', '', '', '', '']);
-      } else { setSuccess(true); }
+      } else {
+        setSuccess(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');
       setEmailOtp(['', '', '', '', '', '']);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleEmailOtpResend() {
     if (emailCooldown > 0) return;
-    setError(''); setEmailOtp(['', '', '', '', '', '']); setLoading(true);
+    setError('');
+    setEmailOtp(['', '', '', '', '', '']);
+    setLoading(true);
     try {
       const { error: sendError } = await authClient.emailOtp.sendVerificationOtp({
         email: designerEmail.trim(),
         type: 'sign-in',
       });
-      if (sendError) { setError(sendError.message ?? 'Failed to resend code'); }
-      else { setEmailCooldown(COOLDOWN_SECONDS); }
+      if (sendError) {
+        setError(sendError.message ?? 'Failed to resend code');
+      } else {
+        setEmailCooldown(COOLDOWN_SECONDS);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resend code');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (success) {
@@ -345,8 +413,12 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                 {features.map((f) => {
                   const Icon = f.icon;
                   return (
-                    <div key={f.title} data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`} className="flex items-center gap-2.5">
-                      <Icon className="size-4 shrink-0 text-white" aria-hidden="true" />
+                    <div
+                      key={f.title}
+                      data-testid={`feature-${f.title.toLowerCase().replace(/\s+/g, '-')}`}
+                      className="flex items-center gap-2.5"
+                    >
+                      <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
                       <p className="text-sm text-white">{f.title}</p>
                     </div>
                   );
@@ -354,11 +426,15 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
               </div>
             </div>
           </div>
-          <div className="mt-6 flex flex-col gap-3">
+          <div className="mt-6 flex items-center gap-3">
             <div className="flex -space-x-2">
               {trustAvatars.map((a) => (
                 <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
-                  <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>{a.initials}</AvatarFallback>
+                  <AvatarFallback
+                    className={cn('text-[9px] font-semibold text-white', a.className)}
+                  >
+                    {a.initials}
+                  </AvatarFallback>
                 </Avatar>
               ))}
             </div>
@@ -381,14 +457,25 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-base font-medium text-foreground">Login to continue</h3>
               {onClose && (
-                <Button onClick={onClose} aria-label="Close" variant="ghost" size="icon" className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <Button
+                  onClick={onClose}
+                  aria-label="Close"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
                   <X className="size-4" aria-hidden="true" />
                 </Button>
               )}
             </div>
 
             <div className="flex flex-col gap-4">
-              <Tabs defaultValue={initialMode} value={loginMode} className="w-full" onValueChange={(val) => setLoginMode(val as LoginMode)}>
+              <Tabs
+                defaultValue={initialMode}
+                value={loginMode}
+                className="w-full"
+                onValueChange={(val) => setLoginMode(val as LoginMode)}
+              >
                 <TabsList className="w-full">
                   <TabsTrigger value="browsing" className="flex-1 gap-1.5">
                     <House className="size-4" aria-hidden="true" />
@@ -407,20 +494,41 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                   >
                     {/* ─── Browsing tab: Phone OTP + Google ─── */}
                     <div
-                      className={cn('flex w-1/2 shrink-0 flex-col gap-3 transition-opacity duration-300', loginMode === 'browsing' ? 'opacity-100' : 'opacity-0')}
+                      className={cn(
+                        'flex w-1/2 shrink-0 flex-col gap-3 transition-opacity duration-300',
+                        loginMode === 'browsing' ? 'opacity-100' : 'opacity-0',
+                      )}
                       inert={loginMode !== 'browsing'}
                       aria-hidden={loginMode !== 'browsing'}
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
-                          <DropdownMenu onOpenChange={(open) => { if (!open) setCountrySearch(''); }}>
+                          <DropdownMenu
+                            onOpenChange={(open) => {
+                              if (!open) setCountrySearch('');
+                            }}
+                          >
                             <DropdownMenuTrigger asChild>
-                              <button type="button" className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" disabled={loading}>
-                                <span className="text-base leading-none">{selectedCountry.flag}</span>
-                                <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
+                                disabled={loading}
+                              >
+                                <span className="text-base leading-none">
+                                  {selectedCountry.flag}
+                                </span>
+                                <ChevronDown
+                                  className="size-3.5 shrink-0 opacity-60"
+                                  aria-hidden="true"
+                                />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" sideOffset={2} collisionPadding={8} className="max-h-60 overflow-y-auto max-w-[calc(100vw-1rem)]">
+                            <DropdownMenuContent
+                              align="start"
+                              sideOffset={2}
+                              collisionPadding={8}
+                              className="max-h-60 overflow-y-auto max-w-[calc(100vw-1rem)]"
+                            >
                               <div className="sticky top-0 -mx-1 -mt-1 mb-1 z-10 bg-popover px-1 pt-1 shadow-sm">
                                 <input
                                   ref={searchRef}
@@ -428,21 +536,37 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                                   placeholder="Search countries..."
                                   value={countrySearch}
                                   onChange={(e) => setCountrySearch(e.target.value)}
-                                  onKeyDown={(e) => { if (e.key === 'Escape') { if (countrySearch) { e.preventDefault(); setCountrySearch(''); return; } return; } e.stopPropagation(); }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      if (countrySearch) {
+                                        e.preventDefault();
+                                        setCountrySearch('');
+                                        return;
+                                      }
+                                      return;
+                                    }
+                                    e.stopPropagation();
+                                  }}
                                   className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
                                   autoFocus
                                 />
                               </div>
                               {filteredCountries.length > 0 ? (
                                 filteredCountries.map((country) => (
-                                  <DropdownMenuItem key={`${country.code}-${country.name}`} onSelect={() => setSelectedCountry(country)} className="gap-2">
+                                  <DropdownMenuItem
+                                    key={`${country.code}-${country.name}`}
+                                    onSelect={() => setSelectedCountry(country)}
+                                    className="gap-2"
+                                  >
                                     <span className="text-base leading-none">{country.flag}</span>
                                     <span className="text-muted-foreground">{country.code}</span>
                                     <span className="text-foreground">{country.name}</span>
                                   </DropdownMenuItem>
                                 ))
                               ) : (
-                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">No countries found</div>
+                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                                  No countries found
+                                </div>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -454,7 +578,9 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                             placeholder="9123456789"
                             value={phone}
                             onChange={handlePhoneChange}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSendOtp(); }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSendOtp();
+                            }}
                             className="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                             disabled={loading}
                             autoComplete="tel"
@@ -474,17 +600,28 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                       <OrSeparator className="my-5" />
 
                       <div className="flex flex-col items-center gap-2">
-                        <GoogleSignInButton label="Continue with Google" loading={loading} onClick={handleGoogleLogin} />
+                        <GoogleSignInButton
+                          label="Continue with Google"
+                          loading={loading}
+                          onClick={handleGoogleLogin}
+                        />
                       </div>
                     </div>
 
                     {/* ─── Designer tab: Google SSO + Email OTP ─── */}
                     <div
-                      className={cn('flex w-1/2 shrink-0 flex-col gap-4 transition-opacity duration-300', loginMode === 'designer' ? 'opacity-100' : 'opacity-0')}
+                      className={cn(
+                        'flex w-1/2 shrink-0 flex-col gap-4 transition-opacity duration-300',
+                        loginMode === 'designer' ? 'opacity-100' : 'opacity-0',
+                      )}
                       inert={loginMode !== 'designer'}
                       aria-hidden={loginMode !== 'designer'}
                     >
-                      <GoogleSignInButton label="Continue with Google" loading={loading} onClick={handleGoogleLogin} />
+                      <GoogleSignInButton
+                        label="Continue with Google"
+                        loading={loading}
+                        onClick={handleGoogleLogin}
+                      />
 
                       <OrSeparator className="my-2" />
 
@@ -493,13 +630,21 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                           <div className="flex flex-col gap-1.5">
                             <Label htmlFor="designer-email">Email</Label>
                             <div className="relative">
-                              <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                              <Mail
+                                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                                aria-hidden="true"
+                              />
                               <Input
                                 id="designer-email"
                                 type="email"
                                 value={designerEmail}
-                                onChange={(e) => { setDesignerEmail(e.target.value); setError(''); }}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleEmailOtpSend(); }}
+                                onChange={(e) => {
+                                  setDesignerEmail(e.target.value);
+                                  setError('');
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleEmailOtpSend();
+                                }}
                                 placeholder="you@example.com"
                                 className="pl-10 focus-visible:ring-inset focus-visible:ring-offset-0"
                                 disabled={loading}
@@ -520,12 +665,17 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                       ) : (
                         <>
                           {emailMessage && (
-                            <p className="rounded-md bg-green-50 p-2 text-center text-sm text-green-700">{emailMessage}</p>
+                            <p className="rounded-md bg-green-50 p-2 text-center text-sm text-green-700">
+                              {emailMessage}
+                            </p>
                           )}
 
                           <OtpInput
                             value={emailOtp}
-                            onChange={(v) => { setEmailOtp(v); setError(''); }}
+                            onChange={(v) => {
+                              setEmailOtp(v);
+                              setError('');
+                            }}
                             onComplete={handleEmailOtpVerify}
                             disabled={loading}
                           />
@@ -543,7 +693,12 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                             <button
                               type="button"
                               className="text-primary underline-offset-2 hover:underline"
-                              onClick={() => { setEmailOtpStep('email'); setError(''); setEmailMessage(''); setEmailOtp(['', '', '', '', '', '']); }}
+                              onClick={() => {
+                                setEmailOtpStep('email');
+                                setError('');
+                                setEmailMessage('');
+                                setEmailOtp(['', '', '', '', '', '']);
+                              }}
                             >
                               Change email
                             </button>
@@ -553,7 +708,9 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                               disabled={emailCooldown > 0 || loading}
                               className="underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
                             >
-                              {emailCooldown > 0 ? `Resend in ${formatTimer(emailCooldown)}` : 'Resend code'}
+                              {emailCooldown > 0
+                                ? `Resend in ${formatTimer(emailCooldown)}`
+                                : 'Resend code'}
                             </button>
                           </div>
                         </>
@@ -577,40 +734,87 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
   function renderOtpStep() {
     return (
-      <div className="flex flex-col items-center gap-6 px-6 py-8">
-        <h3 className="text-base font-medium text-foreground">Enter verification code</h3>
-
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex size-24 items-center justify-center rounded-full bg-muted">
-            <Mail className="size-14 text-muted-foreground" aria-hidden="true" />
-          </div>
-          <p className="text-base text-muted-foreground">
-            We've sent a code to{' '}
-            <span className="font-medium text-foreground">
-              {selectedCountry.code} {phone}
-            </span>
-          </p>
+      <div data-testid="phone-otp-verification" className="flex flex-col">
+        <div
+          data-slot="verification-header"
+          className="flex items-center gap-2 border-b border-border bg-muted/30 p-3"
+        >
+          <h3 className="min-w-0 flex-1 text-base font-medium leading-relaxed text-foreground">
+            Enter verification code
+          </h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            onClick={handleCancelOtp}
+            aria-label="Close verification"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
         </div>
 
-        <OtpInput value={code} onChange={(v) => { setCode(v); setError(''); }} onComplete={handleVerify} disabled={loading} />
+        <div className="flex flex-col gap-6 p-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex size-24 items-center justify-center rounded-full bg-gradient-to-b from-muted to-transparent p-4">
+              <div className="flex size-16 items-center justify-center rounded-full border border-border bg-background shadow-xs">
+                <BadgeCheck className="size-8 text-muted-foreground" aria-hidden="true" />
+              </div>
+            </div>
+            <p className="text-center text-base leading-6 text-muted-foreground">
+              We’ve sent a code to
+              <span className="font-medium text-foreground">
+                {' '}
+                {selectedCountry.code} {phone}
+              </span>
+            </p>
+          </div>
 
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={cooldown > 0 || loading}
-          className="text-base text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
+          <OtpInput
+            value={code}
+            onChange={(value) => {
+              setCode(value);
+              setError('');
+            }}
+            onComplete={handleVerify}
+            disabled={loading}
+            variant="verification"
+          />
+
+          {error && <p className="text-center text-sm text-destructive">{error}</p>}
+
+          <div className="flex items-center justify-center gap-1 text-sm leading-relaxed">
+            <span className="text-muted-foreground">Didn’t get the code?</span>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={cooldown > 0 || loading}
+              className="font-medium text-primary underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
+            >
+              {cooldown > 0 ? `Resend in ${formatTimer(cooldown)}` : 'Resend'}
+            </button>
+          </div>
+        </div>
+
+        <div
+          data-slot="verification-footer"
+          className="flex items-center justify-end gap-3 border-t border-border bg-muted/30 p-3"
         >
-          {cooldown > 0 ? `Didn't get the code? Resend in ${formatTimer(cooldown)}` : "Didn't get the code? Resend"}
-        </button>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex w-full gap-3">
-          <Button type="button" variant="outline" className="flex-1" onClick={() => { setStep('phone'); setError(''); setCode(['', '', '', '', '', '']); }}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={handleCancelOtp}
+          >
             Cancel
           </Button>
-          <Button type="button" onClick={handleVerify} disabled={loading || code.some((d) => !d)} className="flex-1">
+          <Button
+            type="button"
+            onClick={handleVerify}
+            disabled={loading || code.some((digit) => !digit)}
+          >
             {loading ? 'Verifying…' : 'Continue'}
+            <ChevronRight className="size-5" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -618,12 +822,13 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   }
 
   return (
-    <Card className="mx-auto w-full max-w-[760px]">
-      {step === 'otp' ? (
-        <div className="mx-auto max-w-[440px]">{renderOtpStep()}</div>
-      ) : (
-        renderPhoneStep()
+    <Card
+      className={cn(
+        'mx-auto w-full overflow-hidden',
+        step === 'otp' ? 'max-w-[33.8125rem] shadow-xl' : 'max-w-[760px]',
       )}
+    >
+      {step === 'otp' ? renderOtpStep() : renderPhoneStep()}
     </Card>
   );
 }

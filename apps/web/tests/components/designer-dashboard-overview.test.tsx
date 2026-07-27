@@ -90,6 +90,24 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByRole('link', { name: /start verification/i })).not.toBeInTheDocument();
   });
 
+  it('uses the requested Lucide icons in the what happens next panel', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(document.querySelector('.lucide-calendar-days')).toBeInTheDocument();
+    expect(document.querySelector('.lucide-user')).toBeInTheDocument();
+    expect(document.querySelector('.lucide-shield')).toBeInTheDocument();
+    expect(document.querySelector('.lucide-clipboard-check')).not.toBeInTheDocument();
+    expect(document.querySelector('.lucide-user-round-check')).not.toBeInTheDocument();
+    expect(document.querySelector('.lucide-shield-check')).not.toBeInTheDocument();
+  });
+
   it('shows setup complete once all tracked backend steps are done', () => {
     render(
       <DesignerDashboardOverview

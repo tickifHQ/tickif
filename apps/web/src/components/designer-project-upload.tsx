@@ -61,6 +61,7 @@ import { MonthPickerField } from '@repo/ui/components/month-picker-field';
 import { SelectField, type SelectFieldOption } from '@repo/ui/components/select-field';
 import { TagCombobox, type TagComboboxOption } from '@repo/ui/components/tag-combobox';
 import { Textarea } from '@repo/ui/components/textarea';
+import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import {
@@ -970,19 +971,6 @@ function WhyItMattersCard() {
           </p>
         </div>
       </Card>
-    </div>
-  );
-}
-
-function TipCallout({ children }: { children: ReactNode }) {
-  return (
-    <div data-slot="tip-callout" className="flex gap-1">
-      <span aria-hidden="true" className="w-1 shrink-0 self-stretch rounded-full bg-primary" />
-      <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-primary/5 px-4 py-3">
-        <Lightbulb className="size-4 shrink-0 text-primary" />
-        <span className={cn(typography.bodyMedium, 'font-semibold text-primary')}>Tip</span>
-        <span className={cn(typography.bodyMedium, 'text-muted-foreground')}>{children}</span>
-      </div>
     </div>
   );
 }

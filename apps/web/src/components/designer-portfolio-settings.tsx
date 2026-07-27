@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Globe,
   Info,
-  Lightbulb,
   Loader2,
   RefreshCw,
   Star,
@@ -38,6 +37,7 @@ import { Label } from '@repo/ui/components/label';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { Switch } from '@repo/ui/components/switch';
 import { Textarea } from '@repo/ui/components/textarea';
+import { TipCallout } from '@repo/ui/components/tip-callout';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -95,12 +95,7 @@ const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
 
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
-type ToggleableSectionKey =
-  | 'trust'
-  | 'testimonial'
-  | 'reviews'
-  | 'socialLinks'
-  | 'shareBlock';
+type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
 type SectionKey = 'linkUrl' | 'customizations' | 'hero' | ToggleableSectionKey;
 
@@ -158,10 +153,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
   };
 }
 
-function computeChangedFields(
-  current: FormState,
-  saved: FormState,
-): UpdatePortfolioInput | null {
+function computeChangedFields(current: FormState, saved: FormState): UpdatePortfolioInput | null {
   const patch: Record<string, unknown> = {};
 
   for (const key of Object.keys(current) as Array<keyof FormState>) {
@@ -177,7 +169,17 @@ function computeChangedFields(
       if (
         typeof value === 'string' &&
         value === '' &&
-        ['portfolioSlug', 'tagline', 'bio', 'websiteUrl', 'instagramHandle', 'linkedinHandle', 'youtubeHandle', 'testimonialWords', 'testimonialAuthor'].includes(key)
+        [
+          'portfolioSlug',
+          'tagline',
+          'bio',
+          'websiteUrl',
+          'instagramHandle',
+          'linkedinHandle',
+          'youtubeHandle',
+          'testimonialWords',
+          'testimonialAuthor',
+        ].includes(key)
       ) {
         patch[key] = null;
       } else {
@@ -368,9 +370,7 @@ export function DesignerPortfolioSettings() {
   // -------------------------------------------------------------------------
 
   const isDirty =
-    form !== null &&
-    savedForm !== null &&
-    JSON.stringify(form) !== JSON.stringify(savedForm);
+    form !== null && savedForm !== null && JSON.stringify(form) !== JSON.stringify(savedForm);
 
   // -------------------------------------------------------------------------
   // Form handlers
@@ -387,54 +387,51 @@ export function DesignerPortfolioSettings() {
   // Slug debounce
   // -------------------------------------------------------------------------
 
-  const handleSlugChange = useCallback(
-    (value: string) => {
-      // Sanitize toward the contract's slug shape: lowercase alphanumerics
-      // and hyphens, no consecutive hyphens, no leading hyphen. A trailing
-      // hyphen is allowed while typing and caught by the pattern check below.
-      const slug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-{2,}/g, '-')
-        .replace(/^-+/, '');
-      updateField('portfolioSlug', slug);
+  const handleSlugChange = useCallback((value: string) => {
+    // Sanitize toward the contract's slug shape: lowercase alphanumerics
+    // and hyphens, no consecutive hyphens, no leading hyphen. A trailing
+    // hyphen is allowed while typing and caught by the pattern check below.
+    const slug = value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+/, '');
+    updateField('portfolioSlug', slug);
 
-      if (slugDebounceRef.current) {
-        clearTimeout(slugDebounceRef.current);
-      }
+    if (slugDebounceRef.current) {
+      clearTimeout(slugDebounceRef.current);
+    }
 
-      if (!slug || slug.length < 3) {
-        setSlugStatus('idle');
-        latestSlugRef.current = '';
-        return;
-      }
+    if (!slug || slug.length < 3) {
+      setSlugStatus('idle');
+      latestSlugRef.current = '';
+      return;
+    }
 
-      // Validate the final value against the contract regex before hitting
-      // the API — the server would reject it with a 422 anyway.
-      if (!SLUG_PATTERN.test(slug)) {
-        setSlugStatus('invalid');
-        latestSlugRef.current = '';
-        return;
-      }
+    // Validate the final value against the contract regex before hitting
+    // the API. The server would reject it with a 422 anyway.
+    if (!SLUG_PATTERN.test(slug)) {
+      setSlugStatus('invalid');
+      latestSlugRef.current = '';
+      return;
+    }
 
-      setSlugStatus('checking');
-      latestSlugRef.current = slug;
-      slugDebounceRef.current = setTimeout(async () => {
-        try {
-          const result = await checkSlugAvailability(slug);
-          // Only update if this slug is still the latest request (prevents stale race)
-          if (latestSlugRef.current === slug) {
-            setSlugStatus(result.available ? 'available' : 'unavailable');
-          }
-        } catch {
-          if (latestSlugRef.current === slug) {
-            setSlugStatus('error');
-          }
+    setSlugStatus('checking');
+    latestSlugRef.current = slug;
+    slugDebounceRef.current = setTimeout(async () => {
+      try {
+        const result = await checkSlugAvailability(slug);
+        // Only update if this slug is still the latest request (prevents stale race)
+        if (latestSlugRef.current === slug) {
+          setSlugStatus(result.available ? 'available' : 'unavailable');
         }
-      }, 500);
-    },
-    [],
-  );
+      } catch {
+        if (latestSlugRef.current === slug) {
+          setSlugStatus('error');
+        }
+      }
+    }, 500);
+  }, []);
 
   // Clean up debounce on unmount
   useEffect(() => {
@@ -514,9 +511,7 @@ export function DesignerPortfolioSettings() {
       try {
         const result = await uploadLogo(file);
         // Refresh portfolio to get new logoUrl
-        setPortfolio((prev) =>
-          prev ? { ...prev, logoUrl: result.logoUrl } : prev,
-        );
+        setPortfolio((prev) => (prev ? { ...prev, logoUrl: result.logoUrl } : prev));
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
       }
@@ -587,12 +582,15 @@ export function DesignerPortfolioSettings() {
   if (!form || !portfolio) return null;
 
   const initials = form.displayName
-    ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+    ? form.displayName
+        .split(' ')
+        .map((w) => w[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl =
-    portfolio.portfolioUrl ??
-    new URL(portfolioPath, portfolioWebUrl).toString();
+  const copyUrl = portfolio.portfolioUrl ?? new URL(portfolioPath, portfolioWebUrl).toString();
   // Derive the on-screen preview from the copy target so the displayed link
   // and the copied link never diverge once the backend populates portfolioUrl.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
@@ -611,12 +609,9 @@ export function DesignerPortfolioSettings() {
     <div className="flex flex-col">
       {/* Header */}
       <div className="px-6 py-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Portfolio
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Portfolio</h1>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Manage your public link, customize the look, and configure each
-          section visitors see.
+          Manage your public link, customize the look, and configure each section visitors see.
         </p>
       </div>
 
@@ -744,7 +739,9 @@ export function DesignerPortfolioSettings() {
               >
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label className="text-sm font-medium mt-2 text-muted-foreground">Accent colour</Label>
+                    <Label className="text-sm font-medium mt-2 text-muted-foreground">
+                      Accent colour
+                    </Label>
                     <AccentColorDropdown
                       value={form.accentColor}
                       onChange={(hex) => updateField('accentColor', hex)}
@@ -752,11 +749,10 @@ export function DesignerPortfolioSettings() {
                   </div>
 
                   <div className="mt-7">
-                    <div className="flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3 ml-1">
-                      <Lightbulb className="size-4 shrink-0 text-primary" />
-                      <span className="text-sm font-semibold text-primary">Tip</span>
-                      <span className="text-[13px] text-muted-foreground">Your accent colour is used across buttons and highlights on your public portfolio.</span>
-                    </div>
+                    <TipCallout>
+                      Your accent colour is used across buttons and highlights on your public
+                      portfolio.
+                    </TipCallout>
                   </div>
                 </div>
               </div>
@@ -765,12 +761,10 @@ export function DesignerPortfolioSettings() {
             {/* Page sections */}
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-semibold text-foreground">
-                  Page sections
-                </h3>
+                <h3 className="text-xl font-semibold text-foreground">Page sections</h3>
                 <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">
-                  Toggle each section on or off. Configure content below the
-                  toggle — same items are pulled from settings page.
+                  Toggle each section on or off. Configure content below the toggle. Same items are
+                  pulled from settings page.
                 </p>
               </div>
 
@@ -810,8 +804,17 @@ export function DesignerPortfolioSettings() {
                               {isUploadingLogo ? (
                                 <Loader2 className="size-6 animate-spin" />
                               ) : (
-                                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="size-6"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  aria-hidden
+                                >
+                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                                  <circle cx="9" cy="9" r="2" />
+                                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
                                 </svg>
                               )}
                             </button>
@@ -828,13 +831,23 @@ export function DesignerPortfolioSettings() {
                             {isDeletingLogo ? (
                               <Loader2 className="size-2.5 animate-spin" />
                             ) : (
-                              <svg viewBox="0 0 24 24" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="size-2.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                              >
+                                <path d="M18 6 6 18M6 6l12 12" />
+                              </svg>
                             )}
                           </button>
                         )}
                       </div>
                       <div className="flex-1 space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">Studio name</Label>
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Studio name
+                        </Label>
                         <Input
                           value={form.displayName}
                           onChange={(e) => updateField('displayName', e.target.value)}
@@ -898,7 +911,8 @@ export function DesignerPortfolioSettings() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Trust badges are awarded automatically as you publish projects and complete milestones.
+                      Trust badges are awarded automatically as you publish projects and complete
+                      milestones.
                     </p>
                   )}
                 </div>
@@ -909,7 +923,9 @@ export function DesignerPortfolioSettings() {
                 title="Featured testimonial"
                 subtitle="Their words – one client quote"
                 enabled={form.showFeaturedTestimonial}
-                onToggle={() => updateField('showFeaturedTestimonial', !form.showFeaturedTestimonial)}
+                onToggle={() =>
+                  updateField('showFeaturedTestimonial', !form.showFeaturedTestimonial)
+                }
                 expanded={sectionExpanded.testimonial}
                 onToggleExpanded={() => toggleExpanded('testimonial')}
               >
@@ -919,7 +935,9 @@ export function DesignerPortfolioSettings() {
                 >
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-muted-foreground">Their words</Label>
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Their words
+                      </Label>
                       <Textarea
                         value={form.testimonialWords}
                         onChange={(e) => updateField('testimonialWords', e.target.value)}
@@ -950,7 +968,10 @@ export function DesignerPortfolioSettings() {
                             placeholder="Select a project"
                             className="pr-8 shadow-sm"
                           />
-                          <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                          <ChevronsUpDown
+                            className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden
+                          />
                         </div>
                       </div>
                     </div>
@@ -1078,10 +1099,17 @@ export function DesignerPortfolioSettings() {
                             onClick={handleRefreshGoogle}
                             disabled={isRefreshingGoogle}
                           >
-                            <RefreshCw className={`size-3.5 ${isRefreshingGoogle ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                              className={`size-3.5 ${isRefreshingGoogle ? 'animate-spin' : ''}`}
+                            />
                             Refresh
                           </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={handleDisconnectGoogle}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleDisconnectGoogle}
+                          >
                             Disconnect
                           </Button>
                         </div>
@@ -1100,7 +1128,9 @@ export function DesignerPortfolioSettings() {
                           onClick={handleConnectGoogle}
                           disabled={isConnectingGoogle || !googleRef.trim()}
                         >
-                          {isConnectingGoogle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                          {isConnectingGoogle ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : null}
                           Connect
                         </Button>
                       </div>
@@ -1113,8 +1143,12 @@ export function DesignerPortfolioSettings() {
                     <div className="space-y-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Show overall ratings on your profile</p>
-                          <p className="text-[13px] text-muted-foreground">Show Google rating in trust strip</p>
+                          <p className="text-sm font-medium text-foreground">
+                            Show overall ratings on your profile
+                          </p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Show Google rating in trust strip
+                          </p>
                         </div>
                         <Switch
                           checked={form.showOverallRating}
@@ -1123,12 +1157,18 @@ export function DesignerPortfolioSettings() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Show only reviews with over 4+ star ratings</p>
-                          <p className="text-[13px] text-muted-foreground">Show positive testimonials on your portfolio</p>
+                          <p className="text-sm font-medium text-foreground">
+                            Show only reviews with over 4+ star ratings
+                          </p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Show positive testimonials on your portfolio
+                          </p>
                         </div>
                         <Switch
                           checked={form.showPositiveReviewsOnly}
-                          onCheckedChange={(checked) => updateField('showPositiveReviewsOnly', checked)}
+                          onCheckedChange={(checked) =>
+                            updateField('showPositiveReviewsOnly', checked)
+                          }
                         />
                       </div>
                     </div>
@@ -1164,7 +1204,9 @@ export function DesignerPortfolioSettings() {
                     <div className="-mx-4 h-px w-[calc(100%+2rem)] bg-border" />
 
                     <div className="space-y-3">
-                      <Label className="text-sm font-medium text-muted-foreground">Social links</Label>
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Social links
+                      </Label>
                       <div className="flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm">
                         <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
                           <InstagramBrandIcon className="size-4" />
@@ -1218,7 +1260,8 @@ export function DesignerPortfolioSettings() {
                 >
                   <div className="space-y-4">
                     <p className="text-[15px] text-muted-foreground font-medium mt-1.5">
-                      Encourages visitors to copy and share your portfolio link. Uses your studio name, cover, and accent colour.
+                      Encourages visitors to copy and share your portfolio link. Uses your studio
+                      name, cover, and accent colour.
                     </p>
 
                     <div className="rounded-lg bg-muted p-4">
@@ -1232,8 +1275,12 @@ export function DesignerPortfolioSettings() {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-foreground">Show Made with Tickif badge</p>
-                        <p className="text-[13px] text-muted-foreground">Show Made with Tickif badge on your profile</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Show Made with Tickif badge
+                        </p>
+                        <p className="text-[13px] text-muted-foreground">
+                          Show Made with Tickif badge on your profile
+                        </p>
                       </div>
                       <Switch
                         checked={form.showTickifBadge}
@@ -1252,10 +1299,21 @@ export function DesignerPortfolioSettings() {
           <div className="sticky top-6 flex w-full flex-col items-center gap-4">
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="size-4 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 4h7M14 9h7M14 15h7M14 20h7" />
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-4 text-muted-foreground"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <path d="M14 4h7M14 9h7M14 15h7M14 20h7" />
                 </svg>
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Live preview</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Live preview
+                </span>
               </div>
               <button
                 type="button"
@@ -1303,7 +1361,9 @@ export function DesignerPortfolioSettings() {
                       )}
                     </div>
                     <div>
-                      <div className="text-base font-semibold text-foreground">{form.displayName || 'Studio Meraki'}</div>
+                      <div className="text-base font-semibold text-foreground">
+                        {form.displayName || 'Studio Meraki'}
+                      </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
                         {form.tagline || previewUrl}
                       </div>
@@ -1401,11 +1461,10 @@ function AccentColorDropdown({
   value: string;
   onChange: (hex: string) => void;
 }) {
-  const selected =
-    accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
-      name: 'Custom',
-      hex: value || '#FF8F73',
-    };
+  const selected = accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
+    name: 'Custom',
+    hex: value || '#FF8F73',
+  };
 
   return (
     <DropdownMenu>

@@ -45,11 +45,14 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
+  --color-success-lighter: var(--success-lighter);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-feature: var(--feature);
+  --color-feature-lighter: var(--feature-lighter);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

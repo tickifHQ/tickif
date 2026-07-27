@@ -128,6 +128,23 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('uses the shared Tip callout in portfolio customizations', async () => {
+    await renderSettings();
+
+    const callout = document.querySelector('[data-slot="tip-callout"]');
+
+    expect(callout).not.toBeNull();
+    expect(callout).toHaveClass('flex', 'gap-1');
+    expect(callout?.firstElementChild).toHaveClass(
+      'w-1',
+      'self-stretch',
+      'rounded-full',
+      'bg-primary',
+    );
+    expect(callout?.lastElementChild).toHaveClass('border', 'border-border', 'bg-primary/5');
+    expect(callout?.querySelector('svg')).toHaveClass('text-primary');
+  });
+
   it('copies the canonical preview URL when the backend portfolio URL is not available yet', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
     await renderSettings();
@@ -325,21 +342,14 @@ describe('DesignerPortfolioSettings', () => {
       'fill-current',
     );
     expect(
-      screen.getByTestId('reviews-summary').querySelectorAll(
-        'span[aria-hidden="true"]',
-      ),
+      screen.getByTestId('reviews-summary').querySelectorAll('span[aria-hidden="true"]'),
     ).toHaveLength(2);
     expect(
       Array.from(
-        screen.getByTestId('reviews-summary').querySelectorAll(
-          'span[aria-hidden="true"]',
-        ),
+        screen.getByTestId('reviews-summary').querySelectorAll('span[aria-hidden="true"]'),
       ).every((separator) => separator.textContent === '·'),
     ).toBe(true);
-    expect(screen.getByTestId('reviews-integration')).toHaveClass(
-      'border-b',
-      'border-border',
-    );
+    expect(screen.getByTestId('reviews-integration')).toHaveClass('border-b', 'border-border');
   });
 
   it('shows a retry-able error state when the portfolio fails to load', async () => {
@@ -555,7 +565,13 @@ describe('DesignerPortfolioSettings', () => {
     it('connects a location and shows the pending state', async () => {
       mock.connectGoogleReviews.mockResolvedValue({
         available: true,
-        connection: { status: 'pending', placeId: 'ChIJabc', rating: null, userRatingsTotal: null, lastFetchedAt: null },
+        connection: {
+          status: 'pending',
+          placeId: 'ChIJabc',
+          rating: null,
+          userRatingsTotal: null,
+          lastFetchedAt: null,
+        },
         reviews: [],
       });
 
@@ -591,7 +607,11 @@ describe('DesignerPortfolioSettings', () => {
     });
 
     it('reports the feature as unavailable when the platform has no key', async () => {
-      mock.fetchGoogleReviews.mockResolvedValue({ available: false, connection: null, reviews: [] });
+      mock.fetchGoogleReviews.mockResolvedValue({
+        available: false,
+        connection: null,
+        reviews: [],
+      });
       await expandReviews();
       expect(await screen.findByText(/isn.t enabled on this workspace/i)).toBeInTheDocument();
     });

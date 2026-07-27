@@ -161,6 +161,53 @@ describe('DesignerWorkspaceShell', () => {
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
   });
 
+  it.each([
+    ['/designer/dashboard', 'Overview', 'lucide-layout-dashboard', 'lucide-house'],
+    ['/designer/projects', 'Projects', 'lucide-layers', 'lucide-folder-kanban'],
+    ['/designer/portfolio', 'Portfolio', 'lucide-link', 'lucide-link-2'],
+    ['/designer/analytics', 'Analytics', 'lucide-chart-column-big', 'lucide-chart-line'],
+    ['/designer/plan-billing', 'Plan & billing', 'lucide-credit-card', 'lucide-hand-coins'],
+    ['/designer/profile', 'Profile & settings', 'lucide-settings', 'lucide-circle-user-round'],
+  ])(
+    'uses the requested Lucide icon for %s in the sidebar and header',
+    (pathname, label, iconClass, oldIconClass) => {
+      mock.pathname = pathname;
+
+      render(
+        <DesignerWorkspaceShell
+          activeOrganizationId="org-1"
+          studioName="Antika Interiors"
+          studioLocation="Chennai"
+        >
+          <div>Dashboard content</div>
+        </DesignerWorkspaceShell>,
+      );
+
+      const navLink = screen.getAllByRole('link', { name: label })[0];
+      expect(navLink?.querySelector('svg')).toHaveClass(iconClass);
+      expect(document.querySelector(`.${iconClass}`)).toBeInTheDocument();
+      expect(document.querySelector(`.${oldIconClass}`)).not.toBeInTheDocument();
+    },
+  );
+
+  it('uses the requested Lucide icon for Contact support', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    expect(supportLink.querySelector('svg')).toHaveClass('lucide-message-square-more');
+    expect(document.querySelector('.lucide-badge-help')).not.toBeInTheDocument();
+  });
+
   it('routes Profile & settings to the designer profile page', () => {
     mock.pathname = '/designer/dashboard';
 
@@ -217,6 +264,8 @@ describe('DesignerWorkspaceShell', () => {
     const addProject = screen.getByRole('link', { name: /add new project/i });
 
     expect(exploreTickif.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    expect(exploreTickif.querySelector('.lucide-external-link')).toBeInTheDocument();
+    expect(exploreTickif.querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument();
     expect(
       exploreTickif.compareDocumentPosition(organizationSwitcher) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -286,7 +335,12 @@ describe('DesignerWorkspaceShell', () => {
     const main = screen.getByText('Upload content').closest('main');
     const section = main?.closest('section');
     const shell = main?.closest('.fixed');
+    const projectsLinks = screen.getAllByRole('link', { name: 'Projects' });
 
+    for (const projectsLink of projectsLinks) {
+      expect(projectsLink.querySelector('svg')).toHaveClass('lucide-layers');
+      expect(projectsLink.querySelector('.lucide-sliders-horizontal')).not.toBeInTheDocument();
+    }
     expect(shell).toHaveClass('inset-0');
     expect(shell).toHaveClass('overflow-hidden');
     expect(main).toHaveClass('h-full');

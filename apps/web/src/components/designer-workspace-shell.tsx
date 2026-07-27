@@ -10,20 +10,19 @@ import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import {
-  ArrowUpRight,
-  BadgeHelp,
   CalendarDays,
-  ChartLine,
-  CircleUserRound,
+  ChartColumnBig,
+  CreditCard,
+  ExternalLink,
   FileUser,
-  FolderKanban,
-  HandCoins,
-  House,
-  Link2,
+  Layers,
+  LayoutDashboard,
+  Link as LinkIcon,
   Menu,
+  MessageSquareMore,
   Plus,
+  Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Star,
   UsersRound,
   X,
@@ -37,20 +36,20 @@ type NavItem = {
 };
 
 const studioItems: NavItem[] = [
-  { label: 'Overview', href: '/designer/dashboard', icon: House },
-  { label: 'Projects', href: '/designer/projects', icon: FolderKanban },
+  { label: 'Overview', href: '/designer/dashboard', icon: LayoutDashboard },
+  { label: 'Projects', href: '/designer/projects', icon: Layers },
   { label: 'Leads', href: '/designer/leads', icon: FileUser },
   { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
   { label: 'Reviews', href: '/designer/reviews', icon: Star },
-  { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
+  { label: 'Analytics', href: '/designer/analytics', icon: ChartColumnBig },
 ];
 
 const growItems: NavItem[] = [
-  { label: 'Portfolio', href: '/designer/portfolio', icon: Link2 },
+  { label: 'Portfolio', href: '/designer/portfolio', icon: LinkIcon },
   { label: 'Verification', icon: ShieldCheck, comingSoon: true },
   { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
-  { label: 'Plan & billing', href: '/designer/plan-billing', icon: HandCoins },
-  { label: 'Profile & settings', href: '/designer/profile', icon: CircleUserRound },
+  { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard },
+  { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
 ];
 
 function isItemActive(pathname: string, href?: string) {
@@ -118,7 +117,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     return (
       <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-muted-foreground sm:inline-flex">
         <Link href="/designer/projects" className="inline-flex items-center gap-2 text-foreground">
-          <SlidersHorizontal className="size-4" />
+          <Layers className="size-4" />
           <span className="font-medium">Projects</span>
         </Link>
         <span>/</span>
@@ -184,7 +183,7 @@ function SidebarContent({
               href="mailto:support@tickif.in"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <BadgeHelp className="size-4" />
+              <MessageSquareMore className="size-4" />
               <span>Contact support</span>
             </Link>
             <Link
@@ -193,7 +192,7 @@ function SidebarContent({
             >
               <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
               <span>Explore Tickif</span>
-              <ArrowUpRight className="ml-auto size-4" />
+              <ExternalLink className="ml-auto size-4" />
             </Link>
           </div>
 

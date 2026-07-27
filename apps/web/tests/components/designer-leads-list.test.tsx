@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
 import { DesignerLeadsList } from '../../src/components/designer-leads-list';
@@ -53,8 +54,14 @@ describe('DesignerLeadsList', () => {
   it('renders lead filters and API rows without exposing backend status copy', () => {
     render(<DesignerLeadsList leads={leads} activeStatus="all" />);
 
-    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute('href', '/designer/leads?page=1');
-    expect(screen.getByRole('link', { name: /contacted/i })).toHaveAttribute('href', '/designer/leads?status=contacted&page=1');
+    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?page=1',
+    );
+    expect(screen.getByRole('link', { name: /contacted/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?status=contacted&page=1',
+    );
     expect(screen.getByText('Priya Krishnan')).toBeInTheDocument();
     expect(screen.getAllByText('4BHK Villa in OMR').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/mark as/i).length).toBeGreaterThan(0);
@@ -62,7 +69,13 @@ describe('DesignerLeadsList', () => {
   });
 
   it('shows an empty state for an empty API page', () => {
-    render(<DesignerLeadsList leads={{ ...leads, items: [], total: 0, totalPages: 1 }} activeStatus="closed" query="rahul" />);
+    render(
+      <DesignerLeadsList
+        leads={{ ...leads, items: [], total: 0, totalPages: 1 }}
+        activeStatus="closed"
+        query="rahul"
+      />,
+    );
 
     expect(screen.getByText(/no leads found/i)).toBeInTheDocument();
     expect(screen.getByText(/try a different search/i)).toBeInTheDocument();
@@ -73,5 +86,14 @@ describe('DesignerLeadsList', () => {
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
     expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
+  });
+
+  it('focuses lead search when pressing the slash shortcut', async () => {
+    const user = userEvent.setup();
+    render(<DesignerLeadsList leads={leads} activeStatus="all" />);
+
+    await user.keyboard('/');
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
   });
 });
