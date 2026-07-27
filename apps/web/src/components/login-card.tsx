@@ -590,9 +590,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
                       <Button
                         type="button"
+                        variant="fancy"
+                        size="fancy"
                         onClick={handleSendOtp}
                         disabled={loading || phone.length < 10}
-                        className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                        className="w-full cursor-pointer"
                       >
                         {loading ? 'Sending…' : 'Get OTP'}
                       </Button>
@@ -655,11 +657,13 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
                           <Button
                             type="button"
-                            className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                            variant="fancy"
+                            size="fancy"
+                            className="w-full cursor-pointer"
                             disabled={loading || !designerEmail.trim()}
                             onClick={handleEmailOtpSend}
                           >
-                            {loading ? 'Sending…' : 'Continue'}
+                            {loading ? 'Sending…' : 'Login'}
                           </Button>
                         </>
                       ) : (
@@ -682,7 +686,9 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
                           <Button
                             type="button"
-                            className="w-full cursor-pointer border border-white/10 bg-[#0e121b] text-white shadow-[0px_1px_2px_0px_rgba(27,28,29,0.48),0px_0px_0px_1px_#242628] [background-image:linear-gradient(180deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0)_100%)] hover:bg-[#0e121b]/90"
+                            variant="fancy"
+                            size="fancy"
+                            className="w-full cursor-pointer"
                             disabled={loading || emailOtp.some((d) => !d)}
                             onClick={handleEmailOtpVerify}
                           >

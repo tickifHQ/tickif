@@ -34,4 +34,38 @@ describe('Button', () => {
     );
     expect(screen.getByRole('button', { name: 'List your work' })).not.toHaveClass('border');
   });
+
+  it('supports the compact inverted design-system button', () => {
+    render(
+      <Button variant="inverted" size="compact">
+        Add new project
+      </Button>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Add new project' })).toHaveClass(
+      'h-8',
+      'gap-1.5',
+      'px-2.5',
+      'bg-button-inverted',
+      'text-button-inverted-foreground',
+      'shadow-button-inverted',
+    );
+  });
+
+  it('supports the fancy design-system button', () => {
+    render(
+      <Button variant="fancy" size="fancy">
+        Login
+      </Button>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Login' })).toHaveClass(
+      'h-10',
+      'rounded-lg',
+      'border-button-fancy-border',
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
+  });
 });

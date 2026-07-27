@@ -3,15 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { leadDetailResponseSchema, type LeadDetailResponse, type LeadStatus } from '@repo/contracts';
+import {
+  leadDetailResponseSchema,
+  type LeadDetailResponse,
+  type LeadStatus,
+} from '@repo/contracts';
 import { Avatar } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@repo/ui/components/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { ArrowRight, ImagePlus, X } from 'lucide-react';
@@ -113,9 +112,12 @@ export function DesignerLeadDetailDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      if (!nextOpen) closeDialog();
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) closeDialog();
+      }}
+    >
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-black/25 backdrop-blur-sm"
@@ -147,7 +149,9 @@ export function DesignerLeadDetailDialog({
               </Avatar>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-medium text-foreground">{lead.name}</h2>
-                <p className="mt-1 truncate text-sm text-muted-foreground">{lead.city ?? 'Location not added'}</p>
+                <p className="mt-1 truncate text-sm text-muted-foreground">
+                  {lead.city ?? 'Location not added'}
+                </p>
               </div>
             </div>
 
@@ -156,7 +160,11 @@ export function DesignerLeadDetailDialog({
                 <DetailField label="Name" value={lead.name} />
                 <DetailField label="Location" value={lead.city} />
                 <DetailField label="Budget" value={lead.budgetBand} />
-                <DetailField label="Contact number" value={lead.contactNumber} className="sm:col-span-2" />
+                <DetailField
+                  label="Contact number"
+                  value={lead.contactNumber}
+                  className="sm:col-span-2"
+                />
                 <DetailField label="Received on" value={formatDate(lead.receivedAt)} />
               </dl>
 
@@ -170,7 +178,9 @@ export function DesignerLeadDetailDialog({
                     <div className="truncate text-sm font-medium text-foreground">
                       {lead.referredProjectTitle ?? 'No project attached'}
                     </div>
-                    <div className="mt-1 truncate text-sm text-muted-foreground">{lead.city ?? 'Location not added'}</div>
+                    <div className="mt-1 truncate text-sm text-muted-foreground">
+                      {lead.city ?? 'Location not added'}
+                    </div>
                   </div>
                   {lead.referredProjectId ? (
                     <Button asChild variant="outline" className="shrink-0">
@@ -190,7 +200,10 @@ export function DesignerLeadDetailDialog({
                 onValueChange={(value) => setSelectedStatus(value as LeadStatus)}
                 options={[
                   { value: 'new', label: statusLabel('new') },
-                  ...leadStatusOptions.map((option) => ({ value: option.value, label: statusLabel(option.value) })),
+                  ...leadStatusOptions.map((option) => ({
+                    value: option.value,
+                    label: statusLabel(option.value),
+                  })),
                 ]}
                 placeholder="Select status"
               />
@@ -222,7 +235,8 @@ export function DesignerLeadDetailDialog({
           </Button>
           <Button
             type="button"
-            variant="emphasis"
+            variant="inverted"
+            size="compact"
             className="min-w-32"
             disabled={!lead || selectedStatus === lead.status || isPending}
             onClick={saveLead}

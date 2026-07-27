@@ -86,6 +86,11 @@ describe('DesignerLeadsList', () => {
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
     expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
+      'h-8',
+      'bg-button-inverted',
+      'text-button-inverted-foreground',
+    );
   });
 
   it('focuses lead search when pressing the slash shortcut', async () => {

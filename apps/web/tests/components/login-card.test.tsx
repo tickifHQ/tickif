@@ -38,7 +38,11 @@ describe('LoginCard', () => {
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
   });
 
   it('renders segmented control with browsing and designer tabs', () => {
@@ -101,7 +105,11 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Continue$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Login$/i })).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
   });
 
   it('calls Google signIn with origin callback in browsing mode', async () => {

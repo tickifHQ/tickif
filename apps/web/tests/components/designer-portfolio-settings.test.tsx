@@ -151,7 +151,14 @@ describe('DesignerPortfolioSettings', () => {
 
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
-    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    const copyButton = screen.getByRole('button', { name: 'Copy link' });
+
+    expect(copyButton).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
+    await user.click(copyButton);
 
     expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/mahi-studio');
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();

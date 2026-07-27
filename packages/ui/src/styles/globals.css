@@ -59,6 +59,13 @@
   --color-button-neutral: var(--button-neutral);
   --color-button-neutral-foreground: var(--button-neutral-foreground);
   --color-button-neutral-hover: var(--button-neutral-hover);
+  --color-button-inverted: var(--button-inverted);
+  --color-button-inverted-foreground: var(--button-inverted-foreground);
+  --color-button-inverted-hover: var(--button-inverted-hover);
+  --color-button-fancy: var(--button-fancy);
+  --color-button-fancy-foreground: var(--button-fancy-foreground);
+  --color-button-fancy-hover: var(--button-fancy-hover);
+  --color-button-fancy-border: var(--button-fancy-border);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -81,6 +88,8 @@
   --shadow-xl: 0 20px 25px -5px oklch(0.3 0.04 50 / 0.1), 0 8px 10px -6px oklch(0.3 0.04 50 / 0.1);
   --shadow-button-neutral: var(--button-neutral-shadow);
   --shadow-floating-card: 0 28px 72px 0 oklch(0 0 0 / 0.32), 0 10px 28px 0 oklch(0 0 0 / 0.14);
+  --shadow-button-inverted: var(--button-inverted-shadow);
+  --shadow-button-fancy: var(--button-fancy-shadow);
 }
 
 @layer base {

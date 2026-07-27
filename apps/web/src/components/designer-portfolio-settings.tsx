@@ -1387,8 +1387,9 @@ export function DesignerPortfolioSettings() {
                 </p>
                 <CopyLinkButton
                   value={copyUrl}
-                  variant="emphasis"
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] py-3 text-sm font-medium text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:from-[#3e4148] hover:to-[#1f2228]"
+                  variant="fancy"
+                  size="fancy"
+                  className="mt-4 w-full cursor-pointer"
                 />
               </div>
             </Card>

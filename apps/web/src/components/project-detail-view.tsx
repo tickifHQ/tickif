@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { FeedProject, GalleryImage } from '@repo/contracts';
+import { Button } from '@repo/ui/components/button';
+import { MessageSquare } from 'lucide-react';
 import { ShowcaseCard } from '@/components/showcase-card';
 
 interface ProjectDetailViewProps {
@@ -25,7 +27,7 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
   const mainImageUrl =
     displayGallery.length > 0
       ? displayGallery[activeImageIndex]?.url
-      : project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/800/600`;
+      : (project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/800/600`);
 
   const mainImageAlt =
     displayGallery.length > 0
@@ -37,7 +39,14 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
         <Link href="/" className="flex items-center gap-1 hover:text-foreground transition-colors">
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <svg
+            viewBox="0 0 24 24"
+            className="size-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
             <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Back to results
@@ -96,13 +105,27 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
                 <div className="flex-1">
                   <p className="relative inline-flex items-center text-sm font-semibold">
                     {project.studio}
-                    <svg viewBox="0 0 24 24" className="-mt-1 ml-0.5 size-4 text-primary" fill="currentColor" aria-label="Verified">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="-mt-1 ml-0.5 size-4 text-primary"
+                      fill="currentColor"
+                      aria-label="Verified"
+                    >
                       <path d="M12 1l2.09 2.31L17 2.73l.52 2.94 2.94.52-.58 2.91L22 12l-2.12 2.9.58 2.91-2.94.52L17 21.27l-2.91-.58L12 23l-2.09-2.31L7 21.27l-.52-2.94-2.94-.52.58-2.91L2 12l2.12-2.9-.58-2.91 2.94-.52L7 2.73l2.91.58L12 1z" />
-                      <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="m9 12 2 2 4-4"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   </p>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span aria-hidden className="text-primary font-bold">★</span>
+                    <span aria-hidden className="text-primary font-bold">
+                      ★
+                    </span>
                     <span className="font-medium">{project.rating.toFixed(1)}</span>
                     <span>·</span>
                     <span>56 homes</span>
@@ -114,20 +137,22 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
 
               {/* Buttons row */}
               <div className="mt-4 flex items-center gap-3">
-                <button
-                  type="button"
-                  className="flex flex-[7] items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-                >
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                <Button type="button" variant="inverted" size="compact" className="flex-[7]">
+                  <MessageSquare aria-hidden />
                   Enquire
-                </button>
+                </Button>
                 <button
                   type="button"
                   className="flex flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
                 >
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
                     <circle cx="12" cy="8" r="5" />
                     <path d="M20 21a8 8 0 0 0-16 0" />
                   </svg>
@@ -147,8 +172,19 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
                 }`}
                 aria-label="Bookmark"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill={bookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-4"
+                  fill={bookmarked ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <path
+                    d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
               <button
@@ -160,8 +196,17 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
                 }`}
                 aria-label="Share"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill={shared ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-4"
+                  fill={shared ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
                   <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
                 </svg>
               </button>
@@ -171,14 +216,33 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4 text-sm text-foreground">
                 <span className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" />
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                    <circle cx="12" cy="12" r="3" />
                   </svg>
                   1.7k
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path
+                      d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                   145
                 </span>
@@ -192,8 +256,20 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
                 }`}
                 aria-label="Report"
               >
-                <svg viewBox="0 0 24 24" className="size-4" fill={reported ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" strokeLinecap="round" strokeLinejoin="round" /><line x1="4" x2="4" y1="22" y2="15" />
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-4"
+                  fill={reported ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <path
+                    d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <line x1="4" x2="4" y1="22" y2="15" />
                 </svg>
                 Report
               </button>
@@ -201,10 +277,12 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
 
             {/* Description placeholder */}
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">About this project</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                About this project
+              </p>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                A beautifully designed space that blends functionality with aesthetics.
-                More details coming soon.
+                A beautifully designed space that blends functionality with aesthetics. More details
+                coming soon.
               </p>
             </div>
 
@@ -214,7 +292,14 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground shadow-md transition-colors hover:bg-primary/90"
             >
               Visit full project
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden
+              >
                 <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Link>

@@ -73,7 +73,14 @@ describe('DesignerDashboardOverview', () => {
       'href',
       '/designer/profile',
     );
-    expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+    const copyButton = screen.getByRole('button', { name: /copy link/i });
+
+    expect(copyButton).toBeInTheDocument();
+    expect(copyButton).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
   });
 
   it('keeps verification non-interactive until that flow ships', () => {

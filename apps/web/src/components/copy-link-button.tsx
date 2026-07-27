@@ -7,12 +7,14 @@ import { Check, Copy, Share2 } from 'lucide-react';
 export function CopyLinkButton({
   value,
   variant = 'outline',
+  size,
   className,
   label = 'Copy link',
   icon = 'copy',
 }: {
   value: string;
-  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'link';
+  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'link' | 'fancy';
+  size?: 'default' | 'compact' | 'fancy' | 'sm' | 'xs' | 'lg' | 'icon';
   className?: string;
   label?: string;
   icon?: 'copy' | 'share';
@@ -31,7 +33,7 @@ export function CopyLinkButton({
   }
 
   return (
-    <Button type="button" variant={variant} onClick={handleCopy} className={className}>
+    <Button type="button" variant={variant} size={size} onClick={handleCopy} className={className}>
       {copied ? <Check className="size-4" /> : <IdleIcon className="size-4" />}
       {copied ? 'Copied' : label}
     </Button>

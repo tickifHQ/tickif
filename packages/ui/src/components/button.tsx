@@ -14,6 +14,10 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
         neutral:
           'bg-button-neutral text-button-neutral-foreground shadow-button-neutral hover:bg-button-neutral-hover',
+        inverted:
+          'bg-button-inverted text-button-inverted-foreground shadow-button-inverted hover:bg-button-inverted-hover',
+        fancy:
+          'rounded-lg border border-button-fancy-border bg-button-fancy text-button-fancy-foreground shadow-button-fancy [background-image:var(--button-fancy-background)] hover:bg-button-fancy-hover',
         outline:
           'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
@@ -22,6 +26,8 @@ const buttonVariants = cva(
       },
       size: {
         default: 'h-10 px-4 py-2',
+        compact: 'h-8 gap-1.5 px-2.5 text-[13px] leading-[1.1] [&_svg]:size-[15px]',
+        fancy: 'h-10 gap-1 px-2.5 py-2 text-sm leading-relaxed [&_svg]:size-[15px]',
         sm: 'h-9 px-3',
         xs: 'h-8 gap-1.5 px-2.5',
         lg: 'h-11 px-6',

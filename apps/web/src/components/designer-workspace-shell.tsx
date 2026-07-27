@@ -330,8 +330,9 @@ export function DesignerWorkspaceShell({
               pathname === '/designer/leads' ? (
                 <Button
                   asChild
-                  variant="emphasis"
-                  className="size-10 cursor-pointer rounded-full p-0 sm:w-auto sm:px-4"
+                  variant="inverted"
+                  size="compact"
+                  className="size-10 cursor-pointer rounded-full p-0 sm:h-8 sm:w-auto sm:rounded-md sm:px-2.5"
                 >
                   <Link href="/designer/projects/new" aria-label="Add new project">
                     <Plus className="size-4" />

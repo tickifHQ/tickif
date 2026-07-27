@@ -50,13 +50,12 @@ export function PublicHeader({
           {isAuthenticated ? (
             <AccountMenu />
           ) : (
-            <Link
-              href="/login"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#27272a] px-2.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#27272a]/90"
-            >
-              <UserRound className="size-4" aria-hidden />
-              Sign in
-            </Link>
+            <Button asChild variant="inverted" size="compact">
+              <Link href="/login">
+                <UserRound className="size-4" aria-hidden />
+                Sign in
+              </Link>
+            </Button>
           )}
         </div>
       </div>
