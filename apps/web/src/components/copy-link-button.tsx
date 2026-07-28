@@ -2,18 +2,23 @@
 
 import { useState } from 'react';
 import { Button } from '@repo/ui/components/button';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Share2 } from 'lucide-react';
 
 export function CopyLinkButton({
   value,
   variant = 'outline',
   className,
+  label = 'Copy link',
+  icon = 'copy',
 }: {
   value: string;
   variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'link';
   className?: string;
+  label?: string;
+  icon?: 'copy' | 'share';
 }) {
   const [copied, setCopied] = useState(false);
+  const IdleIcon = icon === 'share' ? Share2 : Copy;
 
   async function handleCopy() {
     try {
@@ -27,8 +32,8 @@ export function CopyLinkButton({
 
   return (
     <Button type="button" variant={variant} onClick={handleCopy} className={className}>
-      {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-      {copied ? 'Copied' : 'Copy link'}
+      {copied ? <Check className="size-4" /> : <IdleIcon className="size-4" />}
+      {copied ? 'Copied' : label}
     </Button>
   );
 }

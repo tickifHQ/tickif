@@ -5,6 +5,7 @@ import type {
   SlugAvailabilityResponse,
 } from '@repo/contracts';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
+import { config } from '@repo/config';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -89,7 +90,37 @@ function isUniqueViolation(error: unknown, constraintName?: string): boolean {
   return false;
 }
 
-function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
+/**
+ * The slug a public portfolio URL should use: the designer's chosen slug when
+ * set, else the owning organization slug (which every profile has from onboarding).
+ */
+export function publicPortfolioSlug(
+  portfolioSlug: string | null,
+  orgSlug: string,
+): string {
+  return portfolioSlug ?? orgSlug;
+}
+
+/** Absolute `/d/{slug}` URL for a designer's public portfolio. */
+export function publicPortfolioUrl(portfolioSlug: string | null, orgSlug: string): string {
+  return `${config.PUBLIC_WEB_URL}/d/${publicPortfolioSlug(portfolioSlug, orgSlug)}`;
+}
+
+/**
+ * Presign the logo for display, or null when unset.
+ *
+ * The prefix check prevents IDOR: only keys minted for this profile are signed,
+ * so a tampered `logo_image_id` can't be used to read another profile's object.
+ */
+export async function presignProfileLogo(
+  profile: DesignerProfileRecord,
+): Promise<string | null> {
+  const expectedPrefix = `originals/logos/${profile.id}/`;
+  if (!profile.logoImageId || !profile.logoImageId.startsWith(expectedPrefix)) return null;
+  return presignDownload({ key: profile.logoImageId });
+}
+
+export function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
   const badges: PortfolioBadge[] = [];
   if (profile.status === 'active') badges.push('verified');
   const daysSinceCreation =
@@ -126,22 +157,19 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   const badges = computeBadges(profile);
-  // The public portfolio route (/d/:slug) is not shipped yet.
-  // portfolioUrl will be populated when the public page is implemented
-  const portfolioUrl = null;
 
-  // Resolve logo to a presigned download URL (or null)
-  // Validate prefix to prevent IDOR — only sign keys belonging to this profile
-  const expectedPrefix = `originals/logos/${profile.id}/`;
-  const logoUrl =
-    profile.logoImageId && profile.logoImageId.startsWith(expectedPrefix)
-      ? await presignDownload({ key: profile.logoImageId })
-      : null;
+  // Independent reads — one round-trip's worth of latency, not three.
+  const [logoUrl, googleRow, orgSlug] = await Promise.all([
+    presignProfileLogo(profile),
+    // Lightweight Google connection snapshot so the settings page renders the
+    // real connection state (badge + rating) without a second request.
+    googleReviewsRepository.findByProfileId(profile.id),
+    portfolioRepository.findOrgSlug(profile.orgId),
+  ]);
 
-  // Embed a lightweight Google connection snapshot so the settings page renders
-  // the real connection state (badge + rating) without a second round-trip.
-  const googleRow = await googleReviewsRepository.findByProfileId(profile.id);
   const googleConnection = googleRow ? readState(googleRow).summary : null;
+  // Null only if the owning org vanished mid-request; the FK makes that a no-op case.
+  const portfolioUrl = orgSlug ? publicPortfolioUrl(portfolio.portfolioSlug, orgSlug) : null;
 
   return {
     id: portfolio.id,

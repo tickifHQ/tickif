@@ -3,8 +3,25 @@ import { getSessionCookie } from 'better-auth/cookies';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
 
-function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname);
+/**
+ * Route trees anonymous visitors may enter.
+ *
+ * `/d/` is the designer portfolio; `/projects/` is the public project detail
+ * page it links to — the two are one journey, so gating either sends visitors to
+ * a login wall mid-browse. Both read published-only API projections
+ * (`projectsService.gallery` and the portfolio read 404 anything unpublished),
+ * so nothing here depends on the proxy for confidentiality.
+ *
+ * Trailing slashes are deliberate: they keep `/designer/...` from matching `/d/`
+ * and any future `/projectsomething` from matching `/projects/`.
+ */
+const PUBLIC_PATH_PREFIXES = ['/d/', '/projects/'] as const;
+
+export function isPublicPath(pathname: string): boolean {
+  return (
+    PUBLIC_PATHS.has(pathname) ||
+    PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
 }
 
 export function proxy(req: NextRequest) {
@@ -17,7 +34,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url));
   }
 
-  if (!hasSession && !isPublic(pathname)) {
+  if (!hasSession && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 

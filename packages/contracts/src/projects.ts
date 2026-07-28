@@ -473,12 +473,27 @@ export const designerProjectsQuerySchema = z
 export type DesignerProjectsQuery = z.infer<typeof designerProjectsQuerySchema>;
 
 /**
- * GET /api/profiles/{id}/projects — response.
- * Reuses `feedProjectSchema` for the card projection (same shape as the home feed).
+ * Card projection for a single designer's portfolio grid.
+ *
+ * Extends the feed card with the three fields the public portfolio gallery
+ * renders and sorts on. They stay off `feedProjectSchema` because the home feed
+ * neither displays nor orders by them.
  */
+export const designerProjectCardSchema = feedProjectSchema
+  .extend({
+    /** e.g. "4 BHK · Apartment" — composed from the bhk + property subtype labels. */
+    propertyType: z.string().nullable(),
+    /** Year the project was completed; falls back to the publish year. */
+    completionYear: z.number().int().nullable(),
+    sizeSqft: z.number().int().nullable(),
+  })
+  .meta({ id: 'DesignerProjectCard' });
+export type DesignerProjectCard = z.infer<typeof designerProjectCardSchema>;
+
+/** GET /api/profiles/{id}/projects — response. */
 export const designerProjectsResponseSchema = z
   .object({
-    projects: z.array(feedProjectSchema),
+    projects: z.array(designerProjectCardSchema),
     page: z.number().int(),
     limit: z.number().int(),
     hasMore: z.boolean(),

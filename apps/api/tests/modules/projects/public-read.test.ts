@@ -97,6 +97,9 @@ function makeFeedRow(overrides: Partial<ProjectFeedItemRecord> = {}): ProjectFee
     coverDerivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/thumb.webp', width: 400, height: 300 }],
     coverWidth: 400,
     coverHeight: 300,
+    sizeSqft: 1200,
+    completedMonth: '2025-03',
+    publishedAt: new Date('2025-06-01'),
     ...overrides,
   };
 }
@@ -251,6 +254,83 @@ describe('projectsService.designerProjects', () => {
 
     expect(result.projects).toHaveLength(1);
     expect(result.hasMore).toBe(false);
+  });
+
+  it('adds the portfolio card fields the public gallery renders and sorts on', async () => {
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
+      makeFeedRow({ propertySubtypeSlug: 'apartment', sizeSqft: 2400, completedMonth: '2024-06' }),
+    ]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
+      new Map([
+        ['bhk:3-bhk', '3 BHK'],
+        ['property_subtype:apartment', 'Apartment'],
+      ]),
+    );
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    const result = await projectsService.designerProjects('d1', { page: 1, limit: 12 });
+
+    expect(result.projects[0]).toMatchObject({
+      propertyType: '3 BHK · Apartment',
+      completionYear: 2024,
+      sizeSqft: 2400,
+    });
+  });
+
+  it('falls back to the publish year when completedMonth is unset', async () => {
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
+      makeFeedRow({ completedMonth: null, publishedAt: new Date('2023-11-02T00:00:00.000Z') }),
+    ]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    const result = await projectsService.designerProjects('d1', { page: 1, limit: 12 });
+
+    expect(result.projects[0]?.completionYear).toBe(2023);
+  });
+
+  it('parses a free-text completedMonth and reports null when there is no year at all', async () => {
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
+      makeFeedRow({ id: 'p-free', completedMonth: 'June 2022' }),
+      makeFeedRow({ id: 'p-none', completedMonth: 'sometime', publishedAt: null }),
+    ]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    const result = await projectsService.designerProjects('d1', { page: 1, limit: 12 });
+
+    expect(result.projects[0]?.completionYear).toBe(2022);
+    expect(result.projects[1]?.completionYear).toBeNull();
+  });
+
+  it('reports a null propertyType when neither taxonomy label resolves', async () => {
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
+      makeFeedRow({ bhkSlug: null, propertySubtypeSlug: null }),
+    ]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    const result = await projectsService.designerProjects('d1', { page: 1, limit: 12 });
+
+    expect(result.projects[0]?.propertyType).toBeNull();
+  });
+
+  it('skips the designer lookup when the caller already verified the profile', async () => {
+    vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    await projectsService.designerProjects(
+      'd1',
+      { page: 1, limit: 12 },
+      { skipDesignerCheck: true },
+    );
+
+    expect(projectsRepository.findDesignerById).not.toHaveBeenCalled();
   });
 });
 

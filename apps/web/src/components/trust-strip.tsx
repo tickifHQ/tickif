@@ -1,17 +1,25 @@
-const items = [
-  { mark: '✓', label: '12,400+ real homes, fully verified' },
-  { mark: '⛉', label: 'Talk directly to the designers' },
-  { mark: '✦', label: 'No commissions · No middlemen' },
-];
+import type { LucideIcon } from 'lucide-react';
+import { Check, Shield, Sparkle } from 'lucide-react';
 
-export function TrustStrip() {
+export type TrustStripItem = {
+  icon: LucideIcon;
+  label: string;
+};
+
+const defaultItems = [
+  { icon: Check, label: '12,400+ real homes, fully verified' },
+  { icon: Shield, label: 'Talk directly to the designers' },
+  { icon: Sparkle, label: 'No commissions · No middlemen' },
+] satisfies TrustStripItem[];
+
+export function TrustStrip({ items = defaultItems }: { items?: readonly TrustStripItem[] }) {
   return (
-    <div className="bg-[#1d2721]">
-      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-center gap-x-8 gap-y-1.5 px-6 py-2.5">
-        {items.map((item) => (
-          <span key={item.label} className="inline-flex items-center gap-2 text-xs font-medium text-[#f3f0e7]/95">
-            <span aria-hidden className="text-[#f3f0e7]">{item.mark}</span>
-            {item.label}
+    <div className="bg-surface-inverse px-4 py-2 text-surface-inverse-foreground">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs">
+        {items.map(({ icon: Icon, label }) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <Icon className="size-3" aria-hidden="true" />
+            {label}
           </span>
         ))}
       </div>

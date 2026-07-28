@@ -871,6 +871,9 @@ describe('projectsService.feed', () => {
     ],
     coverWidth: 480,
     coverHeight: 640,
+    sizeSqft: 1450,
+    completedMonth: '2025-02',
+    publishedAt: new Date('2025-04-01'),
     ...over,
   });
 

@@ -1,4 +1,5 @@
-import { db, schema, eq, and, sql } from '@repo/db';
+import { db, schema, eq, and, or, sql } from '@repo/db';
+import type { DesignerProfileRecord } from './repository.js';
 
 /**
  * Data-access for designer portfolio (E-222).
@@ -6,6 +7,14 @@ import { db, schema, eq, and, sql } from '@repo/db';
  */
 
 export type PortfolioRecord = typeof schema.designerPortfolio.$inferSelect;
+
+/** Everything needed to resolve a public `/d/{slug}` portfolio URL. */
+export type PublicPortfolioRecord = {
+  profile: DesignerProfileRecord;
+  orgSlug: string;
+  /** Null when the designer has never opened the portfolio settings page. */
+  portfolio: PortfolioRecord | null;
+};
 
 /**
  * Transaction handle type. Exported so the service layer can reference it
@@ -29,6 +38,60 @@ const RESERVED_SLUGS = new Set([
   'signup', 'signin', 'register', 'logout', 'app',
 ]);
 
+/** Either a pooled connection or an open transaction — both satisfy the query builder. */
+type Handle = typeof db | Tx;
+
+/**
+ * Is `slug` free for `excludeProfileId` to claim?
+ *
+ * `findPublicBySlug` resolves `/d/{slug}` against `designer_portfolio.portfolio_slug`
+ * **or** `organization.slug`, so the two share one namespace and both have to be
+ * checked here. Checking only the portfolio table would let a designer claim another
+ * org's slug and, because the resolver ranks a `portfolio_slug` match first, serve
+ * their own portfolio at that org's established public URL — or 404 it outright by
+ * also switching `publicLinkEnabled` off.
+ *
+ * Best-effort: no DB constraint can span the two tables, so a concurrent org rename
+ * can still collide. The unique index on `portfolio_slug` covers the common race;
+ * the org half is rare enough to leave to the resolver's deterministic ordering.
+ */
+async function slugAvailable(
+  handle: Handle,
+  slug: string,
+  excludeProfileId?: string,
+): Promise<boolean> {
+  if (RESERVED_SLUGS.has(slug)) return false;
+
+  const portfolioConditions = [eq(schema.designerPortfolio.portfolioSlug, slug)];
+  if (excludeProfileId) {
+    portfolioConditions.push(sql`${schema.designerPortfolio.profileId} != ${excludeProfileId}`);
+  }
+  const [portfolioHit] = await handle
+    .select({ id: schema.designerPortfolio.id })
+    .from(schema.designerPortfolio)
+    .where(and(...portfolioConditions))
+    .limit(1);
+  if (portfolioHit) return false;
+
+  // A designer's own org slug stays claimable: it already resolves to them, so
+  // typing it into the custom-slug field should not report a conflict with itself.
+  const orgConditions = [eq(schema.organization.slug, slug)];
+  if (excludeProfileId) {
+    orgConditions.push(
+      sql`${schema.organization.id} != (
+        select ${schema.designerProfile.orgId} from ${schema.designerProfile}
+        where ${schema.designerProfile.id} = ${excludeProfileId}
+      )`,
+    );
+  }
+  const [orgHit] = await handle
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .where(and(...orgConditions))
+    .limit(1);
+  return !orgHit;
+}
+
 export const portfolioRepository = {
   /** Find portfolio by designer profile ID. */
   async findByProfileId(profileId: string): Promise<PortfolioRecord | null> {
@@ -40,11 +103,7 @@ export const portfolioRepository = {
     return row ?? null;
   },
 
-  /**
-   * Find portfolio by slug.
-   * Not used by the settings endpoints yet — reserved for the public
-   * portfolio page epic (/p/:slug).
-   */
+  /** Find portfolio by slug. */
   async findBySlug(slug: string): Promise<PortfolioRecord | null> {
     const [row] = await db
       .select()
@@ -52,6 +111,94 @@ export const portfolioRepository = {
       .where(eq(schema.designerPortfolio.portfolioSlug, slug))
       .limit(1);
     return row ?? null;
+  },
+
+  /**
+   * Resolve a public `/d/{slug}` URL to its profile, org slug, and portfolio row.
+   *
+   * Matches the designer-chosen `portfolioSlug` **or** the owning organization
+   * slug, so share links minted before the designer picked a custom slug keep
+   * working. A `portfolioSlug` hit wins if both could match. The portfolio join
+   * is a LEFT JOIN because designers who never opened the settings page have no
+   * row yet — the service falls back to the column defaults.
+   *
+   * Visibility is filtered here rather than only in the service so the resolver is
+   * total: an ineligible candidate yields to the next one instead of collapsing the
+   * result set and 404ing. Without that, a designer who squats a slug and disables
+   * their public link takes the rightful owner's page down with them. `slugAvailable`
+   * is the primary guard against the squat; this keeps the read path honest anyway.
+   * `coalesce(..., true)` preserves "no row means never configured, so enabled".
+   */
+  async findPublicBySlug(slug: string): Promise<PublicPortfolioRecord | null> {
+    const [row] = await db
+      .select({
+        profile: schema.designerProfile,
+        orgSlug: schema.organization.slug,
+        portfolio: schema.designerPortfolio,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .leftJoin(
+        schema.designerPortfolio,
+        eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+      )
+      .where(
+        and(
+          or(eq(schema.designerPortfolio.portfolioSlug, slug), eq(schema.organization.slug, slug)),
+          eq(schema.designerProfile.status, 'active'),
+          sql`coalesce(${schema.designerPortfolio.publicLinkEnabled}, true)`,
+        ),
+      )
+      .orderBy(sql`case when ${schema.designerPortfolio.portfolioSlug} = ${slug} then 0 else 1 end`)
+      .limit(1);
+    if (!row) return null;
+    return { profile: row.profile, orgSlug: row.orgSlug, portfolio: row.portfolio };
+  },
+
+  /** Title of a published project owned by this designer, for the featured quote. */
+  async findPublishedProjectTitle(projectId: string, designerId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ title: schema.project.title })
+      .from(schema.project)
+      .where(
+        and(
+          eq(schema.project.id, projectId),
+          eq(schema.project.designerId, designerId),
+          eq(schema.project.status, 'published'),
+        ),
+      )
+      .limit(1);
+    return row?.title ?? null;
+  },
+
+  /** City footprint labels for a profile, in taxonomy display order. */
+  async findCityLabels(profileId: string): Promise<string[]> {
+    const rows = await db
+      .select({ label: schema.taxonomy.label })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+      )
+      .where(
+        and(
+          eq(schema.designerProfileFootprint.profileId, profileId),
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .orderBy(schema.taxonomy.sortOrder, schema.taxonomy.label);
+    return rows.map((r) => r.label);
+  },
+
+  /** Organization slug for a profile's owning org — used to build the canonical URL. */
+  async findOrgSlug(orgId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ slug: schema.organization.slug })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, orgId))
+      .limit(1);
+    return row?.slug ?? null;
   },
 
   /** Create a new portfolio row for a profile. */
@@ -155,20 +302,7 @@ export const portfolioRepository = {
    * Optionally excludes a specific profile (for the owner's own slug).
    */
   async isSlugAvailable(slug: string, excludeProfileId?: string): Promise<boolean> {
-    if (RESERVED_SLUGS.has(slug)) return false;
-
-    const conditions = [eq(schema.designerPortfolio.portfolioSlug, slug)];
-    if (excludeProfileId) {
-      conditions.push(
-        sql`${schema.designerPortfolio.profileId} != ${excludeProfileId}`,
-      );
-    }
-    const [row] = await db
-      .select({ id: schema.designerPortfolio.id })
-      .from(schema.designerPortfolio)
-      .where(and(...conditions))
-      .limit(1);
-    return !row;
+    return slugAvailable(db, slug, excludeProfileId);
   },
 
   /** Check if a slug is reserved. */
@@ -185,20 +319,7 @@ export const portfolioRepository = {
     slug: string,
     excludeProfileId?: string,
   ): Promise<boolean> {
-    if (RESERVED_SLUGS.has(slug)) return false;
-
-    const conditions = [eq(schema.designerPortfolio.portfolioSlug, slug)];
-    if (excludeProfileId) {
-      conditions.push(
-        sql`${schema.designerPortfolio.profileId} != ${excludeProfileId}`,
-      );
-    }
-    const [row] = await tx
-      .select({ id: schema.designerPortfolio.id })
-      .from(schema.designerPortfolio)
-      .where(and(...conditions))
-      .limit(1);
-    return !row;
+    return slugAvailable(tx, slug, excludeProfileId);
   },
 
   /**

@@ -4,6 +4,7 @@ import type {
   DeleteProjectImageResponse,
   DeleteProjectResponse,
   DeleteProjectRoomResponse,
+  DesignerProjectCard,
   DesignerProjectsQuery,
   DesignerProjectsResponse,
   DuplicateProjectResponse,
@@ -210,6 +211,45 @@ function toFeedProject(
     coverImageUrl,
     imageWidth: row.coverWidth,
     imageHeight: row.coverHeight,
+  };
+}
+
+/**
+ * Year a project was completed. `completed_month` is free text captured during
+ * upload (e.g. "2024-06" or "June 2024"), so read the first 4-digit run and fall
+ * back to the publish year. Returns null when neither yields a plausible year.
+ */
+function completionYearOf(row: ProjectFeedItemRecord): number | null {
+  const matched = row.completedMonth?.match(/\d{4}/)?.[0];
+  const year = matched ? Number(matched) : row.publishedAt?.getUTCFullYear();
+  if (!year || year < 1900 || year > 2200) return null;
+  return year;
+}
+
+/**
+ * Designer-portfolio card projection: the feed card plus the display and sort
+ * fields the public portfolio gallery needs.
+ */
+function toDesignerProjectCard(
+  row: ProjectFeedItemRecord,
+  labels: Map<string, string>,
+  localityLabels: Map<string, string>,
+  coverImageUrl: string | null,
+): DesignerProjectCard {
+  const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
+    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+
+  // "4 BHK · Apartment" — either part may be missing.
+  const propertyType =
+    [labelOf('bhk', row.bhkSlug), labelOf('property_subtype', row.propertySubtypeSlug)]
+      .filter((part): part is string => !!part)
+      .join(' · ') || null;
+
+  return {
+    ...toFeedProject(row, labels, localityLabels, coverImageUrl),
+    propertyType,
+    completionYear: completionYearOf(row),
+    sizeSqft: row.sizeSqft,
   };
 }
 
@@ -1300,16 +1340,21 @@ export const projectsService = {
 
   /**
    * GET /api/profiles/{id}/projects — paginated published projects for a designer.
-   * Reuses feed projection (same card shape as the home feed).
+   *
+   * `skipDesignerCheck` is set by the public-portfolio service, which has already
+   * loaded and status-checked the profile — it saves a redundant round-trip.
    */
   async designerProjects(
     designerId: string,
     query: DesignerProjectsQuery,
+    options?: { skipDesignerCheck?: boolean },
   ): Promise<DesignerProjectsResponse> {
-    // Verify the designer profile exists and is active
-    const profile = await projectsRepository.findDesignerById(designerId);
-    if (!profile || profile.status !== 'active') {
-      throw AppError.notFound('Designer profile not found');
+    if (!options?.skipDesignerCheck) {
+      // Verify the designer profile exists and is active
+      const profile = await projectsRepository.findDesignerById(designerId);
+      if (!profile || profile.status !== 'active') {
+        throw AppError.notFound('Designer profile not found');
+      }
     }
 
     const { page, limit } = query;
@@ -1326,17 +1371,22 @@ export const projectsService = {
       projectsRepository.findLocalityLabels(pageRows.flatMap(feedLocalityPairs)),
     ]);
 
-    const projects = await Promise.all(
+    const projects: DesignerProjectCard[] = await Promise.all(
       pageRows.map(async (row) => {
         const cover = await coverImageUrl({
           status: row.coverStatus,
           derivatives: row.coverDerivatives,
         }).catch(() => null);
-        return toFeedProject(row, labels, localityLabels, cover);
+        return toDesignerProjectCard(row, labels, localityLabels, cover);
       }),
     );
 
     return { projects, page, limit, hasMore };
+  },
+
+  /** Lowest published budget-band label for a designer, or null. */
+  async designerStartingBudget(designerId: string): Promise<string | null> {
+    return projectsRepository.findLowestBudgetBandLabel(designerId);
   },
 
   /**
