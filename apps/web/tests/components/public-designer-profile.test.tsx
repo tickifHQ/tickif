@@ -68,8 +68,49 @@ describe('PublicDesignerProfile', () => {
 
     expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Anika Spaces hasn’t collected reviews on Tickif yet.'),
+      screen.getByText('No reviews are available for Anika Spaces yet.'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps Google ratings visible when no Tickif aggregate is available', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, tickif: null },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
+    expect(screen.getByText('57 Google reviews')).toBeInTheDocument();
+  });
+
+  it('renders both source aggregates without merging their counts', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getByText('Based on 42 verified reviews')).toBeInTheDocument();
+    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
+  });
+
+  it('marks only completed Tickif consultations as verified and supports rating-only reviews', () => {
+    const reviews = [
+      makeReview({
+        id: 'tickif-rating-only',
+        source: 'tickif',
+        text: null,
+        verifiedConsultation: true,
+      }),
+    ];
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
+
+    expect(
+      within(screen.getByTestId('review-marquee-primary')).getByLabelText(
+        'Verified consultation',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('“”')).not.toBeInTheDocument();
   });
 
   it('hides sections the designer switched off in portfolio settings', () => {
@@ -182,7 +223,7 @@ describe('PublicDesignerProfile', () => {
       .closest('[data-slot="card"]');
 
     expect(ratingSummary).toHaveClass('shadow-floating-card');
-    expect(ratingSummary?.parentElement).toHaveClass('pb-20');
+    expect(ratingSummary?.closest('.pb-20')).toBeInTheDocument();
   });
 
   it('builds displayed and copied profile links from the API canonical URL', async () => {

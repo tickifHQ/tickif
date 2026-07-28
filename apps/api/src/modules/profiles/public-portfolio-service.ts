@@ -90,6 +90,7 @@ function toPublicReview(review: GoogleReview, index: number): PublicPortfolioRev
     rating: review.rating,
     relativeTime: review.relativeTime,
     text: review.text,
+    verifiedConsultation: false,
     source: 'google',
   };
 }
@@ -203,8 +204,8 @@ export const publicPortfolioService = {
       stats: {
         tickif: tickifSettings.showOverallRating
           ? {
-              rating: tickif.averageRating,
-              reviewCount: tickif.reviewCount,
+              rating: Number(profile.avgRating) || 0,
+              reviewCount: profile.reviewCount,
             }
           : null,
         google:
@@ -244,7 +245,8 @@ export const publicPortfolioService = {
           avatarUrl: review.author.avatarUrl,
           rating: review.rating,
           relativeTime: relativeReviewTime(review.publishedAt ?? review.createdAt),
-          text: review.body ?? '',
+          text: review.body,
+          verifiedConsultation: review.verifiedConsultation,
           source: 'tickif' as const,
         })),
         ...googleReviews.map(toPublicReview),

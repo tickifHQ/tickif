@@ -361,9 +361,14 @@ describe('portfolioService.updatePortfolio', () => {
   it('patches Tickif and Google review settings independently', async () => {
     setupResolveProfile();
     setupGetPortfolio();
-    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({
+        showTickifReviews: false,
+        showGoogleOverallRating: false,
+      }),
+    );
 
-    await portfolioService.updatePortfolio(
+    const result = await portfolioService.updatePortfolio(
       {
         reviewSettings: {
           tickif: { showReviews: false },
@@ -381,6 +386,14 @@ describe('portfolioService.updatePortfolio', () => {
         showGoogleOverallRating: false,
       }),
     );
+    expect(result).toMatchObject({
+      showReviews: true,
+      showOverallRating: true,
+      reviewSettings: {
+        tickif: { showReviews: false },
+        google: { showOverallRating: false },
+      },
+    });
   });
 });
 

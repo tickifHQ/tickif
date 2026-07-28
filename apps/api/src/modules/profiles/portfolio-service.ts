@@ -225,7 +225,7 @@ async function buildPortfolioResponse(
     showHero: portfolio.showHero,
     showTrustCredentials: portfolio.showTrustCredentials,
     showFeaturedTestimonial: portfolio.showFeaturedTestimonial,
-    showReviews: portfolio.showReviews,
+    showReviews: portfolio.showTickifReviews || portfolio.showGoogleReviews,
     showSocialLinks: portfolio.showSocialLinks,
     showShareBlock: portfolio.showShareBlock,
     tagline: portfolio.tagline,
@@ -239,8 +239,11 @@ async function buildPortfolioResponse(
     testimonialWords: portfolio.testimonialWords,
     testimonialAuthor: portfolio.testimonialAuthor,
     testimonialProjectId: portfolio.testimonialProjectId,
-    showOverallRating: portfolio.showOverallRating,
-    showPositiveReviewsOnly: portfolio.showPositiveReviewsOnly,
+    showOverallRating:
+      portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
+    showPositiveReviewsOnly:
+      portfolio.showTickifPositiveReviewsOnly &&
+      portfolio.showGooglePositiveReviewsOnly,
     reviewSettings: {
       tickif: {
         showReviews: portfolio.showTickifReviews,

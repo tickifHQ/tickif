@@ -369,9 +369,10 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
       id: 'review-1',
       author: 'Priya K.',
       relativeTime: '5 days ago',
+      verifiedConsultation: false,
       source: 'tickif',
     });
-    expect(result.stats.tickif).toEqual({ rating: 5, reviewCount: 1 });
+    expect(result.stats.tickif).toEqual({ rating: 4.2, reviewCount: 8 });
     expect(result.stats.google).toEqual({ rating: 4.8, reviewCount: 57 });
   });
 
@@ -388,6 +389,7 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
         rating: 5,
         relativeTime: '2 weeks ago',
         text: 'Wonderful to work with.',
+        verifiedConsultation: false,
         source: 'google',
       },
     ]);

@@ -497,7 +497,8 @@ export const publicPortfolioReviewSchema = z
     avatarUrl: z.string().url().nullable(),
     rating: z.number().min(0).max(5),
     relativeTime: z.string(),
-    text: z.string(),
+    text: z.string().nullable(),
+    verifiedConsultation: z.boolean(),
     source: publicReviewSourceSchema,
   })
   .meta({ id: 'PublicPortfolioReview' });

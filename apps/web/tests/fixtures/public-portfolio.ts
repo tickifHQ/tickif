@@ -41,6 +41,7 @@ export function makeReview(overrides: Partial<PublicPortfolioReview> = {}): Publ
     rating: 4.5,
     relativeTime: '3 months ago',
     text: 'Anika and her team understood what we wanted before we could properly explain it.',
+    verifiedConsultation: false,
     source: 'google',
     ...overrides,
   };
