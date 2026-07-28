@@ -16,6 +16,21 @@ export const moderationAction = z
   .meta({ id: 'ModerationAction' });
 export type ModerationAction = z.infer<typeof moderationAction>;
 
+/**
+ * Actions a designer takes on their own project. These carry no reviewer verdict, so a
+ * project whose history is only self-service churn (submit, then withdraw) is still the
+ * designer's to delete. Every other action means an admin looked at the project, and that
+ * decision has to outlive the draft.
+ *
+ * Typed as `ModerationAction[]` so adding an enum member without classifying it here is a
+ * compile error rather than a silent promotion to "admin action".
+ */
+export const SELF_SERVICE_MODERATION_ACTIONS: readonly ModerationAction[] = [
+  'submit',
+  'resubmit',
+  'withdraw',
+];
+
 export const moderationFieldDiff = z
   .record(
     z.string(),

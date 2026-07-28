@@ -823,6 +823,7 @@ describe('assertTransition', () => {
     ['superadmin:in_review:changes_requested', 'request_changes'],
     ['superadmin:in_review:rejected', 'reject'],
     ['superadmin:published:in_review', 'unpublish'],
+    ['superadmin:submitted:draft', 'withdraw'],
   ]);
 
   it('accepts only declared transitions and derives their audit actions', () => {
