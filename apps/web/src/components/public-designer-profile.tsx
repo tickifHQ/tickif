@@ -19,6 +19,7 @@ import type {
   PortfolioBadge,
   PublicPortfolioResponse,
   PublicPortfolioReview,
+  PublicPortfolioStats,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { buttonVariants } from '@repo/ui/components/button';
@@ -83,6 +84,16 @@ type SectionProps = {
   view: ProfileView;
 };
 
+function headlineReviewAggregate(stats: PublicPortfolioStats) {
+  if (stats.tickif && stats.tickif.reviewCount > 0) {
+    return { source: 'tickif' as const, ...stats.tickif };
+  }
+  if (stats.google && stats.google.reviewCount > 0) {
+    return { source: 'google' as const, ...stats.google };
+  }
+  return null;
+}
+
 function LoginGatedAction({
   children,
   className,
@@ -144,7 +155,7 @@ function StudioMark({
 
 function StudioBar({ portfolio, view }: SectionProps) {
   const headlineRating = portfolio.sections.overallRating
-    ? (portfolio.stats.tickif ?? portfolio.stats.google)
+    ? headlineReviewAggregate(portfolio.stats)
     : null;
 
   return (
@@ -205,9 +216,8 @@ type HeroStatTile = { value: string; label: string; detail: string };
 
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
-  const headlineSource = stats.tickif ? 'tickif' : 'google';
   const headlineRating = portfolio.sections.overallRating
-    ? (stats.tickif ?? stats.google)
+    ? headlineReviewAggregate(stats)
     : null;
 
   // Only stats the designer actually has data for — an empty tile reads as broken.
@@ -217,7 +227,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
           value: formatRating(headlineRating.rating),
           label: 'Rating',
           detail:
-            headlineSource === 'tickif'
+            headlineRating.source === 'tickif'
               ? `${headlineRating.reviewCount} verified reviews`
               : `${headlineRating.reviewCount} Google reviews`,
         }
@@ -403,9 +413,8 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
 
 function StorySection({ portfolio, view }: SectionProps) {
   const testimonial = portfolio.testimonial;
-  const headlineSource = portfolio.stats.tickif ? 'tickif' : 'google';
   const headlineRating = portfolio.sections.overallRating
-    ? (portfolio.stats.tickif ?? portfolio.stats.google)
+    ? headlineReviewAggregate(portfolio.stats)
     : null;
   if (!testimonial) return null;
 
@@ -517,7 +526,7 @@ function StorySection({ portfolio, view }: SectionProps) {
                       <span>{formatRating(headlineRating.rating)}</span>
                       <span className="text-muted-foreground">
                         (
-                        {headlineSource === 'tickif'
+                        {headlineRating.source === 'tickif'
                           ? `${headlineRating.reviewCount} verified reviews`
                           : `${headlineRating.reviewCount} Google reviews`}
                         )
@@ -538,7 +547,20 @@ function StorySection({ portfolio, view }: SectionProps) {
 
               {headlineRating && headlineRating.reviewCount > 0 ? (
                 <div className="flex items-center justify-between border-t px-5 py-3 text-muted-foreground">
-                  <TickifBrandIcon role="img" aria-label="Tickif" className="size-4 text-primary" />
+                  {headlineRating.source === 'tickif' ? (
+                    <TickifBrandIcon
+                      role="img"
+                      aria-label="Tickif"
+                      className="size-4 text-primary"
+                    />
+                  ) : (
+                    <GoogleBrandIcon
+                      role="img"
+                      aria-label="Google reviews"
+                      aria-hidden={false}
+                      className="size-4"
+                    />
+                  )}
                   <span className="inline-flex items-center gap-1 font-mono text-2xs leading-none tracking-wider uppercase">
                     <span>{formatRating(headlineRating.rating)}</span>
                     <Star className="block size-2.5 shrink-0 fill-current" aria-hidden="true" />
@@ -656,10 +678,10 @@ function ReviewsSection({ portfolio }: SectionProps) {
   const { reviews, stats } = portfolio;
   const reviewAggregates = portfolio.sections.overallRating
     ? [
-        stats.tickif
+        stats.tickif && stats.tickif.reviewCount > 0
           ? { source: 'tickif' as const, ...stats.tickif }
           : null,
-        stats.google
+        stats.google && stats.google.reviewCount > 0
           ? { source: 'google' as const, ...stats.google }
           : null,
       ].filter((aggregate): aggregate is NonNullable<typeof aggregate> => aggregate !== null)

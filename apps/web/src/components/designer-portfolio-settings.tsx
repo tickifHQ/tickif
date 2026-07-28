@@ -69,7 +69,7 @@ type FormState = {
   showHero: boolean;
   showTrustCredentials: boolean;
   showFeaturedTestimonial: boolean;
-  showReviews: boolean;
+  showGoogleReviews: boolean;
   showSocialLinks: boolean;
   showShareBlock: boolean;
   tagline: string;
@@ -81,8 +81,8 @@ type FormState = {
   youtubeHandle: string;
   testimonialWords: string;
   testimonialAuthor: string;
-  showOverallRating: boolean;
-  showPositiveReviewsOnly: boolean;
+  showGoogleOverallRating: boolean;
+  showGooglePositiveReviewsOnly: boolean;
   showTickifBadge: boolean;
 };
 
@@ -140,7 +140,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     showHero: data.showHero,
     showTrustCredentials: data.showTrustCredentials,
     showFeaturedTestimonial: data.showFeaturedTestimonial,
-    showReviews: data.showReviews,
+    showGoogleReviews: data.reviewSettings.google.showReviews,
     showSocialLinks: data.showSocialLinks,
     showShareBlock: data.showShareBlock,
     tagline: data.tagline ?? '',
@@ -152,8 +152,9 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     youtubeHandle: data.youtubeHandle ?? '',
     testimonialWords: data.testimonialWords ?? '',
     testimonialAuthor: data.testimonialAuthor ?? '',
-    showOverallRating: data.showOverallRating,
-    showPositiveReviewsOnly: data.showPositiveReviewsOnly,
+    showGoogleOverallRating: data.reviewSettings.google.showOverallRating,
+    showGooglePositiveReviewsOnly:
+      data.reviewSettings.google.showPositiveReviewsOnly,
     showTickifBadge: data.showTickifBadge,
   };
 }
@@ -163,8 +164,32 @@ function computeChangedFields(
   saved: FormState,
 ): UpdatePortfolioInput | null {
   const patch: Record<string, unknown> = {};
+  const googleReviewSettings: Record<string, boolean> = {};
+
+  if (current.showGoogleReviews !== saved.showGoogleReviews) {
+    googleReviewSettings.showReviews = current.showGoogleReviews;
+  }
+  if (current.showGoogleOverallRating !== saved.showGoogleOverallRating) {
+    googleReviewSettings.showOverallRating = current.showGoogleOverallRating;
+  }
+  if (
+    current.showGooglePositiveReviewsOnly !== saved.showGooglePositiveReviewsOnly
+  ) {
+    googleReviewSettings.showPositiveReviewsOnly =
+      current.showGooglePositiveReviewsOnly;
+  }
+  if (Object.keys(googleReviewSettings).length > 0) {
+    patch.reviewSettings = { google: googleReviewSettings };
+  }
 
   for (const key of Object.keys(current) as Array<keyof FormState>) {
+    if (
+      key === 'showGoogleReviews' ||
+      key === 'showGoogleOverallRating' ||
+      key === 'showGooglePositiveReviewsOnly'
+    ) {
+      continue;
+    }
     if (current[key] !== saved[key]) {
       const value = current[key];
       // displayName is required server-side (min 2 chars, not nullable):
@@ -962,8 +987,10 @@ export function DesignerPortfolioSettings() {
               <ToggleableSection
                 title="Reviews"
                 subtitle="What it's like to work with us"
-                enabled={form.showReviews}
-                onToggle={() => updateField('showReviews', !form.showReviews)}
+                enabled={form.showGoogleReviews}
+                onToggle={() =>
+                  updateField('showGoogleReviews', !form.showGoogleReviews)
+                }
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >
@@ -1117,8 +1144,10 @@ export function DesignerPortfolioSettings() {
                           <p className="text-[13px] text-muted-foreground">Show Google rating in trust strip</p>
                         </div>
                         <Switch
-                          checked={form.showOverallRating}
-                          onCheckedChange={(checked) => updateField('showOverallRating', checked)}
+                          checked={form.showGoogleOverallRating}
+                          onCheckedChange={(checked) =>
+                            updateField('showGoogleOverallRating', checked)
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -1127,8 +1156,10 @@ export function DesignerPortfolioSettings() {
                           <p className="text-[13px] text-muted-foreground">Show positive testimonials on your portfolio</p>
                         </div>
                         <Switch
-                          checked={form.showPositiveReviewsOnly}
-                          onCheckedChange={(checked) => updateField('showPositiveReviewsOnly', checked)}
+                          checked={form.showGooglePositiveReviewsOnly}
+                          onCheckedChange={(checked) =>
+                            updateField('showGooglePositiveReviewsOnly', checked)
+                          }
                         />
                       </div>
                     </div>

@@ -72,19 +72,24 @@ describe('PublicDesignerProfile', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps Google ratings visible when no Tickif aggregate is available', () => {
+  it('keeps Google ratings visible when Tickif has no published reviews', () => {
     const portfolio = makePublicPortfolio();
     render(
       <PublicDesignerProfile
         portfolio={{
           ...portfolio,
-          stats: { ...portfolio.stats, tickif: null },
+          stats: {
+            ...portfolio.stats,
+            tickif: { rating: 0, reviewCount: 0 },
+          },
         }}
       />,
     );
 
     expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
     expect(screen.getByText('57 Google reviews')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Google reviews' })).toBeInTheDocument();
+    expect(screen.queryByText('Based on 0 verified reviews')).not.toBeInTheDocument();
   });
 
   it('renders both source aggregates without merging their counts', () => {
