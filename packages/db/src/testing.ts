@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from './client.js';
 import * as schema from './schema/index.js';
 
@@ -183,6 +183,37 @@ export async function makeLead(overrides: Partial<typeof schema.lead.$inferInser
       organizationId,
       name: overrides.name ?? 'Test Lead',
       contactNumber: overrides.contactNumber ?? '+919800000000',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
+export async function makeConsultationBooking(
+  overrides: Partial<typeof schema.consultationBooking.$inferInsert> = {},
+) {
+  const designer = overrides.designerProfileId
+    ? null
+    : await makeDesigner({ status: 'active', phone: '+919800000099' });
+  const designerProfileId = overrides.designerProfileId ?? designer!.id;
+  const organizationId =
+    overrides.organizationId ??
+    designer?.orgId ??
+    (
+      await db
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, designerProfileId))
+        .limit(1)
+    )[0]!.organizationId;
+  const requesterId = overrides.requesterId ?? (await makeUser()).id;
+  const [row] = await db
+    .insert(schema.consultationBooking)
+    .values({
+      organizationId,
+      designerProfileId,
+      requesterId,
+      preferredSlots: [{ date: '2026-08-10', window: 'morning' }],
       ...overrides,
     })
     .returning();

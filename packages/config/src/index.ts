@@ -95,10 +95,11 @@ const envSchema = z.object({
   // resolve to the same origin in every environment.
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
 
-  // SMS / OTP provider. Selection is explicit; creds are per-provider.
+  // SMS provider. Selection is explicit; credentials and workflows are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
-  NOVU_SECRET_KEY: z.string().optional(),
-  NOVU_OTP_WORKFLOW_ID: z.string().optional(),
+  NOVU_SECRET_KEY: z.string().trim().min(1).optional(),
+  NOVU_OTP_WORKFLOW_ID: z.string().trim().min(1).optional(),
+  NOVU_BOOKING_WORKFLOW_ID: z.string().trim().min(1).optional(),
   NOVU_API_URL: z.string().url().default('https://api.novu.co'),
 
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
@@ -243,6 +244,20 @@ function assertProductionMediaConfig(env: RawEnv): void {
   }
 }
 
+function assertProductionSmsConfig(env: RawEnv): void {
+  if (env.NODE_ENV !== 'production' || env.SMS_PROVIDER !== 'novu') return;
+  const missing = [
+    ['NOVU_SECRET_KEY', env.NOVU_SECRET_KEY],
+    ['NOVU_OTP_WORKFLOW_ID', env.NOVU_OTP_WORKFLOW_ID],
+    ['NOVU_BOOKING_WORKFLOW_ID', env.NOVU_BOOKING_WORKFLOW_ID],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => `  - ${name}: required when SMS_PROVIDER=novu in production`);
+  if (missing.length > 0) {
+    throw new Error(`Invalid environment configuration:\n${missing.join('\n')}`);
+  }
+}
+
 export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   const parsed = refinedEnvSchema.safeParse(environment);
   if (!parsed.success) {
@@ -253,6 +268,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   }
   const env = parsed.data;
   assertProductionMediaConfig(env);
+  assertProductionSmsConfig(env);
   return {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),

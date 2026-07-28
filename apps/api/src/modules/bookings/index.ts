@@ -1,3 +1,2 @@
-// Reserved for the bookings module (routes.ts / service.ts / repository.ts).
-// See ../README.md for the layering convention.
-export {};
+export { bookingsRoutes, type BookingsRoutes } from './routes.js';
+export { bookingsService, type BookingCaller } from './service.js';

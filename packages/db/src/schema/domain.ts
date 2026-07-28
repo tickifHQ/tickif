@@ -49,6 +49,15 @@ export const moderationActionEnum = pgEnum('moderation_action', [
 
 export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
 
+export const bookingStatusEnum = pgEnum('booking_status', [
+  'requested',
+  'confirmed',
+  'completed',
+  'cancelled',
+]);
+
+export const bookingCancelledByEnum = pgEnum('booking_cancelled_by', ['requester', 'designer']);
+
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
@@ -299,6 +308,148 @@ export const lead = pgTable(
     index('lead_organization_idx').on(t.organizationId),
     index('lead_referred_project_idx').on(t.referredProjectId),
     index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
+  ],
+);
+
+export type ConsultationSlot = {
+  date: string;
+  window: 'morning' | 'afternoon' | 'evening';
+};
+
+export const consultationBooking = pgTable(
+  'consultation_booking',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    designerProfileId: uuid('designer_profile_id')
+      .notNull()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    requesterId: text('requester_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    referredProjectId: uuid('referred_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    preferredSlots: jsonb('preferred_slots').$type<ConsultationSlot[]>().notNull(),
+    confirmedSlot: jsonb('confirmed_slot').$type<ConsultationSlot>(),
+    message: text('message'),
+    status: bookingStatusEnum('status').default('requested').notNull(),
+    cancelledBy: bookingCancelledByEnum('cancelled_by'),
+    cancelledByUserId: text('cancelled_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    cancelReason: text('cancel_reason'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check(
+      'consultation_booking_preferred_slots_count_check',
+      sql`jsonb_typeof(${t.preferredSlots}) = 'array' AND jsonb_array_length(${t.preferredSlots}) BETWEEN 1 AND 3`,
+    ),
+    check(
+      'consultation_booking_confirmed_slot_check',
+      sql`${t.confirmedSlot} IS NULL OR ${t.preferredSlots} @> jsonb_build_array(${t.confirmedSlot})`,
+    ),
+    check(
+      'consultation_booking_lifecycle_check',
+      sql`
+        (
+          ${t.status} = 'requested'
+          AND ${t.confirmedSlot} IS NULL
+          AND ${t.confirmedAt} IS NULL
+          AND ${t.completedAt} IS NULL
+          AND ${t.cancelledAt} IS NULL
+          AND ${t.cancelledBy} IS NULL
+          AND ${t.cancelledByUserId} IS NULL
+          AND ${t.cancelReason} IS NULL
+        )
+        OR (
+          ${t.status} = 'confirmed'
+          AND ${t.confirmedSlot} IS NOT NULL
+          AND ${t.confirmedAt} IS NOT NULL
+          AND ${t.completedAt} IS NULL
+          AND ${t.cancelledAt} IS NULL
+          AND ${t.cancelledBy} IS NULL
+          AND ${t.cancelledByUserId} IS NULL
+          AND ${t.cancelReason} IS NULL
+        )
+        OR (
+          ${t.status} = 'completed'
+          AND ${t.confirmedSlot} IS NOT NULL
+          AND ${t.confirmedAt} IS NOT NULL
+          AND ${t.completedAt} IS NOT NULL
+          AND ${t.cancelledAt} IS NULL
+          AND ${t.cancelledBy} IS NULL
+          AND ${t.cancelledByUserId} IS NULL
+          AND ${t.cancelReason} IS NULL
+        )
+        OR (
+          ${t.status} = 'cancelled'
+          AND ${t.completedAt} IS NULL
+          AND ${t.cancelledAt} IS NOT NULL
+          AND ${t.cancelledBy} IS NOT NULL
+          AND ${t.cancelledByUserId} IS NOT NULL
+          AND (
+            (${t.confirmedSlot} IS NULL AND ${t.confirmedAt} IS NULL)
+            OR (${t.confirmedSlot} IS NOT NULL AND ${t.confirmedAt} IS NOT NULL)
+          )
+        )
+      `,
+    ),
+    check(
+      'consultation_booking_designer_cancel_reason_check',
+      sql`${t.cancelledBy} IS DISTINCT FROM 'designer' OR nullif(btrim(${t.cancelReason}), '') IS NOT NULL`,
+    ),
+    check(
+      'consultation_booking_timestamp_order_check',
+      sql`
+        (${t.confirmedAt} IS NULL OR ${t.confirmedAt} >= ${t.requestedAt})
+        AND (${t.completedAt} IS NULL OR ${t.completedAt} >= ${t.confirmedAt})
+        AND (${t.cancelledAt} IS NULL OR ${t.cancelledAt} >= ${t.requestedAt})
+        AND (${t.cancelledAt} IS NULL OR ${t.confirmedAt} IS NULL OR ${t.cancelledAt} >= ${t.confirmedAt})
+      `,
+    ),
+    index('consultation_booking_organization_idx').on(t.organizationId),
+    index('consultation_booking_designer_profile_idx').on(t.designerProfileId),
+    index('consultation_booking_requester_idx').on(t.requesterId),
+    index('consultation_booking_referred_project_idx').on(t.referredProjectId),
+    index('consultation_booking_requester_designer_status_idx').on(
+      t.requesterId,
+      t.designerProfileId,
+      t.status,
+    ),
+    index('consultation_booking_org_status_requested_idx').on(
+      t.organizationId,
+      t.status,
+      t.requestedAt,
+    ),
+  ],
+);
+
+export const bookingNotificationOutbox = pgTable(
+  'booking_notification_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .unique()
+      .references(() => consultationBooking.id, { onDelete: 'cascade' }),
+    phoneNumber: text('phone_number').notNull(),
+    requesterName: text('requester_name').notNull(),
+    enqueuedAt: timestamp('enqueued_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('booking_notification_outbox_pending_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.enqueuedAt} IS NULL`),
   ],
 );
 

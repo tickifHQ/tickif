@@ -15,6 +15,7 @@ import { taxonomyRoutes } from './modules/taxonomy/routes.js';
 import { leadsRoutes } from './modules/leads/routes.js';
 import { discoveryRoutes } from './modules/discovery/routes.js';
 import { adminProjectsRoutes } from './modules/admin-projects/routes.js';
+import { bookingsRoutes } from './modules/bookings/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -64,6 +65,7 @@ export const app = base
   .route('/api/portfolios', publicPortfolioRoutes)
   .route('/api/taxonomy', taxonomyRoutes)
   .route('/api/leads', leadsRoutes)
+  .route('/api/bookings', bookingsRoutes)
   .route('/api/discovery', discoveryRoutes)
   .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
 
