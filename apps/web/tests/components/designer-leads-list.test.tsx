@@ -15,7 +15,7 @@ vi.mock('next/navigation', () => ({
 const leads: ListLeadsResponse = {
   page: 1,
   limit: 12,
-  total: 2,
+  total: 3,
   totalPages: 1,
   items: [
     {
@@ -38,6 +38,16 @@ const leads: ListLeadsResponse = {
       status: 'closed',
       receivedAt: '2025-12-22T00:00:00.000Z',
     },
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      name: 'Ananya Mehta',
+      city: 'Mumbai',
+      referredProjectTitle: '2BHK Apartment in Bandra',
+      contactNumber: '+91 9000000101',
+      budgetBand: '₹10-15L',
+      status: 'spam',
+      receivedAt: '2025-12-20T00:00:00.000Z',
+    },
   ],
 };
 
@@ -51,10 +61,10 @@ const selectedLead: LeadDetailResponse = {
 };
 
 describe('DesignerLeadsList', () => {
-  it('renders lead filters and API rows without exposing backend status copy', () => {
+  it('renders lead filters, API rows, and passive response status chips', () => {
     render(<DesignerLeadsList leads={leads} activeStatus="all" />);
 
-    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /all 3/i })).toHaveAttribute(
       'href',
       '/designer/leads?page=1',
     );
@@ -62,9 +72,17 @@ describe('DesignerLeadsList', () => {
       'href',
       '/designer/leads?status=contacted&page=1',
     );
+    expect(screen.getByRole('link', { name: /new lead/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?status=new&page=1',
+    );
     expect(screen.getByText('Priya Krishnan')).toBeInTheDocument();
     expect(screen.getAllByText('4BHK Villa in OMR').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/mark as/i).length).toBeGreaterThan(0);
+    const responseChips = screen
+      .getAllByText(/^(Contacted|Closed|Spam)$/)
+      .filter((element) => element.getAttribute('data-slot') === 'badge');
+    expect(responseChips.map((chip) => chip.textContent)).toEqual(['Contacted', 'Closed', 'Spam']);
+    expect(screen.queryByText(/mark as/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/backend is not available/i)).not.toBeInTheDocument();
   });
 

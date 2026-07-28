@@ -17,10 +17,11 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  GoogleReviewsResponse,
+  PortfolioProjectItem,
   PortfolioResponse,
   RequiredPortfolioField,
   UpdatePortfolioInput,
-  GoogleReviewsResponse,
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
@@ -38,6 +39,7 @@ import { Skeleton } from '@repo/ui/components/skeleton';
 import { Switch } from '@repo/ui/components/switch';
 import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
+import { cn } from '@repo/ui/lib/utils';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -51,6 +53,7 @@ import {
   connectGoogleReviews,
   deleteLogo,
   disconnectGoogleReviews,
+  fetchPortfolioProjects,
   fetchGoogleReviews,
   fetchPortfolio,
   refreshGoogleReviews,
@@ -81,6 +84,7 @@ type FormState = {
   youtubeHandle: string;
   testimonialWords: string;
   testimonialAuthor: string;
+  testimonialProjectId: string;
   showOverallRating: boolean;
   showPositiveReviewsOnly: boolean;
   showTickifBadge: boolean;
@@ -114,6 +118,11 @@ function formatMissingFields(fields: RequiredPortfolioField[]): string {
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
+type TestimonialProjectOption = {
+  label: string;
+  value: string;
+};
+
 /** Maps a portfolio badge enum to its display label and illustration. */
 const BADGE_META: Record<string, { label: string; src: string }> = {
   verified: { label: 'Verified', src: '/illustrations/badges/verified.svg' },
@@ -122,6 +131,11 @@ const BADGE_META: Record<string, { label: string; src: string }> = {
   established: { label: 'Established', src: '/illustrations/badges/established.svg' },
   'projects-published': { label: 'Projects', src: '/illustrations/badges/projects-published.svg' },
 };
+
+function formatProjectOption(project: PortfolioProjectItem) {
+  const location = [project.locality, project.city].filter(Boolean).join(', ');
+  return location ? `${project.title} - ${location}` : project.title;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,6 +161,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     youtubeHandle: data.youtubeHandle ?? '',
     testimonialWords: data.testimonialWords ?? '',
     testimonialAuthor: data.testimonialAuthor ?? '',
+    testimonialProjectId: data.testimonialProjectId ?? '',
     showOverallRating: data.showOverallRating,
     showPositiveReviewsOnly: data.showPositiveReviewsOnly,
     showTickifBadge: data.showTickifBadge,
@@ -179,6 +194,7 @@ function computeChangedFields(current: FormState, saved: FormState): UpdatePortf
           'youtubeHandle',
           'testimonialWords',
           'testimonialAuthor',
+          'testimonialProjectId',
         ].includes(key)
       ) {
         patch[key] = null;
@@ -230,6 +246,11 @@ export function DesignerPortfolioSettings() {
   const [isRefreshingGoogle, setIsRefreshingGoogle] = useState(false);
   const googlePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Published projects available for the featured testimonial picker.
+  const [testimonialProjects, setTestimonialProjects] = useState<PortfolioProjectItem[]>([]);
+  const [testimonialProjectsLoading, setTestimonialProjectsLoading] = useState(true);
+  const [testimonialProjectsError, setTestimonialProjectsError] = useState<string | null>(null);
+
   // Collapsible/expanded UI state (local only — presentation, not persisted)
   const [sectionExpanded, setSectionExpanded] = useState<Record<SectionKey, boolean>>({
     linkUrl: true,
@@ -241,11 +262,6 @@ export function DesignerPortfolioSettings() {
     socialLinks: false,
     shareBlock: false,
   });
-
-  // Featured-testimonial project selector is not persisted yet — the contract
-  // exposes testimonialProjectId, but wiring it needs a project picker (list of
-  // the designer's projects). Kept local so the section matches the design.
-  const [testimonialProject, setTestimonialProject] = useState('');
 
   function toggleExpanded(key: SectionKey) {
     setSectionExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -274,6 +290,25 @@ export function DesignerPortfolioSettings() {
   useEffect(() => {
     void loadPortfolio();
   }, [loadPortfolio]);
+
+  const loadTestimonialProjects = useCallback(async () => {
+    setTestimonialProjectsLoading(true);
+    setTestimonialProjectsError(null);
+    try {
+      const data = await fetchPortfolioProjects();
+      setTestimonialProjects(data.items);
+    } catch (err) {
+      setTestimonialProjectsError(
+        err instanceof Error ? err.message : 'Could not load portfolio projects.',
+      );
+    } finally {
+      setTestimonialProjectsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTestimonialProjects();
+  }, [loadTestimonialProjects]);
 
   // -------------------------------------------------------------------------
   // Google reviews
@@ -600,6 +635,22 @@ export function DesignerPortfolioSettings() {
   const googleConnection = googleReviews?.connection ?? null;
   const googleAvailable = googleReviews?.available ?? true;
   const googleStatus = googleConnection?.status ?? null;
+  const testimonialProjectOptions = testimonialProjects.map((project) => ({
+    value: project.id,
+    label: formatProjectOption(project),
+  }));
+  const selectedTestimonialProjectMissing =
+    !!form.testimonialProjectId &&
+    !testimonialProjectOptions.some((option) => option.value === form.testimonialProjectId);
+  const testimonialProjectSelectOptions = selectedTestimonialProjectMissing
+    ? [
+        {
+          value: form.testimonialProjectId,
+          label: 'Selected project',
+        },
+        ...testimonialProjectOptions,
+      ]
+    : testimonialProjectOptions;
 
   // -------------------------------------------------------------------------
   // Render
@@ -959,20 +1010,27 @@ export function DesignerPortfolioSettings() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">Project</Label>
-                        {/* TODO(E-195 follow-up): wire to testimonialProjectId with a project picker */}
-                        <div className="relative">
-                          <Input
-                            value={testimonialProject}
-                            onChange={(e) => setTestimonialProject(e.target.value)}
-                            placeholder="Select a project"
-                            className="pr-8 shadow-sm"
-                          />
-                          <ChevronsUpDown
-                            className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                            aria-hidden
-                          />
-                        </div>
+                        <ProjectDropdown
+                          value={form.testimonialProjectId}
+                          onChange={(value) => updateField('testimonialProjectId', value)}
+                          options={testimonialProjectSelectOptions}
+                          placeholder={
+                            testimonialProjectsLoading ? 'Loading projects...' : 'Select a project'
+                          }
+                          disabled={
+                            testimonialProjectsLoading ||
+                            (testimonialProjectSelectOptions.length === 0 &&
+                              !form.testimonialProjectId)
+                          }
+                        />
+                        {testimonialProjectsError ? (
+                          <p className="text-xs text-destructive">{testimonialProjectsError}</p>
+                        ) : testimonialProjectSelectOptions.length === 0 &&
+                          !testimonialProjectsLoading ? (
+                          <p className="text-xs text-muted-foreground">
+                            Publish a project to feature it.
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1505,6 +1563,104 @@ function AccentColorDropdown({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function ProjectDropdown({
+  disabled,
+  onChange,
+  options,
+  placeholder,
+  value,
+}: {
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  options: TestimonialProjectOption[];
+  placeholder: string;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find((option) => option.value === value);
+  const displayValue = selected?.label ?? placeholder;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+    : options;
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery('');
+  }
+
+  function handleSelect(nextValue: string) {
+    onChange(nextValue);
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-muted-foreground">Project</Label>
+      <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger
+          aria-label="Project"
+          disabled={disabled}
+          className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 text-left shadow-md transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span
+            className={cn(
+              'min-w-0 truncate text-sm font-medium',
+              selected ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {displayValue}
+          </span>
+          <ChevronsUpDown className="ml-3 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={4}
+          className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-md border border-border bg-background p-1 shadow-md"
+        >
+          <div className="p-1">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder="Search projects"
+              className="h-8 shadow-sm"
+            />
+          </div>
+          <DropdownMenuItem
+            onSelect={() => handleSelect('')}
+            className={cn('justify-between px-3 py-2', !value && 'bg-accent/30')}
+          >
+            <span className="text-sm text-muted-foreground">{placeholder}</span>
+            {!value ? <Check className="size-4 text-primary" aria-hidden /> : null}
+          </DropdownMenuItem>
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onSelect={() => handleSelect(option.value)}
+                className={cn(
+                  'justify-between px-3 py-2',
+                  option.value === value && 'bg-accent/30',
+                )}
+              >
+                <span className="min-w-0 truncate text-sm text-foreground">{option.label}</span>
+                {option.value === value ? (
+                  <Check className="size-4 shrink-0 text-primary" aria-hidden />
+                ) : null}
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No projects found</div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

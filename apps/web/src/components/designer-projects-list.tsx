@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components/table';
-import { AlertCircle, ArrowDown, CheckCircle2, ImagePlus } from 'lucide-react';
+import { AlertCircle, ArrowDown, CheckCircle2, ImagePlus, SquarePen } from 'lucide-react';
 import { DesignerListControls } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
 import { DesignerProjectRowActions } from '@/components/designer-project-row-actions';
@@ -83,7 +83,11 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
         status === 'published' && 'gap-1 bg-success-lighter pl-1 text-success',
       )}
     >
-      <CheckCircle2 className="size-3.5" />
+      {status === 'draft' ? (
+        <SquarePen className="size-3.5" />
+      ) : (
+        <CheckCircle2 className="size-3.5" />
+      )}
       {statusLabel(status)}
     </Badge>
   );

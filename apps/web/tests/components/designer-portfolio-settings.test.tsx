@@ -3,13 +3,14 @@ import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PortfolioResponse } from '@repo/contracts';
+import type { PortfolioProjectsResponse, PortfolioResponse } from '@repo/contracts';
 import { DesignerPortfolioSettings } from '../../src/components/designer-portfolio-settings';
 
 const mock = vi.hoisted(() => ({
   fetchPortfolio: vi.fn(),
   updatePortfolio: vi.fn(),
   checkSlugAvailability: vi.fn(),
+  fetchPortfolioProjects: vi.fn(),
   uploadLogo: vi.fn(),
   deleteLogo: vi.fn(),
   fetchGoogleReviews: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@/lib/portfolio-api', () => ({
   fetchPortfolio: mock.fetchPortfolio,
   updatePortfolio: mock.updatePortfolio,
   checkSlugAvailability: mock.checkSlugAvailability,
+  fetchPortfolioProjects: mock.fetchPortfolioProjects,
   uploadLogo: mock.uploadLogo,
   deleteLogo: mock.deleteLogo,
   fetchGoogleReviews: mock.fetchGoogleReviews,
@@ -76,6 +78,37 @@ const basePortfolio: PortfolioResponse = {
 
 const NOT_CONNECTED_GOOGLE = { available: true, connection: null, reviews: [] };
 
+const portfolioProjects: PortfolioProjectsResponse = {
+  items: [
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      slug: 'omr-villa',
+      title: '4BHK Villa in OMR',
+      propertyType: 'Villa',
+      city: 'Chennai',
+      locality: 'OMR',
+      status: 'published',
+      statusGroup: 'published',
+      coverImageUrl: null,
+      coverImage: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    },
+  ],
+  statusCounts: {
+    total: 1,
+    draft: 0,
+    inReview: 0,
+    published: 1,
+    changesRequested: 0,
+    rejected: 0,
+  },
+  page: 1,
+  total: 1,
+  limit: 50,
+  totalPages: 1,
+};
+
 // The E-195 design uses visually-styled labels that aren't associated with
 // their inputs via htmlFor, so we target inputs by their placeholder text.
 const SLUG_PLACEHOLDER = 'your-studio';
@@ -92,6 +125,7 @@ describe('DesignerPortfolioSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock.fetchPortfolio.mockResolvedValue(basePortfolio);
+    mock.fetchPortfolioProjects.mockResolvedValue(portfolioProjects);
     mock.fetchGoogleReviews.mockResolvedValue(NOT_CONNECTED_GOOGLE);
   });
 
@@ -264,7 +298,7 @@ describe('DesignerPortfolioSettings', () => {
       },
       {
         name: 'Featured testimonial',
-        getContent: () => screen.getByPlaceholderText('Select a project'),
+        getContent: () => screen.getByRole('button', { name: /project/i }),
       },
       {
         name: 'Reviews',
@@ -498,6 +532,33 @@ describe('DesignerPortfolioSettings', () => {
     // Form resets to the server response, so the save controls disable again.
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
+  });
+
+  it('uses a published project select for the featured testimonial project', async () => {
+    mock.updatePortfolio.mockResolvedValue({
+      ...basePortfolio,
+      testimonialProjectId: '22222222-2222-4222-8222-222222222222',
+    });
+    await renderSettings();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Toggle Featured testimonial details' }));
+    const projectSelect = await screen.findByRole('button', { name: /project/i });
+
+    expect(projectSelect).toHaveTextContent('Select a project');
+
+    await user.click(projectSelect);
+    await user.type(screen.getByPlaceholderText('Search projects'), 'omr');
+    await user.click(screen.getByRole('menuitem', { name: '4BHK Villa in OMR - OMR, Chennai' }));
+    expect(projectSelect).toHaveTextContent('4BHK Villa in OMR - OMR, Chennai');
+
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updatePortfolio).toHaveBeenCalledWith({
+        testimonialProjectId: '22222222-2222-4222-8222-222222222222',
+      });
+    });
   });
 
   it('surfaces the detail-derived message when the save fails validation', async () => {

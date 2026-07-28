@@ -93,6 +93,23 @@ describe('DesignerProjectsList', () => {
     );
   });
 
+  it('uses the square pen icon for draft projects', () => {
+    render(
+      <DesignerProjectsList
+        projects={{
+          ...projects,
+          total: 1,
+          items: [{ ...projects.items[0]!, status: 'draft' }],
+        }}
+        activeStatus="draft"
+      />,
+    );
+
+    expect(
+      screen.getByText('Draft').closest('[data-slot="badge"]')?.querySelector('.lucide-square-pen'),
+    ).toBeInTheDocument();
+  });
+
   it('focuses project search when pressing the slash shortcut', async () => {
     const user = userEvent.setup();
     render(<DesignerProjectsList projects={projects} activeStatus="all" />);

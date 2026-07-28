@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
 import { CheckCircle2, MoreVertical, ShieldAlert, AlertTriangle } from 'lucide-react';
-import { leadStatusOptions } from '@/components/designer-lead-status-action';
+import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
 
 const leadStatusIcons: Record<Exclude<LeadStatus, 'new'>, typeof AlertTriangle> = {

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { ArrowRight, ImagePlus, X } from 'lucide-react';
-import { leadStatusOptions } from '@/components/designer-lead-status-action';
+import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
 
 function formatDate(value: string) {
