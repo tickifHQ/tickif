@@ -23,6 +23,9 @@ function loadRootEnv(): void {
 }
 loadRootEnv();
 
+const LOCAL_TYPESENSE_HOST = 'http://localhost:8108';
+const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
+
 /**
  * Single source of truth for environment configuration.
  *
@@ -52,6 +55,19 @@ const envSchema = z.object({
   REDIS_URL: z.string().url().optional(),
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
+
+  // Typesense. Local defaults keep non-search processes self-contained; the
+  // search boundary separately requires explicit production credentials.
+  TYPESENSE_HOST: z.string().url().optional(),
+  TYPESENSE_API_KEY: z.string().min(16).optional(),
+  TYPESENSE_SEARCH_API_KEY: z.string().min(16).optional(),
+  TYPESENSE_COLLECTION_PREFIX: z
+    .string()
+    .trim()
+    .min(1)
+    .max(48)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/)
+    .default('tickif'),
 
   // better-auth
   BETTER_AUTH_SECRET: z.string().min(16, 'BETTER_AUTH_SECRET must be at least 16 chars'),
@@ -155,16 +171,53 @@ const refinedEnvSchema = envSchema.refine(
   },
 );
 
+const productionSearchEnvSchema = z
+  .object({
+    TYPESENSE_HOST: z.string().url(),
+    TYPESENSE_API_KEY: z.string().min(16),
+    TYPESENSE_SEARCH_API_KEY: z.string().min(16),
+  })
+  .superRefine((env, ctx) => {
+    if (env.TYPESENSE_API_KEY === env.TYPESENSE_SEARCH_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'TYPESENSE_SEARCH_API_KEY must differ from TYPESENSE_API_KEY in production',
+        path: ['TYPESENSE_SEARCH_API_KEY'],
+      });
+    }
+
+    for (const key of ['TYPESENSE_API_KEY', 'TYPESENSE_SEARCH_API_KEY'] as const) {
+      if (env[key] === LOCAL_TYPESENSE_API_KEY) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} must not use the checked-in local credential in production`,
+          path: [key],
+        });
+      }
+    }
+  });
+
 type RawEnv = z.infer<typeof envSchema>;
 
 /**
  * Public config: the raw env plus the connection strings, which are always
  * present (built from parts when not explicitly provided).
  */
-export type Config = Omit<RawEnv, 'DATABASE_URL' | 'DATABASE_URL_TEST' | 'REDIS_URL'> & {
+export type Config = Omit<
+  RawEnv,
+  | 'DATABASE_URL'
+  | 'DATABASE_URL_TEST'
+  | 'REDIS_URL'
+  | 'TYPESENSE_HOST'
+  | 'TYPESENSE_API_KEY'
+  | 'TYPESENSE_SEARCH_API_KEY'
+> & {
   DATABASE_URL: string;
   DATABASE_URL_TEST: string;
   REDIS_URL: string;
+  TYPESENSE_HOST: string;
+  TYPESENSE_API_KEY: string;
+  TYPESENSE_SEARCH_API_KEY: string;
 };
 
 function postgresUrl(env: RawEnv, database: string): string {
@@ -205,8 +258,8 @@ function assertProductionSmsConfig(env: RawEnv): void {
   }
 }
 
-function loadConfig(): Config {
-  const parsed = refinedEnvSchema.safeParse(process.env);
+export function parseConfig(environment: NodeJS.ProcessEnv): Config {
+  const parsed = refinedEnvSchema.safeParse(environment);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -221,10 +274,28 @@ function loadConfig(): Config {
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
     DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
     REDIS_URL: env.REDIS_URL ?? `redis://${env.REDIS_HOST}:${env.REDIS_PORT}`,
+    TYPESENSE_HOST: env.TYPESENSE_HOST ?? LOCAL_TYPESENSE_HOST,
+    TYPESENSE_API_KEY: env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
+    TYPESENSE_SEARCH_API_KEY:
+      env.TYPESENSE_SEARCH_API_KEY ?? env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
   };
 }
 
-export const config: Config = loadConfig();
+/** Validate search credentials only in processes that actually use Typesense. */
+export function assertProductionSearchConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  if (environment.NODE_ENV !== 'production') return;
+  const parsed = productionSearchEnvSchema.safeParse(environment);
+  if (parsed.success) return;
+
+  const issues = parsed.error.issues
+    .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('\n');
+  throw new Error(`Invalid search environment configuration:\n${issues}`);
+}
+
+export const config: Config = parseConfig(process.env);
 
 export const isProduction = config.NODE_ENV === 'production';
 export const isDevelopment = config.NODE_ENV === 'development';

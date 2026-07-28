@@ -9,6 +9,7 @@ work down; the first two get you running, the rest are reference.
 | [architecture.md](./architecture.md) | You want the mental model — monorepo layout, the modular monolith, the layering rule. |
 | [adding-a-module.md](./adding-a-module.md) | You're about to build a new domain (leads, media, search…). The most-used guide. |
 | [database-and-migrations.md](./database-and-migrations.md) | You're changing the schema or running migrations. |
+| [runbooks/search.md](./runbooks/search.md) | You're provisioning Typesense credentials, bootstrapping collections, or diagnosing degraded search. |
 | [auth.md](./auth.md) | You're protecting a route, working on login, or touching RBAC. |
 | [testing.md](./testing.md) | You're writing tests or practicing TDD (you should be). |
 | [conventions.md](./conventions.md) | Anytime — coding standards, env config, shared contracts. |

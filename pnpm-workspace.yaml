@@ -63,6 +63,10 @@ catalog:
   "@aws-sdk/s3-request-presigner": ^3.700.0
   sharp: ^0.35.3
 
+  # Search
+  "@babel/runtime": ^7.29.0
+  typesense: ^3.0.6
+
   # Frontend
   next: ^16.2.11
   react: ^19.0.0
