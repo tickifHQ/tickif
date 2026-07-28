@@ -16,7 +16,24 @@ export function initialSearchCollectionName(
   kind: SearchCollectionKind,
   prefix: string = config.TYPESENSE_COLLECTION_PREFIX,
 ): string {
-  return `${searchCollectionName(kind, prefix)}_v1`;
+  return versionedSearchCollectionName(kind, 1, prefix);
+}
+
+export function versionedSearchCollectionName(
+  kind: SearchCollectionKind,
+  version: string | number,
+  prefix: string = config.TYPESENSE_COLLECTION_PREFIX,
+): string {
+  const value = String(version);
+  const invalidNumber =
+    typeof version === 'number' &&
+    (!Number.isSafeInteger(version) || version < 0);
+  if (invalidNumber || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value)) {
+    throw new Error(
+      'Search collection version must contain only letters, numbers, underscores, or hyphens',
+    );
+  }
+  return `${searchCollectionName(kind, prefix)}_v${value}`;
 }
 
 export function searchSynonymSetName(
@@ -27,6 +44,7 @@ export function searchSynonymSetName(
 
 let client: Client | undefined;
 let bootstrapClient: Client | undefined;
+let writeClient: Client | undefined;
 
 /** Lazily constructed so importing document types never opens a network connection. */
 export function searchClient(): Client {
@@ -52,6 +70,18 @@ export function searchBootstrapClient(): Client {
     numRetries: 0,
   });
   return bootstrapClient;
+}
+
+/** Admin client for steady-state document writes and bounded rebuild operations. */
+export function searchWriteClient(): Client {
+  writeClient ??= new Client({
+    nodes: [{ url: config.TYPESENSE_HOST }],
+    apiKey: config.TYPESENSE_API_KEY,
+    connectionTimeoutSeconds: 5,
+    numRetries: 3,
+    retryIntervalSeconds: 0.25,
+  });
+  return writeClient;
 }
 
 export function projectsCollection(instance: Client = searchClient()) {

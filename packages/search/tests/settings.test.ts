@@ -3,6 +3,7 @@ import {
   initialSearchCollectionName,
   searchCollectionName,
   searchSynonymSetName,
+  versionedSearchCollectionName,
 } from '../src/client.js';
 import {
   DESIGNER_SEARCH_SETTINGS,
@@ -18,7 +19,22 @@ describe('search collection configuration', () => {
     expect(initialSearchCollectionName('projects', 'tickif_test')).toBe(
       'tickif_test_projects_v1',
     );
+    expect(versionedSearchCollectionName('projects', 1_785_000_000_000, 'tickif_test')).toBe(
+      'tickif_test_projects_v1785000000000',
+    );
     expect(searchSynonymSetName('tickif_test')).toBe('tickif_test_search_synonyms');
+  });
+
+  it('rejects unsafe collection versions', () => {
+    expect(() => versionedSearchCollectionName('projects', '')).toThrow(
+      'Search collection version must contain only letters, numbers, underscores, or hyphens',
+    );
+    expect(() => versionedSearchCollectionName('projects', '2026/07/28')).toThrow(
+      'Search collection version must contain only letters, numbers, underscores, or hyphens',
+    );
+    expect(() => versionedSearchCollectionName('projects', Number.NaN)).toThrow(
+      'Search collection version must contain only letters, numbers, underscores, or hyphens',
+    );
   });
 
   it('keeps publishedAt as the final project ranking tiebreak', () => {
