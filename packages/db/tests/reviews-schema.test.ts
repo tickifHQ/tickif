@@ -57,4 +57,13 @@ describe('reviews schema', () => {
 
     expect(actorForeignKey?.onDelete).toBe('set null');
   });
+
+  it('constrains review lifecycle timestamps and audit transition pairs', () => {
+    expect(getTableConfig(review).checks.map((tableCheck) => tableCheck.name)).toContain(
+      'review_lifecycle_check',
+    );
+    expect(
+      getTableConfig(reviewModerationEvent).checks.map((tableCheck) => tableCheck.name),
+    ).toContain('review_moderation_event_transition_check');
+  });
 });

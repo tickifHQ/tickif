@@ -57,7 +57,22 @@ export type TransitionReviewParams = {
   action: ReviewModerationAction;
   note?: string | null;
   reasonCode?: string | null;
+  requiredWriter?: {
+    organizationId: string;
+    userId: string;
+  };
 };
+
+export type UpdateReviewResult =
+  | { kind: 'updated'; review: ReviewViewRecord }
+  | { kind: 'conflict' }
+  | { kind: 'phone_unverified' }
+  | { kind: 'self_review' };
+
+export type TransitionReviewResult =
+  | { kind: 'updated'; review: ReviewViewRecord }
+  | { kind: 'conflict' }
+  | { kind: 'forbidden' };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Handle = typeof db | Tx;
@@ -155,10 +170,15 @@ async function aggregatePublished(
       five: sql<number>`count(*) filter (where ${schema.review.rating} = 5)::int`,
     })
     .from(schema.review)
+    .innerJoin(
+      schema.designerProfile,
+      eq(schema.review.designerProfileId, schema.designerProfile.id),
+    )
     .where(
       and(
         eq(schema.review.designerProfileId, designerProfileId),
         eq(schema.review.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
       ),
     );
 
@@ -205,6 +225,12 @@ export const reviewsRepository = {
         .limit(1)
         .for('update');
       if (!designer) return { kind: 'designer_not_found' } as const;
+
+      await tx
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, designer.orgId))
+        .for('update');
 
       const [membership] = await tx
         .select({ id: schema.member.id })
@@ -279,13 +305,12 @@ export const reviewsRepository = {
         fromStatus: null,
         toStatus: 'pending',
       });
-      return { kind: 'created', id: inserted.id } as const;
+      const review = await findByIdWith(tx, inserted.id);
+      if (!review) throw new Error('inserted review not found');
+      return { kind: 'created', review } as const;
     });
 
-    if (result.kind !== 'created') return result;
-    const review = await this.findById(result.id);
-    if (!review) throw new Error('inserted review not found');
-    return { kind: 'created', review };
+    return result;
   },
 
   async update(
@@ -295,17 +320,69 @@ export const reviewsRepository = {
       designerProfileId: string;
       fromStatus: 'pending' | 'published';
       expectedRevision: number;
+      publishedEditCutoff: Date;
       rating?: number;
       body?: string | null;
     },
-  ): Promise<ReviewViewRecord | null> {
-    const updatedId = await db.transaction(async (tx) => {
+  ): Promise<UpdateReviewResult> {
+    return db.transaction(async (tx) => {
       const now = new Date();
-      await tx
-        .select({ id: schema.designerProfile.id })
+      const [author] = await tx
+        .select({ phoneNumberVerified: schema.user.phoneNumberVerified })
+        .from(schema.user)
+        .where(eq(schema.user.id, params.authorUserId))
+        .limit(1);
+      if (author?.phoneNumberVerified !== true) {
+        return { kind: 'phone_unverified' } as const;
+      }
+
+      const [designer] = await tx
+        .select({
+          id: schema.designerProfile.id,
+          orgId: schema.designerProfile.orgId,
+          ownerUserId: schema.designerProfile.userId,
+        })
         .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.id, params.designerProfileId))
+        .where(
+          and(
+            eq(schema.designerProfile.id, params.designerProfileId),
+            eq(schema.designerProfile.status, 'active'),
+          ),
+        )
         .for('update');
+      if (!designer) return { kind: 'conflict' } as const;
+
+      await tx
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, designer.orgId))
+        .for('update');
+      const [membership] = await tx
+        .select({ id: schema.member.id })
+        .from(schema.member)
+        .where(
+          and(
+            eq(schema.member.organizationId, designer.orgId),
+            eq(schema.member.userId, params.authorUserId),
+          ),
+        )
+        .limit(1);
+      if (designer.ownerUserId === params.authorUserId || membership) {
+        return { kind: 'self_review' } as const;
+      }
+
+      const stateConditions = [
+        eq(schema.review.id, params.id),
+        eq(schema.review.authorUserId, params.authorUserId),
+        eq(schema.review.status, params.fromStatus),
+        eq(schema.review.moderationRevision, params.expectedRevision),
+      ];
+      if (params.fromStatus === 'published') {
+        stateConditions.push(
+          sql`${schema.review.publishedAt} >= ${params.publishedEditCutoff}`,
+        );
+      }
+
       const [updated] = await tx
         .update(schema.review)
         .set({
@@ -318,16 +395,9 @@ export const reviewsRepository = {
           moderationRevision: sql`${schema.review.moderationRevision} + 1`,
           updatedAt: now,
         })
-        .where(
-          and(
-            eq(schema.review.id, params.id),
-            eq(schema.review.authorUserId, params.authorUserId),
-            eq(schema.review.status, params.fromStatus),
-            eq(schema.review.moderationRevision, params.expectedRevision),
-          ),
-        )
+        .where(and(...stateConditions))
         .returning({ id: schema.review.id });
-      if (!updated) return null;
+      if (!updated) return { kind: 'conflict' } as const;
 
       await tx.insert(schema.reviewModerationEvent).values({
         reviewId: updated.id,
@@ -340,21 +410,51 @@ export const reviewsRepository = {
       if (params.fromStatus === 'published') {
         await recomputeDesignerAggregate(tx, params.designerProfileId, now);
       }
-      return updated.id;
+      const review = await findByIdWith(tx, updated.id);
+      if (!review) throw new Error('updated review not found');
+      return { kind: 'updated', review } as const;
     });
-
-    return updatedId ? this.findById(updatedId) : null;
   },
 
-  async transition(params: TransitionReviewParams): Promise<ReviewViewRecord | null> {
-    const updatedId = await db.transaction(async (tx) => {
+  async transition(params: TransitionReviewParams): Promise<TransitionReviewResult> {
+    return db.transaction(async (tx) => {
       const now = new Date();
       const enteringPublished = params.toStatus === 'published';
-      await tx
-        .select({ id: schema.designerProfile.id })
+      const [designer] = await tx
+        .select({
+          id: schema.designerProfile.id,
+          orgId: schema.designerProfile.orgId,
+        })
         .from(schema.designerProfile)
         .where(eq(schema.designerProfile.id, params.designerProfileId))
         .for('update');
+      if (!designer) return { kind: 'conflict' } as const;
+
+      if (params.requiredWriter) {
+        if (designer.orgId !== params.requiredWriter.organizationId) {
+          return { kind: 'forbidden' } as const;
+        }
+        await tx
+          .select({ id: schema.organization.id })
+          .from(schema.organization)
+          .where(eq(schema.organization.id, designer.orgId))
+          .for('update');
+        const [membership] = await tx
+          .select({ role: schema.member.role })
+          .from(schema.member)
+          .where(
+            and(
+              eq(schema.member.organizationId, designer.orgId),
+              eq(schema.member.userId, params.requiredWriter.userId),
+            ),
+          )
+          .limit(1);
+        const canWrite = membership?.role
+          .split(',')
+          .some((role) => role.trim() === 'owner' || role.trim() === 'admin');
+        if (!canWrite) return { kind: 'forbidden' } as const;
+      }
+
       const [updated] = await tx
         .update(schema.review)
         .set({
@@ -383,7 +483,7 @@ export const reviewsRepository = {
           ),
         )
         .returning({ id: schema.review.id });
-      if (!updated) return null;
+      if (!updated) return { kind: 'conflict' } as const;
 
       await tx.insert(schema.reviewModerationEvent).values({
         reviewId: updated.id,
@@ -398,29 +498,30 @@ export const reviewsRepository = {
       if ((params.fromStatus === 'published') !== enteringPublished) {
         await recomputeDesignerAggregate(tx, params.designerProfileId, now);
       }
-      return updated.id;
+      const review = await findByIdWith(tx, updated.id);
+      if (!review) throw new Error('transitioned review not found');
+      return { kind: 'updated', review } as const;
     });
-
-    return updatedId ? this.findById(updatedId) : null;
   },
 
   async listPublished(
     query: ListPublishedReviewsQuery,
   ): Promise<{ items: ReviewViewRecord[]; aggregate: ReviewAggregateRecord }> {
-    const [items, aggregate] = await Promise.all([
-      reviewViewQuery(db)
+    return db.transaction(async (tx) => {
+      const items = await reviewViewQuery(tx)
         .where(
           and(
             eq(schema.review.designerProfileId, query.designerProfileId),
             eq(schema.review.status, 'published'),
+            eq(schema.designerProfile.status, 'active'),
           ),
         )
         .orderBy(desc(schema.review.publishedAt), desc(schema.review.id))
         .limit(query.limit)
-        .offset((query.page - 1) * query.limit),
-      aggregatePublished(db, query.designerProfileId),
-    ]);
-    return { items, aggregate };
+        .offset((query.page - 1) * query.limit);
+      const aggregate = await aggregatePublished(tx, query.designerProfileId);
+      return { items, aggregate };
+    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
   },
 
   async listAdmin(

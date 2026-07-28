@@ -1,5 +1,5 @@
 {
-  "id": "49ee298f-490b-4405-a154-ea8b927a9032",
+  "id": "e33c0d42-e1fd-4817-9071-f99a92409851",
   "prevId": "40d72588-55e9-49f4-98b6-6d2b7903790c",
   "version": "7",
   "dialect": "postgresql",
@@ -3326,7 +3326,7 @@
         },
         "review_lifecycle_check": {
           "name": "review_lifecycle_check",
-          "value": "\n        (\n          \"review\".\"status\" in ('pending', 'rejected')\n          and \"review\".\"published_at\" is null\n          and \"review\".\"disputed_at\" is null\n        )\n        or (\n          \"review\".\"status\" = 'published'\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is null\n        )\n        or (\n          \"review\".\"status\" in ('disputed', 'removed')\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is not null\n        )\n      "
+          "value": "\n        (\n          \"review\".\"status\" = 'pending'\n          and \"review\".\"published_at\" is null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is null\n        )\n        or (\n          \"review\".\"status\" = 'rejected'\n          and \"review\".\"published_at\" is null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is not null\n        )\n        or (\n          \"review\".\"status\" = 'published'\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is not null\n          and \"review\".\"moderated_at\" >= \"review\".\"published_at\"\n        )\n        or (\n          \"review\".\"status\" in ('disputed', 'removed')\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is not null\n          and \"review\".\"moderated_at\" is not null\n          and \"review\".\"disputed_at\" >= \"review\".\"published_at\"\n          and (\n            \"review\".\"status\" <> 'removed'\n            or \"review\".\"moderated_at\" >= \"review\".\"disputed_at\"\n          )\n        )\n      "
         }
       },
       "isRLSEnabled": false
@@ -3470,7 +3470,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "review_moderation_event_transition_check": {
+          "name": "review_moderation_event_transition_check",
+          "value": "\n        (\"review_moderation_event\".\"action\" = 'submit' and \"review_moderation_event\".\"from_status\" is null and \"review_moderation_event\".\"to_status\" = 'pending')\n        or (\n          \"review_moderation_event\".\"action\" = 'edit'\n          and \"review_moderation_event\".\"from_status\" in ('pending', 'published')\n          and \"review_moderation_event\".\"to_status\" = 'pending'\n        )\n        or (\n          \"review_moderation_event\".\"action\" = 'publish'\n          and \"review_moderation_event\".\"from_status\" = 'pending'\n          and \"review_moderation_event\".\"to_status\" = 'published'\n        )\n        or (\n          \"review_moderation_event\".\"action\" = 'reject'\n          and \"review_moderation_event\".\"from_status\" = 'pending'\n          and \"review_moderation_event\".\"to_status\" = 'rejected'\n        )\n        or (\n          \"review_moderation_event\".\"action\" = 'dispute'\n          and \"review_moderation_event\".\"from_status\" = 'published'\n          and \"review_moderation_event\".\"to_status\" = 'disputed'\n        )\n        or (\n          \"review_moderation_event\".\"action\" = 'resolve_publish'\n          and \"review_moderation_event\".\"from_status\" = 'disputed'\n          and \"review_moderation_event\".\"to_status\" = 'published'\n        )\n        or (\n          \"review_moderation_event\".\"action\" = 'remove'\n          and \"review_moderation_event\".\"from_status\" = 'disputed'\n          and \"review_moderation_event\".\"to_status\" = 'removed'\n        )\n      "
+        }
+      },
       "isRLSEnabled": false
     },
     "public.taxonomy": {

@@ -9,6 +9,7 @@ import {
   makeUser,
 } from '@repo/db/testing';
 import { reviewsService } from '../../../src/modules/reviews/service.js';
+import { reviewsRepository } from '../../../src/modules/reviews/repository.js';
 
 let fixtureSequence = 0;
 
@@ -171,6 +172,45 @@ describe('review lifecycle', () => {
     expect(afterResolve?.reviewCount).toBe(1);
   });
 
+  it('rechecks organization write access when a designer disputes a review', async () => {
+    const { organization, designer, author, admin } = await makeReviewFixture();
+    const writer = await makeUser({ name: 'Designer Admin' });
+    const membershipId = `member-${writer.id}`;
+    await db.insert(schema.member).values({
+      id: membershipId,
+      organizationId: organization.id,
+      userId: writer.id,
+      role: 'admin',
+      createdAt: new Date(),
+    });
+    const review = await reviewsService.create(
+      {
+        designerProfileId: designer.id,
+        rating: 3,
+        body: 'The project result was good, but the final handover needed more coordination.',
+      },
+      {
+        userId: author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+    await reviewsService.publish(review.id, { userId: admin.id });
+    await db.delete(schema.member).where(eq(schema.member.id, membershipId));
+
+    await expect(
+      reviewsService.dispute(
+        review.id,
+        { note: 'This dispute should fail because writer access was revoked.' },
+        {
+          userId: writer.id,
+          phoneNumberVerified: true,
+          activeOrgId: organization.id,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
   it('marks only a completed matching consultation as verified', async () => {
     const { designer, author } = await makeReviewFixture();
     const project = await makeProject({ designerId: designer.id, status: 'published' });
@@ -302,6 +342,131 @@ describe('review lifecycle', () => {
     ).rejects.toMatchObject({
       code: 'conflict',
       message: 'Published reviews can only be edited within 24 hours',
+    });
+  });
+
+  it('enforces the published edit cutoff inside the update transaction', async () => {
+    const { designer, author, admin } = await makeReviewFixture();
+    const review = await reviewsService.create(
+      {
+        designerProfileId: designer.id,
+        rating: 4,
+        body: 'The design process was detailed, collaborative, and professionally managed.',
+      },
+      {
+        userId: author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+    const published = await reviewsService.publish(review.id, { userId: admin.id });
+
+    const result = await reviewsRepository.update({
+      id: published.id,
+      authorUserId: author.id,
+      designerProfileId: designer.id,
+      fromStatus: 'published',
+      expectedRevision: published.moderationRevision,
+      publishedEditCutoff: new Date(Date.now() + 1_000),
+      rating: 3,
+    });
+    expect(result.kind).toBe('conflict');
+  });
+
+  it('rechecks phone verification and self-review eligibility on author edits', async () => {
+    const first = await makeReviewFixture();
+    const phoneReview = await reviewsService.create(
+      {
+        designerProfileId: first.designer.id,
+        rating: 5,
+        body: 'The original review is valid before phone verification is revoked.',
+      },
+      {
+        userId: first.author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+    await db
+      .update(schema.user)
+      .set({ phoneNumberVerified: false })
+      .where(eq(schema.user.id, first.author.id));
+
+    await expect(
+      reviewsService.update(
+        phoneReview.id,
+        { rating: 4 },
+        {
+          userId: first.author.id,
+          phoneNumberVerified: true,
+          activeOrgId: null,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'validation_error' });
+
+    const second = await makeReviewFixture();
+    const membershipReview = await reviewsService.create(
+      {
+        designerProfileId: second.designer.id,
+        rating: 5,
+        body: 'The original review is valid before the author joins the designer team.',
+      },
+      {
+        userId: second.author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+    await db.insert(schema.member).values({
+      id: `member-${second.author.id}`,
+      organizationId: second.organization.id,
+      userId: second.author.id,
+      role: 'member',
+      createdAt: new Date(),
+    });
+
+    await expect(
+      reviewsService.update(
+        membershipReview.id,
+        { rating: 4 },
+        {
+          userId: second.author.id,
+          phoneNumberVerified: true,
+          activeOrgId: second.organization.id,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('withholds published reviews when the designer profile is suspended', async () => {
+    const { designer, author, admin } = await makeReviewFixture();
+    const review = await reviewsService.create(
+      {
+        designerProfileId: designer.id,
+        rating: 5,
+        body: 'This published review must disappear when the designer is suspended.',
+      },
+      {
+        userId: author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+    await reviewsService.publish(review.id, { userId: admin.id });
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'suspended' })
+      .where(eq(schema.designerProfile.id, designer.id));
+
+    const page = await reviewsService.listPublished({
+      designerProfileId: designer.id,
+      page: 1,
+      limit: 20,
+    });
+    expect(page).toMatchObject({
+      items: [],
+      averageRating: 0,
+      reviewCount: 0,
     });
   });
 

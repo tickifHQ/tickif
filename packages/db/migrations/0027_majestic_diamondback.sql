@@ -20,19 +20,34 @@ CREATE TABLE "review" (
 	CONSTRAINT "review_body_length_check" CHECK ("review"."body" is null or char_length(btrim("review"."body")) >= 30),
 	CONSTRAINT "review_lifecycle_check" CHECK (
         (
-          "review"."status" in ('pending', 'rejected')
+          "review"."status" = 'pending'
           and "review"."published_at" is null
           and "review"."disputed_at" is null
+          and "review"."moderated_at" is null
+        )
+        or (
+          "review"."status" = 'rejected'
+          and "review"."published_at" is null
+          and "review"."disputed_at" is null
+          and "review"."moderated_at" is not null
         )
         or (
           "review"."status" = 'published'
           and "review"."published_at" is not null
           and "review"."disputed_at" is null
+          and "review"."moderated_at" is not null
+          and "review"."moderated_at" >= "review"."published_at"
         )
         or (
           "review"."status" in ('disputed', 'removed')
           and "review"."published_at" is not null
           and "review"."disputed_at" is not null
+          and "review"."moderated_at" is not null
+          and "review"."disputed_at" >= "review"."published_at"
+          and (
+            "review"."status" <> 'removed'
+            or "review"."moderated_at" >= "review"."disputed_at"
+          )
         )
       )
 );
@@ -46,7 +61,40 @@ CREATE TABLE "review_moderation_event" (
 	"to_status" "review_status" NOT NULL,
 	"note" text,
 	"reason_code" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "review_moderation_event_transition_check" CHECK (
+        ("review_moderation_event"."action" = 'submit' and "review_moderation_event"."from_status" is null and "review_moderation_event"."to_status" = 'pending')
+        or (
+          "review_moderation_event"."action" = 'edit'
+          and "review_moderation_event"."from_status" in ('pending', 'published')
+          and "review_moderation_event"."to_status" = 'pending'
+        )
+        or (
+          "review_moderation_event"."action" = 'publish'
+          and "review_moderation_event"."from_status" = 'pending'
+          and "review_moderation_event"."to_status" = 'published'
+        )
+        or (
+          "review_moderation_event"."action" = 'reject'
+          and "review_moderation_event"."from_status" = 'pending'
+          and "review_moderation_event"."to_status" = 'rejected'
+        )
+        or (
+          "review_moderation_event"."action" = 'dispute'
+          and "review_moderation_event"."from_status" = 'published'
+          and "review_moderation_event"."to_status" = 'disputed'
+        )
+        or (
+          "review_moderation_event"."action" = 'resolve_publish'
+          and "review_moderation_event"."from_status" = 'disputed'
+          and "review_moderation_event"."to_status" = 'published'
+        )
+        or (
+          "review_moderation_event"."action" = 'remove'
+          and "review_moderation_event"."from_status" = 'disputed'
+          and "review_moderation_event"."to_status" = 'removed'
+        )
+      )
 );
 --> statement-breakpoint
 ALTER TABLE "designer_portfolio" ADD COLUMN "show_tickif_reviews" boolean DEFAULT true NOT NULL;--> statement-breakpoint

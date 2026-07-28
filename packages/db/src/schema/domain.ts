@@ -487,19 +487,34 @@ export const review = pgTable(
       'review_lifecycle_check',
       sql`
         (
-          ${t.status} in ('pending', 'rejected')
+          ${t.status} = 'pending'
           and ${t.publishedAt} is null
           and ${t.disputedAt} is null
+          and ${t.moderatedAt} is null
+        )
+        or (
+          ${t.status} = 'rejected'
+          and ${t.publishedAt} is null
+          and ${t.disputedAt} is null
+          and ${t.moderatedAt} is not null
         )
         or (
           ${t.status} = 'published'
           and ${t.publishedAt} is not null
           and ${t.disputedAt} is null
+          and ${t.moderatedAt} is not null
+          and ${t.moderatedAt} >= ${t.publishedAt}
         )
         or (
           ${t.status} in ('disputed', 'removed')
           and ${t.publishedAt} is not null
           and ${t.disputedAt} is not null
+          and ${t.moderatedAt} is not null
+          and ${t.disputedAt} >= ${t.publishedAt}
+          and (
+            ${t.status} <> 'removed'
+            or ${t.moderatedAt} >= ${t.disputedAt}
+          )
         )
       `,
     ),
@@ -532,6 +547,42 @@ export const reviewModerationEvent = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    check(
+      'review_moderation_event_transition_check',
+      sql`
+        (${t.action} = 'submit' and ${t.fromStatus} is null and ${t.toStatus} = 'pending')
+        or (
+          ${t.action} = 'edit'
+          and ${t.fromStatus} in ('pending', 'published')
+          and ${t.toStatus} = 'pending'
+        )
+        or (
+          ${t.action} = 'publish'
+          and ${t.fromStatus} = 'pending'
+          and ${t.toStatus} = 'published'
+        )
+        or (
+          ${t.action} = 'reject'
+          and ${t.fromStatus} = 'pending'
+          and ${t.toStatus} = 'rejected'
+        )
+        or (
+          ${t.action} = 'dispute'
+          and ${t.fromStatus} = 'published'
+          and ${t.toStatus} = 'disputed'
+        )
+        or (
+          ${t.action} = 'resolve_publish'
+          and ${t.fromStatus} = 'disputed'
+          and ${t.toStatus} = 'published'
+        )
+        or (
+          ${t.action} = 'remove'
+          and ${t.fromStatus} = 'disputed'
+          and ${t.toStatus} = 'removed'
+        )
+      `,
+    ),
     index('review_moderation_event_review_created_idx').on(t.reviewId, t.createdAt, t.id),
     index('review_moderation_event_actor_idx').on(t.actorUserId),
   ],

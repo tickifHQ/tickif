@@ -13,7 +13,6 @@ import type {
   UpdateReviewInput,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
-import { orgsService } from '../orgs/service.js';
 import {
   reviewsRepository,
   type ReviewViewRecord,
@@ -67,9 +66,12 @@ function reviewTransitionError(): AppError {
 }
 
 async function transitionOrConflict(params: TransitionReviewParams): Promise<ReviewResponse> {
-  const transitioned = await reviewsRepository.transition(params);
-  if (!transitioned) throw reviewTransitionError();
-  return toResponse(transitioned);
+  const result = await reviewsRepository.transition(params);
+  if (result.kind === 'conflict') throw reviewTransitionError();
+  if (result.kind === 'forbidden') {
+    throw AppError.forbidden('Organization write access required');
+  }
+  return toResponse(result.review);
 }
 
 function transitionParams(
@@ -127,6 +129,9 @@ export const reviewsService = {
     input: UpdateReviewInput,
     caller: ReviewCaller,
   ): Promise<ReviewResponse> {
+    if (!caller.phoneNumberVerified) {
+      throw AppError.unprocessable('A verified phone number is required to edit a review');
+    }
     const review = await reviewsRepository.findById(id);
     if (!review || review.authorUserId !== caller.userId) {
       throw AppError.notFound('Review not found');
@@ -148,10 +153,17 @@ export const reviewsService = {
       designerProfileId: review.designerProfileId,
       fromStatus: review.status,
       expectedRevision: review.moderationRevision,
+      publishedEditCutoff: new Date(Date.now() - PUBLISHED_EDIT_WINDOW_MS),
       ...input,
     });
-    if (!updated) throw reviewTransitionError();
-    return toResponse(updated);
+    if (updated.kind === 'phone_unverified') {
+      throw AppError.unprocessable('A verified phone number is required to edit a review');
+    }
+    if (updated.kind === 'self_review') {
+      throw AppError.forbidden('Members cannot review their own designer organization');
+    }
+    if (updated.kind === 'conflict') throw reviewTransitionError();
+    return toResponse(updated.review);
   },
 
   async listPublished(query: ListPublishedReviewsQuery): Promise<PublishedReviewsResponse> {
@@ -177,9 +189,6 @@ export const reviewsService = {
     if (!review || !caller.activeOrgId || review.designerOrgId !== caller.activeOrgId) {
       throw AppError.notFound('Review not found');
     }
-    if (!(await orgsService.isWriter(caller.userId, caller.activeOrgId))) {
-      throw AppError.forbidden('Organization write access required');
-    }
     if (review.status !== 'published') throw reviewTransitionError();
 
     return transitionOrConflict({
@@ -191,6 +200,10 @@ export const reviewsService = {
       actorUserId: caller.userId,
       action: 'dispute',
       note: input.note,
+      requiredWriter: {
+        organizationId: caller.activeOrgId,
+        userId: caller.userId,
+      },
     });
   },
 
@@ -251,4 +264,3 @@ export const reviewsService = {
     );
   },
 };
-
