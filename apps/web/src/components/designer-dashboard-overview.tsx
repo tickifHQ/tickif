@@ -306,7 +306,7 @@ export function DesignerDashboardOverview({
                 <div className="min-w-0">
                   <Badge
                     variant="outline"
-                    className="text-xs font-medium border-primary/20 bg-background/70 text-primary"
+                    className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
                   >
                     COMPLETE SETUP
                   </Badge>
@@ -336,7 +336,7 @@ export function DesignerDashboardOverview({
           </Card>
 
           <div>
-            <div className="mb-3 flex items-center gap-2 px-3 text-xs font-medium tracking-normal text-muted-foreground">
+            <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
               <ShieldPlus className="size-4" />
               WHAT HAPPENS NEXT
             </div>
@@ -385,7 +385,7 @@ export function DesignerDashboardOverview({
               </div>
             </div>
             <div className="px-5 pt-6 pb-5">
-              <div className="text-xs tracking-normal text-muted-foreground">
+              <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
                 ONE LINK. EVERYWHERE.
               </div>
               <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">

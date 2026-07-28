@@ -236,7 +236,6 @@ export function DesignerLeadDetailDialog({
           <Button
             type="button"
             variant="inverted"
-            size="compact"
             className="min-w-32"
             disabled={!lead || selectedStatus === lead.status || isPending}
             onClick={saveLead}

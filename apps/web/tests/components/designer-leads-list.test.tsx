@@ -99,13 +99,27 @@ describe('DesignerLeadsList', () => {
     expect(screen.getByText(/try a different search/i)).toBeInTheDocument();
   });
 
+  it('uses contact and archive icons in the lead action menu', async () => {
+    const user = userEvent.setup();
+    render(<DesignerLeadsList leads={leads} activeStatus="all" />);
+
+    await user.click(screen.getByRole('button', { name: /more actions for priya krishnan/i }));
+
+    expect(
+      screen.getByRole('menuitem', { name: /mark as contacted/i }).querySelector('.lucide-contact'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /mark as spam/i }).querySelector('.lucide-archive-x'),
+    ).toBeInTheDocument();
+  });
+
   it('labels the lead detail dialog for assistive technology', () => {
     render(<DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />);
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
     expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
-      'h-8',
+      'h-10',
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );

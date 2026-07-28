@@ -10,14 +10,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
-import { CheckCircle2, MoreVertical, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ArchiveX, CheckCircle2, Contact, MoreVertical } from 'lucide-react';
 import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
 
-const leadStatusIcons: Record<Exclude<LeadStatus, 'new'>, typeof AlertTriangle> = {
-  contacted: AlertTriangle,
+const leadStatusIcons: Record<Exclude<LeadStatus, 'new'>, typeof Contact> = {
+  contacted: Contact,
   closed: CheckCircle2,
-  spam: ShieldAlert,
+  spam: ArchiveX,
 };
 
 export function DesignerLeadMoreMenu({
