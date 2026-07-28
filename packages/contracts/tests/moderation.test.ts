@@ -4,6 +4,7 @@ import {
   adminModerationQueueQuerySchema,
   moderationHistoryResponseSchema,
   moderationAction,
+  SELF_SERVICE_MODERATION_ACTIONS,
 } from '../src/moderation.js';
 
 describe('moderation contracts', () => {
@@ -12,6 +13,23 @@ describe('moderation contracts', () => {
       'submit',
       'resubmit',
       'withdraw',
+      'start_review',
+      'publish',
+      'request_changes',
+      'reject',
+      'unpublish',
+      'metadata_corrected',
+    ]);
+  });
+
+  it('classifies every action as either self-service or a reviewer verdict', () => {
+    expect(SELF_SERVICE_MODERATION_ACTIONS).toEqual(['submit', 'resubmit', 'withdraw']);
+    // Retention keys off "not self-service", so an unclassified new action must default to
+    // being treated as a reviewer verdict rather than silently becoming deletable.
+    const reviewerActions = moderationAction.options.filter(
+      (action) => !SELF_SERVICE_MODERATION_ACTIONS.includes(action),
+    );
+    expect(reviewerActions).toEqual([
       'start_review',
       'publish',
       'request_changes',

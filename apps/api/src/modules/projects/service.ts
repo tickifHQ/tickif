@@ -371,6 +371,10 @@ const transitionRules: TransitionRule[] = [
     toStatus: 'in_review',
     action: 'unpublish',
   },
+  // assertAccess already waves superadmin through every ownership gate, so without this row
+  // POST /{id}/withdraw was reachable for them but always 409'd — the one action in the matrix
+  // superadmin could not perform.
+  { actorRole: 'superadmin', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
 ];
 
 export function assertTransition(

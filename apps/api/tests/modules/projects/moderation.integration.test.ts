@@ -15,6 +15,7 @@ import {
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { projectsRepository } from '../../../src/modules/projects/repository.js';
+import { transitionProject } from '../../../src/modules/projects/service.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 async function makeDesignerSession(phoneNumber: string) {
@@ -190,7 +191,7 @@ describe('project moderation transitions', () => {
     expect(response.status).toBe(403);
   });
 
-  it('retains moderation history by preventing a withdrawn project from being deleted', async () => {
+  it('allows deleting a project whose only history is the designer submitting and withdrawing', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002087');
     const project = await makeProject({
       designerId: designer.id,
@@ -203,17 +204,83 @@ describe('project moderation transitions', () => {
     });
     expect(withdraw.status).toBe(200);
 
+    // No reviewer ever saw this project, so there is no verdict to retain — blocking here
+    // stranded the draft permanently, with nothing able to clear it.
+    const deletion = await app.request(`/api/projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+    expect(deletion.status).toBe(200);
+
+    const [rows, events] = await Promise.all([
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      db
+        .select()
+        .from(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, project.id)),
+    ]);
+    expect(rows).toHaveLength(0);
+    expect(events).toHaveLength(0);
+  });
+
+  it('still refuses to delete a project once a reviewer has acted on it', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002090');
+    const admin = await makeUser();
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'submitted',
+      submittedAt: new Date(),
+    });
+    const adminCaller = { userId: admin.id, userRole: 'admin' };
+    await transitionProject({ projectId: project.id, toStatus: 'in_review' }, adminCaller);
+    // Ends on changes_requested, which is editable — so the delete reaches the retention
+    // check rather than being turned away for the project's status.
+    await transitionProject(
+      { projectId: project.id, toStatus: 'changes_requested', note: 'Add room labels.' },
+      adminCaller,
+    );
+
     const deletion = await app.request(`/api/projects/${project.id}`, {
       method: 'DELETE',
       headers: { cookie },
     });
     expect(deletion.status).toBe(409);
 
+    const [rows, events] = await Promise.all([
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      db
+        .select()
+        .from(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, project.id)),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(events.map((event) => event.action)).toEqual(['start_review', 'request_changes']);
+  });
+
+  it('lets a superadmin withdraw a submitted project', async () => {
+    const { designer } = await makeDesignerSession('+919800002091');
+    const superadmin = await createRoleSession('+919800002092', 'superadmin');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'submitted',
+      submittedAt: new Date(),
+    });
+
+    const withdraw = await app.request(`/api/projects/${project.id}/withdraw`, {
+      method: 'POST',
+      headers: { cookie: superadmin.cookie },
+    });
+    expect(withdraw.status).toBe(200);
+    expect((await withdraw.json()) as ProjectDetailResponse).toMatchObject({
+      status: 'draft',
+      submittedAt: null,
+    });
+
     const events = await db
       .select()
       .from(schema.projectModerationEvent)
       .where(eq(schema.projectModerationEvent.projectId, project.id));
-    expect(events).toHaveLength(1);
+    expect(events.map((event) => event.action)).toEqual(['withdraw']);
   });
 
   // Schema-level guarantee, so this drives the repository directly rather than the HTTP

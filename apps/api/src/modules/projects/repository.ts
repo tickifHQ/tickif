@@ -1,6 +1,7 @@
 import { ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { db, schema, eq, and, or, desc, asc, sql, isNotNull } from '@repo/db';
+import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
+import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -761,13 +762,26 @@ export const projectsRepository = {
         .limit(1);
       if (!project) return 'missing';
 
-      const [event] = await tx
+      // Only a reviewer verdict is worth retaining. A project the designer submitted and then
+      // withdrew has history but no verdict, and blocking on that stranded such drafts
+      // permanently — nothing could ever clear them.
+      const [reviewedEvent] = await tx
         .select({ id: schema.projectModerationEvent.id })
         .from(schema.projectModerationEvent)
-        .where(eq(schema.projectModerationEvent.projectId, id))
+        .where(
+          and(
+            eq(schema.projectModerationEvent.projectId, id),
+            notInArray(schema.projectModerationEvent.action, [...SELF_SERVICE_MODERATION_ACTIONS]),
+          ),
+        )
         .limit(1);
-      if (event) return 'moderated';
+      if (reviewedEvent) return 'moderated';
 
+      // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
+      // even if the check above ever regresses. Self-service rows must therefore go explicitly.
+      await tx
+        .delete(schema.projectModerationEvent)
+        .where(eq(schema.projectModerationEvent.projectId, id));
       await tx.delete(schema.project).where(eq(schema.project.id, id));
       return 'deleted';
     });
