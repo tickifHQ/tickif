@@ -382,6 +382,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 'catalog:'
         version: 3.1068.0
+      '@babel/runtime':
+        specifier: 'catalog:'
+        version: 7.29.7
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -397,6 +400,9 @@ importers:
       '@repo/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@repo/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@repo/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -409,6 +415,9 @@ importers:
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@26.0.0)
+      typesense:
+        specifier: 'catalog:'
+        version: 3.0.6(@babel/runtime@7.29.7)
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*

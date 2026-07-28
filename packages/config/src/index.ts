@@ -120,6 +120,7 @@ const envSchema = z.object({
   // Concurrent media jobs per worker (E-112). Image work is CPU-heavy; cap it.
   // Peak worker memory ≈ MEDIA_WORKER_CONCURRENCY × MEDIA_MAX_IMAGE_PIXELS × 4 bytes; size the container to match.
   MEDIA_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  SEARCH_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(4),
   WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(3002),
 
   // Watermark on public derivatives only (E-109); originals stay clean.

@@ -8,6 +8,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "enqueue:demo": "tsx src/enqueue-demo.ts",
+    "search:reindex": "tsx src/reindex-search.ts",
     "media:reprocess": "tsx src/reprocess-media.ts",
     "media:backfill-duplicates": "tsx src/backfill-duplicate-flags.ts",
     "lint": "eslint src tests",
@@ -18,15 +19,18 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@babel/runtime": "catalog:",
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/google-places": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
-    "sharp": "catalog:"
+    "sharp": "catalog:",
+    "typesense": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

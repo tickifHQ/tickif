@@ -1,5 +1,6 @@
 export { db, type DB } from './client.js';
 export * as schema from './schema/index.js';
+export { SEARCH_PROJECTION_ADVISORY_LOCK_KEY } from './search-projection.js';
 
 // Re-export commonly used drizzle operators so consumers don't depend on
 // drizzle-orm directly for simple queries.

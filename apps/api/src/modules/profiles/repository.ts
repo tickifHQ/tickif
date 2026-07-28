@@ -1,5 +1,6 @@
 import { db, schema, eq, and, sql } from '@repo/db';
 import { inArray } from 'drizzle-orm';
+import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 /**
  * Data-access for profile completion checks.
@@ -7,6 +8,54 @@ import { inArray } from 'drizzle-orm';
  */
 
 export type DesignerProfileRecord = typeof schema.designerProfile.$inferSelect;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type ProfileUpdateData = Partial<{
+  displayName: string;
+  bio: string | null;
+  logoImageId: string | null;
+  entityType: 'individual' | 'company';
+  address: string | null;
+  websiteUrl: string | null;
+  googleBusinessUrl: string | null;
+  phone: string | null;
+  instagramHandle: string | null;
+  linkedinHandle: string | null;
+  youtubeHandle: string | null;
+  firmType: string | null;
+  foundedYear: number | null;
+  staffCount: number | null;
+  testimonialBannerEnabled: boolean;
+}>;
+
+async function replaceFootprintByKindInTx(
+  tx: Tx,
+  profileId: string,
+  kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+  taxonomyIds: string[],
+): Promise<void> {
+  const existingIds = await tx
+    .select({ id: schema.designerProfileFootprint.id })
+    .from(schema.designerProfileFootprint)
+    .innerJoin(schema.taxonomy, eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id))
+    .where(
+      and(eq(schema.designerProfileFootprint.profileId, profileId), eq(schema.taxonomy.kind, kind)),
+    );
+
+  if (existingIds.length > 0) {
+    await tx.delete(schema.designerProfileFootprint).where(
+      inArray(
+        schema.designerProfileFootprint.id,
+        existingIds.map((entry) => entry.id),
+      ),
+    );
+  }
+  if (taxonomyIds.length > 0) {
+    await tx
+      .insert(schema.designerProfileFootprint)
+      .values(taxonomyIds.map((taxonomyId) => ({ profileId, taxonomyId })))
+      .onConflictDoNothing();
+  }
+}
 
 export const profilesRepository = {
   /** Find the designer profile owned by the given organization. */
@@ -276,32 +325,72 @@ export const profilesRepository = {
   },
 
   /** Update profile fields (partial). */
-  async updateProfile(
-    profileId: string,
-    data: Partial<{
-      displayName: string;
-      bio: string | null;
-      logoImageId: string | null;
-      entityType: 'individual' | 'company';
-      address: string | null;
-      websiteUrl: string | null;
-      googleBusinessUrl: string | null;
-      phone: string | null;
-      instagramHandle: string | null;
-      linkedinHandle: string | null;
-      youtubeHandle: string | null;
-      firmType: string | null;
-      foundedYear: number | null;
-      staffCount: number | null;
-      testimonialBannerEnabled: boolean;
-    }>,
-  ): Promise<DesignerProfileRecord> {
+  async updateProfile(profileId: string, data: ProfileUpdateData): Promise<DesignerProfileRecord> {
     const [row] = await db
       .update(schema.designerProfile)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(schema.designerProfile.id, profileId))
       .returning();
     return row!;
+  },
+
+  async updateProfileAndFootprint(
+    profileId: string,
+    data: ProfileUpdateData,
+    footprint: {
+      cityIds?: string[];
+      scopeIds?: string[];
+      themeIds?: string[];
+    },
+  ): Promise<DesignerProfileRecord> {
+    return db.transaction(async (tx) => {
+      const now = new Date();
+      const hasMutation =
+        Object.keys(data).length > 0 ||
+        footprint.cityIds !== undefined ||
+        footprint.scopeIds !== undefined ||
+        footprint.themeIds !== undefined;
+      let updated: DesignerProfileRecord;
+      if (hasMutation) {
+        const [row] = await tx
+          .update(schema.designerProfile)
+          .set({ ...data, updatedAt: now })
+          .where(eq(schema.designerProfile.id, profileId))
+          .returning();
+        if (!row) throw new Error('designer profile missing during update');
+        updated = row;
+      } else {
+        const [row] = await tx
+          .select()
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.id, profileId))
+          .limit(1);
+        if (!row) throw new Error('designer profile missing during update');
+        updated = row;
+      }
+
+      if (footprint.cityIds !== undefined) {
+        await replaceFootprintByKindInTx(tx, profileId, 'city', footprint.cityIds);
+      }
+      if (footprint.scopeIds !== undefined) {
+        await replaceFootprintByKindInTx(tx, profileId, 'scope', footprint.scopeIds);
+      }
+      if (footprint.themeIds !== undefined) {
+        await replaceFootprintByKindInTx(tx, profileId, 'theme', footprint.themeIds);
+      }
+
+      if (hasMutation) {
+        await recordSearchProjectionEvents(tx, [
+          {
+            entityKind: 'designer',
+            entityId: profileId,
+            operation: 'index',
+            sourceUpdatedAt: updated.updatedAt,
+          },
+        ]);
+      }
+      return updated;
+    });
   },
 
   /**
@@ -313,38 +402,6 @@ export const profilesRepository = {
     kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
     taxonomyIds: string[],
   ): Promise<void> {
-    await db.transaction(async (tx) => {
-      // Find existing entries of this kind
-      const existingIds = await tx
-        .select({ id: schema.designerProfileFootprint.id })
-        .from(schema.designerProfileFootprint)
-        .innerJoin(
-          schema.taxonomy,
-          eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
-        )
-        .where(
-          and(
-            eq(schema.designerProfileFootprint.profileId, profileId),
-            eq(schema.taxonomy.kind, kind),
-          ),
-        );
-
-      if (existingIds.length > 0) {
-        await tx.delete(schema.designerProfileFootprint).where(
-          inArray(
-            schema.designerProfileFootprint.id,
-            existingIds.map((e) => e.id),
-          ),
-        );
-      }
-
-      // Insert new entries with conflict guard
-      if (taxonomyIds.length > 0) {
-        await tx
-          .insert(schema.designerProfileFootprint)
-          .values(taxonomyIds.map((taxonomyId) => ({ profileId, taxonomyId })))
-          .onConflictDoNothing();
-      }
-    });
+    await db.transaction((tx) => replaceFootprintByKindInTx(tx, profileId, kind, taxonomyIds));
   },
 };

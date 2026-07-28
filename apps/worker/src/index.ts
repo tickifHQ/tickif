@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import sharp from 'sharp';
 import { Worker } from 'bullmq';
-import { config, isProduction } from '@repo/config';
+import { assertProductionSearchConfig, config, isProduction } from '@repo/config';
 import { assertMediaStorageConfig } from '@repo/storage';
 import { isGooglePlacesConfigured } from '@repo/google-places';
 import {
@@ -9,6 +9,7 @@ import {
   scheduleBookingNotificationSweep,
   scheduleGoogleReviewsSweep,
 } from '@repo/queue';
+import { searchWriteClient } from '@repo/search';
 import {
   connection,
   QUEUES,
@@ -17,6 +18,7 @@ import {
   type SmsQueueJob,
   type GoogleReviewsRefreshJob,
   type GoogleReviewsSweepJob,
+  type SearchIndexJob,
 } from './connection.js';
 import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
@@ -27,11 +29,15 @@ import {
   processGoogleReviewRefresh,
   processGoogleReviewSweep,
 } from './jobs/google-reviews.js';
+import { processSearchIndex } from './jobs/search-indexer.js';
+import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
+import { probeSearchReadiness } from './search/readiness.js';
 
 /**
  * Worker process. Each queue gets a Worker; handlers live under ./jobs.
  */
 assertMediaStorageConfig();
+if (isProduction) assertProductionSearchConfig();
 
 // One libvips thread per job so BullMQ concurrency is the only parallelism knob, and no
 // cross-job operation cache in a long-running process — both bound worker memory.
@@ -78,6 +84,11 @@ void scheduleBookingNotificationSweep(30_000).catch((err) =>
   console.error('[worker] failed to register booking-notifications sweep:', err),
 );
 
+const searchIndexWorker = new Worker<SearchIndexJob>(QUEUES.searchIndex, processSearchIndex, {
+  connection,
+  concurrency: config.SEARCH_WORKER_CONCURRENCY,
+});
+
 // Google reviews worker + periodic sweep — only when a Places API key is set.
 let googleReviewsWorker: Worker<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
 if (isGooglePlacesConfigured()) {
@@ -120,27 +131,87 @@ mediaWorker.on('failed', async (job, err) => {
 });
 smsWorker.on('completed', (job) => console.log(`[worker] sms completed job ${job.id}`));
 smsWorker.on('failed', (job, err) => console.error(`[worker] sms failed job ${job?.id}:`, err));
+searchIndexWorker.on('completed', (job) =>
+  console.log(`[worker] search-index completed job ${job.id}`),
+);
+searchIndexWorker.on('failed', (job, err) =>
+  console.error(
+    `[worker] search-index failed job ${job?.id} after ${job?.attemptsMade ?? 0} attempts:`,
+    err,
+  ),
+);
 
 let draining = false;
+let searchReady = false;
+let readinessPromise: Promise<void> | null = null;
+let dispatchPromise: Promise<void> | null = null;
+
+function refreshSearchReadiness(): Promise<void> {
+  if (readinessPromise) return readinessPromise;
+  readinessPromise = probeSearchReadiness(() => searchWriteClient().health.retrieve())
+    .then((ready) => {
+      searchReady = ready;
+    })
+    .finally(() => {
+      readinessPromise = null;
+    });
+  return readinessPromise;
+}
+
+function dispatchSearchOutbox(): Promise<void> {
+  if (dispatchPromise) return dispatchPromise;
+  dispatchPromise = dispatchSearchProjectionOutbox()
+    .then(({ failed }) => {
+      if (failed > 0) {
+        console.error(`[worker] search outbox: ${failed} enqueue attempt(s) failed`);
+      }
+    })
+    .catch((error) => {
+      console.error('[worker] search outbox sweep failed:', error);
+    })
+    .finally(() => {
+      dispatchPromise = null;
+    });
+  return dispatchPromise;
+}
+
+void refreshSearchReadiness();
+void dispatchSearchOutbox();
+const readinessTimer = setInterval(() => void refreshSearchReadiness(), 10_000);
+const outboxTimer = setInterval(() => void dispatchSearchOutbox(), 2_000);
 
 // Liveness = process up; readiness flips to 503 on shutdown so an orchestrator stops routing first.
 const health = createServer((req, res) => {
   if (req.url === '/livez') return void res.writeHead(200).end('ok');
-  if (req.url === '/readyz') return void res.writeHead(draining ? 503 : 200).end(draining ? 'draining' : 'ready');
+  if (req.url === '/readyz') {
+    const ready = !draining && searchReady;
+    return void res
+      .writeHead(ready ? 200 : 503)
+      .end(draining ? 'draining' : searchReady ? 'ready' : 'search-unavailable');
+  }
   res.writeHead(404).end();
 });
 health.listen(config.WORKER_HEALTH_PORT);
 
 console.log(
-  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}"; health on :${config.WORKER_HEALTH_PORT}`,
+  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}", "${QUEUES.searchIndex}"; health on :${config.WORKER_HEALTH_PORT}`,
 );
 
 async function shutdown(signal: string): Promise<void> {
   draining = true;
+  clearInterval(readinessTimer);
+  clearInterval(outboxTimer);
   console.log(`[worker] ${signal} received, draining...`);
   let code = 0;
   try {
-    await Promise.all([mediaWorker.close(), smsWorker.close(), googleReviewsWorker?.close()]);
+    await Promise.all([
+      readinessPromise,
+      dispatchPromise,
+      mediaWorker.close(),
+      smsWorker.close(),
+      searchIndexWorker.close(),
+      googleReviewsWorker?.close(),
+    ]);
     await closeQueues();
   } catch (err) {
     console.error('[worker] error during shutdown:', err);

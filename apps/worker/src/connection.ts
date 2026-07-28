@@ -4,4 +4,5 @@ export type {
   SmsQueueJob,
   GoogleReviewsRefreshJob,
   GoogleReviewsSweepJob,
+  SearchIndexJob,
 } from '@repo/queue';

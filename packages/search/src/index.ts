@@ -7,6 +7,8 @@ export {
   searchClient,
   searchCollectionName,
   searchSynonymSetName,
+  searchWriteClient,
+  versionedSearchCollectionName,
   type SearchCollectionKind,
 } from './client.js';
 export type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
@@ -25,3 +27,18 @@ export {
   searchCollectionSchema,
 } from './settings.js';
 export { SEARCH_SYNONYMS, SEARCH_SYNONYM_SET } from './synonyms.js';
+export {
+  createSearchCollection,
+  deleteSearchCollection,
+  deleteSearchDocument,
+  deleteSearchProjectsByDesigner,
+  getSearchCollectionTarget,
+  importSearchDocuments,
+  SearchDocumentImportError,
+  swapSearchCollectionAlias,
+  upsertSearchDocument,
+  type SearchDocument,
+  type SearchDocumentImportFailure,
+  type SearchDocumentsByKind,
+  type SearchWriteOperations,
+} from './write.js';

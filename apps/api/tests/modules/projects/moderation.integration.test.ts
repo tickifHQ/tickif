@@ -180,6 +180,50 @@ describe('project moderation transitions', () => {
     expect(events).toHaveLength(0);
   });
 
+  it('records publish and unpublish projection events in transition order', async () => {
+    const actor = await makeUser();
+    const designer = await makeDesigner({ userId: actor.id, status: 'active' });
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'in_review',
+      publishedAt: null,
+    });
+
+    await transitionProject(
+      {
+        projectId: project.id,
+        toStatus: 'published',
+        patch: { publishedAt: new Date('2026-07-28T12:00:00.000Z') },
+      },
+      { userId: actor.id, userRole: 'admin' },
+    );
+    await transitionProject(
+      {
+        projectId: project.id,
+        toStatus: 'in_review',
+        patch: { publishedAt: null },
+      },
+      { userId: actor.id, userRole: 'admin' },
+    );
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .orderBy(schema.searchProjectionOutbox.sequence);
+    expect(
+      events.map(({ entityKind, entityId, operation }) => ({
+        entityKind,
+        entityId,
+        operation,
+      })),
+    ).toEqual([
+      { entityKind: 'project', entityId: project.id, operation: 'index' },
+      { entityKind: 'designer', entityId: designer.id, operation: 'index' },
+      { entityKind: 'project', entityId: project.id, operation: 'delete' },
+      { entityKind: 'designer', entityId: designer.id, operation: 'index' },
+    ]);
+  });
+
   it('rejects history reads by a different designer', async () => {
     const owner = await makeDesignerSession('+919800002084');
     const stranger = await makeDesignerSession('+919800002085');
@@ -221,6 +265,16 @@ describe('project moderation transitions', () => {
     ]);
     expect(rows).toHaveLength(0);
     expect(events).toHaveLength(0);
+    const projectionEvents = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, project.id));
+    expect(projectionEvents).toEqual([
+      expect.objectContaining({
+        entityKind: 'project',
+        operation: 'delete',
+      }),
+    ]);
   });
 
   it('still refuses to delete a project once a reviewer has acted on it', async () => {

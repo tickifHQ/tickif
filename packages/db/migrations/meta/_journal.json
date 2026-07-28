@@ -183,6 +183,13 @@
       "when": 1785021759597,
       "tag": "0025_mature_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785263178515,
+      "tag": "0026_light_invaders",
+      "breakpoints": true
     }
   ]
 }

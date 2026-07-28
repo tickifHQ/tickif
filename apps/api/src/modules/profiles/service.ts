@@ -441,23 +441,11 @@ export const profilesService = {
       throw AppError.unprocessable(taxonomyErrors.join('; '));
     }
 
-    // Update profile fields
-    const hasProfileUpdates = Object.keys(profileFields).length > 0;
-    let updated = profile;
-    if (hasProfileUpdates) {
-      updated = await profilesRepository.updateProfile(profile.id, profileFields);
-    }
-
-    // Replace taxonomy footprints atomically (only for provided arrays)
-    if (cityIds !== undefined) {
-      await profilesRepository.replaceFootprintByKind(profile.id, 'city', cityIds);
-    }
-    if (scopeIds !== undefined) {
-      await profilesRepository.replaceFootprintByKind(profile.id, 'scope', scopeIds);
-    }
-    if (themeIds !== undefined) {
-      await profilesRepository.replaceFootprintByKind(profile.id, 'theme', themeIds);
-    }
+    const updated = await profilesRepository.updateProfileAndFootprint(profile.id, profileFields, {
+      cityIds,
+      scopeIds,
+      themeIds,
+    });
 
     // Return owner projection
     const footprint = await profilesRepository.getFootprint(profile.id);

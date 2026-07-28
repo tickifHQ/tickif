@@ -1,5 +1,6 @@
 import { db, schema, eq, and, or, sql } from '@repo/db';
 import type { DesignerProfileRecord } from './repository.js';
+import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 /**
  * Data-access for designer portfolio (E-222).
@@ -31,11 +32,37 @@ export async function withTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>
 }
 
 const RESERVED_SLUGS = new Set([
-  'admin', 'api', 'login', 'designer', 'dashboard', 'auth', 'help',
-  'support', 'pricing', 'projects', 'settings', 'profile', 'portfolio',
-  'onboarding', 'billing', 'analytics', 'reviews', 'leads', 'team',
-  'about', 'contact', 'terms', 'privacy', 'blog', 'docs', 'status',
-  'signup', 'signin', 'register', 'logout', 'app',
+  'admin',
+  'api',
+  'login',
+  'designer',
+  'dashboard',
+  'auth',
+  'help',
+  'support',
+  'pricing',
+  'projects',
+  'settings',
+  'profile',
+  'portfolio',
+  'onboarding',
+  'billing',
+  'analytics',
+  'reviews',
+  'leads',
+  'team',
+  'about',
+  'contact',
+  'terms',
+  'privacy',
+  'blog',
+  'docs',
+  'status',
+  'signup',
+  'signin',
+  'register',
+  'logout',
+  'app',
 ]);
 
 /** Either a pooled connection or an open transaction — both satisfy the query builder. */
@@ -203,10 +230,7 @@ export const portfolioRepository = {
 
   /** Create a new portfolio row for a profile. */
   async create(profileId: string): Promise<PortfolioRecord> {
-    const [row] = await db
-      .insert(schema.designerPortfolio)
-      .values({ profileId })
-      .returning();
+    const [row] = await db.insert(schema.designerPortfolio).values({ profileId }).returning();
     if (!row) throw new Error('insert returned no row');
     return row;
   },
@@ -337,9 +361,7 @@ export const portfolioRepository = {
         status: schema.project.status,
       })
       .from(schema.project)
-      .where(
-        and(eq(schema.project.id, projectId), eq(schema.project.designerId, designerId)),
-      )
+      .where(and(eq(schema.project.id, projectId), eq(schema.project.designerId, designerId)))
       .limit(1);
     return row ?? null;
   },
@@ -360,10 +382,19 @@ export const portfolioRepository = {
       youtubeHandle: string | null;
     }>,
   ): Promise<void> {
+    const now = new Date();
     await tx
       .update(schema.designerProfile)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, updatedAt: now })
       .where(eq(schema.designerProfile.id, profileId));
+    await recordSearchProjectionEvents(tx, [
+      {
+        entityKind: 'designer',
+        entityId: profileId,
+        operation: 'index',
+        sourceUpdatedAt: now,
+      },
+    ]);
   },
 
   /**
@@ -371,17 +402,29 @@ export const portfolioRepository = {
    * Returns true if the update matched a row, false if another request already changed it.
    */
   async clearLogoIfMatch(profileId: string, expectedKey: string): Promise<boolean> {
-    const result = await db
-      .update(schema.designerProfile)
-      .set({ logoImageId: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.designerProfile.id, profileId),
-          eq(schema.designerProfile.logoImageId, expectedKey),
-        ),
-      )
-      .returning({ id: schema.designerProfile.id });
-    return result.length > 0;
+    return db.transaction(async (tx) => {
+      const now = new Date();
+      const result = await tx
+        .update(schema.designerProfile)
+        .set({ logoImageId: null, updatedAt: now })
+        .where(
+          and(
+            eq(schema.designerProfile.id, profileId),
+            eq(schema.designerProfile.logoImageId, expectedKey),
+          ),
+        )
+        .returning({ id: schema.designerProfile.id });
+      if (result.length === 0) return false;
+      await recordSearchProjectionEvents(tx, [
+        {
+          entityKind: 'designer',
+          entityId: profileId,
+          operation: 'index',
+          sourceUpdatedAt: now,
+        },
+      ]);
+      return true;
+    });
   },
 
   /**
@@ -403,11 +446,23 @@ export const portfolioRepository = {
           sql`${schema.designerProfile.logoImageId} IS NULL`,
         );
 
-    const result = await db
-      .update(schema.designerProfile)
-      .set({ logoImageId: newKey, updatedAt: new Date() })
-      .where(condition!)
-      .returning({ id: schema.designerProfile.id });
-    return result.length > 0;
+    return db.transaction(async (tx) => {
+      const now = new Date();
+      const result = await tx
+        .update(schema.designerProfile)
+        .set({ logoImageId: newKey, updatedAt: now })
+        .where(condition)
+        .returning({ id: schema.designerProfile.id });
+      if (result.length === 0) return false;
+      await recordSearchProjectionEvents(tx, [
+        {
+          entityKind: 'designer',
+          entityId: profileId,
+          operation: 'index',
+          sourceUpdatedAt: now,
+        },
+      ]);
+      return true;
+    });
   },
 };
