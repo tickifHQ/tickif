@@ -158,18 +158,17 @@ const envSchema = z.object({
  * be provided or both omitted. A single value without its pair is a
  * misconfiguration that should fail fast.
  */
-const refinedEnvSchema = envSchema.superRefine((env, ctx) => {
-  const hasId = Boolean(env.GOOGLE_CLIENT_ID);
-  const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
-  if (hasId !== hasSecret) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
-      path: ['GOOGLE_CLIENT_ID'],
-    });
-  }
-
-});
+const refinedEnvSchema = envSchema.refine(
+  (env) => {
+    const hasId = Boolean(env.GOOGLE_CLIENT_ID);
+    const hasSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
+    return hasId === hasSecret;
+  },
+  {
+    message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must both be provided or both omitted',
+    path: ['GOOGLE_CLIENT_ID'],
+  },
+);
 
 const productionSearchEnvSchema = z
   .object({

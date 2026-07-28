@@ -82,7 +82,10 @@ jobs:
       REDIS_PORT: "6379"
       TYPESENSE_HOST: http://localhost:8108
       TYPESENSE_API_KEY: ci-typesense-api-key
-      TYPESENSE_SEARCH_API_KEY: ci-typesense-search-key
+      # The CI Typesense instance is bootstrapped with only the admin key below, so a distinct
+      # value here would 401 the moment a test exercises searchClient(). Scoped-key separation
+      # is a production concern — see docs/runbooks/search.md.
+      TYPESENSE_SEARCH_API_KEY: ci-typesense-api-key
       TYPESENSE_COLLECTION_PREFIX: tickif_ci
       R2_ENDPOINT: http://localhost:9000
       R2_ACCESS_KEY_ID: minioadmin

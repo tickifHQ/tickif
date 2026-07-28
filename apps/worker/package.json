@@ -17,18 +17,15 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
-    "@babel/runtime": "catalog:",
     "@repo/config": "workspace:*",
     "@repo/contracts": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/google-places": "workspace:*",
     "@repo/queue": "workspace:*",
-    "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
-    "sharp": "catalog:",
-    "typesense": "catalog:"
+    "sharp": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

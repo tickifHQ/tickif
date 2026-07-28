@@ -74,6 +74,16 @@ function isAlreadyExists(error: unknown): boolean {
   return error instanceof Errors.ObjectAlreadyExists || httpStatus(error) === 409;
 }
 
+/**
+ * Mirrors Typesense's own default so `normalizedField` compares like with like: `getCollection`
+ * echoes an explicit `sort` for every field, while the checked-in schemas leave it unset.
+ *
+ * This list is load-bearing and has to be revisited on a Typesense upgrade. If it disagrees with
+ * the server, drift detection never converges — `--check` fails and every boot logs a bootstrap
+ * error for a collection that is in fact correct. `bool` is the likely omission here; it is inert
+ * until a boolean field exists in either collection, so confirm against the target version before
+ * adding it rather than guessing.
+ */
 function defaultSortable(type: CollectionFieldSchema['type']): boolean {
   return ['int32', 'int64', 'float'].includes(type);
 }
@@ -301,6 +311,8 @@ export async function bootstrapSearch(
 
   const check = options.check ?? false;
   const applyUpdates = options.applyUpdates ?? false;
+  // Ordering is load-bearing: collection schemas reference the synonym set by name at create
+  // time, so it has to exist before the loop below. Keep this await ahead of the collections.
   const result: SearchBootstrapResult = {
     createdCollections: [],
     updatedCollections: [],
