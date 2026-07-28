@@ -31,6 +31,7 @@ export {
   createSearchCollection,
   deleteSearchCollection,
   deleteSearchDocument,
+  deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,
   importSearchDocuments,
   SearchDocumentImportError,

@@ -7,15 +7,8 @@ import {
   type CollectionSchema,
   type ImportResponse,
 } from 'typesense';
-import {
-  searchCollectionName,
-  searchWriteClient,
-  type SearchCollectionKind,
-} from './client.js';
-import type {
-  DesignerSearchDocument,
-  ProjectSearchDocument,
-} from './documents.js';
+import { searchCollectionName, searchWriteClient, type SearchCollectionKind } from './client.js';
+import type { DesignerSearchDocument, ProjectSearchDocument } from './documents.js';
 import { searchCollectionSchema } from './settings.js';
 
 export type SearchDocumentsByKind = {
@@ -31,16 +24,14 @@ export type SearchWriteOperations = {
     collectionName: string,
     documents: SearchDocument[],
   ): Promise<ImportResponse<SearchDocument>[]>;
-  upsertDocument(
-    collectionName: string,
-    document: SearchDocument,
-  ): Promise<void>;
+  upsertDocument(collectionName: string, document: SearchDocument): Promise<void>;
   deleteDocument(collectionName: string, documentId: string): Promise<void>;
+  deleteDocumentsByFilter(
+    collectionName: string,
+    filterBy: string,
+  ): Promise<{ num_deleted: number }>;
   getAlias(name: string): Promise<CollectionAliasSchema>;
-  upsertAlias(
-    name: string,
-    alias: CollectionAliasCreateSchema,
-  ): Promise<CollectionAliasSchema>;
+  upsertAlias(name: string, alias: CollectionAliasCreateSchema): Promise<CollectionAliasSchema>;
   deleteCollection(name: string): Promise<CollectionSchema>;
 };
 
@@ -71,26 +62,22 @@ function typesenseWriteOperations(instance: Client): SearchWriteOperations {
   return {
     createCollection: (schema) => instance.collections().create(schema),
     importDocuments: (collectionName, documents) =>
-      instance
-        .collections<SearchDocument>(collectionName)
-        .documents()
-        .import(documents, {
-          action: 'upsert',
-          dirty_values: 'reject',
-          return_id: true,
-          throwOnFail: false,
-        }),
+      instance.collections<SearchDocument>(collectionName).documents().import(documents, {
+        action: 'upsert',
+        dirty_values: 'reject',
+        return_id: true,
+        throwOnFail: false,
+      }),
     upsertDocument: async (collectionName, document) => {
-      await instance
-        .collections<SearchDocument>(collectionName)
-        .documents()
-        .upsert(document, {
-          dirty_values: 'reject',
-        });
+      await instance.collections<SearchDocument>(collectionName).documents().upsert(document, {
+        dirty_values: 'reject',
+      });
     },
     deleteDocument: async (collectionName, documentId) => {
       await instance.collections(collectionName).documents(documentId).delete();
     },
+    deleteDocumentsByFilter: (collectionName, filterBy) =>
+      instance.collections(collectionName).documents().delete({ filter_by: filterBy }),
     getAlias: (name) => instance.aliases(name).retrieve(),
     upsertAlias: (name, alias) => instance.aliases().upsert(name, alias),
     deleteCollection: (name) => instance.collections(name).delete(),
@@ -113,19 +100,11 @@ function isNotFound(error: unknown): boolean {
   return error instanceof Errors.ObjectNotFound || httpStatus(error) === 404;
 }
 
-function assertVersionedCollectionName(
-  kind: SearchCollectionKind,
-  collectionName: string,
-): void {
+function assertVersionedCollectionName(kind: SearchCollectionKind, collectionName: string): void {
   const prefix = `${searchCollectionName(kind)}_v`;
   const version = collectionName.slice(prefix.length);
-  if (
-    !collectionName.startsWith(prefix) ||
-    !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(version)
-  ) {
-    throw new Error(
-      `Refusing to use non-versioned search collection ${collectionName}`,
-    );
+  if (!collectionName.startsWith(prefix) || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(version)) {
+    throw new Error(`Refusing to use non-versioned search collection ${collectionName}`);
   }
 }
 
@@ -165,10 +144,7 @@ export async function importSearchDocuments<K extends SearchCollectionKind>(
   assertVersionedCollectionName(kind, collectionName);
   if (documents.length === 0) return;
 
-  const results = await writeOperations(options.client).importDocuments(
-    collectionName,
-    documents,
-  );
+  const results = await writeOperations(options.client).importDocuments(collectionName, documents);
   const failures: SearchDocumentImportFailure[] = [];
 
   for (const [row, result] of results.entries()) {
@@ -219,15 +195,31 @@ export async function deleteSearchDocument(
     assertVersionedCollectionName(kind, collectionName);
   }
   try {
-    await writeOperations(options.client).deleteDocument(
-      collectionName,
-      documentId,
-    );
+    await writeOperations(options.client).deleteDocument(collectionName, documentId);
     return true;
   } catch (error) {
     if (isNotFound(error)) return false;
     throw error;
   }
+}
+
+export async function deleteSearchProjectsByDesigner(
+  designerId: string,
+  options: {
+    client?: SearchWriteOperations;
+    collectionName?: string;
+  } = {},
+): Promise<number> {
+  const collectionName = options.collectionName ?? searchCollectionName('projects');
+  if (options.collectionName) {
+    assertVersionedCollectionName('projects', collectionName);
+  }
+  const escapedDesignerId = designerId.replace(/`/g, '\\`');
+  const result = await writeOperations(options.client).deleteDocumentsByFilter(
+    collectionName,
+    `designerId:=\`${escapedDesignerId}\``,
+  );
+  return result.num_deleted;
 }
 
 export async function getSearchCollectionTarget(

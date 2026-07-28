@@ -77,21 +77,29 @@ export type GoogleReviewsSweepJob = Record<string, never>;
 export type SearchIndexProjectJob = {
   projectId: string;
   updatedAtEpoch: number;
+  eventId: string;
+  outboxSequence?: string;
 };
 
 export type SearchDeleteProjectJob = {
   projectId: string;
   updatedAtEpoch: number;
+  eventId: string;
+  outboxSequence?: string;
 };
 
 export type SearchIndexDesignerJob = {
   profileId: string;
   updatedAtEpoch: number;
+  eventId: string;
+  outboxSequence?: string;
 };
 
 export type SearchDeleteDesignerJob = {
   profileId: string;
   updatedAtEpoch: number;
+  eventId: string;
+  outboxSequence?: string;
 };
 
 export type SearchReindexAllJob = {
@@ -249,31 +257,32 @@ export async function scheduleBookingNotificationSweep(everyMs: number): Promise
 
 export async function enqueueSearchProjectIndex(job: SearchIndexProjectJob): Promise<void> {
   await getSearchIndexQueue().add(JOBS.indexProject, job, {
-    jobId: `${JOBS.indexProject}-${job.projectId}-${job.updatedAtEpoch}`,
+    jobId: `${JOBS.indexProject}-${job.projectId}-${job.eventId}`,
   });
 }
 
 export async function enqueueSearchProjectDelete(job: SearchDeleteProjectJob): Promise<void> {
   await getSearchIndexQueue().add(JOBS.deleteProject, job, {
-    jobId: `${JOBS.deleteProject}-${job.projectId}-${job.updatedAtEpoch}`,
+    jobId: `${JOBS.deleteProject}-${job.projectId}-${job.eventId}`,
   });
 }
 
 export async function enqueueSearchDesignerIndex(job: SearchIndexDesignerJob): Promise<void> {
   await getSearchIndexQueue().add(JOBS.indexDesigner, job, {
-    jobId: `${JOBS.indexDesigner}-${job.profileId}-${job.updatedAtEpoch}`,
+    jobId: `${JOBS.indexDesigner}-${job.profileId}-${job.eventId}`,
   });
 }
 
 export async function enqueueSearchDesignerDelete(job: SearchDeleteDesignerJob): Promise<void> {
   await getSearchIndexQueue().add(JOBS.deleteDesigner, job, {
-    jobId: `${JOBS.deleteDesigner}-${job.profileId}-${job.updatedAtEpoch}`,
+    jobId: `${JOBS.deleteDesigner}-${job.profileId}-${job.eventId}`,
   });
 }
 
 export async function enqueueSearchReindexAll(job: SearchReindexAllJob): Promise<void> {
   await getSearchIndexQueue().add(JOBS.reindexAll, job, {
     jobId: `${JOBS.reindexAll}-${job.requestedAtEpoch}`,
+    deduplication: { id: JOBS.reindexAll },
   });
 }
 

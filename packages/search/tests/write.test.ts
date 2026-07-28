@@ -12,6 +12,7 @@ import {
   createSearchCollection,
   deleteSearchCollection,
   deleteSearchDocument,
+  deleteSearchProjectsByDesigner,
   getSearchCollectionTarget,
   importSearchDocuments,
   type SearchDocument,
@@ -80,6 +81,7 @@ function fakeOperations() {
     async (_collectionName: string, _document: SearchDocument) => undefined,
   );
   const deleteDocument = vi.fn(async () => undefined);
+  const deleteDocumentsByFilter = vi.fn(async () => ({ num_deleted: 0 }));
   const getAlias = vi.fn(
     async (name: string): Promise<CollectionAliasSchema> => ({
       name,
@@ -87,10 +89,10 @@ function fakeOperations() {
     }),
   );
   const upsertAlias = vi.fn(
-    async (
-      name: string,
-      alias: CollectionAliasCreateSchema,
-    ): Promise<CollectionAliasSchema> => ({ name, ...alias }),
+    async (name: string, alias: CollectionAliasCreateSchema): Promise<CollectionAliasSchema> => ({
+      name,
+      ...alias,
+    }),
   );
   const deleteCollection = vi.fn(async (name: string) => collectionSchema(name));
 
@@ -99,6 +101,7 @@ function fakeOperations() {
     importDocuments,
     upsertDocument,
     deleteDocument,
+    deleteDocumentsByFilter,
     getAlias,
     upsertAlias,
     deleteCollection,
@@ -110,6 +113,7 @@ function fakeOperations() {
     importDocuments,
     upsertDocument,
     deleteDocument,
+    deleteDocumentsByFilter,
     getAlias,
     upsertAlias,
     deleteCollection,
@@ -149,11 +153,7 @@ describe('search write primitives', () => {
       collectionName: 'tickif_projects_v20260728',
     });
 
-    expect(fake.upsertDocument).toHaveBeenNthCalledWith(
-      1,
-      'tickif_projects',
-      projectDocument,
-    );
+    expect(fake.upsertDocument).toHaveBeenNthCalledWith(1, 'tickif_projects', projectDocument);
     expect(fake.upsertDocument).toHaveBeenNthCalledWith(
       2,
       'tickif_projects_v20260728',
@@ -230,6 +230,19 @@ describe('search write primitives', () => {
     ).resolves.toBe(true);
   });
 
+  it('deletes every project document belonging to a designer', async () => {
+    const fake = fakeOperations();
+    fake.deleteDocumentsByFilter.mockResolvedValueOnce({ num_deleted: 3 });
+
+    await expect(
+      deleteSearchProjectsByDesigner('designer-1', { client: fake.operations }),
+    ).resolves.toBe(3);
+    expect(fake.deleteDocumentsByFilter).toHaveBeenCalledWith(
+      'tickif_projects',
+      'designerId:=`designer-1`',
+    );
+  });
+
   it('returns the previous target when atomically replacing an alias', async () => {
     const fake = fakeOperations();
 
@@ -245,9 +258,9 @@ describe('search write primitives', () => {
     expect(fake.upsertAlias).toHaveBeenCalledWith('tickif_projects', {
       collection_name: 'tickif_projects_v20260728',
     });
-    await expect(
-      getSearchCollectionTarget('projects', { client: fake.operations }),
-    ).resolves.toBe('tickif_projects_v1');
+    await expect(getSearchCollectionTarget('projects', { client: fake.operations })).resolves.toBe(
+      'tickif_projects_v1',
+    );
   });
 
   it('only deletes versioned physical collections belonging to the selected kind', async () => {
