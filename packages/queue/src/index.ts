@@ -15,6 +15,7 @@ export const QUEUES = {
   media: 'media',
   sms: 'sms',
   googleReviews: 'google-reviews',
+  searchIndex: 'search-index',
 } as const;
 
 export const JOBS = {
@@ -24,6 +25,11 @@ export const JOBS = {
   processMedia: 'process-media',
   refreshGoogleReviews: 'refresh-google-reviews',
   sweepGoogleReviews: 'sweep-google-reviews',
+  indexProject: 'index-project',
+  deleteProject: 'delete-project',
+  indexDesigner: 'index-designer',
+  deleteDesigner: 'delete-designer',
+  reindexAll: 'reindex-all',
 } as const;
 
 export type MediaProcessJob = {
@@ -68,6 +74,37 @@ export type GoogleReviewsRefreshJob = {
 /** Periodic sweep: refetch stale rows + purge ToS-expired review payloads. */
 export type GoogleReviewsSweepJob = Record<string, never>;
 
+export type SearchIndexProjectJob = {
+  projectId: string;
+  updatedAtEpoch: number;
+};
+
+export type SearchDeleteProjectJob = {
+  projectId: string;
+  updatedAtEpoch: number;
+};
+
+export type SearchIndexDesignerJob = {
+  profileId: string;
+  updatedAtEpoch: number;
+};
+
+export type SearchDeleteDesignerJob = {
+  profileId: string;
+  updatedAtEpoch: number;
+};
+
+export type SearchReindexAllJob = {
+  requestedAtEpoch: number;
+};
+
+export type SearchIndexJob =
+  | SearchIndexProjectJob
+  | SearchDeleteProjectJob
+  | SearchIndexDesignerJob
+  | SearchDeleteDesignerJob
+  | SearchReindexAllJob;
+
 /** Stable scheduler id so re-registering the repeatable sweep is idempotent. */
 export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
 export const BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER = 'booking-notifications-sweep';
@@ -86,6 +123,7 @@ export const defaultJobOptions = {
 let smsQueue: Queue<SmsQueueJob> | undefined;
 let mediaQueue: Queue<MediaProcessJob> | undefined;
 let googleReviewsQueue: Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
+let searchIndexQueue: Queue<SearchIndexJob> | undefined;
 
 function getSmsQueue(): Queue<SmsQueueJob> {
   smsQueue ??= new Queue<SmsQueueJob>(QUEUES.sms, {
@@ -141,6 +179,14 @@ function getGoogleReviewsQueue(): Queue<GoogleReviewsRefreshJob | GoogleReviewsS
     { connection, defaultJobOptions },
   );
   return googleReviewsQueue;
+}
+
+function getSearchIndexQueue(): Queue<SearchIndexJob> {
+  searchIndexQueue ??= new Queue<SearchIndexJob>(QUEUES.searchIndex, {
+    connection,
+    defaultJobOptions,
+  });
+  return searchIndexQueue;
 }
 
 /**
@@ -201,9 +247,45 @@ export async function scheduleBookingNotificationSweep(everyMs: number): Promise
   );
 }
 
+export async function enqueueSearchProjectIndex(job: SearchIndexProjectJob): Promise<void> {
+  await getSearchIndexQueue().add(JOBS.indexProject, job, {
+    jobId: `${JOBS.indexProject}-${job.projectId}-${job.updatedAtEpoch}`,
+  });
+}
+
+export async function enqueueSearchProjectDelete(job: SearchDeleteProjectJob): Promise<void> {
+  await getSearchIndexQueue().add(JOBS.deleteProject, job, {
+    jobId: `${JOBS.deleteProject}-${job.projectId}-${job.updatedAtEpoch}`,
+  });
+}
+
+export async function enqueueSearchDesignerIndex(job: SearchIndexDesignerJob): Promise<void> {
+  await getSearchIndexQueue().add(JOBS.indexDesigner, job, {
+    jobId: `${JOBS.indexDesigner}-${job.profileId}-${job.updatedAtEpoch}`,
+  });
+}
+
+export async function enqueueSearchDesignerDelete(job: SearchDeleteDesignerJob): Promise<void> {
+  await getSearchIndexQueue().add(JOBS.deleteDesigner, job, {
+    jobId: `${JOBS.deleteDesigner}-${job.profileId}-${job.updatedAtEpoch}`,
+  });
+}
+
+export async function enqueueSearchReindexAll(job: SearchReindexAllJob): Promise<void> {
+  await getSearchIndexQueue().add(JOBS.reindexAll, job, {
+    jobId: `${JOBS.reindexAll}-${job.requestedAtEpoch}`,
+  });
+}
+
 export async function closeQueues(): Promise<void> {
-  await Promise.all([smsQueue?.close(), mediaQueue?.close(), googleReviewsQueue?.close()]);
+  await Promise.all([
+    smsQueue?.close(),
+    mediaQueue?.close(),
+    googleReviewsQueue?.close(),
+    searchIndexQueue?.close(),
+  ]);
   smsQueue = undefined;
   mediaQueue = undefined;
   googleReviewsQueue = undefined;
+  searchIndexQueue = undefined;
 }

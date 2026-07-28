@@ -58,10 +58,22 @@ describe('Typesense environment configuration', () => {
     expect(parsed.TYPESENSE_HOST).toBe('http://localhost:8108');
     expect(parsed.TYPESENSE_API_KEY).toBe('tickif-local-typesense-key');
     expect(parsed.TYPESENSE_SEARCH_API_KEY).toBe('tickif-local-typesense-key');
+    expect(parsed.SEARCH_WORKER_CONCURRENCY).toBe(4);
     expect(() =>
       assertProductionSearchConfig({
         NODE_ENV: 'development',
       }),
     ).not.toThrow();
+  });
+
+  it('accepts a positive search worker concurrency override', () => {
+    const parsed = parseConfig({
+      NODE_ENV: 'development',
+      BETTER_AUTH_SECRET: 'development-auth-secret',
+      BETTER_AUTH_URL: 'http://localhost:3001',
+      SEARCH_WORKER_CONCURRENCY: '8',
+    });
+
+    expect(parsed.SEARCH_WORKER_CONCURRENCY).toBe(8);
   });
 });
