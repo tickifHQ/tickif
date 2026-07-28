@@ -150,4 +150,3 @@ export const adminReviewsResponseSchema = z
   })
   .meta({ id: 'AdminReviews' });
 export type AdminReviewsResponse = z.infer<typeof adminReviewsResponseSchema>;
-

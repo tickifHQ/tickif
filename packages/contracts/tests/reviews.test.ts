@@ -97,4 +97,3 @@ describe('review contracts', () => {
     expect(adminReviewsQuerySchema.safeParse({ status: 'draft' }).success).toBe(false);
   });
 });
-
