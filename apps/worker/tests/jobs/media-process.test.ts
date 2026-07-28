@@ -270,6 +270,13 @@ describe('processMedia', () => {
 
     expect(result).toEqual({ ok: true, derivatives: 8 });
     expect(repoMock.markReady).toHaveBeenCalledTimes(1);
+    expect(repoMock.markReady).toHaveBeenCalledWith(
+      'img-1',
+      expect.objectContaining({
+        duplicateOfImageId: 'other',
+        duplicateDistance: 0,
+      }),
+    );
     expect(repoMock.markFailed).not.toHaveBeenCalled();
   });
 

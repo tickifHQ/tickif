@@ -169,6 +169,13 @@
       "when": 1784932108903,
       "tag": "0023_tired_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784964225725,
+      "tag": "0024_lowly_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

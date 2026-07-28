@@ -79,7 +79,9 @@ export const taxonomy = pgTable(
     slug: text('slug').notNull(),
     // Self-referencing FK for hierarchy. Only locality uses this (city → locality).
     // v0 policy: parentId is immutable after creation.
-    parentId: uuid('parent_id').references((): AnyPgColumn => taxonomy.id, { onDelete: 'restrict' }),
+    parentId: uuid('parent_id').references((): AnyPgColumn => taxonomy.id, {
+      onDelete: 'restrict',
+    }),
     sortOrder: integer('sort_order').default(0).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Kind-specific data. budget_band stores { min: number, max: number }.
@@ -89,7 +91,10 @@ export const taxonomy = pgTable(
   },
   (t) => [
     // Hierarchy: locality MUST have parent, all other kinds MUST NOT.
-    check('taxonomy_hierarchy_check', sql`(${t.kind} = 'locality' AND ${t.parentId} IS NOT NULL) OR (${t.kind} <> 'locality' AND ${t.parentId} IS NULL)`),
+    check(
+      'taxonomy_hierarchy_check',
+      sql`(${t.kind} = 'locality' AND ${t.parentId} IS NOT NULL) OR (${t.kind} <> 'locality' AND ${t.parentId} IS NULL)`,
+    ),
     // Slug format: lowercase, URL-safe, immutable after creation.
     check('taxonomy_slug_format_check', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
     // Non-locality kinds: slug unique within kind
@@ -142,9 +147,7 @@ export const designerProfile = pgTable(
     // Corporate display fields (gated by entitlement at read time)
     websiteUrl: text('website_url'),
     googleBusinessUrl: text('google_business_url'),
-    testimonialBannerEnabled: boolean('testimonial_banner_enabled')
-      .default(false)
-      .notNull(),
+    testimonialBannerEnabled: boolean('testimonial_banner_enabled').default(false).notNull(),
     staffCount: integer('staff_count'),
     // Contact & social presence
     phone: text('phone'),
@@ -222,6 +225,7 @@ export const project = pgTable(
     rejectionReasonCode: text('rejection_reason_code'),
     moderationNote: text('moderation_note'),
     featuredAt: timestamp('featured_at'),
+    moderationRevision: integer('moderation_revision').default(0).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -236,6 +240,12 @@ export const project = pgTable(
     index('project_scope_idx').on(t.scopeSlug),
     index('project_reviewed_by_idx').on(t.reviewedBy),
     index('project_featured_at_idx').on(t.featuredAt),
+    index('project_submitted_moderation_queue_idx')
+      .on(t.submittedAt, t.id)
+      .where(sql`${t.status} = 'submitted'`),
+    index('project_in_review_moderation_queue_idx')
+      .on(t.reviewedBy, t.submittedAt, t.id)
+      .where(sql`${t.status} = 'in_review'`),
   ],
 );
 
@@ -360,6 +370,10 @@ export const projectImage = pgTable(
     width: integer('width'),
     height: integer('height'),
     phash: text('phash'),
+    // Immutable pipeline provenance. The matched image may later be deleted, so this is not an FK.
+    duplicateOfImageId: uuid('duplicate_of_image_id'),
+    duplicateDistance: integer('duplicate_distance'),
+    duplicateCheckedAt: timestamp('duplicate_checked_at'),
     status: projectImageStatusEnum('status').default('processing').notNull(),
     sortOrder: integer('sort_order').default(0).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -370,9 +384,12 @@ export const projectImage = pgTable(
     index('project_image_room_idx').on(t.roomId),
     // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
+    check(
+      'project_image_duplicate_distance_nonnegative',
+      sql`${t.duplicateDistance} is null or ${t.duplicateDistance} >= 0`,
+    ),
   ],
 );
-
 
 // --- Designer Portfolio (E-222) ---
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { moderationHistoryResponseSchema, moderationAction } from '../src/moderation.js';
+import {
+  adminCorrectProjectSchema,
+  adminModerationQueueQuerySchema,
+  moderationHistoryResponseSchema,
+  moderationAction,
+} from '../src/moderation.js';
 
 describe('moderation contracts', () => {
   it('accepts every persisted moderation action', () => {
@@ -55,5 +60,30 @@ describe('moderation contracts', () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it('defaults the admin queue to submitted projects in FIFO order', () => {
+    expect(adminModerationQueueQuerySchema.parse({})).toEqual({
+      status: 'submitted',
+      sort: 'oldest',
+      page: 1,
+      limit: 20,
+    });
+  });
+
+  it('accepts only allowlisted non-empty admin corrections', () => {
+    expect(
+      adminCorrectProjectSchema.parse({
+        title: 'Corrected title',
+        citySlug: 'mumbai',
+        featuredAt: null,
+      }),
+    ).toEqual({
+      title: 'Corrected title',
+      citySlug: 'mumbai',
+      featuredAt: null,
+    });
+    expect(() => adminCorrectProjectSchema.parse({})).toThrow();
+    expect(() => adminCorrectProjectSchema.parse({ description: 'not allowlisted' })).toThrow();
   });
 });

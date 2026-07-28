@@ -77,6 +77,7 @@ export type TransitionProjectParams = {
   reasonCode?: string | null;
   fieldDiff?: ModerationFieldDiff | null;
   patch?: ProjectTransitionPatch;
+  expectedModerationRevision?: number;
 };
 
 const freshProcessingImageFilter = sql`
@@ -671,7 +672,15 @@ export const projectsRepository = {
           status: params.toStatus,
           updatedAt: new Date(),
         })
-        .where(and(eq(schema.project.id, params.id), eq(schema.project.status, params.fromStatus)))
+        .where(
+          and(
+            eq(schema.project.id, params.id),
+            eq(schema.project.status, params.fromStatus),
+            params.expectedModerationRevision === undefined
+              ? undefined
+              : eq(schema.project.moderationRevision, params.expectedModerationRevision),
+          ),
+        )
         .returning();
 
       if (!transitioned) return null;
