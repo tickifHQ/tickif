@@ -143,6 +143,10 @@ function StudioMark({
 }
 
 function StudioBar({ portfolio, view }: SectionProps) {
+  const tickifRating = portfolio.sections.overallRating
+    ? portfolio.stats.tickif
+    : null;
+
   return (
     <div className="border-b bg-background/95">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
@@ -157,12 +161,12 @@ function StudioBar({ portfolio, view }: SectionProps) {
             </p>
             <p className="truncate text-xs text-muted-foreground">
               {view.type}
-              {portfolio.sections.overallRating && portfolio.stats.reviewCount > 0 ? (
+              {tickifRating && tickifRating.reviewCount > 0 ? (
                 <>
                   {' · '}
                   <span className="inline-flex -translate-y-px items-center gap-1 align-middle">
                     <Star className="size-3 fill-warning text-warning" />
-                    <span>{formatRating(portfolio.stats.rating)}</span>
+                    <span>{formatRating(tickifRating.rating)}</span>
                   </span>
                 </>
               ) : null}
@@ -201,14 +205,15 @@ type HeroStatTile = { value: string; label: string; detail: string };
 
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
+  const tickifRating = portfolio.sections.overallRating ? stats.tickif : null;
 
   // Only stats the designer actually has data for — an empty tile reads as broken.
   const candidates: (HeroStatTile | null)[] = [
-    portfolio.sections.overallRating && stats.reviewCount > 0
+    tickifRating && tickifRating.reviewCount > 0
       ? {
-          value: formatRating(stats.rating),
+          value: formatRating(tickifRating.rating),
           label: 'Rating',
-          detail: `${stats.reviewCount} verified reviews`,
+          detail: `${tickifRating.reviewCount} verified reviews`,
         }
       : null,
     stats.projectCount > 0
@@ -392,6 +397,9 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
 
 function StorySection({ portfolio, view }: SectionProps) {
   const testimonial = portfolio.testimonial;
+  const tickifRating = portfolio.sections.overallRating
+    ? portfolio.stats.tickif
+    : null;
   if (!testimonial) return null;
 
   const attribution = [testimonial.author, testimonial.projectTitle]
@@ -496,12 +504,12 @@ function StorySection({ portfolio, view }: SectionProps) {
                       ) : null}
                     </p>
                   ) : null}
-                  {portfolio.sections.overallRating && portfolio.stats.reviewCount > 0 ? (
+                  {tickifRating && tickifRating.reviewCount > 0 ? (
                     <p className="flex items-center gap-1.5">
                       <Star className="size-3 fill-muted-foreground text-muted-foreground" />
-                      <span>{formatRating(portfolio.stats.rating)}</span>
+                      <span>{formatRating(tickifRating.rating)}</span>
                       <span className="text-muted-foreground">
-                        ({portfolio.stats.reviewCount} verified reviews)
+                        ({tickifRating.reviewCount} verified reviews)
                       </span>
                     </p>
                   ) : null}
@@ -517,13 +525,13 @@ function StorySection({ portfolio, view }: SectionProps) {
                 </LoginGatedAction>
               </div>
 
-              {portfolio.sections.overallRating && portfolio.stats.reviewCount > 0 ? (
+              {tickifRating && tickifRating.reviewCount > 0 ? (
                 <div className="flex items-center justify-between border-t px-5 py-3 text-muted-foreground">
                   <TickifBrandIcon role="img" aria-label="Tickif" className="size-4 text-primary" />
                   <span className="inline-flex items-center gap-1 font-mono text-2xs leading-none tracking-wider uppercase">
-                    <span>{formatRating(portfolio.stats.rating)}</span>
+                    <span>{formatRating(tickifRating.rating)}</span>
                     <Star className="block size-2.5 shrink-0 fill-current" aria-hidden="true" />
-                    <span>· {portfolio.stats.reviewCount}</span>
+                    <span>· {tickifRating.reviewCount}</span>
                   </span>
                 </div>
               ) : null}
@@ -570,7 +578,11 @@ function ReviewCard({ review }: { review: PublicPortfolioReview }) {
             <p className="mt-1 text-sm text-muted-foreground">{review.relativeTime}</p>
           </div>
         </div>
-        <GoogleBrandIcon className="size-6" />
+        {review.source === 'google' ? (
+          <GoogleBrandIcon className="size-6" />
+        ) : (
+          <TickifBrandIcon className="size-6 text-primary" />
+        )}
       </div>
       <p className="flex-1 text-sm leading-relaxed">“{review.text}”</p>
       <Rating rating={review.rating} size="lg" />
@@ -580,6 +592,7 @@ function ReviewCard({ review }: { review: PublicPortfolioReview }) {
 
 function ReviewsSection({ portfolio }: SectionProps) {
   const { reviews, stats } = portfolio;
+  const tickifRating = portfolio.sections.overallRating ? stats.tickif : null;
 
   return (
     <section className="overflow-hidden border-t border-surface-subtle-border bg-surface-subtle px-4 py-22 sm:px-6">
@@ -592,7 +605,7 @@ function ReviewsSection({ portfolio }: SectionProps) {
           What it’s like to <span className="font-light text-primary italic">work with us</span>.
         </h2>
         <div className="mt-9 flex flex-col gap-8 pb-20 md:flex-row">
-          {portfolio.sections.overallRating && stats.reviewCount > 0 ? (
+          {tickifRating && tickifRating.reviewCount > 0 ? (
             <Card
               className="shadow-floating-card relative flex min-h-56 w-60 shrink-0 flex-col justify-between overflow-hidden border-surface-inverse-foreground/15 bg-surface-inverse p-5 text-surface-inverse-foreground"
               radius="xl"
@@ -607,12 +620,12 @@ function ReviewsSection({ portfolio }: SectionProps) {
                 </p>
               </div>
               <p className="relative text-7xl font-normal tracking-tight">
-                {formatRating(stats.rating)}
+                {formatRating(tickifRating.rating)}
               </p>
               <div className="relative">
-                <Rating rating={stats.rating} />
+                <Rating rating={tickifRating.rating} />
                 <p className="mt-2 text-sm text-surface-inverse-foreground">
-                  Based on {stats.reviewCount} verified reviews
+                  Based on {tickifRating.reviewCount} verified reviews
                 </p>
               </div>
             </Card>

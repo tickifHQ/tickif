@@ -62,7 +62,7 @@ describe('PublicDesignerProfile', () => {
   it('explains the empty state instead of an empty rail when there are no reviews', () => {
     render(
       <PublicDesignerProfile
-        portfolio={makePublicPortfolio({ reviews: [], reviewSource: null })}
+        portfolio={makePublicPortfolio({ reviews: [] })}
       />,
     );
 
@@ -152,8 +152,8 @@ describe('PublicDesignerProfile', () => {
             youtubeHandle: null,
           },
           stats: {
-            rating: 0,
-            reviewCount: 0,
+            tickif: null,
+            google: null,
             projectCount: 3,
             yearsExperience: 0,
             startingBudget: null,
