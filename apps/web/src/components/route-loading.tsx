@@ -8,8 +8,10 @@
  * screens, and wrong for anonymous, crawlable routes like `/d/{slug}`, where a
  * real `404`/`307` is what keeps unpublished portfolios out of search results.
  *
- * So: groups that sit behind the login redirect opt in here; public profile
- * routes intentionally have no fallback.
+ * So: groups that sit behind the login redirect opt in here. The anonymous,
+ * crawlable groups — `(public-profile)` and `(public)` — intentionally have no
+ * fallback, so `/d/{slug}` and `/projects/{id}` return honest `404`s for
+ * portfolios and projects that are not published.
  */
 export function RouteLoading() {
   return (
