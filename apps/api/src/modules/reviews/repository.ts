@@ -206,7 +206,8 @@ export const reviewsRepository = {
         .select({ phoneNumberVerified: schema.user.phoneNumberVerified })
         .from(schema.user)
         .where(eq(schema.user.id, params.authorUserId))
-        .limit(1);
+        .limit(1)
+        .for('update');
       if (author?.phoneNumberVerified !== true) return { kind: 'phone_unverified' } as const;
 
       const [designer] = await tx
@@ -320,7 +321,6 @@ export const reviewsRepository = {
       designerProfileId: string;
       fromStatus: 'pending' | 'published';
       expectedRevision: number;
-      publishedEditCutoff: Date;
       rating?: number;
       body?: string | null;
     },
@@ -331,7 +331,8 @@ export const reviewsRepository = {
         .select({ phoneNumberVerified: schema.user.phoneNumberVerified })
         .from(schema.user)
         .where(eq(schema.user.id, params.authorUserId))
-        .limit(1);
+        .limit(1)
+        .for('update');
       if (author?.phoneNumberVerified !== true) {
         return { kind: 'phone_unverified' } as const;
       }
@@ -379,7 +380,7 @@ export const reviewsRepository = {
       ];
       if (params.fromStatus === 'published') {
         stateConditions.push(
-          sql`${schema.review.publishedAt} >= ${params.publishedEditCutoff}`,
+          sql`${schema.review.publishedAt} >= clock_timestamp() - interval '24 hours'`,
         );
       }
 
@@ -448,7 +449,8 @@ export const reviewsRepository = {
               eq(schema.member.userId, params.requiredWriter.userId),
             ),
           )
-          .limit(1);
+          .limit(1)
+          .for('update');
         const canWrite = membership?.role
           .split(',')
           .some((role) => role.trim() === 'owner' || role.trim() === 'admin');
@@ -527,18 +529,18 @@ export const reviewsRepository = {
   async listAdmin(
     query: AdminReviewsQuery,
   ): Promise<{ items: ReviewViewRecord[]; total: number }> {
-    const where = eq(schema.review.status, query.status);
-    const [items, [count]] = await Promise.all([
-      reviewViewQuery(db)
+    return db.transaction(async (tx) => {
+      const where = eq(schema.review.status, query.status);
+      const items = await reviewViewQuery(tx)
         .where(where)
         .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
         .limit(query.limit)
-        .offset((query.page - 1) * query.limit),
-      db
+        .offset((query.page - 1) * query.limit);
+      const [count] = await tx
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.review)
-        .where(where),
-    ]);
-    return { items, total: count?.value ?? 0 };
+        .where(where);
+      return { items, total: count?.value ?? 0 };
+    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
   },
 };

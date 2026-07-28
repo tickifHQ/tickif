@@ -484,6 +484,15 @@ export const review = pgTable(
       sql`${t.body} is null or char_length(btrim(${t.body})) >= 30`,
     ),
     check(
+      'review_timestamp_order_check',
+      sql`
+        ${t.updatedAt} >= ${t.createdAt}
+        and (${t.publishedAt} is null or ${t.publishedAt} >= ${t.createdAt})
+        and (${t.disputedAt} is null or ${t.disputedAt} >= ${t.createdAt})
+        and (${t.moderatedAt} is null or ${t.moderatedAt} >= ${t.createdAt})
+      `,
+    ),
+    check(
       'review_lifecycle_check',
       sql`
         (
@@ -506,15 +515,21 @@ export const review = pgTable(
           and ${t.moderatedAt} >= ${t.publishedAt}
         )
         or (
-          ${t.status} in ('disputed', 'removed')
+          ${t.status} = 'disputed'
           and ${t.publishedAt} is not null
           and ${t.disputedAt} is not null
           and ${t.moderatedAt} is not null
           and ${t.disputedAt} >= ${t.publishedAt}
-          and (
-            ${t.status} <> 'removed'
-            or ${t.moderatedAt} >= ${t.disputedAt}
-          )
+          and ${t.moderatedAt} >= ${t.publishedAt}
+          and ${t.moderatedAt} <= ${t.disputedAt}
+        )
+        or (
+          ${t.status} = 'removed'
+          and ${t.publishedAt} is not null
+          and ${t.disputedAt} is not null
+          and ${t.moderatedAt} is not null
+          and ${t.disputedAt} >= ${t.publishedAt}
+          and ${t.moderatedAt} >= ${t.disputedAt}
         )
       `,
     ),
@@ -552,34 +567,39 @@ export const reviewModerationEvent = pgTable(
       sql`
         (${t.action} = 'submit' and ${t.fromStatus} is null and ${t.toStatus} = 'pending')
         or (
-          ${t.action} = 'edit'
-          and ${t.fromStatus} in ('pending', 'published')
-          and ${t.toStatus} = 'pending'
-        )
-        or (
-          ${t.action} = 'publish'
-          and ${t.fromStatus} = 'pending'
-          and ${t.toStatus} = 'published'
-        )
-        or (
-          ${t.action} = 'reject'
-          and ${t.fromStatus} = 'pending'
-          and ${t.toStatus} = 'rejected'
-        )
-        or (
-          ${t.action} = 'dispute'
-          and ${t.fromStatus} = 'published'
-          and ${t.toStatus} = 'disputed'
-        )
-        or (
-          ${t.action} = 'resolve_publish'
-          and ${t.fromStatus} = 'disputed'
-          and ${t.toStatus} = 'published'
-        )
-        or (
-          ${t.action} = 'remove'
-          and ${t.fromStatus} = 'disputed'
-          and ${t.toStatus} = 'removed'
+          ${t.fromStatus} is not null
+          and (
+            (
+              ${t.action} = 'edit'
+              and ${t.fromStatus} in ('pending', 'published')
+              and ${t.toStatus} = 'pending'
+            )
+            or (
+              ${t.action} = 'publish'
+              and ${t.fromStatus} = 'pending'
+              and ${t.toStatus} = 'published'
+            )
+            or (
+              ${t.action} = 'reject'
+              and ${t.fromStatus} = 'pending'
+              and ${t.toStatus} = 'rejected'
+            )
+            or (
+              ${t.action} = 'dispute'
+              and ${t.fromStatus} = 'published'
+              and ${t.toStatus} = 'disputed'
+            )
+            or (
+              ${t.action} = 'resolve_publish'
+              and ${t.fromStatus} = 'disputed'
+              and ${t.toStatus} = 'published'
+            )
+            or (
+              ${t.action} = 'remove'
+              and ${t.fromStatus} = 'disputed'
+              and ${t.toStatus} = 'removed'
+            )
+          )
         )
       `,
     ),

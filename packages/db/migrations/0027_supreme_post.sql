@@ -18,6 +18,12 @@ CREATE TABLE "review" (
 	CONSTRAINT "review_rating_check" CHECK ("review"."rating" between 1 and 5),
 	CONSTRAINT "review_moderation_revision_check" CHECK ("review"."moderation_revision" >= 0),
 	CONSTRAINT "review_body_length_check" CHECK ("review"."body" is null or char_length(btrim("review"."body")) >= 30),
+	CONSTRAINT "review_timestamp_order_check" CHECK (
+        "review"."updated_at" >= "review"."created_at"
+        and ("review"."published_at" is null or "review"."published_at" >= "review"."created_at")
+        and ("review"."disputed_at" is null or "review"."disputed_at" >= "review"."created_at")
+        and ("review"."moderated_at" is null or "review"."moderated_at" >= "review"."created_at")
+      ),
 	CONSTRAINT "review_lifecycle_check" CHECK (
         (
           "review"."status" = 'pending'
@@ -39,15 +45,21 @@ CREATE TABLE "review" (
           and "review"."moderated_at" >= "review"."published_at"
         )
         or (
-          "review"."status" in ('disputed', 'removed')
+          "review"."status" = 'disputed'
           and "review"."published_at" is not null
           and "review"."disputed_at" is not null
           and "review"."moderated_at" is not null
           and "review"."disputed_at" >= "review"."published_at"
-          and (
-            "review"."status" <> 'removed'
-            or "review"."moderated_at" >= "review"."disputed_at"
-          )
+          and "review"."moderated_at" >= "review"."published_at"
+          and "review"."moderated_at" <= "review"."disputed_at"
+        )
+        or (
+          "review"."status" = 'removed'
+          and "review"."published_at" is not null
+          and "review"."disputed_at" is not null
+          and "review"."moderated_at" is not null
+          and "review"."disputed_at" >= "review"."published_at"
+          and "review"."moderated_at" >= "review"."disputed_at"
         )
       )
 );
@@ -65,34 +77,39 @@ CREATE TABLE "review_moderation_event" (
 	CONSTRAINT "review_moderation_event_transition_check" CHECK (
         ("review_moderation_event"."action" = 'submit' and "review_moderation_event"."from_status" is null and "review_moderation_event"."to_status" = 'pending')
         or (
-          "review_moderation_event"."action" = 'edit'
-          and "review_moderation_event"."from_status" in ('pending', 'published')
-          and "review_moderation_event"."to_status" = 'pending'
-        )
-        or (
-          "review_moderation_event"."action" = 'publish'
-          and "review_moderation_event"."from_status" = 'pending'
-          and "review_moderation_event"."to_status" = 'published'
-        )
-        or (
-          "review_moderation_event"."action" = 'reject'
-          and "review_moderation_event"."from_status" = 'pending'
-          and "review_moderation_event"."to_status" = 'rejected'
-        )
-        or (
-          "review_moderation_event"."action" = 'dispute'
-          and "review_moderation_event"."from_status" = 'published'
-          and "review_moderation_event"."to_status" = 'disputed'
-        )
-        or (
-          "review_moderation_event"."action" = 'resolve_publish'
-          and "review_moderation_event"."from_status" = 'disputed'
-          and "review_moderation_event"."to_status" = 'published'
-        )
-        or (
-          "review_moderation_event"."action" = 'remove'
-          and "review_moderation_event"."from_status" = 'disputed'
-          and "review_moderation_event"."to_status" = 'removed'
+          "review_moderation_event"."from_status" is not null
+          and (
+            (
+              "review_moderation_event"."action" = 'edit'
+              and "review_moderation_event"."from_status" in ('pending', 'published')
+              and "review_moderation_event"."to_status" = 'pending'
+            )
+            or (
+              "review_moderation_event"."action" = 'publish'
+              and "review_moderation_event"."from_status" = 'pending'
+              and "review_moderation_event"."to_status" = 'published'
+            )
+            or (
+              "review_moderation_event"."action" = 'reject'
+              and "review_moderation_event"."from_status" = 'pending'
+              and "review_moderation_event"."to_status" = 'rejected'
+            )
+            or (
+              "review_moderation_event"."action" = 'dispute'
+              and "review_moderation_event"."from_status" = 'published'
+              and "review_moderation_event"."to_status" = 'disputed'
+            )
+            or (
+              "review_moderation_event"."action" = 'resolve_publish'
+              and "review_moderation_event"."from_status" = 'disputed'
+              and "review_moderation_event"."to_status" = 'published'
+            )
+            or (
+              "review_moderation_event"."action" = 'remove'
+              and "review_moderation_event"."from_status" = 'disputed'
+              and "review_moderation_event"."to_status" = 'removed'
+            )
+          )
         )
       )
 );
@@ -111,6 +128,52 @@ SET
 	"show_google_reviews" = "show_reviews",
 	"show_google_overall_rating" = "show_overall_rating",
 	"show_google_positive_reviews_only" = "show_positive_reviews_only";--> statement-breakpoint
+CREATE FUNCTION "sync_legacy_review_visibility"() RETURNS trigger AS $$
+BEGIN
+	IF TG_OP = 'INSERT' THEN
+		IF NEW."show_reviews" = false
+			AND NEW."show_tickif_reviews" = true
+			AND NEW."show_google_reviews" = true THEN
+			NEW."show_tickif_reviews" := false;
+			NEW."show_google_reviews" := false;
+		END IF;
+		IF NEW."show_overall_rating" = false
+			AND NEW."show_tickif_overall_rating" = true
+			AND NEW."show_google_overall_rating" = true THEN
+			NEW."show_tickif_overall_rating" := false;
+			NEW."show_google_overall_rating" := false;
+		END IF;
+		IF NEW."show_positive_reviews_only" = true
+			AND NEW."show_tickif_positive_reviews_only" = false
+			AND NEW."show_google_positive_reviews_only" = false THEN
+			NEW."show_tickif_positive_reviews_only" := true;
+			NEW."show_google_positive_reviews_only" := true;
+		END IF;
+	ELSE
+		IF NEW."show_reviews" IS DISTINCT FROM OLD."show_reviews" THEN
+			NEW."show_tickif_reviews" := NEW."show_reviews";
+			NEW."show_google_reviews" := NEW."show_reviews";
+		END IF;
+		IF NEW."show_overall_rating" IS DISTINCT FROM OLD."show_overall_rating" THEN
+			NEW."show_tickif_overall_rating" := NEW."show_overall_rating";
+			NEW."show_google_overall_rating" := NEW."show_overall_rating";
+		END IF;
+		IF NEW."show_positive_reviews_only" IS DISTINCT FROM OLD."show_positive_reviews_only" THEN
+			NEW."show_tickif_positive_reviews_only" := NEW."show_positive_reviews_only";
+			NEW."show_google_positive_reviews_only" := NEW."show_positive_reviews_only";
+		END IF;
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;--> statement-breakpoint
+CREATE TRIGGER "designer_portfolio_legacy_review_visibility"
+BEFORE INSERT OR UPDATE OF
+	"show_reviews",
+	"show_overall_rating",
+	"show_positive_reviews_only"
+ON "designer_portfolio"
+FOR EACH ROW
+EXECUTE FUNCTION "sync_legacy_review_visibility"();--> statement-breakpoint
 ALTER TABLE "review" ADD CONSTRAINT "review_designer_profile_id_designer_profile_id_fk" FOREIGN KEY ("designer_profile_id") REFERENCES "public"."designer_profile"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review" ADD CONSTRAINT "review_author_user_id_user_id_fk" FOREIGN KEY ("author_user_id") REFERENCES "public"."user"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review" ADD CONSTRAINT "review_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint

@@ -59,8 +59,8 @@ describe('reviews schema', () => {
   });
 
   it('constrains review lifecycle timestamps and audit transition pairs', () => {
-    expect(getTableConfig(review).checks.map((tableCheck) => tableCheck.name)).toContain(
-      'review_lifecycle_check',
+    expect(getTableConfig(review).checks.map((tableCheck) => tableCheck.name)).toEqual(
+      expect.arrayContaining(['review_timestamp_order_check', 'review_lifecycle_check']),
     );
     expect(
       getTableConfig(reviewModerationEvent).checks.map((tableCheck) => tableCheck.name),

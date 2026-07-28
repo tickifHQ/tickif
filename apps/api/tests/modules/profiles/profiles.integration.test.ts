@@ -734,3 +734,50 @@ describe('PATCH /api/profiles/me — update', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('designer portfolio review visibility compatibility', () => {
+  it('mirrors legacy inserts and updates without overriding source-specific writes', async () => {
+    const designer = await makeDesigner();
+    const [inserted] = await db
+      .insert(schema.designerPortfolio)
+      .values({
+        profileId: designer.id,
+        showReviews: false,
+        showOverallRating: false,
+        showPositiveReviewsOnly: true,
+      })
+      .returning();
+
+    expect(inserted).toMatchObject({
+      showTickifReviews: false,
+      showGoogleReviews: false,
+      showTickifOverallRating: false,
+      showGoogleOverallRating: false,
+      showTickifPositiveReviewsOnly: true,
+      showGooglePositiveReviewsOnly: true,
+    });
+
+    const [sourceSpecific] = await db
+      .update(schema.designerPortfolio)
+      .set({
+        showTickifReviews: true,
+        showGoogleReviews: false,
+      })
+      .where(eq(schema.designerPortfolio.profileId, designer.id))
+      .returning();
+    expect(sourceSpecific).toMatchObject({
+      showTickifReviews: true,
+      showGoogleReviews: false,
+    });
+
+    const [legacyUpdate] = await db
+      .update(schema.designerPortfolio)
+      .set({ showReviews: true })
+      .where(eq(schema.designerPortfolio.profileId, designer.id))
+      .returning();
+    expect(legacyUpdate).toMatchObject({
+      showTickifReviews: true,
+      showGoogleReviews: true,
+    });
+  });
+});

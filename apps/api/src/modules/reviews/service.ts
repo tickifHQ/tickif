@@ -153,7 +153,6 @@ export const reviewsService = {
       designerProfileId: review.designerProfileId,
       fromStatus: review.status,
       expectedRevision: review.moderationRevision,
-      publishedEditCutoff: new Date(Date.now() - PUBLISHED_EDIT_WINDOW_MS),
       ...input,
     });
     if (updated.kind === 'phone_unverified') {

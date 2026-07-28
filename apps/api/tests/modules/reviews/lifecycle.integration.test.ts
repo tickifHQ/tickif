@@ -324,9 +324,15 @@ describe('review lifecycle', () => {
       },
     );
     await reviewsService.publish(review.id, { userId: admin.id });
+    const createdAt = new Date(Date.now() - 26 * 60 * 60 * 1000);
+    const publishedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
     await db
       .update(schema.review)
-      .set({ publishedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+      .set({
+        createdAt,
+        publishedAt,
+        moderatedAt: publishedAt,
+      })
       .where(eq(schema.review.id, review.id));
 
     await expect(
@@ -360,6 +366,16 @@ describe('review lifecycle', () => {
       },
     );
     const published = await reviewsService.publish(review.id, { userId: admin.id });
+    const createdAt = new Date(Date.now() - 26 * 60 * 60 * 1000);
+    const publishedAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await db
+      .update(schema.review)
+      .set({
+        createdAt,
+        publishedAt,
+        moderatedAt: publishedAt,
+      })
+      .where(eq(schema.review.id, published.id));
 
     const result = await reviewsRepository.update({
       id: published.id,
@@ -367,7 +383,6 @@ describe('review lifecycle', () => {
       designerProfileId: designer.id,
       fromStatus: 'published',
       expectedRevision: published.moderationRevision,
-      publishedEditCutoff: new Date(Date.now() + 1_000),
       rating: 3,
     });
     expect(result.kind).toBe('conflict');
@@ -467,6 +482,43 @@ describe('review lifecycle', () => {
       items: [],
       averageRating: 0,
       reviewCount: 0,
+    });
+  });
+
+  it('rejects impossible review chronology and moderation audit pairs at the database boundary', async () => {
+    const { designer, author } = await makeReviewFixture();
+    const review = await reviewsService.create(
+      {
+        designerProfileId: designer.id,
+        rating: 4,
+        body: 'This review supplies a valid row for database invariant checks.',
+      },
+      {
+        userId: author.id,
+        phoneNumberVerified: true,
+        activeOrgId: null,
+      },
+    );
+
+    await expect(
+      db.insert(schema.reviewModerationEvent).values({
+        reviewId: review.id,
+        actorUserId: author.id,
+        action: 'edit',
+        fromStatus: null,
+        toStatus: 'pending',
+      }),
+    ).rejects.toMatchObject({
+      cause: { constraint: 'review_moderation_event_transition_check' },
+    });
+
+    await expect(
+      db
+        .update(schema.review)
+        .set({ updatedAt: new Date('2000-01-01T00:00:00.000Z') })
+        .where(eq(schema.review.id, review.id)),
+    ).rejects.toMatchObject({
+      cause: { constraint: 'review_timestamp_order_check' },
     });
   });
 
