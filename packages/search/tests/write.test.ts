@@ -7,6 +7,7 @@ import type {
 } from 'typesense';
 import { Errors } from 'typesense';
 import { describe, expect, it, vi } from 'vitest';
+import { searchCollectionName } from '../src/client.js';
 import type { ProjectSearchDocument } from '../src/documents.js';
 import {
   createSearchCollection,
@@ -21,6 +22,11 @@ import {
   type SearchWriteOperations,
   upsertSearchDocument,
 } from '../src/write.js';
+
+const projectAlias = searchCollectionName('projects');
+const designerAlias = searchCollectionName('designers');
+const projectCollection = `${projectAlias}_v20260728`;
+const designerCollection = `${designerAlias}_v20260728`;
 
 const projectDocument: ProjectSearchDocument = {
   id: 'project-1',
@@ -85,7 +91,7 @@ function fakeOperations() {
   const getAlias = vi.fn(
     async (name: string): Promise<CollectionAliasSchema> => ({
       name,
-      collection_name: 'tickif_projects_v1',
+      collection_name: `${projectAlias}_v1`,
     }),
   );
   const upsertAlias = vi.fn(
@@ -128,13 +134,13 @@ describe('search write primitives', () => {
   it('creates a physical collection from the checked-in schema', async () => {
     const fake = fakeOperations();
 
-    await createSearchCollection('projects', 'tickif_projects_v20260728', {
+    await createSearchCollection('projects', projectCollection, {
       client: fake.operations,
     });
 
     expect(fake.createCollection).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: 'tickif_projects_v20260728',
+        name: projectCollection,
         fields: expect.arrayContaining([
           expect.objectContaining({ name: 'publishedAt', type: 'int64' }),
         ]) as CollectionCreateSchema['fields'],
@@ -150,15 +156,11 @@ describe('search write primitives', () => {
     });
     await upsertSearchDocument('projects', projectDocument, {
       client: fake.operations,
-      collectionName: 'tickif_projects_v20260728',
+      collectionName: projectCollection,
     });
 
-    expect(fake.upsertDocument).toHaveBeenNthCalledWith(1, 'tickif_projects', projectDocument);
-    expect(fake.upsertDocument).toHaveBeenNthCalledWith(
-      2,
-      'tickif_projects_v20260728',
-      projectDocument,
-    );
+    expect(fake.upsertDocument).toHaveBeenNthCalledWith(1, projectAlias, projectDocument);
+    expect(fake.upsertDocument).toHaveBeenNthCalledWith(2, projectCollection, projectDocument);
   });
 
   it('validates every row returned by a bulk import', async () => {
@@ -176,13 +178,13 @@ describe('search write primitives', () => {
     await expect(
       importSearchDocuments(
         'projects',
-        'tickif_projects_v20260728',
+        projectCollection,
         [projectDocument, { ...projectDocument, id: 'project-2' }],
         { client: fake.operations },
       ),
     ).rejects.toMatchObject({
       name: 'SearchDocumentImportError',
-      collectionName: 'tickif_projects_v20260728',
+      collectionName: projectCollection,
       failures: [
         {
           row: 1,
@@ -200,7 +202,7 @@ describe('search write primitives', () => {
 
     const promise = importSearchDocuments(
       'projects',
-      'tickif_projects_v20260728',
+      projectCollection,
       [projectDocument, { ...projectDocument, id: 'project-2' }],
       { client: fake.operations },
     );
@@ -238,7 +240,7 @@ describe('search write primitives', () => {
       deleteSearchProjectsByDesigner('designer-1', { client: fake.operations }),
     ).resolves.toBe(3);
     expect(fake.deleteDocumentsByFilter).toHaveBeenCalledWith(
-      'tickif_projects',
+      projectAlias,
       'designerId:=`designer-1`',
     );
   });
@@ -247,42 +249,42 @@ describe('search write primitives', () => {
     const fake = fakeOperations();
 
     await expect(
-      swapSearchCollectionAlias('projects', 'tickif_projects_v20260728', {
+      swapSearchCollectionAlias('projects', projectCollection, {
         client: fake.operations,
       }),
     ).resolves.toEqual({
-      aliasName: 'tickif_projects',
-      previousCollectionName: 'tickif_projects_v1',
-      collectionName: 'tickif_projects_v20260728',
+      aliasName: projectAlias,
+      previousCollectionName: `${projectAlias}_v1`,
+      collectionName: projectCollection,
     });
-    expect(fake.upsertAlias).toHaveBeenCalledWith('tickif_projects', {
-      collection_name: 'tickif_projects_v20260728',
+    expect(fake.upsertAlias).toHaveBeenCalledWith(projectAlias, {
+      collection_name: projectCollection,
     });
     await expect(getSearchCollectionTarget('projects', { client: fake.operations })).resolves.toBe(
-      'tickif_projects_v1',
+      `${projectAlias}_v1`,
     );
   });
 
   it('only deletes versioned physical collections belonging to the selected kind', async () => {
     const fake = fakeOperations();
 
-    await deleteSearchCollection('projects', 'tickif_projects_v20260728', {
+    await deleteSearchCollection('projects', projectCollection, {
       client: fake.operations,
     });
 
-    expect(fake.deleteCollection).toHaveBeenCalledWith('tickif_projects_v20260728');
+    expect(fake.deleteCollection).toHaveBeenCalledWith(projectCollection);
     await expect(
-      deleteSearchCollection('projects', 'tickif_projects', {
+      deleteSearchCollection('projects', projectAlias, {
         client: fake.operations,
       }),
     ).rejects.toThrow('Refusing to use non-versioned search collection');
     await expect(
-      deleteSearchCollection('projects', 'tickif_designers_v20260728', {
+      deleteSearchCollection('projects', designerCollection, {
         client: fake.operations,
       }),
     ).rejects.toThrow('Refusing to use non-versioned search collection');
     await expect(
-      importSearchDocuments('projects', 'tickif_designers_v20260728', [], {
+      importSearchDocuments('projects', designerCollection, [], {
         client: fake.operations,
       }),
     ).rejects.toThrow('Refusing to use non-versioned search collection');
