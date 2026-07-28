@@ -16,6 +16,7 @@ import { leadsRoutes } from './modules/leads/routes.js';
 import { discoveryRoutes } from './modules/discovery/routes.js';
 import { adminProjectsRoutes } from './modules/admin-projects/routes.js';
 import { bookingsRoutes } from './modules/bookings/routes.js';
+import { adminReviewsRoutes, reviewsRoutes } from './modules/reviews/index.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -57,7 +58,9 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/admin/reviews', adminReviewsRoutes)
   .route('/api/admin/projects', adminProjectsRoutes)
+  .route('/api/reviews', reviewsRoutes)
   .route('/api/projects', projectsRoutes)
   .route('/api/projects', projectImagesRoutes)
   .route('/api/media', mediaRoutes)

@@ -1,3 +1,2 @@
-// Reserved for the reviews module (routes.ts / service.ts / repository.ts).
-// See ../README.md for the layering convention.
-export {};
+export { adminReviewsRoutes } from './admin-routes.js';
+export { reviewsRoutes } from './routes.js';
