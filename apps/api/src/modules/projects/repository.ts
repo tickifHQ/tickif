@@ -14,6 +14,7 @@ import type {
   UpdateProjectInput,
   UpdateProjectRoomInput,
 } from '@repo/contracts';
+import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 /**
  * Data-access for projects. This is the ONLY layer that imports Drizzle.
@@ -725,6 +726,38 @@ export const projectsRepository = {
           .where(eq(schema.designerProfile.id, transitioned.designerId));
       }
 
+      if (params.fromStatus !== 'published' && params.toStatus === 'published') {
+        await recordSearchProjectionEvents(tx, [
+          {
+            entityKind: 'project',
+            entityId: transitioned.id,
+            operation: 'index',
+            sourceUpdatedAt: transitioned.updatedAt,
+          },
+          {
+            entityKind: 'designer',
+            entityId: transitioned.designerId,
+            operation: 'index',
+            sourceUpdatedAt: transitioned.updatedAt,
+          },
+        ]);
+      } else if (params.fromStatus === 'published' && params.toStatus !== 'published') {
+        await recordSearchProjectionEvents(tx, [
+          {
+            entityKind: 'project',
+            entityId: transitioned.id,
+            operation: 'delete',
+            sourceUpdatedAt: transitioned.updatedAt,
+          },
+          {
+            entityKind: 'designer',
+            entityId: transitioned.designerId,
+            operation: 'index',
+            sourceUpdatedAt: transitioned.updatedAt,
+          },
+        ]);
+      }
+
       return transitioned;
     });
   },
@@ -793,6 +826,14 @@ export const projectsRepository = {
         .delete(schema.projectModerationEvent)
         .where(eq(schema.projectModerationEvent.projectId, id));
       await tx.delete(schema.project).where(eq(schema.project.id, id));
+      await recordSearchProjectionEvents(tx, [
+        {
+          entityKind: 'project',
+          entityId: id,
+          operation: 'delete',
+          sourceUpdatedAt: new Date(),
+        },
+      ]);
       return 'deleted';
     });
   },
@@ -1281,7 +1322,10 @@ export const projectsRepository = {
    * Rule-based matching exactly as specified — no relaxation for null values.
    */
   async findSimilarPublished(
-    sourceProject: Pick<ProjectRecord, 'id' | 'citySlug' | 'scopeSlug' | 'budgetBandSlug' | 'bhkSlug'>,
+    sourceProject: Pick<
+      ProjectRecord,
+      'id' | 'citySlug' | 'scopeSlug' | 'budgetBandSlug' | 'bhkSlug'
+    >,
     limit: number,
   ): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
@@ -1301,10 +1345,7 @@ export const projectsRepository = {
           sql`${schema.project.bhkSlug} = ${sourceProject.bhkSlug}`,
         ),
       )
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-      )
+      .orderBy(sql`${schema.project.publishedAt} desc nulls last`, desc(schema.project.createdAt))
       .limit(limit);
   },
 };

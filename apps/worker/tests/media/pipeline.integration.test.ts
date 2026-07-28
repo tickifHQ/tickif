@@ -121,8 +121,12 @@ describe('media pipeline (integration)', () => {
   }, 60_000);
 
   it('refreshes a ready image in place and removes its stale derivatives', async () => {
-    const { imageId } = await seedProcessing(representative);
+    const { projectId, imageId } = await seedProcessing(representative);
     await processMedia(job(imageId));
+    await db
+      .update(schema.project)
+      .set({ status: 'published', publishedAt: new Date() })
+      .where(eq(schema.project.id, projectId));
 
     const ready = await reload(imageId);
     const legacyDerivatives = ready.derivatives.map((derivative) => ({
@@ -145,6 +149,17 @@ describe('media pipeline (integration)', () => {
     );
     expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);
     expect(r2.has(ready.originalKey)).toBe(true);
+    await expect(
+      db
+        .select()
+        .from(schema.searchProjectionOutbox)
+        .where(eq(schema.searchProjectionOutbox.entityId, projectId)),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        entityKind: 'project',
+        operation: 'index',
+      }),
+    ]);
   });
 
   it('marks corrupt bytes failed and writes no derivatives', async () => {
@@ -165,6 +180,12 @@ describe('media pipeline (integration)', () => {
       const submittedAt = new Date('2026-01-02T00:00:00Z');
       const publishedAt = status === 'published' ? new Date('2026-01-03T00:00:00Z') : null;
       const project = await makeProject({ status, submittedAt, publishedAt });
+      if (status === 'published') {
+        await db
+          .update(schema.designerProfile)
+          .set({ projectCount: 1 })
+          .where(eq(schema.designerProfile.id, project.designerId));
+      }
       const originalKey = `originals/${project.id}/corrupt`;
       const image = await makeProjectImage({
         projectId: project.id,
@@ -189,6 +210,25 @@ describe('media pipeline (integration)', () => {
           }),
         },
       });
+      if (status === 'published') {
+        const [[profile], projectionEvents] = await Promise.all([
+          db
+            .select({ projectCount: schema.designerProfile.projectCount })
+            .from(schema.designerProfile)
+            .where(eq(schema.designerProfile.id, project.designerId)),
+          db
+            .select()
+            .from(schema.searchProjectionOutbox)
+            .where(eq(schema.searchProjectionOutbox.entityId, project.id)),
+        ]);
+        expect(profile?.projectCount).toBe(0);
+        expect(projectionEvents).toEqual([
+          expect.objectContaining({
+            entityKind: 'project',
+            operation: 'delete',
+          }),
+        ]);
+      }
     },
   );
 

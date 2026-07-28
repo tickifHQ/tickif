@@ -1,4 +1,16 @@
-import { db, schema, eq, and, or, ne, inArray, isNotNull, asc, sql } from '@repo/db';
+import {
+  SEARCH_PROJECTION_ADVISORY_LOCK_KEY,
+  db,
+  schema,
+  eq,
+  and,
+  or,
+  ne,
+  inArray,
+  isNotNull,
+  asc,
+  sql,
+} from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
 export type ProcessingImage = {
@@ -60,12 +72,36 @@ export async function refreshReadyDerivatives(
     height: number;
   },
 ): Promise<boolean> {
-  const rows = await db
-    .update(schema.projectImage)
-    .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'ready')))
-    .returning({ id: schema.projectImage.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const [image] = await tx
+      .update(schema.projectImage)
+      .set({ ...data, updatedAt: now })
+      .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'ready')))
+      .returning({
+        id: schema.projectImage.id,
+        projectId: schema.projectImage.projectId,
+      });
+    if (!image) return false;
+
+    const [project] = await tx
+      .select({ status: schema.project.status })
+      .from(schema.project)
+      .where(eq(schema.project.id, image.projectId))
+      .limit(1);
+    if (project?.status === 'published') {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
+      );
+      await tx.insert(schema.searchProjectionOutbox).values({
+        entityKind: 'project',
+        entityId: image.projectId,
+        operation: 'index',
+        sourceUpdatedAt: now,
+      });
+    }
+    return true;
+  });
 }
 
 /** Resolve explicit IDs, or all ready image IDs for a confirmed operational backfill. */
@@ -97,6 +133,17 @@ export async function markFailed(imageId: string): Promise<void> {
       .returning({ id: schema.projectImage.id, projectId: schema.projectImage.projectId });
 
     if (!image) return;
+    const [project] = await tx
+      .select({
+        id: schema.project.id,
+        designerId: schema.project.designerId,
+        status: schema.project.status,
+      })
+      .from(schema.project)
+      .where(eq(schema.project.id, image.projectId))
+      .for('update')
+      .limit(1);
+    if (!project) return;
 
     const failureMetadata = {
       mediaProcessingFailure: {
@@ -107,7 +154,7 @@ export async function markFailed(imageId: string): Promise<void> {
       },
     };
 
-    await tx
+    const transitioned = await tx
       .update(schema.project)
       .set({
         status: 'changes_requested',
@@ -125,7 +172,35 @@ export async function markFailed(imageId: string): Promise<void> {
             eq(schema.project.status, 'published'),
           ),
         ),
+      )
+      .returning({ id: schema.project.id });
+
+    if (transitioned.length > 0 && project.status === 'published') {
+      await tx
+        .update(schema.designerProfile)
+        .set({
+          projectCount: sql`greatest(${schema.designerProfile.projectCount} - 1, 0)`,
+          updatedAt: now,
+        })
+        .where(eq(schema.designerProfile.id, project.designerId));
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
       );
+      await tx.insert(schema.searchProjectionOutbox).values([
+        {
+          entityKind: 'project',
+          entityId: project.id,
+          operation: 'delete',
+          sourceUpdatedAt: now,
+        },
+        {
+          entityKind: 'designer',
+          entityId: project.designerId,
+          operation: 'index',
+          sourceUpdatedAt: now,
+        },
+      ]);
+    }
   });
 }
 
