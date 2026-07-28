@@ -36,6 +36,11 @@ vi.mock('@repo/db', () => {
         id: 'designer_profile.id',
         orgId: 'designer_profile.org_id',
         userId: 'designer_profile.user_id',
+        status: 'designer_profile.status',
+      },
+      organization: {
+        id: 'organization.id',
+        slug: 'organization.slug',
       },
       project: {
         id: 'project.id',
@@ -45,6 +50,7 @@ vi.mock('@repo/db', () => {
     },
     eq: vi.fn((...args: unknown[]) => ({ type: 'eq', args })),
     and: vi.fn((...args: unknown[]) => ({ type: 'and', args })),
+    or: vi.fn((...args: unknown[]) => ({ type: 'or', args })),
     sql: vi.fn(),
   };
 });
@@ -174,6 +180,36 @@ describe('portfolioRepository', () => {
       const result = await portfolioRepository.isSlugAvailable('my-slug', 'profile-1');
       // With the default empty mock, it should be true (no other profile has it)
       expect(result).toBe(true);
+    });
+
+    // `findPublicBySlug` resolves /d/{slug} against portfolio_slug OR organization.slug,
+    // so a slug free in the portfolio table can still be another org's live public URL.
+    it('returns false when the slug is another organization’s slug', async () => {
+      const limit = vi.mocked(
+        db.select().from(undefined as never).where(undefined as never).limit as ReturnType<
+          typeof vi.fn
+        >,
+      );
+      limit
+        .mockResolvedValueOnce([]) // no portfolio holds it
+        .mockResolvedValueOnce([{ id: 'org-other' }]); // but an organization does
+
+      const result = await portfolioRepository.isSlugAvailable('acme-interiors');
+      expect(result).toBe(false);
+    });
+
+    it('checks both namespaces before reporting a slug free', async () => {
+      const limit = vi.mocked(
+        db.select().from(undefined as never).where(undefined as never).limit as ReturnType<
+          typeof vi.fn
+        >,
+      );
+      limit.mockClear();
+
+      const result = await portfolioRepository.isSlugAvailable('genuinely-free');
+
+      expect(result).toBe(true);
+      expect(limit).toHaveBeenCalledTimes(2);
     });
   });
 
