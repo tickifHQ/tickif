@@ -162,6 +162,13 @@
       "when": 1784928546615,
       "tag": "0022_serious_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784932108903,
+      "tag": "0023_tired_wrecker",
+      "breakpoints": true
     }
   ]
 }

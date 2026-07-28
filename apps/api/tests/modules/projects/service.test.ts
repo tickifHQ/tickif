@@ -47,8 +47,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       deleteImage: vi.fn(),
       getUploadImageCounts: vi.fn(),
       submitWithUploadCounts: vi.fn(),
+      transition: vi.fn(),
+      listModerationHistory: vi.fn(),
       findReferencedImageObjectKeys: vi.fn(),
-      submit: vi.fn(),
       listPublishedFeed: vi.fn(),
       findTaxonomyLabels: vi.fn(),
       findLocalityLabels: vi.fn(),
@@ -72,7 +73,7 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
 }));
 
 // Import AFTER the mock is registered.
-const { projectsService } = await import('../../../src/modules/projects/service.js');
+const { assertTransition, projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { deleteObject } = await import('@repo/storage');
@@ -99,6 +100,11 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   metadata: {},
   publishedAt: null,
   submittedAt: null,
+  reviewedBy: null,
+  reviewStartedAt: null,
+  rejectionReasonCode: null,
+  moderationNote: null,
+  featuredAt: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   ...over,
@@ -758,6 +764,10 @@ describe('projectsService.submit', () => {
     expect(result.status).toBe('submitted');
     expect(projectsRepository.submitWithUploadCounts).toHaveBeenCalledWith(requestedChanges.id, {
       minImageCount: 3,
+      actorUserId: caller.userId,
+      expectedStatus: 'changes_requested',
+      // Derived from the transition matrix, not re-derived from expectedStatus.
+      action: 'resubmit',
     });
   });
 
@@ -785,6 +795,51 @@ describe('projectsService.submit', () => {
     await expect(projectsService.submit(complete.id, caller)).rejects.toMatchObject({
       status: 422,
     });
+  });
+});
+
+describe('assertTransition', () => {
+  const statuses = [
+    'draft',
+    'submitted',
+    'in_review',
+    'published',
+    'rejected',
+    'changes_requested',
+  ] as const;
+  const roles = ['visitor', 'designer', 'admin', 'superadmin'] as const;
+  const allowed = new Map([
+    ['designer:draft:submitted', 'submit'],
+    ['designer:changes_requested:submitted', 'resubmit'],
+    ['designer:submitted:draft', 'withdraw'],
+    ['admin:submitted:in_review', 'start_review'],
+    ['admin:in_review:published', 'publish'],
+    ['admin:in_review:changes_requested', 'request_changes'],
+    ['admin:in_review:rejected', 'reject'],
+    ['admin:published:in_review', 'unpublish'],
+    ['superadmin:submitted:in_review', 'start_review'],
+    ['superadmin:in_review:published', 'publish'],
+    ['superadmin:in_review:changes_requested', 'request_changes'],
+    ['superadmin:in_review:rejected', 'reject'],
+    ['superadmin:published:in_review', 'unpublish'],
+  ]);
+
+  it('accepts only declared transitions and derives their audit actions', () => {
+    for (const role of roles) {
+      for (const fromStatus of statuses) {
+        for (const toStatus of statuses) {
+          const key = `${role}:${fromStatus}:${toStatus}`;
+          const action = allowed.get(key);
+          if (action) {
+            expect(assertTransition(fromStatus, toStatus, role), key).toBe(action);
+          } else {
+            expect(() => assertTransition(fromStatus, toStatus, role), key).toThrowError(
+              expect.objectContaining({ code: 'invalid_transition', status: 409 }),
+            );
+          }
+        }
+      }
+    }
   });
 });
 

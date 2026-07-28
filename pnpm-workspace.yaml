@@ -9,10 +9,10 @@ overrides:
   esbuild: 0.28.1
   hono: ^4.12.27
   # Security patches for transitive advisories (pnpm audit, high severity).
-  # brace-expansion DoS (GHSA-v6h2-p8h4-qcjw): 1.x tree (via eslint>minimatch)
-  # and 3.x+ tree (via typescript-eslint>minimatch) each need a patched line.
-  "brace-expansion@1": 1.1.16
-  "brace-expansion@>=3": 5.0.7
+  # brace-expansion DoS: GHSA-v6h2-p8h4-qcjw, then GHSA-mh99-v99m-4gvg which is
+  # scoped <=5.0.7 and so covers the old 1.x pin too. One line for every copy —
+  # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
+  brace-expansion: 5.0.8
   # js-yaml prototype pollution: keep within the 4.x line.
   "js-yaml@<4.3.0": 4.3.0
   # fast-uri ReDoS (via shadcn>@modelcontextprotocol/sdk>ajv): stay on 3.x.
