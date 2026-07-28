@@ -56,14 +56,23 @@ const completedBooking = {
   reviewEligible: true,
 } as const;
 
+/**
+ * Request-side slots must be in the future, so these are relative rather than
+ * literal — a hardcoded date would silently become a past date and start failing.
+ * Resolved in IST to match the schema.
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const istDay = (daysFromNow: number): string =>
+  new Date(Date.now() + IST_OFFSET_MS + daysFromNow * 86_400_000).toISOString().slice(0, 10);
+
 describe('booking contracts', () => {
   it('accepts one to three unique preferred slots and trims the message', () => {
     const parsed = createBookingSchema.parse({
       designerProfileId: PROFILE_ID,
       referredProjectId: PROJECT_ID,
       preferredSlots: [
-        { date: '2026-08-03', window: 'morning' },
-        { date: '2026-08-04', window: 'evening' },
+        { date: istDay(6), window: 'morning' },
+        { date: istDay(7), window: 'evening' },
       ],
       message: '  Please call before confirming.  ',
     });
@@ -89,11 +98,54 @@ describe('booking contracts', () => {
       createBookingSchema.safeParse({
         designerProfileId: PROFILE_ID,
         preferredSlots: [
-          { date: '2026-08-03', window: 'morning' },
-          { date: '2026-08-03', window: 'morning' },
+          { date: istDay(6), window: 'morning' },
+          { date: istDay(6), window: 'morning' },
         ],
       }).success,
     ).toBe(false);
+  });
+
+  // z.iso.date() only checks the format. Without an explicit rule a past-dated
+  // booking is accepted end to end and consumes one of the three open slots.
+  it('rejects preferred slots in the past', () => {
+    const result = createBookingSchema.safeParse({
+      designerProfileId: PROFILE_ID,
+      preferredSlots: [{ date: istDay(-1), window: 'morning' }],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('Preferred slots must not be in the past');
+  });
+
+  it('accepts a slot later today', () => {
+    expect(
+      createBookingSchema.safeParse({
+        designerProfileId: PROFILE_ID,
+        preferredSlots: [{ date: istDay(0), window: 'evening' }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects preferred slots beyond the 90-day horizon', () => {
+    const result = createBookingSchema.safeParse({
+      designerProfileId: PROFILE_ID,
+      preferredSlots: [{ date: istDay(120), window: 'morning' }],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('Preferred slots must be within 90 days');
+  });
+
+  // The response schema shares the dedupe rule but deliberately not the future rule:
+  // a booking made last month is still valid to read back.
+  it('still serializes a historical booking whose slots have passed', () => {
+    expect(
+      bookingResponseSchema.safeParse({
+        ...completedBooking,
+        preferredSlots: [{ date: '2020-01-01', window: 'morning' }],
+        confirmedSlot: { date: '2020-01-01', window: 'morning' },
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts an exact slot for confirmation', () => {

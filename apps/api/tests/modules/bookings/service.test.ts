@@ -65,6 +65,7 @@ function row(overrides: Partial<BookingViewRecord> = {}): BookingViewRecord {
     organizationName: 'Studio One',
     organizationSlug: 'studio-one',
     designerDisplayName: 'Studio One',
+    designerPortfolioSlug: null,
     referredProjectTitle: 'Bandra Apartment',
     referredProjectSlug: 'bandra-apartment',
     ...overrides,
@@ -341,5 +342,57 @@ describe('bookingsService transitions', () => {
     await expect(
       bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  // A 422 here would distinguish an existing booking id from an unknown one, since
+  // findById already answers 404 for the latter.
+  it('does not reveal that a booking exists to a caller with no active organization', async () => {
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(row({ requesterId: 'someone_else' }));
+    const stranger = { ...caller, userId: 'stranger_1', activeOrgId: null };
+
+    await expect(
+      bookingsService.confirm(row().id, { confirmedSlot: slot }, stranger),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(bookingsService.complete(row().id, stranger)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      bookingsService.cancel(row().id, { reason: 'no longer needed' }, stranger),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(bookingsRepository.transition).not.toHaveBeenCalled();
+  });
+});
+
+describe('bookingsService designer slug resolution', () => {
+  it('prefers the designer-chosen portfolio slug over the org slug', async () => {
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(
+      row({ designerPortfolioSlug: 'studio-one-interiors' }),
+    );
+    vi.mocked(bookingsRepository.transition).mockResolvedValue(
+      row({ designerPortfolioSlug: 'studio-one-interiors', status: 'confirmed', confirmedSlot: slot }),
+    );
+
+    const result = await bookingsService.confirm(
+      row().id,
+      { confirmedSlot: slot },
+      designerCaller,
+    );
+
+    expect(result.designerProfile.slug).toBe('studio-one-interiors');
+  });
+
+  it('falls back to the org slug when the designer never chose one', async () => {
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(row());
+    vi.mocked(bookingsRepository.transition).mockResolvedValue(
+      row({ status: 'confirmed', confirmedSlot: slot }),
+    );
+
+    const result = await bookingsService.confirm(
+      row().id,
+      { confirmedSlot: slot },
+      designerCaller,
+    );
+
+    expect(result.designerProfile.slug).toBe('studio-one');
   });
 });

@@ -36,7 +36,10 @@ function toResponse(row: BookingViewRecord): BookingResponse {
     designerProfile: {
       id: row.designerProfileId,
       displayName: row.designerDisplayName,
-      slug: row.organizationSlug,
+      // The slug /d/{slug} actually canonicalises to. Sending the org slug when a custom
+      // one exists produces a link that works but immediately redirects. #282 lands
+      // publicPortfolioSlug() with this same rule — collapse onto it once that merges.
+      slug: row.designerPortfolioSlug ?? row.organizationSlug,
       logoUrl: null,
     },
     requester: {
@@ -86,11 +89,20 @@ function requireActiveOrganization(caller: BookingCaller): string {
   return caller.activeOrgId;
 }
 
+/**
+ * Guard the designer-side transitions on a booking the caller has already loaded.
+ *
+ * A caller with no active organization 404s rather than 422ing: the alternative
+ * distinguishes an existing booking id from an unknown one, since `findById`
+ * answers 404 for the latter. "No active organization selected" also describes the
+ * session rather than this request, which is the wrong thing to tell the client here.
+ */
 async function assertDesignerWriteAccess(
   booking: BookingViewRecord,
   caller: BookingCaller,
 ): Promise<void> {
-  const organizationId = requireActiveOrganization(caller);
+  if (!caller.activeOrgId) throw AppError.notFound('Booking not found');
+  const organizationId = caller.activeOrgId;
   if (booking.organizationId !== organizationId) {
     throw AppError.notFound('Booking not found');
   }

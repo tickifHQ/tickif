@@ -20,22 +20,72 @@ export const bookingSlotSchema = z
   .meta({ id: 'BookingSlot' });
 export type BookingSlot = z.infer<typeof bookingSlotSchema>;
 
+/**
+ * India-first product, so "today" resolves in IST rather than UTC — a requester
+ * booking late evening for tomorrow otherwise straddles the UTC date boundary.
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/** How far ahead a consultation may be proposed. */
+const MAX_BOOKING_HORIZON_DAYS = 90;
+
+function istDate(offsetMs = 0): string {
+  return new Date(Date.now() + IST_OFFSET_MS + offsetMs).toISOString().slice(0, 10);
+}
+
+function assertUniqueSlots(slots: BookingSlot[], ctx: z.RefinementCtx): void {
+  const seen = new Set<string>();
+  for (const [index, slot] of slots.entries()) {
+    const key = `${slot.date}:${slot.window}`;
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Preferred slots must be unique',
+        path: [index],
+      });
+    }
+    seen.add(key);
+  }
+}
+
+/**
+ * Response shape. Deliberately carries no future-date rule: a booking made last
+ * month is still valid to read back, and sharing one schema with the request would
+ * make every historical booking fail serialization the day after it was created.
+ */
 const preferredSlotsSchema = z
   .array(bookingSlotSchema)
   .min(1)
   .max(3)
+  .superRefine(assertUniqueSlots);
+
+/**
+ * Request shape. `z.iso.date()` validates format only, so without this a requester
+ * can propose slots in the past — accepted end to end, landing in the designer's
+ * inbox as a live booking and consuming one of their three open-booking slots.
+ */
+const requestedSlotsSchema = z
+  .array(bookingSlotSchema)
+  .min(1)
+  .max(3)
   .superRefine((slots, ctx) => {
-    const seen = new Set<string>();
+    assertUniqueSlots(slots, ctx);
+    const today = istDate();
+    const horizon = istDate(MAX_BOOKING_HORIZON_DAYS * 86_400_000);
     for (const [index, slot] of slots.entries()) {
-      const key = `${slot.date}:${slot.window}`;
-      if (seen.has(key)) {
+      if (slot.date < today) {
         ctx.addIssue({
           code: 'custom',
-          message: 'Preferred slots must be unique',
+          message: 'Preferred slots must not be in the past',
+          path: [index],
+        });
+      } else if (slot.date > horizon) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Preferred slots must be within ${MAX_BOOKING_HORIZON_DAYS} days`,
           path: [index],
         });
       }
-      seen.add(key);
     }
   });
 
@@ -43,7 +93,7 @@ export const createBookingSchema = z
   .object({
     designerProfileId: z.uuid(),
     referredProjectId: z.uuid().optional(),
-    preferredSlots: preferredSlotsSchema,
+    preferredSlots: requestedSlotsSchema,
     message: z.string().trim().min(1).max(2000).optional(),
   })
   .meta({ id: 'CreateBooking' });

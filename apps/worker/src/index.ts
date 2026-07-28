@@ -59,8 +59,12 @@ const smsWorker = new Worker<SmsQueueJob>(
   QUEUES.sms,
   async (job) => {
     if (job.name === JOBS.sweepBookingNotifications) {
-      const enqueued = await processBookingNotificationSweep();
-      console.log(`[worker] booking-notifications sweep: enqueued ${enqueued}`);
+      const { enqueued, failed } = await processBookingNotificationSweep();
+      // Report failures separately: an all-failing batch and an empty one both
+      // enqueue zero, and only one of them is a problem.
+      console.log(
+        `[worker] booking-notifications sweep: enqueued ${enqueued}, failed ${failed}`,
+      );
       return;
     }
     await smsService.send(job.data);

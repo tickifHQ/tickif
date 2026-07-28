@@ -12,6 +12,7 @@ export type BookingViewRecord = BookingRecord & {
   requesterEmail: string;
   requesterPhoneNumber: string | null;
   designerDisplayName: string;
+  designerPortfolioSlug: string | null;
   referredProjectTitle: string | null;
   referredProjectSlug: string | null;
 };
@@ -77,6 +78,8 @@ function bookingProjection() {
     requesterEmail: schema.user.email,
     requesterPhoneNumber: schema.user.phoneNumber,
     designerDisplayName: schema.designerProfile.displayName,
+    /** Designer-chosen slug when set; the org slug is resolved as the fallback in the service. */
+    designerPortfolioSlug: schema.designerPortfolio.portfolioSlug,
     referredProjectTitle: schema.project.title,
     referredProjectSlug: schema.project.slug,
   };
@@ -95,6 +98,11 @@ function bookingViewQuery() {
       eq(schema.consultationBooking.organizationId, schema.organization.id),
     )
     .innerJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
+    // Designers who never opened portfolio settings have no row; the org slug covers them.
+    .leftJoin(
+      schema.designerPortfolio,
+      eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+    )
     .leftJoin(
       schema.project,
       eq(schema.consultationBooking.referredProjectId, schema.project.id),
@@ -274,6 +282,10 @@ export const bookingsRepository = {
           eq(schema.consultationBooking.organizationId, schema.organization.id),
         )
         .innerJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
+        .leftJoin(
+          schema.designerPortfolio,
+          eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+        )
         .leftJoin(
           schema.project,
           eq(schema.consultationBooking.referredProjectId, schema.project.id),
