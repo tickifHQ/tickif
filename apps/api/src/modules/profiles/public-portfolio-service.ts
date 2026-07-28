@@ -158,8 +158,11 @@ export const publicPortfolioService = {
       badges: sections.trustCredentials ? computeBadges(profile) : [],
       sections,
       stats: {
-        rating,
-        reviewCount,
+        // Withheld, not merely hidden — `showOverallRating` behaves like every other
+        // section gate above rather than relying on the client to not render it.
+        // Zeroing `reviewCount` is what the page already keys off at every call site.
+        rating: sections.overallRating ? rating : 0,
+        reviewCount: sections.overallRating ? reviewCount : 0,
         projectCount: profile.projectCount,
         yearsExperience: profile.yearsExperience,
         startingBudget,

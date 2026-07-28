@@ -329,6 +329,19 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
     expect(result.stats.reviewCount).toBe(8);
   });
 
+  it('withholds the aggregate rating when the designer hid it, rather than leaving it to the client', async () => {
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
+    resolveTo(makeProfile(), makePortfolio({ showOverallRating: false }));
+
+    const result = await publicPortfolioService.getBySlug('test-studio');
+
+    expect(result.sections.overallRating).toBe(false);
+    expect(result.stats.rating).toBe(0);
+    expect(result.stats.reviewCount).toBe(0);
+    // The review list is a separate toggle and stays on.
+    expect(result.reviews).toHaveLength(1);
+  });
+
   it('withholds review content past the 30-day Places ToS window', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(
       makeGoogleRow({ lastFetchedAt: new Date('2026-05-01T00:00:00.000Z') }),
