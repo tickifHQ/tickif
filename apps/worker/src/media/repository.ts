@@ -1,4 +1,4 @@
-import { db, schema, eq, and, or, ne, inArray, isNotNull, sql } from '@repo/db';
+import { db, schema, eq, and, or, ne, inArray, isNotNull, asc, sql } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
 export type ProcessingImage = {
@@ -34,11 +34,18 @@ export async function markReady(
     width: number;
     height: number;
     phash: string;
+    duplicateOfImageId: string | null;
+    duplicateDistance: number | null;
   },
 ): Promise<boolean> {
   const rows = await db
     .update(schema.projectImage)
-    .set({ ...data, status: 'ready', updatedAt: new Date() })
+    .set({
+      ...data,
+      duplicateCheckedAt: new Date(),
+      status: 'ready',
+      updatedAt: new Date(),
+    })
     .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
     .returning({ id: schema.projectImage.id });
   return rows.length > 0;
@@ -66,9 +73,7 @@ export async function listReadyImageIds(imageIds?: readonly string[]): Promise<s
   if (imageIds?.length === 0) return [];
 
   const ready = eq(schema.projectImage.status, 'ready');
-  const filter = imageIds
-    ? and(ready, inArray(schema.projectImage.id, [...imageIds]))
-    : ready;
+  const filter = imageIds ? and(ready, inArray(schema.projectImage.id, [...imageIds])) : ready;
   const rows = await db
     .select({ id: schema.projectImage.id })
     .from(schema.projectImage)
@@ -81,7 +86,13 @@ export async function markFailed(imageId: string): Promise<void> {
     const now = new Date();
     const [image] = await tx
       .update(schema.projectImage)
-      .set({ status: 'failed', updatedAt: now })
+      .set({
+        status: 'failed',
+        duplicateOfImageId: null,
+        duplicateDistance: null,
+        duplicateCheckedAt: null,
+        updatedAt: now,
+      })
       .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
       .returning({ id: schema.projectImage.id, projectId: schema.projectImage.projectId });
 
@@ -143,4 +154,83 @@ export async function findProjectPhashes(
   return rows.flatMap((r) =>
     r.phash && r.phash.length === PHASH_HEX_LEN ? [{ imageId: r.imageId, phash: r.phash }] : [],
   );
+}
+
+export type UncheckedDuplicateImage = {
+  id: string;
+  projectId: string;
+  phash: string;
+  createdAt: Date;
+};
+
+export async function listUncheckedDuplicateImages(
+  limit: number,
+): Promise<UncheckedDuplicateImage[]> {
+  const rows = await db
+    .select({
+      id: schema.projectImage.id,
+      projectId: schema.projectImage.projectId,
+      phash: schema.projectImage.phash,
+      createdAt: schema.projectImage.createdAt,
+    })
+    .from(schema.projectImage)
+    .where(
+      and(
+        eq(schema.projectImage.status, 'ready'),
+        isNotNull(schema.projectImage.phash),
+        sql`${schema.projectImage.duplicateCheckedAt} is null`,
+      ),
+    )
+    .orderBy(
+      asc(schema.projectImage.projectId),
+      asc(schema.projectImage.createdAt),
+      asc(schema.projectImage.id),
+    )
+    .limit(limit);
+
+  return rows.flatMap((row) => (row.phash ? [{ ...row, phash: row.phash }] : []));
+}
+
+export async function findPriorProjectPhashes(
+  image: UncheckedDuplicateImage,
+): Promise<PhashCandidate[]> {
+  const rows = await db
+    .select({ imageId: schema.projectImage.id, phash: schema.projectImage.phash })
+    .from(schema.projectImage)
+    .where(
+      and(
+        eq(schema.projectImage.projectId, image.projectId),
+        eq(schema.projectImage.status, 'ready'),
+        isNotNull(schema.projectImage.phash),
+        sql`(${schema.projectImage.createdAt}, ${schema.projectImage.id}) < (${image.createdAt}, ${image.id})`,
+      ),
+    );
+  return rows.flatMap((row) =>
+    row.phash && row.phash.length === PHASH_HEX_LEN
+      ? [{ imageId: row.imageId, phash: row.phash }]
+      : [],
+  );
+}
+
+export async function markDuplicateChecked(
+  imageId: string,
+  duplicate: { imageId: string; distance: number } | null,
+): Promise<boolean> {
+  const rows = await db
+    .update(schema.projectImage)
+    .set({
+      duplicateOfImageId: duplicate?.imageId ?? null,
+      duplicateDistance: duplicate?.distance ?? null,
+      duplicateCheckedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.projectImage.id, imageId),
+        eq(schema.projectImage.status, 'ready'),
+        sql`${schema.projectImage.duplicateCheckedAt} is null`,
+      ),
+    )
+    .returning({ id: schema.projectImage.id });
+  return rows.length > 0;
 }

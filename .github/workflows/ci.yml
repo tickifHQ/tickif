@@ -80,6 +80,13 @@ jobs:
       DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_test
       REDIS_HOST: localhost
       REDIS_PORT: "6379"
+      TYPESENSE_HOST: http://localhost:8108
+      TYPESENSE_API_KEY: ci-typesense-api-key
+      # The CI Typesense instance is bootstrapped with only the admin key below, so a distinct
+      # value here would 401 the moment a test exercises searchClient(). Scoped-key separation
+      # is a production concern — see docs/runbooks/search.md.
+      TYPESENSE_SEARCH_API_KEY: ci-typesense-api-key
+      TYPESENSE_COLLECTION_PREFIX: tickif_ci
       R2_ENDPOINT: http://localhost:9000
       R2_ACCESS_KEY_ID: minioadmin
       R2_SECRET_ACCESS_KEY: minioadmin
@@ -110,6 +117,14 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+
+      typesense:
+        image: typesense/typesense:30.2
+        env:
+          TYPESENSE_DATA_DIR: /tmp
+          TYPESENSE_API_KEY: ci-typesense-api-key
+        ports:
+          - 8108:8108
 
       minio:
         # Bitnami relocated their public images to the bitnamilegacy org; bitnami/minio:latest
@@ -165,6 +180,15 @@ jobs:
           PGPASSWORD=tickif psql -h localhost -p 5432 -U tickif -d tickif \
             -c "CREATE DATABASE tickif_test;" \
             -c "CREATE DATABASE tickif_worker_test;"
+
+      - name: Wait for Typesense
+        run: curl --retry 20 --retry-all-errors --retry-delay 1 --fail http://localhost:8108/health
+
+      # Create the checked-in resources once, then prove a second pass is a no-op.
+      - name: Bootstrap search collections
+        run: |
+          pnpm --filter @repo/search bootstrap
+          pnpm --filter @repo/search bootstrap -- --check
 
       - name: Typecheck
         run: pnpm typecheck

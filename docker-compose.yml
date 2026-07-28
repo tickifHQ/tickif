@@ -33,6 +33,18 @@ services:
       timeout: 5s
       retries: 5
 
+  typesense:
+    image: typesense/typesense:30.2
+    container_name: tickif-typesense
+    restart: unless-stopped
+    command: >-
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-tickif-local-typesense-key}
+    ports:
+      - "${TYPESENSE_PORT:-8108}:8108"
+    volumes:
+      - typesense_data:/data
+
   # Local S3-compatible store standing in for Cloudflare R2. Point R2_ENDPOINT at
   # http://localhost:9000 and create the R2_BUCKET via the console (:9001) or mc.
   minio:
@@ -58,4 +70,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  typesense_data:
   minio_data:

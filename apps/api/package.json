@@ -21,6 +21,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@babel/runtime": "catalog:",
     "@hono/node-server": "catalog:",
     "@hono/zod-openapi": "catalog:",
     "@repo/auth": "workspace:*",
@@ -29,6 +30,7 @@
     "@repo/db": "workspace:*",
     "@repo/google-places": "workspace:*",
     "@repo/queue": "workspace:*",
+    "@repo/search": "workspace:*",
     "@repo/storage": "workspace:*",
     "@scalar/hono-api-reference": "catalog:",
     "better-auth": "catalog:",
@@ -37,6 +39,7 @@
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "pg": "catalog:",
+    "typesense": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
