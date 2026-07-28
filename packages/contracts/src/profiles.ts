@@ -271,6 +271,25 @@ export const requiredPortfolioFieldSchema = z.enum([
 ]);
 export type RequiredPortfolioField = z.infer<typeof requiredPortfolioFieldSchema>;
 
+export const portfolioReviewSourceSettingsSchema = z
+  .object({
+    showReviews: z.boolean(),
+    showOverallRating: z.boolean(),
+    showPositiveReviewsOnly: z.boolean(),
+  })
+  .meta({ id: 'PortfolioReviewSourceSettings' });
+export type PortfolioReviewSourceSettings = z.infer<
+  typeof portfolioReviewSourceSettingsSchema
+>;
+
+export const portfolioReviewSettingsSchema = z
+  .object({
+    tickif: portfolioReviewSourceSettingsSchema,
+    google: portfolioReviewSourceSettingsSchema,
+  })
+  .meta({ id: 'PortfolioReviewSettings' });
+export type PortfolioReviewSettings = z.infer<typeof portfolioReviewSettingsSchema>;
+
 export const portfolioResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -296,6 +315,7 @@ export const portfolioResponseSchema = z
     testimonialProjectId: z.string().uuid().nullable(),
     showOverallRating: z.boolean(),
     showPositiveReviewsOnly: z.boolean(),
+    reviewSettings: portfolioReviewSettingsSchema,
     showTickifBadge: z.boolean(),
     badges: z.array(portfolioBadgeSchema),
     portfolioUrl: z.string().nullable(),
@@ -334,6 +354,12 @@ export const updatePortfolioSchema = z
     testimonialProjectId: z.string().uuid().nullable().optional(),
     showOverallRating: z.boolean().optional(),
     showPositiveReviewsOnly: z.boolean().optional(),
+    reviewSettings: z
+      .object({
+        tickif: portfolioReviewSourceSettingsSchema.partial().optional(),
+        google: portfolioReviewSourceSettingsSchema.partial().optional(),
+      })
+      .optional(),
     showTickifBadge: z.boolean().optional(),
   })
   .meta({ id: 'UpdatePortfolio' });
@@ -455,8 +481,8 @@ export const portfolioSlugParamSchema = profileSlugParamSchema.meta({
   id: 'PortfolioSlugParam',
 });
 
-/** Provider backing the public reviews rail. Only Google today. */
-export const publicReviewSourceSchema = z.enum(['google']);
+/** Provider backing a public review or rating aggregate. */
+export const publicReviewSourceSchema = z.enum(['tickif', 'google']);
 export type PublicReviewSource = z.infer<typeof publicReviewSourceSchema>;
 
 /**
@@ -498,9 +524,20 @@ export type PublicPortfolioSections = z.infer<typeof publicPortfolioSectionsSche
 /** Headline proof numbers shown in the hero and studio strips. */
 export const publicPortfolioStatsSchema = z
   .object({
-    /** Google's aggregate when connected and fresh, else the Tickif profile rating. */
-    rating: z.number().min(0).max(5),
-    reviewCount: z.number().int(),
+    /** Null when the source aggregate is hidden or unavailable. */
+    tickif: z
+      .object({
+        rating: z.number().min(0).max(5),
+        reviewCount: z.number().int().nonnegative(),
+      })
+      .nullable(),
+    /** Null when hidden, disconnected, or outside Google's cache window. */
+    google: z
+      .object({
+        rating: z.number().min(0).max(5),
+        reviewCount: z.number().int().nonnegative(),
+      })
+      .nullable(),
     projectCount: z.number().int(),
     yearsExperience: z.number().int(),
     /**
@@ -511,6 +548,22 @@ export const publicPortfolioStatsSchema = z
   })
   .meta({ id: 'PublicPortfolioStats' });
 export type PublicPortfolioStats = z.infer<typeof publicPortfolioStatsSchema>;
+
+export const publicPortfolioReviewVisibilitySchema = z
+  .object({
+    tickif: z.object({
+      reviews: z.boolean(),
+      overallRating: z.boolean(),
+    }),
+    google: z.object({
+      reviews: z.boolean(),
+      overallRating: z.boolean(),
+    }),
+  })
+  .meta({ id: 'PublicPortfolioReviewVisibility' });
+export type PublicPortfolioReviewVisibility = z.infer<
+  typeof publicPortfolioReviewVisibilitySchema
+>;
 
 /** The designer's public links, already filtered by `sections.socialLinks`. */
 export const publicPortfolioSocialSchema = z
@@ -564,11 +617,10 @@ export const publicPortfolioResponseSchema = z
     badges: z.array(portfolioBadgeSchema),
     sections: publicPortfolioSectionsSchema,
     stats: publicPortfolioStatsSchema,
+    reviewVisibility: publicPortfolioReviewVisibilitySchema,
     social: publicPortfolioSocialSchema,
     testimonial: publicPortfolioTestimonialSchema.nullable(),
     reviews: z.array(publicPortfolioReviewSchema),
-    /** Null when no provider is connected or reviews are hidden. */
-    reviewSource: publicReviewSourceSchema.nullable(),
     projects: designerProjectsResponseSchema,
     publishedAt: z.string().datetime().nullable(),
   })

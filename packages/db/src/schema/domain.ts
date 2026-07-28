@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   integer,
+  smallint,
   numeric,
   timestamp,
   boolean,
@@ -57,6 +58,24 @@ export const bookingStatusEnum = pgEnum('booking_status', [
 ]);
 
 export const bookingCancelledByEnum = pgEnum('booking_cancelled_by', ['requester', 'designer']);
+
+export const reviewStatusEnum = pgEnum('review_status', [
+  'pending',
+  'published',
+  'rejected',
+  'disputed',
+  'removed',
+]);
+
+export const reviewModerationActionEnum = pgEnum('review_moderation_action', [
+  'submit',
+  'edit',
+  'publish',
+  'reject',
+  'dispute',
+  'resolve_publish',
+  'remove',
+]);
 
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
@@ -433,6 +452,91 @@ export const consultationBooking = pgTable(
   ],
 );
 
+export const review = pgTable(
+  'review',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    designerProfileId: uuid('designer_profile_id')
+      .notNull()
+      .references(() => designerProfile.id, { onDelete: 'restrict' }),
+    authorUserId: text('author_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    projectId: uuid('project_id').references(() => project.id, { onDelete: 'set null' }),
+    bookingId: uuid('booking_id').references(() => consultationBooking.id, {
+      onDelete: 'restrict',
+    }),
+    rating: smallint('rating').notNull(),
+    body: text('body'),
+    status: reviewStatusEnum('status').default('pending').notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    disputedAt: timestamp('disputed_at', { withTimezone: true }),
+    moderatedAt: timestamp('moderated_at', { withTimezone: true }),
+    moderationRevision: integer('moderation_revision').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('review_rating_check', sql`${t.rating} between 1 and 5`),
+    check('review_moderation_revision_check', sql`${t.moderationRevision} >= 0`),
+    check(
+      'review_body_length_check',
+      sql`${t.body} is null or char_length(btrim(${t.body})) >= 30`,
+    ),
+    check(
+      'review_lifecycle_check',
+      sql`
+        (
+          ${t.status} in ('pending', 'rejected')
+          and ${t.publishedAt} is null
+          and ${t.disputedAt} is null
+        )
+        or (
+          ${t.status} = 'published'
+          and ${t.publishedAt} is not null
+          and ${t.disputedAt} is null
+        )
+        or (
+          ${t.status} in ('disputed', 'removed')
+          and ${t.publishedAt} is not null
+          and ${t.disputedAt} is not null
+        )
+      `,
+    ),
+    uniqueIndex('review_designer_author_uniq').on(t.designerProfileId, t.authorUserId),
+    uniqueIndex('review_booking_uniq')
+      .on(t.bookingId)
+      .where(sql`${t.bookingId} is not null`),
+    index('review_author_user_idx').on(t.authorUserId),
+    index('review_project_idx').on(t.projectId),
+    index('review_designer_published_idx')
+      .on(t.designerProfileId, t.publishedAt, t.id)
+      .where(sql`${t.status} = 'published'`),
+    index('review_status_updated_idx').on(t.status, t.updatedAt, t.id),
+  ],
+);
+
+export const reviewModerationEvent = pgTable(
+  'review_moderation_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reviewId: uuid('review_id')
+      .notNull()
+      .references(() => review.id, { onDelete: 'restrict' }),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
+    action: reviewModerationActionEnum('action').notNull(),
+    fromStatus: reviewStatusEnum('from_status'),
+    toStatus: reviewStatusEnum('to_status').notNull(),
+    note: text('note'),
+    reasonCode: text('reason_code'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('review_moderation_event_review_created_idx').on(t.reviewId, t.createdAt, t.id),
+    index('review_moderation_event_actor_idx').on(t.actorUserId),
+  ],
+);
+
 export const bookingNotificationOutbox = pgTable(
   'booking_notification_outbox',
   {
@@ -582,6 +686,18 @@ export const designerPortfolio = pgTable(
     // Review display settings (Google-agnostic names)
     showOverallRating: boolean('show_overall_rating').default(true).notNull(),
     showPositiveReviewsOnly: boolean('show_positive_reviews_only').default(false).notNull(),
+    // Per-source controls. The generic fields above stay for one compatibility
+    // cycle and are mirrored to both source groups when older clients patch them.
+    showTickifReviews: boolean('show_tickif_reviews').default(true).notNull(),
+    showTickifOverallRating: boolean('show_tickif_overall_rating').default(true).notNull(),
+    showTickifPositiveReviewsOnly: boolean('show_tickif_positive_reviews_only')
+      .default(false)
+      .notNull(),
+    showGoogleReviews: boolean('show_google_reviews').default(true).notNull(),
+    showGoogleOverallRating: boolean('show_google_overall_rating').default(true).notNull(),
+    showGooglePositiveReviewsOnly: boolean('show_google_positive_reviews_only')
+      .default(false)
+      .notNull(),
 
     // Share block
     showTickifBadge: boolean('show_tickif_badge').default(true).notNull(),
