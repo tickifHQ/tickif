@@ -114,6 +114,9 @@ catalogs:
     happy-dom:
       specifier: ^20.10.6
       version: 20.10.6
+    libphonenumber-js:
+      specifier: 1.13.9
+      version: 1.13.9
     lucide-react:
       specifier: ^1.24.0
       version: 1.26.0
@@ -304,7 +307,7 @@ importers:
         specifier: ^4.12.27
         version: 4.12.32
       libphonenumber-js:
-        specifier: 1.13.9
+        specifier: 'catalog:'
         version: 1.13.9
       lucide-react:
         specifier: 'catalog:'
