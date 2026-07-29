@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Asterisk,
   BadgeCheck,
   Bookmark,
   Calendar,
-  ChevronDown,
   ChevronRight,
   House,
   Mail,
@@ -22,19 +21,18 @@ import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
 import { Card } from '@repo/ui/components/card';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
-import { countries as allCountries } from 'country-codes-flags-phone-codes';
 import { OtpInput } from '@/components/otp-input';
 import { GoogleBrandIcon } from '@/components/brand-icons';
+import {
+  countries,
+  PhoneNumberInput,
+  toE164PhoneNumber,
+  type Country,
+} from '@/components/phone-number-input';
 
 type LoginMode = 'browsing' | 'designer';
 
@@ -46,21 +44,6 @@ interface LoginCardProps {
 
 type Step = 'phone' | 'otp';
 type OtpDigits = string[];
-
-interface Country {
-  code: string;
-  flag: string;
-  name: string;
-}
-
-const countries: Country[] = allCountries
-  .filter((c) => c.dialCode)
-  .map((c) => ({ code: c.dialCode, flag: c.flag, name: c.name }))
-  .sort((a, b) => {
-    if (a.name === 'India') return -1;
-    if (b.name === 'India') return 1;
-    return a.name.localeCompare(b.name);
-  });
 
 const COOLDOWN_SECONDS = 30;
 
@@ -137,8 +120,6 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
   const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
-  const [countrySearch, setCountrySearch] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
 
   // Email OTP state (designer tab)
   const [designerEmail, setDesignerEmail] = useState('');
@@ -152,13 +133,6 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     loginMode === 'designer'
       ? 'One link to share your work, get discovered, and turn views into real enquiries.'
       : 'Save the homes you love, message designers, and book free consultations.';
-
-  const filteredCountries = countrySearch
-    ? countries.filter((c) => {
-        const q = countrySearch.toLowerCase();
-        return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
-      })
-    : countries;
 
   const cooldownRef = useRef(cooldown);
   cooldownRef.current = cooldown;
@@ -204,18 +178,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     return () => clearInterval(id);
   }, [emailCooldown > 0]);
 
-  const validatePhone = useCallback((value: string): string | null => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length !== 10) return 'Enter a valid 10-digit phone number';
-    return null;
-  }, []);
-
   // ─── Phone OTP handlers ─────────────────────────────────────────────────
   async function handleSendOtp() {
-    const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
-    const validationError = validatePhone(phone);
-    if (validationError) {
-      setError(validationError);
+    const fullPhone = toE164PhoneNumber(selectedCountry, phone);
+    if (!fullPhone) {
+      setError(`Enter a valid phone number for ${selectedCountry.name}`);
       return;
     }
     setError('');
@@ -236,7 +203,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   }
 
   async function handleVerify() {
-    const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
+    const fullPhone = toE164PhoneNumber(selectedCountry, phone);
+    if (!fullPhone) {
+      setError(`Enter a valid phone number for ${selectedCountry.name}`);
+      return;
+    }
     const otp = code.join('');
     if (otp.length !== 6) {
       setError('Enter the full 6-digit OTP');
@@ -265,7 +236,12 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     setError('');
     setCode(['', '', '', '', '', '']);
     setLoading(true);
-    const fullPhone = `${selectedCountry.code}${phone.replace(/\D/g, '')}`;
+    const fullPhone = toE164PhoneNumber(selectedCountry, phone);
+    if (!fullPhone) {
+      setError(`Enter a valid phone number for ${selectedCountry.name}`);
+      setLoading(false);
+      return;
+    }
     try {
       const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: fullPhone });
       if (error) {
@@ -284,12 +260,6 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     setStep('phone');
     setError('');
     setCode(['', '', '', '', '', '']);
-  }
-
-  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-    setPhone(digits);
-    setError('');
   }
 
   // ─── Google SSO handler ─────────────────────────────────────────────────
@@ -502,90 +472,25 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                       aria-hidden={loginMode !== 'browsing'}
                     >
                       <div className="flex flex-col gap-1.5">
-                        <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
-                          <DropdownMenu
-                            onOpenChange={(open) => {
-                              if (!open) setCountrySearch('');
-                            }}
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-2 bg-muted px-2.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                disabled={loading}
-                              >
-                                <span className="text-base leading-none">
-                                  {selectedCountry.flag}
-                                </span>
-                                <ChevronDown
-                                  className="size-3.5 shrink-0 opacity-60"
-                                  aria-hidden="true"
-                                />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="start"
-                              sideOffset={2}
-                              collisionPadding={8}
-                              className="max-h-60 overflow-y-auto max-w-[calc(100vw-1rem)]"
-                            >
-                              <div className="sticky top-0 -mx-1 -mt-1 mb-1 z-10 bg-popover px-1 pt-1 shadow-sm">
-                                <input
-                                  ref={searchRef}
-                                  type="text"
-                                  placeholder="Search countries..."
-                                  value={countrySearch}
-                                  onChange={(e) => setCountrySearch(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                      if (countrySearch) {
-                                        e.preventDefault();
-                                        setCountrySearch('');
-                                        return;
-                                      }
-                                      return;
-                                    }
-                                    e.stopPropagation();
-                                  }}
-                                  className="w-full rounded-sm border border-input bg-background px-2 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                                  autoFocus
-                                />
-                              </div>
-                              {filteredCountries.length > 0 ? (
-                                filteredCountries.map((country) => (
-                                  <DropdownMenuItem
-                                    key={`${country.code}-${country.name}`}
-                                    onSelect={() => setSelectedCountry(country)}
-                                    className="gap-2"
-                                  >
-                                    <span className="text-base leading-none">{country.flag}</span>
-                                    <span className="text-muted-foreground">{country.code}</span>
-                                    <span className="text-foreground">{country.name}</span>
-                                  </DropdownMenuItem>
-                                ))
-                              ) : (
-                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                                  No countries found
-                                </div>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            inputMode="numeric"
-                            aria-label="Phone number"
-                            placeholder="9123456789"
-                            value={phone}
-                            onChange={handlePhoneChange}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSendOtp();
-                            }}
-                            className="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                            disabled={loading}
-                            autoComplete="tel"
-                          />
-                        </div>
+                        <PhoneNumberInput
+                          id="phone"
+                          phone={phone}
+                          selectedCountry={selectedCountry}
+                          onPhoneChange={(value) => {
+                            setPhone(value);
+                            setError('');
+                          }}
+                          onSelectedCountryChange={(country) => {
+                            setSelectedCountry(country);
+                            setError('');
+                          }}
+                          onEnter={handleSendOtp}
+                          placeholder="9123456789"
+                          disabled={loading}
+                          wrapperClassName="items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset"
+                          countryButtonClassName="rounded-none border-0 py-0"
+                          inputClassName="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        />
                       </div>
 
                       <Button
@@ -593,7 +498,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
                         variant="fancy"
                         size="fancy"
                         onClick={handleSendOtp}
-                        disabled={loading || phone.length < 10}
+                        disabled={loading || !toE164PhoneNumber(selectedCountry, phone)}
                         className="w-full cursor-pointer"
                       >
                         {loading ? 'Sending…' : 'Get OTP'}

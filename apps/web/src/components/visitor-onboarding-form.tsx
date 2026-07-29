@@ -6,15 +6,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
+import { Checkbox } from '@repo/ui/components/checkbox';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
+import { InitialsAvatar } from '@/components/initials-avatar';
 import { saveVisitorOnboardingPreferences } from '@/lib/visitor-onboarding';
 
 type VisitorOnboardingFormProps = {
   displayName: string;
   signedInAs: string;
-  initials: string;
+  initialPhoneNumber: string;
 };
 
 const cityOptions = [
@@ -26,22 +28,30 @@ const cityOptions = [
 
 export function VisitorOnboardingForm({
   displayName: initialDisplayName,
-  initials,
+  initialPhoneNumber,
   signedInAs,
 }: VisitorOnboardingFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [city, setCity] = useState<(typeof cityOptions)[number]['value']>('chennai');
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
   const [whatsapp, setWhatsapp] = useState('');
+  const [usePhoneForWhatsapp, setUsePhoneForWhatsapp] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     saveVisitorOnboardingPreferences({
       displayName: displayName.trim() || initialDisplayName,
       city,
-      whatsapp: whatsapp.replace(/\D/g, ''),
+      phoneNumber: phoneNumber.trim(),
+      whatsapp: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim(),
     });
     router.push('/');
+  }
+
+  function handleUsePhoneForWhatsappChange(checked: boolean) {
+    setWhatsapp(phoneNumber);
+    setUsePhoneForWhatsapp(checked);
   }
 
   return (
@@ -58,11 +68,13 @@ export function VisitorOnboardingForm({
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="flex gap-5">
-          <div className="relative flex size-[60px] shrink-0 items-center justify-center rounded-lg border border-border bg-primary/10 text-lg font-semibold text-primary">
-            {initials}
-            <span className="absolute -right-1 -top-1 inline-flex size-4 items-center justify-center rounded-full border border-border bg-background text-[10px] text-muted-foreground">
-              x
-            </span>
+          <div className="aspect-square self-stretch shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
+            <InitialsAvatar
+              seed={displayName}
+              fallbackSeed="Your name"
+              alt="Generated visitor initials"
+              size={64}
+            />
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
             <Label htmlFor="visitor-display-name" className="text-sm font-medium">
@@ -72,6 +84,8 @@ export function VisitorOnboardingForm({
               id="visitor-display-name"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="Your name"
+              required
             />
           </div>
         </div>
@@ -85,22 +99,46 @@ export function VisitorOnboardingForm({
         />
 
         <div className="space-y-1.5">
+          <Label htmlFor="visitor-phone-number" className="text-sm font-medium">
+            Phone number
+          </Label>
+          <Input
+            id="visitor-phone-number"
+            type="tel"
+            value={phoneNumber}
+            onChange={(event) => setPhoneNumber(event.target.value)}
+            placeholder="+91 9123456789"
+            autoComplete="tel"
+            readOnly={Boolean(initialPhoneNumber)}
+            className="read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground"
+          />
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="visitor-whatsapp" className="text-sm font-medium">
             WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
           </Label>
-          <div className="flex">
-            <div className="inline-flex h-10 items-center gap-2 rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-              <span>IN</span>
-              <span>+91</span>
-            </div>
-            <Input
-              id="visitor-whatsapp"
-              type="tel"
-              value={whatsapp}
-              onChange={(event) => setWhatsapp(event.target.value)}
-              placeholder="9123456789"
-              className="-ml-px rounded-l-none"
+          <Input
+            id="visitor-whatsapp"
+            type="tel"
+            value={usePhoneForWhatsapp ? phoneNumber : whatsapp}
+            onChange={(event) => setWhatsapp(event.target.value)}
+            placeholder="+91 9123456789"
+            autoComplete="tel"
+            disabled={usePhoneForWhatsapp}
+          />
+          <div className="flex items-center gap-2.5 pt-1">
+            <Checkbox
+              id="visitor-use-phone-for-whatsapp"
+              checked={usePhoneForWhatsapp}
+              onCheckedChange={(checked) => handleUsePhoneForWhatsappChange(checked === true)}
             />
+            <Label
+              htmlFor="visitor-use-phone-for-whatsapp"
+              className="cursor-pointer text-sm font-normal"
+            >
+              Use phone number for WhatsApp
+            </Label>
           </div>
         </div>
 
@@ -111,12 +149,18 @@ export function VisitorOnboardingForm({
           </Button>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <span>Need help?</span>
-            <Link href="mailto:support@tickif.in" className="font-medium text-foreground underline-offset-2 hover:underline">
+            <Link
+              href="mailto:support@tickif.in"
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
               Contact support
             </Link>
             <span>|</span>
-            <Link href="/" className="font-medium text-foreground underline-offset-2 hover:underline">
-              Skip to dashboard
+            <Link
+              href="/"
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Skip
             </Link>
           </div>
         </div>

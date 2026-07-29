@@ -21,6 +21,7 @@
     "better-auth": "catalog:",
     "country-codes-flags-phone-codes": "^1.1.1",
     "hono": "catalog:",
+    "libphonenumber-js": "1.13.9",
     "lucide-react": "catalog:",
     "next": "catalog:",
     "react": "catalog:",

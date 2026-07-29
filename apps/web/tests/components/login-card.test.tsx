@@ -183,11 +183,29 @@ describe('LoginCard', () => {
     expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
   });
 
-  it('disables Send OTP button when phone has fewer than 10 digits', async () => {
+  it('disables Send OTP button when the phone number is invalid', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '12345');
     expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
+  });
+
+  it('shows the selected dial code and sends a valid local number in E.164 format', async () => {
+    mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+
+    expect(screen.getByRole('button', { name: 'Country code, India +91' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Country code, India +91' }));
+    await user.type(screen.getByPlaceholderText('Search countries...'), 'Australia');
+    await user.click(screen.getByRole('menuitem', { name: /Australia/ }));
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '412345678');
+
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+
+    expect(mock.sendOtp).toHaveBeenCalledWith({ phoneNumber: '+61412345678' });
   });
 
   it('transitions to OTP step after successful send', async () => {
