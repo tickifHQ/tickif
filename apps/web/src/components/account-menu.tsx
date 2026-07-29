@@ -80,7 +80,7 @@ export function AccountMenu({
           <Avatar className={showLabel ? 'size-8' : undefined}>
             <InitialsAvatar
               seed={resolvedAvatarSeed}
-              fallbackSeed="Tickif"
+              fallbackSeed="Your name"
               alt=""
               size={showLabel ? 32 : 40}
             />

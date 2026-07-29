@@ -21,6 +21,25 @@ describe('session lifecycle (E-85)', () => {
     expect(rows.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('persists an authenticated visitor display name', async () => {
+    const { cookie } = await createAuthedSession('+919800000025');
+    const headers = new Headers({ cookie });
+
+    await auth.api.updateUser({
+      headers,
+      body: { name: 'Sarthak Wade' },
+    });
+
+    const session = await getSession(headers, { disableCookieCache: true });
+    expect(session?.user.name).toBe('Sarthak Wade');
+
+    const [row] = await db
+      .select({ name: schema.user.name })
+      .from(schema.user)
+      .where(eq(schema.user.id, session!.user.id));
+    expect(row?.name).toBe('Sarthak Wade');
+  });
+
   it('rolling refresh extends expiry once inside the updateAge window', async () => {
     const { cookie } = await createAuthedSession('+919800000021');
     const me = await getSession(new Headers({ cookie }));
@@ -34,10 +53,7 @@ describe('session lifecycle (E-85)', () => {
     // disableCookieCache forces the DB read + rolling-refresh logic (the cache would skip both).
     await getSession(new Headers({ cookie }), { disableCookieCache: true });
 
-    const [row] = await db
-      .select()
-      .from(schema.session)
-      .where(eq(schema.session.userId, userId));
+    const [row] = await db.select().from(schema.session).where(eq(schema.session.userId, userId));
     expect(row!.expiresAt.getTime()).toBeGreaterThan(staleExpiry.getTime());
   });
 

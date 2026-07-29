@@ -5,7 +5,7 @@ const VISITOR_ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export type VisitorOnboardingPreferences = {
   displayName: string;
-  city: string;
+  address: string;
   phoneNumber: string;
   whatsapp: string;
 };

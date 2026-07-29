@@ -54,7 +54,7 @@ describe('VisitorOnboardingPage', () => {
     expect(screen.getByText("Let's set up your space on Tickif")).toBeInTheDocument();
     expect(screen.getByLabelText(/display name/i)).toHaveValue('');
     expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
-    expect(screen.getByLabelText(/city/i)).toHaveValue('chennai');
+    expect(screen.getByLabelText(/^address$/i)).toHaveValue('');
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
     expect(screen.getByRole('link', { name: 'Skip' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();

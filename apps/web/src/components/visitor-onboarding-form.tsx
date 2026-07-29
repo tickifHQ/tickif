@@ -4,13 +4,13 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
 import { Checkbox } from '@repo/ui/components/checkbox';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
-import { SelectField } from '@repo/ui/components/select-field';
 import { InitialsAvatar } from '@/components/initials-avatar';
+import { authClient } from '@/lib/auth-client';
 import { saveVisitorOnboardingPreferences } from '@/lib/visitor-onboarding';
 
 type VisitorOnboardingFormProps = {
@@ -19,13 +19,6 @@ type VisitorOnboardingFormProps = {
   initialPhoneNumber: string;
 };
 
-const cityOptions = [
-  { value: 'chennai', label: 'Chennai' },
-  { value: 'bengaluru', label: 'Bengaluru' },
-  { value: 'mumbai', label: 'Mumbai' },
-  { value: 'pune', label: 'Pune' },
-] as const;
-
 export function VisitorOnboardingForm({
   displayName: initialDisplayName,
   initialPhoneNumber,
@@ -33,20 +26,45 @@ export function VisitorOnboardingForm({
 }: VisitorOnboardingFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
-  const [city, setCity] = useState<(typeof cityOptions)[number]['value']>('chennai');
+  const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
   const [whatsapp, setWhatsapp] = useState('');
   const [usePhoneForWhatsapp, setUsePhoneForWhatsapp] = useState(false);
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveVisitorOnboardingPreferences({
-      displayName: displayName.trim() || initialDisplayName,
-      city,
-      phoneNumber: phoneNumber.trim(),
-      whatsapp: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim(),
-    });
-    router.push('/');
+    const normalizedDisplayName = displayName.trim();
+    if (normalizedDisplayName.length < 2 || normalizedDisplayName.length > 100) {
+      setError('Enter a display name between 2 and 100 characters');
+      return;
+    }
+
+    setError('');
+    setIsSaving(true);
+    try {
+      const { error: updateError } = await authClient.updateUser({
+        name: normalizedDisplayName,
+      });
+      if (updateError) {
+        setError(updateError.message || 'Could not save your name. Please try again.');
+        return;
+      }
+
+      saveVisitorOnboardingPreferences({
+        displayName: normalizedDisplayName,
+        address: address.trim(),
+        phoneNumber: phoneNumber.trim(),
+        whatsapp: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim(),
+      });
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Could not save your name. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleUsePhoneForWhatsappChange(checked: boolean) {
@@ -86,17 +104,26 @@ export function VisitorOnboardingForm({
               onChange={(event) => setDisplayName(event.target.value)}
               placeholder="Your name"
               required
+              minLength={2}
+              maxLength={100}
             />
           </div>
         </div>
 
-        <SelectField
-          label="City"
-          value={city}
-          onValueChange={(value) => setCity(value as typeof city)}
-          options={cityOptions}
-          placeholder="Select city"
-        />
+        <div className="grid gap-1">
+          <Label htmlFor="visitor-address" className="text-[13px] font-medium leading-relaxed">
+            Address
+          </Label>
+          <Input
+            id="visitor-address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="Address or locality"
+            autoComplete="street-address"
+            maxLength={300}
+            className="h-8 rounded-md px-2 text-[13px]"
+          />
+        </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="visitor-phone-number" className="text-sm font-medium">
@@ -143,9 +170,23 @@ export function VisitorOnboardingForm({
         </div>
 
         <div className="space-y-3 pt-2">
-          <Button type="submit" className="h-11 w-full">
-            Continue
-            <ChevronRight className="size-4" />
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <Button type="submit" className="h-11 w-full" disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                Saving
+              </>
+            ) : (
+              <>
+                Continue
+                <ChevronRight className="size-4" />
+              </>
+            )}
           </Button>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <span>Need help?</span>

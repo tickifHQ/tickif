@@ -130,7 +130,7 @@ describe('LoginCard', () => {
   it('sends completed visitors home after Google sign in', async () => {
     window.localStorage.setItem(
       'tickif.visitorOnboarding',
-      JSON.stringify({ displayName: 'Mahi', city: 'chennai' }),
+      JSON.stringify({ displayName: 'Mahi', address: '12 Studio Lane, Chennai' }),
     );
     mock.signInSocial.mockResolvedValueOnce({
       error: null,
