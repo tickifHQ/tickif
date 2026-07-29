@@ -23,7 +23,9 @@ export function studioInitials(displayName: string): string {
  * The "Interior Design Studio" line. `firmType` is designer-entered free text;
  * when blank, fall back to a label implied by the entity type.
  */
-export function studioType(portfolio: Pick<PublicPortfolioResponse, 'firmType' | 'entityType'>): string {
+export function studioType(
+  portfolio: Pick<PublicPortfolioResponse, 'firmType' | 'entityType'>,
+): string {
   if (portfolio.firmType?.trim()) return portfolio.firmType.trim();
   return portfolio.entityType === 'company' ? 'Design Studio' : 'Interior Designer';
 }
@@ -45,7 +47,9 @@ export function studioLocation(
 }
 
 /** The one-line hero pitch: the curated tagline, else the opening of the bio. */
-export function strapline(portfolio: Pick<PublicPortfolioResponse, 'tagline' | 'bio'>): string | null {
+export function strapline(
+  portfolio: Pick<PublicPortfolioResponse, 'tagline' | 'bio'>,
+): string | null {
   return portfolio.tagline?.trim() || portfolio.bio?.trim() || null;
 }
 
@@ -96,6 +100,51 @@ export function socialLabel(handle: string): string {
     }
   }
   return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+type SocialPlatform = 'instagram' | 'linkedin' | 'youtube';
+
+/**
+ * Turn the free-form social value stored on a profile into a safe external URL.
+ *
+ * Full HTTP(S) URLs are preserved. Bare values are resolved against the
+ * platform's public profile URL, while non-web schemes are rejected instead of
+ * being rendered into a clickable link.
+ */
+export function socialHref(platform: SocialPlatform, handle: string): string | null {
+  const trimmed = handle.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
+
+  const path = trimmed.replace(/^\/+/, '');
+  if (!path) return null;
+
+  if (platform === 'instagram') {
+    const username = path.replace(/^@/, '');
+    return username ? `https://www.instagram.com/${encodeURIComponent(username)}` : null;
+  }
+
+  if (platform === 'linkedin') {
+    const profilePath = path.replace(/^@/, '');
+    const normalizedPath = /^(?:company|in|school)\//.test(profilePath)
+      ? profilePath
+      : `in/${profilePath}`;
+    return new URL(normalizedPath, 'https://www.linkedin.com/').toString();
+  }
+
+  const channelPath =
+    path.startsWith('@') || /^(?:c|channel|user)\//.test(path) ? path : `@${path}`;
+  return new URL(channelPath, 'https://www.youtube.com/').toString();
 }
 
 /** Website label without the scheme, e.g. "anikaspaces.in". */

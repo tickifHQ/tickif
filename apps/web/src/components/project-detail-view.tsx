@@ -137,13 +137,13 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
 
               {/* Buttons row */}
               <div className="mt-4 flex items-center gap-3">
-                <Button type="button" variant="inverted" size="compact" className="flex-[7]">
+                <Button type="button" variant="inverted" size="compact" className="h-9 flex-[7]">
                   <MessageSquare aria-hidden />
                   Enquire
                 </Button>
                 <button
                   type="button"
-                  className="flex flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
+                  className="flex h-10 flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
                 >
                   <svg
                     viewBox="0 0 24 24"

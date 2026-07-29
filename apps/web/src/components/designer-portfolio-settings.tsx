@@ -8,7 +8,6 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
-  ExternalLink,
   Globe,
   Info,
   Loader2,
@@ -766,12 +765,6 @@ export function DesignerPortfolioSettings() {
                       Lowercase letters, numbers, and hyphens only
                     </p>
                   )}
-                  {portfolio.portfolioUrl && (
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ExternalLink className="size-4 shrink-0" />
-                      {portfolio.portfolioUrl}
-                    </p>
-                  )}
                 </div>
               </div>
             </CollapsibleSection>
@@ -1373,14 +1366,26 @@ export function DesignerPortfolioSettings() {
                   Live preview
                 </span>
               </div>
-              <button
-                type="button"
-                disabled
-                className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-foreground transition-colors"
-              >
-                Open full
-                <ArrowRight className="size-3.5" aria-hidden />
-              </button>
+              {portfolio.publicLinkEnabled && portfolio.portfolioUrl ? (
+                <a
+                  href={portfolio.portfolioUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-primary"
+                >
+                  Open full
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-foreground transition-colors"
+                >
+                  Open full
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </button>
+              )}
             </div>
 
             {/* URL bar */}

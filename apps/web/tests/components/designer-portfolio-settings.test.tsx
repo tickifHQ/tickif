@@ -140,7 +140,7 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
-    expect(screen.getByText('https://tickif.com/d/mahi-studio')).toBeInTheDocument();
+    expect(screen.queryByText('https://tickif.com/d/mahi-studio')).not.toBeInTheDocument();
   });
 
   it('tells the designer which hero fields still block the public page', async () => {
@@ -198,7 +198,21 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
-  it('disables the full portfolio control while the public page is unavailable', async () => {
+  it('opens the saved live portfolio in a new tab', async () => {
+    await renderSettings();
+
+    const openFull = screen.getByRole('link', { name: 'Open full' });
+
+    expect(openFull).toHaveAttribute('href', 'https://tickif.com/d/mahi-studio');
+    expect(openFull).toHaveAttribute('target', '_blank');
+    expect(openFull).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('disables the full portfolio control when the saved public link is hidden', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      publicLinkEnabled: false,
+    });
     await renderSettings();
 
     expect(screen.getByRole('button', { name: 'Open full' })).toBeDisabled();

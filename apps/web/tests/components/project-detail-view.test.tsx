@@ -34,7 +34,7 @@ describe('ProjectDetailView', () => {
     render(<ProjectDetailView project={project} gallery={gallery} moreProjects={[]} />);
 
     expect(screen.getByRole('button', { name: /enquire/i })).toHaveClass(
-      'h-8',
+      'h-9',
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );
