@@ -66,6 +66,8 @@ const basePortfolio: PortfolioResponse = {
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: 'https://tickif.com/d/mahi-studio',
+  publiclyVisible: true,
+  missingRequiredFields: [],
   googleConnection: null,
   publishedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
@@ -105,6 +107,25 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
     expect(screen.getByText('https://tickif.com/d/mahi-studio')).toBeInTheDocument();
+  });
+
+  it('tells the designer which hero fields still block the public page', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      publiclyVisible: false,
+      missingRequiredFields: ['logo', 'bio'],
+    });
+    await renderSettings();
+
+    const notice = await screen.findByRole('status');
+    expect(notice).toHaveTextContent("Your portfolio isn't public yet.");
+    expect(notice).toHaveTextContent('a logo and a bio');
+  });
+
+  it('drops the visibility notice once every required field is filled', async () => {
+    await renderSettings();
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('copies the canonical preview URL when the backend portfolio URL is not available yet', async () => {

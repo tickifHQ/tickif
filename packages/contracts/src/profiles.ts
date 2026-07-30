@@ -255,6 +255,22 @@ export const googleConnectionSummarySchema = z
   .meta({ id: 'GoogleConnectionSummary' });
 export type GoogleConnectionSummary = z.infer<typeof googleConnectionSummarySchema>;
 
+/**
+ * Hero fields a designer must fill before the public page goes live.
+ *
+ * The public `/d/{slug}` page leads with the logo, studio name, tagline and bio;
+ * without them the hero renders as an empty frame. Completing all four flips
+ * `designer_profile.status` from `draft` to `active`, which is what every public
+ * surface gates on (portfolio page, discovery feed, search index, bookings).
+ */
+export const requiredPortfolioFieldSchema = z.enum([
+  'logo',
+  'displayName',
+  'tagline',
+  'bio',
+]);
+export type RequiredPortfolioField = z.infer<typeof requiredPortfolioFieldSchema>;
+
 export const portfolioResponseSchema = z
   .object({
     id: z.string().uuid(),
@@ -283,6 +299,14 @@ export const portfolioResponseSchema = z
     showTickifBadge: z.boolean(),
     badges: z.array(portfolioBadgeSchema),
     portfolioUrl: z.string().nullable(),
+    /**
+     * Whether the public page is live. False while required hero fields are
+     * blank — distinct from `publicLinkEnabled`, which is the designer's own
+     * switch for taking a *complete* portfolio offline.
+     */
+    publiclyVisible: z.boolean(),
+    /** Required hero fields still blank. Empty once the portfolio is live. */
+    missingRequiredFields: z.array(requiredPortfolioFieldSchema),
     // Null when the designer has never connected a Google Business location.
     googleConnection: googleConnectionSummarySchema.nullable(),
     publishedAt: z.string().datetime().nullable(),

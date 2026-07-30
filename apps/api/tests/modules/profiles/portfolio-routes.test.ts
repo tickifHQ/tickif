@@ -94,6 +94,8 @@ const fakePortfolioResponse: PortfolioResponse = {
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: null,
+  publiclyVisible: true,
+  missingRequiredFields: [],
   googleConnection: null,
   publishedAt: null,
   createdAt: '2025-01-01T00:00:00.000Z',

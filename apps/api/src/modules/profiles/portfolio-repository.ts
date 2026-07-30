@@ -398,6 +398,43 @@ export const portfolioRepository = {
   },
 
   /**
+   * Promote a profile to `active` once its required portfolio fields are filled.
+   *
+   * Scoped to `status = 'draft'` so it is idempotent and can never resurrect a
+   * profile an admin suspended. Returns true only on the transition, so callers
+   * can emit the projection event exactly once — activation is what makes the
+   * designer indexable, so a search reindex has to follow it.
+   */
+  async activateIfDraftInTx(tx: Tx, profileId: string): Promise<boolean> {
+    const now = new Date();
+    const result = await tx
+      .update(schema.designerProfile)
+      .set({ status: 'active', updatedAt: now })
+      .where(
+        and(
+          eq(schema.designerProfile.id, profileId),
+          eq(schema.designerProfile.status, 'draft'),
+        ),
+      )
+      .returning({ id: schema.designerProfile.id });
+    if (result.length === 0) return false;
+    await recordSearchProjectionEvents(tx, [
+      {
+        entityKind: 'designer',
+        entityId: profileId,
+        operation: 'index',
+        sourceUpdatedAt: now,
+      },
+    ]);
+    return true;
+  },
+
+  /** `activateIfDraftInTx` for callers that are not already inside a transaction. */
+  async activateIfDraft(profileId: string): Promise<boolean> {
+    return db.transaction((tx) => portfolioRepository.activateIfDraftInTx(tx, profileId));
+  },
+
+  /**
    * Compare-and-set: clear logoImageId only if it still matches the expected value.
    * Returns true if the update matched a row, false if another request already changed it.
    */

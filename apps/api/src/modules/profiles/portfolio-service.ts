@@ -1,6 +1,7 @@
 import type {
   PortfolioBadge,
   PortfolioResponse,
+  RequiredPortfolioField,
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
 } from '@repo/contracts';
@@ -133,6 +134,51 @@ export function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] 
   return badges;
 }
 
+/**
+ * Required hero fields still blank, in the order the settings form presents them.
+ *
+ * A profile is created `draft` at onboarding and every public surface gates on
+ * `status === 'active'`, so this is the rule that decides when a designer becomes
+ * visible: fill the hero, go live. Whitespace-only values do not count — they
+ * would render as an empty hero just the same.
+ */
+export function missingRequiredFields(
+  profile: Pick<DesignerProfileRecord, 'logoImageId' | 'displayName' | 'bio'>,
+  portfolio: Pick<PortfolioRecord, 'tagline'>,
+): RequiredPortfolioField[] {
+  const filled = (value: string | null): boolean => !!value && value.trim().length > 0;
+  const missing: RequiredPortfolioField[] = [];
+  if (!filled(profile.logoImageId)) missing.push('logo');
+  if (!filled(profile.displayName)) missing.push('displayName');
+  if (!filled(portfolio.tagline)) missing.push('tagline');
+  if (!filled(profile.bio)) missing.push('bio');
+  return missing;
+}
+
+/**
+ * Promote a draft profile whose required fields are now filled.
+ *
+ * Deliberately one-way: clearing a field later does **not** hide a live
+ * portfolio. Un-publishing has a wide blast radius — the public page 404s, the
+ * designer's projects drop out of the feed, and the search document is removed —
+ * so taking a portfolio offline stays an explicit act via `publicLinkEnabled`
+ * rather than a side effect of editing a field.
+ *
+ * Mutates `profile.status` in place so the caller's response (and the `verified`
+ * badge computed from it) reflects the transition without a re-read.
+ */
+async function activateIfComplete(
+  tx: Tx,
+  profile: DesignerProfileRecord,
+  portfolio: PortfolioRecord,
+): Promise<void> {
+  if (profile.status !== 'draft') return;
+  if (missingRequiredFields(profile, portfolio).length > 0) return;
+
+  const activated = await portfolioRepository.activateIfDraftInTx(tx, profile.id);
+  if (activated) profile.status = 'active';
+}
+
 export async function resolveProfile(caller: Caller): Promise<DesignerProfileRecord> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
@@ -198,6 +244,10 @@ async function buildPortfolioResponse(
     showTickifBadge: portfolio.showTickifBadge,
     badges,
     portfolioUrl,
+    // `publiclyVisible` answers "does /d/{slug} serve a page right now?", so it
+    // carries the designer's own switch as well as the completeness gate.
+    publiclyVisible: profile.status === 'active' && portfolio.publicLinkEnabled,
+    missingRequiredFields: missingRequiredFields(profile, portfolio),
     googleConnection,
     publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     createdAt: portfolio.createdAt.toISOString(),
@@ -347,6 +397,10 @@ export const portfolioService = {
         }
       }
 
+      // Same transaction as the writes above, so a save that completes the hero
+      // can never commit the fields but lose the activation.
+      await activateIfComplete(tx, profile, row);
+
       return row;
     });
 
@@ -450,6 +504,18 @@ export const portfolioService = {
         throw AppError.conflict('Logo was modified concurrently, please retry');
       }
     }
+    profile.logoImageId = input.objectKey;
+
+    // The logo is a required field, so this upload may be what takes the
+    // portfolio live. Kept out of the CAS transaction: a failure here must not
+    // roll back a logo that is already committed and in storage — the next save
+    // re-evaluates the same condition.
+    if (profile.status === 'draft') {
+      const portfolio = await portfolioRepository.findOrCreate(profile.id);
+      if (missingRequiredFields(profile, portfolio).length === 0) {
+        await portfolioRepository.activateIfDraft(profile.id);
+      }
+    }
 
     // Clean up the previous storage object (non-critical — orphan is acceptable)
     if (previousKey && previousKey !== input.objectKey && previousKey.startsWith(expectedPrefix)) {
@@ -473,7 +539,11 @@ export const portfolioService = {
     return { logoUrl };
   },
 
-  /** Delete the current logo from storage and clear the DB association. */
+  /**
+   * Delete the current logo from storage and clear the DB association.
+   *
+   * Does not demote an already-live portfolio — see `activateIfComplete`.
+   */
   async deleteLogo(caller: Caller): Promise<void> {
     const profile = await resolveProfile(caller);
 

@@ -24,6 +24,8 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     updateProfileInTx: vi.fn(),
     clearLogoIfMatch: vi.fn(),
     setLogoIfMatch: vi.fn(),
+    activateIfDraft: vi.fn(async () => true),
+    activateIfDraftInTx: vi.fn(async () => true),
   },
   withTransaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
     return fn({});
@@ -61,7 +63,7 @@ vi.mock('@repo/storage', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService } = await import(
+const { portfolioService, missingRequiredFields } = await import(
   '../../../src/modules/profiles/portfolio-service.js'
 );
 const { portfolioRepository } = await import(
@@ -686,5 +688,177 @@ describe('audit event emission', () => {
     expect(consoleSpy).not.toHaveBeenCalled();
     expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+});
+
+// =============================================================================
+// Completeness gate — a draft profile goes live once the hero is filled
+// =============================================================================
+
+/** A draft profile whose only gap is the field named by `missing`. */
+function makeDraftMissing(missing: 'logo' | 'displayName' | 'tagline' | 'bio' | 'nothing') {
+  const profile = makeProfile({
+    status: 'draft',
+    logoImageId: missing === 'logo' ? null : 'originals/logos/profile-1/abc',
+    displayName: missing === 'displayName' ? '' : 'Anika Spaces',
+    bio: missing === 'bio' ? null : 'We design beautiful spaces',
+  });
+  const portfolio = makePortfolio({
+    tagline: missing === 'tagline' ? null : 'Warm, functional homes',
+  });
+  return { profile, portfolio };
+}
+
+describe('missingRequiredFields', () => {
+  it('reports nothing when every hero field is filled', () => {
+    const { profile, portfolio } = makeDraftMissing('nothing');
+    expect(missingRequiredFields(profile, portfolio)).toEqual([]);
+  });
+
+  it.each([['logo'], ['displayName'], ['tagline'], ['bio']] as const)(
+    'reports %s when it is blank',
+    (missing) => {
+      const { profile, portfolio } = makeDraftMissing(missing);
+      expect(missingRequiredFields(profile, portfolio)).toEqual([missing]);
+    },
+  );
+
+  it('treats whitespace-only values as blank — they render an empty hero', () => {
+    const profile = makeProfile({ bio: '   ', displayName: '\t' });
+    const portfolio = makePortfolio({ tagline: '\n ' });
+    expect(missingRequiredFields(profile, portfolio)).toEqual(['displayName', 'tagline', 'bio']);
+  });
+
+  it('lists every gap at once, in form order', () => {
+    const profile = makeProfile({ logoImageId: null, bio: null });
+    const portfolio = makePortfolio({ tagline: null });
+    expect(missingRequiredFields(profile, portfolio)).toEqual(['logo', 'tagline', 'bio']);
+  });
+});
+
+describe('portfolioService.updatePortfolio — activation', () => {
+  it('activates a draft profile once the save fills the last required field', async () => {
+    const { profile, portfolio } = makeDraftMissing('tagline');
+    setupResolveProfile(profile);
+    setupGetPortfolio(portfolio);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ tagline: 'Warm, functional homes' }),
+    );
+
+    const result = await portfolioService.updatePortfolio(
+      { tagline: 'Warm, functional homes' },
+      caller,
+    );
+
+    expect(portfolioRepository.activateIfDraftInTx).toHaveBeenCalledWith({}, 'profile-1');
+    expect(result.publiclyVisible).toBe(true);
+    expect(result.missingRequiredFields).toEqual([]);
+    // Activation is what earns the badge, so the same response must carry it.
+    expect(result.badges).toContain('verified');
+  });
+
+  it('leaves a draft profile in draft while a required field is still blank', async () => {
+    const { profile, portfolio } = makeDraftMissing('logo');
+    setupResolveProfile(profile);
+    setupGetPortfolio(portfolio);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ tagline: 'Warm, functional homes' }),
+    );
+
+    const result = await portfolioService.updatePortfolio({ tagline: 'Warm homes' }, caller);
+
+    expect(portfolioRepository.activateIfDraftInTx).not.toHaveBeenCalled();
+    expect(result.publiclyVisible).toBe(false);
+    expect(result.missingRequiredFields).toEqual(['logo']);
+    expect(result.badges).not.toContain('verified');
+  });
+
+  it('promotes on completeness but stays non-public while the designer switch is off', async () => {
+    const { profile, portfolio } = makeDraftMissing('nothing');
+    setupResolveProfile(profile);
+    setupGetPortfolio(portfolio);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ tagline: 'Warm, functional homes', publicLinkEnabled: false }),
+    );
+
+    const result = await portfolioService.updatePortfolio({ publicLinkEnabled: false }, caller);
+
+    expect(portfolioRepository.activateIfDraftInTx).toHaveBeenCalled();
+    expect(result.missingRequiredFields).toEqual([]);
+    expect(result.publiclyVisible).toBe(false);
+  });
+
+  it('does not re-activate a profile that is already active', async () => {
+    setupResolveProfile(makeProfile({ status: 'active' }));
+    setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ tagline: 'Warmer homes' }),
+    );
+
+    await portfolioService.updatePortfolio({ tagline: 'Warmer homes' }, caller);
+
+    expect(portfolioRepository.activateIfDraftInTx).not.toHaveBeenCalled();
+  });
+
+  it('never promotes a suspended profile', async () => {
+    const { portfolio } = makeDraftMissing('nothing');
+    setupResolveProfile(makeProfile({ status: 'suspended' }));
+    setupGetPortfolio(portfolio);
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(portfolio);
+
+    const result = await portfolioService.updatePortfolio({ tagline: 'Warm homes' }, caller);
+
+    expect(portfolioRepository.activateIfDraftInTx).not.toHaveBeenCalled();
+    expect(result.publiclyVisible).toBe(false);
+  });
+
+  it('keeps a live portfolio live after a required field is cleared', async () => {
+    // One-way by design: editing a field must not silently 404 a public page.
+    setupResolveProfile(makeProfile({ status: 'active' }));
+    setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio({ tagline: null }));
+
+    const result = await portfolioService.updatePortfolio({ tagline: null }, caller);
+
+    expect(result.publiclyVisible).toBe(true);
+    expect(result.missingRequiredFields).toEqual(['tagline']);
+  });
+});
+
+describe('portfolioService.commitLogoUpload — activation', () => {
+  const objectKey = 'originals/logos/profile-1/new-logo';
+
+  beforeEach(() => {
+    vi.mocked(objectExists).mockResolvedValue(true);
+    vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(true);
+    vi.mocked(presignDownload).mockResolvedValue('https://r2.example.com/presigned-get');
+  });
+
+  it('activates a draft profile when the logo was the last gap', async () => {
+    const { profile, portfolio } = makeDraftMissing('logo');
+    setupResolveProfile(profile);
+    setupGetPortfolio(portfolio);
+
+    await portfolioService.commitLogoUpload({ objectKey }, caller);
+
+    expect(portfolioRepository.activateIfDraft).toHaveBeenCalledWith('profile-1');
+  });
+
+  it('leaves the profile in draft when other fields are still blank', async () => {
+    setupResolveProfile(makeProfile({ status: 'draft', logoImageId: null, bio: null }));
+    setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
+
+    await portfolioService.commitLogoUpload({ objectKey }, caller);
+
+    expect(portfolioRepository.activateIfDraft).not.toHaveBeenCalled();
+  });
+
+  it('skips the completeness check for an already-active profile', async () => {
+    setupResolveProfile(makeProfile({ status: 'active', logoImageId: null }));
+    setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
+
+    await portfolioService.commitLogoUpload({ objectKey }, caller);
+
+    expect(portfolioRepository.activateIfDraft).not.toHaveBeenCalled();
   });
 });
