@@ -15,7 +15,7 @@
  * - 9.3: Local development without Typesense (env vars cleared)
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { DiscoveryFeedResponse, Derivative } from '@repo/contracts';
 import { db, schema } from '@repo/db';
