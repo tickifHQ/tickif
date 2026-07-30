@@ -165,10 +165,6 @@ function findFallbackLogCall(spy: ReturnType<typeof vi.spyOn>): unknown[] | unde
 describe('GET /api/discovery/feed - Integration Tests', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeAll(async () => {
-    await seedFeedTaxonomy();
-  });
-
   beforeEach(() => {
     vi.clearAllMocks();
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -184,9 +180,12 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   describe('9.1 Typesense primary path', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       vi.stubEnv('TYPESENSE_HOST', 'localhost');
       vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-api-key');
+      // Seed taxonomy since truncateAll() clears it between tests
+      // (needed because toDiscoveryCard() resolves labels from Postgres)
+      await seedFeedTaxonomy();
     });
 
     it('returns search results from Typesense with source: "search"', async () => {
@@ -361,9 +360,11 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   describe('9.2 Postgres fallback path', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       vi.stubEnv('TYPESENSE_HOST', 'localhost');
       vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-api-key');
+      // Seed taxonomy since truncateAll() clears it between tests
+      await seedFeedTaxonomy();
     });
 
     it('falls back on Typesense error and returns source: "db"', async () => {
@@ -458,10 +459,12 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   describe('9.3 Local development without Typesense', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       // Clear Typesense env vars to simulate unconfigured state
       vi.stubEnv('TYPESENSE_HOST', '');
       vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      // Re-seed taxonomy since truncateAll() clears it between tests
+      await seedFeedTaxonomy();
     });
 
     it('uses Postgres when TYPESENSE_HOST is not set', async () => {
