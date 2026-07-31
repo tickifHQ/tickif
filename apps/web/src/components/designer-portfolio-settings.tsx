@@ -513,10 +513,14 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         const result = await uploadLogo(file);
-        // Refresh portfolio to get new logoUrl
-        setPortfolio((prev) =>
-          prev ? { ...prev, logoUrl: result.logoUrl } : prev,
-        );
+        // Refresh portfolio to get new logoUrl and all server-derived fields
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => prev ? { ...prev, logoUrl: result.logoUrl } : prev);
+          setLogoError('Logo updated successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
       }
@@ -528,7 +532,13 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         await deleteLogo();
-        setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+          setLogoError('Logo removed successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not delete logo.');
       }

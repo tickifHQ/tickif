@@ -535,6 +535,112 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
   });
 
+  describe('Bug condition: stale portfolio state after logo operation', () => {
+    /**
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
+     *
+     * Bug condition exploration test — demonstrates that after a successful
+     * logo upload, the component does NOT refresh server-derived fields
+     * (missingRequiredFields, publiclyVisible, badges) from the server.
+     *
+     * EXPECTED: This test SHOULD FAIL on unfixed code, confirming the bug exists.
+     */
+    it('refreshes portfolio state after logo upload so the visibility notice disappears', async () => {
+      // Arrange: portfolio is NOT public because logo is missing
+      const portfolioBeforeUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: null,
+        publiclyVisible: false,
+        missingRequiredFields: ['logo'],
+        badges: [],
+      };
+
+      // After upload, server returns portfolio with logo fulfilled
+      const portfolioAfterUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+        publiclyVisible: true,
+        missingRequiredFields: [],
+        badges: ['verified'],
+      };
+
+      // Initial load returns the "before" state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioBeforeUpload);
+      // After upload, fetchPortfolio should be called again and return fresh state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioAfterUpload);
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      render(<DesignerPortfolioSettings />);
+
+      // Wait for initial load — should show the "not public" notice
+      const notice = await screen.findByRole('status');
+      expect(notice).toHaveTextContent("Your portfolio isn't public yet");
+
+      // Act: trigger logo upload via file input
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      // Assert: after upload, the component should have refreshed portfolio state
+      // and the "not public" notice should be gone (missingRequiredFields is now [])
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      });
+    });
+
+    /**
+     * Validates: Requirements 3.1, 3.2
+     *
+     * Preservation test — verifies that unsaved form edits are NOT overwritten
+     * when a logo upload triggers a portfolio state refresh from the server.
+     */
+    it('preserves unsaved form edits after logo upload refreshes portfolio state', async () => {
+      // After upload, server returns a refreshed portfolio with a DIFFERENT tagline
+      const portfolioAfterUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+        tagline: 'Server tagline after refresh',
+      };
+
+      // Initial load returns basePortfolio
+      mock.fetchPortfolio.mockResolvedValueOnce(basePortfolio);
+      // After upload, fetchPortfolio returns the refreshed state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioAfterUpload);
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      render(<DesignerPortfolioSettings />);
+
+      // Wait for initial load
+      const tagline = await screen.findByPlaceholderText(TAGLINE_PLACEHOLDER);
+      expect(tagline).toHaveValue('Design with care');
+
+      // User makes an unsaved edit to the tagline
+      const user = userEvent.setup();
+      await user.clear(tagline);
+      await user.type(tagline, 'My unsaved edit');
+      expect(tagline).toHaveValue('My unsaved edit');
+
+      // Act: trigger logo upload
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      // Assert: form tagline still shows the user's unsaved edit, NOT the server value
+      await waitFor(() => {
+        expect(mock.fetchPortfolio).toHaveBeenCalledTimes(2);
+      });
+      expect(tagline).toHaveValue('My unsaved edit');
+    });
+  });
+
   describe('Google reviews', () => {
     // The Reviews section is collapsed by default; expand it to reveal the card.
     async function expandReviews() {
