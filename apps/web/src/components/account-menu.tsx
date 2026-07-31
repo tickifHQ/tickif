@@ -74,16 +74,11 @@ export function AccountMenu({
           className={
             showLabel
               ? 'inline-flex cursor-pointer items-center gap-0 rounded-full border border-border bg-background p-1 text-sm leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground sm:gap-2 sm:pr-3'
-              : 'cursor-pointer outline-none'
+              : 'inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none'
           }
         >
-          <Avatar className={showLabel ? 'size-8' : undefined}>
-            <InitialsAvatar
-              seed={resolvedAvatarSeed}
-              fallbackSeed="Your name"
-              alt=""
-              size={showLabel ? 32 : 40}
-            />
+          <Avatar className="size-8">
+            <InitialsAvatar seed={resolvedAvatarSeed} fallbackSeed="Your name" alt="" size={32} />
           </Avatar>
           {showLabel ? (
             <>

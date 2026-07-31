@@ -10,6 +10,8 @@ import {
   Copy,
   Globe,
   Info,
+  ImagePlus,
+  LayoutList,
   Loader2,
   RefreshCw,
   Star,
@@ -702,7 +704,10 @@ export function DesignerPortfolioSettings() {
                     className="flex items-start gap-2 border-b border-border bg-muted/40 px-5 py-3"
                     role="status"
                   >
-                    <AlertCircle className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <AlertCircle
+                      className="mt-px size-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       Your portfolio isn&apos;t public yet. Add{' '}
                       <span className="font-medium text-foreground">
@@ -848,18 +853,7 @@ export function DesignerPortfolioSettings() {
                               {isUploadingLogo ? (
                                 <Loader2 className="size-6 animate-spin" />
                               ) : (
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  className="size-6"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  aria-hidden
-                                >
-                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                                  <circle cx="9" cy="9" r="2" />
-                                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                                </svg>
+                                <ImagePlus className="size-6" aria-hidden />
                               )}
                             </button>
                           )}
@@ -875,15 +869,7 @@ export function DesignerPortfolioSettings() {
                             {isDeletingLogo ? (
                               <Loader2 className="size-2.5 animate-spin" />
                             ) : (
-                              <svg
-                                viewBox="0 0 24 24"
-                                className="size-2.5"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="3"
-                              >
-                                <path d="M18 6 6 18M6 6l12 12" />
-                              </svg>
+                              <X className="size-2.5" aria-hidden />
                             )}
                           </button>
                         )}
@@ -1350,18 +1336,7 @@ export function DesignerPortfolioSettings() {
           <div className="sticky top-6 flex w-full flex-col items-center gap-4">
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="size-4 text-muted-foreground"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden
-                >
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <path d="M14 4h7M14 9h7M14 15h7M14 20h7" />
-                </svg>
+                <LayoutList className="size-4 text-muted-foreground" aria-hidden />
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Live preview
                 </span>
