@@ -901,7 +901,10 @@ export function PublicDesignerProfile({ portfolio }: { portfolio: PublicPortfoli
   const props: SectionProps = { portfolio, view };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-background text-foreground">
+    <main
+      className="min-h-screen overflow-x-hidden bg-background text-foreground"
+      style={{ '--primary': portfolio.accentColor } as React.CSSProperties}
+    >
       <TrustStrip items={profileTrustItems} />
       <StudioBar {...props} />
       {portfolio.sections.hero ? <HeroSection {...props} /> : null}
