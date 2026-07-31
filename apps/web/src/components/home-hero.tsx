@@ -14,7 +14,7 @@ const collage = mockProjects.slice(0, 4).map((p) => p.seed);
 
 export function HomeHero() {
   return (
-    <div className="bg-gradient-to-b from-[#e8f0eb] to-[#fafaf8]">
+    <div className="bg-card">
       <div className="mx-auto flex w-full max-w-[1512px] flex-col items-center gap-12 px-6 py-12 lg:flex-row lg:justify-between lg:px-10 lg:py-12">
         <div className="flex w-full max-w-xl flex-col gap-6">
           <div className="flex items-center gap-2">
@@ -26,7 +26,8 @@ export function HomeHero() {
           </div>
 
           <h1 className="font-display text-5xl leading-[1.05] tracking-tight text-[#18181b] sm:text-6xl">
-            Inspire from <span className="text-primary">homes</span>{' '}
+            Inspire from <span className="text-primary">homes</span>
+            <br />
             you&rsquo;ll love.
           </h1>
 
@@ -82,12 +83,28 @@ export function HomeHero() {
 
         <div className="hidden w-full max-w-[605px] grid-cols-2 gap-4 opacity-90 lg:grid">
           <div className="flex flex-col gap-4">
-            <img src={feedImageUrl(collage[0] ?? 'a', 520)} alt="" className="aspect-[3/5] w-full rounded-[10px] object-cover" />
-            <img src={feedImageUrl(collage[2] ?? 'c', 320)} alt="" className="aspect-[5/4] w-full rounded-[10px] object-cover" />
+            <img
+              src={feedImageUrl(collage[0] ?? 'a', 520)}
+              alt=""
+              className="aspect-[3/5] w-full rounded-[10px] object-cover"
+            />
+            <img
+              src={feedImageUrl(collage[2] ?? 'c', 320)}
+              alt=""
+              className="aspect-[5/4] w-full rounded-[10px] object-cover"
+            />
           </div>
           <div className="flex flex-col gap-4">
-            <img src={feedImageUrl(collage[1] ?? 'b', 320)} alt="" className="aspect-[5/4] w-full rounded-[10px] object-cover" />
-            <img src={feedImageUrl(collage[3] ?? 'd', 520)} alt="" className="aspect-[3/5] w-full rounded-[10px] object-cover" />
+            <img
+              src={feedImageUrl(collage[1] ?? 'b', 320)}
+              alt=""
+              className="aspect-[5/4] w-full rounded-[10px] object-cover"
+            />
+            <img
+              src={feedImageUrl(collage[3] ?? 'd', 520)}
+              alt=""
+              className="aspect-[3/5] w-full rounded-[10px] object-cover"
+            />
           </div>
         </div>
       </div>
