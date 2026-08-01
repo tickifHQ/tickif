@@ -56,16 +56,21 @@ export default async function HomePage() {
       <TrustStrip />
       <HomeHero />
 
-      <div className="bg-card">
+      <div className="bg-home-hero-gradient-to">
         <section className="w-full px-5 py-5 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="font-display text-lg font-medium tracking-tight">Trending projects</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <h2 className="font-display text-3xl font-medium tracking-tight">
+                Trending projects
+              </h2>
+              <p className="mt-1 text-base text-muted-foreground">
                 Hand-picked by our editors this week
               </p>
             </div>
-            <a href="/" className="shrink-0 pt-1 text-xs font-medium text-primary hover:underline">
+            <a
+              href="/"
+              className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
+            >
               See all projects →
             </a>
           </div>

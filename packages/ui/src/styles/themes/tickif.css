@@ -24,6 +24,12 @@
   --foreground: oklch(0.21 0.006 286);
   --surface-subtle: #eef2f0;
   --surface-subtle-border: #e2e8e5;
+  --home-hero-gradient-from: #e8f0eb;
+  --home-hero-gradient-to: #fafaf8;
+  --home-search-background: #ffffff;
+  --home-search-border: rgba(45, 90, 61, 0.34);
+  --home-search-foreground-disabled: #a1a1aa;
+  --home-search-shadow: 0 16px 48px 0 rgba(45, 90, 61, 0.15), 0 0 0 0 #f0faf3;
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(1 0 0);
@@ -83,6 +89,12 @@
   --foreground: oklch(0.985 0.001 286);
   --surface-subtle: oklch(0.23 0.012 170);
   --surface-subtle-border: oklch(0.3 0.012 170);
+  --home-hero-gradient-from: color-mix(in oklab, var(--primary) 12%, var(--background));
+  --home-hero-gradient-to: var(--background);
+  --home-search-background: var(--card);
+  --home-search-border: color-mix(in oklab, var(--primary) 34%, transparent);
+  --home-search-foreground-disabled: var(--muted-foreground);
+  --home-search-shadow: 0 16px 48px 0 oklch(0 0 0 / 0.25);
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(0.23 0.012 280);

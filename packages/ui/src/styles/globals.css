@@ -28,6 +28,11 @@
   --color-foreground: var(--foreground);
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-subtle-border: var(--surface-subtle-border);
+  --color-home-hero-gradient-from: var(--home-hero-gradient-from);
+  --color-home-hero-gradient-to: var(--home-hero-gradient-to);
+  --color-home-search-background: var(--home-search-background);
+  --color-home-search-border: var(--home-search-border);
+  --color-home-search-foreground-disabled: var(--home-search-foreground-disabled);
   --color-surface-inverse: var(--surface-inverse);
   --color-surface-inverse-foreground: var(--surface-inverse-foreground);
   --color-card: var(--card);
@@ -86,7 +91,7 @@
   --shadow-md: 0 4px 6px -1px oklch(0.3 0.04 50 / 0.08), 0 2px 4px -2px oklch(0.3 0.04 50 / 0.08);
   --shadow-lg: 0 10px 15px -3px oklch(0.3 0.04 50 / 0.09), 0 4px 6px -4px oklch(0.3 0.04 50 / 0.09);
   --shadow-xl: 0 20px 25px -5px oklch(0.3 0.04 50 / 0.1), 0 8px 10px -6px oklch(0.3 0.04 50 / 0.1);
-  --shadow-home-search: 0 16px 48px 0 oklch(0.42 0.08 150 / 0.15);
+  --shadow-home-search: var(--home-search-shadow);
   --shadow-button-neutral: var(--button-neutral-shadow);
   --shadow-floating-card: 0 28px 72px 0 oklch(0 0 0 / 0.32), 0 10px 28px 0 oklch(0 0 0 / 0.14);
   --shadow-button-inverted: var(--button-inverted-shadow);
