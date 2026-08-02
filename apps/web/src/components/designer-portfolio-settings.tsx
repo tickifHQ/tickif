@@ -600,11 +600,9 @@ export function DesignerPortfolioSettings() {
     ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl =
-    portfolio.portfolioUrl ??
-    new URL(portfolioPath, portfolioWebUrl).toString();
-  // Derive the on-screen preview from the copy target so the displayed link
-  // and the copied link never diverge once the backend populates portfolioUrl.
+  const copyUrl = new URL(portfolioPath, portfolioWebUrl).toString();
+  // Derive the on-screen preview from the copy target so both always reflect
+  // the currently-typed slug, giving the designer real-time URL feedback.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
   // Google connection derived state (default `available` true until first load,

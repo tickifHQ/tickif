@@ -109,6 +109,16 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByText('https://tickif.com/d/mahi-studio')).toBeInTheDocument();
   });
 
+  it('updates the preview URL immediately when the user types a new slug', async () => {
+    await renderSettings();
+
+    const slugInput = screen.getByPlaceholderText(SLUG_PLACEHOLDER);
+    fireEvent.change(slugInput, { target: { value: 'new-slug' } });
+
+    // Preview should reflect the typed slug, not the last-saved portfolioUrl
+    expect(screen.getAllByText(/\/d\/new-slug/).length).toBeGreaterThan(0);
+  });
+
   it('tells the designer which hero fields still block the public page', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce({
       ...basePortfolio,
