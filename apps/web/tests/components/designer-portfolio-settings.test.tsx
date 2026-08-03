@@ -16,6 +16,7 @@ const mock = vi.hoisted(() => ({
   connectGoogleReviews: vi.fn(),
   refreshGoogleReviews: vi.fn(),
   disconnectGoogleReviews: vi.fn(),
+  fetchPublishedProjects: vi.fn(),
 }));
 
 vi.mock('@/lib/portfolio-api', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/lib/portfolio-api', () => ({
   connectGoogleReviews: mock.connectGoogleReviews,
   refreshGoogleReviews: mock.refreshGoogleReviews,
   disconnectGoogleReviews: mock.disconnectGoogleReviews,
+  fetchPublishedProjects: mock.fetchPublishedProjects,
 }));
 
 vi.mock('next/image', () => ({
@@ -93,6 +95,10 @@ describe('DesignerPortfolioSettings', () => {
     vi.clearAllMocks();
     mock.fetchPortfolio.mockResolvedValue(basePortfolio);
     mock.fetchGoogleReviews.mockResolvedValue(NOT_CONNECTED_GOOGLE);
+    mock.fetchPublishedProjects.mockResolvedValue([
+      { id: '22222222-2222-4222-8222-222222222222', title: 'Modern Living Room' },
+      { id: '33333333-3333-4333-8333-333333333333', title: 'Kitchen Renovation' },
+    ]);
   });
 
   afterEach(() => {
@@ -151,10 +157,18 @@ describe('DesignerPortfolioSettings', () => {
   });
 
   it('disables the full portfolio control while the public page is unavailable', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
     await renderSettings();
 
-    expect(screen.getByRole('button', { name: 'Open full' })).toBeDisabled();
     expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
+  });
+
+  it('links to the public portfolio when the URL is available', async () => {
+    await renderSettings();
+
+    const link = screen.getByRole('link', { name: 'Open full' });
+    expect(link).toHaveAttribute('href', 'https://tickif.com/d/mahi-studio');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 
   it('keeps the sticky action bar inset from the viewport bottom', async () => {
@@ -246,11 +260,11 @@ describe('DesignerPortfolioSettings', () => {
     const sections = [
       {
         name: 'Trust & credentials',
-        getContent: () => screen.getByAltText('Verified'),
+        getContent: () => screen.getByAltText('Identity verified'),
       },
       {
         name: 'Featured testimonial',
-        getContent: () => screen.getByPlaceholderText('Select a project'),
+        getContent: () => screen.getByRole('combobox'),
       },
       {
         name: 'Reviews',
