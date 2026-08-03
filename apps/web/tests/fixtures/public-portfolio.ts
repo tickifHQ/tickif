@@ -23,6 +23,7 @@ export function makeProject(overrides: Partial<DesignerProjectCard> = {}): Desig
     reviewCount: 42,
     budget: '₹35–42L',
     tags: ['4 BHK', 'Full home'],
+    coverImageId: '33333333-3333-4333-8333-333333333333',
     coverImageUrl: 'https://cdn.example.test/projects/adyar.jpg',
     imageWidth: 1600,
     imageHeight: 2000,

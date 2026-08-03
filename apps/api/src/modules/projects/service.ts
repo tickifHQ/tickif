@@ -25,6 +25,7 @@ import type {
   PortfolioProjectStatusCounts,
   PortfolioProjectStatusGroup,
   ProjectResponse,
+  PublicImageDetailResponse,
   PublicProjectBySlugResponse,
   ListProjectsResponse,
   ProjectRoom,
@@ -141,7 +142,9 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
 
 function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
+    ) ??
     derivatives.find((derivative) => derivative.variant === 'thumb') ??
     derivatives[0] ??
     null
@@ -180,6 +183,34 @@ async function coverImageUrl(coverImage?: {
   return preview ? presignDownload({ key: preview.key }) : null;
 }
 
+async function toPublicGalleryImages(
+  images: Array<{
+    id: string;
+    derivatives: Derivative[];
+    width: number | null;
+    height: number | null;
+    roomName: string | null;
+  }>,
+) {
+  const gallery = await Promise.all(
+    images.map(async (img) => {
+      const key = pickGalleryDerivative(img.derivatives ?? []);
+      if (!key) return null;
+      const url = await presignDownload({ key }).catch(() => null);
+      if (!url) return null;
+      return {
+        id: img.id,
+        url,
+        width: img.width,
+        height: img.height,
+        roomName: img.roomName,
+      };
+    }),
+  );
+
+  return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
 function toFeedProject(
   row: ProjectFeedItemRecord,
   labels: Map<string, string>,
@@ -208,6 +239,7 @@ function toFeedProject(
     reviewCount: row.reviewCount,
     budget: labelOf('budget_band', row.budgetBandSlug),
     tags,
+    coverImageId: row.coverImageId,
     coverImageUrl,
     imageWidth: row.coverWidth,
     imageHeight: row.coverHeight,
@@ -237,7 +269,7 @@ function toDesignerProjectCard(
   coverImageUrl: string | null,
 ): DesignerProjectCard {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
-    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+    slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 
   // "4 BHK · Apartment" — either part may be missing.
   const propertyType =
@@ -274,7 +306,10 @@ function feedLocalityPairs(
     : [];
 }
 
-function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | null): ProjectListItem {
+function toListItemFields(
+  row: ProjectListItemRecord,
+  coverImageUrl: string | null,
+): ProjectListItem {
   return {
     id: row.id,
     slug: row.slug,
@@ -311,14 +346,15 @@ async function toPortfolioItem(
   return {
     ...toListItemFields(row, url),
     statusGroup: portfolioStatusGroup(row.status),
-    coverImage: cover && preview && url
-      ? {
-          id: cover.id,
-          url,
-          width: preview.width,
-          height: preview.height,
-        }
-      : null,
+    coverImage:
+      cover && preview && url
+        ? {
+            id: cover.id,
+            url,
+            width: preview.width,
+            height: preview.height,
+          }
+        : null,
   };
 }
 
@@ -1203,10 +1239,7 @@ export const projectsService = {
     return toDetailResponse(withdrawn, await projectsRepository.listRooms(projectId));
   },
 
-  async moderationHistory(
-    projectId: string,
-    caller: Caller,
-  ): Promise<ModerationHistoryResponse> {
+  async moderationHistory(projectId: string, caller: Caller): Promise<ModerationHistoryResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
@@ -1233,24 +1266,32 @@ export const projectsService = {
 
     const images = await projectsRepository.listPublicGalleryImages(projectId);
 
-    // Presign each image's best derivative for fullscreen display
-    const gallery = await Promise.all(
-      images.map(async (img) => {
-        const key = pickGalleryDerivative(img.derivatives ?? []);
-        if (!key) return null;
-        const url = await presignDownload({ key }).catch(() => null);
-        if (!url) return null;
-        return {
-          id: img.id,
-          url,
-          width: img.width,
-          height: img.height,
-          roomName: img.roomName,
-        };
-      }),
-    );
+    return toPublicGalleryImages(images);
+  },
 
-    return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+  async getPublicImageDetail(imageId: string): Promise<PublicImageDetailResponse> {
+    const row = await projectsRepository.findPublishedFeedProjectByImageId(imageId);
+    if (!row) throw AppError.notFound('Image not found');
+
+    const [labels, localityLabels, galleryImages, cover] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(feedTaxonomyPairs(row)),
+      projectsRepository.findLocalityLabels(feedLocalityPairs(row)),
+      projectsRepository.listPublicGalleryImages(row.id).then(toPublicGalleryImages),
+      coverImageUrl({
+        status: row.coverStatus,
+        derivatives: row.coverDerivatives,
+      }).catch(() => null),
+    ]);
+
+    if (!galleryImages.some((image) => image.id === imageId)) {
+      throw AppError.notFound('Image not found');
+    }
+
+    return {
+      project: toFeedProject(row, labels, localityLabels, cover),
+      images: galleryImages,
+      activeImageId: imageId,
+    };
   },
 
   // ---------------------------------------------------------------------------
@@ -1279,18 +1320,7 @@ export const projectsService = {
         : Promise.resolve(null),
     ]);
 
-    // Presign gallery images (parallel)
-    const galleryImages = (
-      await Promise.all(
-        rawGalleryImages.map(async (img) => {
-          const key = pickGalleryDerivative(img.derivatives ?? []);
-          if (!key) return null;
-          const url = await presignDownload({ key }).catch(() => null);
-          if (!url) return null;
-          return { id: img.id, url, width: img.width, height: img.height, roomName: img.roomName };
-        }),
-      )
-    ).filter((item): item is NonNullable<typeof item> => item !== null);
+    const galleryImages = await toPublicGalleryImages(rawGalleryImages);
 
     // Resolve cover URL
     let resolvedCoverUrl: string | null = null;

@@ -143,6 +143,7 @@ export type ProjectFeedItemRecord = {
   studio: string;
   rating: string; // designer_profile.avg_rating is numeric → string over the wire
   reviewCount: number;
+  coverImageId: string | null;
   coverStatus: ProjectImageRecord['status'] | null;
   coverDerivatives: ProjectImageRecord['derivatives'] | null;
   coverWidth: number | null;
@@ -169,6 +170,7 @@ function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.project
     studio: schema.designerProfile.displayName,
     rating: schema.designerProfile.avgRating,
     reviewCount: schema.designerProfile.reviewCount,
+    coverImageId: schema.project.coverImageId,
     coverStatus: cover.status,
     coverDerivatives: cover.derivatives,
     coverWidth: cover.width,
@@ -316,21 +318,52 @@ export const projectsRepository = {
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
-    return db
+    return (
+      db
+        .select(feedProjectColumns(cover))
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+        // Only active designers: suspended studios 404 on their public profile, so their
+        // projects must not surface here either. `id` is the stable tiebreaker for paging.
+        .where(
+          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+        )
+        .orderBy(
+          sql`${schema.project.publishedAt} desc nulls last`,
+          desc(schema.project.createdAt),
+          desc(schema.project.id),
+        )
+        .limit(params.limit)
+        .offset(params.offset)
+    );
+  },
+
+  /**
+   * Public image detail starts from an image id, then resolves the published
+   * active-designer project that owns it. The feed-shaped projection lets the
+   * image page reuse the same public card metadata as discovery.
+   */
+  async findPublishedFeedProjectByImageId(imageId: string): Promise<ProjectFeedItemRecord | null> {
+    const cover = alias(schema.projectImage, 'cover');
+
+    const [row] = await db
       .select(feedProjectColumns(cover))
-      .from(schema.project)
+      .from(schema.projectImage)
+      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      // Only active designers: suspended studios 404 on their public profile, so their
-      // projects must not surface here either. `id` is the stable tiebreaker for paging.
-      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-        desc(schema.project.id),
+      .where(
+        and(
+          eq(schema.projectImage.id, imageId),
+          eq(schema.projectImage.status, 'ready'),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
       )
-      .limit(params.limit)
-      .offset(params.offset);
+      .limit(1);
+
+    return row ?? null;
   },
 
   /**

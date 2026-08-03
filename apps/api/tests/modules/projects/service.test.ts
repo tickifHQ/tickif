@@ -73,7 +73,8 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
 }));
 
 // Import AFTER the mock is registered.
-const { assertTransition, projectsService } = await import('../../../src/modules/projects/service.js');
+const { assertTransition, projectsService } =
+  await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { deleteObject } = await import('@repo/storage');
@@ -227,21 +228,26 @@ describe('projectsService.portfolio', () => {
       { status: 'changes_requested', count: 3 },
       { status: 'rejected', count: 1 },
     ]);
-    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
-      [coverId, {
-        id: coverId,
-        status: 'ready',
-        derivatives: [
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          coverId,
           {
-            variant: 'thumb',
-            format: 'webp',
-            key: 'derivatives/project/cover/thumb.webp',
-            width: 320,
-            height: 240,
+            id: coverId,
+            status: 'ready',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'derivatives/project/cover/thumb.webp',
+                width: 320,
+                height: 240,
+              },
+            ],
           },
         ],
-      }],
-    ]));
+      ]),
+    );
 
     const result = await projectsService.portfolio(
       { status: 'changes_requested', page: 1, limit: 12, sort: '-updatedAt' },
@@ -311,22 +317,27 @@ describe('projectsService.portfolio', () => {
     vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
       { status: 'published', count: 2 },
     ]);
-    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
-      [processingCoverId, {
-        id: processingCoverId,
-        status: 'processing',
-        derivatives: [
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          processingCoverId,
           {
-            variant: 'thumb',
-            format: 'webp',
-            key: 'derivatives/project/cover/thumb.webp',
-            width: 320,
-            height: 240,
+            id: processingCoverId,
+            status: 'processing',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'derivatives/project/cover/thumb.webp',
+                width: 320,
+                height: 240,
+              },
+            ],
           },
         ],
-      }],
-      [bareCoverId, { id: bareCoverId, status: 'ready', derivatives: [] }],
-    ]));
+        [bareCoverId, { id: bareCoverId, status: 'ready', derivatives: [] }],
+      ]),
+    );
 
     const result = await projectsService.portfolio(
       { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
@@ -859,6 +870,7 @@ describe('projectsService.feed', () => {
     studio: 'Studio Noir',
     rating: '4.70',
     reviewCount: 12,
+    coverImageId: '22222222-2222-4222-8222-222222222222',
     coverStatus: 'ready',
     coverDerivatives: [
       {
@@ -908,6 +920,7 @@ describe('projectsService.feed', () => {
       rating: 4.7,
       reviewCount: 12,
       tags: ['2 BHK', 'Full Home'],
+      coverImageId: '22222222-2222-4222-8222-222222222222',
       coverImageUrl: 'https://signed.example/derivatives/cover/thumb.webp',
       imageWidth: 480,
       imageHeight: 640,

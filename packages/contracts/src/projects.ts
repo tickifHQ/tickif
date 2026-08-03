@@ -68,10 +68,7 @@ export const projectRoomMetadataSchema = z
   .object({
     labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     attributeLabels: z
-      .record(
-        z.string().trim().min(1).max(80),
-        z.array(z.string().trim().min(1).max(80)).max(20),
-      )
+      .record(z.string().trim().min(1).max(80), z.array(z.string().trim().min(1).max(80)).max(20))
       .refine((value) => Object.keys(value).length <= 20, {
         message: 'attributeLabels can contain at most 20 entries',
       })
@@ -345,6 +342,7 @@ export const feedProjectSchema = z
     reviewCount: z.number().int(),
     budget: z.string().nullable(),
     tags: z.array(z.string()),
+    coverImageId: z.uuid().nullable(),
     coverImageUrl: z.string().url().nullable(),
     imageWidth: z.number().int().nullable(),
     imageHeight: z.number().int().nullable(),
@@ -381,6 +379,19 @@ export const galleryResponseSchema = z
   })
   .meta({ id: 'GalleryResponse' });
 export type GalleryResponse = z.infer<typeof galleryResponseSchema>;
+
+export const publicImageDetailParamSchema = z
+  .object({ imageId: z.uuid() })
+  .meta({ id: 'PublicImageDetailParam' });
+
+export const publicImageDetailResponseSchema = z
+  .object({
+    project: feedProjectSchema,
+    images: z.array(galleryImageSchema),
+    activeImageId: z.uuid(),
+  })
+  .meta({ id: 'PublicImageDetail' });
+export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
 
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
@@ -452,7 +463,13 @@ export const projectSlugParamSchema = z
  * Composed from existing schemas: project detail + designer summary + gallery.
  */
 export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
-  .omit({ designerId: true, coverImageId: true, metadata: true, submittedAt: true, updatedAt: true })
+  .omit({
+    designerId: true,
+    coverImageId: true,
+    metadata: true,
+    submittedAt: true,
+    updatedAt: true,
+  })
   .extend({
     designer: designerSummarySchema,
     images: z.array(galleryImageSchema),
