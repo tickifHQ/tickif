@@ -128,7 +128,7 @@ export function ImageDetailView({
                     <p className="relative inline-flex items-center text-sm font-semibold">
                       {project.studio}
                       <BadgeCheck
-                        className="-mt-1 ml-0.5 size-4 fill-primary text-primary"
+                        className="-mt-1 ml-0.5 size-4 fill-primary text-primary-foreground"
                         aria-label="Verified"
                       />
                     </p>
