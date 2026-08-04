@@ -220,13 +220,10 @@ describe('admin project moderation API', () => {
       .set({ projectCount: 1 })
       .where(eq(schema.designerProfile.id, published.designer.id));
 
-    const response = await app.request(
-      `/api/admin/projects/${published.project.id}/start-review`,
-      {
-        method: 'POST',
-        headers: { cookie: admin.cookie },
-      },
-    );
+    const response = await app.request(`/api/admin/projects/${published.project.id}/start-review`, {
+      method: 'POST',
+      headers: { cookie: admin.cookie },
+    });
 
     expect(response.status).toBe(409);
     const [project, profile, events] = await Promise.all([
