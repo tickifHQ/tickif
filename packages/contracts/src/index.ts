@@ -5,4 +5,5 @@ export * from './profiles';
 export * from './taxonomy';
 export * from './leads';
 export * from './moderation';
+export * from './review-comments';
 export * from './bookings';

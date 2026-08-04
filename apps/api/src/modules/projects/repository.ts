@@ -55,6 +55,7 @@ export type SubmitWithUploadCountsResult = {
 };
 
 export type ProjectModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
+export type ProjectReviewCommentRecord = typeof schema.projectReviewComment.$inferSelect;
 
 export type ProjectTransitionPatch = Partial<
   Pick<
@@ -80,7 +81,10 @@ export type TransitionProjectParams = {
   fieldDiff?: ModerationFieldDiff | null;
   patch?: ProjectTransitionPatch;
   expectedModerationRevision?: number;
+  requireNoUnresolvedReviewComments?: boolean;
 };
+
+export type TransitionProjectResult = ProjectRecord | 'unresolved_review_comments' | null;
 
 const freshProcessingImageFilter = sql`
   (
@@ -288,6 +292,30 @@ export const projectsRepository = {
       .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
       .where(and(...filters))
       .groupBy(schema.project.status);
+  },
+
+  async listReviewComments(projectId: string): Promise<ProjectReviewCommentRecord[]> {
+    return db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(eq(schema.projectReviewComment.projectId, projectId))
+      .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
+  },
+
+  async listUnresolvedReviewComments(
+    projectIds: string[],
+  ): Promise<ProjectReviewCommentRecord[]> {
+    if (projectIds.length === 0) return [];
+    return db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(
+        and(
+          inArray(schema.projectReviewComment.projectId, projectIds),
+          eq(schema.projectReviewComment.status, 'unresolved'),
+        ),
+      )
+      .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
   },
 
   async findCoverImages(imageIds: string[]): Promise<Map<string, ProjectCoverImageRecord>> {
@@ -669,14 +697,56 @@ export const projectsRepository = {
           fromStatus: requirements.expectedStatus,
           toStatus: 'submitted',
         });
+
+        if (requirements.expectedStatus === 'changes_requested') {
+          await tx
+            .update(schema.projectReviewComment)
+            .set({ status: 'resolved', updatedAt: now })
+            .where(
+              and(
+                eq(schema.projectReviewComment.projectId, id),
+                eq(schema.projectReviewComment.status, 'unresolved'),
+              ),
+            );
+        }
       }
 
       return { project, counts, submitted: submitted ?? null };
     });
   },
 
-  async transition(params: TransitionProjectParams): Promise<ProjectRecord | null> {
+  async transition(params: TransitionProjectParams): Promise<TransitionProjectResult> {
     return db.transaction(async (tx) => {
+      if (params.requireNoUnresolvedReviewComments) {
+        const [lockedProject] = await tx
+          .select({ id: schema.project.id })
+          .from(schema.project)
+          .where(
+            and(
+              eq(schema.project.id, params.id),
+              eq(schema.project.status, params.fromStatus),
+              params.expectedModerationRevision === undefined
+                ? undefined
+                : eq(schema.project.moderationRevision, params.expectedModerationRevision),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        if (!lockedProject) return null;
+
+        const [unresolvedComment] = await tx
+          .select({ id: schema.projectReviewComment.id })
+          .from(schema.projectReviewComment)
+          .where(
+            and(
+              eq(schema.projectReviewComment.projectId, params.id),
+              eq(schema.projectReviewComment.status, 'unresolved'),
+            ),
+          )
+          .limit(1);
+        if (unresolvedComment) return 'unresolved_review_comments';
+      }
+
       const [transitioned] = await tx
         .update(schema.project)
         .set({
@@ -818,7 +888,12 @@ export const projectsRepository = {
           ),
         )
         .limit(1);
-      if (reviewedEvent) return 'moderated';
+      const [reviewComment] = await tx
+        .select({ id: schema.projectReviewComment.id })
+        .from(schema.projectReviewComment)
+        .where(eq(schema.projectReviewComment.projectId, id))
+        .limit(1);
+      if (reviewedEvent || reviewComment) return 'moderated';
 
       // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
       // even if the check above ever regresses. Self-service rows must therefore go explicitly.

@@ -4,10 +4,14 @@ import {
   adminModerationDetailResponseSchema,
   adminModerationQueueQuerySchema,
   adminModerationQueueResponseSchema,
+  createProjectReviewCommentSchema,
   errorResponseSchema,
   moderationNoteSchema,
   projectIdParamSchema,
+  projectReviewCommentParamsSchema,
+  projectReviewCommentSchema,
   rejectProjectSchema,
+  updateProjectReviewCommentSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAnyRole, requireAuth } from '../../lib/auth-middleware.js';
@@ -188,6 +192,54 @@ const correctRoute = createRoute({
   },
 });
 
+const createReviewCommentRoute = createRoute({
+  method: 'post',
+  path: '/{id}/review-comments',
+  tags: ['Admin Projects'],
+  summary: 'Create a review comment on a submitted or in-review project',
+  security: [{ cookieAuth: [] }],
+  middleware: adminMiddleware,
+  request: {
+    params: projectIdParamSchema,
+    body: { content: { 'application/json': { schema: createProjectReviewCommentSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created project review comment',
+      content: { 'application/json': { schema: projectReviewCommentSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Admin role or reviewer claim required'),
+    404: errorJson('Project not found'),
+    409: errorJson('Project is not submitted or in review'),
+    422: errorJson('A review comment body is required'),
+  },
+});
+
+const updateReviewCommentRoute = createRoute({
+  method: 'patch',
+  path: '/{id}/review-comments/{commentId}',
+  tags: ['Admin Projects'],
+  summary: 'Update one project review comment status',
+  security: [{ cookieAuth: [] }],
+  middleware: adminMiddleware,
+  request: {
+    params: projectReviewCommentParamsSchema,
+    body: { content: { 'application/json': { schema: updateProjectReviewCommentSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Updated project review comment',
+      content: { 'application/json': { schema: projectReviewCommentSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Admin role or reviewer claim required'),
+    404: errorJson('Project or review comment not found'),
+    409: errorJson('Review comment cannot be updated in this project state'),
+    422: errorJson('Invalid review comment status'),
+  },
+});
+
 export const adminProjectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -236,6 +288,24 @@ export const adminProjectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>
   .openapi(correctRoute, async (c) => {
     const result = await adminProjectsService.correct(
       c.req.valid('param').id,
+      c.req.valid('json'),
+      caller(c.get('user')),
+    );
+    return c.json(result, 200);
+  })
+  .openapi(createReviewCommentRoute, async (c) => {
+    const result = await adminProjectsService.createReviewComment(
+      c.req.valid('param').id,
+      c.req.valid('json'),
+      caller(c.get('user')),
+    );
+    return c.json(result, 201);
+  })
+  .openapi(updateReviewCommentRoute, async (c) => {
+    const { id, commentId } = c.req.valid('param');
+    const result = await adminProjectsService.updateReviewComment(
+      id,
+      commentId,
       c.req.valid('json'),
       caller(c.get('user')),
     );
