@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 
 const adminLinks = [
-  { href: '/admin/dashboard', label: 'Dashboard' },
+  { href: '/admin/moderation', label: 'Moderation' },
   { href: '/', label: 'View site' },
 ];
 
@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div className="flex min-h-screen flex-col">
       <ProtectedBfcacheGuard />
-      <SiteNav brand="Tickif · Admin" brandHref="/admin/dashboard" links={adminLinks} />
+      <SiteNav brand="Tickif · Admin" brandHref="/admin/moderation" links={adminLinks} />
       <main className="flex-1">{children}</main>
       <SiteFooter />
     </div>
