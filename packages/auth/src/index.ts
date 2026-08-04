@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
-import { db, schema } from '@repo/db';
+import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
 import { ac, roles } from './permissions.js';
@@ -26,6 +26,19 @@ const googleEnabled = !!(googleClientId && googleClientSecret);
 const socialProviders = googleEnabled
   ? { google: { clientId: googleClientId, clientSecret: googleClientSecret } }
   : undefined;
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character] ?? character;
+  });
+}
 
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
@@ -76,16 +89,7 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      const escapedName = (user.name ?? '').replace(/[&<>"']/g, (ch) => {
-        const map: Record<string, string> = {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-        };
-        return map[ch] ?? ch;
-      });
+      const escapedName = escapeHtml(user.name ?? '');
       await sendEmail({
         to: user.email,
         subject: 'Verify your Tickif email',
@@ -143,6 +147,37 @@ export const auth = betterAuth({
       // destructive deletion outside that workflow.
       allowUserToCreateOrganization: false,
       disableOrganizationDeletion: true,
+      sendInvitationEmail: async ({ id, email, organization, inviter }) => {
+        const invitationUrl = new URL(
+          `/invitations/${encodeURIComponent(id)}`,
+          config.PUBLIC_WEB_URL,
+        );
+        await sendEmail({
+          to: email,
+          subject: "You're invited to a Tickif studio",
+          html: `
+            <h2>Join ${escapeHtml(organization.name)} on Tickif</h2>
+            <p>${escapeHtml(inviter.user.name)} invited you to join their studio workspace.</p>
+            <p><a href="${invitationUrl.toString()}">Accept invitation</a></p>
+            <p>This invitation expires in 48 hours.</p>
+            <p>Tickif</p>
+          `,
+        });
+      },
+      organizationHooks: {
+        afterAcceptInvitation: async ({ user }) => {
+          await db
+            .update(schema.user)
+            .set({ role: 'designer', status: 'active', updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.user.id, user.id),
+                or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
+                inArray(schema.user.status, ['pending', 'active']),
+              ),
+            );
+        },
+      },
     }),
     emailOTP({
       otpLength: 6,

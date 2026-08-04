@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testClient } from 'hono/testing';
 import type { OrganizationWorkspaceResponse } from '@repo/contracts';
-import { db, eq, schema } from '@repo/db';
+import { and, db, eq, schema } from '@repo/db';
 import { makeOrganization, makeUser } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
@@ -215,6 +215,55 @@ describe('organization management', () => {
     });
 
     expect(response.status).toBe(200);
+  });
+
+  it('accepts an invitation, selects the organization, and promotes a visitor to designer', async () => {
+    const organization = await makeOrganization({ slug: 'accepted-invite-studio' });
+    const owner = await makeOrganizationSession({
+      phone: '+919800004009',
+      organizationId: organization.id,
+      role: 'owner',
+    });
+    const guest = await createRoleSession('+919800004010', 'visitor');
+    const [guestUser] = await db
+      .select({ email: schema.user.email })
+      .from(schema.user)
+      .where(eq(schema.user.id, guest.userId));
+
+    const inviteResponse = await postOrganizationAction('invite-member', owner.cookie, {
+      email: guestUser!.email,
+      role: 'member',
+      organizationId: organization.id,
+    });
+    expect(inviteResponse.status).toBe(200);
+    const invitation = (await inviteResponse.json()) as { id: string };
+
+    const acceptResponse = await postOrganizationAction('accept-invitation', guest.cookie, {
+      invitationId: invitation.id,
+    });
+
+    expect(acceptResponse.status).toBe(200);
+    const [acceptedUser] = await db
+      .select({ role: schema.user.role, status: schema.user.status })
+      .from(schema.user)
+      .where(eq(schema.user.id, guest.userId));
+    const [membership] = await db
+      .select({ role: schema.member.role })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.userId, guest.userId),
+          eq(schema.member.organizationId, organization.id),
+        ),
+      );
+    const [guestSession] = await db
+      .select({ activeOrganizationId: schema.session.activeOrganizationId })
+      .from(schema.session)
+      .where(eq(schema.session.userId, guest.userId));
+
+    expect(acceptedUser).toEqual({ role: 'designer', status: 'active' });
+    expect(membership?.role).toBe('member');
+    expect(guestSession?.activeOrganizationId).toBe(organization.id);
   });
 
   it('lets an owner update a member role in the active organization', async () => {
