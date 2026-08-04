@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import type { FeedProject, FeedProjectsResponse, GalleryImage, GalleryResponse } from '@repo/contracts';
 import { ProjectDetailView } from '@/components/project-detail-view';
+import { env } from '@/env';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8008';
+const BASE_URL = env.NEXT_PUBLIC_API_URL;
 
 export default async function ProjectDetailPage({
   params,
@@ -11,10 +12,11 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  // Fetch gallery + feed in parallel
-  const [galleryRes, feedRes] = await Promise.all([
+  // Fetch gallery + feed + project detail in parallel
+  const [galleryRes, feedRes, detailRes] = await Promise.all([
     fetch(`${BASE_URL}/api/projects/${id}/gallery`, { cache: 'no-store' }).catch(() => null),
     fetch(`${BASE_URL}/api/projects/feed?limit=30`, { cache: 'no-store' }).catch(() => null),
+    fetch(`${BASE_URL}/api/projects/${id}`, { cache: 'no-store' }).catch(() => null),
   ]);
 
   // Gallery is required — if we can't load it, 404
@@ -30,6 +32,13 @@ export default async function ProjectDetailPage({
   if (feedRes && feedRes.ok) {
     const feedData: FeedProjectsResponse = await feedRes.json();
     feedProjects = feedData.projects ?? [];
+  }
+
+  // Get designer profile ID from project detail
+  let designerProfileId: string | null = null;
+  if (detailRes && detailRes.ok) {
+    const detailData = await detailRes.json();
+    designerProfileId = detailData?.designerId ?? null;
   }
 
   // Find this project's metadata from the feed
@@ -60,6 +69,7 @@ export default async function ProjectDetailPage({
       project={projectData}
       gallery={gallery}
       moreProjects={moreProjects}
+      designerProfileId={designerProfileId}
     />
   );
 }

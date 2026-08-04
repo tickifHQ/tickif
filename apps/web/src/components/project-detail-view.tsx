@@ -4,14 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { FeedProject, GalleryImage } from '@repo/contracts';
 import { ShowcaseCard } from '@/components/showcase-card';
+import { EnquiryCta } from '@/components/enquiry-cta';
 
 interface ProjectDetailViewProps {
   project: FeedProject;
   gallery: GalleryImage[];
   moreProjects: FeedProject[];
+  designerProfileId?: string | null;
 }
 
-export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDetailViewProps) {
+export function ProjectDetailView({ project, gallery, moreProjects, designerProfileId }: ProjectDetailViewProps) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
   const [shared, setShared] = useState(false);
@@ -114,15 +116,17 @@ export function ProjectDetailView({ project, gallery, moreProjects }: ProjectDet
 
               {/* Buttons row */}
               <div className="mt-4 flex items-center gap-3">
-                <button
-                  type="button"
+                <EnquiryCta
+                  context={{ type: 'project', projectName: project.title, designerName: project.studio, designerLocation: location }}
+                  designerProfileId={designerProfileId ?? ''}
+                  loginHref={`/login?next=/projects/${project.id}`}
                   className="flex flex-[7] items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
                 >
                   <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   Enquire
-                </button>
+                </EnquiryCta>
                 <button
                   type="button"
                   className="flex flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"

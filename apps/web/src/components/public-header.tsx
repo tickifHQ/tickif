@@ -7,6 +7,7 @@ const navLinks = [
   { href: '/', label: 'Explore' },
   { href: '/designer/dashboard', label: 'Designers' },
   { href: '/', label: 'Cost Calculator' },
+  { href: '/enquiries', label: 'Your Enquiries' },
   { href: '/', label: 'For you' },
 ];
 
