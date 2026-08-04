@@ -139,6 +139,18 @@ describe('LoginCard', () => {
     });
   });
 
+  it('uses a safe callback path for Google sign in', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard initialMode="designer" callbackPath="/invitations/invitation-1" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/invitations/invitation-1',
+    });
+  });
+
   it('shows error when Google signIn fails in browsing mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();

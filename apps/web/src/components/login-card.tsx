@@ -38,6 +38,7 @@ type LoginMode = 'browsing' | 'designer';
 
 interface LoginCardProps {
   initialMode?: LoginMode;
+  callbackPath?: string;
   onSuccess?: () => void;
   onClose?: () => void;
 }
@@ -119,7 +120,7 @@ const trustAvatars = [
   { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
-export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: LoginCardProps) {
+export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -163,6 +164,10 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
       onSuccess();
       return;
     }
+    if (callbackPath) {
+      window.location.href = callbackPath;
+      return;
+    }
     // After successful auth, check if designer onboarding is needed
     if (loginMode === 'designer') {
       // Redirect to onboarding — the page itself will redirect to dashboard if already complete
@@ -170,7 +175,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     } else {
       router.push(visitorPostLoginPath());
     }
-  }, [success, loginMode, router, onSuccess]);
+  }, [success, loginMode, router, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
   useEffect(() => {
@@ -253,9 +258,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   // ─── Google SSO handler ─────────────────────────────────────────────────
   async function handleGoogleLogin() {
     setLoading(true); setError('');
-    const callbackURL = loginMode === 'designer'
-      ? `${window.location.origin}/designer/onboarding`
-      : `${window.location.origin}${visitorPostLoginPath()}`;
+    const callbackURL = callbackPath
+      ? `${window.location.origin}${callbackPath}`
+      : loginMode === 'designer'
+        ? `${window.location.origin}/designer/onboarding`
+        : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) setError('Couldn\'t sign in with Google');
