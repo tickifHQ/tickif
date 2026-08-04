@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components/table';
-import { ArrowDown, ArrowUp, ExternalLink, UsersRound } from 'lucide-react';
+import { ExternalLink, UsersRound } from 'lucide-react';
 import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dialog';
 import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
 import { DesignerLeadStatusBadge } from '@/components/designer-lead-status';

@@ -96,7 +96,6 @@ export function EnquiryDialog({
   const [description, setDescription] = useState('');
   const [budgetMin, setBudgetMin] = useState(0);
   const [budgetMax, setBudgetMax] = useState(3);
-  const [budgetTouched, setBudgetTouched] = useState(false);
   const [activeChip, setActiveChip] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -106,7 +105,6 @@ export function EnquiryDialog({
     setDescription('');
     setBudgetMin(0);
     setBudgetMax(3);
-    setBudgetTouched(false);
     setActiveChip(null);
     setError(null);
     setSuccess(false);
@@ -273,7 +271,6 @@ export function EnquiryDialog({
                     const val = Number(e.target.value);
                     if (val <= budgetMax) {
                       setBudgetMin(val);
-                      setBudgetTouched(true);
                     }
                   }}
                   className="pointer-events-none absolute inset-x-2 top-[10px] h-5 w-[calc(100%-16px)] cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md"
@@ -289,7 +286,6 @@ export function EnquiryDialog({
                     const val = Number(e.target.value);
                     if (val >= budgetMin) {
                       setBudgetMax(val);
-                      setBudgetTouched(true);
                     }
                   }}
                   className="pointer-events-none absolute inset-x-2 top-[10px] h-5 w-[calc(100%-16px)] cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md"

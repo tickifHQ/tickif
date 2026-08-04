@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { FeedProject, GalleryImage } from '@repo/contracts';
-import { Button } from '@repo/ui/components/button';
 import {
   BadgeCheck,
   Bookmark,
