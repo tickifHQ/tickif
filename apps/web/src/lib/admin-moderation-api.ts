@@ -20,7 +20,7 @@ function parseDetail(payload: unknown): AdminModerationDetailResponse {
 }
 
 export async function fetchAdminModerationQueue(
-  status: 'submitted' | 'in_review',
+  status: 'submitted' | 'in_review' | 'published',
   requestInit?: ServerRequestInit,
 ): Promise<AdminModerationQueueResponse> {
   const response = await api.api.admin.projects.$get(

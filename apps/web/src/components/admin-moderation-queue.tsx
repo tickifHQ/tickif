@@ -58,7 +58,7 @@ import {
   unpublishAdminProject,
 } from '@/lib/admin-moderation-api';
 
-type ModerationTab = 'submitted' | 'in_review';
+type ModerationTab = 'submitted' | 'in_review' | 'published';
 type ActionIntent = 'request_changes' | 'reject' | 'unpublish';
 type EditableField =
   | 'title'
@@ -71,6 +71,7 @@ type EditableField =
 const tabLabels: Record<ModerationTab, string> = {
   submitted: 'Submitted',
   in_review: 'In review by me',
+  published: 'Published',
 };
 
 const editableFields: Array<{ key: EditableField; label: string }> = [
@@ -90,7 +91,7 @@ function formatDate(value: string | null) {
 }
 
 function formatAge(value: string | null) {
-  if (!value) return 'No submission date';
+  if (!value) return 'No submitted projects';
   const ageMs = Math.max(0, Date.now() - new Date(value).getTime());
   const ageHours = Math.floor(ageMs / 3_600_000);
   if (ageHours < 1) return 'Less than an hour';
@@ -750,7 +751,7 @@ export function AdminModerationQueue({
   }
 
   async function refreshQueues() {
-    const tabs: ModerationTab[] = ['submitted', 'in_review'];
+    const tabs: ModerationTab[] = ['submitted', 'in_review', 'published'];
     const results = await Promise.allSettled(tabs.map((tab) => fetchAdminModerationQueue(tab)));
     setQueues((current) => {
       const next = { ...current };
@@ -818,6 +819,13 @@ export function AdminModerationQueue({
           <QueueTable
             queue={activeTab === 'in_review' ? activeQueue : (queues.in_review ?? activeQueue)}
             tab="in_review"
+            onOpen={(id) => void openDetail(id)}
+          />
+        </TabsContent>
+        <TabsContent value="published" className="mt-5">
+          <QueueTable
+            queue={activeTab === 'published' ? activeQueue : (queues.published ?? activeQueue)}
+            tab="published"
             onOpen={(id) => void openDetail(id)}
           />
         </TabsContent>

@@ -113,6 +113,38 @@ describe('admin project moderation API', () => {
     });
   });
 
+  it('lists published projects in the admin queue for reopening and unpublish flows', async () => {
+    const admin = await roleSession('+919800002117', 'admin');
+    const published = await makeCompleteProject({
+      title: 'Published project',
+      status: 'published',
+      submittedAt: new Date('2026-07-17T10:00:00.000Z'),
+      publishedAt: new Date('2026-07-18T10:00:00.000Z'),
+      reviewedBy: admin.userId,
+    });
+    await db
+      .update(schema.designerProfile)
+      .set({ projectCount: 1 })
+      .where(eq(schema.designerProfile.id, published.designer.id));
+
+    const response = await app.request('/api/admin/projects?status=published', {
+      headers: { cookie: admin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as AdminModerationQueueResponse).toMatchObject({
+      total: 1,
+      items: [
+        {
+          id: published.project.id,
+          title: 'Published project',
+          status: 'published',
+          reviewedBy: admin.userId,
+        },
+      ],
+    });
+  });
+
   it('returns review detail with admin-only originals and pHash duplicate flags', async () => {
     const admin = await roleSession('+919800002104', 'admin');
     const { project } = await makeCompleteProject();

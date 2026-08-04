@@ -164,7 +164,7 @@ export const adminProjectsService = {
       items: items.map((row) => ({
         id: row.id,
         title: row.title,
-        status: row.status as 'submitted' | 'in_review',
+        status: row.status as 'submitted' | 'in_review' | 'published',
         designerName: row.designerName,
         submittedAt: row.submittedAt?.toISOString() ?? null,
         reviewedBy: row.reviewedBy,

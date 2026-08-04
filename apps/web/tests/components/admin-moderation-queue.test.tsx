@@ -160,6 +160,7 @@ describe('AdminModerationQueue', () => {
     expect(screen.getByText(/oldest submission/i)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /submitted/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /in review by me/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /published/i })).toBeInTheDocument();
   });
 
   it('claims a submission and then enables the current admin review actions', async () => {
