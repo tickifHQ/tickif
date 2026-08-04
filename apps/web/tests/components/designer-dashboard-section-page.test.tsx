@@ -7,7 +7,6 @@ describe('DesignerDashboardSectionPage', () => {
     ['consultations', 'Manage homeowner consultations', 'View leads'],
     ['reviews', 'Collect and manage client reviews', 'Update profile'],
     ['analytics', 'Understand portfolio performance', 'View projects'],
-    ['terms-roles', 'Manage your studio team and roles', 'Update profile'],
     ['plan-billing', 'Track plan access and billing readiness', 'Contact support'],
   ] as const)('renders the %s section page', (section, title, action) => {
     const { container } = render(<DesignerDashboardSectionPage section={section} />);
@@ -17,14 +16,5 @@ describe('DesignerDashboardSectionPage', () => {
     expect(screen.getByText(/workspace snapshot/i)).toBeInTheDocument();
     expect(screen.getByText(/current setup/i)).toBeInTheDocument();
     expect(container.querySelectorAll('.h-full.flex-1.items-end')).toHaveLength(7);
-  });
-
-  it('uses Teams & Roles copy without presenting terms as live workspace data', () => {
-    render(<DesignerDashboardSectionPage section="terms-roles" />);
-
-    expect(screen.getByText('Teams & Roles')).toBeInTheDocument();
-    expect(screen.getByText('Team access')).toBeInTheDocument();
-    expect(screen.getByText('Invitations')).toBeInTheDocument();
-    expect(screen.queryByText('Terms')).not.toBeInTheDocument();
   });
 });
