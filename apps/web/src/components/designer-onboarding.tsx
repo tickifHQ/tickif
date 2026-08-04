@@ -4,14 +4,14 @@ import type { FormEvent, ReactNode } from 'react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import {
-  BriefcaseBusiness,
-  ChevronRight,
-  ChevronsUpDown,
-  Loader2,
-  UserRound,
-} from 'lucide-react';
-import { onboardDesignerSchema, type ListTaxonomyResponse, type OnboardDesignerInput, type OnboardDesignerResponse, type TaxonomyTerm } from '@repo/contracts';
+  onboardDesignerSchema,
+  type ListTaxonomyResponse,
+  type OnboardDesignerInput,
+  type OnboardDesignerResponse,
+  type TaxonomyTerm,
+} from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
@@ -28,7 +28,7 @@ import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { PhoneNumberInput, countries } from '@/components/phone-number-input';
+import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
 
 type EntityType = OnboardDesignerInput['entityType'];
 
@@ -83,7 +83,17 @@ const firmTypeOptions = [
   'Studio',
 ] as const;
 
-const foundedOptions = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018'] as const;
+const foundedOptions = [
+  '2026',
+  '2025',
+  '2024',
+  '2023',
+  '2022',
+  '2021',
+  '2020',
+  '2019',
+  '2018',
+] as const;
 
 const teamSizeOptions = ['Just me', '2-10', '11-25', '26-50', '50+'] as const;
 
@@ -116,7 +126,8 @@ function validateOptionalUrl(
   try {
     const url = new URL(normalized);
     const hostname = url.hostname.toLowerCase();
-    const hasPublicHostname = hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
+    const hasPublicHostname =
+      hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
     return hasPublicHostname ? '' : message;
   } catch {
     return message;
@@ -127,7 +138,11 @@ const websiteUrlValidationMessage = 'Enter a valid website URL.';
 const googleBusinessUrlValidationMessage = 'Enter a valid Google Business URL.';
 
 function validateWebsiteUrl(value: string) {
-  return validateOptionalUrl(value, onboardDesignerSchema.shape.websiteUrl, websiteUrlValidationMessage);
+  return validateOptionalUrl(
+    value,
+    onboardDesignerSchema.shape.websiteUrl,
+    websiteUrlValidationMessage,
+  );
 }
 
 function validateGoogleBusinessUrl(value: string) {
@@ -136,11 +151,6 @@ function validateGoogleBusinessUrl(value: string) {
     onboardDesignerSchema.shape.googleBusinessUrl,
     googleBusinessUrlValidationMessage,
   );
-}
-
-function formatOptionalPhone(countryCode: string, phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 7 ? `${countryCode}${digits}` : undefined;
 }
 
 function teamSizeToStaffCount(teamSize: string) {
@@ -311,7 +321,7 @@ export function DesignerOnboarding({
 
     setSubmitting(true);
     try {
-      const phone = formatOptionalPhone(whatsappCountry.code, whatsappNumber);
+      const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
       const foundedYearValue = Number.parseInt(foundedYear, 10);
       const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
@@ -323,18 +333,32 @@ export function DesignerOnboarding({
         ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
         ...(phone ? { phone } : {}),
         ...(normalizeUrl(websiteUrl) ? { websiteUrl: normalizeUrl(websiteUrl) } : {}),
-        ...(normalizeUrl(googleBusinessUrl) ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) } : {}),
-        ...(optionalTrimmed(instagramHandle) ? { instagramHandle: optionalTrimmed(instagramHandle) } : {}),
-        ...(optionalTrimmed(linkedinHandle) ? { linkedinHandle: optionalTrimmed(linkedinHandle) } : {}),
-        ...(optionalTrimmed(youtubeHandle) ? { youtubeHandle: optionalTrimmed(youtubeHandle) } : {}),
-        ...(entityType === 'company' && optionalTrimmed(firmType) ? { firmType: optionalTrimmed(firmType) } : {}),
-        ...(entityType === 'company' && Number.isFinite(foundedYearValue) ? { foundedYear: foundedYearValue } : {}),
+        ...(normalizeUrl(googleBusinessUrl)
+          ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) }
+          : {}),
+        ...(optionalTrimmed(instagramHandle)
+          ? { instagramHandle: optionalTrimmed(instagramHandle) }
+          : {}),
+        ...(optionalTrimmed(linkedinHandle)
+          ? { linkedinHandle: optionalTrimmed(linkedinHandle) }
+          : {}),
+        ...(optionalTrimmed(youtubeHandle)
+          ? { youtubeHandle: optionalTrimmed(youtubeHandle) }
+          : {}),
+        ...(entityType === 'company' && optionalTrimmed(firmType)
+          ? { firmType: optionalTrimmed(firmType) }
+          : {}),
+        ...(entityType === 'company' && Number.isFinite(foundedYearValue)
+          ? { foundedYear: foundedYearValue }
+          : {}),
         ...(entityType === 'company' && staffCount ? { staffCount } : {}),
       };
       const response = await onSubmitOnboarding(payload);
       setResult(response.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not finish onboarding. Please try again.');
+      setError(
+        err instanceof Error ? err.message : 'Could not finish onboarding. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -343,7 +367,10 @@ export function DesignerOnboarding({
   if (result) {
     return (
       <OnboardingShell signedInAs={displayEmail}>
-        <CompletionStep onAddProjects={() => router.push('/designer/projects/new')} onSkip={() => router.push('/designer/dashboard')} />
+        <CompletionStep
+          onAddProjects={() => router.push('/designer/projects/new')}
+          onSkip={() => router.push('/designer/dashboard')}
+        />
       </OnboardingShell>
     );
   }
@@ -372,7 +399,9 @@ export function DesignerOnboarding({
                     icon={option.icon}
                     illustration={option.illustration}
                     illustrationClassName={option.value === 'individual' ? 'w-24' : 'w-36'}
-                    illustrationPositionClassName={option.value === 'individual' ? 'right-5' : 'right-1'}
+                    illustrationPositionClassName={
+                      option.value === 'individual' ? 'right-5' : 'right-1'
+                    }
                     selected={entityType === option.value}
                     title={option.title}
                     onClick={() => {
@@ -414,7 +443,10 @@ export function DesignerOnboarding({
               </div>
 
               <div className="grid flex-1 gap-1 self-stretch">
-                <Label htmlFor={`${formId}-name`} className="text-[13px] font-medium leading-relaxed">
+                <Label
+                  htmlFor={`${formId}-name`}
+                  className="text-[13px] font-medium leading-relaxed"
+                >
                   Display name
                 </Label>
                 <Input
@@ -429,7 +461,10 @@ export function DesignerOnboarding({
             </div>
 
             <div className="grid gap-1">
-              <Label htmlFor={`${formId}-address`} className="text-[13px] font-medium leading-relaxed">
+              <Label
+                htmlFor={`${formId}-address`}
+                className="text-[13px] font-medium leading-relaxed"
+              >
                 Address
               </Label>
               <Input
@@ -443,8 +478,12 @@ export function DesignerOnboarding({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor={`${formId}-whatsapp`} className="text-[13px] font-medium leading-relaxed">
-                WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
+              <Label
+                htmlFor={`${formId}-whatsapp`}
+                className="text-[13px] font-medium leading-relaxed"
+              >
+                WhatsApp number{' '}
+                <span className="font-normal text-muted-foreground">(Recommended)</span>
               </Label>
               <PhoneNumberInput
                 id={`${formId}-whatsapp`}
@@ -523,9 +562,7 @@ export function DesignerOnboarding({
             onThemeIdsChange={setSelectedThemeIds}
             onTeamSizeChange={setTeamSize}
           />
-        ) : (
-          null
-        )}
+        ) : null}
 
         {error && (
           <Alert variant="destructive">
@@ -569,17 +606,19 @@ function CompletionStep({
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-lg font-medium tracking-[-0.015em]">
-          You&apos;re set up, there! 🎉
-        </h1>
+        <h1 className="text-lg font-medium tracking-[-0.015em]">You&apos;re set up, there! 🎉</h1>
         <p className="max-w-[358px] text-xs font-medium leading-[1.35] text-muted-foreground">
-          One thing stands between you and homeowners: your first project. It&apos;s the only
-          thing that makes your profile public.
+          One thing stands between you and homeowners: your first project. It&apos;s the only thing
+          that makes your profile public.
         </p>
       </div>
 
       <div className="grid gap-3">
-        <Button type="button" onClick={onAddProjects} className="h-9 w-full cursor-pointer gap-1 rounded-lg">
+        <Button
+          type="button"
+          onClick={onAddProjects}
+          className="h-9 w-full cursor-pointer gap-1 rounded-lg"
+        >
           Add your projects
           <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
         </Button>
@@ -701,7 +740,10 @@ function CompanyPresenceFields({
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-2">
-        <Label htmlFor={`${formId}-company-whatsapp`} className="text-[13px] font-medium leading-relaxed">
+        <Label
+          htmlFor={`${formId}-company-whatsapp`}
+          className="text-[13px] font-medium leading-relaxed"
+        >
           WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
         </Label>
         <PhoneNumberInput
@@ -769,9 +811,7 @@ function CompanyServicesFields({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      {taxonomyError ? (
-        <p className="text-xs text-destructive">{taxonomyError}</p>
-      ) : null}
+      {taxonomyError ? <p className="text-xs text-destructive">{taxonomyError}</p> : null}
 
       <TaxonomyMultiSelect
         id={`${formId}-services`}
@@ -847,7 +887,9 @@ function TaxonomyMultiSelect({
     <div className="grid gap-1">
       <Label htmlFor={id} className="text-[13px] font-medium leading-relaxed">
         {label}{' '}
-        {labelHint ? <span className="font-normal text-muted-foreground">({labelHint})</span> : null}
+        {labelHint ? (
+          <span className="font-normal text-muted-foreground">({labelHint})</span>
+        ) : null}
       </Label>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -879,9 +921,7 @@ function TaxonomyMultiSelect({
               </DropdownMenuCheckboxItem>
             ))
           ) : (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-              {emptyLabel}
-            </div>
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">{emptyLabel}</div>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -908,7 +948,9 @@ function CompactSelect({
     <div className="grid gap-1">
       <Label htmlFor={id} className="text-[13px] font-medium leading-relaxed">
         {label}{' '}
-        {labelHint ? <span className="font-normal text-muted-foreground">({labelHint})</span> : null}
+        {labelHint ? (
+          <span className="font-normal text-muted-foreground">({labelHint})</span>
+        ) : null}
       </Label>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -928,7 +970,11 @@ function CompactSelect({
           className="w-[var(--radix-dropdown-menu-trigger-width)]"
         >
           {options.map((option) => (
-            <DropdownMenuItem key={option} onSelect={() => onValueChange(option)} className="text-[13px]">
+            <DropdownMenuItem
+              key={option}
+              onSelect={() => onValueChange(option)}
+              className="text-[13px]"
+            >
               {option}
             </DropdownMenuItem>
           ))}
@@ -973,7 +1019,8 @@ function PresenceFields({
   onWebsiteUrlChange: (value: string) => void;
   onYoutubeHandleChange: (value: string) => void;
 }) {
-  const handlePlaceholder = placeholderHandle ?? (firstName ? `@${firstName.toLowerCase()}` : '@yourstudio');
+  const handlePlaceholder =
+    placeholderHandle ?? (firstName ? `@${firstName.toLowerCase()}` : '@yourstudio');
 
   return (
     <div className="flex flex-col gap-5">
@@ -995,7 +1042,10 @@ function PresenceFields({
       </div>
 
       <div className="grid gap-1">
-        <Label htmlFor={`${formId}-google-business`} className="text-[13px] font-medium leading-relaxed">
+        <Label
+          htmlFor={`${formId}-google-business`}
+          className="text-[13px] font-medium leading-relaxed"
+        >
           Google Business{' '}
           <span className="font-normal text-muted-foreground">({googleBusinessHint})</span>
         </Label>
@@ -1113,12 +1163,20 @@ function EntityChoiceCard({
         selected && 'border-border',
       )}
     >
-      <span className="flex size-12 items-center justify-center rounded-lg bg-secondary" aria-hidden="true">
+      <span
+        className="flex size-12 items-center justify-center rounded-lg bg-secondary"
+        aria-hidden="true"
+      >
         <Icon className="size-4 text-primary" />
       </span>
       <span className="mt-2.5 flex flex-col gap-1.5">
         <span className="text-base font-medium leading-none">{title}</span>
-        <span className={cn('max-w-[260px] text-[13px] leading-relaxed text-muted-foreground', descriptionClassName)}>
+        <span
+          className={cn(
+            'max-w-[260px] text-[13px] leading-relaxed text-muted-foreground',
+            descriptionClassName,
+          )}
+        >
           {description}
         </span>
       </span>
@@ -1140,7 +1198,10 @@ function EntityChoiceCard({
 function OnboardingSecondaryActions() {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-      <a href="mailto:support@tickif.in" className="cursor-pointer font-medium text-foreground hover:underline">
+      <a
+        href="mailto:support@tickif.in"
+        className="cursor-pointer font-medium text-foreground hover:underline"
+      >
         Need help? Contact support
       </a>
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
@@ -1158,7 +1219,10 @@ function OnboardingSecondaryActions() {
 function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-      <a href="mailto:support@tickif.in" className="cursor-pointer font-medium text-foreground hover:underline">
+      <a
+        href="mailto:support@tickif.in"
+        className="cursor-pointer font-medium text-foreground hover:underline"
+      >
         Need help? Contact support
       </a>
       <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
@@ -1173,13 +1237,7 @@ function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
   );
 }
 
-function OnboardingShell({
-  children,
-  signedInAs,
-}: {
-  children: ReactNode;
-  signedInAs: string;
-}) {
+function OnboardingShell({ children, signedInAs }: { children: ReactNode; signedInAs: string }) {
   return (
     <main className="min-h-screen bg-background">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(420px,600px)]">
@@ -1218,7 +1276,10 @@ function OnboardingShell({
               </div>
             </div>
           </div>
-          <div className="absolute bottom-12 left-0 right-0 z-10 h-px bg-border xl:bottom-14" aria-hidden="true" />
+          <div
+            className="absolute bottom-12 left-0 right-0 z-10 h-px bg-border xl:bottom-14"
+            aria-hidden="true"
+          />
           <div className="absolute bottom-3 right-0 w-80 xl:w-96">
             <Image
               src={onboardingIllustrations.panel}

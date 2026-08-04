@@ -12,13 +12,13 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
   ArrowRight,
+  CalendarDays,
   Check,
-  ClipboardCheck,
   Copy,
   Plus,
-  ShieldCheck,
+  Shield,
   ShieldPlus,
-  UserRoundCheck,
+  User,
 } from 'lucide-react';
 
 type OverviewChecklistItem = {
@@ -306,7 +306,7 @@ export function DesignerDashboardOverview({
                 <div className="min-w-0">
                   <Badge
                     variant="outline"
-                    className="text-xs font-medium border-primary/20 bg-background/70 text-primary"
+                    className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
                   >
                     COMPLETE SETUP
                   </Badge>
@@ -336,24 +336,24 @@ export function DesignerDashboardOverview({
           </Card>
 
           <div>
-            <div className="mb-3 flex items-center gap-2 px-3 text-xs font-medium tracking-normal text-muted-foreground">
+            <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
               <ShieldPlus className="size-4" />
               WHAT HAPPENS NEXT
             </div>
             <Card radius="2xl" className="overflow-hidden">
               <RightRailInfoRow
-                icon={<ClipboardCheck className="size-4" />}
+                icon={<CalendarDays className="size-4" />}
                 title="We review your project"
                 description="A human check, usually within 24–48 hours."
               />
               <RightRailInfoRow
-                icon={<UserRoundCheck className="size-4" />}
+                icon={<User className="size-4" />}
                 title="Round out your profile"
                 description="Add a bio and tags while you wait."
                 href="/designer/profile"
               />
               <RightRailInfoRow
-                icon={<ShieldCheck className="size-4" />}
+                icon={<Shield className="size-4" />}
                 title="Start verification"
                 description="Get a head start on your KYC."
               />
@@ -385,7 +385,7 @@ export function DesignerDashboardOverview({
               </div>
             </div>
             <div className="px-5 pt-6 pb-5">
-              <div className="text-xs tracking-normal text-muted-foreground">
+              <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
                 ONE LINK. EVERYWHERE.
               </div>
               <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
@@ -396,8 +396,9 @@ export function DesignerDashboardOverview({
               </p>
               <CopyLinkButton
                 value={portfolioUrl}
-                variant="emphasis"
-                className="mt-6 w-full cursor-pointer rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-[#3e4148] hover:to-[#1f2228]"
+                variant="fancy"
+                size="fancy"
+                className="mt-6 w-full cursor-pointer"
               />
             </div>
           </Card>

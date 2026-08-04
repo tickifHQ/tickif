@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 import { Input } from '@repo/ui/components/input';
 import { cn } from '@repo/ui/lib/utils';
 import { Search } from 'lucide-react';
@@ -12,7 +13,11 @@ export type DesignerListTab<TValue extends string> = {
   count?: number;
 };
 
-function queryHref(pathname: string, searchParams: URLSearchParams, updates: Record<string, string | number | null>) {
+function queryHref(
+  pathname: string,
+  searchParams: URLSearchParams,
+  updates: Record<string, string | number | null>,
+) {
   const next = new URLSearchParams(searchParams);
   for (const [key, value] of Object.entries(updates)) {
     if (value === null || value === '') {
@@ -23,6 +28,16 @@ function queryHref(pathname: string, searchParams: URLSearchParams, updates: Rec
   }
   const query = next.toString();
   return query ? `${pathname}?${query}` : pathname;
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+
+  return (
+    target.isContentEditable ||
+    ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) ||
+    target.getAttribute('role') === 'textbox'
+  );
 }
 
 export function DesignerListControls<TValue extends string>({
@@ -38,6 +53,29 @@ export function DesignerListControls<TValue extends string>({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const isSlashShortcut =
+        event.key === '/' || event.key === 'Slash' || (event.code === 'Slash' && !event.shiftKey);
+
+      if (
+        !isSlashShortcut ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableTarget(event.target)
+      )
+        return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -47,10 +85,15 @@ export function DesignerListControls<TValue extends string>({
           return (
             <Link
               key={tab.value}
-              href={queryHref(pathname, searchParams, { status: tab.value === 'all' ? null : tab.value, page: 1 })}
+              href={queryHref(pathname, searchParams, {
+                status: tab.value === 'all' ? null : tab.value,
+                page: 1,
+              })}
               className={cn(
                 'inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-[13px] leading-none font-medium transition-colors',
-                active ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+                active
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               aria-current={active ? 'page' : undefined}
             >
@@ -67,9 +110,11 @@ export function DesignerListControls<TValue extends string>({
       <form action={pathname} className="relative w-full sm:w-[17.5rem]">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          ref={searchInputRef}
           name="q"
           defaultValue={searchValue}
           placeholder={searchPlaceholder}
+          aria-keyshortcuts="/"
           className="h-8 rounded-md pl-9 pr-9 text-[13px] shadow-xs"
         />
         {activeTab !== 'all' ? <input type="hidden" name="status" value={activeTab} /> : null}

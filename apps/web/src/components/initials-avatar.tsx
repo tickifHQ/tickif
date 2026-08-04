@@ -13,15 +13,17 @@ type InitialsAvatarProps = {
 };
 
 const initialsStyle = new Style(initialsDefinition);
+const containsLetter = /\p{L}/u;
 
-export function InitialsAvatar({
-  seed,
-  fallbackSeed,
-  alt,
-  size = 60,
-}: InitialsAvatarProps) {
+export function InitialsAvatar({ seed, fallbackSeed, alt, size = 60 }: InitialsAvatarProps) {
   const avatarUri = useMemo(() => {
-    const normalizedSeed = seed.trim() || fallbackSeed.trim() || 'Tickif Designer';
+    const trimmedSeed = seed.trim();
+    const trimmedFallbackSeed = fallbackSeed.trim();
+    const normalizedSeed = containsLetter.test(trimmedSeed)
+      ? trimmedSeed
+      : containsLetter.test(trimmedFallbackSeed)
+        ? trimmedFallbackSeed
+        : 'Tickif Designer';
     return new Avatar(initialsStyle, {
       seed: normalizedSeed,
       size,

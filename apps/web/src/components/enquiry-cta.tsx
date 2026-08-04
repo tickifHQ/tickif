@@ -26,7 +26,7 @@ type Props = {
   loginHref: string;
   children: ReactNode;
   className?: string;
-  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost';
+  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'inverted' | 'neutral' | 'fancy';
   ariaLabel?: string;
 };
 

@@ -4,44 +4,72 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { Button } from '@repo/ui/components/button';
+import { Checkbox } from '@repo/ui/components/checkbox';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
-import { SelectField } from '@repo/ui/components/select-field';
+import { InitialsAvatar } from '@/components/initials-avatar';
+import { authClient } from '@/lib/auth-client';
 import { saveVisitorOnboardingPreferences } from '@/lib/visitor-onboarding';
 
 type VisitorOnboardingFormProps = {
   displayName: string;
   signedInAs: string;
-  initials: string;
+  initialPhoneNumber: string;
 };
-
-const cityOptions = [
-  { value: 'chennai', label: 'Chennai' },
-  { value: 'bengaluru', label: 'Bengaluru' },
-  { value: 'mumbai', label: 'Mumbai' },
-  { value: 'pune', label: 'Pune' },
-] as const;
 
 export function VisitorOnboardingForm({
   displayName: initialDisplayName,
-  initials,
+  initialPhoneNumber,
   signedInAs,
 }: VisitorOnboardingFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
-  const [city, setCity] = useState<(typeof cityOptions)[number]['value']>('chennai');
+  const [address, setAddress] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
   const [whatsapp, setWhatsapp] = useState('');
+  const [usePhoneForWhatsapp, setUsePhoneForWhatsapp] = useState(false);
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveVisitorOnboardingPreferences({
-      displayName: displayName.trim() || initialDisplayName,
-      city,
-      whatsapp: whatsapp.replace(/\D/g, ''),
-    });
-    router.push('/');
+    const normalizedDisplayName = displayName.trim();
+    if (normalizedDisplayName.length < 2 || normalizedDisplayName.length > 100) {
+      setError('Enter a display name between 2 and 100 characters');
+      return;
+    }
+
+    setError('');
+    setIsSaving(true);
+    try {
+      const { error: updateError } = await authClient.updateUser({
+        name: normalizedDisplayName,
+      });
+      if (updateError) {
+        setError(updateError.message || 'Could not save your name. Please try again.');
+        return;
+      }
+
+      saveVisitorOnboardingPreferences({
+        displayName: normalizedDisplayName,
+        address: address.trim(),
+        phoneNumber: phoneNumber.trim(),
+        whatsapp: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim(),
+      });
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Could not save your name. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleUsePhoneForWhatsappChange(checked: boolean) {
+    setWhatsapp(phoneNumber);
+    setUsePhoneForWhatsapp(checked);
   }
 
   return (
@@ -58,11 +86,13 @@ export function VisitorOnboardingForm({
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="flex gap-5">
-          <div className="relative flex size-[60px] shrink-0 items-center justify-center rounded-lg border border-border bg-primary/10 text-lg font-semibold text-primary">
-            {initials}
-            <span className="absolute -right-1 -top-1 inline-flex size-4 items-center justify-center rounded-full border border-border bg-background text-[10px] text-muted-foreground">
-              x
-            </span>
+          <div className="aspect-square self-stretch shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
+            <InitialsAvatar
+              seed={displayName}
+              fallbackSeed="Your name"
+              alt="Generated visitor initials"
+              size={64}
+            />
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
             <Label htmlFor="visitor-display-name" className="text-sm font-medium">
@@ -72,51 +102,106 @@ export function VisitorOnboardingForm({
               id="visitor-display-name"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="Your name"
+              required
+              minLength={2}
+              maxLength={100}
             />
           </div>
         </div>
 
-        <SelectField
-          label="City"
-          value={city}
-          onValueChange={(value) => setCity(value as typeof city)}
-          options={cityOptions}
-          placeholder="Select city"
-        />
+        <div className="grid gap-1">
+          <Label htmlFor="visitor-address" className="text-[13px] font-medium leading-relaxed">
+            Address
+          </Label>
+          <Input
+            id="visitor-address"
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+            placeholder="Address or locality"
+            autoComplete="street-address"
+            maxLength={300}
+            className="h-8 rounded-md px-2 text-[13px]"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="visitor-phone-number" className="text-sm font-medium">
+            Phone number
+          </Label>
+          <Input
+            id="visitor-phone-number"
+            type="tel"
+            value={phoneNumber}
+            onChange={(event) => setPhoneNumber(event.target.value)}
+            placeholder="+91 9123456789"
+            autoComplete="tel"
+            readOnly={Boolean(initialPhoneNumber)}
+            className="read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground"
+          />
+        </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="visitor-whatsapp" className="text-sm font-medium">
             WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
           </Label>
-          <div className="flex">
-            <div className="inline-flex h-10 items-center gap-2 rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
-              <span>IN</span>
-              <span>+91</span>
-            </div>
-            <Input
-              id="visitor-whatsapp"
-              type="tel"
-              value={whatsapp}
-              onChange={(event) => setWhatsapp(event.target.value)}
-              placeholder="9123456789"
-              className="-ml-px rounded-l-none"
+          <Input
+            id="visitor-whatsapp"
+            type="tel"
+            value={usePhoneForWhatsapp ? phoneNumber : whatsapp}
+            onChange={(event) => setWhatsapp(event.target.value)}
+            placeholder="+91 9123456789"
+            autoComplete="tel"
+            disabled={usePhoneForWhatsapp}
+          />
+          <div className="flex items-center gap-2.5 pt-1">
+            <Checkbox
+              id="visitor-use-phone-for-whatsapp"
+              checked={usePhoneForWhatsapp}
+              onCheckedChange={(checked) => handleUsePhoneForWhatsappChange(checked === true)}
             />
+            <Label
+              htmlFor="visitor-use-phone-for-whatsapp"
+              className="cursor-pointer text-sm font-normal"
+            >
+              Use phone number for WhatsApp
+            </Label>
           </div>
         </div>
 
         <div className="space-y-3 pt-2">
-          <Button type="submit" className="h-11 w-full">
-            Continue
-            <ChevronRight className="size-4" />
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <Button type="submit" className="h-11 w-full" disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                Saving
+              </>
+            ) : (
+              <>
+                Continue
+                <ChevronRight className="size-4" />
+              </>
+            )}
           </Button>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <span>Need help?</span>
-            <Link href="mailto:support@tickif.in" className="font-medium text-foreground underline-offset-2 hover:underline">
+            <Link
+              href="mailto:support@tickif.in"
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
               Contact support
             </Link>
             <span>|</span>
-            <Link href="/" className="font-medium text-foreground underline-offset-2 hover:underline">
-              Skip to dashboard
+            <Link
+              href="/"
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Skip
             </Link>
           </div>
         </div>

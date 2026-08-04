@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { countries as allCountries } from 'country-codes-flags-phone-codes';
+import parsePhoneNumber, { isSupportedCountry, type CountryCode } from 'libphonenumber-js/max';
+import { ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,19 +16,92 @@ import { cn } from '@repo/ui/lib/utils';
 export interface Country {
   code: string;
   flag: string;
+  isoCode: CountryCode;
   name: string;
 }
 
 export const countries: Country[] = allCountries
-  .filter((c) => c.dialCode)
-  .map((c) => ({ code: c.dialCode, flag: c.flag, name: c.name }))
+  .filter(
+    (country): country is typeof country & { code: CountryCode; dialCode: string } =>
+      Boolean(country.dialCode) && isSupportedCountry(country.code),
+  )
+  .map((country) => ({
+    code: country.dialCode,
+    flag: country.flag,
+    isoCode: country.code,
+    name: country.name,
+  }))
   .sort((a, b) => {
     if (a.name === 'India') return -1;
     if (b.name === 'India') return 1;
     return a.name.localeCompare(b.name);
   });
 
+const countryByIsoCode = new Map(countries.map((country) => [country.isoCode, country]));
+const MAX_E164_DIGITS = 15;
+
+export function normalizePhoneInput(
+  value: string,
+  selectedCountry: Country,
+): { country: Country; phone: string } {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, '');
+
+  if (!digits) return { country: selectedCountry, phone: '' };
+
+  if (trimmed.startsWith('+')) {
+    const international = parsePhoneNumber(trimmed);
+    const detectedCountry = international?.country
+      ? countryByIsoCode.get(international.country)
+      : undefined;
+
+    if (international?.isPossible() && detectedCountry) {
+      return { country: detectedCountry, phone: international.nationalNumber };
+    }
+  }
+
+  const local = parsePhoneNumber(digits, selectedCountry.isoCode);
+  const selectedDialDigits = selectedCountry.code.replace(/\D/g, '');
+
+  if (
+    local?.isPossible() &&
+    digits.startsWith(selectedDialDigits) &&
+    digits.length > local.nationalNumber.length
+  ) {
+    return { country: selectedCountry, phone: local.nationalNumber };
+  }
+
+  if (!local?.isPossible() && digits.startsWith(selectedDialDigits)) {
+    const international = parsePhoneNumber(`+${digits}`);
+    if (international?.isPossible() && international.countryCallingCode === selectedDialDigits) {
+      return {
+        country:
+          countryByIsoCode.get(international.country ?? selectedCountry.isoCode) ?? selectedCountry,
+        phone: international.nationalNumber,
+      };
+    }
+  }
+
+  const maxNationalDigits = MAX_E164_DIGITS - selectedDialDigits.length;
+  return { country: selectedCountry, phone: digits.slice(0, maxNationalDigits) };
+}
+
+export function toE164PhoneNumber(country: Country, phone: string): string | null {
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+
+  const parsed = trimmed.startsWith('+')
+    ? parsePhoneNumber(trimmed)
+    : parsePhoneNumber(trimmed.replace(/\D/g, ''), country.isoCode);
+
+  if (!parsed?.isValid()) return null;
+
+  const selectedDialDigits = country.code.replace(/\D/g, '');
+  return parsed.countryCallingCode === selectedDialDigits ? parsed.number : null;
+}
+
 type PhoneNumberInputProps = {
+  ariaLabel?: string;
   countryButtonClassName?: string;
   disabled?: boolean;
   id: string;
@@ -41,6 +116,7 @@ type PhoneNumberInputProps = {
 };
 
 export function PhoneNumberInput({
+  ariaLabel = 'Phone number',
   countryButtonClassName,
   disabled = false,
   id,
@@ -60,15 +136,17 @@ export function PhoneNumberInput({
     ? countries.filter((country) => {
         const query = countrySearch.toLowerCase();
         return (
-          country.name.toLowerCase().includes(query) ||
-          country.code.toLowerCase().includes(query)
+          country.name.toLowerCase().includes(query) || country.code.toLowerCase().includes(query)
         );
       })
     : countries;
 
   function handlePhoneChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const digits = event.target.value.replace(/\D/g, '').slice(0, 10);
-    onPhoneChange(digits);
+    const normalized = normalizePhoneInput(event.target.value, selectedCountry);
+    if (normalized.country.isoCode !== selectedCountry.isoCode) {
+      onSelectedCountryChange(normalized.country);
+    }
+    onPhoneChange(normalized.phone);
   }
 
   return (
@@ -86,21 +164,11 @@ export function PhoneNumberInput({
               countryButtonClassName,
             )}
             disabled={disabled}
+            aria-label={`Country code, ${selectedCountry.name} ${selectedCountry.code}`}
           >
             <span className="text-base leading-none">{selectedCountry.flag}</span>
             {selectedCountry.code}
-            <svg
-              className="size-3.5 shrink-0 opacity-60"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+            <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -152,6 +220,7 @@ export function PhoneNumberInput({
       </DropdownMenu>
       <Input
         id={id}
+        aria-label={ariaLabel}
         type="tel"
         inputMode="numeric"
         placeholder={placeholder}
@@ -162,7 +231,7 @@ export function PhoneNumberInput({
         }}
         className={cn('-ml-px rounded-l-none', inputClassName)}
         disabled={disabled}
-        autoComplete="tel"
+        autoComplete="tel-national"
       />
     </div>
   );

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
+import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 
 const navLinks = [
   { href: '/', label: 'Explore' },
@@ -22,18 +23,18 @@ export function PublicHeader({
   const listYourWorkHref = getListYourWorkHref({ isAuthenticated, userRole });
 
   return (
-    <header className="border-b border-[#e8e6e1] bg-white">
-      <div className="mx-auto flex h-14 w-full max-w-[1512px] items-center justify-between px-6 lg:px-10">
+    <header className="border-b border-border bg-background">
+      <div className="flex h-14 w-full items-center justify-between px-5 sm:px-6">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-[20px] font-medium tracking-tight text-[#047857]">
-            tickif
+          <Link href="/" className="inline-flex items-center rounded-lg p-2">
+            <TickifBrandLogo />
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {navLinks.map((link) => (
               <Link
                 key={link.label}
                 href={link.href}
-                className="rounded-md px-3 py-1.5 text-[13px] font-medium text-[#52525b] transition-colors hover:bg-accent hover:text-foreground"
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 {link.label}
               </Link>
@@ -51,13 +52,12 @@ export function PublicHeader({
           {isAuthenticated ? (
             <AccountMenu />
           ) : (
-            <Link
-              href="/login"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#27272a] px-2.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#27272a]/90"
-            >
-              <UserRound className="size-4" aria-hidden />
-              Sign in
-            </Link>
+            <Button asChild variant="inverted" size="compact">
+              <Link href="/login">
+                <UserRound className="size-4" aria-hidden />
+                Sign in
+              </Link>
+            </Button>
           )}
         </div>
       </div>

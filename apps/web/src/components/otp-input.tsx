@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Input } from '@repo/ui/components/input';
+import { cn } from '@repo/ui/lib/utils';
 
 interface OtpInputProps {
   value: string[];
@@ -9,6 +10,7 @@ interface OtpInputProps {
   onComplete?: () => void;
   disabled?: boolean;
   length?: number;
+  variant?: 'default' | 'verification';
 }
 
 export function OtpInput({
@@ -17,6 +19,7 @@ export function OtpInput({
   onComplete,
   disabled = false,
   length = 6,
+  variant = 'default',
 }: OtpInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -84,7 +87,12 @@ export function OtpInput({
   }
 
   return (
-    <div className="flex w-full justify-center gap-1.5 px-2">
+    <div
+      className={cn(
+        'flex w-full justify-center',
+        variant === 'verification' ? 'gap-2.5' : 'gap-1.5 px-2',
+      )}
+    >
       {Array.from({ length }, (_, i) => (
         <Input
           key={i}
@@ -100,7 +108,12 @@ export function OtpInput({
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
-          className="h-12 min-w-0 flex-1 rounded-lg text-center text-xl font-medium"
+          className={cn(
+            'min-w-0 flex-1 text-center font-medium',
+            variant === 'verification'
+              ? 'h-18 rounded-xl px-2 py-5 font-display text-2xl leading-8 focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 focus-visible:ring-offset-0'
+              : 'h-12 rounded-lg text-xl',
+          )}
           disabled={disabled}
           autoComplete="one-time-code"
         />

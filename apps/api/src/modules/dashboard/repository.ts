@@ -4,6 +4,7 @@ export type DashboardProfileContext = {
   profileId: string;
   orgId: string;
   orgSlug: string;
+  portfolioSlug: string | null;
 };
 
 export type ProjectStatusCount = {
@@ -21,10 +22,15 @@ export const dashboardRepository = {
         profileId: schema.designerProfile.id,
         orgId: schema.designerProfile.orgId,
         orgSlug: schema.organization.slug,
+        portfolioSlug: schema.designerPortfolio.portfolioSlug,
       })
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .innerJoin(schema.member, eq(schema.member.organizationId, schema.designerProfile.orgId))
+      .leftJoin(
+        schema.designerPortfolio,
+        eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+      )
       .where(
         and(eq(schema.member.userId, input.userId), eq(schema.designerProfile.orgId, input.orgId)),
       )

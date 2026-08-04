@@ -3,8 +3,15 @@ import type { ListProjectsResponse, ProjectListStatus, ProjectStatus } from '@re
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { EmptyState } from '@repo/ui/components/empty-state';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
-import { AlertCircle, ArrowDown, CheckCircle2, ImagePlus } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@repo/ui/components/table';
+import { AlertCircle, ArrowDown, CheckCircle2, ImagePlus, SquarePen } from 'lucide-react';
 import { DesignerListControls } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
 import { DesignerProjectRowActions } from '@/components/designer-project-row-actions';
@@ -49,18 +56,38 @@ function statusLabel(status: ProjectStatus) {
 function StatusBadge({ status }: { status: ProjectStatus }) {
   if (status === 'changes_requested') {
     return (
-      <Badge variant="destructive" className="rounded-md bg-destructive/10 px-2 py-1 text-[13px] text-destructive">
+      <Badge
+        variant="destructive"
+        className="rounded-md bg-destructive/10 px-2 py-1 text-[13px] text-destructive"
+      >
         <AlertCircle className="size-3.5 fill-current" />
         {statusLabel(status)}
       </Badge>
     );
   }
 
-  const variant = status === 'published' ? 'success' : status === 'rejected' ? 'destructive' : status === 'draft' ? 'secondary' : 'warning';
+  const variant =
+    status === 'published'
+      ? 'success'
+      : status === 'rejected'
+        ? 'destructive'
+        : status === 'draft'
+          ? 'secondary'
+          : 'warning';
 
   return (
-    <Badge variant={variant} className="rounded-md px-2 py-1 text-[13px]">
-      <CheckCircle2 className="size-3.5" />
+    <Badge
+      variant={variant}
+      className={cn(
+        'rounded-md px-2 py-1 text-[13px] font-medium leading-[1.1]',
+        status === 'published' && 'gap-1 bg-success-lighter pl-1 text-success',
+      )}
+    >
+      {status === 'draft' ? (
+        <SquarePen className="size-3.5" />
+      ) : (
+        <CheckCircle2 className="size-3.5" />
+      )}
       {statusLabel(status)}
     </Badge>
   );
@@ -69,13 +96,19 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
 function ProjectTypeBadge({ label }: { label: string | null }) {
   const normalizedLabel = label?.toLowerCase() ?? '';
   const className = normalizedLabel.includes('villa')
-    ? 'bg-secondary text-secondary-foreground'
+    ? 'bg-feature-lighter text-feature'
     : normalizedLabel.includes('apartment')
       ? 'bg-info/10 text-info'
       : 'bg-info/10 text-info';
 
   return (
-    <Badge variant="secondary" className={cn('rounded-full border-transparent px-2.5 py-1 text-[13px]', className)}>
+    <Badge
+      variant="secondary"
+      className={cn(
+        'rounded-full border-transparent px-2.5 py-1 text-[13px] font-medium leading-[1.1]',
+        className,
+      )}
+    >
       {label ?? 'Project'}
     </Badge>
   );
@@ -99,7 +132,8 @@ export function DesignerProjectsList({
       <DesignerListControls
         tabs={projectTabs.map((tab) => ({
           ...tab,
-          count: tabCounts?.[tab.value] ?? (tab.value === activeStatus ? projects.total : undefined),
+          count:
+            tabCounts?.[tab.value] ?? (tab.value === activeStatus ? projects.total : undefined),
         }))}
         activeTab={activeStatus}
         searchValue={query}
@@ -136,15 +170,22 @@ export function DesignerProjectsList({
                     <div className="flex items-center gap-3">
                       <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
                         {project.coverImageUrl ? (
-                          <img src={project.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={project.coverImageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <ImagePlus className="size-4 text-muted-foreground" />
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">{project.title}</div>
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {project.title}
+                        </div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {[project.locality, project.city].filter(Boolean).join(', ') || 'Location not added'}
+                          {[project.locality, project.city].filter(Boolean).join(', ') ||
+                            'Location not added'}
                         </div>
                       </div>
                     </div>
@@ -155,8 +196,12 @@ export function DesignerProjectsList({
                   <TableCell>
                     <StatusBadge status={project.status} />
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">{formatDate(project.createdAt)}</TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">{formatUpdated(project.updatedAt)}</TableCell>
+                  <TableCell className="text-sm font-medium text-muted-foreground">
+                    {formatDate(project.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium text-muted-foreground">
+                    {formatUpdated(project.updatedAt)}
+                  </TableCell>
                   <TableCell>
                     <DesignerProjectRowActions
                       projectId={project.id}
@@ -172,7 +217,11 @@ export function DesignerProjectsList({
                   <EmptyState
                     icon={<ImagePlus className="size-5" />}
                     title="No projects found"
-                    description={query ? 'Try a different search or clear the filter.' : 'Add your first project to make your portfolio live.'}
+                    description={
+                      query
+                        ? 'Try a different search or clear the filter.'
+                        : 'Add your first project to make your portfolio live.'
+                    }
                     action={
                       <Button asChild variant="emphasis">
                         <Link href="/designer/projects/new">Add new project</Link>

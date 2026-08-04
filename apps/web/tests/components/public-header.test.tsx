@@ -15,7 +15,7 @@ describe('PublicHeader', () => {
 
     expect(listYourWorkLink).toHaveAttribute('href', '/login?mode=designer');
     expect(listYourWorkLink).toHaveClass('h-8');
-    expect(signInLink).toHaveClass('h-8');
+    expect(signInLink).toHaveClass('h-8', 'bg-button-inverted', 'text-button-inverted-foreground');
     expect(listYourWorkLink.querySelector('.lucide-list-chevrons-up-down')).toBeInTheDocument();
     expect(signInLink.querySelector('.lucide-user-round')).toBeInTheDocument();
   });

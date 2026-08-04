@@ -37,7 +37,13 @@ describe('VisitorOnboardingPage', () => {
   it('renders the visitor onboarding profile setup for signed-in visitors', async () => {
     mock.requireAuth.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
-      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
+      user: {
+        id: 'u1',
+        name: '+919123456789',
+        email: 'mahi@test.com',
+        phoneNumber: '+919123456789',
+        role: 'visitor',
+      },
     });
     vi.mocked(rolePassesCheck).mockReturnValue(false);
 
@@ -46,9 +52,11 @@ describe('VisitorOnboardingPage', () => {
     render(page);
 
     expect(screen.getByText("Let's set up your space on Tickif")).toBeInTheDocument();
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi');
-    expect(screen.getByLabelText(/city/i)).toHaveValue('chennai');
+    expect(screen.getByLabelText(/display name/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
+    expect(screen.getByLabelText(/^address$/i)).toHaveValue('');
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
+    expect(screen.getByRole('link', { name: 'Skip' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
   });
 

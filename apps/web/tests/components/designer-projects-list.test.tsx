@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { ListProjectsResponse } from '@repo/contracts';
 import { DesignerProjectsList } from '../../src/components/designer-projects-list';
@@ -48,14 +49,28 @@ describe('DesignerProjectsList', () => {
   it('renders project filters, rows, status badges, and edit links', () => {
     render(<DesignerProjectsList projects={projects} activeStatus="all" />);
 
-    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute('href', '/designer/projects?page=1');
-    expect(screen.getByRole('link', { name: /live/i })).toHaveAttribute('href', '/designer/projects?status=published&page=1');
+    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute(
+      'href',
+      '/designer/projects?page=1',
+    );
+    expect(screen.getByRole('link', { name: /live/i })).toHaveAttribute(
+      'href',
+      '/designer/projects?status=published&page=1',
+    );
     expect(screen.getByText('2BHK Apartment in Velachery')).toBeInTheDocument();
     expect(screen.getByText('Velachery, Chennai')).toBeInTheDocument();
     expect(screen.getByText('Apartment')).toBeInTheDocument();
     expect(screen.getByText('Villa')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Needs change')).toBeInTheDocument();
+    expect(screen.getByText('Villa').closest('[data-slot="badge"]')).toHaveClass(
+      'bg-feature-lighter',
+      'text-feature',
+    );
+    expect(screen.getByText('Active').closest('[data-slot="badge"]')).toHaveClass(
+      'bg-success-lighter',
+      'text-success',
+    );
     expect(screen.getByRole('link', { name: /edit 2bhk apartment in velachery/i })).toHaveAttribute(
       'href',
       '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
@@ -72,6 +87,43 @@ describe('DesignerProjectsList', () => {
     );
 
     expect(screen.getByText(/no projects found/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add new project/i })).toHaveAttribute('href', '/designer/projects/new');
+    expect(screen.getByRole('link', { name: /add new project/i })).toHaveAttribute(
+      'href',
+      '/designer/projects/new',
+    );
+  });
+
+  it('uses the square pen icon for draft projects', () => {
+    render(
+      <DesignerProjectsList
+        projects={{
+          ...projects,
+          total: 1,
+          items: [{ ...projects.items[0]!, status: 'draft' }],
+        }}
+        activeStatus="draft"
+      />,
+    );
+
+    expect(
+      screen.getByText('Draft').closest('[data-slot="badge"]')?.querySelector('.lucide-square-pen'),
+    ).toBeInTheDocument();
+  });
+
+  it('focuses project search when pressing the slash shortcut', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    await user.keyboard('/');
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
+  });
+
+  it('focuses project search when the browser reports the slash key by code', () => {
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    fireEvent.keyDown(window, { key: 'Slash', code: 'Slash' });
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
   });
 });

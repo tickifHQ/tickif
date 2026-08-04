@@ -37,6 +37,7 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   profileId: '11111111-1111-4111-8111-111111111111',
   orgId: 'org_1',
   orgSlug: 'studio-noir',
+  portfolioSlug: 'studio-noir-portfolio',
   ...overrides,
 });
 
@@ -93,9 +94,19 @@ describe('dashboardService.getProfileDashboard', () => {
         total: 7,
         new: 3,
       },
-      shareUrl: new URL('/d/studio-noir', config.PUBLIC_WEB_URL).toString(),
+      shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1');
+  });
+
+  it('falls back to the organization slug before a custom portfolio slug is set', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ portfolioSlug: null }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.shareUrl).toBe(new URL('/d/studio-noir', config.PUBLIC_WEB_URL).toString());
   });
 
   it('resolves completion against the same active organization as the dashboard context', async () => {

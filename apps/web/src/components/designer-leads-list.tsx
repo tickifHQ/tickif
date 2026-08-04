@@ -3,16 +3,24 @@ import type { LeadDetailResponse, LeadListStatus, ListLeadsResponse } from '@rep
 import { Avatar } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { EmptyState } from '@repo/ui/components/empty-state';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@repo/ui/components/table';
 import { ArrowDown, ExternalLink, UsersRound } from 'lucide-react';
 import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dialog';
 import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
-import { DesignerLeadStatusAction } from '@/components/designer-lead-status-action';
+import { DesignerLeadStatusBadge } from '@/components/designer-lead-status';
 import { DesignerListControls, type DesignerListTab } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
 
 const leadTabs: Array<DesignerListTab<LeadListStatus>> = [
   { value: 'all', label: 'All' },
+  { value: 'new', label: 'New lead' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'closed', label: 'Closed' },
   { value: 'spam', label: 'Spam' },
@@ -119,34 +127,56 @@ export function DesignerLeadsList({
                         <span className="text-xs font-bold">{initials(lead.name)}</span>
                       </Avatar>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">{lead.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">{lead.city ?? 'City not added'}</div>
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {lead.name}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {lead.city ?? 'City not added'}
+                        </div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm font-medium text-muted-foreground">
                     {lead.referredProjectTitle ?? 'No project attached'}
                   </TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">{lead.contactNumber}</TableCell>
-                  <TableCell className="text-[13px] font-medium text-muted-foreground">{lead.budgetBand ?? 'Not added'}</TableCell>
-                  <TableCell className="text-sm font-medium text-muted-foreground">{formatDate(lead.receivedAt)}</TableCell>
+                  <TableCell className="text-sm font-medium text-muted-foreground">
+                    {lead.contactNumber}
+                  </TableCell>
+                  <TableCell className="text-[13px] font-medium text-muted-foreground">
+                    {lead.budgetBand ?? 'Not added'}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium text-muted-foreground">
+                    {formatDate(lead.receivedAt)}
+                  </TableCell>
                   <TableCell>
-                    <DesignerLeadStatusAction leadId={lead.id} status={lead.status} />
+                    <DesignerLeadStatusBadge status={lead.status} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button asChild variant="ghost" size="icon" className="size-8" aria-label={`Open ${lead.name} lead`}>
-                        <Link href={leadDetailHref({
-                          leadId: lead.id,
-                          activeStatus,
-                          query,
-                          page: leads.page,
-                          limit: leads.limit,
-                        })}>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        aria-label={`Open ${lead.name} lead`}
+                      >
+                        <Link
+                          href={leadDetailHref({
+                            leadId: lead.id,
+                            activeStatus,
+                            query,
+                            page: leads.page,
+                            limit: leads.limit,
+                          })}
+                        >
                           <ExternalLink className="size-4" />
                         </Link>
                       </Button>
-                      <DesignerLeadMoreMenu leadId={lead.id} leadName={lead.name} status={lead.status} />
+                      <DesignerLeadMoreMenu
+                        leadId={lead.id}
+                        leadName={lead.name}
+                        status={lead.status}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -157,7 +187,11 @@ export function DesignerLeadsList({
                   <EmptyState
                     icon={<UsersRound className="size-5" />}
                     title="No leads found"
-                    description={query ? 'Try a different search or clear the filter.' : 'New leads will appear here when homeowners enquire.'}
+                    description={
+                      query
+                        ? 'Try a different search or clear the filter.'
+                        : 'New leads will appear here when homeowners enquire.'
+                    }
                   />
                 </TableCell>
               </TableRow>

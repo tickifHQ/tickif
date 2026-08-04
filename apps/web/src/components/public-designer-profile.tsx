@@ -40,6 +40,7 @@ import {
   formatRating,
   heroCaption,
   heroProject,
+  socialHref,
   socialLabel,
   strapline,
   studioInitials,
@@ -664,16 +665,38 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
   const { social, stats } = portfolio;
   const socialLinks = [
     social.instagramHandle
-      ? { key: 'instagram', icon: InstagramBrandIcon, label: socialLabel(social.instagramHandle) }
+      ? {
+          key: 'instagram',
+          icon: InstagramBrandIcon,
+          label: socialLabel(social.instagramHandle),
+          href: socialHref('instagram', social.instagramHandle),
+        }
       : null,
     social.linkedinHandle
-      ? { key: 'linkedin', icon: LinkedInBrandIcon, label: socialLabel(social.linkedinHandle) }
+      ? {
+          key: 'linkedin',
+          icon: LinkedInBrandIcon,
+          label: socialLabel(social.linkedinHandle),
+          href: socialHref('linkedin', social.linkedinHandle),
+        }
       : null,
     social.youtubeHandle
-      ? { key: 'youtube', icon: YouTubeBrandIcon, label: socialLabel(social.youtubeHandle) }
+      ? {
+          key: 'youtube',
+          icon: YouTubeBrandIcon,
+          label: socialLabel(social.youtubeHandle),
+          href: socialHref('youtube', social.youtubeHandle),
+        }
       : null,
   ].filter(
-    (link): link is { key: string; icon: typeof InstagramBrandIcon; label: string } => !!link,
+    (
+      link,
+    ): link is {
+      key: string;
+      icon: typeof InstagramBrandIcon;
+      label: string;
+      href: string;
+    } => !!link?.href,
   );
 
   const facts = [
@@ -729,14 +752,17 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
         </div>
         {socialLinks.length > 0 || social.websiteUrl ? (
           <div className="mt-8 flex flex-wrap items-center gap-2 border-t pt-3">
-            {socialLinks.map(({ key, icon: Icon, label }) => (
-              <span
+            {socialLinks.map(({ key, icon: Icon, label, href }) => (
+              <a
                 key={key}
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1.5 text-sm text-muted-foreground"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground"
               >
                 <Icon className="size-4" />
                 {label}
-              </span>
+              </a>
             ))}
             {social.websiteUrl ? (
               <a
