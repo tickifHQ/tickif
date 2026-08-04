@@ -39,6 +39,8 @@ function parseLeadQuery(
   const raw = {
     status: firstParam(searchParams.status),
     q: firstParam(searchParams.q) || undefined,
+    sortBy: firstParam(searchParams.sortBy) || undefined,
+    sortOrder: firstParam(searchParams.sortOrder) || undefined,
     page: firstParam(searchParams.page),
     limit: firstParam(searchParams.limit),
   };
@@ -135,6 +137,8 @@ export default async function DesignerLeadsPage({ searchParams }: DesignerLeadsP
       selectedLeadError={selectedLead.ok ? undefined : selectedLead.message}
       activeStatus={query.status as LeadListStatus}
       query={query.q}
+      sortBy={query.sortBy}
+      sortOrder={query.sortOrder}
       error={leads.ok ? undefined : leads.message}
     />
   );

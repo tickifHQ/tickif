@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@repo/ui/components/dialog';
 import { Label } from '@repo/ui/components/label';
-import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
@@ -48,14 +47,26 @@ const TEMPLATE_CHIPS = [
   { label: 'General question', template: '' },
 ] as const;
 
-const BUDGET_OPTIONS = [
-  { value: 'under-5l', label: 'Under \u20B95 Lakh' },
-  { value: '5-10l', label: '\u20B95\u201310 Lakh' },
-  { value: '10-20l', label: '\u20B910\u201320 Lakh' },
-  { value: '20-50l', label: '\u20B920\u201350 Lakh' },
-  { value: '50l-plus', label: '\u20B950 Lakh+' },
-  { value: 'prefer-not-to-say', label: 'Prefer not to say' },
+const BUDGET_STEPS = [
+  { value: 5, label: '\u20B95L' },
+  { value: 10, label: '\u20B910L' },
+  { value: 20, label: '\u20B920L' },
+  { value: 50, label: '\u20B950L+' },
 ] as const;
+
+function budgetRangeToString(min: number, max: number): string {
+  const minVal = BUDGET_STEPS[min]!.value;
+  const maxVal = BUDGET_STEPS[max]!.value;
+  if (min === max) return `${minVal}l`;
+  return `${minVal}-${maxVal}l`;
+}
+
+function budgetRangeLabel(min: number, max: number): string {
+  const minLabel = BUDGET_STEPS[min]!.label;
+  const maxLabel = BUDGET_STEPS[max]!.label;
+  if (min === max) return minLabel;
+  return `${minLabel} \u2013 ${maxLabel}`;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,7 +94,9 @@ export function EnquiryDialog({
 }: Props) {
   const [subject] = useState(defaultSubject(context));
   const [description, setDescription] = useState('');
-  const [budget, setBudget] = useState('');
+  const [budgetMin, setBudgetMin] = useState(0);
+  const [budgetMax, setBudgetMax] = useState(3);
+  const [budgetTouched, setBudgetTouched] = useState(false);
   const [activeChip, setActiveChip] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -91,7 +104,9 @@ export function EnquiryDialog({
 
   function reset() {
     setDescription('');
-    setBudget('');
+    setBudgetMin(0);
+    setBudgetMax(3);
+    setBudgetTouched(false);
     setActiveChip(null);
     setError(null);
     setSuccess(false);
@@ -122,7 +137,7 @@ export function EnquiryDialog({
             subject: subject.trim(),
             description: description.trim(),
             templateUsed: activeChip ?? undefined,
-            budget,
+            budget: budgetRangeToString(budgetMin, budgetMax),
           },
         });
 
@@ -152,7 +167,7 @@ export function EnquiryDialog({
     });
   }
 
-  const isValid = description.trim().length > 0 && budget.length > 0;
+  const isValid = description.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -231,14 +246,74 @@ export function EnquiryDialog({
               ))}
             </div>
 
-            {/* Budget */}
-            <SelectField
-              label="Estimated Budget"
-              value={budget}
-              onValueChange={setBudget}
-              options={[...BUDGET_OPTIONS]}
-              placeholder="Select budget range"
-            />
+            {/* Budget Range Slider */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">
+                Estimated Budget <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative px-2 pt-2 pb-1">
+                {/* Track background (grey) */}
+                <div className="absolute top-[18px] left-2 right-2 h-1 rounded-full bg-border" />
+                {/* Active track (green) */}
+                <div
+                  className="absolute top-[18px] h-1 rounded-full bg-primary"
+                  style={{
+                    left: `calc(${(budgetMin / 3) * 100}% + 8px - ${(budgetMin / 3) * 16}px)`,
+                    right: `calc(${((3 - budgetMax) / 3) * 100}% + 8px - ${((3 - budgetMax) / 3) * 16}px)`,
+                  }}
+                />
+                {/* Min thumb */}
+                <input
+                  type="range"
+                  min={0}
+                  max={3}
+                  step={1}
+                  value={budgetMin}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (val <= budgetMax) {
+                      setBudgetMin(val);
+                      setBudgetTouched(true);
+                    }
+                  }}
+                  className="pointer-events-none absolute inset-x-2 top-[10px] h-5 w-[calc(100%-16px)] cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md"
+                />
+                {/* Max thumb */}
+                <input
+                  type="range"
+                  min={0}
+                  max={3}
+                  step={1}
+                  value={budgetMax}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (val >= budgetMin) {
+                      setBudgetMax(val);
+                      setBudgetTouched(true);
+                    }
+                  }}
+                  className="pointer-events-none absolute inset-x-2 top-[10px] h-5 w-[calc(100%-16px)] cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md"
+                />
+                {/* Spacer for layout */}
+                <div className="h-5" />
+              </div>
+              {/* Labels below slider */}
+              <div className="flex justify-between px-2 text-[11px] text-muted-foreground">
+                {BUDGET_STEPS.map((step, i) => (
+                  <span
+                    key={step.value}
+                    className={cn(
+                      i >= budgetMin && i <= budgetMax ? 'font-medium text-primary' : '',
+                    )}
+                  >
+                    {step.label}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs font-medium text-foreground">
+                {budgetRangeLabel(budgetMin, budgetMax)}
+              </p>
+            </div>
 
             {/* Error */}
             {error && (
@@ -246,6 +321,11 @@ export function EnquiryDialog({
                 {error}
               </div>
             )}
+
+            {/* Notice */}
+            <p className="text-xs text-muted-foreground">
+              Your contact details and enquiry will be shared with the designer.
+            </p>
           </div>
         </div>
 

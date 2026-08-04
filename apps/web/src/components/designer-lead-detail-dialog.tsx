@@ -13,7 +13,7 @@ import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { SelectField } from '@repo/ui/components/select-field';
 import { Textarea } from '@repo/ui/components/textarea';
-import { ArrowRight, ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X } from 'lucide-react';
 import { leadStatusOptions } from '@/components/designer-lead-status';
 import { api } from '@/lib/api';
 
@@ -23,6 +23,19 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+function formatBudget(slug: string | null): string {
+  if (!slug) return 'Not added';
+  const map: Record<string, string> = {
+    'under-5l': '₹Under 5L',
+    '5-10l': '₹5-10L',
+    '10-20l': '₹10-20L',
+    '20-50l': '₹20-50L',
+    '50l-plus': '₹50L+',
+    'prefer-not-to-say': 'Not disclosed',
+  };
+  return map[slug] ?? slug;
 }
 
 function initials(name: string) {
@@ -52,8 +65,8 @@ function DetailField({
 }) {
   return (
     <div className={className}>
-      <dt className="text-sm font-medium text-foreground">{label}</dt>
-      <dd className="mt-2 rounded-lg bg-muted/40 px-3 py-3 text-sm font-medium text-muted-foreground">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 rounded-lg bg-muted/40 px-3 py-2.5 text-sm font-medium text-foreground">
         {value || 'Not added'}
       </dd>
     </div>
@@ -145,7 +158,7 @@ export function DesignerLeadDetailDialog({
           <>
             <div className="flex items-center gap-4 px-6 pt-5 pb-4">
               <Avatar className="size-12 bg-primary text-primary-foreground">
-                <span className="text-sm font-bold">{initials(lead.name)}</span>
+                <span className="flex size-full items-center justify-center text-sm font-bold">{initials(lead.name)}</span>
               </Avatar>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-medium text-foreground">{lead.name}</h2>
@@ -156,40 +169,38 @@ export function DesignerLeadDetailDialog({
             </div>
 
             <div className="max-h-[calc(100vh-15rem)] overflow-y-auto border-t border-border px-6 py-6">
-              <dl className="grid gap-x-4 gap-y-4 sm:grid-cols-[1fr_1fr_8.5rem]">
+              <dl className="grid gap-x-4 gap-y-4 sm:grid-cols-3">
                 <DetailField label="Name" value={lead.name} />
                 <DetailField label="Location" value={lead.city} />
-                <DetailField label="Budget" value={lead.budgetBand} />
-                <DetailField
-                  label="Contact number"
-                  value={lead.contactNumber}
-                  className="sm:col-span-2"
-                />
+                <DetailField label="Budget" value={formatBudget(lead.budgetBand)} />
+                <DetailField label="Contact number" value={lead.contactNumber} />
                 <DetailField label="Received on" value={formatDate(lead.receivedAt)} />
               </dl>
 
               <div className="mt-5">
-                <div className="text-sm font-medium text-foreground">Referred project</div>
+                <div className="text-sm font-medium text-muted-foreground">Referred project</div>
                 <div className="mt-3 flex items-center gap-3">
                   <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
                     <ImagePlus className="size-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {lead.referredProjectTitle ?? 'No project attached'}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {lead.referredProjectTitle ?? 'No project attached'}
+                      </span>
+                      {lead.referredProjectId ? (
+                        <Link
+                          href={`/designer/projects/${lead.referredProjectId}/edit`}
+                          className="shrink-0 text-sm text-primary underline hover:text-primary/80"
+                        >
+                          View project
+                        </Link>
+                      ) : null}
                     </div>
                     <div className="mt-1 truncate text-sm text-muted-foreground">
                       {lead.city ?? 'Location not added'}
                     </div>
                   </div>
-                  {lead.referredProjectId ? (
-                    <Button asChild variant="outline" className="shrink-0">
-                      <Link href={`/designer/projects/${lead.referredProjectId}/edit`}>
-                        View project
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </Button>
-                  ) : null}
                 </div>
               </div>
 
