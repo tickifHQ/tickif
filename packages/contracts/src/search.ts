@@ -11,8 +11,15 @@ import { z } from 'zod';
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Multi-value facet: single string or array of strings for OR logic within facet */
-const multiValueFacet = z.union([z.string(), z.array(z.string())]);
+/**
+ * Multi-value facet: single string or array of strings for OR logic within facet.
+ *
+ * Bounded on both axes because every value ends up concatenated into a Typesense
+ * `filter_by` expression — an unbounded array would let one request build an
+ * arbitrarily large query string.
+ */
+const facetValue = z.string().trim().min(1).max(80);
+const multiValueFacet = z.union([facetValue, z.array(facetValue).max(20)]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Project Search

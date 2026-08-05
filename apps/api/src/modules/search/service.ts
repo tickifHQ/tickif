@@ -181,8 +181,7 @@ export async function searchProjects(
 
   // Build initial search params
   const filterBy = buildProjectFilter(mutableFilters);
-  const sortBy =
-    PROJECT_SORT_OPTIONS[query.sort as keyof typeof PROJECT_SORT_OPTIONS];
+  const sortBy = PROJECT_SORT_OPTIONS[query.sort];
 
   const searchParams: repository.TypesenseSearchParams = {
     q: query.q,
@@ -380,8 +379,7 @@ export async function searchDesigners(
 
   // Build search params
   const filterBy = buildDesignerFilter(filters);
-  const sortBy =
-    DESIGNER_SORT_OPTIONS[query.sort as keyof typeof DESIGNER_SORT_OPTIONS];
+  const sortBy = DESIGNER_SORT_OPTIONS[query.sort];
 
   const searchParams: repository.TypesenseSearchParams = {
     q: query.q,

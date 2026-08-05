@@ -17,6 +17,7 @@ import {
   type DesignerSearchDocument,
 } from '@repo/search';
 import { db, schema, eq, and, desc, isNotNull, inArray } from '@repo/db';
+import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
   DESIGNER_FACET_FIELDS,
@@ -90,6 +91,27 @@ export interface TypesenseSearchParams {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Cover-derivative policy for the Postgres fallback.
+ *
+ * Deliberately identical to `pickCoverDerivative` in apps/worker/src/search/mapper.ts,
+ * which produces `coverImageKey` for the Typesense document. Keeping the two in step
+ * means a fallback hit and an indexed hit render the same image. The worker helper is
+ * not importable from apps/api, so the policy is duplicated rather than shared —
+ * change both together.
+ */
+function pickCoverDerivativeKey(derivatives: Derivative[] | null): string | null {
+  if (!derivatives) return null;
+  return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
+    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
+    derivatives[0]?.key ??
+    null
+  );
+}
 
 /**
  * Transform Typesense facet_counts to domain facetDistribution shape.
@@ -369,10 +391,7 @@ export async function recentProjectsInCity(
   }
 
   // Index cover image derivatives by ID
-  const coverById = new Map<
-    string,
-    Array<{ key: string; width: number; height: number }>
-  >();
+  const coverById = new Map<string, Derivative[]>();
   for (const c of coverData) {
     coverById.set(c.id, c.derivatives);
   }
@@ -383,11 +402,10 @@ export async function recentProjectsInCity(
     const coverDerivatives = row.coverImageId
       ? coverById.get(row.coverImageId)
       : null;
-    // Extract the public derivative key (typically the first or 'public' variant)
-    const coverImageKey =
-      coverDerivatives && coverDerivatives.length > 0
-        ? coverDerivatives[0]!.key
-        : null;
+    // Mirror the indexer's cover policy (apps/worker/src/search/mapper.ts →
+    // pickCoverDerivative) so a Postgres fallback hit renders the same image the
+    // Typesense document would have carried.
+    const coverImageKey = pickCoverDerivativeKey(coverDerivatives ?? null);
 
     return {
       id: row.id,
