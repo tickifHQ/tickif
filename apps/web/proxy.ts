@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
+import { ADMIN_LOGIN_PATH } from '@/lib/auth-paths';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
+const PUBLIC_PATHS = new Set(['/', '/login', ADMIN_LOGIN_PATH, '/design-system']);
 
 /**
  * Route trees anonymous visitors may enter.
