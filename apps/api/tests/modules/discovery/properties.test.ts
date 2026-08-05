@@ -13,8 +13,10 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
   },
 }));
 
-// Mock the mapper
+// Mock the mapper. The mocked toDiscoveryCard ignores the resolved label map, so
+// collectTaxonomyPairs returns nothing and the batch lookup never hits the database.
 vi.mock('../../../src/modules/discovery/mapper.js', () => ({
+  collectTaxonomyPairs: vi.fn(() => []),
   normalizeTypesenseHit: vi.fn((hit) => ({
     slug: hit.slug,
     title: hit.title,
