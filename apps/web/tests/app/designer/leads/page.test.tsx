@@ -79,7 +79,7 @@ describe('DesignerLeadsPage', () => {
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'designer' });
     expect(mock.getLeads).toHaveBeenCalledWith(
-      { query: { status: 'contacted', q: 'Priya', page: 2, limit: 12 } },
+      { query: { status: 'contacted', q: 'Priya', sortBy: 'receivedAt', sortOrder: 'desc', page: 2, limit: 12 } },
       { headers: { cookie: 'session=abc' } },
     );
     expect(screen.getByTestId('active-status')).toHaveTextContent('contacted');

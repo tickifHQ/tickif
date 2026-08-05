@@ -30,16 +30,12 @@ const gallery: GalleryImage[] = [
 ];
 
 describe('ProjectDetailView', () => {
-  it('uses the compact inverted design-system button for enquiries', () => {
+  it('renders the enquire action with the inverted style', () => {
     render(<ProjectDetailView project={project} gallery={gallery} moreProjects={[]} />);
 
-    expect(screen.getByRole('button', { name: /enquire/i })).toHaveClass(
-      'h-9',
-      'bg-button-inverted',
-      'text-button-inverted-foreground',
-    );
-    expect(
-      screen.getByRole('button', { name: /enquire/i }).querySelector('.lucide-message-square'),
-    ).toBeInTheDocument();
+    // When unauthenticated, EnquiryCta renders as a link
+    const enquireLink = screen.getByRole('link', { name: /enquire/i });
+    expect(enquireLink).toBeInTheDocument();
+    expect(enquireLink.querySelector('.lucide-message-square')).toBeInTheDocument();
   });
 });

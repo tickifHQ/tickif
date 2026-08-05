@@ -64,7 +64,7 @@ describe('DesignerLeadsList', () => {
   it('renders lead filters, API rows, and passive response status chips', () => {
     render(<DesignerLeadsList leads={leads} activeStatus="all" />);
 
-    expect(screen.getByRole('link', { name: /all 3/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /^all$/i })).toHaveAttribute(
       'href',
       '/designer/leads?page=1',
     );
