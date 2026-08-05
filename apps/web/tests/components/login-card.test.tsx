@@ -6,6 +6,8 @@ import { LoginCard } from '../../src/components/login-card';
 const mock = vi.hoisted(() => ({
   router: {
     push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
   },
   sendOtp: vi.fn(),
   verify: vi.fn(),
@@ -73,6 +75,16 @@ describe('LoginCard', () => {
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
   });
 
+  it('renders a dedicated admin sign-in without audience tabs', () => {
+    render(<LoginCard intent="admin" />);
+
+    expect(screen.getByRole('heading', { name: 'Admin sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Phone' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Email' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /i'm browsing/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /i'm a designer/i })).not.toBeInTheDocument();
+  });
+
   it('shows designer-specific promo subtitle when designer tab is active', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
@@ -82,7 +94,9 @@ describe('LoginCard', () => {
 
   it('shows Google sign-in in browsing mode', () => {
     render(<LoginCard />);
-    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByRole('button', { name: /continue with google/i }).length,
+    ).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
@@ -103,7 +117,10 @@ describe('LoginCard', () => {
   });
 
   it('calls Google signIn with origin callback in browsing mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
@@ -115,8 +132,14 @@ describe('LoginCard', () => {
   });
 
   it('sends completed visitors home after Google sign in', async () => {
-    window.localStorage.setItem('tickif.visitorOnboarding', JSON.stringify({ displayName: 'Mahi', city: 'chennai' }));
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    window.localStorage.setItem(
+      'tickif.visitorOnboarding',
+      JSON.stringify({ displayName: 'Mahi', city: 'chennai' }),
+    );
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('button', { name: /continue with google/i }));
@@ -126,9 +149,11 @@ describe('LoginCard', () => {
     });
   });
 
-
   it('calls Google signIn with onboarding callback in designer mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard initialMode="designer" />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
@@ -139,13 +164,30 @@ describe('LoginCard', () => {
     });
   });
 
+  it('calls Google signIn with the moderation callback in admin mode', async () => {
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
+    const user = userEvent.setup();
+    render(<LoginCard intent="admin" />);
+
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
+
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/admin/moderation',
+    });
+  });
+
   it('shows error when Google signIn fails in browsing mode', async () => {
     mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
     const user = userEvent.setup();
     render(<LoginCard />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
     await user.click(googleButtons[0]!);
-    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't sign in with Google")).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
@@ -154,7 +196,7 @@ describe('LoginCard', () => {
     render(<LoginCard initialMode="designer" />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
     await user.click(googleButtons[googleButtons.length - 1]!);
-    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't sign in with Google")).toBeInTheDocument();
   });
 
   it('disables Send OTP button when phone is empty', () => {
@@ -243,7 +285,10 @@ describe('LoginCard', () => {
     });
 
     it('shows error on verify failure', async () => {
-      mock.verify.mockResolvedValueOnce({ data: null, error: { message: 'Invalid or expired OTP' } });
+      mock.verify.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Invalid or expired OTP' },
+      });
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
@@ -256,7 +301,9 @@ describe('LoginCard', () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /continue with google/i }),
+      ).not.toBeInTheDocument();
     });
 
     it('returns to phone step on Cancel click', async () => {
@@ -276,6 +323,19 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(onSuccess).toHaveBeenCalled();
+    });
+
+    it('routes a successful admin phone sign-in to moderation', async () => {
+      mock.verify.mockResolvedValueOnce({ data: null, error: null });
+      const user = userEvent.setup();
+      render(<LoginCard intent="admin" />);
+      await user.click(screen.getByRole('tab', { name: 'Phone' }));
+      await goToOtpStep(user);
+      await fillOtp(user, '123456');
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(mock.router.replace).toHaveBeenCalledWith('/admin/moderation');
+      expect(mock.router.refresh).toHaveBeenCalled();
     });
   });
 });

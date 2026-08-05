@@ -3,7 +3,9 @@ import { getServerSession, requireAuth, rolePassesCheck } from '../../src/lib/au
 
 const mock = vi.hoisted(() => ({
   headers: vi.fn(),
-  redirect: vi.fn().mockImplementation(() => { throw new Error('NEXT_REDIRECT'); }),
+  redirect: vi.fn().mockImplementation(() => {
+    throw new Error('NEXT_REDIRECT');
+  }),
 }));
 
 vi.mock('next/headers', () => ({
@@ -47,13 +49,16 @@ describe('getServerSession', () => {
     mock.headers.mockResolvedValue({
       get: vi.fn((name: string) => (name === 'cookie' ? 'better-auth.session_token=test' : null)),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-        user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+        }),
       }),
-    }));
+    );
   });
 
   it('can bypass better-auth cookie cache for fresh role reads', async () => {
@@ -86,6 +91,15 @@ describe('getServerSession', () => {
 
     await expect(requireAuth()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/login');
+  });
+
+  it('supports a dedicated unauthenticated redirect for admin surfaces', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(
+      requireAuth({ requiredRole: 'admin', unauthenticatedRedirectTo: '/admin/login' }),
+    ).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/admin/login');
   });
 
   it('redirects to /unauthorized when role is insufficient', async () => {

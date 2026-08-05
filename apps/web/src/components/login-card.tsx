@@ -10,6 +10,8 @@ import {
   House,
   Mail,
   MessageSquare,
+  Phone,
+  ShieldCheck,
   Star,
   Users,
   X,
@@ -33,11 +35,13 @@ import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { countries as allCountries } from 'country-codes-flags-phone-codes';
 import { OtpInput } from '@/components/otp-input';
 import { GoogleBrandIcon } from '@/components/brand-icons';
+import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
 
 type LoginMode = 'browsing' | 'designer';
 
 interface LoginCardProps {
   initialMode?: LoginMode;
+  intent?: 'standard' | 'admin';
   onSuccess?: () => void;
   onClose?: () => void;
 }
@@ -112,6 +116,12 @@ const designerFeatures = [
   { icon: Calendar, title: 'Turn visitors into clients' },
 ] as const;
 
+const adminFeatures = [
+  { icon: ShieldCheck, title: 'Use role-protected moderation tools' },
+  { icon: Asterisk, title: 'Review projects across studios' },
+  { icon: MessageSquare, title: 'Keep every decision auditable' },
+] as const;
+
 const trustAvatars = [
   { initials: 'PK', className: 'bg-[#1a9b7a]' },
   { initials: 'RV', className: 'bg-[#3b5570]' },
@@ -119,8 +129,9 @@ const trustAvatars = [
   { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
-export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: LoginCardProps) {
+export function LoginCard({ initialMode = 'browsing', intent = 'standard', onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
+  const isAdmin = intent === 'admin';
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
   const [phone, setPhone] = useState('');
@@ -129,7 +140,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
-  const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
+  const [loginMode, setLoginMode] = useState<LoginMode>(isAdmin ? 'designer' : initialMode);
   const [countrySearch, setCountrySearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -140,10 +151,16 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   const [emailCooldown, setEmailCooldown] = useState(0);
   const [emailMessage, setEmailMessage] = useState('');
 
-  const features = loginMode === 'designer' ? designerFeatures : browsingFeatures;
-  const promoSubtitle = loginMode === 'designer'
-    ? 'One link to share your work, get discovered, and turn views into real enquiries.'
-    : 'Save the homes you love, message designers, and book free consultations.';
+  const features = isAdmin
+    ? adminFeatures
+    : loginMode === 'designer'
+      ? designerFeatures
+      : browsingFeatures;
+  const promoSubtitle = isAdmin
+    ? 'Sign in with your authorized Tickif account to continue to moderation.'
+    : loginMode === 'designer'
+      ? 'One link to share your work, get discovered, and turn views into real enquiries.'
+      : 'Save the homes you love, message designers, and book free consultations.';
 
   const filteredCountries = countrySearch
     ? countries.filter((c) => {
@@ -159,6 +176,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
 
   useEffect(() => {
     if (!success) return;
+    if (isAdmin) {
+      router.replace(ADMIN_MODERATION_PATH);
+      router.refresh();
+      return;
+    }
     if (onSuccess) {
       onSuccess();
       return;
@@ -170,7 +192,7 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
     } else {
       router.push(visitorPostLoginPath());
     }
-  }, [success, loginMode, router, onSuccess]);
+  }, [success, isAdmin, loginMode, router, onSuccess]);
 
   // Phone OTP cooldown
   useEffect(() => {
@@ -253,9 +275,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   // ─── Google SSO handler ─────────────────────────────────────────────────
   async function handleGoogleLogin() {
     setLoading(true); setError('');
-    const callbackURL = loginMode === 'designer'
-      ? `${window.location.origin}/designer/onboarding`
-      : `${window.location.origin}${visitorPostLoginPath()}`;
+    const callbackURL = isAdmin
+      ? `${window.location.origin}${ADMIN_MODERATION_PATH}`
+      : loginMode === 'designer'
+        ? `${window.location.origin}/designer/onboarding`
+        : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) setError('Couldn\'t sign in with Google');
@@ -335,11 +359,17 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
         <div className="flex w-full flex-col justify-between rounded-xl px-6 py-8 md:my-1 md:ml-1 md:w-[315px] md:shrink-0 [background-image:radial-gradient(circle_at_top_left,rgba(26,155,122,0.28),transparent_55%),linear-gradient(170deg,#17271f_0%,#0e1814_100%)]">
           <div className="flex flex-col gap-5">
             <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
-              <Users className="size-3.5 text-success" aria-hidden="true" />
-              <span className="text-xs font-medium text-success">Trusted by 5000+ homeowners</span>
+              {isAdmin ? (
+                <ShieldCheck className="size-3.5 text-success" aria-hidden="true" />
+              ) : (
+                <Users className="size-3.5 text-success" aria-hidden="true" />
+              )}
+              <span className="text-xs font-medium text-success">
+                {isAdmin ? 'Secure platform access' : 'Trusted by 5000+ homeowners'}
+              </span>
             </div>
             <div className="flex flex-col gap-2">
-              <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
+              <h2 className="font-display text-3xl text-white">{isAdmin ? 'Tickif administration' : 'Welcome to Tickif'}</h2>
               <p className="text-xs text-white/60">{promoSubtitle}</p>
               <div className="mt-6 flex flex-col gap-3">
                 {features.map((f) => {
@@ -354,32 +384,36 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
               </div>
             </div>
           </div>
-          <div className="mt-6 flex flex-col gap-3">
-            <div className="flex -space-x-2">
-              {trustAvatars.map((a) => (
-                <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
-                  <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>{a.initials}</AvatarFallback>
-                </Avatar>
-              ))}
+          {isAdmin ? (
+            <p className="mt-6 text-xs text-white/60">Authorized Tickif team members only.</p>
+          ) : (
+            <div className="mt-6 flex flex-col gap-3">
+              <div className="flex -space-x-2">
+                {trustAvatars.map((a) => (
+                  <Avatar key={a.initials} className="size-7 ring-2 ring-[#131f1a]">
+                    <AvatarFallback className={cn('text-[9px] font-semibold text-white', a.className)}>{a.initials}</AvatarFallback>
+                  </Avatar>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-white">12,400+ homeowners</p>
+                <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
+                  trust Tickif
+                  <span className="inline-flex items-center gap-1">
+                    <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
+                    4.9 (1.5k)
+                  </span>
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-white">12,400+ homeowners</p>
-              <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
-                trust Tickif
-                <span className="inline-flex items-center gap-1">
-                  <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
-                  4.9 (1.5k)
-                </span>
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Right: Form Panel */}
         <div className="flex w-full min-w-0 flex-col px-6 py-8 md:flex-1">
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-base font-medium text-foreground">Login to continue</h3>
+              <h3 className="text-base font-medium text-foreground">{isAdmin ? 'Admin sign in' : 'Login to continue'}</h3>
               {onClose && (
                 <Button onClick={onClose} aria-label="Close" variant="ghost" size="icon" className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground">
                   <X className="size-4" aria-hidden="true" />
@@ -388,15 +422,15 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
             </div>
 
             <div className="flex flex-col gap-4">
-              <Tabs defaultValue={initialMode} value={loginMode} className="w-full" onValueChange={(val) => setLoginMode(val as LoginMode)}>
+              <Tabs defaultValue={loginMode} value={loginMode} className="w-full" onValueChange={(val) => setLoginMode(val as LoginMode)}>
                 <TabsList className="w-full">
                   <TabsTrigger value="browsing" className="flex-1 gap-1.5">
-                    <House className="size-4" aria-hidden="true" />
-                    I'm browsing
+                    {isAdmin ? <Phone className="size-4" aria-hidden="true" /> : <House className="size-4" aria-hidden="true" />}
+                    {isAdmin ? 'Phone' : "I'm browsing"}
                   </TabsTrigger>
                   <TabsTrigger value="designer" className="flex-1 gap-1.5">
-                    <Asterisk className="size-4" aria-hidden="true" />
-                    I'm a designer
+                    {isAdmin ? <Mail className="size-4" aria-hidden="true" /> : <Asterisk className="size-4" aria-hidden="true" />}
+                    {isAdmin ? 'Email' : "I'm a designer"}
                   </TabsTrigger>
                 </TabsList>
 

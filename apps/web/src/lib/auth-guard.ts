@@ -66,7 +66,9 @@ export function rolePassesCheck(
  * passing the same flag (e.g. (public) layout + page) share one API
  * round-trip; callers with different flags still fetch independently.
  */
-export async function getServerSession(options?: GetServerSessionOptions): Promise<SessionData | null> {
+export async function getServerSession(
+  options?: GetServerSessionOptions,
+): Promise<SessionData | null> {
   return fetchSession(Boolean(options?.disableCookieCache));
 }
 
@@ -101,13 +103,14 @@ const fetchSession = cache(async (disableCookieCache: boolean): Promise<SessionD
  */
 export async function requireAuth(options?: {
   requiredRole?: 'designer' | 'admin' | 'superadmin';
+  unauthenticatedRedirectTo?: '/login' | '/admin/login';
 }): Promise<SessionData> {
   const session = await getServerSession({
     disableCookieCache: Boolean(options?.requiredRole),
   });
 
   if (!session) {
-    redirect('/login');
+    redirect(options?.unauthenticatedRedirectTo ?? '/login');
   }
 
   if (options?.requiredRole) {

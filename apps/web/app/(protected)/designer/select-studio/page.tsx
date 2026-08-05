@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { Card } from '@repo/ui/components/card';
+import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
 
 export const metadata = {
   title: 'Choose your studio · Tickif',
@@ -9,8 +10,13 @@ export const metadata = {
 
 export default async function DesignerSelectStudioPage() {
   const session = await getServerSession({ disableCookieCache: true });
+  const userRole = session?.user.role ?? null;
 
-  if (!rolePassesCheck(session?.user.role ?? null, 'designer')) {
+  if (rolePassesCheck(userRole, 'admin')) {
+    redirect(ADMIN_MODERATION_PATH);
+  }
+
+  if (!rolePassesCheck(userRole, 'designer')) {
     redirect('/designer/onboarding');
   }
 
