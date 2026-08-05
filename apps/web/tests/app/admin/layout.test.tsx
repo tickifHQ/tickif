@@ -27,14 +27,11 @@ describe('AdminLayout', () => {
     mock.requireAuth.mockResolvedValue({ user: { role: 'admin' }, session: {} });
   });
 
-  it('uses the dedicated admin login when the session is missing', async () => {
+  it('uses the shared login while enforcing the admin role on the server', async () => {
     const { default: Layout } = await import('../../../app/(admin)/layout');
     render(await Layout({ children: <div>Moderation</div> }));
 
-    expect(mock.requireAuth).toHaveBeenCalledWith({
-      requiredRole: 'admin',
-      unauthenticatedRedirectTo: '/admin/login',
-    });
+    expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'admin' });
     expect(screen.getByText('Moderation')).toBeInTheDocument();
   });
 });

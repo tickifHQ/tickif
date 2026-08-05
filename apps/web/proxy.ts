@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
-import { ADMIN_LOGIN_PATH } from '@/lib/auth-paths';
 
-const PUBLIC_PATHS = new Set(['/', '/login', ADMIN_LOGIN_PATH, '/design-system']);
+const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
 
 /**
  * Route trees anonymous visitors may enter.
@@ -30,10 +29,6 @@ export function proxy(req: NextRequest) {
 
   // Optimistic only; requireAuth in the server layouts is the real security boundary.
   const hasSession = !!getSessionCookie(req);
-
-  if (hasSession && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
 
   if (!hasSession && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL('/login', req.url));

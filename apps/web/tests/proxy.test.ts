@@ -6,10 +6,6 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/d/anika-spaces')).toBe(true);
   });
 
-  it('allows anonymous administrators to reach their dedicated sign-in page', () => {
-    expect(isPublicPath('/admin/login')).toBe(true);
-  });
-
   it('allows the public project detail pages a portfolio links to', () => {
     // The portfolio grid links every card at /projects/{id}; gating this route
     // bounced anonymous visitors to /login the moment they clicked a project.
@@ -19,7 +15,6 @@ describe('isPublicPath', () => {
   it('does not treat similarly prefixed protected routes as public', () => {
     expect(isPublicPath('/designer/dashboard')).toBe(false);
     expect(isPublicPath('/designer/projects')).toBe(false);
-    expect(isPublicPath('/admin/login-help')).toBe(false);
     expect(isPublicPath('/d')).toBe(false);
     expect(isPublicPath('/projects')).toBe(false);
   });
