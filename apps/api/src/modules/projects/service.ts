@@ -70,6 +70,8 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     slug: row.slug,
     description: row.description,
     status: row.status,
+    rejectionReasonCode: row.rejectionReasonCode,
+    moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
     propertySubtypeSlug: row.propertySubtypeSlug,
     scopeSlug: row.scopeSlug,
@@ -141,7 +143,9 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
 
 function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
+    ) ??
     derivatives.find((derivative) => derivative.variant === 'thumb') ??
     derivatives[0] ??
     null
@@ -237,7 +241,7 @@ function toDesignerProjectCard(
   coverImageUrl: string | null,
 ): DesignerProjectCard {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
-    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+    slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 
   // "4 BHK · Apartment" — either part may be missing.
   const propertyType =
@@ -274,7 +278,10 @@ function feedLocalityPairs(
     : [];
 }
 
-function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | null): ProjectListItem {
+function toListItemFields(
+  row: ProjectListItemRecord,
+  coverImageUrl: string | null,
+): ProjectListItem {
   return {
     id: row.id,
     slug: row.slug,
@@ -283,6 +290,8 @@ function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | nu
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
+    rejectionReasonCode: row.rejectionReasonCode,
+    moderationNote: row.moderationNote,
     coverImageUrl,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -311,14 +320,15 @@ async function toPortfolioItem(
   return {
     ...toListItemFields(row, url),
     statusGroup: portfolioStatusGroup(row.status),
-    coverImage: cover && preview && url
-      ? {
-          id: cover.id,
-          url,
-          width: preview.width,
-          height: preview.height,
-        }
-      : null,
+    coverImage:
+      cover && preview && url
+        ? {
+            id: cover.id,
+            url,
+            width: preview.width,
+            height: preview.height,
+          }
+        : null,
   };
 }
 
@@ -370,6 +380,7 @@ const transitionRules: TransitionRule[] = [
     toStatus: 'submitted',
     action: 'resubmit',
   },
+  { actorRole: 'designer', fromStatus: 'rejected', toStatus: 'submitted', action: 'resubmit' },
   { actorRole: 'designer', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
   { actorRole: 'admin', fromStatus: 'submitted', toStatus: 'in_review', action: 'start_review' },
   { actorRole: 'admin', fromStatus: 'in_review', toStatus: 'published', action: 'publish' },
@@ -497,7 +508,7 @@ function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
 }
 
 function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
-  return status === 'draft' || status === 'changes_requested';
+  return status === 'draft' || status === 'changes_requested' || status === 'rejected';
 }
 
 async function requireEditableProject(
@@ -773,7 +784,7 @@ async function duplicateWithUniqueSlug(
 }
 
 function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] | undefined {
-  if (status === 'draft') return ['draft', 'changes_requested'];
+  if (status === 'draft') return ['draft', 'changes_requested', 'rejected'];
   if (status === 'in_review') return ['submitted', 'in_review'];
   if (status === 'published') return ['published'];
   return undefined;
@@ -1144,7 +1155,11 @@ export const projectsService = {
     const action = assertTransition(project.status, 'submitted', caller.userRole);
     // Narrows `project.status` for `expectedStatus` below. The matrix already rejects
     // every other source status, so this is a type guard rather than a second rule.
-    if (project.status !== 'draft' && project.status !== 'changes_requested') {
+    if (
+      project.status !== 'draft' &&
+      project.status !== 'changes_requested' &&
+      project.status !== 'rejected'
+    ) {
       throw AppError.invalidTransition();
     }
 
@@ -1203,10 +1218,7 @@ export const projectsService = {
     return toDetailResponse(withdrawn, await projectsRepository.listRooms(projectId));
   },
 
-  async moderationHistory(
-    projectId: string,
-    caller: Caller,
-  ): Promise<ModerationHistoryResponse> {
+  async moderationHistory(projectId: string, caller: Caller): Promise<ModerationHistoryResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
