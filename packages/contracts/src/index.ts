@@ -1,4 +1,5 @@
 export * from './common';
+export * from './auth';
 export * from './projects';
 export * from './media';
 export * from './profiles';

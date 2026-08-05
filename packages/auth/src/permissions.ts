@@ -1,5 +1,8 @@
 import { createAccessControl } from 'better-auth/plugins/access';
 import { defaultStatements, adminAc } from 'better-auth/plugins/admin/access';
+import { PLATFORM_ROLE, type PlatformRole } from '@repo/contracts';
+
+export type { PlatformRole } from '@repo/contracts';
 
 /**
  * better-auth access control for the admin plugin (E-87).
@@ -18,10 +21,8 @@ export const ac = createAccessControl(statement);
  * user/session admin set.
  */
 export const roles = {
-  visitor: ac.newRole({ user: [], session: [] }),
-  designer: ac.newRole({ user: [], session: [] }),
-  admin: ac.newRole({ ...adminAc.statements }),
-  superadmin: ac.newRole({ ...adminAc.statements }),
-};
-
-export type PlatformRole = keyof typeof roles;
+  [PLATFORM_ROLE.VISITOR]: ac.newRole({ user: [], session: [] }),
+  [PLATFORM_ROLE.DESIGNER]: ac.newRole({ user: [], session: [] }),
+  [PLATFORM_ROLE.ADMIN]: ac.newRole({ ...adminAc.statements }),
+  [PLATFORM_ROLE.SUPERADMIN]: ac.newRole({ ...adminAc.statements }),
+} satisfies Record<PlatformRole, ReturnType<typeof ac.newRole>>;

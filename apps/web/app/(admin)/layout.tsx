@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PLATFORM_ROLE } from '@repo/contracts';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { requireAuth } from '@/lib/auth-guard';
@@ -12,7 +13,7 @@ const adminLinks = [
 
 /** Admin console chrome. Requires role: admin or superadmin (redirects to /unauthorized). */
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  await requireAuth({ requiredRole: 'admin' });
+  await requireAuth({ requiredRole: PLATFORM_ROLE.ADMIN });
   return (
     <div className="flex min-h-screen flex-col">
       <ProtectedBfcacheGuard />

@@ -1,7 +1,17 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { PLATFORM_ROLE, platformRoleSchema, type PlatformRole } from '@repo/contracts';
 import { env } from '@/env';
+
+export type RequiredPlatformRole = Exclude<PlatformRole, typeof PLATFORM_ROLE.VISITOR>;
+
+const PLATFORM_ROLE_LEVEL: Readonly<Record<PlatformRole, number>> = {
+  [PLATFORM_ROLE.VISITOR]: 0,
+  [PLATFORM_ROLE.DESIGNER]: 1,
+  [PLATFORM_ROLE.ADMIN]: 2,
+  [PLATFORM_ROLE.SUPERADMIN]: 3,
+};
 
 /**
  * Server-side auth utilities for layouts and server components.
@@ -42,18 +52,13 @@ type GetServerSessionOptions = {
  */
 export function rolePassesCheck(
   userRole: string | null,
-  requiredRole: 'designer' | 'admin' | 'superadmin',
+  requiredRole: RequiredPlatformRole,
 ): boolean {
-  if (!userRole) return false;
+  const parsedRole = platformRoleSchema.safeParse(userRole);
+  if (!parsedRole.success) return false;
 
-  const hierarchy: Record<string, number> = {
-    designer: 1,
-    admin: 2,
-    superadmin: 3,
-  };
-
-  const userLevel = hierarchy[userRole] ?? 0;
-  const requiredLevel = hierarchy[requiredRole] ?? 0;
+  const userLevel = PLATFORM_ROLE_LEVEL[parsedRole.data];
+  const requiredLevel = PLATFORM_ROLE_LEVEL[requiredRole];
 
   return userLevel >= requiredLevel;
 }
@@ -100,7 +105,7 @@ const fetchSession = cache(async (disableCookieCache: boolean): Promise<SessionD
  * Used in protected/designer/admin layouts.
  */
 export async function requireAuth(options?: {
-  requiredRole?: 'designer' | 'admin' | 'superadmin';
+  requiredRole?: RequiredPlatformRole;
 }): Promise<SessionData> {
   const session = await getServerSession({
     disableCookieCache: Boolean(options?.requiredRole),

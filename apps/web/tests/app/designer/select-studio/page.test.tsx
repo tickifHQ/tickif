@@ -40,11 +40,12 @@ describe('DesignerSelectStudioPage', () => {
       },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(true);
-
-    const { default: Page } = await import(
-      '../../../../app/(protected)/designer/select-studio/page'
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'designer',
     );
+
+    const { default: Page } =
+      await import('../../../../app/(protected)/designer/select-studio/page');
     const page = await Page();
     render(page);
 
@@ -63,11 +64,12 @@ describe('DesignerSelectStudioPage', () => {
       },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(true);
-
-    const { default: Page } = await import(
-      '../../../../app/(protected)/designer/select-studio/page'
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'designer',
     );
+
+    const { default: Page } =
+      await import('../../../../app/(protected)/designer/select-studio/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
@@ -79,10 +81,29 @@ describe('DesignerSelectStudioPage', () => {
     });
     vi.mocked(rolePassesCheck).mockReturnValue(false);
 
-    const { default: Page } = await import(
-      '../../../../app/(protected)/designer/select-studio/page'
-    );
+    const { default: Page } =
+      await import('../../../../app/(protected)/designer/select-studio/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding');
+  });
+
+  it('routes an admin without an active organization to moderation', async () => {
+    mock.getServerSession.mockResolvedValue({
+      session: {
+        id: 's1',
+        token: 't1',
+        expiresAt: '2026-06-30T00:00:00.000Z',
+        activeOrganizationId: null,
+      },
+      user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+    });
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'admin' || requiredRole === 'designer',
+    );
+
+    const { default: Page } =
+      await import('../../../../app/(protected)/designer/select-studio/page');
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/admin/moderation');
   });
 });
