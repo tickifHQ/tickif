@@ -19,6 +19,7 @@ import { bookingsRoutes } from './modules/bookings/routes.js';
 import { reportsRoutes } from './modules/reports/routes.js';
 import { searchRoutes } from './modules/search/index.js';
 import { adminReviewsRoutes, reviewsRoutes } from './modules/reviews/index.js';
+import { orgsRoutes } from './modules/orgs/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -71,6 +72,7 @@ export const app = base
   .route('/api/taxonomy', taxonomyRoutes)
   .route('/api/leads', leadsRoutes)
   .route('/api/bookings', bookingsRoutes)
+  .route('/api/orgs', orgsRoutes)
   .route('/api/reports', reportsRoutes)
   .route('/api/discovery', discoveryRoutes)
   .route('/api/search', searchRoutes)

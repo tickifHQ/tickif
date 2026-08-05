@@ -7,9 +7,18 @@ import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
 
 type LoginPageProps = {
   searchParams: Promise<{
+    callbackURL?: string | string[];
     mode?: string | string[];
   }>;
 };
+
+export function safeCallbackPath(value: string | string[] | undefined): string | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate?.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) {
+    return undefined;
+  }
+  return candidate;
+}
 
 export default async function LoginPage({ searchParams }: LoginPageProps): Promise<ReactNode> {
   const [params, session] = await Promise.all([
@@ -18,6 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   ]);
   const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const initialMode = mode === 'designer' ? 'designer' : 'browsing';
+  const callbackPath = safeCallbackPath(params.callbackURL);
 
   if (rolePassesCheck(session?.user.role ?? null, PLATFORM_ROLE.ADMIN)) {
     redirect(ADMIN_MODERATION_PATH);
@@ -29,7 +39,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <LoginCard initialMode={initialMode} />
+      <LoginCard initialMode={initialMode} callbackPath={callbackPath} />
     </main>
   );
 }

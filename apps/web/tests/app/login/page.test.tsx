@@ -76,3 +76,20 @@ describe('LoginPage', () => {
     );
   });
 });
+
+// ─── Invitation callback sanitisation (E-178) ───────────────────────────
+
+describe('login callback path', () => {
+  it('accepts an application-relative path', async () => {
+    const { safeCallbackPath } = await import('../../../app/login/page');
+    expect(safeCallbackPath('/invitations/invitation-1')).toBe('/invitations/invitation-1');
+  });
+
+  it.each(['https://example.com', '//example.com', '/\\example.com'])(
+    'rejects unsafe callback value %s',
+    async (value) => {
+      const { safeCallbackPath } = await import('../../../app/login/page');
+      expect(safeCallbackPath(value)).toBeUndefined();
+    },
+  );
+});

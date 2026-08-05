@@ -12,3 +12,4 @@ export * from './analytics';
 export * from './search';
 export * from './discovery';
 export * from './reviews';
+export * from './organizations';

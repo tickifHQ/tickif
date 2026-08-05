@@ -39,6 +39,7 @@ type LoginMode = 'browsing' | 'designer';
 
 interface LoginCardProps {
   initialMode?: LoginMode;
+  callbackPath?: string;
   onSuccess?: () => void;
   onClose?: () => void;
 }
@@ -120,7 +121,7 @@ const trustAvatars = [
   { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
-export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: LoginCardProps) {
+export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, onClose }: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -164,14 +165,19 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
       onSuccess();
       return;
     }
-    // Continue through the server-rendered login page so it resolves the fresh
-    // Better Auth session and owns the platform-role redirect.
+    // An explicit callback (invitation deep-link) wins over the default routing.
+    if (callbackPath) {
+      window.location.href = callbackPath;
+      return;
+    }
+    // Otherwise continue through the server-rendered login page so it resolves
+    // the fresh Better Auth session and owns the platform-role redirect.
     if (loginMode === 'designer') {
       router.replace(DESIGNER_AUTH_CONTINUE_PATH);
     } else {
       router.push(visitorPostLoginPath());
     }
-  }, [success, loginMode, router, onSuccess]);
+  }, [success, loginMode, router, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
   useEffect(() => {
@@ -254,9 +260,11 @@ export function LoginCard({ initialMode = 'browsing', onSuccess, onClose }: Logi
   // ─── Google SSO handler ─────────────────────────────────────────────────
   async function handleGoogleLogin() {
     setLoading(true); setError('');
-    const callbackURL = loginMode === 'designer'
-      ? `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`
-      : `${window.location.origin}${visitorPostLoginPath()}`;
+    const callbackURL = callbackPath
+      ? `${window.location.origin}${callbackPath}`
+      : loginMode === 'designer'
+        ? `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`
+        : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) setError('Couldn\'t sign in with Google');
