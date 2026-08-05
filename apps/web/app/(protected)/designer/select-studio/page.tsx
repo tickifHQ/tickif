@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { PLATFORM_ROLE } from '@repo/contracts';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { Card } from '@repo/ui/components/card';
@@ -12,11 +13,11 @@ export default async function DesignerSelectStudioPage() {
   const session = await getServerSession({ disableCookieCache: true });
   const userRole = session?.user.role ?? null;
 
-  if (rolePassesCheck(userRole, 'admin')) {
+  if (rolePassesCheck(userRole, PLATFORM_ROLE.ADMIN)) {
     redirect(ADMIN_MODERATION_PATH);
   }
 
-  if (!rolePassesCheck(userRole, 'designer')) {
+  if (!rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {
     redirect('/designer/onboarding');
   }
 

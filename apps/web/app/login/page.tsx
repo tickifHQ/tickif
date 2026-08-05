@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { PLATFORM_ROLE } from '@repo/contracts';
 import { LoginCard } from '@/components/login-card';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
@@ -18,7 +19,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const initialMode = mode === 'designer' ? 'designer' : 'browsing';
 
-  if (rolePassesCheck(session?.user.role ?? null, 'admin')) {
+  if (rolePassesCheck(session?.user.role ?? null, PLATFORM_ROLE.ADMIN)) {
     redirect(ADMIN_MODERATION_PATH);
   }
 

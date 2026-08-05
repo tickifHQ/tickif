@@ -1,4 +1,5 @@
 import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES } from '@repo/contracts';
 
 /**
  * better-auth tables (the committed source of truth).
@@ -24,7 +25,7 @@ import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg
 export type UserStatus = 'pending' | 'active' | 'suspended' | 'deleted';
 
 /** Platform authorization roles (E-86). Postgres enum order is part of the schema contract — append new roles, never reorder (pinned by role.test.ts). */
-export const userRole = pgEnum('user_role', ['visitor', 'designer', 'admin', 'superadmin']);
+export const userRole = pgEnum('user_role', PLATFORM_ROLE_VALUES);
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -41,7 +42,7 @@ export const user = pgTable('user', {
   phoneNumber: text('phone_number').unique(),
   phoneNumberVerified: boolean('phone_number_verified'),
   // admin plugin
-  role: userRole('role').default('visitor').notNull(),
+  role: userRole('role').default(PLATFORM_ROLE.VISITOR).notNull(),
   banned: boolean('banned').default(false),
   banReason: text('ban_reason'),
   banExpires: timestamp('ban_expires'),
