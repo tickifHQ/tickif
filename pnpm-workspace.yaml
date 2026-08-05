@@ -9,14 +9,16 @@ overrides:
   esbuild: 0.28.1
   hono: ^4.12.27
   # Security patches for transitive advisories (pnpm audit, high severity).
-  # brace-expansion DoS: GHSA-v6h2-p8h4-qcjw, then GHSA-mh99-v99m-4gvg which is
-  # scoped <=5.0.7 and so covers the old 1.x pin too. One line for every copy —
+  # brace-expansion DoS advisories through 5.0.8. One line for every copy —
   # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.9
   # js-yaml prototype pollution: keep within the 4.x line.
   "js-yaml@<4.3.0": 4.3.0
-  # fast-uri ReDoS (via shadcn>@modelcontextprotocol/sdk>ajv): stay on 3.x.
-  "fast-uri@<3.1.4": 3.1.4
+  # fast-uri validation advisories (via shadcn>@modelcontextprotocol/sdk>ajv): stay on 3.x.
+  "fast-uri@<3.1.5": 3.1.5
+  # MCP HTTP/cache parsing and rate-limit address validation advisories.
+  undici: 7.29.0
+  ip-address: 10.3.1
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
   sharp: ^0.35.3
   # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
