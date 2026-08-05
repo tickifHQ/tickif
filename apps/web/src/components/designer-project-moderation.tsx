@@ -29,11 +29,13 @@ export function DesignerProjectModeration({
   status,
   moderationNote,
   rejectionReasonCode,
+  showFeedbackAlert = true,
 }: {
   projectId: string | null;
   status: ProjectStatus | null;
   moderationNote: string | null;
   rejectionReasonCode: string | null;
+  showFeedbackAlert?: boolean;
 }) {
   const [history, setHistory] = useState<ModerationHistoryResponse['items'] | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -71,7 +73,7 @@ export function DesignerProjectModeration({
 
   return (
     <div className="mt-6 space-y-3">
-      {hasFeedback ? (
+      {hasFeedback && showFeedbackAlert ? (
         <Alert variant={isRejected ? 'destructive' : 'default'}>
           <AlertCircle className="size-4" />
           <AlertTitle>{isRejected ? 'This project was rejected' : 'Needs Change'}</AlertTitle>

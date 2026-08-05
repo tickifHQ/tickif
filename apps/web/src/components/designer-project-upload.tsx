@@ -9,9 +9,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronRight,
   ChevronDown,
   ChevronsUpDown,
   CircleDashed,
+  FileExclamationPoint,
   ImagePlus,
   LayoutList,
   Lightbulb,
@@ -934,6 +936,37 @@ function TipsCard() {
             <div key={tip} className="flex items-start gap-3">
               <Check className="mt-0.5 size-4 text-primary" />
               <p className="text-sm font-medium text-muted-foreground">{tip}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ChangesNeededCard({ note }: { note: string }) {
+  const noteItems = note
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
+
+  return (
+    <div data-testid="changes-needed-card">
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 font-mono uppercase text-destructive',
+        )}
+      >
+        <FileExclamationPoint className="size-3.5" />
+        CHANGES NEEDED ON
+      </div>
+      <Card radius="xl" className="border-destructive/10 bg-destructive/5">
+        <div className="space-y-2 p-2">
+          {noteItems.map((item, index) => (
+            <div key={`${item}-${index}`} className="flex items-start gap-2">
+              <ChevronRight className="mt-0.5 size-4 shrink-0 text-primary" />
+              <p className={cn(typography.bodySmall, 'text-muted-foreground')}>{item}</p>
             </div>
           ))}
         </div>
@@ -2783,6 +2816,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         status={projectStatus}
         moderationNote={moderationNote}
         rejectionReasonCode={rejectionReasonCode}
+        showFeedbackAlert={projectStatus !== 'changes_requested'}
       />
 
       {taxonomyError ? (
@@ -3171,6 +3205,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
+          {projectStatus === 'changes_requested' && moderationNote ? (
+            <ChangesNeededCard note={moderationNote} />
+          ) : null}
           <TipsCard />
           <ChecklistCard
             title="REQUIRED INFORMATION"
