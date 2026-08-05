@@ -7,3 +7,4 @@ export * from './leads';
 export * from './moderation';
 export * from './bookings';
 export * from './analytics';
+export * from './search';
