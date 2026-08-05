@@ -201,6 +201,13 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          # `next build` type-checks the whole app graph in one worker, and the
+          # web app pulls the full contracts barrel plus the hc<AppType> client
+          # type spanning every mounted route. V8 sizes its default heap from
+          # system memory, so a 32 GB dev box is fine while a ~7 GB runner caps
+          # near 2 GB and OOMs during "Running TypeScript".
+          NODE_OPTIONS: --max-old-space-size=4096
 
       # Migration gating (blueprint §9): migrate the empty `tickif` DB, then
       # regenerate SQL from the schema and fail if the committed migrations drift
