@@ -73,7 +73,7 @@ const taxonomySlug = z
 
 export const adminModerationQueueQuerySchema = z
   .object({
-    status: z.enum(['submitted', 'in_review']).default('submitted'),
+    status: z.enum(['submitted', 'in_review', 'published']).default('submitted'),
     sort: z.literal('oldest').default('oldest'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -85,7 +85,7 @@ export const adminModerationQueueItemSchema = z
   .object({
     id: z.uuid(),
     title: z.string(),
-    status: z.enum(['submitted', 'in_review']),
+    status: z.enum(['submitted', 'in_review', 'published']),
     designerName: z.string(),
     submittedAt: z.string().datetime().nullable(),
     reviewedBy: z.string().nullable(),
