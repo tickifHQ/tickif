@@ -69,6 +69,12 @@ jobs:
     #    listed in turbo.json `globalEnv`. DATABASE_URL_TEST and BETTER_AUTH_* are
     #    in globalEnv, so they reach the integration tests; POSTGRES_* need not be.
     env:
+      # Both `tsc --noEmit` and `next build` type-check the whole web app graph:
+      # the full contracts barrel plus the hc<AppType> client type spanning every
+      # mounted route. V8 sizes its default heap from system memory, so a dev box
+      # has headroom while this ~7 GB runner caps near 2 GB and dies with exit 134.
+      # Job-wide because typecheck and build each hit it independently.
+      NODE_OPTIONS: --max-old-space-size=4096
       NODE_ENV: test
       BETTER_AUTH_SECRET: ci-dummy-secret-0123456789
       BETTER_AUTH_URL: http://localhost:3001
@@ -201,13 +207,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-        env:
-          # `next build` type-checks the whole app graph in one worker, and the
-          # web app pulls the full contracts barrel plus the hc<AppType> client
-          # type spanning every mounted route. V8 sizes its default heap from
-          # system memory, so a 32 GB dev box is fine while a ~7 GB runner caps
-          # near 2 GB and OOMs during "Running TypeScript".
-          NODE_OPTIONS: --max-old-space-size=4096
 
       # Migration gating (blueprint §9): migrate the empty `tickif` DB, then
       # regenerate SQL from the schema and fail if the committed migrations drift
