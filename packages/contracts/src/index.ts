@@ -8,3 +8,4 @@ export * from './moderation';
 export * from './bookings';
 export * from './analytics';
 export * from './search';
+export * from './discovery';
