@@ -225,7 +225,7 @@ async function buildPortfolioResponse(
     showHero: portfolio.showHero,
     showTrustCredentials: portfolio.showTrustCredentials,
     showFeaturedTestimonial: portfolio.showFeaturedTestimonial,
-    showReviews: portfolio.showReviews,
+    showReviews: portfolio.showTickifReviews || portfolio.showGoogleReviews,
     showSocialLinks: portfolio.showSocialLinks,
     showShareBlock: portfolio.showShareBlock,
     tagline: portfolio.tagline,
@@ -239,8 +239,23 @@ async function buildPortfolioResponse(
     testimonialWords: portfolio.testimonialWords,
     testimonialAuthor: portfolio.testimonialAuthor,
     testimonialProjectId: portfolio.testimonialProjectId,
-    showOverallRating: portfolio.showOverallRating,
-    showPositiveReviewsOnly: portfolio.showPositiveReviewsOnly,
+    showOverallRating:
+      portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
+    showPositiveReviewsOnly:
+      portfolio.showTickifPositiveReviewsOnly &&
+      portfolio.showGooglePositiveReviewsOnly,
+    reviewSettings: {
+      tickif: {
+        showReviews: portfolio.showTickifReviews,
+        showOverallRating: portfolio.showTickifOverallRating,
+        showPositiveReviewsOnly: portfolio.showTickifPositiveReviewsOnly,
+      },
+      google: {
+        showReviews: portfolio.showGoogleReviews,
+        showOverallRating: portfolio.showGoogleOverallRating,
+        showPositiveReviewsOnly: portfolio.showGooglePositiveReviewsOnly,
+      },
+    },
     showTickifBadge: portfolio.showTickifBadge,
     badges,
     portfolioUrl,
@@ -365,6 +380,10 @@ export const portfolioService = {
         portfolioPatch.showFeaturedTestimonial = portfolioFields.showFeaturedTestimonial;
       if (portfolioFields.showReviews !== undefined)
         portfolioPatch.showReviews = portfolioFields.showReviews;
+      if (portfolioFields.showReviews !== undefined) {
+        portfolioPatch.showTickifReviews = portfolioFields.showReviews;
+        portfolioPatch.showGoogleReviews = portfolioFields.showReviews;
+      }
       if (portfolioFields.showSocialLinks !== undefined)
         portfolioPatch.showSocialLinks = portfolioFields.showSocialLinks;
       if (portfolioFields.showShareBlock !== undefined)
@@ -379,10 +398,46 @@ export const portfolioService = {
         portfolioPatch.testimonialProjectId = portfolioFields.testimonialProjectId;
         portfolioPatch.testimonialUpdatedAt = new Date();
       }
-      if (portfolioFields.showOverallRating !== undefined)
+      if (portfolioFields.showOverallRating !== undefined) {
         portfolioPatch.showOverallRating = portfolioFields.showOverallRating;
-      if (portfolioFields.showPositiveReviewsOnly !== undefined)
+        portfolioPatch.showTickifOverallRating = portfolioFields.showOverallRating;
+        portfolioPatch.showGoogleOverallRating = portfolioFields.showOverallRating;
+      }
+      if (portfolioFields.showPositiveReviewsOnly !== undefined) {
         portfolioPatch.showPositiveReviewsOnly = portfolioFields.showPositiveReviewsOnly;
+        portfolioPatch.showTickifPositiveReviewsOnly =
+          portfolioFields.showPositiveReviewsOnly;
+        portfolioPatch.showGooglePositiveReviewsOnly =
+          portfolioFields.showPositiveReviewsOnly;
+      }
+      if (portfolioFields.reviewSettings?.tickif?.showReviews !== undefined) {
+        portfolioPatch.showTickifReviews =
+          portfolioFields.reviewSettings.tickif.showReviews;
+      }
+      if (portfolioFields.reviewSettings?.tickif?.showOverallRating !== undefined) {
+        portfolioPatch.showTickifOverallRating =
+          portfolioFields.reviewSettings.tickif.showOverallRating;
+      }
+      if (
+        portfolioFields.reviewSettings?.tickif?.showPositiveReviewsOnly !== undefined
+      ) {
+        portfolioPatch.showTickifPositiveReviewsOnly =
+          portfolioFields.reviewSettings.tickif.showPositiveReviewsOnly;
+      }
+      if (portfolioFields.reviewSettings?.google?.showReviews !== undefined) {
+        portfolioPatch.showGoogleReviews =
+          portfolioFields.reviewSettings.google.showReviews;
+      }
+      if (portfolioFields.reviewSettings?.google?.showOverallRating !== undefined) {
+        portfolioPatch.showGoogleOverallRating =
+          portfolioFields.reviewSettings.google.showOverallRating;
+      }
+      if (
+        portfolioFields.reviewSettings?.google?.showPositiveReviewsOnly !== undefined
+      ) {
+        portfolioPatch.showGooglePositiveReviewsOnly =
+          portfolioFields.reviewSettings.google.showPositiveReviewsOnly;
+      }
       if (portfolioFields.showTickifBadge !== undefined)
         portfolioPatch.showTickifBadge = portfolioFields.showTickifBadge;
 

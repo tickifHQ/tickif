@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import type {
+  PortfolioBadge,
   PortfolioResponse,
   RequiredPortfolioField,
   UpdatePortfolioInput,
@@ -53,9 +54,11 @@ import {
   disconnectGoogleReviews,
   fetchGoogleReviews,
   fetchPortfolio,
+  fetchPublishedProjects,
   refreshGoogleReviews,
   updatePortfolio,
   uploadLogo,
+  type TestimonialProjectOption,
 } from '@/lib/portfolio-api';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +72,7 @@ type FormState = {
   showHero: boolean;
   showTrustCredentials: boolean;
   showFeaturedTestimonial: boolean;
-  showReviews: boolean;
+  showGoogleReviews: boolean;
   showSocialLinks: boolean;
   showShareBlock: boolean;
   tagline: string;
@@ -81,8 +84,9 @@ type FormState = {
   youtubeHandle: string;
   testimonialWords: string;
   testimonialAuthor: string;
-  showOverallRating: boolean;
-  showPositiveReviewsOnly: boolean;
+  testimonialProjectId: string | null;
+  showGoogleOverallRating: boolean;
+  showGooglePositiveReviewsOnly: boolean;
   showTickifBadge: boolean;
 };
 
@@ -120,12 +124,12 @@ function formatMissingFields(fields: RequiredPortfolioField[]): string {
 }
 
 /** Maps a portfolio badge enum to its display label and illustration. */
-const BADGE_META: Record<string, { label: string; src: string }> = {
-  verified: { label: 'Verified', src: '/illustrations/badges/verified.svg' },
-  new: { label: 'New', src: '/illustrations/badges/new.svg' },
-  'top-performer': { label: 'Top Performer', src: '/illustrations/badges/top-performer.svg' },
-  established: { label: 'Established', src: '/illustrations/badges/established.svg' },
-  'projects-published': { label: 'Projects', src: '/illustrations/badges/projects-published.svg' },
+const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
+  verified: { label: 'Identity verified', src: '/illustrations/badges/verified.svg' },
+  new: { label: 'New on Tickif', src: '/illustrations/badges/new.svg' },
+  'top-performer': { label: 'Top performer', src: '/illustrations/badges/top-performer.svg' },
+  established: { label: 'Established studio', src: '/illustrations/badges/established.svg' },
+  'projects-published': { label: 'Projects published', src: '/illustrations/badges/projects-published.svg' },
 };
 
 // ---------------------------------------------------------------------------
@@ -140,7 +144,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     showHero: data.showHero,
     showTrustCredentials: data.showTrustCredentials,
     showFeaturedTestimonial: data.showFeaturedTestimonial,
-    showReviews: data.showReviews,
+    showGoogleReviews: data.reviewSettings.google.showReviews,
     showSocialLinks: data.showSocialLinks,
     showShareBlock: data.showShareBlock,
     tagline: data.tagline ?? '',
@@ -152,8 +156,9 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     youtubeHandle: data.youtubeHandle ?? '',
     testimonialWords: data.testimonialWords ?? '',
     testimonialAuthor: data.testimonialAuthor ?? '',
-    showOverallRating: data.showOverallRating,
-    showPositiveReviewsOnly: data.showPositiveReviewsOnly,
+    testimonialProjectId: data.testimonialProjectId,
+    showGoogleOverallRating: data.reviewSettings.google.showOverallRating,
+    showGooglePositiveReviewsOnly: data.reviewSettings.google.showPositiveReviewsOnly,
     showTickifBadge: data.showTickifBadge,
   };
 }
@@ -163,14 +168,43 @@ function computeChangedFields(
   saved: FormState,
 ): UpdatePortfolioInput | null {
   const patch: Record<string, unknown> = {};
+  const googleReviewSettings: Record<string, boolean> = {};
+
+  if (current.showGoogleReviews !== saved.showGoogleReviews) {
+    googleReviewSettings.showReviews = current.showGoogleReviews;
+  }
+  if (current.showGoogleOverallRating !== saved.showGoogleOverallRating) {
+    googleReviewSettings.showOverallRating = current.showGoogleOverallRating;
+  }
+  if (
+    current.showGooglePositiveReviewsOnly !== saved.showGooglePositiveReviewsOnly
+  ) {
+    googleReviewSettings.showPositiveReviewsOnly =
+      current.showGooglePositiveReviewsOnly;
+  }
+  if (Object.keys(googleReviewSettings).length > 0) {
+    patch.reviewSettings = { google: googleReviewSettings };
+  }
 
   for (const key of Object.keys(current) as Array<keyof FormState>) {
+    if (
+      key === 'showGoogleReviews' ||
+      key === 'showGoogleOverallRating' ||
+      key === 'showGooglePositiveReviewsOnly'
+    ) {
+      continue;
+    }
     if (current[key] !== saved[key]) {
       const value = current[key];
       // displayName is required server-side (min 2 chars, not nullable):
       // omit it from the patch when cleared instead of sending a value that
       // is guaranteed to fail validation.
       if (key === 'displayName' && typeof value === 'string' && value.trim() === '') {
+        continue;
+      }
+      // testimonialProjectId is nullable — pass through as-is (null or uuid)
+      if (key === 'testimonialProjectId') {
+        patch[key] = value;
         continue;
       }
       // Convert empty strings to null for nullable text fields
@@ -240,10 +274,9 @@ export function DesignerPortfolioSettings() {
     shareBlock: false,
   });
 
-  // Featured-testimonial project selector is not persisted yet — the contract
-  // exposes testimonialProjectId, but wiring it needs a project picker (list of
-  // the designer's projects). Kept local so the section matches the design.
-  const [testimonialProject, setTestimonialProject] = useState('');
+  // Published projects for the testimonial picker
+  const [publishedProjects, setPublishedProjects] = useState<TestimonialProjectOption[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
 
   function toggleExpanded(key: SectionKey) {
     setSectionExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -272,6 +305,27 @@ export function DesignerPortfolioSettings() {
   useEffect(() => {
     void loadPortfolio();
   }, [loadPortfolio]);
+
+  // -------------------------------------------------------------------------
+  // Published projects (for testimonial picker)
+  // -------------------------------------------------------------------------
+
+  const loadPublishedProjects = useCallback(async () => {
+    setProjectsLoading(true);
+    try {
+      const projects = await fetchPublishedProjects();
+      setPublishedProjects(projects);
+    } catch {
+      // Non-critical — picker will show empty state
+      setPublishedProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPublishedProjects();
+  }, [loadPublishedProjects]);
 
   // -------------------------------------------------------------------------
   // Google reviews
@@ -513,10 +567,14 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         const result = await uploadLogo(file);
-        // Refresh portfolio to get new logoUrl
-        setPortfolio((prev) =>
-          prev ? { ...prev, logoUrl: result.logoUrl } : prev,
-        );
+        // Refresh portfolio to get new logoUrl and all server-derived fields
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => prev ? { ...prev, logoUrl: result.logoUrl } : prev);
+          setLogoError('Logo updated successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
       }
@@ -528,7 +586,13 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         await deleteLogo();
-        setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+          setLogoError('Logo removed successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not delete logo.');
       }
@@ -590,11 +654,9 @@ export function DesignerPortfolioSettings() {
     ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl =
-    portfolio.portfolioUrl ??
-    new URL(portfolioPath, portfolioWebUrl).toString();
-  // Derive the on-screen preview from the copy target so the displayed link
-  // and the copied link never diverge once the backend populates portfolioUrl.
+  const copyUrl = new URL(portfolioPath, portfolioWebUrl).toString();
+  // Derive the on-screen preview from the copy target so both always reflect
+  // the currently-typed slug, giving the designer real-time URL feedback.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
   // Google connection derived state (default `available` true until first load,
@@ -777,7 +839,7 @@ export function DesignerPortfolioSettings() {
               {/* Hero */}
               <CollapsibleSection
                 title="Hero"
-                subtitle="Name, tagline, location, stats"
+                subtitle="Logo, studio name, tagline and bio"
                 expanded={sectionExpanded.hero}
                 onToggleExpanded={() => toggleExpanded('hero')}
                 compact
@@ -942,16 +1004,32 @@ export function DesignerPortfolioSettings() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Project</Label>
-                        {/* TODO(E-195 follow-up): wire to testimonialProjectId with a project picker */}
-                        <div className="relative">
-                          <Input
-                            value={testimonialProject}
-                            onChange={(e) => setTestimonialProject(e.target.value)}
-                            placeholder="Select a project"
-                            className="pr-8 shadow-sm"
-                          />
-                          <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                        </div>
+                        {projectsLoading ? (
+                          <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-muted/50 px-3">
+                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Loading projects…</span>
+                          </div>
+                        ) : publishedProjects.length === 0 ? (
+                          <div className="flex h-10 items-center rounded-md border border-input bg-muted/30 px-3">
+                            <span className="text-sm text-muted-foreground">No published projects available</span>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <select
+                              value={form.testimonialProjectId ?? ''}
+                              onChange={(e) => updateField('testimonialProjectId', e.target.value || null)}
+                              className="flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              <option value="">No project selected</option>
+                              {publishedProjects.map((project) => (
+                                <option key={project.id} value={project.id}>
+                                  {project.title}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -962,8 +1040,10 @@ export function DesignerPortfolioSettings() {
               <ToggleableSection
                 title="Reviews"
                 subtitle="What it's like to work with us"
-                enabled={form.showReviews}
-                onToggle={() => updateField('showReviews', !form.showReviews)}
+                enabled={form.showGoogleReviews}
+                onToggle={() =>
+                  updateField('showGoogleReviews', !form.showGoogleReviews)
+                }
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >
@@ -1117,8 +1197,10 @@ export function DesignerPortfolioSettings() {
                           <p className="text-[13px] text-muted-foreground">Show Google rating in trust strip</p>
                         </div>
                         <Switch
-                          checked={form.showOverallRating}
-                          onCheckedChange={(checked) => updateField('showOverallRating', checked)}
+                          checked={form.showGoogleOverallRating}
+                          onCheckedChange={(checked) =>
+                            updateField('showGoogleOverallRating', checked)
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -1127,8 +1209,10 @@ export function DesignerPortfolioSettings() {
                           <p className="text-[13px] text-muted-foreground">Show positive testimonials on your portfolio</p>
                         </div>
                         <Switch
-                          checked={form.showPositiveReviewsOnly}
-                          onCheckedChange={(checked) => updateField('showPositiveReviewsOnly', checked)}
+                          checked={form.showGooglePositiveReviewsOnly}
+                          onCheckedChange={(checked) =>
+                            updateField('showGooglePositiveReviewsOnly', checked)
+                          }
                         />
                       </div>
                     </div>
@@ -1257,14 +1341,22 @@ export function DesignerPortfolioSettings() {
                 </svg>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Live preview</span>
               </div>
-              <button
-                type="button"
-                disabled
-                className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-foreground transition-colors"
-              >
-                Open full
-                <ArrowRight className="size-3.5" aria-hidden />
-              </button>
+              {portfolio.portfolioUrl ? (
+                <a
+                  href={portfolio.portfolioUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-primary"
+                >
+                  Open full
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </a>
+              ) : (
+                <span className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                  Open full
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </span>
+              )}
             </div>
 
             {/* URL bar */}

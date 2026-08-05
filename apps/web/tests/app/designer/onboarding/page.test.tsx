@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const mock = vi.hoisted(() => ({
-  redirect: vi.fn().mockImplementation(() => { throw new Error('NEXT_REDIRECT'); }),
+  redirect: vi.fn().mockImplementation(() => {
+    throw new Error('NEXT_REDIRECT');
+  }),
   getServerSession: vi.fn(),
 }));
 
@@ -36,7 +38,9 @@ describe('DesignerOnboardingPage', () => {
       },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(true);
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'designer',
+    );
 
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
@@ -53,7 +57,9 @@ describe('DesignerOnboardingPage', () => {
       },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(true);
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'designer',
+    );
 
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
@@ -73,5 +79,24 @@ describe('DesignerOnboardingPage', () => {
 
     expect(screen.getByTestId('designer-onboarding')).toBeInTheDocument();
     expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('routes an admin without an active organization to moderation', async () => {
+    mock.getServerSession.mockResolvedValue({
+      session: {
+        id: 's1',
+        token: 't1',
+        expiresAt: '2026-06-30T00:00:00.000Z',
+        activeOrganizationId: null,
+      },
+      user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+    });
+    vi.mocked(rolePassesCheck).mockImplementation(
+      (_role, requiredRole) => requiredRole === 'admin' || requiredRole === 'designer',
+    );
+
+    const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/admin/moderation');
   });
 });

@@ -1,7 +1,4 @@
-import type {
-  CreateProjectInput,
-  UpdateImageMetadataInput,
-} from '@repo/contracts';
+import type { CreateProjectInput, UpdateImageMetadataInput } from '@repo/contracts';
 
 export type BackendProjectSelection = {
   propertyTypeSlug: string;
@@ -48,10 +45,16 @@ export function roomSlugsMatch(left: string, right: string) {
 export const projectTypeBackendMap: Record<string, BackendProjectSelection> = {
   apartment: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
   villa: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'villa' },
-  'office-commercial': { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'corporate-office' },
+  'office-commercial': {
+    propertyTypeSlug: 'commercial-workspace',
+    propertySubtypeSlug: 'corporate-office',
+  },
   'institutional-public': { propertyTypeSlug: 'institutional-public' },
   'retail-showroom': { propertyTypeSlug: 'retail-showroom', propertySubtypeSlug: 'showroom' },
-  'cafe-restaurant': { propertyTypeSlug: 'food-hospitality', propertySubtypeSlug: 'cafe-coffee-shop' },
+  'cafe-restaurant': {
+    propertyTypeSlug: 'food-hospitality',
+    propertySubtypeSlug: 'cafe-coffee-shop',
+  },
 };
 
 export function getBackendProjectSelection({
@@ -71,13 +74,21 @@ export function getBackendProjectSelection({
   const propertyTypeSlug = base.propertyTypeSlug;
 
   if (hasLoadedPropertyTypes && !availablePropertyTypeSlugs.has(propertyTypeSlug)) {
-    throw new Error(`Project type taxonomy is missing "${propertyTypeSlug}". Please refresh seed data and try again.`);
+    throw new Error(
+      `Project type taxonomy is missing "${propertyTypeSlug}". Please refresh seed data and try again.`,
+    );
   }
 
-  const mappedSubtypeSlug = (projectSubtype || base.propertySubtypeSlug) || undefined;
+  const mappedSubtypeSlug = projectSubtype || base.propertySubtypeSlug || undefined;
 
-  if (mappedSubtypeSlug && hasLoadedPropertySubtypes && !availablePropertySubtypeSlugs.has(mappedSubtypeSlug)) {
-    throw new Error(`Project subtype taxonomy is missing "${mappedSubtypeSlug}". Please refresh seed data and try again.`);
+  if (
+    mappedSubtypeSlug &&
+    hasLoadedPropertySubtypes &&
+    !availablePropertySubtypeSlugs.has(mappedSubtypeSlug)
+  ) {
+    throw new Error(
+      `Project subtype taxonomy is missing "${mappedSubtypeSlug}". Please refresh seed data and try again.`,
+    );
   }
 
   return {
@@ -136,13 +147,12 @@ export function deriveDefaultProjectTitle(input: {
   cityLabel: string;
   citySlug: string;
 }) {
-  const subject = input.primaryField === 'bhk'
-    ? humanizeBhk(input.bhkSlug)
-    : input.selectedProjectSubtypeLabel.trim() || input.selectedProjectTypeLabel.trim();
+  const subject =
+    input.primaryField === 'bhk'
+      ? humanizeBhk(input.bhkSlug)
+      : input.selectedProjectSubtypeLabel.trim() || input.selectedProjectTypeLabel.trim();
   const location =
-    input.localityLabel.trim() ||
-    (input.cityLabel || '').trim() ||
-    humanizeSlug(input.citySlug);
+    input.localityLabel.trim() || (input.cityLabel || '').trim() || humanizeSlug(input.citySlug);
 
   if (subject && location) return `${subject} in ${location}`;
   if (subject) return subject;
@@ -250,6 +260,21 @@ function toSlug(value: string) {
 
 function uniqueNonEmpty(values: string[]) {
   return [...new Set(values.filter((value) => value.length > 0))];
+}
+
+export function canonicalTaxonomySlug(
+  value: string,
+  terms: Array<{ slug: string; label: string }>,
+) {
+  const normalizedValue = value.trim().toLowerCase();
+  if (!normalizedValue) return '';
+
+  return (
+    terms.find(
+      (term) =>
+        term.slug === normalizedValue || term.label.trim().toLowerCase() === normalizedValue,
+    )?.slug ?? ''
+  );
 }
 
 export function buildImageMetadata(input: {

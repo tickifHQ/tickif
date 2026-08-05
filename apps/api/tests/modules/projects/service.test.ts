@@ -76,7 +76,8 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
 }));
 
 // Import AFTER the mock is registered.
-const { assertTransition, projectsService } = await import('../../../src/modules/projects/service.js');
+const { assertTransition, projectsService } =
+  await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { deleteObject } = await import('@repo/storage');
@@ -192,7 +193,7 @@ describe('projectsService.list', () => {
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: 'org_1',
-      statuses: ['draft', 'changes_requested'],
+      statuses: ['draft', 'changes_requested', 'rejected'],
       q: 'bandra',
       limit: 20,
       offset: 20,
@@ -262,21 +263,26 @@ describe('projectsService.portfolio', () => {
       { status: 'changes_requested', count: 3 },
       { status: 'rejected', count: 1 },
     ]);
-    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
-      [coverId, {
-        id: coverId,
-        status: 'ready',
-        derivatives: [
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          coverId,
           {
-            variant: 'thumb',
-            format: 'webp',
-            key: 'derivatives/project/cover/thumb.webp',
-            width: 320,
-            height: 240,
+            id: coverId,
+            status: 'ready',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'derivatives/project/cover/thumb.webp',
+                width: 320,
+                height: 240,
+              },
+            ],
           },
         ],
-      }],
-    ]));
+      ]),
+    );
 
     const result = await projectsService.portfolio(
       { status: 'changes_requested', page: 1, limit: 12, sort: '-updatedAt' },
@@ -346,22 +352,27 @@ describe('projectsService.portfolio', () => {
     vi.mocked(projectsRepository.countByStatus).mockResolvedValue([
       { status: 'published', count: 2 },
     ]);
-    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map([
-      [processingCoverId, {
-        id: processingCoverId,
-        status: 'processing',
-        derivatives: [
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          processingCoverId,
           {
-            variant: 'thumb',
-            format: 'webp',
-            key: 'derivatives/project/cover/thumb.webp',
-            width: 320,
-            height: 240,
+            id: processingCoverId,
+            status: 'processing',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'derivatives/project/cover/thumb.webp',
+                width: 320,
+                height: 240,
+              },
+            ],
           },
         ],
-      }],
-      [bareCoverId, { id: bareCoverId, status: 'ready', derivatives: [] }],
-    ]));
+        [bareCoverId, { id: bareCoverId, status: 'ready', derivatives: [] }],
+      ]),
+    );
 
     const result = await projectsService.portfolio(
       { status: 'all', page: 1, limit: 12, sort: '-updatedAt' },
@@ -807,6 +818,45 @@ describe('projectsService.submit', () => {
     });
   });
 
+  it('resubmits a complete rejected project', async () => {
+    const rejected = row({
+      status: 'rejected',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+      rejectionReasonCode: 'portfolio-mismatch',
+      moderationNote: 'Portfolio mismatch.',
+    });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: rejected.id,
+      designerId: rejected.designerId,
+      status: 'rejected',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(rejected);
+    vi.mocked(projectsRepository.submitWithUploadCounts).mockResolvedValue({
+      project: rejected,
+      counts: { imageCount: 3, taggedImageCount: 3 },
+      submitted: row({
+        ...rejected,
+        status: 'submitted',
+        submittedAt: new Date('2026-01-02T00:00:00Z'),
+      }),
+    });
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([roomRow()]);
+
+    const result = await projectsService.submit(rejected.id, caller);
+
+    expect(result.status).toBe('submitted');
+    expect(projectsRepository.submitWithUploadCounts).toHaveBeenCalledWith(rejected.id, {
+      minImageCount: 3,
+      actorUserId: caller.userId,
+      expectedStatus: 'rejected',
+      action: 'resubmit',
+    });
+  });
+
   it('rejects when the atomic submit recheck sees stale image counts', async () => {
     const complete = row({
       status: 'draft',
@@ -847,6 +897,7 @@ describe('assertTransition', () => {
   const allowed = new Map([
     ['designer:draft:submitted', 'submit'],
     ['designer:changes_requested:submitted', 'resubmit'],
+    ['designer:rejected:submitted', 'resubmit'],
     ['designer:submitted:draft', 'withdraw'],
     ['admin:submitted:in_review', 'start_review'],
     ['admin:in_review:published', 'publish'],

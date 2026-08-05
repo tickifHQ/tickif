@@ -237,6 +237,26 @@ export async function makeConsultationBooking(
   return row!;
 }
 
+export async function makeReview(overrides: Partial<typeof schema.review.$inferInsert> = {}) {
+  const designerProfileId = overrides.designerProfileId ?? (await makeDesigner()).id;
+  const authorUserId =
+    overrides.authorUserId ??
+    (await makeUser({ phoneNumber: '+919800000001', phoneNumberVerified: true })).id;
+  const [row] = await db
+    .insert(schema.review)
+    .values({
+      designerProfileId,
+      authorUserId,
+      rating: overrides.rating ?? 5,
+      body:
+        overrides.body ??
+        'A thoughtful and detailed review of the completed design experience.',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 // --- seed helpers (test-only) -------------------------------------------------
 
 export { seedTaxonomy } from './seeds/taxonomy.js';

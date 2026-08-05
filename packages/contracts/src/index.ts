@@ -1,4 +1,5 @@
 export * from './common';
+export * from './auth';
 export * from './projects';
 export * from './media';
 export * from './profiles';
@@ -7,3 +8,7 @@ export * from './leads';
 export * from './moderation';
 export * from './review-comments';
 export * from './bookings';
+export * from './analytics';
+export * from './search';
+export * from './discovery';
+export * from './reviews';

@@ -89,6 +89,13 @@ describe('moderation contracts', () => {
     });
   });
 
+  it('accepts published as an admin moderation queue status', () => {
+    expect(adminModerationQueueQuerySchema.parse({ status: 'published' })).toMatchObject({
+      status: 'published',
+      sort: 'oldest',
+    });
+  });
+
   it('accepts only allowlisted non-empty admin corrections', () => {
     expect(
       adminCorrectProjectSchema.parse({

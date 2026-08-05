@@ -1,5 +1,5 @@
 {
-  "id": "f0f832ff-4702-4dc7-874e-2027829ed55e",
+  "id": "75cf5429-1f82-4672-8ef5-ed67e2ece47d",
   "prevId": "40d72588-55e9-49f4-98b6-6d2b7903790c",
   "version": "7",
   "dialect": "postgresql",
@@ -1263,6 +1263,48 @@
         },
         "show_positive_reviews_only": {
           "name": "show_positive_reviews_only",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "show_tickif_reviews": {
+          "name": "show_tickif_reviews",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "show_tickif_overall_rating": {
+          "name": "show_tickif_overall_rating",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "show_tickif_positive_reviews_only": {
+          "name": "show_tickif_positive_reviews_only",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "show_google_reviews": {
+          "name": "show_google_reviews",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "show_google_overall_rating": {
+          "name": "show_google_overall_rating",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "show_google_positive_reviews_only": {
+          "name": "show_google_positive_reviews_only",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -2836,131 +2878,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.project_review_comment": {
-      "name": "project_review_comment",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_id": {
-          "name": "author_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "project_review_comment_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unresolved'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "project_review_comment_project_idx": {
-          "name": "project_review_comment_project_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_review_comment_project_unresolved_idx": {
-          "name": "project_review_comment_project_unresolved_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project_review_comment\".\"status\" = 'unresolved'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "project_review_comment_project_id_project_id_fk": {
-          "name": "project_review_comment_project_id_project_id_fk",
-          "tableFrom": "project_review_comment",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "project_review_comment_author_id_user_id_fk": {
-          "name": "project_review_comment_author_id_user_id_fk",
-          "tableFrom": "project_review_comment",
-          "tableTo": "user",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.project_room": {
       "name": "project_room",
       "schema": "",
@@ -3116,6 +3033,453 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.review": {
+      "name": "review",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "designer_profile_id": {
+          "name": "designer_profile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "booking_id": {
+          "name": "booking_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "review_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disputed_at": {
+          "name": "disputed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moderated_at": {
+          "name": "moderated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moderation_revision": {
+          "name": "moderation_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "review_designer_author_uniq": {
+          "name": "review_designer_author_uniq",
+          "columns": [
+            {
+              "expression": "designer_profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "author_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_booking_uniq": {
+          "name": "review_booking_uniq",
+          "columns": [
+            {
+              "expression": "booking_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"review\".\"booking_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_author_user_idx": {
+          "name": "review_author_user_idx",
+          "columns": [
+            {
+              "expression": "author_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_project_idx": {
+          "name": "review_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_designer_published_idx": {
+          "name": "review_designer_published_idx",
+          "columns": [
+            {
+              "expression": "designer_profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"review\".\"status\" = 'published'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_status_updated_idx": {
+          "name": "review_status_updated_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "review_designer_profile_id_designer_profile_id_fk": {
+          "name": "review_designer_profile_id_designer_profile_id_fk",
+          "tableFrom": "review",
+          "tableTo": "designer_profile",
+          "columnsFrom": [
+            "designer_profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "review_author_user_id_user_id_fk": {
+          "name": "review_author_user_id_user_id_fk",
+          "tableFrom": "review",
+          "tableTo": "user",
+          "columnsFrom": [
+            "author_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "review_project_id_project_id_fk": {
+          "name": "review_project_id_project_id_fk",
+          "tableFrom": "review",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "review_booking_id_consultation_booking_id_fk": {
+          "name": "review_booking_id_consultation_booking_id_fk",
+          "tableFrom": "review",
+          "tableTo": "consultation_booking",
+          "columnsFrom": [
+            "booking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "review_rating_check": {
+          "name": "review_rating_check",
+          "value": "\"review\".\"rating\" between 1 and 5"
+        },
+        "review_moderation_revision_check": {
+          "name": "review_moderation_revision_check",
+          "value": "\"review\".\"moderation_revision\" >= 0"
+        },
+        "review_body_length_check": {
+          "name": "review_body_length_check",
+          "value": "\"review\".\"body\" is null or char_length(btrim(\"review\".\"body\")) >= 30"
+        },
+        "review_timestamp_order_check": {
+          "name": "review_timestamp_order_check",
+          "value": "\n        \"review\".\"updated_at\" >= \"review\".\"created_at\"\n        and (\"review\".\"published_at\" is null or \"review\".\"published_at\" >= \"review\".\"created_at\")\n        and (\"review\".\"disputed_at\" is null or \"review\".\"disputed_at\" >= \"review\".\"created_at\")\n        and (\"review\".\"moderated_at\" is null or \"review\".\"moderated_at\" >= \"review\".\"created_at\")\n      "
+        },
+        "review_lifecycle_check": {
+          "name": "review_lifecycle_check",
+          "value": "\n        (\n          \"review\".\"status\" = 'pending'\n          and \"review\".\"published_at\" is null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is null\n        )\n        or (\n          \"review\".\"status\" = 'rejected'\n          and \"review\".\"published_at\" is null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is not null\n        )\n        or (\n          \"review\".\"status\" = 'published'\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is null\n          and \"review\".\"moderated_at\" is not null\n          and \"review\".\"moderated_at\" >= \"review\".\"published_at\"\n        )\n        or (\n          \"review\".\"status\" = 'disputed'\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is not null\n          and \"review\".\"moderated_at\" is not null\n          and \"review\".\"disputed_at\" >= \"review\".\"published_at\"\n          and \"review\".\"moderated_at\" >= \"review\".\"published_at\"\n          and \"review\".\"moderated_at\" <= \"review\".\"disputed_at\"\n        )\n        or (\n          \"review\".\"status\" = 'removed'\n          and \"review\".\"published_at\" is not null\n          and \"review\".\"disputed_at\" is not null\n          and \"review\".\"moderated_at\" is not null\n          and \"review\".\"disputed_at\" >= \"review\".\"published_at\"\n          and \"review\".\"moderated_at\" >= \"review\".\"disputed_at\"\n        )\n      "
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.review_moderation_event": {
+      "name": "review_moderation_event",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "review_id": {
+          "name": "review_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "review_moderation_action",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_status": {
+          "name": "from_status",
+          "type": "review_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_status": {
+          "name": "to_status",
+          "type": "review_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "review_moderation_event_review_created_idx": {
+          "name": "review_moderation_event_review_created_idx",
+          "columns": [
+            {
+              "expression": "review_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_moderation_event_actor_idx": {
+          "name": "review_moderation_event_actor_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "review_moderation_event_review_id_review_id_fk": {
+          "name": "review_moderation_event_review_id_review_id_fk",
+          "tableFrom": "review_moderation_event",
+          "tableTo": "review",
+          "columnsFrom": [
+            "review_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "review_moderation_event_actor_user_id_user_id_fk": {
+          "name": "review_moderation_event_actor_user_id_user_id_fk",
+          "tableFrom": "review_moderation_event",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "review_moderation_event_transition_check": {
+          "name": "review_moderation_event_transition_check",
+          "value": "\n        (\"review_moderation_event\".\"action\" = 'submit' and \"review_moderation_event\".\"from_status\" is null and \"review_moderation_event\".\"to_status\" = 'pending')\n        or (\n          \"review_moderation_event\".\"from_status\" is not null\n          and (\n            (\n              \"review_moderation_event\".\"action\" = 'edit'\n              and \"review_moderation_event\".\"from_status\" in ('pending', 'published')\n              and \"review_moderation_event\".\"to_status\" = 'pending'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'publish'\n              and \"review_moderation_event\".\"from_status\" = 'pending'\n              and \"review_moderation_event\".\"to_status\" = 'published'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'reject'\n              and \"review_moderation_event\".\"from_status\" = 'pending'\n              and \"review_moderation_event\".\"to_status\" = 'rejected'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'dispute'\n              and \"review_moderation_event\".\"from_status\" = 'published'\n              and \"review_moderation_event\".\"to_status\" = 'disputed'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'resolve_publish'\n              and \"review_moderation_event\".\"from_status\" = 'disputed'\n              and \"review_moderation_event\".\"to_status\" = 'published'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'remove'\n              and \"review_moderation_event\".\"from_status\" = 'disputed'\n              and \"review_moderation_event\".\"to_status\" = 'removed'\n            )\n          )\n        )\n      "
+        }
+      },
       "isRLSEnabled": false
     },
     "public.taxonomy": {
@@ -3527,14 +3891,6 @@
         "failed"
       ]
     },
-    "public.project_review_comment_status": {
-      "name": "project_review_comment_status",
-      "schema": "public",
-      "values": [
-        "unresolved",
-        "resolved"
-      ]
-    },
     "public.project_status": {
       "name": "project_status",
       "schema": "public",
@@ -3545,6 +3901,30 @@
         "published",
         "rejected",
         "changes_requested"
+      ]
+    },
+    "public.review_moderation_action": {
+      "name": "review_moderation_action",
+      "schema": "public",
+      "values": [
+        "submit",
+        "edit",
+        "publish",
+        "reject",
+        "dispute",
+        "resolve_publish",
+        "remove"
+      ]
+    },
+    "public.review_status": {
+      "name": "review_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "published",
+        "rejected",
+        "disputed",
+        "removed"
       ]
     },
     "public.taxonomy_kind": {

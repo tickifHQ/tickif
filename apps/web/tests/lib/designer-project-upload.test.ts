@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCreateProjectPayload,
   buildImageMetadata,
+  canonicalTaxonomySlug,
   getBackendProjectSelection,
   moveProjectImage,
   roomSlugCandidates,
@@ -28,7 +29,9 @@ const propertySubtypes = new Set([
   'restaurant',
 ]);
 
-function room(overrides: Partial<Parameters<typeof shouldRefreshPristineDefaultRooms>[0][number]> = {}) {
+function room(
+  overrides: Partial<Parameters<typeof shouldRefreshPristineDefaultRooms>[0][number]> = {},
+) {
   return {
     roomSlug: 'modular-kitchen',
     title: 'Kitchen',
@@ -89,7 +92,10 @@ describe('designer project upload helpers', () => {
       projectName: ' Maitri Apartments ',
       selectedProjectTypeLabel: 'Apartment',
       aboutProject: ' Luxury 2BHK ',
-      backendProjectSelection: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+      },
       selectedScopeSlug: 'construction',
       primaryField: 'bhk',
       bhkSlug: '2-bhk',
@@ -136,7 +142,10 @@ describe('designer project upload helpers', () => {
       projectName: '   ',
       selectedProjectTypeLabel: 'Apartment',
       aboutProject: '',
-      backendProjectSelection: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+      },
       selectedScopeSlug: 'construction',
       primaryField: 'bhk',
       bhkSlug: '2-bhk',
@@ -158,7 +167,10 @@ describe('designer project upload helpers', () => {
       projectName: '',
       selectedProjectTypeLabel: 'Office / Commercial',
       aboutProject: '',
-      backendProjectSelection: { propertyTypeSlug: 'commercial-workspace', propertySubtypeSlug: 'creative-studio' },
+      backendProjectSelection: {
+        propertyTypeSlug: 'commercial-workspace',
+        propertySubtypeSlug: 'creative-studio',
+      },
       selectedScopeSlug: 'design',
       primaryField: 'subtype',
       bhkSlug: '',
@@ -185,7 +197,10 @@ describe('designer project upload helpers', () => {
       projectName: 'Apartment',
       selectedProjectTypeLabel: 'Apartment',
       aboutProject: '',
-      backendProjectSelection: { propertyTypeSlug: 'residential', propertySubtypeSlug: 'apartment' },
+      backendProjectSelection: {
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+      },
       selectedScopeSlug: 'construction',
       primaryField: 'bhk',
       bhkSlug: '2-bhk',
@@ -222,6 +237,16 @@ describe('designer project upload helpers', () => {
       finishSlugs: ['matte-laminate'],
       tagSlugs: ['warm-wood'],
     });
+  });
+
+  it('drops stale taxonomy values and canonicalizes labels before editing metadata', () => {
+    const terms = [
+      { slug: 'veneer', label: 'Veneer' },
+      { slug: 'pu', label: 'PU (Polyurethane)' },
+    ];
+
+    expect(canonicalTaxonomySlug('PU (Polyurethane)', terms)).toBe('pu');
+    expect(canonicalTaxonomySlug('stone', terms)).toBe('');
   });
 
   it('matches UI room aliases against backend default room slugs', () => {

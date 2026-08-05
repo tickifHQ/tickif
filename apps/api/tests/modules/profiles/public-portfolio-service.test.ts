@@ -26,6 +26,20 @@ vi.mock('../../../src/modules/projects/service.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/reviews/service.js', () => ({
+  reviewsService: {
+    listPublished: vi.fn(async () => ({
+      items: [],
+      histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      averageRating: 4.2,
+      reviewCount: 8,
+      page: 1,
+      limit: 50,
+      totalPages: 1,
+    })),
+  },
+}));
+
 vi.mock('@repo/storage', () => ({
   presignUpload: vi.fn(),
   presignDownload: vi.fn(async ({ key }: { key: string }) => `https://cdn.test/${key}`),
@@ -46,6 +60,7 @@ const { googleReviewsRepository } = await import(
   '../../../src/modules/profiles/google-repository.js'
 );
 const { projectsService } = await import('../../../src/modules/projects/service.js');
+const { reviewsService } = await import('../../../src/modules/reviews/service.js');
 
 // --- Factories ---
 
@@ -98,6 +113,12 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   testimonialUpdatedAt: null,
   showOverallRating: true,
   showPositiveReviewsOnly: false,
+  showTickifReviews: true,
+  showTickifOverallRating: true,
+  showTickifPositiveReviewsOnly: false,
+  showGoogleReviews: true,
+  showGoogleOverallRating: true,
+  showGooglePositiveReviewsOnly: false,
   showTickifBadge: true,
   publishedAt: new Date('2026-02-01'),
   createdAt: new Date('2025-01-01'),
@@ -157,6 +178,15 @@ beforeEach(() => {
   vi.mocked(projectsService.designerProjects).mockResolvedValue(emptyProjects);
   vi.mocked(projectsService.designerStartingBudget).mockResolvedValue(null);
   vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(null);
+  vi.mocked(reviewsService.listPublished).mockResolvedValue({
+    items: [],
+    histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    averageRating: 4.2,
+    reviewCount: 8,
+    page: 1,
+    limit: 50,
+    totalPages: 1,
+  });
   vi.mocked(portfolioRepository.findCityLabels).mockResolvedValue([]);
   vi.mocked(portfolioRepository.findPublishedProjectTitle).mockResolvedValue(null);
   resolveTo();
@@ -299,12 +329,58 @@ describe('publicPortfolioService.getBySlug — projection', () => {
 });
 
 describe('publicPortfolioService.getBySlug — reviews', () => {
-  it('serves cached Google reviews and prefers Google’s aggregate rating', async () => {
+  it('returns Tickif and Google review content together', async () => {
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
+    vi.mocked(reviewsService.listPublished).mockResolvedValue({
+      items: [
+        {
+          id: 'review-1',
+          designerProfileId: 'profile-1',
+          author: {
+            id: 'author-1',
+            name: 'Priya K.',
+            avatarUrl: null,
+          },
+          project: null,
+          bookingId: null,
+          verifiedConsultation: false,
+          rating: 5,
+          body: 'The team translated our needs into a home that feels effortless.',
+          status: 'published',
+          moderationRevision: 1,
+          publishedAt: '2026-07-20T00:00:00.000Z',
+          disputedAt: null,
+          createdAt: '2026-07-18T00:00:00.000Z',
+          updatedAt: '2026-07-20T00:00:00.000Z',
+        },
+      ],
+      histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+      averageRating: 5,
+      reviewCount: 1,
+      page: 1,
+      limit: 50,
+      totalPages: 1,
+    });
+
+    const result = await publicPortfolioService.getBySlug('test-studio');
+
+    expect(result.reviews.map((review) => review.source)).toEqual(['tickif', 'google']);
+    expect(result.reviews[0]).toMatchObject({
+      id: 'review-1',
+      author: 'Priya K.',
+      relativeTime: '5 days ago',
+      verifiedConsultation: false,
+      source: 'tickif',
+    });
+    expect(result.stats.tickif).toEqual({ rating: 4.2, reviewCount: 8 });
+    expect(result.stats.google).toEqual({ rating: 4.8, reviewCount: 57 });
+  });
+
+  it('serves independent Tickif and Google aggregates without source precedence', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 
-    expect(result.reviewSource).toBe('google');
     expect(result.reviews).toEqual([
       {
         id: 'google-1770000000-0',
@@ -313,31 +389,37 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
         rating: 5,
         relativeTime: '2 weeks ago',
         text: 'Wonderful to work with.',
+        verifiedConsultation: false,
         source: 'google',
       },
     ]);
-    expect(result.stats.rating).toBe(4.8);
-    expect(result.stats.reviewCount).toBe(57);
+    expect(result.stats.tickif).toEqual({ rating: 4.2, reviewCount: 8 });
+    expect(result.stats.google).toEqual({ rating: 4.8, reviewCount: 57 });
   });
 
-  it('falls back to the Tickif profile rating when no place is connected', async () => {
+  it('keeps the Tickif aggregate when no Google place is connected', async () => {
     const result = await publicPortfolioService.getBySlug('test-studio');
 
-    expect(result.reviewSource).toBeNull();
     expect(result.reviews).toEqual([]);
-    expect(result.stats.rating).toBe(4.2);
-    expect(result.stats.reviewCount).toBe(8);
+    expect(result.stats.tickif).toEqual({ rating: 4.2, reviewCount: 8 });
+    expect(result.stats.google).toBeNull();
   });
 
-  it('withholds the aggregate rating when the designer hid it, rather than leaving it to the client', async () => {
+  it('withholds each aggregate when the designer hid both source ratings', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
-    resolveTo(makeProfile(), makePortfolio({ showOverallRating: false }));
+    resolveTo(
+      makeProfile(),
+      makePortfolio({
+        showTickifOverallRating: false,
+        showGoogleOverallRating: false,
+      }),
+    );
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 
     expect(result.sections.overallRating).toBe(false);
-    expect(result.stats.rating).toBe(0);
-    expect(result.stats.reviewCount).toBe(0);
+    expect(result.stats.tickif).toBeNull();
+    expect(result.stats.google).toBeNull();
     // The review list is a separate toggle and stays on.
     expect(result.reviews).toHaveLength(1);
   });
@@ -350,9 +432,9 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
     const result = await publicPortfolioService.getBySlug('test-studio');
 
     expect(result.reviews).toEqual([]);
-    expect(result.reviewSource).toBeNull();
     // The stale row must not leak Google's rating either.
-    expect(result.stats.rating).toBe(4.2);
+    expect(result.stats.tickif).toEqual({ rating: 4.2, reviewCount: 8 });
+    expect(result.stats.google).toBeNull();
   });
 
   it('withholds review content while a connection is still pending', async () => {
@@ -367,12 +449,14 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
 
   it('hides all reviews when the designer hid the reviews section', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
-    resolveTo(makeProfile(), makePortfolio({ showReviews: false }));
+    resolveTo(
+      makeProfile(),
+      makePortfolio({ showTickifReviews: false, showGoogleReviews: false }),
+    );
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 
     expect(result.reviews).toEqual([]);
-    expect(result.reviewSource).toBeNull();
   });
 
   it('drops sub-4-star reviews when showPositiveReviewsOnly is on', async () => {
@@ -385,7 +469,7 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
         ],
       }),
     );
-    resolveTo(makeProfile(), makePortfolio({ showPositiveReviewsOnly: true }));
+    resolveTo(makeProfile(), makePortfolio({ showGooglePositiveReviewsOnly: true }));
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 

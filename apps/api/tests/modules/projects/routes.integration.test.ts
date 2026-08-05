@@ -217,6 +217,14 @@ describe('GET /api/projects', () => {
       status: 'submitted',
       localitySlug: 'bandra',
     });
+    await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Rejected',
+      status: 'rejected',
+      localitySlug: 'bandra',
+      moderationNote: 'Portfolio mismatch.',
+      rejectionReasonCode: 'portfolio-mismatch',
+    });
 
     const draft = await client.api.projects.$get(
       { query: { status: 'draft', q: 'bandra', page: 1, limit: 1, sort: 'title' } },
@@ -224,7 +232,7 @@ describe('GET /api/projects', () => {
     );
     expect(draft.status).toBe(200);
     const draftBody = (await draft.json()) as ListProjectsResponse;
-    expect(draftBody).toMatchObject({ total: 2, page: 1, limit: 1, totalPages: 2 });
+    expect(draftBody).toMatchObject({ total: 3, page: 1, limit: 1, totalPages: 3 });
     expect(draftBody.items[0]?.status).toBe('changes_requested');
 
     const review = await client.api.projects.$get(
@@ -287,7 +295,15 @@ describe('GET /api/projects/portfolio', () => {
       status: 'ready',
       width: 1600,
       height: 1200,
-      derivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/project/portfolio/thumb.webp', width: 320, height: 240 }],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/project/portfolio/thumb.webp',
+          width: 320,
+          height: 240,
+        },
+      ],
     });
     await db
       .update(schema.project)

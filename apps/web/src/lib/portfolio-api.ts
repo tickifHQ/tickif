@@ -4,6 +4,7 @@ import type {
   SlugAvailabilityResponse,
   UploadLogoResponse,
   GoogleReviewsResponse,
+  ListProjectsResponse,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 
@@ -207,4 +208,29 @@ export async function disconnectGoogleReviews(): Promise<void> {
     }
     throw new Error(message);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Projects (for testimonial picker)
+// ---------------------------------------------------------------------------
+
+/** Lightweight project info for the testimonial project picker. */
+export type TestimonialProjectOption = {
+  id: string;
+  title: string;
+};
+
+/**
+ * GET /api/projects — fetch the designer's published projects for the
+ * testimonial picker. Returns only the fields needed for selection.
+ */
+export async function fetchPublishedProjects(): Promise<TestimonialProjectOption[]> {
+  const response = await api.api.projects.$get({
+    query: { status: 'published', limit: 100 },
+  });
+  const data = await handleResponse<ListProjectsResponse>(
+    response,
+    'Could not load projects.',
+  );
+  return data.items.map((p) => ({ id: p.id, title: p.title }));
 }

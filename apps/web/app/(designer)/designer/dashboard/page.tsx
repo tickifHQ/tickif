@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import {
+  PLATFORM_ROLE,
   profileCompletionResponseSchema,
   profileDashboardResponseSchema,
   type ProfileCompletionResponse,
@@ -88,7 +89,7 @@ async function getProfileCompletion(): Promise<CompletionResult> {
 
 export default async function DesignerDashboardPage() {
   const [session, profile, dashboard, completion] = await Promise.all([
-    requireAuth({ requiredRole: 'designer' }),
+    requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER }),
     getCurrentDesignerProfile(),
     getDashboardSummary(),
     getProfileCompletion(),

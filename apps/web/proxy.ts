@@ -30,10 +30,6 @@ export function proxy(req: NextRequest) {
   // Optimistic only; requireAuth in the server layouts is the real security boundary.
   const hasSession = !!getSessionCookie(req);
 
-  if (hasSession && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-
   if (!hasSession && !isPublicPath(pathname)) {
     return NextResponse.redirect(new URL('/login', req.url));
   }

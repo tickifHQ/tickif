@@ -121,6 +121,8 @@ export type ProjectListItemRecord = Pick<
   | 'citySlug'
   | 'localitySlug'
   | 'status'
+  | 'rejectionReasonCode'
+  | 'moderationNote'
   | 'coverImageId'
   | 'createdAt'
   | 'updatedAt'
@@ -251,6 +253,8 @@ export const projectsRepository = {
           citySlug: schema.project.citySlug,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
+          rejectionReasonCode: schema.project.rejectionReasonCode,
+          moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
           createdAt: schema.project.createdAt,
           updatedAt: schema.project.updatedAt,
@@ -344,21 +348,25 @@ export const projectsRepository = {
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
-    return db
-      .select(feedProjectColumns(cover))
-      .from(schema.project)
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      // Only active designers: suspended studios 404 on their public profile, so their
-      // projects must not surface here either. `id` is the stable tiebreaker for paging.
-      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-        desc(schema.project.id),
-      )
-      .limit(params.limit)
-      .offset(params.offset);
+    return (
+      db
+        .select(feedProjectColumns(cover))
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+        // Only active designers: suspended studios 404 on their public profile, so their
+        // projects must not surface here either. `id` is the stable tiebreaker for paging.
+        .where(
+          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+        )
+        .orderBy(
+          sql`${schema.project.publishedAt} desc nulls last`,
+          desc(schema.project.createdAt),
+          desc(schema.project.id),
+        )
+        .limit(params.limit)
+        .offset(params.offset)
+    );
   },
 
   /**
@@ -624,7 +632,7 @@ export const projectsRepository = {
     requirements: {
       minImageCount: number;
       actorUserId: string;
-      expectedStatus: 'draft' | 'changes_requested';
+      expectedStatus: 'draft' | 'changes_requested' | 'rejected';
       /** Derived from the transition matrix by the caller — never re-derived here. */
       action: ModerationAction;
     },
