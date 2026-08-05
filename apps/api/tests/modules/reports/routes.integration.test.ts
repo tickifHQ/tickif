@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import { analyticsResponseSchema } from '@repo/contracts';
+import { db, schema } from '@repo/db';
+import { makeDesigner, makeLead, makeProject } from '@repo/db/testing';
+import { app } from '../../../src/app.js';
+import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+
+async function makeDesignerSession(phoneNumber: string) {
+  const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
+  const designer = await makeDesigner({ userId });
+  await db.insert(schema.member).values({
+    id: `mem-reports-${userId}`,
+    organizationId: designer.orgId,
+    userId,
+    role: 'owner',
+    createdAt: new Date(),
+  });
+  return {
+    cookie: await activateOrganization(cookie, designer.orgId),
+    designer,
+  };
+}
+
+describe('GET /api/reports/analytics', () => {
+  it('rejects unauthenticated analytics requests', async () => {
+    const response = await app.request('/api/reports/analytics');
+
+    expect(response.status).toBe(401);
+  });
+
+  it('validates the requested analytics window', async () => {
+    const { cookie } = await makeDesignerSession('+919800004001');
+
+    const response = await app.request('/api/reports/analytics?days=6', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(422);
+  });
+
+  it('returns real metrics scoped to the active designer organization', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004002');
+    const today = new Date();
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const outsideWindow = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000);
+
+    await makeProject({
+      designerId: designer.id,
+      status: 'published',
+      title: 'Published in window',
+      createdAt: yesterday,
+    });
+    await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      title: 'Older draft',
+      createdAt: outsideWindow,
+    });
+    await makeProject({ title: 'Other organization project', status: 'published' });
+
+    await makeLead({
+      organizationId: designer.orgId,
+      status: 'new',
+      receivedAt: today,
+    });
+    await makeLead({
+      organizationId: designer.orgId,
+      status: 'contacted',
+      receivedAt: yesterday,
+    });
+    await makeLead({ status: 'new', receivedAt: today });
+
+    const response = await app.request('/api/reports/analytics?days=7', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.safeParse(await response.json());
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.projects).toEqual({
+      total: 2,
+      draft: 1,
+      submitted: 0,
+      inReview: 0,
+      published: 1,
+      rejected: 0,
+      changesRequested: 0,
+    });
+    expect(parsed.data.leads).toEqual({
+      total: 2,
+      new: 1,
+      contacted: 1,
+      closed: 0,
+      spam: 0,
+    });
+    expect(parsed.data.activity).toHaveLength(7);
+    expect(parsed.data.activity.reduce((sum, point) => sum + point.projectsCreated, 0)).toBe(1);
+    expect(parsed.data.activity.reduce((sum, point) => sum + point.leadsReceived, 0)).toBe(2);
+  });
+
+  it('rejects authenticated designers without an active organization', async () => {
+    const { cookie } = await createRoleSession('+919800004003', 'designer');
+
+    const response = await app.request('/api/reports/analytics', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(422);
+  });
+});

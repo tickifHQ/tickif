@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type {
   PortfolioResponse,
+  RequiredPortfolioField,
   UpdatePortfolioInput,
   GoogleReviewsResponse,
 } from '@repo/contracts';
@@ -102,6 +103,21 @@ type ToggleableSectionKey =
   | 'shareBlock';
 
 type SectionKey = 'linkUrl' | 'customizations' | 'hero' | ToggleableSectionKey;
+
+/** Hero fields that have to be filled before the public page goes live. */
+const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
+  logo: 'a logo',
+  displayName: 'a studio name',
+  tagline: 'a tagline',
+  bio: 'a bio',
+};
+
+/** "a logo and a bio" — the missing fields as a readable list. */
+function formatMissingFields(fields: RequiredPortfolioField[]): string {
+  const labels = fields.map((field) => REQUIRED_FIELD_LABELS[field]);
+  if (labels.length < 2) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
 
 /** Maps a portfolio badge enum to its display label and illustration. */
 const BADGE_META: Record<string, { label: string; src: string }> = {
@@ -633,6 +649,24 @@ export function DesignerPortfolioSettings() {
                     onCheckedChange={(checked) => updateField('publicLinkEnabled', checked)}
                   />
                 </div>
+
+                {/* Completeness gate — the switch alone does not make a page live. */}
+                {portfolio.missingRequiredFields.length > 0 && (
+                  <div
+                    data-slot="portfolio-visibility-notice"
+                    className="flex items-start gap-2 border-b border-border bg-muted/40 px-5 py-3"
+                    role="status"
+                  >
+                    <AlertCircle className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Your portfolio isn&apos;t public yet. Add{' '}
+                      <span className="font-medium text-foreground">
+                        {formatMissingFields(portfolio.missingRequiredFields)}
+                      </span>{' '}
+                      in the Hero section and save to publish it.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2 p-5">
                   <Label className="text-sm font-medium text-foreground">Portfolio URL</Label>
