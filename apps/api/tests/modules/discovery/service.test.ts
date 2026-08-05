@@ -9,8 +9,16 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
   },
 }));
 
+// The service resolves taxonomy labels once per page, so the batch lookup is mocked here.
+vi.mock('../../../src/modules/projects/repository.js', () => ({
+  projectsRepository: {
+    findTaxonomyLabels: vi.fn(async () => new Map<string, string>()),
+  },
+}));
+
 // Mock the mapper
 vi.mock('../../../src/modules/discovery/mapper.js', () => ({
+  collectTaxonomyPairs: vi.fn(() => []),
   normalizeTypesenseHit: vi.fn((hit) => ({ ...hit, normalized: true })),
   normalizePostgresRow: vi.fn((row) => ({ ...row, normalized: true })),
   toDiscoveryCard: vi.fn(async (item) => ({

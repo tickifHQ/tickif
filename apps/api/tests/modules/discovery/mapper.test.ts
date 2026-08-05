@@ -8,23 +8,19 @@ vi.mock('@repo/storage', () => ({
   presignDownload: vi.fn(async ({ key }: { key: string }) => `https://signed.example/${key}`),
 }));
 
-vi.mock('../../../src/modules/projects/repository.js', () => ({
-  projectsRepository: {
-    findTaxonomyLabels: vi.fn(async () =>
-      new Map([
-        ['city:mumbai', 'Mumbai'],
-        ['bhk:3-bhk', '3 BHK'],
-      ]),
-    ),
-  },
-}));
-
 // Import AFTER mocks are registered
-const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } = await import(
-  '../../../src/modules/discovery/mapper.js'
-);
+const { collectTaxonomyPairs, normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } =
+  await import('../../../src/modules/discovery/mapper.js');
 const { presignDownload } = await import('@repo/storage');
-const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
+
+/**
+ * The service resolves labels once per page and hands the map to the mapper, so
+ * these tests supply it directly rather than mocking a repository.
+ */
+const LABELS = new Map([
+  ['city:mumbai', 'Mumbai'],
+  ['bhk:3-bhk', '3 BHK'],
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Fixtures
@@ -251,19 +247,12 @@ describe('normalizePostgresRow', () => {
 describe('toDiscoveryCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset to default mock behavior
-    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
-      new Map([
-        ['city:mumbai', 'Mumbai'],
-        ['bhk:3-bhk', '3 BHK'],
-      ]),
-    );
   });
 
   describe('cover image handling', () => {
     it('presigns cover image URL when status is "ready" and derivatives exist (Postgres path)', async () => {
       const normalized = normalizePostgresRow(createPostgresRow());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).toHaveBeenCalledWith({
         key: 'derivatives/projects/proj-123/cover-small.webp',
@@ -277,7 +266,7 @@ describe('toDiscoveryCard', () => {
 
     it('presigns cover image URL when status is "ready" and coverImageKey exists (Typesense path)', async () => {
       const normalized = normalizeTypesenseHit(createTypesenseHit());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).toHaveBeenCalledWith({
         key: 'derivatives/projects/proj-123/cover-small.webp',
@@ -293,7 +282,7 @@ describe('toDiscoveryCard', () => {
     it('returns null cover fields when status is "processing"', async () => {
       const row = createPostgresRow({ coverStatus: 'processing' });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).not.toHaveBeenCalled();
       expect(result.coverImageUrl).toBeNull();
@@ -304,7 +293,7 @@ describe('toDiscoveryCard', () => {
     it('returns null cover fields when status is "failed"', async () => {
       const row = createPostgresRow({ coverStatus: 'failed' });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).not.toHaveBeenCalled();
       expect(result.coverImageUrl).toBeNull();
@@ -315,7 +304,7 @@ describe('toDiscoveryCard', () => {
     it('returns null cover fields when status is null', async () => {
       const row = createPostgresRow({ coverStatus: null, coverDerivatives: null });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).not.toHaveBeenCalled();
       expect(result.coverImageUrl).toBeNull();
@@ -327,7 +316,7 @@ describe('toDiscoveryCard', () => {
       vi.mocked(presignDownload).mockRejectedValueOnce(new Error('Presign failed'));
 
       const normalized = normalizePostgresRow(createPostgresRow());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.coverImageUrl).toBeNull();
     });
@@ -342,7 +331,7 @@ describe('toDiscoveryCard', () => {
       ];
       const row = createPostgresRow({ coverDerivatives: derivatives });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).toHaveBeenCalledWith({ key: 'cover-small.webp' });
       expect(result.coverImageWidth).toBe(640);
@@ -355,7 +344,7 @@ describe('toDiscoveryCard', () => {
       ];
       const row = createPostgresRow({ coverDerivatives: derivatives });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).toHaveBeenCalledWith({ key: 'cover-small.avif' });
       expect(result.coverImageWidth).toBe(640);
@@ -368,7 +357,7 @@ describe('toDiscoveryCard', () => {
       ];
       const row = createPostgresRow({ coverDerivatives: derivatives });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).not.toHaveBeenCalled();
       expect(result.coverImageUrl).toBeNull();
@@ -379,7 +368,7 @@ describe('toDiscoveryCard', () => {
     it('handles empty derivatives array', async () => {
       const row = createPostgresRow({ coverDerivatives: [] });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(presignDownload).not.toHaveBeenCalled();
       expect(result.coverImageUrl).toBeNull();
@@ -389,14 +378,8 @@ describe('toDiscoveryCard', () => {
   describe('taxonomy label resolution', () => {
     it('resolves city and bhk taxonomy labels', async () => {
       const normalized = normalizePostgresRow(createPostgresRow());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
-      expect(projectsRepository.findTaxonomyLabels).toHaveBeenCalledWith([
-        { kind: 'city', slug: 'mumbai' },
-      ]);
-      expect(projectsRepository.findTaxonomyLabels).toHaveBeenCalledWith([
-        { kind: 'bhk', slug: '3-bhk' },
-      ]);
       expect(result.city).toBe('Mumbai');
       expect(result.bhk).toBe('3 BHK');
     });
@@ -404,7 +387,7 @@ describe('toDiscoveryCard', () => {
     it('returns null for city when citySlug is null', async () => {
       const row = createPostgresRow({ citySlug: null });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.city).toBeNull();
     });
@@ -412,19 +395,40 @@ describe('toDiscoveryCard', () => {
     it('returns null for bhk when bhkSlug is null', async () => {
       const row = createPostgresRow({ bhkSlug: null });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.bhk).toBeNull();
     });
 
     it('returns null when taxonomy label not found', async () => {
-      vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
-
       const normalized = normalizePostgresRow(createPostgresRow());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, new Map());
 
       expect(result.city).toBeNull();
       expect(result.bhk).toBeNull();
+    });
+  });
+
+  describe('collectTaxonomyPairs', () => {
+    it('collects the distinct city and bhk pairs a page needs', () => {
+      const items = [
+        normalizePostgresRow(createPostgresRow()),
+        normalizePostgresRow(createPostgresRow()),
+        normalizePostgresRow(createPostgresRow({ citySlug: 'pune', bhkSlug: '2-bhk' })),
+      ];
+
+      expect(collectTaxonomyPairs(items)).toEqual([
+        { kind: 'city', slug: 'mumbai' },
+        { kind: 'bhk', slug: '3-bhk' },
+        { kind: 'city', slug: 'pune' },
+        { kind: 'bhk', slug: '2-bhk' },
+      ]);
+    });
+
+    it('skips null slugs', () => {
+      const items = [normalizePostgresRow(createPostgresRow({ citySlug: null, bhkSlug: null }))];
+
+      expect(collectTaxonomyPairs(items)).toEqual([]);
     });
   });
 
@@ -432,7 +436,7 @@ describe('toDiscoveryCard', () => {
     it('formats rating snippet as "4.8 (12 reviews)" for plural', async () => {
       const row = createPostgresRow({ avgRating: '4.8', reviewCount: 12 });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.ratingSnippet).toBe('4.8 (12 reviews)');
     });
@@ -440,7 +444,7 @@ describe('toDiscoveryCard', () => {
     it('formats rating snippet as "4.8 (1 review)" for singular', async () => {
       const row = createPostgresRow({ avgRating: '4.8', reviewCount: 1 });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.ratingSnippet).toBe('4.8 (1 review)');
     });
@@ -448,7 +452,7 @@ describe('toDiscoveryCard', () => {
     it('returns null for zero reviews', async () => {
       const row = createPostgresRow({ avgRating: '4.5', reviewCount: 0 });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.ratingSnippet).toBeNull();
     });
@@ -456,7 +460,7 @@ describe('toDiscoveryCard', () => {
     it('formats rating with one decimal place', async () => {
       const row = createPostgresRow({ avgRating: '4.567', reviewCount: 5 });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.ratingSnippet).toBe('4.6 (5 reviews)');
     });
@@ -464,7 +468,7 @@ describe('toDiscoveryCard', () => {
     it('handles integer rating by adding .0', async () => {
       const row = createPostgresRow({ avgRating: '5', reviewCount: 3 });
       const normalized = normalizePostgresRow(row);
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.ratingSnippet).toBe('5.0 (3 reviews)');
     });
@@ -473,7 +477,7 @@ describe('toDiscoveryCard', () => {
   describe('complete Card_Projection output', () => {
     it('produces complete DiscoveryCard with all fields', async () => {
       const normalized = normalizePostgresRow(createPostgresRow());
-      const result = await toDiscoveryCard(normalized);
+      const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result).toEqual({
         slug: 'modern-mumbai-apartment',

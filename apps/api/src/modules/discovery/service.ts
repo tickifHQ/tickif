@@ -1,7 +1,14 @@
 import type { DiscoveryFeedQuery, DiscoveryFeedResponse } from '@repo/contracts';
 import { discoveryRepository } from './repository.js';
 import { buildDiscoveryFilter } from './filter-builder.js';
-import { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } from './mapper.js';
+import {
+  collectTaxonomyPairs,
+  normalizeTypesenseHit,
+  normalizePostgresRow,
+  toDiscoveryCard,
+  type NormalizedFeedItem,
+} from './mapper.js';
+import { projectsRepository } from '../projects/repository.js';
 import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
 
 /**
@@ -34,6 +41,25 @@ import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
  */
 export function isTypesenseConfigured(): boolean {
   return !!(process.env.TYPESENSE_HOST && process.env.TYPESENSE_SEARCH_API_KEY);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Card Assembly
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve a page of normalized items into cards.
+ *
+ * Taxonomy labels are resolved once for the whole page rather than per card:
+ * `toDiscoveryCard` needs a city and a bhk label each, so resolving inside the
+ * mapper cost two queries per item — 48 for a default `limit: 24` page on a
+ * public endpoint. Shared by both the Typesense and Postgres paths so they stay
+ * contract-identical (Design Invariant 1).
+ */
+async function toCards(items: NormalizedFeedItem[]) {
+  if (items.length === 0) return [];
+  const labels = await projectsRepository.findTaxonomyLabels(collectTaxonomyPairs(items));
+  return Promise.all(items.map((item) => toDiscoveryCard(item, labels)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,8 +133,7 @@ export const discoveryService: DiscoveryService = {
         });
 
         // Normalize then map through shared mapper (Design Invariant 1)
-        const normalized = result.hits.map(normalizeTypesenseHit);
-        const items = await Promise.all(normalized.map(toDiscoveryCard));
+        const items = await toCards(result.hits.map(normalizeTypesenseHit));
         const hasMore = result.found > offset + result.hits.length;
 
         return { items, page, limit, hasMore, source: 'search' as const };
@@ -134,8 +159,7 @@ export const discoveryService: DiscoveryService = {
 
     // Normalize then map through shared mapper (SAME as Typesense path)
     // This enforces contract-identical responses (Design Invariant 1)
-    const normalized = result.rows.map(normalizePostgresRow);
-    const items = await Promise.all(normalized.map(toDiscoveryCard));
+    const items = await toCards(result.rows.map(normalizePostgresRow));
     const hasMore = result.rows.length === limit;
 
     return { items, page, limit, hasMore, source: 'db' as const };

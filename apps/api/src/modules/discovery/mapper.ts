@@ -3,7 +3,6 @@ import type { DiscoveryCard, Derivative } from '@repo/contracts';
 import type { ProjectSearchDocument } from '@repo/search';
 import type { FeedProjectRow } from './repository.js';
 import type { TaxonomyKind } from '../projects/repository.js';
-import { projectsRepository } from '../projects/repository.js';
 
 /**
  * Discovery feed mapper — the ONLY layer producing DiscoveryCard objects.
@@ -126,13 +125,41 @@ function formatRatingSnippet(avgRating: number, reviewCount: number): string | n
 }
 
 /**
- * Resolve taxonomy label from slug.
- * Returns null for null slugs or missing labels.
+ * Collect the distinct taxonomy pairs a page of items needs, so the caller can
+ * resolve every label in one query.
+ *
+ * Resolving per card would cost two round trips per item — 48 for a default
+ * `limit: 24` page on an unauthenticated endpoint.
  */
-async function resolveLabel(kind: TaxonomyKind, slug: string | null): Promise<string | null> {
-  if (!slug) return null;
-  const labels = await projectsRepository.findTaxonomyLabels([{ kind, slug }]);
-  return labels.get(`${kind}:${slug}`) ?? null;
+export function collectTaxonomyPairs(
+  items: NormalizedFeedItem[],
+): Array<{ kind: TaxonomyKind; slug: string }> {
+  const seen = new Set<string>();
+  const pairs: Array<{ kind: TaxonomyKind; slug: string }> = [];
+
+  const add = (kind: TaxonomyKind, slug: string | null) => {
+    if (!slug) return;
+    const key = `${kind}:${slug}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    pairs.push({ kind, slug });
+  };
+
+  for (const item of items) {
+    add('city', item.citySlug);
+    add('bhk', item.bhkSlug);
+  }
+
+  return pairs;
+}
+
+/** Read a label out of the pre-resolved map. Null slugs and misses both yield null. */
+function labelOf(
+  labels: Map<string, string>,
+  kind: TaxonomyKind,
+  slug: string | null,
+): string | null {
+  return slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,7 +175,10 @@ async function resolveLabel(kind: TaxonomyKind, slug: string | null): Promise<st
  *
  * @see Requirements 6.1, 6.2, 7.1-7.10
  */
-export async function toDiscoveryCard(item: NormalizedFeedItem): Promise<DiscoveryCard> {
+export async function toDiscoveryCard(
+  item: NormalizedFeedItem,
+  labels: Map<string, string>,
+): Promise<DiscoveryCard> {
   // Resolve cover image URL and dimensions
   let coverImageUrl: string | null = null;
   let coverImageWidth: number | null = null;
@@ -171,12 +201,6 @@ export async function toDiscoveryCard(item: NormalizedFeedItem): Promise<Discove
     }
   }
 
-  // Resolve taxonomy labels in parallel
-  const [city, bhk] = await Promise.all([
-    resolveLabel('city', item.citySlug),
-    resolveLabel('bhk', item.bhkSlug),
-  ]);
-
   return {
     slug: item.slug,
     title: item.title,
@@ -185,8 +209,8 @@ export async function toDiscoveryCard(item: NormalizedFeedItem): Promise<Discove
     coverImageHeight,
     designerName: item.designerName,
     designerSlug: item.designerSlug,
-    city,
-    bhk,
+    city: labelOf(labels, 'city', item.citySlug),
+    bhk: labelOf(labels, 'bhk', item.bhkSlug),
     ratingSnippet: formatRatingSnippet(item.avgRating, item.reviewCount),
   };
 }

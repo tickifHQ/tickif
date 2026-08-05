@@ -58,6 +58,9 @@ function mockProjectDocument(
     tags: [],
     coverImageKey: 'covers/test.webp',
     publishedAt: Date.now(),
+    featuredAt: null,
+    avgRating: 4.5,
+    reviewCount: 12,
     ...overrides,
   };
 }
