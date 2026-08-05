@@ -65,6 +65,7 @@ describe('DesignerProjectRowActions', () => {
             metadata: null,
             publishedAt: null,
             submittedAt: null,
+            reviewComments: [],
             createdAt: '2026-07-02T00:00:00.000Z',
             updatedAt: '2026-07-02T00:00:00.000Z',
             rooms: [],

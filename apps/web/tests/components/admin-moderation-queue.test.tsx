@@ -130,6 +130,7 @@ function detail(
       ],
     },
     history: [],
+    reviewComments: [],
   };
 }
 

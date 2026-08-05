@@ -122,6 +122,23 @@ export async function makeProject(overrides: Partial<typeof schema.project.$infe
   return row!;
 }
 
+export async function makeProjectReviewComment(
+  overrides: Partial<typeof schema.projectReviewComment.$inferInsert> = {},
+) {
+  const projectId = overrides.projectId ?? (await makeProject({ status: 'changes_requested' })).id;
+  const authorId = overrides.authorId ?? (await makeUser({ role: 'admin' })).id;
+  const [row] = await db
+    .insert(schema.projectReviewComment)
+    .values({
+      projectId,
+      authorId,
+      body: overrides.body ?? 'Add clearer room labels.',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 export async function makeTaxonomy(overrides: Partial<typeof schema.taxonomy.$inferInsert> = {}) {
   const { kind = 'room', label = 'Living Room', slug, ...rest } = overrides;
   const [row] = await db

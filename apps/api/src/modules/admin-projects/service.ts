@@ -5,10 +5,13 @@ import type {
   AdminModerationProject,
   AdminModerationQueueQuery,
   AdminModerationQueueResponse,
+  CreateProjectReviewCommentInput,
   ModerationFieldDiff,
   ModerationHistoryItem,
   ModerationNoteInput,
+  ProjectReviewComment,
   RejectProjectInput,
+  UpdateProjectReviewCommentInput,
 } from '@repo/contracts';
 import { presignDownload } from '@repo/storage';
 import { isDeepStrictEqual } from 'node:util';
@@ -24,6 +27,7 @@ import {
   type AdminImageRecord,
   type AdminModerationEventRecord,
   type AdminProjectRecord,
+  type AdminReviewCommentRecord,
   type AdminRoomRecord,
 } from './repository.js';
 
@@ -88,6 +92,18 @@ function toHistory(row: AdminModerationEventRecord): ModerationHistoryItem {
     reasonCode: row.reasonCode,
     fieldDiff: row.fieldDiff,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function toReviewComment(row: AdminReviewCommentRecord): ProjectReviewComment {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    authorLabel: 'Tickif Review Team',
+    body: row.body,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -185,11 +201,12 @@ export const adminProjectsService = {
     const project = await adminProjectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     // Admin completeness is ready-only so it matches the publish gate, unlike designer grace.
-    const [rooms, images, readyImageCounts, history] = await Promise.all([
+    const [rooms, images, readyImageCounts, history, reviewComments] = await Promise.all([
       adminProjectsRepository.listRooms(projectId),
       adminProjectsRepository.listImages(projectId),
       adminProjectsRepository.getReadyImageCounts(projectId),
       adminProjectsRepository.listHistory(projectId),
+      adminProjectsRepository.listReviewComments(projectId),
     ]);
     return {
       project: toProject(project),
@@ -197,7 +214,63 @@ export const adminProjectsService = {
       images: await Promise.all(images.map(toImage)),
       completeness: buildCompleteness(project, readyImageCounts),
       history: history.map(toHistory),
+      reviewComments: reviewComments.map(toReviewComment),
     };
+  },
+
+  async createReviewComment(
+    projectId: string,
+    input: CreateProjectReviewCommentInput,
+    caller: AdminCaller,
+  ): Promise<ProjectReviewComment> {
+    const project = await adminProjectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    if (project.status !== 'submitted' && project.status !== 'in_review') {
+      throw AppError.invalidTransition('Review comments require a submitted or in-review project');
+    }
+    if (project.status === 'in_review') assertReviewOwner(project, caller);
+
+    const comment = await adminProjectsRepository.createReviewComment({
+      projectId,
+      authorId: caller.userId,
+      body: input.body,
+      expectedStatus: project.status,
+      expectedReviewerId: project.reviewedBy,
+    });
+    if (comment === 'project_changed') throw AppError.invalidTransition();
+    if (!comment) throw AppError.notFound('Project not found');
+    return toReviewComment(comment);
+  },
+
+  async updateReviewComment(
+    projectId: string,
+    commentId: string,
+    input: UpdateProjectReviewCommentInput,
+    caller: AdminCaller,
+  ): Promise<ProjectReviewComment> {
+    const project = await adminProjectsRepository.findById(projectId);
+    if (!project) throw AppError.notFound('Project not found');
+    if (!['submitted', 'in_review', 'changes_requested'].includes(project.status)) {
+      throw AppError.invalidTransition('Review comments cannot be updated in this project state');
+    }
+    if (
+      caller.userRole !== 'superadmin' &&
+      project.status !== 'submitted' &&
+      project.reviewedBy !== caller.userId
+    ) {
+      throw AppError.forbidden('Project is assigned to another reviewer');
+    }
+
+    const comment = await adminProjectsRepository.updateReviewComment({
+      projectId,
+      commentId,
+      status: input.status,
+      expectedStatus: project.status,
+      expectedReviewerId: project.reviewedBy,
+    });
+    if (comment === 'project_changed') throw AppError.invalidTransition();
+    if (!comment) throw AppError.notFound('Review comment not found');
+    return toReviewComment(comment);
   },
 
   async startReview(
@@ -228,6 +301,9 @@ export const adminProjectsService = {
     const project = await adminProjectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     assertReviewOwner(project, caller);
+    if (await adminProjectsRepository.hasUnresolvedReviewComments(projectId)) {
+      throw AppError.conflict('Resolve outstanding review comments before publishing');
+    }
     const completeness = buildCompleteness(
       project,
       await adminProjectsRepository.getReadyImageCounts(projectId),
@@ -245,6 +321,7 @@ export const adminProjectsService = {
           rejectionReasonCode: null,
         },
         expectedModerationRevision: project.moderationRevision,
+        requireNoUnresolvedReviewComments: true,
       },
       caller,
     );

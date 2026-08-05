@@ -5,6 +5,7 @@ import type {
   ProjectImageAttachmentRecord,
   ProjectImageDeletionRecord,
   ProjectRecord,
+  ProjectReviewCommentRecord,
   ProjectRoomRecord,
 } from '../../../src/modules/projects/repository.js';
 
@@ -49,6 +50,8 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       submitWithUploadCounts: vi.fn(),
       transition: vi.fn(),
       listModerationHistory: vi.fn(),
+      listReviewComments: vi.fn(),
+      listUnresolvedReviewComments: vi.fn(),
       findReferencedImageObjectKeys: vi.fn(),
       listPublishedFeed: vi.fn(),
       findTaxonomyLabels: vi.fn(),
@@ -171,6 +174,8 @@ const caller = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
+  vi.mocked(projectsRepository.listReviewComments).mockResolvedValue([]);
+  vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
   vi.mocked(orgsService.isWriter).mockResolvedValue(true);
 });
@@ -200,6 +205,36 @@ describe('projectsService.list', () => {
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('surfaces only unresolved comments for changes-requested list rows', async () => {
+    const project = row({ status: 'changes_requested' });
+    const comment: ProjectReviewCommentRecord = {
+      id: '22222222-2222-4222-8222-222222222222',
+      projectId: project.id,
+      authorId: 'admin-1',
+      body: 'Add a wider kitchen photo.',
+      status: 'unresolved',
+      createdAt: new Date('2026-08-04T08:00:00.000Z'),
+      updatedAt: new Date('2026-08-04T08:00:00.000Z'),
+    };
+    vi.mocked(projectsRepository.list).mockResolvedValue({ items: [project], total: 1 });
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([comment]);
+
+    const result = await projectsService.list(
+      { status: 'draft', page: 1, limit: 12, sort: '-updatedAt' },
+      caller,
+    );
+
+    expect(projectsRepository.listUnresolvedReviewComments).toHaveBeenCalledWith([project.id]);
+    expect(result.items[0]?.reviewComments).toEqual([
+      expect.objectContaining({
+        id: comment.id,
+        authorLabel: 'Tickif Review Team',
+        status: 'unresolved',
+      }),
+    ]);
   });
 
   it('rejects listing without an active organization', async () => {

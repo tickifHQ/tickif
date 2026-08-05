@@ -9,6 +9,7 @@ import type {
   ProjectCompletenessResponse,
   ProjectDetailResponse,
   ProjectRoom,
+  ProjectReviewCommentsResponse,
 } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
@@ -16,6 +17,7 @@ import {
   makeOrganization,
   makeProject,
   makeProjectImage,
+  makeProjectReviewComment,
   makeProjectRoom,
   makeTaxonomy,
 } from '@repo/db/testing';
@@ -136,6 +138,63 @@ describe('GET /api/projects', () => {
       locality: 'andheri',
     });
     expect(body.items[0]?.coverImageUrl).toContain('X-Amz-Signature=');
+  });
+
+  it('surfaces unresolved requested changes only on the owned changes-requested project', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002053');
+    const project = await makeProject({
+      designerId: designer.id,
+      title: 'Needs updates',
+      status: 'changes_requested',
+    });
+    const unresolved = await makeProjectReviewComment({
+      projectId: project.id,
+      body: 'Add a wider kitchen photo.',
+    });
+    await makeProjectReviewComment({
+      projectId: project.id,
+      body: 'Use a clearer room label.',
+      status: 'resolved',
+    });
+
+    const list = await app.request('/api/projects?status=draft', {
+      headers: { cookie },
+    });
+    expect(list.status).toBe(200);
+    expect((await list.json()) as ListProjectsResponse).toMatchObject({
+      items: [
+        {
+          id: project.id,
+          reviewComments: [
+            {
+              id: unresolved.id,
+              authorLabel: 'Tickif Review Team',
+              status: 'unresolved',
+            },
+          ],
+        },
+      ],
+    });
+
+    const detail = await app.request(`/api/projects/${project.id}`, {
+      headers: { cookie },
+    });
+    expect(detail.status).toBe(200);
+    expect((await detail.json()) as ProjectDetailResponse).toMatchObject({
+      id: project.id,
+      reviewComments: [{ id: unresolved.id, status: 'unresolved' }],
+    });
+
+    const comments = await app.request(`/api/projects/${project.id}/review-comments`, {
+      headers: { cookie },
+    });
+    expect(comments.status).toBe(200);
+    expect((await comments.json()) as ProjectReviewCommentsResponse).toMatchObject({
+      items: [
+        { id: unresolved.id, status: 'unresolved' },
+        { body: 'Use a clearer room label.', status: 'resolved' },
+      ],
+    });
   });
 
   it('maps dashboard status buckets and applies search and pagination', async () => {
@@ -1168,6 +1227,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       themeSlugs: ['modern'],
       finishSlugs: ['veneer'],
     });
+    const unresolved = await makeProjectReviewComment({ projectId: project.id });
     await makeProjectImage({
       projectId: project.id,
       roomId: room.id,
@@ -1189,7 +1249,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
     expect(submit.status).toBe(200);
     const body = (await submit.json()) as ProjectDetailResponse;
-    expect(body).toMatchObject({ id: project.id, status: 'submitted' });
+    expect(body).toMatchObject({ id: project.id, status: 'submitted', reviewComments: [] });
+    const [resolved] = await db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(eq(schema.projectReviewComment.id, unresolved.id));
+    expect(resolved?.status).toBe('resolved');
   });
 
   it('rejects submitting incomplete draft projects with missing keys', async () => {

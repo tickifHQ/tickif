@@ -48,6 +48,11 @@ export const moderationActionEnum = pgEnum('moderation_action', [
   'metadata_corrected',
 ]);
 
+export const projectReviewCommentStatusEnum = pgEnum('project_review_comment_status', [
+  'unresolved',
+  'resolved',
+]);
+
 export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
 
 export const bookingStatusEnum = pgEnum('booking_status', [
@@ -300,6 +305,27 @@ export const projectModerationEvent = pgTable(
   (t) => [
     index('project_moderation_event_project_created_idx').on(t.projectId, t.createdAt),
     index('project_moderation_event_actor_idx').on(t.actorUserId),
+  ],
+);
+
+export const projectReviewComment = pgTable(
+  'project_review_comment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'restrict' }),
+    authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    status: projectReviewCommentStatusEnum('status').default('unresolved').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('project_review_comment_project_idx').on(t.projectId),
+    index('project_review_comment_project_unresolved_idx')
+      .on(t.projectId, t.status)
+      .where(sql`${t.status} = 'unresolved'`),
   ],
 );
 

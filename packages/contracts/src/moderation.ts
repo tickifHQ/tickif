@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { projectCompletenessResponseSchema, projectRoomSchema, projectStatus } from './projects';
+import { projectReviewCommentSchema } from './review-comments';
 
 export const moderationAction = z
   .enum([
@@ -171,6 +172,7 @@ export const adminModerationDetailResponseSchema = z
     images: z.array(adminModerationImageSchema),
     completeness: projectCompletenessResponseSchema,
     history: z.array(moderationHistoryItemSchema),
+    reviewComments: z.array(projectReviewCommentSchema),
   })
   .meta({ id: 'AdminModerationDetail' });
 export type AdminModerationDetailResponse = z.infer<typeof adminModerationDetailResponseSchema>;
