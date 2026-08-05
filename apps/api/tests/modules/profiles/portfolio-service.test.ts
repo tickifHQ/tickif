@@ -128,6 +128,12 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   testimonialUpdatedAt: null,
   showOverallRating: true,
   showPositiveReviewsOnly: false,
+  showTickifReviews: true,
+  showTickifOverallRating: true,
+  showTickifPositiveReviewsOnly: false,
+  showGoogleReviews: true,
+  showGoogleOverallRating: true,
+  showGooglePositiveReviewsOnly: false,
   showTickifBadge: true,
   publishedAt: null,
   createdAt: new Date('2025-01-01'),
@@ -319,6 +325,75 @@ describe('portfolioService.updatePortfolio', () => {
 
     expect(result.displayName).toBe('Renamed Studio');
     expect(result.websiteUrl).toBe('https://renamed.example.com');
+  });
+
+  it('mirrors legacy review toggles to both review sources', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio());
+
+    await portfolioService.updatePortfolio(
+      {
+        showReviews: false,
+        showOverallRating: false,
+        showPositiveReviewsOnly: true,
+      },
+      caller,
+    );
+
+    expect(portfolioRepository.upsertInTx).toHaveBeenCalledWith(
+      expect.anything(),
+      'profile-1',
+      expect.objectContaining({
+        showReviews: false,
+        showOverallRating: false,
+        showPositiveReviewsOnly: true,
+        showTickifReviews: false,
+        showTickifOverallRating: false,
+        showTickifPositiveReviewsOnly: true,
+        showGoogleReviews: false,
+        showGoogleOverallRating: false,
+        showGooglePositiveReviewsOnly: true,
+      }),
+    );
+  });
+
+  it('patches Tickif and Google review settings independently', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({
+        showTickifReviews: false,
+        showGoogleOverallRating: false,
+      }),
+    );
+
+    const result = await portfolioService.updatePortfolio(
+      {
+        reviewSettings: {
+          tickif: { showReviews: false },
+          google: { showOverallRating: false },
+        },
+      },
+      caller,
+    );
+
+    expect(portfolioRepository.upsertInTx).toHaveBeenCalledWith(
+      expect.anything(),
+      'profile-1',
+      expect.objectContaining({
+        showTickifReviews: false,
+        showGoogleOverallRating: false,
+      }),
+    );
+    expect(result).toMatchObject({
+      showReviews: true,
+      showOverallRating: true,
+      reviewSettings: {
+        tickif: { showReviews: false },
+        google: { showOverallRating: false },
+      },
+    });
   });
 });
 

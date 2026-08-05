@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { ComponentProps } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortfolioResponse } from '@repo/contracts';
@@ -65,6 +65,18 @@ const basePortfolio: PortfolioResponse = {
   testimonialProjectId: null,
   showOverallRating: true,
   showPositiveReviewsOnly: false,
+  reviewSettings: {
+    tickif: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+    google: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+  },
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: 'https://tickif.com/d/mahi-studio',
@@ -364,6 +376,54 @@ describe('DesignerPortfolioSettings', () => {
       'border-b',
       'border-border',
     );
+  });
+
+  it('saves Google review visibility without overwriting Tickif settings', async () => {
+    const portfolio = {
+      ...basePortfolio,
+      reviewSettings: {
+        tickif: {
+          showReviews: false,
+          showOverallRating: false,
+          showPositiveReviewsOnly: true,
+        },
+        google: {
+          showReviews: true,
+          showOverallRating: true,
+          showPositiveReviewsOnly: false,
+        },
+      },
+    };
+    mock.fetchPortfolio.mockResolvedValueOnce(portfolio);
+    mock.updatePortfolio.mockResolvedValue({
+      ...portfolio,
+      reviewSettings: {
+        ...portfolio.reviewSettings,
+        google: {
+          ...portfolio.reviewSettings.google,
+          showOverallRating: false,
+        },
+      },
+    });
+    await renderSettings();
+
+    await userEvent.click(
+      screen.getByRole('heading', { name: 'Reviews' }).closest('button')!,
+    );
+    const ratingRow = screen
+      .getByText('Show overall ratings on your profile')
+      .closest<HTMLElement>('div.flex');
+    expect(ratingRow).not.toBeNull();
+    await userEvent.click(within(ratingRow!).getByRole('switch'));
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updatePortfolio).toHaveBeenCalledWith({
+        reviewSettings: {
+          google: { showOverallRating: false },
+        },
+      });
+    });
   });
 
   it('shows a retry-able error state when the portfolio fails to load', async () => {

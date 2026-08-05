@@ -62,6 +62,18 @@ const portfolio: PortfolioResponse = {
   testimonialProjectId: null,
   showOverallRating: true,
   showPositiveReviewsOnly: false,
+  reviewSettings: {
+    tickif: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+    google: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+  },
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: 'https://tickif.com/d/mahi-studio',

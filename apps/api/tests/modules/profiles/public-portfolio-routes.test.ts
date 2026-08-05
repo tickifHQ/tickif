@@ -82,11 +82,15 @@ const fakePortfolio: PublicPortfolioResponse = {
     tickifBadge: true,
   },
   stats: {
-    rating: 4.8,
-    reviewCount: 57,
+    tickif: { rating: 4.2, reviewCount: 8 },
+    google: { rating: 4.8, reviewCount: 57 },
     projectCount: 12,
     yearsExperience: 6,
     startingBudget: '₹10L+',
+  },
+  reviewVisibility: {
+    tickif: { reviews: true, overallRating: true },
+    google: { reviews: true, overallRating: true },
   },
   social: {
     websiteUrl: null,
@@ -96,7 +100,6 @@ const fakePortfolio: PublicPortfolioResponse = {
   },
   testimonial: null,
   reviews: [],
-  reviewSource: null,
   projects: { projects: [], page: 1, limit: 30, hasMore: false },
   publishedAt: null,
 };
