@@ -6,6 +6,7 @@ import { DesignerProjectRowActions } from '../../src/components/designer-project
 const mock = vi.hoisted(() => ({
   duplicatePost: vi.fn(),
   deleteProject: vi.fn(),
+  withdrawPost: vi.fn(),
   router: {
     push: vi.fn(),
     refresh: vi.fn(),
@@ -25,6 +26,9 @@ vi.mock('@/lib/api', () => ({
             $post: mock.duplicatePost,
           },
           $delete: mock.deleteProject,
+          withdraw: {
+            $post: mock.withdrawPost,
+          },
         },
       },
     },
@@ -44,6 +48,8 @@ describe('DesignerProjectRowActions', () => {
             slug: 'copied-draft',
             description: null,
             status: 'draft',
+            rejectionReasonCode: null,
+            moderationNote: null,
             propertyTypeSlug: null,
             propertySubtypeSlug: null,
             scopeSlug: null,
@@ -75,6 +81,39 @@ describe('DesignerProjectRowActions', () => {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
+    );
+    mock.withdrawPost.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: '11111111-1111-4111-8111-111111111111',
+          designerId: '44444444-4444-4444-8444-444444444444',
+          title: 'Warm Walnut Family Home',
+          slug: 'warm-walnut-family-home',
+          description: null,
+          status: 'draft',
+          rejectionReasonCode: null,
+          moderationNote: null,
+          propertyTypeSlug: null,
+          propertySubtypeSlug: null,
+          scopeSlug: null,
+          bhkSlug: null,
+          sizeSqft: null,
+          citySlug: null,
+          localitySlug: null,
+          buildingName: null,
+          budgetBandSlug: null,
+          completedMonth: null,
+          durationMonths: null,
+          coverImageId: null,
+          metadata: null,
+          publishedAt: null,
+          submittedAt: null,
+          createdAt: '2026-07-02T00:00:00.000Z',
+          updatedAt: '2026-07-02T00:00:00.000Z',
+          rooms: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
     );
   });
 

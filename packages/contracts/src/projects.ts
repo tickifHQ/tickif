@@ -68,10 +68,7 @@ export const projectRoomMetadataSchema = z
   .object({
     labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
     attributeLabels: z
-      .record(
-        z.string().trim().min(1).max(80),
-        z.array(z.string().trim().min(1).max(80)).max(20),
-      )
+      .record(z.string().trim().min(1).max(80), z.array(z.string().trim().min(1).max(80)).max(20))
       .refine((value) => Object.keys(value).length <= 20, {
         message: 'attributeLabels can contain at most 20 entries',
       })
@@ -154,6 +151,8 @@ export const projectResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     status: projectStatus,
+    rejectionReasonCode: z.string().nullable(),
+    moderationNote: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
     propertySubtypeSlug: z.string().nullable(),
     scopeSlug: z.string().nullable(),
@@ -238,6 +237,8 @@ export const projectListItemSchema = z
     city: z.string().nullable(),
     locality: z.string().nullable(),
     status: projectStatus,
+    rejectionReasonCode: z.string().nullable(),
+    moderationNote: z.string().nullable(),
     coverImageUrl: z.string().url().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -452,7 +453,15 @@ export const projectSlugParamSchema = z
  * Composed from existing schemas: project detail + designer summary + gallery.
  */
 export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
-  .omit({ designerId: true, coverImageId: true, metadata: true, submittedAt: true, updatedAt: true })
+  .omit({
+    designerId: true,
+    coverImageId: true,
+    metadata: true,
+    submittedAt: true,
+    updatedAt: true,
+    rejectionReasonCode: true,
+    moderationNote: true,
+  })
   .extend({
     designer: designerSummarySchema,
     images: z.array(galleryImageSchema),

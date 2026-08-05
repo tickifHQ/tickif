@@ -63,8 +63,10 @@ import { TagCombobox, type TagComboboxOption } from '@repo/ui/components/tag-com
 import { Textarea } from '@repo/ui/components/textarea';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
+import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
+  canonicalTaxonomySlug,
   deriveDefaultProjectTitle,
   buildImageMetadata as buildImageMetadataInput,
   getBackendProjectSelection,
@@ -1304,6 +1306,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
+  const [projectStatus, setProjectStatus] = useState<ProjectDetailResponse['status'] | null>(null);
+  const [moderationNote, setModerationNote] = useState<string | null>(null);
+  const [rejectionReasonCode, setRejectionReasonCode] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
@@ -1704,14 +1709,18 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                     title: roomTitleFromRoom(room, roomTerms),
                     description: room.description ?? '',
                     expanded: index === 0,
-                    designStyle:
+                    designStyle: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'theme') ||
-                      roomImages[0]?.themeSlugs[0] ||
-                      '',
-                    materialFinish:
+                        roomImages[0]?.themeSlugs[0] ||
+                        '',
+                      themeTerms,
+                    ),
+                    materialFinish: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'finish') ||
-                      roomImages[0]?.finishSlugs[0] ||
-                      '',
+                        roomImages[0]?.finishSlugs[0] ||
+                        '',
+                      finishTerms,
+                    ),
                     tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
                     tagInput: '',
                     images: roomImages.map((image, imageIndex) =>
@@ -1727,6 +1736,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
         setProjectId(project.id);
         setLoadedProjectId(project.id);
+        setProjectStatus(project.status);
+        setModerationNote(project.moderationNote);
+        setRejectionReasonCode(project.rejectionReasonCode);
         setProjectName(project.title);
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
@@ -2199,6 +2211,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setRooms(attachedRooms);
       setProjectId(detail.id);
       setLoadedProjectId(detail.id);
+      setProjectStatus(detail.status);
+      setModerationNote(detail.moderationNote);
+      setRejectionReasonCode(detail.rejectionReasonCode);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
@@ -2445,6 +2460,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           ? 'Project submitted for review.'
           : 'Project submitted. Review status will update shortly.',
       );
+      setProjectStatus(submittedProject.status);
+      setModerationNote(submittedProject.moderationNote);
+      setRejectionReasonCode(submittedProject.rejectionReasonCode);
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : 'Could not submit this project.',
@@ -2759,6 +2777,13 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           Let&apos;s get your profile ready to go live.
         </p>
       </div>
+
+      <DesignerProjectModeration
+        projectId={projectId}
+        status={projectStatus}
+        moderationNote={moderationNote}
+        rejectionReasonCode={rejectionReasonCode}
+      />
 
       {taxonomyError ? (
         <Alert variant="destructive" className="mt-6">
