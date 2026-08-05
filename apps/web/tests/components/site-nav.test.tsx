@@ -16,9 +16,7 @@ describe('SiteNav', () => {
   });
 
   it('accepts a custom brand and link set', () => {
-    render(
-      <SiteNav brand="Tickif · Admin" links={[{ href: '/admin/dashboard', label: 'Dashboard' }]} />,
-    );
+    render(<SiteNav brand="Tickif · Admin" links={[{ href: '/dashboard', label: 'Dashboard' }]} />);
     expect(screen.getByText('Tickif · Admin')).toBeInTheDocument();
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
   });
