@@ -10,6 +10,8 @@ const project: ProjectResponse = {
   slug: 'sunlit-bandra-apartment',
   description: null,
   status: 'published',
+  rejectionReasonCode: null,
+  moderationNote: null,
   propertyTypeSlug: null,
   propertySubtypeSlug: null,
   scopeSlug: null,

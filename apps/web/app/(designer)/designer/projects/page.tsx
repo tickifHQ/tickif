@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import {
+  PLATFORM_ROLE,
   listProjectsQuerySchema,
   listProjectsResponseSchema,
   type ListProjectsQuery,
@@ -88,7 +89,7 @@ async function getProjectTabCounts(query: ListProjectsQuery) {
 }
 
 export default async function DesignerProjectsPage({ searchParams }: DesignerProjectsPageProps) {
-  await requireAuth({ requiredRole: 'designer' });
+  await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
   const params = await searchParams;
   const query = parseProjectQuery(params);
   const [projects, tabCounts] = await Promise.all([

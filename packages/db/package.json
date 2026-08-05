@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@repo/config": "workspace:*",
+    "@repo/contracts": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "catalog:"
   },

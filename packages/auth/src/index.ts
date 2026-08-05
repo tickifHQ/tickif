@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
+import { ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
@@ -140,7 +141,12 @@ export const auth = betterAuth({
     // exist in roles). admin and superadmin both pass the /admin/* permission checks.
     // set-role still does no role-value validation upstream — the user_role pgEnum is
     // the write backstop (pinned by set-role.integration.test.ts).
-    admin({ defaultRole: 'visitor', ac, roles, adminRoles: ['admin', 'superadmin'] }),
+    admin({
+      defaultRole: PLATFORM_ROLE.VISITOR,
+      ac,
+      roles,
+      adminRoles: [...ADMIN_PLATFORM_ROLES],
+    }),
     organization({
       // Organization lifecycle is owned by the transactional designer onboarding
       // flow. Generic create/delete endpoints would allow profile-less orgs or

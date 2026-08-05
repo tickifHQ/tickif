@@ -33,6 +33,7 @@ import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { countries as allCountries } from 'country-codes-flags-phone-codes';
 import { OtpInput } from '@/components/otp-input';
 import { GoogleBrandIcon } from '@/components/brand-icons';
+import { DESIGNER_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
 
 type LoginMode = 'browsing' | 'designer';
 
@@ -164,14 +165,15 @@ export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, o
       onSuccess();
       return;
     }
+    // An explicit callback (invitation deep-link) wins over the default routing.
     if (callbackPath) {
       window.location.href = callbackPath;
       return;
     }
-    // After successful auth, check if designer onboarding is needed
+    // Otherwise continue through the server-rendered login page so it resolves
+    // the fresh Better Auth session and owns the platform-role redirect.
     if (loginMode === 'designer') {
-      // Redirect to onboarding — the page itself will redirect to dashboard if already complete
-      window.location.href = '/designer/onboarding';
+      router.replace(DESIGNER_AUTH_CONTINUE_PATH);
     } else {
       router.push(visitorPostLoginPath());
     }
@@ -261,7 +263,7 @@ export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, o
     const callbackURL = callbackPath
       ? `${window.location.origin}${callbackPath}`
       : loginMode === 'designer'
-        ? `${window.location.origin}/designer/onboarding`
+        ? `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`
         : `${window.location.origin}${visitorPostLoginPath()}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
