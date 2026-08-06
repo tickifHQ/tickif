@@ -1,11 +1,14 @@
 import { Container } from '@/components/container';
-import { DesignerProfileEditorPlaceholder } from '@/components/designer-profile-editor-placeholder';
+import { DesignerProfileEditor } from '@/components/designer-profile-editor';
+import { getProfileEditorPageData } from '@/lib/profile-editor-data';
 
 export const metadata = {
   title: 'Edit profile · Tickif',
 };
 
-export default function DesignerProfilePage() {
+export default async function DesignerProfilePage() {
+  const data = await getProfileEditorPageData();
+
   return (
     <Container className="py-10">
       <div className="mb-8 max-w-2xl">
@@ -16,7 +19,12 @@ export default function DesignerProfilePage() {
         </p>
       </div>
 
-      <DesignerProfileEditorPlaceholder />
+      <DesignerProfileEditor
+        initialCompletion={data.completion}
+        initialProfile={data.profile}
+        taxonomy={data.taxonomy}
+        taxonomyError={data.taxonomyError}
+      />
     </Container>
   );
 }
