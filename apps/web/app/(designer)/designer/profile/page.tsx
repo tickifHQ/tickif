@@ -21,6 +21,7 @@ export default async function DesignerProfilePage() {
 
       <DesignerProfileEditor
         initialCompletion={data.completion}
+        completionError={data.completionError}
         initialProfile={data.profile}
         taxonomy={data.taxonomy}
         taxonomyError={data.taxonomyError}

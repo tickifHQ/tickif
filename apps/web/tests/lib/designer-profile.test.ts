@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
+  getCompletion: vi.fn(),
   headers: vi.fn(),
   redirect: vi.fn().mockImplementation(() => {
     throw new Error('NEXT_REDIRECT');
@@ -14,13 +15,15 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       profiles: {
-        me: { $get: mock.getProfile },
+        me: { $get: mock.getProfile, completion: { $get: mock.getCompletion } },
       },
     },
   },
 }));
 
-const { requireCurrentDesignerProfile } = await import('../../src/lib/designer-profile');
+const { getProfileCompletion, requireCurrentDesignerProfile } = await import(
+  '../../src/lib/designer-profile'
+);
 
 describe('requireCurrentDesignerProfile', () => {
   beforeEach(() => {
@@ -29,6 +32,7 @@ describe('requireCurrentDesignerProfile', () => {
     });
     mock.redirect.mockClear();
     mock.getProfile.mockReset();
+    mock.getCompletion.mockReset();
   });
 
   it('redirects requests without a session cookie to login', async () => {
@@ -60,5 +64,18 @@ describe('requireCurrentDesignerProfile', () => {
       'Unable to load the active designer organization',
     );
     expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('loads and validates profile completion through the shared server helper', async () => {
+    const completion = { steps: [], score: 75, missing: ['Publish a project'] };
+    mock.getCompletion.mockResolvedValue(
+      new Response(JSON.stringify(completion), { status: 200 }),
+    );
+
+    await expect(getProfileCompletion()).resolves.toEqual({ ok: true, data: completion });
+    expect(mock.getCompletion).toHaveBeenCalledWith(
+      {},
+      { headers: { cookie: 'better-auth.session_token=test' } },
+    );
   });
 });

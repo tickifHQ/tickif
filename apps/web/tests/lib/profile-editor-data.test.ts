@@ -2,22 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CurrentProfileResponse } from '@repo/contracts';
 
 const mock = vi.hoisted(() => ({
-  completionGet: vi.fn(),
-  headers: vi.fn(),
+  getProfileCompletion: vi.fn(),
   requireCurrentDesignerProfile: vi.fn(),
   taxonomyGet: vi.fn(),
 }));
 
-vi.mock('next/headers', () => ({ headers: mock.headers }));
-
 vi.mock('@/lib/designer-profile', () => ({
+  getProfileCompletion: mock.getProfileCompletion,
   requireCurrentDesignerProfile: mock.requireCurrentDesignerProfile,
 }));
 
 vi.mock('@/lib/api', () => ({
   api: {
     api: {
-      profiles: { me: { completion: { $get: mock.completionGet } } },
       taxonomy: { terms: { $get: mock.taxonomyGet } },
     },
   },
@@ -25,7 +22,7 @@ vi.mock('@/lib/api', () => ({
 
 const selectedCity = {
   id: '11111111-1111-4111-8111-111111111111',
-  kind: 'city',
+  kind: 'city' as const,
   label: 'Mumbai',
   slug: 'mumbai',
   parentId: null,
@@ -64,18 +61,15 @@ const profile: CurrentProfileResponse = {
 
 describe('profile editor SSR data', () => {
   beforeEach(() => {
-    mock.completionGet.mockReset();
-    mock.headers.mockReset();
+    mock.getProfileCompletion.mockReset();
     mock.requireCurrentDesignerProfile.mockReset();
     mock.taxonomyGet.mockReset();
 
-    mock.headers.mockResolvedValue(new Headers({ cookie: 'tickif.session=test-session' }));
     mock.requireCurrentDesignerProfile.mockResolvedValue(profile);
-    mock.completionGet.mockResolvedValue(
-      new Response(JSON.stringify({ steps: [], score: 60, missing: ['Add a bio'] }), {
-        status: 200,
-      }),
-    );
+    mock.getProfileCompletion.mockResolvedValue({
+      ok: true,
+      data: { steps: [], score: 60, missing: ['Add a bio'] },
+    });
     mock.taxonomyGet.mockImplementation(
       async ({ query }: { query: { kind: string } }) =>
         new Response(
@@ -98,17 +92,14 @@ describe('profile editor SSR data', () => {
     expect(result.profile).toEqual(profile);
     expect(result.completion?.score).toBe(60);
     expect(result.taxonomy.cities).toEqual([
-      { id: selectedCity.id, label: 'Mumbai', slug: 'mumbai', parentId: null },
+      { id: selectedCity.id, label: 'Mumbai' },
     ]);
     expect(result.taxonomyError).toBeNull();
     expect(mock.taxonomyGet).toHaveBeenCalledTimes(3);
     expect(mock.taxonomyGet).toHaveBeenCalledWith({ query: { kind: 'city' } });
     expect(mock.taxonomyGet).toHaveBeenCalledWith({ query: { kind: 'scope' } });
     expect(mock.taxonomyGet).toHaveBeenCalledWith({ query: { kind: 'theme' } });
-    expect(mock.completionGet).toHaveBeenCalledWith(
-      {},
-      { headers: { cookie: 'tickif.session=test-session' } },
-    );
+    expect(mock.getProfileCompletion).toHaveBeenCalledOnce();
   });
 
   it('preserves selected profile terms when a taxonomy request fails', async () => {
@@ -120,9 +111,41 @@ describe('profile editor SSR data', () => {
     expect(result.taxonomy.cities).toContainEqual({
       id: selectedCity.id,
       label: 'Mumbai',
-      slug: 'mumbai',
-      parentId: null,
     });
     expect(result.taxonomyError).toMatch(/existing selections are preserved/i);
+  });
+
+  it('prefers the current taxonomy label over a stored profile snapshot', async () => {
+    mock.taxonomyGet.mockImplementation(
+      async ({ query }: { query: { kind: string } }) =>
+        new Response(
+          JSON.stringify({
+            terms:
+              query.kind === 'city'
+                ? [{ id: selectedCity.id, label: 'Bombay', slug: 'mumbai', parentId: null }]
+                : [],
+          }),
+          { status: 200 },
+        ),
+    );
+    const { getProfileEditorPageData } = await import('../../src/lib/profile-editor-data');
+
+    const result = await getProfileEditorPageData();
+
+    expect(result.taxonomy.cities).toEqual([{ id: selectedCity.id, label: 'Bombay' }]);
+  });
+
+  it('reports completion loading failures instead of silently hiding the state', async () => {
+    mock.getProfileCompletion.mockResolvedValue({
+      ok: false,
+      data: null,
+      message: 'Could not load profile completion.',
+    });
+    const { getProfileEditorPageData } = await import('../../src/lib/profile-editor-data');
+
+    const result = await getProfileEditorPageData();
+
+    expect(result.completion).toBeNull();
+    expect(result.completionError).toBe('Could not load profile completion.');
   });
 });

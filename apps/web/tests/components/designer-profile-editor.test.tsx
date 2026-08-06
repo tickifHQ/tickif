@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -57,6 +57,13 @@ const terms = {
   ],
 } satisfies Record<string, TaxonomyTerm[]>;
 
+const extraCities: TaxonomyTerm[] = Array.from({ length: 5 }, (_, index) => ({
+  id: `${index + 5}5555555-5555-4555-8555-555555555555`,
+  label: `City ${index + 2}`,
+  slug: `city-${index + 2}`,
+  parentId: null,
+}));
+
 const profile: CurrentProfileResponse = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   orgId: 'org-1',
@@ -82,9 +89,9 @@ const profile: CurrentProfileResponse = {
   staffCount: 12,
   testimonialBannerEnabled: true,
   footprint: [
-    { ...terms.cities[0]!, kind: 'city' },
-    { ...terms.scopes[0]!, kind: 'scope' },
-    { ...terms.themes[0]!, kind: 'theme' },
+    { ...terms.cities[0]!, kind: 'city' as const },
+    { ...terms.scopes[0]!, kind: 'scope' as const },
+    { ...terms.themes[0]!, kind: 'theme' as const },
   ],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
@@ -156,17 +163,16 @@ describe('DesignerProfileEditor', () => {
     await user.click(screen.getByRole('button', { name: /cities: mumbai/i }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: 'Pune' }));
     await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitemcheckbox', { name: 'Pune' })).not.toBeInTheDocument();
+    });
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
-      expect(mock.updateDesignerProfile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          displayName: 'Mahi Design Co.',
-          cityIds: [terms.cities[0]!.id, terms.cities[1]!.id],
-          scopeIds: [terms.scopes[0]!.id],
-          themeIds: [terms.themes[0]!.id],
-        }),
-      );
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        displayName: 'Mahi Design Co.',
+        cityIds: [terms.cities[0]!.id, terms.cities[1]!.id],
+      });
     });
     expect(await screen.findByText(/profile saved/i)).toBeInTheDocument();
     expect(screen.getByText('80% complete')).toBeInTheDocument();
@@ -213,5 +219,214 @@ describe('DesignerProfileEditor', () => {
 
     expect(await screen.findByText('You no longer have edit access.')).toBeInTheDocument();
     expect(screen.getByLabelText(/bio/i)).toHaveValue('Warm, practical homes. More detail.');
+  });
+
+  it('preserves international phone numbers and omits unchanged fields from PATCH', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, phone: '+4915112345678' }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('15112345678');
+    expect(screen.getByRole('button', { name: /country code, germany \+49/i })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/bio/i), ' More detail.');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mock.updateDesignerProfile).toHaveBeenCalledOnce());
+    expect(mock.updateDesignerProfile.mock.calls[0]?.[0]).toEqual({
+      bio: 'Warm, practical homes. More detail.',
+    });
+  });
+
+  it('keeps countries with shared dial codes distinct', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, phone: '+13124567890' }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: /country code, united states \+1/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('rejects invalid phone numbers with a visible field error', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const phone = screen.getByLabelText(/whatsapp \/ phone/i);
+    await user.clear(phone);
+    await user.type(phone, '1234567');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText('Enter a valid phone number.')).toBeInTheDocument();
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('shows footprint errors instead of silently ignoring an over-limit profile', async () => {
+    const user = userEvent.setup();
+    const cities = [terms.cities[0]!, ...extraCities];
+    const footprint = [
+      ...cities.map((term) => ({ ...term, kind: 'city' as const })),
+      ...profile.footprint.filter((term) => term.kind !== 'city'),
+    ];
+
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, footprint }}
+        taxonomy={{ ...terms, cities }}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('Select up to 5 cities.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^cities:/i })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    await user.type(screen.getByLabelText(/bio/i), ' More detail.');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        bio: 'Warm, practical homes. More detail.',
+      });
+    });
+  });
+
+  it('retains hidden company data when switching to an individual listing', async () => {
+    const user = userEvent.setup();
+    mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ entityType: 'individual' }));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText(/listing type/i), 'individual');
+    expect(screen.queryByText('Company details')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ entityType: 'individual' });
+    });
+  });
+
+  it('keeps unrelated validation errors visible while another field is corrected', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'M' } });
+    fireEvent.change(screen.getByLabelText(/website/i), { target: { value: 'not-a-url' } });
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText('Use at least 2 characters.')).toBeInTheDocument();
+    expect(screen.getByText('Enter a valid URL.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/display name/i), {
+      target: { value: 'Mahi Studio Updated' },
+    });
+    expect(screen.queryByText('Use at least 2 characters.')).not.toBeInTheDocument();
+    expect(screen.getByText('Enter a valid URL.')).toBeInTheDocument();
+  });
+
+  it('wires company field errors to their controls', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/founded year/i), { target: { value: '1899' } });
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    const error = await screen.findByText('Enter a year from 1900 onward.');
+    expect(screen.getByLabelText(/founded year/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/founded year/i)).toHaveAttribute('aria-describedby', error.id);
+  });
+
+  it('preserves edits made during an in-flight save and keeps the phone editable', async () => {
+    const user = userEvent.setup();
+    let resolveUpdate: ((value: ProfileOwnerResponse) => void) | undefined;
+    mock.updateDesignerProfile.mockReturnValue(
+      new Promise<ProfileOwnerResponse>((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const displayName = screen.getByLabelText(/display name/i);
+    await user.clear(displayName);
+    await user.type(displayName, 'Mahi Design Co.');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(screen.getByLabelText(/whatsapp \/ phone/i)).not.toBeDisabled();
+
+    await user.type(screen.getByLabelText(/bio/i), ' In-flight edit.');
+    await act(async () => {
+      resolveUpdate?.(ownerProfile({ displayName: 'Mahi Design Co.' }));
+    });
+
+    expect(screen.getByLabelText(/bio/i)).toHaveValue(
+      'Warm, practical homes. In-flight edit.',
+    );
+    expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
+  });
+
+  it('keeps the last completion score when its post-save refresh fails', async () => {
+    const user = userEvent.setup();
+    mock.fetchProfileCompletion.mockRejectedValue(new Error('completion unavailable'));
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/bio/i), ' More detail.');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    expect(await screen.findByText(/profile saved/i)).toBeInTheDocument();
+    expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 });
