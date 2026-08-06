@@ -1,0 +1,1 @@
+CREATE INDEX "project_published_budget_idx" ON "project" USING btree ("budget_band_slug","published_at","id") WHERE "project"."status" = 'published';
