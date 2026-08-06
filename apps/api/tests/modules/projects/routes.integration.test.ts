@@ -8,9 +8,11 @@ import type {
   PortfolioProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
+  PublicProjectBySlugResponse,
   ProjectRoom,
   ProjectReviewCommentsResponse,
 } from '@repo/contracts';
+import { publicProjectBySlugResponseSchema } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -19,6 +21,7 @@ import {
   makeProjectImage,
   makeProjectReviewComment,
   makeProjectRoom,
+  makeReview,
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -268,6 +271,212 @@ describe('GET /api/projects', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ListProjectsResponse;
     expect(body.items.map((item) => item.title)).toEqual(['100% Modular Kitchen']);
+  });
+});
+
+describe('GET /api/projects/slug/{slug}', () => {
+  it('returns the display-ready public project model without private or original media fields', async () => {
+    const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+    await makeTaxonomy({
+      kind: 'locality',
+      slug: 'bandra',
+      label: 'Bandra',
+      parentId: city.id,
+    });
+    await Promise.all([
+      makeTaxonomy({ kind: 'property_type', slug: 'residential', label: 'Residential' }),
+      makeTaxonomy({ kind: 'property_subtype', slug: 'apartment', label: 'Apartment' }),
+      makeTaxonomy({ kind: 'scope', slug: 'full-home', label: 'Full Home' }),
+      makeTaxonomy({ kind: 'bhk', slug: '3-bhk', label: '3 BHK' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' }),
+      makeTaxonomy({ kind: 'theme', slug: 'contemporary', label: 'Contemporary' }),
+      makeTaxonomy({ kind: 'material', slug: 'wood', label: 'Wood' }),
+      makeTaxonomy({ kind: 'finish', slug: 'matte', label: 'Matte' }),
+    ]);
+    const roomType = await makeTaxonomy({
+      kind: 'room',
+      slug: 'living-room',
+      label: 'Living Room',
+    });
+    const designer = await makeDesigner({
+      status: 'active',
+      displayName: 'Studio A',
+      entityType: 'company',
+      bio: 'Residential interior design studio.',
+      firmType: 'Interior design studio',
+      foundedYear: 2018,
+      yearsExperience: 8,
+    });
+    await db.insert(schema.designerProfileFootprint).values({
+      profileId: designer.id,
+      taxonomyId: city.id,
+    });
+    const project = await makeProject({
+      designerId: designer.id,
+      slug: 'sunlit-bandra-apartment',
+      title: 'Sunlit Bandra Apartment',
+      description: 'A warm contemporary apartment.',
+      status: 'published',
+      propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
+      scopeSlug: 'full-home',
+      bhkSlug: '3-bhk',
+      sizeSqft: 1800,
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      budgetBandSlug: 'premium',
+      completedMonth: '2025-06',
+      publishedAt: new Date('2025-07-01T00:00:00.000Z'),
+    });
+    const room = await makeProjectRoom({
+      projectId: project.id,
+      roomTypeId: roomType.id,
+      name: 'Living Room',
+      sortOrder: 0,
+    });
+    const image = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      sortOrder: 0,
+      originalKey: 'originals/private/living-room.jpg',
+      derivatives: [
+        {
+          variant: 'large',
+          format: 'webp',
+          key: 'derivatives/public/living-room-large.webp',
+          width: 1600,
+          height: 1200,
+        },
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/living-room-thumb.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+      width: 1600,
+      height: 1200,
+      themeSlugs: ['contemporary'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['matte'],
+      tagSlugs: ['warm-tones'],
+    });
+    const processingImage = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'processing',
+      sortOrder: 1,
+      originalKey: 'originals/private/processing.jpg',
+      themeSlugs: ['contemporary'],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: image.id })
+      .where(eq(schema.project.id, project.id));
+    await makeReview({
+      designerProfileId: designer.id,
+      projectId: project.id,
+      status: 'published',
+      rating: 5,
+      body: 'The team understood how we wanted the completed home to feel.',
+      createdAt: new Date('2025-07-01T00:00:00.000Z'),
+      updatedAt: new Date('2025-07-02T00:00:00.000Z'),
+      publishedAt: new Date('2025-07-02T00:00:00.000Z'),
+      moderatedAt: new Date('2025-07-02T00:00:00.000Z'),
+    });
+    const recommendedProject = await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Courtyard Home',
+      status: 'published',
+      propertySubtypeSlug: 'apartment',
+      bhkSlug: '3-bhk',
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      budgetBandSlug: 'premium',
+      completedMonth: '2024-11',
+      publishedAt: new Date('2025-06-01T00:00:00.000Z'),
+    });
+    const recommendedCover = await makeProjectImage({
+      projectId: recommendedProject.id,
+      status: 'ready',
+      themeSlugs: ['contemporary'],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/courtyard-thumb.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+      width: 400,
+      height: 300,
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: recommendedCover.id })
+      .where(eq(schema.project.id, recommendedProject.id));
+
+    const response = await app.request('/api/projects/slug/sunlit-bandra-apartment');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=300',
+    );
+    const body = (await response.json()) as PublicProjectBySlugResponse;
+    expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
+    expect(body).toMatchObject({
+      id: project.id,
+      specifications: {
+        propertyType: { slug: 'residential', label: 'Residential' },
+        locality: { slug: 'bandra', label: 'Bandra' },
+      },
+      rooms: [
+        {
+          id: room.id,
+          roomType: { slug: 'living-room', label: 'Living Room' },
+          photoCount: 1,
+        },
+      ],
+      images: [
+        {
+          id: image.id,
+          roomId: room.id,
+          themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+          materials: [{ slug: 'wood', label: 'Wood' }],
+          finishes: [{ slug: 'matte', label: 'Matte' }],
+          tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
+        },
+      ],
+      designer: {
+        displayName: 'Studio A',
+        entityType: 'company',
+        projectCount: 2,
+        footprintCities: [{ slug: 'mumbai', label: 'Mumbai' }],
+      },
+      narrative: { rating: 5 },
+      recurringMotifs: expect.arrayContaining([
+        { kind: 'theme', slug: 'contemporary', label: 'Contemporary', projectCount: 2 },
+      ]),
+      recommendations: {
+        moreFromDesigner: [{ id: recommendedProject.id, completionYear: 2024 }],
+      },
+    });
+    expect(body.images[0]?.url).toContain('living-room-large.webp');
+    expect(body.images).toHaveLength(1);
+    expect(body.images.some((item) => item.id === processingImage.id)).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('originals/private');
+  });
+
+  it('returns 404 for an unpublished project slug', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await makeProject({ designerId: designer.id, slug: 'private-draft', status: 'draft' });
+
+    const response = await app.request('/api/projects/slug/private-draft');
+
+    expect(response.status).toBe(404);
   });
 });
 

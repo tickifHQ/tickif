@@ -8,6 +8,7 @@ import type {
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
+  ProjectMotifKind,
   ProjectListSort,
   ProjectStatus,
   ReorderProjectRoomsInput,
@@ -161,8 +162,50 @@ export type ProjectFeedItemRecord = {
   publishedAt: Date | null;
 };
 
+export type PublicProjectRoomRecord = Pick<
+  ProjectRoomRecord,
+  'id' | 'name' | 'description' | 'sortOrder'
+> & {
+  roomTypeSlug: string;
+  roomTypeLabel: string;
+  photoCount: number;
+};
+
+export type PublicProjectGalleryImageRecord = Pick<
+  ProjectImageRecord,
+  | 'id'
+  | 'roomId'
+  | 'derivatives'
+  | 'width'
+  | 'height'
+  | 'sortOrder'
+  | 'themeSlugs'
+  | 'materialSlugs'
+  | 'finishSlugs'
+  | 'tagSlugs'
+> & {
+  roomName: string | null;
+};
+
+export type PublicProjectNarrativeRecord = Pick<
+  typeof schema.review.$inferSelect,
+  'body' | 'rating' | 'publishedAt'
+>;
+
+export type PublicProjectMotifCountRecord = {
+  kind: ProjectMotifKind;
+  slug: string;
+  projectCount: number;
+};
+
+export type ProjectRecommendationRecord = ProjectFeedItemRecord & {
+  themeSlugs: string[];
+};
+
 /** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
-function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.projectImage, 'cover'>>) {
+function feedProjectColumns<TAlias extends string>(
+  cover: ReturnType<typeof alias<typeof schema.projectImage, TAlias>>,
+) {
   return {
     id: schema.project.id,
     slug: schema.project.slug,
@@ -184,6 +227,26 @@ function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.project
     sizeSqft: schema.project.sizeSqft,
     completedMonth: schema.project.completedMonth,
     publishedAt: schema.project.publishedAt,
+  };
+}
+
+function recommendationProjectColumns<TAlias extends string>(
+  cover: ReturnType<typeof alias<typeof schema.projectImage, TAlias>>,
+) {
+  return {
+    ...feedProjectColumns(cover),
+    themeSlugs: sql<string[]>`
+      coalesce(
+        (
+          select jsonb_agg(distinct theme.slug order by theme.slug)
+          from ${schema.projectImage} as recommendation_image
+          cross join lateral jsonb_array_elements_text(recommendation_image.theme_slugs) as theme(slug)
+          where recommendation_image.project_id = ${schema.project.id}
+            and recommendation_image.status = 'ready'
+        ),
+        '[]'::jsonb
+      )
+    `.as('theme_slugs'),
   };
 }
 
@@ -1260,32 +1323,77 @@ export const projectsRepository = {
     });
   },
 
+  /** Public rooms with their controlled room type and ready-image count. */
+  async listPublicRooms(projectId: string): Promise<PublicProjectRoomRecord[]> {
+    return db
+      .select({
+        id: schema.projectRoom.id,
+        name: schema.projectRoom.name,
+        description: schema.projectRoom.description,
+        sortOrder: schema.projectRoom.sortOrder,
+        roomTypeSlug: schema.taxonomy.slug,
+        roomTypeLabel: schema.taxonomy.label,
+        photoCount: sql<number>`count(${schema.projectImage.id})::int`,
+      })
+      .from(schema.projectRoom)
+      .innerJoin(
+        schema.taxonomy,
+        and(
+          eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
+          eq(schema.taxonomy.kind, 'room'),
+        ),
+      )
+      .leftJoin(
+        schema.projectImage,
+        and(
+          eq(schema.projectImage.roomId, schema.projectRoom.id),
+          eq(schema.projectImage.projectId, projectId),
+          eq(schema.projectImage.status, 'ready'),
+        ),
+      )
+      .where(eq(schema.projectRoom.projectId, projectId))
+      .groupBy(
+        schema.projectRoom.id,
+        schema.projectRoom.name,
+        schema.projectRoom.description,
+        schema.projectRoom.sortOrder,
+        schema.projectRoom.createdAt,
+        schema.taxonomy.slug,
+        schema.taxonomy.label,
+      )
+      .orderBy(
+        asc(schema.projectRoom.sortOrder),
+        asc(schema.projectRoom.createdAt),
+        asc(schema.projectRoom.id),
+      );
+  },
+
   /** Public gallery: all ready images for a published project, ordered by sortOrder. */
-  async listPublicGalleryImages(projectId: string): Promise<
-    Array<{
-      id: string;
-      derivatives: typeof schema.projectImage.$inferSelect.derivatives;
-      width: number | null;
-      height: number | null;
-      sortOrder: number;
-      roomName: string | null;
-    }>
-  > {
+  async listPublicGalleryImages(projectId: string): Promise<PublicProjectGalleryImageRecord[]> {
     return db
       .select({
         id: schema.projectImage.id,
+        roomId: schema.projectImage.roomId,
         derivatives: schema.projectImage.derivatives,
         width: schema.projectImage.width,
         height: schema.projectImage.height,
         sortOrder: schema.projectImage.sortOrder,
         roomName: schema.projectRoom.name,
+        themeSlugs: schema.projectImage.themeSlugs,
+        materialSlugs: schema.projectImage.materialSlugs,
+        finishSlugs: schema.projectImage.finishSlugs,
+        tagSlugs: schema.projectImage.tagSlugs,
       })
       .from(schema.projectImage)
       .leftJoin(schema.projectRoom, eq(schema.projectImage.roomId, schema.projectRoom.id))
       .where(
         and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
       )
-      .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
+      .orderBy(
+        asc(schema.projectImage.sortOrder),
+        asc(schema.projectImage.createdAt),
+        asc(schema.projectImage.id),
+      );
   },
 
   async findReferencedImageObjectKeys(keys: string[]): Promise<string[]> {
@@ -1333,8 +1441,12 @@ export const projectsRepository = {
       orgSlug: string | null;
       avgRating: string;
       reviewCount: number;
-      entityType: string;
+      entityType: typeof schema.designerProfile.$inferSelect.entityType;
       logoImageId: string | null;
+      bio: string | null;
+      firmType: string | null;
+      foundedYear: number | null;
+      yearsExperience: number;
     };
   } | null> {
     const [row] = await db
@@ -1347,6 +1459,10 @@ export const projectsRepository = {
         designerReviewCount: schema.designerProfile.reviewCount,
         designerEntityType: schema.designerProfile.entityType,
         designerLogoImageId: schema.designerProfile.logoImageId,
+        designerBio: schema.designerProfile.bio,
+        designerFirmType: schema.designerProfile.firmType,
+        designerFoundedYear: schema.designerProfile.foundedYear,
+        designerYearsExperience: schema.designerProfile.yearsExperience,
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
@@ -1372,8 +1488,137 @@ export const projectsRepository = {
         reviewCount: row.designerReviewCount,
         entityType: row.designerEntityType,
         logoImageId: row.designerLogoImageId,
+        bio: row.designerBio,
+        firmType: row.designerFirmType,
+        foundedYear: row.designerFoundedYear,
+        yearsExperience: row.designerYearsExperience,
       },
     };
+  },
+
+  async countPublishedByDesigner(designerId: string): Promise<number> {
+    const [row] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.project)
+      .where(
+        and(eq(schema.project.designerId, designerId), eq(schema.project.status, 'published')),
+      );
+    return row?.value ?? 0;
+  },
+
+  async listDesignerFootprintCities(
+    designerId: string,
+  ): Promise<Array<{ slug: string; label: string }>> {
+    return db
+      .select({ slug: schema.taxonomy.slug, label: schema.taxonomy.label })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        and(
+          eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .where(eq(schema.designerProfileFootprint.profileId, designerId))
+      .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label));
+  },
+
+  async findPublishedProjectNarrative(
+    projectId: string,
+  ): Promise<PublicProjectNarrativeRecord | null> {
+    const [row] = await db
+      .select({
+        body: schema.review.body,
+        rating: schema.review.rating,
+        publishedAt: schema.review.publishedAt,
+      })
+      .from(schema.review)
+      .where(
+        and(
+          eq(schema.review.projectId, projectId),
+          eq(schema.review.status, 'published'),
+          isNotNull(schema.review.body),
+        ),
+      )
+      .orderBy(
+        sql`${schema.review.publishedAt} desc nulls last`,
+        desc(schema.review.createdAt),
+        desc(schema.review.id),
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
+  async listPublishedDesignerMotifCounts(
+    designerId: string,
+  ): Promise<PublicProjectMotifCountRecord[]> {
+    const result = await db.execute<PublicProjectMotifCountRecord>(sql`
+      select
+        motif.kind,
+        motif.slug,
+        count(distinct motif.project_id)::int as "projectCount"
+      from (
+        select
+          public_image.project_id,
+          motif_values.kind,
+          motif_values.slug
+        from ${schema.projectImage} as public_image
+        inner join ${schema.project} as public_project
+          on public_project.id = public_image.project_id
+        cross join lateral (
+          select 'theme'::text as kind, jsonb_array_elements_text(public_image.theme_slugs) as slug
+          union all
+          select 'material'::text, jsonb_array_elements_text(public_image.material_slugs)
+          union all
+          select 'finish'::text, jsonb_array_elements_text(public_image.finish_slugs)
+          union all
+          select 'tag'::text, jsonb_array_elements_text(public_image.tag_slugs)
+        ) as motif_values
+        where public_project.designer_id = ${designerId}
+          and public_project.status = 'published'
+          and public_image.status = 'ready'
+      ) as motif
+      group by motif.kind, motif.slug
+      order by count(distinct motif.project_id) desc, motif.kind asc, motif.slug asc
+      limit 4
+    `);
+    return result.rows;
+  },
+
+  async listPublishedRecommendationCandidates(params: {
+    excludeProjectIds: string[];
+    limit: number;
+    designerId?: string;
+    budgetBandSlug?: string;
+    citySlug?: string;
+  }): Promise<ProjectRecommendationRecord[]> {
+    const cover = alias(schema.projectImage, 'recommendation_cover');
+    return db
+      .select(recommendationProjectColumns(cover))
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.status, 'ready')))
+      .where(
+        and(
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+          params.excludeProjectIds.length > 0
+            ? notInArray(schema.project.id, params.excludeProjectIds)
+            : undefined,
+          params.designerId ? eq(schema.project.designerId, params.designerId) : undefined,
+          params.budgetBandSlug
+            ? eq(schema.project.budgetBandSlug, params.budgetBandSlug)
+            : undefined,
+          params.citySlug ? eq(schema.project.citySlug, params.citySlug) : undefined,
+        ),
+      )
+      .orderBy(
+        sql`${schema.project.publishedAt} desc nulls last`,
+        desc(schema.project.createdAt),
+        desc(schema.project.id),
+      )
+      .limit(params.limit);
   },
 
   /**
