@@ -18,10 +18,11 @@ export function PublicProjectCard({
   const location = [project.locality, project.city]
     .filter((part): part is string => !!part)
     .join(', ');
+  const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
 
   return (
     <article>
-      <Link href={`/projects/${project.id}`} className="group block">
+      <Link href={href} className="group block">
         <div className="relative aspect-4/5 overflow-hidden rounded-sm bg-muted">
           {project.coverImageUrl ? (
             <Image

@@ -24,6 +24,7 @@ const feedProject = {
   reviewCount: 10,
   budget: '₹15L - ₹35L',
   tags: ['3 BHK'],
+  coverImageId: '22222222-2222-4222-8222-222222222222',
   coverImageUrl: null,
   imageWidth: 480,
   imageHeight: 600,

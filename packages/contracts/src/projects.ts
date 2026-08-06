@@ -349,6 +349,7 @@ export const feedProjectSchema = z
     reviewCount: z.number().int(),
     budget: z.string().nullable(),
     tags: z.array(z.string()),
+    coverImageId: z.uuid().nullable(),
     coverImageUrl: z.string().url().nullable(),
     imageWidth: z.number().int().nullable(),
     imageHeight: z.number().int().nullable(),
@@ -385,6 +386,19 @@ export const galleryResponseSchema = z
   })
   .meta({ id: 'GalleryResponse' });
 export type GalleryResponse = z.infer<typeof galleryResponseSchema>;
+
+export const publicImageDetailParamSchema = z
+  .object({ imageId: z.uuid() })
+  .meta({ id: 'PublicImageDetailParam' });
+
+export const publicImageDetailResponseSchema = z
+  .object({
+    project: feedProjectSchema,
+    images: z.array(galleryImageSchema),
+    activeImageId: z.uuid(),
+  })
+  .meta({ id: 'PublicImageDetail' });
+export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
 
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
