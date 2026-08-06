@@ -9,7 +9,7 @@ import { z } from 'zod';
 // Helper for filter parameters that accept single string or array of strings
 const taxonomySlugOrArray = z.union([
   z.string().trim().min(1).max(80),
-  z.array(z.string().trim().min(1).max(80)),
+  z.array(z.string().trim().min(1).max(80)).max(20),
 ]);
 
 export const discoveryFeedQuerySchema = z
@@ -25,6 +25,8 @@ export const discoveryFeedQuerySchema = z
     scopeSlug: taxonomySlugOrArray.optional(),
     bhkSlug: taxonomySlugOrArray.optional(),
     budgetBandSlug: taxonomySlugOrArray.optional(),
+    roomSlugs: taxonomySlugOrArray.optional(),
+    themes: taxonomySlugOrArray.optional(),
   })
   .refine((data) => data.page * data.limit <= 1000, {
     message: 'Maximum pagination window exceeded (page × limit must be ≤ 1000)',
@@ -58,6 +60,7 @@ export const discoveryFeedResponseSchema = z
     limit: z.number().int(),
     hasMore: z.boolean(),
     source: z.enum(['search', 'db']),
+    facetDistribution: z.record(z.string(), z.record(z.string(), z.number())),
   })
   .meta({ id: 'DiscoveryFeedResponse' });
 

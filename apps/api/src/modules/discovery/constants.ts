@@ -13,6 +13,8 @@ export const DISCOVERY_FILTER_FIELDS = [
   'scopeSlug',
   'bhkSlug',
   'budgetBandSlug',
+  'roomSlugs',
+  'themes',
 ] as const;
 
 export type DiscoveryFilterField = (typeof DISCOVERY_FILTER_FIELDS)[number];
@@ -44,10 +46,7 @@ export type DiscoverySortTypesense = (typeof SORT_TYPESENSE)[keyof typeof SORT_T
  * Mirrors Typesense behavior exactly, including NULLS LAST for featuredAt.
  */
 export const SORT_POSTGRES = {
-  recent: [
-    desc(schema.project.publishedAt),
-    desc(schema.project.id),
-  ],
+  recent: [desc(schema.project.publishedAt), desc(schema.project.id)],
   featured: [
     sql`${schema.project.featuredAt} DESC NULLS LAST`,
     desc(schema.project.publishedAt),

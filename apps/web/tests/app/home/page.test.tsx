@@ -5,6 +5,12 @@ const mock = vi.hoisted(() => ({
   getServerSession: vi.fn(),
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/',
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: mock.getServerSession,
 }));
@@ -90,6 +96,16 @@ describe('HomePage', () => {
     expect(screen.queryByRole('heading', { name: 'Trending projects' })).not.toBeInTheDocument();
     // Shared feed renders the API projects
     expect(screen.getByText('Test Project')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Filters' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Filters').length).toBeGreaterThan(0);
+  });
+
+  it('passes deep-linked filters to the server-rendered feed', async () => {
+    render(await HomePage({ searchParams: Promise.resolve({ city: 'mumbai,pune' }) }));
+
+    const feedCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
+      String(input).includes('/api/projects/feed?limit=30&city=mumbai&city=pune'),
+    );
+
+    expect(feedCall?.[1]).toEqual(expect.objectContaining({ cache: 'no-store' }));
   });
 });

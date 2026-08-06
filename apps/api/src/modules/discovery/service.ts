@@ -136,7 +136,14 @@ export const discoveryService: DiscoveryService = {
         const items = await toCards(result.hits.map(normalizeTypesenseHit));
         const hasMore = result.found > offset + result.hits.length;
 
-        return { items, page, limit, hasMore, source: 'search' as const };
+        return {
+          items,
+          page,
+          limit,
+          hasMore,
+          source: 'search' as const,
+          facetDistribution: result.facetDistribution ?? {},
+        };
       } catch (error) {
         // Fallback on Typesense error
         const reason = error instanceof Error ? error.message : 'unknown';
@@ -162,6 +169,13 @@ export const discoveryService: DiscoveryService = {
     const items = await toCards(result.rows.map(normalizePostgresRow));
     const hasMore = result.rows.length === limit;
 
-    return { items, page, limit, hasMore, source: 'db' as const };
+    return {
+      items,
+      page,
+      limit,
+      hasMore,
+      source: 'db' as const,
+      facetDistribution: {},
+    };
   },
 };
