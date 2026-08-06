@@ -11,7 +11,12 @@ import {
   type AuthVariables,
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
-import { backdateSession, createRoleSession, mergeResponseCookies } from '../helpers/auth.js';
+import {
+  backdateSession,
+  createAuthedSession,
+  createRoleSession,
+  mergeResponseCookies,
+} from '../helpers/auth.js';
 import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
 
 /**
@@ -81,6 +86,16 @@ describe('RBAC guards (integration, E-87)', () => {
     // no hierarchy: admin does not pass the designer-only gate; superadmin does
     expect((await get(app, '/designer-area', admin.cookie)).status).toBe(403);
     expect((await get(app, '/designer-area', superadmin.cookie)).status).toBe(200);
+  });
+
+  it('uses fresh role state for protected routes with a warm session cookie', async () => {
+    const app = sampleApp();
+    const { cookie } = await createAuthedSession('+919800000062');
+    const session = await getSession(new Headers({ cookie }));
+
+    await db.update(schema.user).set({ role: 'admin' }).where(eq(schema.user.id, session!.user.id));
+
+    expect((await get(app, '/admin-area', cookie)).status).toBe(200);
   });
 
   it('ownership: owner 200, other designer 403, superadmin 200, unknown id 404', async () => {

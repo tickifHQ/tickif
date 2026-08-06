@@ -24,11 +24,11 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  * Resolves the better-auth session from the incoming request and attaches
  * `user` / `session` to the Hono context. Always runs; does not block.
  *
- * Note: reads go through the ≤5-min session cookie cache (E-83), so role/ban
- * changes can be served stale for up to that window by the guards below.
+ * Protected API requests bypass better-auth's ≤5-min session cookie cache so
+ * server-side role, ban, expiry, and organization changes are visible immediately.
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  const result = await getSession(c.req.raw.headers);
+  const result = await getSession(c.req.raw.headers, { disableCookieCache: true });
   if (result?.session && !result.session.activeOrganizationId) {
     const organizationId = await orgsService.findSoleOrganizationForUser(result.user.id);
     if (organizationId) {
