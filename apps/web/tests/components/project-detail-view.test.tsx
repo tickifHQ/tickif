@@ -48,7 +48,9 @@ describe('ImageDetailView', () => {
     push.mockClear();
   });
 
-  it('uses the compact inverted design-system button for enquiries', () => {
+  // Signed out, EnquiryCta renders a link to the login page rather than opening
+  // the dialog, but it keeps the inverted design-system button styling.
+  it('uses the compact inverted design-system styling for the enquiry CTA', () => {
     render(
       <ImageDetailView
         project={project}
@@ -58,14 +60,15 @@ describe('ImageDetailView', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /enquire/i })).toHaveClass(
+    const enquire = screen.getByRole('link', { name: /enquire/i });
+
+    expect(enquire).toHaveClass(
       'h-9',
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );
-    expect(
-      screen.getByRole('button', { name: /enquire/i }).querySelector('.lucide-message-square'),
-    ).toBeInTheDocument();
+    expect(enquire).toHaveAttribute('href', `/login?next=/image/${gallery[0]!.id}`);
+    expect(enquire.querySelector('.lucide-message-square')).toBeInTheDocument();
   });
 
   it('routes each selected thumbnail to its own image detail URL', () => {

@@ -11,12 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components/table';
-import { ArrowDown, ExternalLink, UsersRound } from 'lucide-react';
+import { ExternalLink, UsersRound } from 'lucide-react';
 import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dialog';
 import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
 import { DesignerLeadStatusBadge } from '@/components/designer-lead-status';
 import { DesignerListControls, type DesignerListTab } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
+import { SortableHeader } from '@/components/sortable-header';
 
 const leadTabs: Array<DesignerListTab<LeadListStatus>> = [
   { value: 'all', label: 'All' },
@@ -41,6 +42,19 @@ function formatDate(value: string) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+function formatBudget(slug: string | null): string {
+  if (!slug) return 'Not added';
+  const map: Record<string, string> = {
+    'under-5l': '₹Under 5L',
+    '5-10l': '₹5-10L',
+    '10-20l': '₹10-20L',
+    '20-50l': '₹20-50L',
+    '50l-plus': '₹50L+',
+    'prefer-not-to-say': 'Not disclosed',
+  };
+  return map[slug] ?? slug;
 }
 
 function leadDetailHref({
@@ -72,6 +86,8 @@ export function DesignerLeadsList({
   selectedLeadError,
   activeStatus,
   query,
+  sortBy,
+  sortOrder,
   error,
 }: {
   leads: ListLeadsResponse;
@@ -80,6 +96,8 @@ export function DesignerLeadsList({
   selectedLeadError?: string;
   activeStatus: LeadListStatus;
   query?: string;
+  sortBy?: string;
+  sortOrder?: string;
   error?: string;
 }) {
   return (
@@ -87,7 +105,6 @@ export function DesignerLeadsList({
       <DesignerListControls
         tabs={leadTabs.map((tab) => ({
           ...tab,
-          count: tabCounts?.[tab.value] ?? (tab.value === activeStatus ? leads.total : undefined),
         }))}
         activeTab={activeStatus}
         searchValue={query}
@@ -104,15 +121,16 @@ export function DesignerLeadsList({
           <TableHeader>
             <TableRow className="border-0 bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[15.625rem] rounded-l-lg">
-                <span className="inline-flex items-center gap-1">
-                  Lead
-                  <ArrowDown className="size-4" />
-                </span>
+                <SortableHeader field="name" label="Lead" currentSort={sortBy} currentOrder={sortOrder} />
               </TableHead>
               <TableHead className="w-60">Referred project</TableHead>
               <TableHead className="w-48">Contact number</TableHead>
-              <TableHead className="w-28">Budget</TableHead>
-              <TableHead className="w-36">Received on</TableHead>
+              <TableHead className="w-28">
+                <SortableHeader field="budget" label="Budget" currentSort={sortBy} currentOrder={sortOrder} />
+              </TableHead>
+              <TableHead className="w-36">
+                <SortableHeader field="receivedAt" label="Received on" currentSort={sortBy} currentOrder={sortOrder} />
+              </TableHead>
               <TableHead className="w-44">Response</TableHead>
               <TableHead className="w-20 rounded-r-lg text-right">Actions</TableHead>
             </TableRow>
@@ -120,11 +138,11 @@ export function DesignerLeadsList({
           <TableBody>
             {leads.items.length > 0 ? (
               leads.items.map((lead) => (
-                <TableRow key={lead.id} className="hover:bg-transparent">
+                <TableRow key={lead.id} className="border-border/40 hover:bg-transparent">
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="size-8 bg-primary text-primary-foreground">
-                        <span className="text-xs font-bold">{initials(lead.name)}</span>
+                        <span className="flex size-full items-center justify-center text-xs font-bold">{initials(lead.name)}</span>
                       </Avatar>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-foreground">
@@ -143,7 +161,7 @@ export function DesignerLeadsList({
                     {lead.contactNumber}
                   </TableCell>
                   <TableCell className="text-[13px] font-medium text-muted-foreground">
-                    {lead.budgetBand ?? 'Not added'}
+                    {formatBudget(lead.budgetBand)}
                   </TableCell>
                   <TableCell className="text-sm font-medium text-muted-foreground">
                     {formatDate(lead.receivedAt)}

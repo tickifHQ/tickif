@@ -18,12 +18,14 @@ import {
   UserRound,
 } from 'lucide-react';
 import { ShowcaseCard } from '@/components/showcase-card';
+import { EnquiryCta } from '@/components/enquiry-cta';
 
 interface ImageDetailViewProps {
   project: FeedProject;
   gallery: GalleryImage[];
   moreProjects: FeedProject[];
   activeImageId: string;
+  designerProfileId?: string | null;
 }
 
 export function ImageDetailView({
@@ -31,6 +33,7 @@ export function ImageDetailView({
   gallery,
   moreProjects,
   activeImageId,
+  designerProfileId,
 }: ImageDetailViewProps) {
   const router = useRouter();
   const [selectedImageId, setSelectedImageId] = useState(activeImageId);
@@ -144,10 +147,21 @@ export function ImageDetailView({
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">
-                  <Button type="button" variant="inverted" size="compact" className="h-9 flex-[7]">
+                  <EnquiryCta
+                    context={{
+                      type: 'project',
+                      projectName: project.title,
+                      designerName: project.studio,
+                      designerLocation: location,
+                    }}
+                    designerProfileId={designerProfileId ?? ''}
+                    loginHref={`/login?next=/image/${activeImageId}`}
+                    variant="inverted"
+                    className="h-9 flex-[7]"
+                  >
                     <MessageSquare aria-hidden />
                     Enquire
-                  </Button>
+                  </EnquiryCta>
                   <button
                     type="button"
                     className="flex h-10 flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"

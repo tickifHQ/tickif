@@ -2,11 +2,30 @@ import { notFound } from 'next/navigation';
 import {
   feedProjectsResponseSchema,
   publicImageDetailResponseSchema,
+  publicProjectBySlugResponseSchema,
   type FeedProject,
   type PublicImageDetailResponse,
 } from '@repo/contracts';
 import { ImageDetailView } from '@/components/image-detail-view';
 import { api } from '@/lib/api';
+
+/**
+ * The enquiry CTA needs the owning designer's profile id, which the image
+ * detail projection (a feed card) doesn't carry. The public by-slug route
+ * exposes it and needs no session, so resolve it from there. A failure here
+ * only disables the enquiry action, so it must not fail the page.
+ */
+async function fetchDesignerProfileId(slug: string): Promise<string | null> {
+  try {
+    const response = await api.api.projects.slug[':slug'].$get({ param: { slug } });
+    if (!response.ok) return null;
+
+    const parsed = publicProjectBySlugResponseSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.designer.id : null;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchImageDetail(imageId: string): Promise<PublicImageDetailResponse | null> {
   const response = await api.api.projects.images[':imageId'].$get({
@@ -53,6 +72,7 @@ export default async function ImageDetailPage({ params }: { params: Promise<{ id
   }
 
   const moreProjects = feedProjects.filter((project) => project.id !== imageDetail.project.id);
+  const designerProfileId = await fetchDesignerProfileId(imageDetail.project.slug);
 
   return (
     <ImageDetailView
@@ -60,6 +80,7 @@ export default async function ImageDetailPage({ params }: { params: Promise<{ id
       gallery={imageDetail.images}
       moreProjects={moreProjects}
       activeImageId={imageDetail.activeImageId}
+      designerProfileId={designerProfileId}
     />
   );
 }
