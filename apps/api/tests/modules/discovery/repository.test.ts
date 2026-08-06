@@ -69,6 +69,8 @@ vi.mock('@repo/db', () => ({
       status: 'project.status',
       designerId: 'project.designerId',
       coverImageId: 'project.coverImageId',
+      publishedAt: 'project.publishedAt',
+      featuredAt: 'project.featuredAt',
     },
     designerProfile: {
       id: 'designerProfile.id',
@@ -86,11 +88,27 @@ vi.mock('@repo/db', () => ({
       id: 'projectImage.id',
       status: 'projectImage.status',
       derivatives: 'projectImage.derivatives',
+      projectId: 'projectImage.projectId',
+      themeSlugs: 'projectImage.themeSlugs',
+    },
+    projectRoom: {
+      id: 'projectRoom.id',
+      projectId: 'projectRoom.projectId',
+      roomTypeId: 'projectRoom.roomTypeId',
+    },
+    taxonomy: {
+      id: 'taxonomy.id',
+      kind: 'taxonomy.kind',
+      slug: 'taxonomy.slug',
     },
   },
   eq: vi.fn((a, b) => ({ type: 'eq', left: a, right: b })),
   and: vi.fn((...args) => ({ type: 'and', conditions: args })),
   inArray: vi.fn((col, values) => ({ type: 'inArray', column: col, values })),
+  exists: vi.fn((query) => ({ type: 'exists', query })),
+  or: vi.fn((...args) => ({ type: 'or', conditions: args })),
+  desc: vi.fn((column) => ({ type: 'desc', column })),
+  sql: vi.fn(),
 }));
 
 vi.mock('drizzle-orm/pg-core', () => ({
@@ -98,9 +116,7 @@ vi.mock('drizzle-orm/pg-core', () => ({
 }));
 
 // Import AFTER mocks are registered
-const { discoveryRepository } = await import(
-  '../../../src/modules/discovery/repository.js'
-);
+const { discoveryRepository } = await import('../../../src/modules/discovery/repository.js');
 const { searchClient, searchCollectionName } = await import('@repo/search');
 const { db, inArray } = await import('@repo/db');
 
@@ -178,6 +194,8 @@ describe('discoveryRepository.searchFeed', () => {
       q: '*',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
       sort_by: 'featuredAt:desc,publishedAt:desc',
+      facet_by:
+        'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
       page: 2,
       per_page: 12,
       include_fields:
@@ -337,7 +355,9 @@ describe('discoveryRepository.listFeedFallback', () => {
     avgRating: '4.5',
     reviewCount: 10,
     coverStatus: 'ready' as const,
-    coverDerivatives: [{ variant: 'small', format: 'webp', key: 'test.webp', width: 640, height: 480 }],
+    coverDerivatives: [
+      { variant: 'small', format: 'webp', key: 'test.webp', width: 640, height: 480 },
+    ],
   });
 
   it('returns expected shape { rows: FeedProjectRow[] }', async () => {

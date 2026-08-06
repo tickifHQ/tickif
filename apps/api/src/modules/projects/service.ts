@@ -54,6 +54,7 @@ import {
   type ProjectReviewCommentRecord,
   type ProjectRoomRecord,
   type ProjectStatusCountRecord,
+  type PublishedFeedFilters,
   type TaxonomyKind,
 } from './repository.js';
 
@@ -1037,10 +1038,27 @@ export const projectsService = {
    */
   async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
     const { page, limit } = query;
-    const rows = await projectsRepository.listPublishedFeed({
+    const filters: PublishedFeedFilters = {
+      city: query.city,
+      bhk: query.bhk,
+      propertyType: query.propertyType,
+      scope: query.scope,
+      budgetBand: query.budgetBand,
+      room: query.room,
+      theme: query.theme,
+    };
+    const feedRequest: {
+      limit: number;
+      offset: number;
+      filters?: PublishedFeedFilters;
+    } = {
       limit: limit + 1,
       offset: (page - 1) * limit,
-    });
+    };
+    if (Object.values(filters).some((value) => value !== undefined)) {
+      feedRequest.filters = filters;
+    }
+    const rows = await projectsRepository.listPublishedFeed(feedRequest);
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
@@ -1319,10 +1337,7 @@ export const projectsService = {
     return { items: events.map(toModerationHistoryItem) };
   },
 
-  async reviewComments(
-    projectId: string,
-    caller: Caller,
-  ): Promise<ProjectReviewCommentsResponse> {
+  async reviewComments(projectId: string, caller: Caller): Promise<ProjectReviewCommentsResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);

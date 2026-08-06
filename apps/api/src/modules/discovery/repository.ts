@@ -1,12 +1,13 @@
-import {
-  searchClient,
-  searchCollectionName,
-  type ProjectSearchDocument,
-} from '@repo/search';
-import { db, schema, eq, and, inArray } from '@repo/db';
+import { searchClient, searchCollectionName, type ProjectSearchDocument } from '@repo/search';
+import { db, schema, eq, and, or, inArray, sql } from '@repo/db';
+import { exists } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import type { DiscoveryFeedFilters, DiscoverySortPostgres } from './constants.js';
+import {
+  DISCOVERY_FILTER_FIELDS,
+  type DiscoveryFeedFilters,
+  type DiscoverySortPostgres,
+} from './constants.js';
 import type { Derivative } from '@repo/contracts';
 
 /**
@@ -26,6 +27,7 @@ import type { Derivative } from '@repo/contracts';
 export interface TypesenseSearchResult {
   hits: ProjectSearchDocument[];
   found: number;
+  facetDistribution?: Record<string, Record<string, number>>;
 }
 
 /**
@@ -138,6 +140,46 @@ function buildPostgresFilters(filters: DiscoveryFeedFilters): SQL[] {
       : [filters.budgetBandSlug];
     clauses.push(inArray(schema.project.budgetBandSlug, values));
   }
+  if (filters.roomSlugs) {
+    const values = Array.isArray(filters.roomSlugs) ? filters.roomSlugs : [filters.roomSlugs];
+    clauses.push(
+      exists(
+        db
+          .select({ id: schema.projectRoom.id })
+          .from(schema.projectRoom)
+          .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
+          .where(
+            and(
+              eq(schema.projectRoom.projectId, schema.project.id),
+              eq(schema.taxonomy.kind, 'room'),
+              inArray(schema.taxonomy.slug, values),
+            ),
+          ),
+      ),
+    );
+  }
+  if (filters.themes) {
+    const values = Array.isArray(filters.themes) ? filters.themes : [filters.themes];
+    clauses.push(
+      exists(
+        db
+          .select({ id: schema.projectImage.id })
+          .from(schema.projectImage)
+          .where(
+            and(
+              eq(schema.projectImage.projectId, schema.project.id),
+              eq(schema.projectImage.status, 'ready'),
+              or(
+                ...values.map(
+                  (theme) =>
+                    sql`${schema.projectImage.themeSlugs} @> ${JSON.stringify([theme])}::jsonb`,
+                ),
+              ),
+            ),
+          ),
+      ),
+    );
+  }
 
   return clauses;
 }
@@ -162,6 +204,7 @@ export const discoveryRepository = {
         q: '*',
         filter_by: params.filterBy || undefined,
         sort_by: params.sortBy,
+        facet_by: DISCOVERY_FILTER_FIELDS.join(','),
         page: params.page,
         per_page: params.perPage,
         include_fields: TYPESENSE_INCLUDE_FIELDS,
@@ -170,6 +213,7 @@ export const discoveryRepository = {
     return {
       hits: result.hits?.map((hit) => hit.document) ?? [],
       found: result.found ?? 0,
+      facetDistribution: extractFacetDistribution(result.facet_counts),
     };
   },
 
@@ -218,3 +262,18 @@ export const discoveryRepository = {
     return { rows };
   },
 };
+
+function extractFacetDistribution(
+  facetCounts?: Array<{
+    field_name: string;
+    counts: Array<{ value: string; count: number }>;
+  }>,
+): Record<string, Record<string, number>> {
+  if (!facetCounts) return {};
+  return Object.fromEntries(
+    facetCounts.map(({ field_name, counts }) => [
+      field_name,
+      Object.fromEntries(counts.map(({ value, count }) => [value, count])),
+    ]),
+  );
+}

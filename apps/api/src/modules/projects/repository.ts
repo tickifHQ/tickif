@@ -1,10 +1,11 @@
-import { ilike, inArray } from 'drizzle-orm';
+import { exists, ilike, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
+  FeedProjectsQuery,
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
@@ -161,6 +162,74 @@ export type ProjectFeedItemRecord = {
   publishedAt: Date | null;
 };
 
+export type PublishedFeedFilters = Pick<
+  FeedProjectsQuery,
+  'city' | 'bhk' | 'propertyType' | 'scope' | 'budgetBand' | 'room' | 'theme'
+>;
+
+function filterValues(value: string | string[] | undefined): string[] {
+  return value === undefined ? [] : Array.isArray(value) ? value : [value];
+}
+
+function publishedFeedFilterClauses(filters: PublishedFeedFilters = {}) {
+  const clauses = [];
+  const city = filterValues(filters.city);
+  const bhk = filterValues(filters.bhk);
+  const propertyType = filterValues(filters.propertyType);
+  const scope = filterValues(filters.scope);
+  const budgetBand = filterValues(filters.budgetBand);
+  const rooms = filterValues(filters.room);
+  const themes = filterValues(filters.theme);
+
+  if (city.length > 0) clauses.push(inArray(schema.project.citySlug, city));
+  if (bhk.length > 0) clauses.push(inArray(schema.project.bhkSlug, bhk));
+  if (propertyType.length > 0) clauses.push(inArray(schema.project.propertyTypeSlug, propertyType));
+  if (scope.length > 0) clauses.push(inArray(schema.project.scopeSlug, scope));
+  if (budgetBand.length > 0) clauses.push(inArray(schema.project.budgetBandSlug, budgetBand));
+
+  if (rooms.length > 0) {
+    clauses.push(
+      exists(
+        db
+          .select({ id: schema.projectRoom.id })
+          .from(schema.projectRoom)
+          .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
+          .where(
+            and(
+              eq(schema.projectRoom.projectId, schema.project.id),
+              eq(schema.taxonomy.kind, 'room'),
+              inArray(schema.taxonomy.slug, rooms),
+            ),
+          ),
+      ),
+    );
+  }
+
+  if (themes.length > 0) {
+    clauses.push(
+      exists(
+        db
+          .select({ id: schema.projectImage.id })
+          .from(schema.projectImage)
+          .where(
+            and(
+              eq(schema.projectImage.projectId, schema.project.id),
+              eq(schema.projectImage.status, 'ready'),
+              or(
+                ...themes.map(
+                  (theme) =>
+                    sql`${schema.projectImage.themeSlugs} @> ${JSON.stringify([theme])}::jsonb`,
+                ),
+              ),
+            ),
+          ),
+      ),
+    );
+  }
+
+  return clauses;
+}
+
 /** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
 function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.projectImage, 'cover'>>) {
   return {
@@ -308,9 +377,7 @@ export const projectsRepository = {
       .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
   },
 
-  async listUnresolvedReviewComments(
-    projectIds: string[],
-  ): Promise<ProjectReviewCommentRecord[]> {
+  async listUnresolvedReviewComments(projectIds: string[]): Promise<ProjectReviewCommentRecord[]> {
     if (projectIds.length === 0) return [];
     return db
       .select()
@@ -347,6 +414,7 @@ export const projectsRepository = {
   async listPublishedFeed(params: {
     limit: number;
     offset: number;
+    filters?: PublishedFeedFilters;
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
@@ -359,7 +427,11 @@ export const projectsRepository = {
         // Only active designers: suspended studios 404 on their public profile, so their
         // projects must not surface here either. `id` is the stable tiebreaker for paging.
         .where(
-          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+          and(
+            eq(schema.project.status, 'published'),
+            eq(schema.designerProfile.status, 'active'),
+            ...publishedFeedFilterClauses(params.filters),
+          ),
         )
         .orderBy(
           sql`${schema.project.publishedAt} desc nulls last`,
