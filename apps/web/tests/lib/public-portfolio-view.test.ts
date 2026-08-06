@@ -4,6 +4,7 @@ import {
   heroCaption,
   heroProject,
   projectFilters,
+  socialHref,
   socialLabel,
   strapline,
   studioInitials,
@@ -133,6 +134,23 @@ describe('socialLabel and websiteLabel', () => {
   it('degrades gracefully on an unparseable value', () => {
     expect(websiteLabel('anikaspaces.in')).toBe('anikaspaces.in');
     expect(socialLabel('https://')).toBe('https://');
+  });
+
+  it('builds safe external URLs for bare social handles and platform paths', () => {
+    expect(socialHref('instagram', '@anika')).toBe('https://www.instagram.com/anika');
+    expect(socialHref('linkedin', 'anika')).toBe('https://www.linkedin.com/in/anika');
+    expect(socialHref('linkedin', '/company/anika-spaces')).toBe(
+      'https://www.linkedin.com/company/anika-spaces',
+    );
+    expect(socialHref('youtube', '@anika')).toBe('https://www.youtube.com/@anika');
+  });
+
+  it('preserves valid http links and rejects unsafe schemes', () => {
+    expect(socialHref('instagram', 'https://instagram.com/anika')).toBe(
+      'https://instagram.com/anika',
+    );
+    expect(socialHref('youtube', 'http://youtube.com/@anika')).toBe('http://youtube.com/@anika');
+    expect(socialHref('instagram', 'javascript:alert(1)')).toBeNull();
   });
 });
 

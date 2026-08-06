@@ -15,8 +15,9 @@ Three layers, each swappable without touching the one below:
 ### Tokens
 
 - **Surfaces:** `background`, `card`, `popover` (+ `-foreground`)
-- **Intent:** `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info` (+ `-foreground`)
+- **Intent:** `primary`, `secondary`, `muted`, `accent`, `destructive`, `success`, `warning`, `info`, `feature` (+ `-foreground` where needed, plus lighter state surfaces)
 - **Chrome:** `border`, `input`, `ring`, `radius`
+- **Buttons:** `button-neutral`, `button-inverted`, `button-fancy` (+ foreground, hover, shadow tokens)
 - **Charts:** `chart-1` … `chart-5`
 - **Fonts:** `--font-body` → `font-sans`, `--font-heading` → `font-display`, `--font-code` → `font-mono`
 

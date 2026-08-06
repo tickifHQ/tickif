@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ProjectStatus } from '@repo/contracts';
@@ -47,11 +47,28 @@ export function DesignerProjectRowActions({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Radix traps focus in the menu, so opening a dialog from a menu item has to
+  // wait until the menu has finished closing. Holds which dialog to open next.
+  const pendingDialogRef = useRef<'delete' | 'withdraw' | null>(null);
+  const refreshAfterDeleteRef = useRef(false);
   const deleteEnabled = canDeleteProject(projectStatus);
   const withdrawEnabled = canWithdrawProject(projectStatus);
+
+  function handleMenuOpenChange(open: boolean) {
+    setMenuOpen(open);
+    if (open || !pendingDialogRef.current) return;
+
+    const pending = pendingDialogRef.current;
+    pendingDialogRef.current = null;
+    window.setTimeout(() => {
+      if (pending === 'delete') setDeleteOpen(true);
+      else setWithdrawOpen(true);
+    }, 0);
+  }
 
   function duplicateProject() {
     setError(null);
@@ -88,8 +105,8 @@ export function DesignerProjectRowActions({
           return;
         }
 
+        refreshAfterDeleteRef.current = true;
         setDeleteOpen(false);
-        router.refresh();
       } catch {
         setError('Could not delete project.');
       }
@@ -142,54 +159,58 @@ export function DesignerProjectRowActions({
         </Link>
       </Button>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              aria-label={`More actions for ${projectTitle}`}
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem disabled>
-              <ExternalLink className="size-4" />
-              View public
-            </DropdownMenuItem>
-            {withdrawEnabled ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    setWithdrawOpen(true);
-                  }}
-                >
-                  <Undo2 className="size-4" />
-                  Withdraw submission
-                </DropdownMenuItem>
-              </>
-            ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              disabled={!deleteEnabled}
-              onSelect={(event) => {
-                event.preventDefault();
-                if (deleteEnabled) setDeleteOpen(true);
-              }}
-            >
-              <Trash2 className="size-4" />
-              Delete draft
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`More actions for ${projectTitle}`}
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem disabled>
+            <ExternalLink className="size-4" />
+            View public
+          </DropdownMenuItem>
+          {withdrawEnabled ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  pendingDialogRef.current = 'withdraw';
+                }}
+              >
+                <Undo2 className="size-4" />
+                Withdraw submission
+              </DropdownMenuItem>
+            </>
+          ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!deleteEnabled}
+            onSelect={() => {
+              if (deleteEnabled) pendingDialogRef.current = 'delete';
+            }}
+          >
+            <Trash2 className="size-4" />
+            Delete draft
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-        <DialogContent>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent
+          onCloseAutoFocus={() => {
+            if (!refreshAfterDeleteRef.current) return;
+            refreshAfterDeleteRef.current = false;
+            window.setTimeout(() => router.refresh(), 0);
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Delete project draft?</DialogTitle>
             <DialogDescription>

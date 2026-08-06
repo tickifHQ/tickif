@@ -261,7 +261,14 @@ describe('PublicDesignerProfile', () => {
     expect(studio.getByText('2018')).toBeInTheDocument();
     expect(studio.getByText('Projects published')).toBeInTheDocument();
     expect(studio.getByText('₹10L+')).toBeInTheDocument();
-    expect(studio.getAllByText('@anika')).toHaveLength(2);
+    const socialLinks = studio.getAllByRole('link', { name: '@anika' });
+    expect(socialLinks).toHaveLength(2);
+    expect(socialLinks[0]).toHaveAttribute('href', 'https://www.instagram.com/anika');
+    expect(socialLinks[1]).toHaveAttribute('href', 'https://www.linkedin.com/in/anika');
+    socialLinks.forEach((link) => {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+    });
     expect(studio.getByRole('link', { name: 'anikaspaces.in' })).toHaveAttribute(
       'href',
       'https://anikaspaces.in',

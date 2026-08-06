@@ -28,13 +28,15 @@ const emptyLeads: ListLeadsResponse = {
   totalPages: 1,
 };
 
-const leadCountStatuses: LeadListStatus[] = ['all', 'contacted', 'closed', 'spam'];
+const leadCountStatuses: LeadListStatus[] = ['all', 'new', 'contacted', 'closed', 'spam'];
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseLeadQuery(searchParams: Record<string, string | string[] | undefined>): ListLeadsQuery {
+function parseLeadQuery(
+  searchParams: Record<string, string | string[] | undefined>,
+): ListLeadsQuery {
   const raw = {
     status: firstParam(searchParams.status),
     q: firstParam(searchParams.q) || undefined,
@@ -50,11 +52,13 @@ async function fetchLeads(query: ListLeadsQuery, cookie: string | null) {
 
   try {
     const response = await api.api.leads.$get({ query }, { headers: { cookie } });
-    if (!response.ok) return { ok: false as const, data: emptyLeads, message: 'Could not load leads.' };
+    if (!response.ok)
+      return { ok: false as const, data: emptyLeads, message: 'Could not load leads.' };
 
     const payload = await response.json();
     const parsed = listLeadsResponseSchema.safeParse(payload);
-    if (!parsed.success) return { ok: false as const, data: emptyLeads, message: 'Could not load leads.' };
+    if (!parsed.success)
+      return { ok: false as const, data: emptyLeads, message: 'Could not load leads.' };
 
     return { ok: true as const, data: parsed.data };
   } catch {
@@ -96,12 +100,17 @@ async function getLeadDetail(leadId: string | undefined) {
   if (!cookie) return { ok: false as const, data: null, message: 'Could not load lead details.' };
 
   try {
-    const response = await api.api.leads[':id'].$get({ param: { id: leadId } }, { headers: { cookie } });
-    if (!response.ok) return { ok: false as const, data: null, message: 'Could not load lead details.' };
+    const response = await api.api.leads[':id'].$get(
+      { param: { id: leadId } },
+      { headers: { cookie } },
+    );
+    if (!response.ok)
+      return { ok: false as const, data: null, message: 'Could not load lead details.' };
 
     const payload = await response.json();
     const parsed = leadDetailResponseSchema.safeParse(payload);
-    if (!parsed.success) return { ok: false as const, data: null, message: 'Could not load lead details.' };
+    if (!parsed.success)
+      return { ok: false as const, data: null, message: 'Could not load lead details.' };
 
     return { ok: true as const, data: parsed.data };
   } catch {

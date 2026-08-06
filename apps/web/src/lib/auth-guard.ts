@@ -24,6 +24,7 @@ type SessionUser = {
   id: string;
   name: string;
   email: string;
+  phoneNumber?: string | null;
   role: string | null;
   [key: string]: unknown;
 };
@@ -71,7 +72,9 @@ export function rolePassesCheck(
  * passing the same flag (e.g. (public) layout + page) share one API
  * round-trip; callers with different flags still fetch independently.
  */
-export async function getServerSession(options?: GetServerSessionOptions): Promise<SessionData | null> {
+export async function getServerSession(
+  options?: GetServerSessionOptions,
+): Promise<SessionData | null> {
   return fetchSession(Boolean(options?.disableCookieCache));
 }
 

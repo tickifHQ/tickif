@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DesignerProjectRowActions } from '../../src/components/designer-project-row-actions';
 
 const mock = vi.hoisted(() => ({
@@ -119,8 +118,6 @@ describe('DesignerProjectRowActions', () => {
   });
 
   it('duplicates the project without navigating away from the list', async () => {
-    const user = userEvent.setup();
-
     render(
       <DesignerProjectRowActions
         projectId="11111111-1111-4111-8111-111111111111"
@@ -129,7 +126,7 @@ describe('DesignerProjectRowActions', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /duplicate warm walnut family home/i }));
+    fireEvent.click(screen.getByRole('button', { name: /duplicate warm walnut family home/i }));
 
     await waitFor(() => {
       expect(mock.duplicatePost).toHaveBeenCalledWith({
@@ -138,5 +135,41 @@ describe('DesignerProjectRowActions', () => {
     });
     expect(mock.router.push).not.toHaveBeenCalled();
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores page interactions after deleting a draft', async () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="draft"
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /delete draft/i }));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(mock.deleteProject).toHaveBeenCalledWith({
+        param: { id: '11111111-1111-4111-8111-111111111111' },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    expect(document.body).not.toHaveStyle({ pointerEvents: 'none' });
+    expect(screen.getByRole('link', { name: /edit warm walnut family home/i })).toHaveAttribute(
+      'href',
+      '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
+    );
+    await waitFor(() => {
+      expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    });
   });
 });

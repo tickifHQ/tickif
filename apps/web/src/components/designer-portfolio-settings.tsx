@@ -8,21 +8,22 @@ import {
   Check,
   ChevronsUpDown,
   Copy,
-  ExternalLink,
   Globe,
   Info,
-  Lightbulb,
+  ImagePlus,
+  LayoutList,
   Loader2,
   RefreshCw,
   Star,
   X,
 } from 'lucide-react';
 import type {
+  GoogleReviewsResponse,
+  PortfolioProjectItem,
   PortfolioBadge,
   PortfolioResponse,
   RequiredPortfolioField,
   UpdatePortfolioInput,
-  GoogleReviewsResponse,
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
@@ -39,6 +40,8 @@ import { Label } from '@repo/ui/components/label';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { Switch } from '@repo/ui/components/switch';
 import { Textarea } from '@repo/ui/components/textarea';
+import { TipCallout } from '@repo/ui/components/tip-callout';
+import { cn } from '@repo/ui/lib/utils';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -52,13 +55,12 @@ import {
   connectGoogleReviews,
   deleteLogo,
   disconnectGoogleReviews,
+  fetchPortfolioProjects,
   fetchGoogleReviews,
   fetchPortfolio,
-  fetchPublishedProjects,
   refreshGoogleReviews,
   updatePortfolio,
   uploadLogo,
-  type TestimonialProjectOption,
 } from '@/lib/portfolio-api';
 
 // ---------------------------------------------------------------------------
@@ -99,12 +101,7 @@ const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
 
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
-type ToggleableSectionKey =
-  | 'trust'
-  | 'testimonial'
-  | 'reviews'
-  | 'socialLinks'
-  | 'shareBlock';
+type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
 
 type SectionKey = 'linkUrl' | 'customizations' | 'hero' | ToggleableSectionKey;
 
@@ -123,6 +120,11 @@ function formatMissingFields(fields: RequiredPortfolioField[]): string {
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
+type TestimonialProjectOption = {
+  label: string;
+  value: string;
+};
+
 /** Maps a portfolio badge enum to its display label and illustration. */
 const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
   verified: { label: 'Identity verified', src: '/illustrations/badges/verified.svg' },
@@ -131,6 +133,11 @@ const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
   established: { label: 'Established studio', src: '/illustrations/badges/established.svg' },
   'projects-published': { label: 'Projects published', src: '/illustrations/badges/projects-published.svg' },
 };
+
+function formatProjectOption(project: PortfolioProjectItem) {
+  const location = [project.locality, project.city].filter(Boolean).join(', ');
+  return location ? `${project.title} - ${location}` : project.title;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -163,10 +170,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
   };
 }
 
-function computeChangedFields(
-  current: FormState,
-  saved: FormState,
-): UpdatePortfolioInput | null {
+function computeChangedFields(current: FormState, saved: FormState): UpdatePortfolioInput | null {
   const patch: Record<string, unknown> = {};
   const googleReviewSettings: Record<string, boolean> = {};
 
@@ -211,7 +215,18 @@ function computeChangedFields(
       if (
         typeof value === 'string' &&
         value === '' &&
-        ['portfolioSlug', 'tagline', 'bio', 'websiteUrl', 'instagramHandle', 'linkedinHandle', 'youtubeHandle', 'testimonialWords', 'testimonialAuthor'].includes(key)
+        [
+          'portfolioSlug',
+          'tagline',
+          'bio',
+          'websiteUrl',
+          'instagramHandle',
+          'linkedinHandle',
+          'youtubeHandle',
+          'testimonialWords',
+          'testimonialAuthor',
+          'testimonialProjectId',
+        ].includes(key)
       ) {
         patch[key] = null;
       } else {
@@ -262,6 +277,11 @@ export function DesignerPortfolioSettings() {
   const [isRefreshingGoogle, setIsRefreshingGoogle] = useState(false);
   const googlePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Published projects available for the featured testimonial picker.
+  const [testimonialProjects, setTestimonialProjects] = useState<PortfolioProjectItem[]>([]);
+  const [testimonialProjectsLoading, setTestimonialProjectsLoading] = useState(true);
+  const [testimonialProjectsError, setTestimonialProjectsError] = useState<string | null>(null);
+
   // Collapsible/expanded UI state (local only — presentation, not persisted)
   const [sectionExpanded, setSectionExpanded] = useState<Record<SectionKey, boolean>>({
     linkUrl: true,
@@ -273,10 +293,6 @@ export function DesignerPortfolioSettings() {
     socialLinks: false,
     shareBlock: false,
   });
-
-  // Published projects for the testimonial picker
-  const [publishedProjects, setPublishedProjects] = useState<TestimonialProjectOption[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(false);
 
   function toggleExpanded(key: SectionKey) {
     setSectionExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -306,26 +322,24 @@ export function DesignerPortfolioSettings() {
     void loadPortfolio();
   }, [loadPortfolio]);
 
-  // -------------------------------------------------------------------------
-  // Published projects (for testimonial picker)
-  // -------------------------------------------------------------------------
-
-  const loadPublishedProjects = useCallback(async () => {
-    setProjectsLoading(true);
+  const loadTestimonialProjects = useCallback(async () => {
+    setTestimonialProjectsLoading(true);
+    setTestimonialProjectsError(null);
     try {
-      const projects = await fetchPublishedProjects();
-      setPublishedProjects(projects);
-    } catch {
-      // Non-critical — picker will show empty state
-      setPublishedProjects([]);
+      const data = await fetchPortfolioProjects();
+      setTestimonialProjects(data.items);
+    } catch (err) {
+      setTestimonialProjectsError(
+        err instanceof Error ? err.message : 'Could not load portfolio projects.',
+      );
     } finally {
-      setProjectsLoading(false);
+      setTestimonialProjectsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadPublishedProjects();
-  }, [loadPublishedProjects]);
+    void loadTestimonialProjects();
+  }, [loadTestimonialProjects]);
 
   // -------------------------------------------------------------------------
   // Google reviews
@@ -422,9 +436,7 @@ export function DesignerPortfolioSettings() {
   // -------------------------------------------------------------------------
 
   const isDirty =
-    form !== null &&
-    savedForm !== null &&
-    JSON.stringify(form) !== JSON.stringify(savedForm);
+    form !== null && savedForm !== null && JSON.stringify(form) !== JSON.stringify(savedForm);
 
   // -------------------------------------------------------------------------
   // Form handlers
@@ -441,54 +453,51 @@ export function DesignerPortfolioSettings() {
   // Slug debounce
   // -------------------------------------------------------------------------
 
-  const handleSlugChange = useCallback(
-    (value: string) => {
-      // Sanitize toward the contract's slug shape: lowercase alphanumerics
-      // and hyphens, no consecutive hyphens, no leading hyphen. A trailing
-      // hyphen is allowed while typing and caught by the pattern check below.
-      const slug = value
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-{2,}/g, '-')
-        .replace(/^-+/, '');
-      updateField('portfolioSlug', slug);
+  const handleSlugChange = useCallback((value: string) => {
+    // Sanitize toward the contract's slug shape: lowercase alphanumerics
+    // and hyphens, no consecutive hyphens, no leading hyphen. A trailing
+    // hyphen is allowed while typing and caught by the pattern check below.
+    const slug = value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-+/, '');
+    updateField('portfolioSlug', slug);
 
-      if (slugDebounceRef.current) {
-        clearTimeout(slugDebounceRef.current);
-      }
+    if (slugDebounceRef.current) {
+      clearTimeout(slugDebounceRef.current);
+    }
 
-      if (!slug || slug.length < 3) {
-        setSlugStatus('idle');
-        latestSlugRef.current = '';
-        return;
-      }
+    if (!slug || slug.length < 3) {
+      setSlugStatus('idle');
+      latestSlugRef.current = '';
+      return;
+    }
 
-      // Validate the final value against the contract regex before hitting
-      // the API — the server would reject it with a 422 anyway.
-      if (!SLUG_PATTERN.test(slug)) {
-        setSlugStatus('invalid');
-        latestSlugRef.current = '';
-        return;
-      }
+    // Validate the final value against the contract regex before hitting
+    // the API. The server would reject it with a 422 anyway.
+    if (!SLUG_PATTERN.test(slug)) {
+      setSlugStatus('invalid');
+      latestSlugRef.current = '';
+      return;
+    }
 
-      setSlugStatus('checking');
-      latestSlugRef.current = slug;
-      slugDebounceRef.current = setTimeout(async () => {
-        try {
-          const result = await checkSlugAvailability(slug);
-          // Only update if this slug is still the latest request (prevents stale race)
-          if (latestSlugRef.current === slug) {
-            setSlugStatus(result.available ? 'available' : 'unavailable');
-          }
-        } catch {
-          if (latestSlugRef.current === slug) {
-            setSlugStatus('error');
-          }
+    setSlugStatus('checking');
+    latestSlugRef.current = slug;
+    slugDebounceRef.current = setTimeout(async () => {
+      try {
+        const result = await checkSlugAvailability(slug);
+        // Only update if this slug is still the latest request (prevents stale race)
+        if (latestSlugRef.current === slug) {
+          setSlugStatus(result.available ? 'available' : 'unavailable');
         }
-      }, 500);
-    },
-    [],
-  );
+      } catch {
+        if (latestSlugRef.current === slug) {
+          setSlugStatus('error');
+        }
+      }
+    }, 500);
+  }, []);
 
   // Clean up debounce on unmount
   useEffect(() => {
@@ -651,7 +660,12 @@ export function DesignerPortfolioSettings() {
   if (!form || !portfolio) return null;
 
   const initials = form.displayName
-    ? form.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+    ? form.displayName
+        .split(' ')
+        .map((w) => w[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
   const copyUrl = new URL(portfolioPath, portfolioWebUrl).toString();
@@ -664,6 +678,26 @@ export function DesignerPortfolioSettings() {
   const googleConnection = googleReviews?.connection ?? null;
   const googleAvailable = googleReviews?.available ?? true;
   const googleStatus = googleConnection?.status ?? null;
+  const testimonialProjectOptions = testimonialProjects.map((project) => ({
+    value: project.id,
+    label: formatProjectOption(project),
+  }));
+  // A saved testimonial project that is no longer published won't be in the
+  // options, so surface a placeholder entry rather than showing nothing selected.
+  const selectedTestimonialProjectId = form.testimonialProjectId;
+  const selectedTestimonialProjectMissing =
+    !!selectedTestimonialProjectId &&
+    !testimonialProjectOptions.some((option) => option.value === selectedTestimonialProjectId);
+  const testimonialProjectSelectOptions =
+    selectedTestimonialProjectMissing && selectedTestimonialProjectId
+      ? [
+          {
+            value: selectedTestimonialProjectId,
+            label: 'Selected project',
+          },
+          ...testimonialProjectOptions,
+        ]
+      : testimonialProjectOptions;
 
   // -------------------------------------------------------------------------
   // Render
@@ -673,12 +707,9 @@ export function DesignerPortfolioSettings() {
     <div className="flex flex-col">
       {/* Header */}
       <div className="px-6 py-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Portfolio
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Portfolio</h1>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Manage your public link, customize the look, and configure each
-          section visitors see.
+          Manage your public link, customize the look, and configure each section visitors see.
         </p>
       </div>
 
@@ -719,7 +750,10 @@ export function DesignerPortfolioSettings() {
                     className="flex items-start gap-2 border-b border-border bg-muted/40 px-5 py-3"
                     role="status"
                   >
-                    <AlertCircle className="mt-px size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <AlertCircle
+                      className="mt-px size-4 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       Your portfolio isn&apos;t public yet. Add{' '}
                       <span className="font-medium text-foreground">
@@ -782,12 +816,6 @@ export function DesignerPortfolioSettings() {
                       Lowercase letters, numbers, and hyphens only
                     </p>
                   )}
-                  {portfolio.portfolioUrl && (
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ExternalLink className="size-4 shrink-0" />
-                      {portfolio.portfolioUrl}
-                    </p>
-                  )}
                 </div>
               </div>
             </CollapsibleSection>
@@ -806,7 +834,9 @@ export function DesignerPortfolioSettings() {
               >
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label className="text-sm font-medium mt-2 text-muted-foreground">Accent colour</Label>
+                    <Label className="text-sm font-medium mt-2 text-muted-foreground">
+                      Accent colour
+                    </Label>
                     <AccentColorDropdown
                       value={form.accentColor}
                       onChange={(hex) => updateField('accentColor', hex)}
@@ -814,11 +844,10 @@ export function DesignerPortfolioSettings() {
                   </div>
 
                   <div className="mt-7">
-                    <div className="flex items-center gap-2 rounded-xl border-l-4 border-primary bg-primary/5 px-4 py-3 ml-1">
-                      <Lightbulb className="size-4 shrink-0 text-primary" />
-                      <span className="text-sm font-semibold text-primary">Tip</span>
-                      <span className="text-[13px] text-muted-foreground">Your accent colour is used across buttons and highlights on your public portfolio.</span>
-                    </div>
+                    <TipCallout>
+                      Your accent colour is used across buttons and highlights on your public
+                      portfolio.
+                    </TipCallout>
                   </div>
                 </div>
               </div>
@@ -827,12 +856,10 @@ export function DesignerPortfolioSettings() {
             {/* Page sections */}
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-semibold text-foreground">
-                  Page sections
-                </h3>
+                <h3 className="text-xl font-semibold text-foreground">Page sections</h3>
                 <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">
-                  Toggle each section on or off. Configure content below the
-                  toggle — same items are pulled from settings page.
+                  Toggle each section on or off. Configure content below the toggle. Same items are
+                  pulled from settings page.
                 </p>
               </div>
 
@@ -872,9 +899,7 @@ export function DesignerPortfolioSettings() {
                               {isUploadingLogo ? (
                                 <Loader2 className="size-6 animate-spin" />
                               ) : (
-                                <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                                </svg>
+                                <ImagePlus className="size-6" aria-hidden />
                               )}
                             </button>
                           )}
@@ -890,13 +915,15 @@ export function DesignerPortfolioSettings() {
                             {isDeletingLogo ? (
                               <Loader2 className="size-2.5 animate-spin" />
                             ) : (
-                              <svg viewBox="0 0 24 24" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                              <X className="size-2.5" aria-hidden />
                             )}
                           </button>
                         )}
                       </div>
                       <div className="flex-1 space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">Studio name</Label>
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Studio name
+                        </Label>
                         <Input
                           value={form.displayName}
                           onChange={(e) => updateField('displayName', e.target.value)}
@@ -960,7 +987,8 @@ export function DesignerPortfolioSettings() {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Trust badges are awarded automatically as you publish projects and complete milestones.
+                      Trust badges are awarded automatically as you publish projects and complete
+                      milestones.
                     </p>
                   )}
                 </div>
@@ -971,7 +999,9 @@ export function DesignerPortfolioSettings() {
                 title="Featured testimonial"
                 subtitle="Their words – one client quote"
                 enabled={form.showFeaturedTestimonial}
-                onToggle={() => updateField('showFeaturedTestimonial', !form.showFeaturedTestimonial)}
+                onToggle={() =>
+                  updateField('showFeaturedTestimonial', !form.showFeaturedTestimonial)
+                }
                 expanded={sectionExpanded.testimonial}
                 onToggleExpanded={() => toggleExpanded('testimonial')}
               >
@@ -981,7 +1011,9 @@ export function DesignerPortfolioSettings() {
                 >
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-muted-foreground">Their words</Label>
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Their words
+                      </Label>
                       <Textarea
                         value={form.testimonialWords}
                         onChange={(e) => updateField('testimonialWords', e.target.value)}
@@ -1003,33 +1035,27 @@ export function DesignerPortfolioSettings() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">Project</Label>
-                        {projectsLoading ? (
-                          <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-muted/50 px-3">
-                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">Loading projects…</span>
-                          </div>
-                        ) : publishedProjects.length === 0 ? (
-                          <div className="flex h-10 items-center rounded-md border border-input bg-muted/30 px-3">
-                            <span className="text-sm text-muted-foreground">No published projects available</span>
-                          </div>
-                        ) : (
-                          <div className="relative">
-                            <select
-                              value={form.testimonialProjectId ?? ''}
-                              onChange={(e) => updateField('testimonialProjectId', e.target.value || null)}
-                              className="flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                              <option value="">No project selected</option>
-                              {publishedProjects.map((project) => (
-                                <option key={project.id} value={project.id}>
-                                  {project.title}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronsUpDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                          </div>
-                        )}
+                        <ProjectDropdown
+                          value={form.testimonialProjectId}
+                          onChange={(value) => updateField('testimonialProjectId', value)}
+                          options={testimonialProjectSelectOptions}
+                          placeholder={
+                            testimonialProjectsLoading ? 'Loading projects...' : 'Select a project'
+                          }
+                          disabled={
+                            testimonialProjectsLoading ||
+                            (testimonialProjectSelectOptions.length === 0 &&
+                              !form.testimonialProjectId)
+                          }
+                        />
+                        {testimonialProjectsError ? (
+                          <p className="text-xs text-destructive">{testimonialProjectsError}</p>
+                        ) : testimonialProjectSelectOptions.length === 0 &&
+                          !testimonialProjectsLoading ? (
+                          <p className="text-xs text-muted-foreground">
+                            Publish a project to feature it.
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1158,10 +1184,17 @@ export function DesignerPortfolioSettings() {
                             onClick={handleRefreshGoogle}
                             disabled={isRefreshingGoogle}
                           >
-                            <RefreshCw className={`size-3.5 ${isRefreshingGoogle ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                              className={`size-3.5 ${isRefreshingGoogle ? 'animate-spin' : ''}`}
+                            />
                             Refresh
                           </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={handleDisconnectGoogle}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleDisconnectGoogle}
+                          >
                             Disconnect
                           </Button>
                         </div>
@@ -1180,7 +1213,9 @@ export function DesignerPortfolioSettings() {
                           onClick={handleConnectGoogle}
                           disabled={isConnectingGoogle || !googleRef.trim()}
                         >
-                          {isConnectingGoogle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                          {isConnectingGoogle ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : null}
                           Connect
                         </Button>
                       </div>
@@ -1193,8 +1228,12 @@ export function DesignerPortfolioSettings() {
                     <div className="space-y-5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Show overall ratings on your profile</p>
-                          <p className="text-[13px] text-muted-foreground">Show Google rating in trust strip</p>
+                          <p className="text-sm font-medium text-foreground">
+                            Show overall ratings on your profile
+                          </p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Show Google rating in trust strip
+                          </p>
                         </div>
                         <Switch
                           checked={form.showGoogleOverallRating}
@@ -1205,8 +1244,12 @@ export function DesignerPortfolioSettings() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Show only reviews with over 4+ star ratings</p>
-                          <p className="text-[13px] text-muted-foreground">Show positive testimonials on your portfolio</p>
+                          <p className="text-sm font-medium text-foreground">
+                            Show only reviews with over 4+ star ratings
+                          </p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Show positive testimonials on your portfolio
+                          </p>
                         </div>
                         <Switch
                           checked={form.showGooglePositiveReviewsOnly}
@@ -1248,7 +1291,9 @@ export function DesignerPortfolioSettings() {
                     <div className="-mx-4 h-px w-[calc(100%+2rem)] bg-border" />
 
                     <div className="space-y-3">
-                      <Label className="text-sm font-medium text-muted-foreground">Social links</Label>
+                      <Label className="text-sm font-medium text-muted-foreground">
+                        Social links
+                      </Label>
                       <div className="flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm">
                         <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
                           <InstagramBrandIcon className="size-4" />
@@ -1302,7 +1347,8 @@ export function DesignerPortfolioSettings() {
                 >
                   <div className="space-y-4">
                     <p className="text-[15px] text-muted-foreground font-medium mt-1.5">
-                      Encourages visitors to copy and share your portfolio link. Uses your studio name, cover, and accent colour.
+                      Encourages visitors to copy and share your portfolio link. Uses your studio
+                      name, cover, and accent colour.
                     </p>
 
                     <div className="rounded-lg bg-muted p-4">
@@ -1316,8 +1362,12 @@ export function DesignerPortfolioSettings() {
 
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-foreground">Show Made with Tickif badge</p>
-                        <p className="text-[13px] text-muted-foreground">Show Made with Tickif badge on your profile</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Show Made with Tickif badge
+                        </p>
+                        <p className="text-[13px] text-muted-foreground">
+                          Show Made with Tickif badge on your profile
+                        </p>
                       </div>
                       <Switch
                         checked={form.showTickifBadge}
@@ -1336,10 +1386,10 @@ export function DesignerPortfolioSettings() {
           <div className="sticky top-6 flex w-full flex-col items-center gap-4">
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="size-4 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 4h7M14 9h7M14 15h7M14 20h7" />
-                </svg>
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Live preview</span>
+                <LayoutList className="size-4 text-muted-foreground" aria-hidden />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Live preview
+                </span>
               </div>
               {portfolio.portfolioUrl ? (
                 <a
@@ -1395,7 +1445,9 @@ export function DesignerPortfolioSettings() {
                       )}
                     </div>
                     <div>
-                      <div className="text-base font-semibold text-foreground">{form.displayName || 'Studio Meraki'}</div>
+                      <div className="text-base font-semibold text-foreground">
+                        {form.displayName || 'Studio Meraki'}
+                      </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
                         {form.tagline || previewUrl}
                       </div>
@@ -1419,8 +1471,9 @@ export function DesignerPortfolioSettings() {
                 </p>
                 <CopyLinkButton
                   value={copyUrl}
-                  variant="emphasis"
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#363940] to-[#1a1d23] py-3 text-sm font-medium text-white/90 shadow-[0_3px_10px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors hover:from-[#3e4148] hover:to-[#1f2228]"
+                  variant="fancy"
+                  size="fancy"
+                  className="mt-4 w-full cursor-pointer"
                 />
               </div>
             </Card>
@@ -1493,11 +1546,10 @@ function AccentColorDropdown({
   value: string;
   onChange: (hex: string) => void;
 }) {
-  const selected =
-    accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
-      name: 'Custom',
-      hex: value || '#FF8F73',
-    };
+  const selected = accentColors.find((c) => c.hex.toLowerCase() === value.toLowerCase()) ?? {
+    name: 'Custom',
+    hex: value || '#FF8F73',
+  };
 
   return (
     <DropdownMenu>
@@ -1537,6 +1589,104 @@ function AccentColorDropdown({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function ProjectDropdown({
+  disabled,
+  onChange,
+  options,
+  placeholder,
+  value,
+}: {
+  disabled?: boolean;
+  onChange: (value: string | null) => void;
+  options: TestimonialProjectOption[];
+  placeholder: string;
+  value: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find((option) => option.value === value);
+  const displayValue = selected?.label ?? placeholder;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+    : options;
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery('');
+  }
+
+  function handleSelect(nextValue: string | null) {
+    onChange(nextValue);
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium text-muted-foreground">Project</Label>
+      <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger
+          aria-label="Project"
+          disabled={disabled}
+          className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 text-left shadow-md transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span
+            className={cn(
+              'min-w-0 truncate text-sm font-medium',
+              selected ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {displayValue}
+          </span>
+          <ChevronsUpDown className="ml-3 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          sideOffset={4}
+          className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-md border border-border bg-background p-1 shadow-md"
+        >
+          <div className="p-1">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder="Search projects"
+              className="h-8 shadow-sm"
+            />
+          </div>
+          <DropdownMenuItem
+            onSelect={() => handleSelect(null)}
+            className={cn('justify-between px-3 py-2', !value && 'bg-accent/30')}
+          >
+            <span className="text-sm text-muted-foreground">{placeholder}</span>
+            {!value ? <Check className="size-4 text-primary" aria-hidden /> : null}
+          </DropdownMenuItem>
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onSelect={() => handleSelect(option.value)}
+                className={cn(
+                  'justify-between px-3 py-2',
+                  option.value === value && 'bg-accent/30',
+                )}
+              >
+                <span className="min-w-0 truncate text-sm text-foreground">{option.label}</span>
+                {option.value === value ? (
+                  <Check className="size-4 shrink-0 text-primary" aria-hidden />
+                ) : null}
+              </DropdownMenuItem>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No projects found</div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

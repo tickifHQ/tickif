@@ -24,6 +24,12 @@
   --foreground: oklch(0.21 0.006 286);
   --surface-subtle: #eef2f0;
   --surface-subtle-border: #e2e8e5;
+  --home-hero-gradient-from: #e8f0eb;
+  --home-hero-gradient-to: #fafaf8;
+  --home-search-background: #ffffff;
+  --home-search-border: rgba(45, 90, 61, 0.34);
+  --home-search-foreground-disabled: #a1a1aa;
+  --home-search-shadow: 0 16px 48px 0 rgba(45, 90, 61, 0.15), 0 0 0 0 #f0faf3;
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(1 0 0);
@@ -41,11 +47,14 @@
   --destructive: oklch(0.577 0.245 27);
   --destructive-foreground: oklch(0.985 0 0);
   --success: oklch(0.696 0.149 162);
+  --success-lighter: #e0faec;
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.758 0.159 56);
   --warning-foreground: oklch(0.3 0.04 56);
   --info: oklch(0.58 0.11 245);
   --info-foreground: oklch(0.985 0.01 245);
+  --feature: #7d52f4;
+  --feature-lighter: #efebff;
   --border: oklch(0.92 0.004 286);
   --input: oklch(0.92 0.004 286);
   --ring: oklch(0.616 0.116 170);
@@ -53,6 +62,19 @@
   --button-neutral-foreground: oklch(0.21 0.006 286);
   --button-neutral-hover: oklch(0.967 0.001 286);
   --button-neutral-shadow: 0 0 0 1px oklch(0 0 0 / 0.08), 0 1px 2px oklch(0 0 0 / 0.12);
+  --button-inverted: #27272a;
+  --button-inverted-foreground: oklch(1 0 0);
+  --button-inverted-hover: #18181b;
+  --button-inverted-shadow:
+    0 0 0 1px #18181b, 0 1px 2px oklch(0 0 0 / 0.4), inset 0 0.75px 0 oklch(1 0 0 / 0.2);
+  --button-fancy: #0e121b;
+  --button-fancy-foreground: oklch(1 0 0);
+  --button-fancy-hover: #181d27;
+  --button-fancy-border: oklch(1 0 0 / 0.12);
+  --button-fancy-background:
+    linear-gradient(180deg, oklch(1 0 0 / 0.16) 0%, oklch(1 0 0 / 0) 100%),
+    linear-gradient(90deg, var(--button-fancy) 0%, var(--button-fancy) 100%);
+  --button-fancy-shadow: 0 0 0 1px #242628, 0 1px 2px oklch(0.235 0.003 248 / 0.48);
 
   --chart-1: oklch(0.616 0.116 170);
   --chart-2: oklch(0.508 0.105 166);
@@ -67,6 +89,12 @@
   --foreground: oklch(0.985 0.001 286);
   --surface-subtle: oklch(0.23 0.012 170);
   --surface-subtle-border: oklch(0.3 0.012 170);
+  --home-hero-gradient-from: color-mix(in oklab, var(--primary) 12%, var(--background));
+  --home-hero-gradient-to: var(--background);
+  --home-search-background: var(--card);
+  --home-search-border: color-mix(in oklab, var(--primary) 34%, transparent);
+  --home-search-foreground-disabled: var(--muted-foreground);
+  --home-search-shadow: 0 16px 48px 0 oklch(0 0 0 / 0.25);
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
   --card: oklch(0.23 0.012 280);
@@ -84,14 +112,30 @@
   --destructive: oklch(0.704 0.191 22);
   --destructive-foreground: oklch(0.985 0 0);
   --success: oklch(0.72 0.15 163);
+  --success-lighter: color-mix(in oklab, var(--success) 18%, var(--card));
   --success-foreground: oklch(0.19 0.04 163);
   --warning: oklch(0.79 0.15 60);
   --warning-foreground: oklch(0.25 0.05 60);
   --info: oklch(0.7 0.105 245);
   --info-foreground: oklch(0.19 0.035 245);
+  --feature: #9f7dff;
+  --feature-lighter: color-mix(in oklab, var(--feature) 20%, var(--card));
   --border: oklch(0.3 0.006 286);
   --input: oklch(0.33 0.006 286);
   --ring: oklch(0.72 0.13 168);
+  --button-inverted: #27272a;
+  --button-inverted-foreground: oklch(1 0 0);
+  --button-inverted-hover: #18181b;
+  --button-inverted-shadow:
+    0 0 0 1px #18181b, 0 1px 2px oklch(0 0 0 / 0.4), inset 0 0.75px 0 oklch(1 0 0 / 0.2);
+  --button-fancy: #0e121b;
+  --button-fancy-foreground: oklch(1 0 0);
+  --button-fancy-hover: #181d27;
+  --button-fancy-border: oklch(1 0 0 / 0.12);
+  --button-fancy-background:
+    linear-gradient(180deg, oklch(1 0 0 / 0.16) 0%, oklch(1 0 0 / 0) 100%),
+    linear-gradient(90deg, var(--button-fancy) 0%, var(--button-fancy) 100%);
+  --button-fancy-shadow: 0 0 0 1px #242628, 0 1px 2px oklch(0.235 0.003 248 / 0.48);
 
   --chart-1: oklch(0.72 0.13 168);
   --chart-2: oklch(0.65 0.12 162);

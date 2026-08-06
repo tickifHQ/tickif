@@ -39,7 +39,11 @@ describe('LoginCard', () => {
     expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
   });
 
   it('renders segmented control with browsing and designer tabs', () => {
@@ -83,7 +87,9 @@ describe('LoginCard', () => {
 
   it('shows Google sign-in in browsing mode', () => {
     render(<LoginCard />);
-    expect(screen.getAllByRole('button', { name: /continue with google/i }).length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByRole('button', { name: /continue with google/i }).length,
+    ).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
@@ -100,11 +106,18 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     await user.click(screen.getByRole('tab', { name: /i'm a designer/i }));
     expect(screen.getByPlaceholderText('you@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Continue$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Login$/i })).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
+    );
   });
 
   it('calls Google signIn with origin callback in browsing mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
@@ -116,8 +129,14 @@ describe('LoginCard', () => {
   });
 
   it('sends completed visitors home after Google sign in', async () => {
-    window.localStorage.setItem('tickif.visitorOnboarding', JSON.stringify({ displayName: 'Mahi', city: 'chennai' }));
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    window.localStorage.setItem(
+      'tickif.visitorOnboarding',
+      JSON.stringify({ displayName: 'Mahi', address: '12 Studio Lane, Chennai' }),
+    );
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.click(screen.getByRole('button', { name: /continue with google/i }));
@@ -127,9 +146,11 @@ describe('LoginCard', () => {
     });
   });
 
-
   it('calls Google signIn with onboarding callback in designer mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard initialMode="designer" />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
@@ -147,7 +168,7 @@ describe('LoginCard', () => {
     render(<LoginCard initialMode="designer" />);
 
     await user.type(screen.getByPlaceholderText('you@example.com'), 'admin@tickif.com');
-    await user.click(screen.getByRole('button', { name: /^Continue$/ }));
+    await user.click(screen.getByRole('button', { name: /^Login$/ }));
     const inputs = await screen.findAllByRole('textbox');
     for (const [index, digit] of '123456'.split('').entries()) {
       await user.type(inputs[index]!, digit);
@@ -179,7 +200,7 @@ describe('LoginCard', () => {
     render(<LoginCard />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
     await user.click(googleButtons[0]!);
-    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't sign in with Google")).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
@@ -188,7 +209,7 @@ describe('LoginCard', () => {
     render(<LoginCard initialMode="designer" />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
     await user.click(googleButtons[googleButtons.length - 1]!);
-    expect(screen.getByText('Couldn\'t sign in with Google')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't sign in with Google")).toBeInTheDocument();
   });
 
   it('disables Send OTP button when phone is empty', () => {
@@ -196,11 +217,29 @@ describe('LoginCard', () => {
     expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
   });
 
-  it('disables Send OTP button when phone has fewer than 10 digits', async () => {
+  it('disables Send OTP button when the phone number is invalid', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);
     await user.type(screen.getByRole('textbox', { name: /phone/i }), '12345');
     expect(screen.getByRole('button', { name: 'Get OTP' })).toBeDisabled();
+  });
+
+  it('shows the selected dial code and sends a valid local number in E.164 format', async () => {
+    mock.sendOtp.mockResolvedValueOnce({ data: null, error: null });
+    const user = userEvent.setup();
+    render(<LoginCard />);
+
+    expect(screen.getByRole('button', { name: 'Country code, India +91' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Country code, India +91' }));
+    await user.type(screen.getByPlaceholderText('Search countries...'), 'Australia');
+    await user.click(screen.getByRole('menuitem', { name: /Australia/ }));
+    await user.type(screen.getByRole('textbox', { name: /phone/i }), '412345678');
+
+    expect(screen.getByRole('button', { name: 'Get OTP' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+
+    expect(mock.sendOtp).toHaveBeenCalledWith({ phoneNumber: '+61412345678' });
   });
 
   it('transitions to OTP step after successful send', async () => {
@@ -252,6 +291,42 @@ describe('LoginCard', () => {
       expect(screen.getAllByRole('textbox')).toHaveLength(6);
     });
 
+    it('renders the Figma verification layout without changing the six-digit OTP flow', async () => {
+      const user = userEvent.setup();
+      render(<LoginCard />);
+      await goToOtpStep(user);
+
+      const verification = screen.getByTestId('phone-otp-verification');
+      const digitInputs = screen.getAllByRole('textbox');
+
+      expect(verification.querySelector('.lucide-badge-check')).toBeInTheDocument();
+      expect(verification.querySelector('.lucide-mail')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Close verification' })).toBeInTheDocument();
+      expect(
+        screen.getByText('Enter verification code').closest('[data-slot="verification-header"]'),
+      ).toBeInTheDocument();
+      expect(
+        screen
+          .getByRole('button', { name: 'Continue' })
+          .closest('[data-slot="verification-footer"]'),
+      ).toBeInTheDocument();
+      expect(digitInputs).toHaveLength(6);
+      digitInputs.forEach((input) => {
+        expect(input).toHaveClass('h-18', 'rounded-xl', 'font-display', 'text-2xl');
+      });
+    });
+
+    it('returns to the phone form from the verification close button', async () => {
+      const user = userEvent.setup();
+      render(<LoginCard />);
+      await goToOtpStep(user);
+
+      await user.click(screen.getByRole('button', { name: 'Close verification' }));
+
+      expect(screen.getByRole('button', { name: 'Get OTP' })).toBeInTheDocument();
+      expect(screen.queryByTestId('phone-otp-verification')).not.toBeInTheDocument();
+    });
+
     it('shows the sent phone number', async () => {
       const user = userEvent.setup();
       render(<LoginCard />);
@@ -277,7 +352,10 @@ describe('LoginCard', () => {
     });
 
     it('shows error on verify failure', async () => {
-      mock.verify.mockResolvedValueOnce({ data: null, error: { message: 'Invalid or expired OTP' } });
+      mock.verify.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Invalid or expired OTP' },
+      });
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
@@ -290,7 +368,9 @@ describe('LoginCard', () => {
       const user = userEvent.setup();
       render(<LoginCard />);
       await goToOtpStep(user);
-      expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /continue with google/i }),
+      ).not.toBeInTheDocument();
     });
 
     it('returns to phone step on Cancel click', async () => {

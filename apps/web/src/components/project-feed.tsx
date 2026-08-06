@@ -17,7 +17,7 @@ export function ProjectFeed({ projects }: { projects: FeedProject[] }) {
   }
 
   return (
-    <div className="columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5">
+    <div className="columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6">
       {projects.map((project, index) => (
         <Fragment key={project.id}>
           {index === TRY_FILTER_INDEX && <TryFilterCard />}

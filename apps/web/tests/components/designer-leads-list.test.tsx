@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
 import { DesignerLeadsList } from '../../src/components/designer-leads-list';
@@ -14,7 +15,7 @@ vi.mock('next/navigation', () => ({
 const leads: ListLeadsResponse = {
   page: 1,
   limit: 12,
-  total: 2,
+  total: 3,
   totalPages: 1,
   items: [
     {
@@ -37,6 +38,16 @@ const leads: ListLeadsResponse = {
       status: 'closed',
       receivedAt: '2025-12-22T00:00:00.000Z',
     },
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      name: 'Ananya Mehta',
+      city: 'Mumbai',
+      referredProjectTitle: '2BHK Apartment in Bandra',
+      contactNumber: '+91 9000000101',
+      budgetBand: '₹10-15L',
+      status: 'spam',
+      receivedAt: '2025-12-20T00:00:00.000Z',
+    },
   ],
 };
 
@@ -50,22 +61,56 @@ const selectedLead: LeadDetailResponse = {
 };
 
 describe('DesignerLeadsList', () => {
-  it('renders lead filters and API rows without exposing backend status copy', () => {
+  it('renders lead filters, API rows, and passive response status chips', () => {
     render(<DesignerLeadsList leads={leads} activeStatus="all" />);
 
-    expect(screen.getByRole('link', { name: /all 2/i })).toHaveAttribute('href', '/designer/leads?page=1');
-    expect(screen.getByRole('link', { name: /contacted/i })).toHaveAttribute('href', '/designer/leads?status=contacted&page=1');
+    expect(screen.getByRole('link', { name: /all 3/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?page=1',
+    );
+    expect(screen.getByRole('link', { name: /contacted/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?status=contacted&page=1',
+    );
+    expect(screen.getByRole('link', { name: /new lead/i })).toHaveAttribute(
+      'href',
+      '/designer/leads?status=new&page=1',
+    );
     expect(screen.getByText('Priya Krishnan')).toBeInTheDocument();
     expect(screen.getAllByText('4BHK Villa in OMR').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/mark as/i).length).toBeGreaterThan(0);
+    const responseChips = screen
+      .getAllByText(/^(Contacted|Closed|Spam)$/)
+      .filter((element) => element.getAttribute('data-slot') === 'badge');
+    expect(responseChips.map((chip) => chip.textContent)).toEqual(['Contacted', 'Closed', 'Spam']);
+    expect(screen.queryByText(/mark as/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/backend is not available/i)).not.toBeInTheDocument();
   });
 
   it('shows an empty state for an empty API page', () => {
-    render(<DesignerLeadsList leads={{ ...leads, items: [], total: 0, totalPages: 1 }} activeStatus="closed" query="rahul" />);
+    render(
+      <DesignerLeadsList
+        leads={{ ...leads, items: [], total: 0, totalPages: 1 }}
+        activeStatus="closed"
+        query="rahul"
+      />,
+    );
 
     expect(screen.getByText(/no leads found/i)).toBeInTheDocument();
     expect(screen.getByText(/try a different search/i)).toBeInTheDocument();
+  });
+
+  it('uses contact and archive icons in the lead action menu', async () => {
+    const user = userEvent.setup();
+    render(<DesignerLeadsList leads={leads} activeStatus="all" />);
+
+    await user.click(screen.getByRole('button', { name: /more actions for priya krishnan/i }));
+
+    expect(
+      screen.getByRole('menuitem', { name: /mark as contacted/i }).querySelector('.lucide-contact'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /mark as spam/i }).querySelector('.lucide-archive-x'),
+    ).toBeInTheDocument();
   });
 
   it('labels the lead detail dialog for assistive technology', () => {
@@ -73,5 +118,19 @@ describe('DesignerLeadsList', () => {
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
     expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
+      'h-10',
+      'bg-button-inverted',
+      'text-button-inverted-foreground',
+    );
+  });
+
+  it('focuses lead search when pressing the slash shortcut', async () => {
+    const user = userEvent.setup();
+    render(<DesignerLeadsList leads={leads} activeStatus="all" />);
+
+    await user.keyboard('/');
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
   });
 });

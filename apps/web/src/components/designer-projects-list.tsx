@@ -189,7 +189,7 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
 function ProjectTypeBadge({ label }: { label: string | null }) {
   const normalizedLabel = label?.toLowerCase() ?? '';
   const className = normalizedLabel.includes('villa')
-    ? 'bg-secondary text-secondary-foreground'
+    ? 'bg-feature-lighter text-feature'
     : normalizedLabel.includes('apartment')
       ? 'bg-info/10 text-info'
       : 'bg-info/10 text-info';
@@ -197,7 +197,10 @@ function ProjectTypeBadge({ label }: { label: string | null }) {
   return (
     <Badge
       variant="secondary"
-      className={cn('rounded-full border-transparent px-2.5 py-1 text-[13px]', className)}
+      className={cn(
+        'rounded-full border-transparent px-2.5 py-1 text-[13px] font-medium leading-[1.1]',
+        className,
+      )}
     >
       {label ?? 'Project'}
     </Badge>

@@ -1,10 +1,11 @@
 import type {
-  PortfolioResponse,
-  UpdatePortfolioInput,
-  SlugAvailabilityResponse,
-  UploadLogoResponse,
   GoogleReviewsResponse,
   ListProjectsResponse,
+  PortfolioProjectsResponse,
+  PortfolioResponse,
+  SlugAvailabilityResponse,
+  UpdatePortfolioInput,
+  UploadLogoResponse,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 
@@ -94,6 +95,14 @@ export async function updatePortfolio(input: UpdatePortfolioInput): Promise<Port
     json: input,
   });
   return handleResponse<PortfolioResponse>(response, 'Could not save portfolio settings.');
+}
+
+/** GET /api/projects/portfolio — published projects available for portfolio sections. */
+export async function fetchPortfolioProjects(): Promise<PortfolioProjectsResponse> {
+  const response = await api.api.projects.portfolio.$get({
+    query: { status: 'published', page: 1, limit: 50, sort: 'title' },
+  });
+  return handleResponse<PortfolioProjectsResponse>(response, 'Could not load portfolio projects.');
 }
 
 // ---------------------------------------------------------------------------

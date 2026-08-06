@@ -10,12 +10,6 @@ export const metadata = {
   title: 'Onboarding · Tickif',
 };
 
-function initialsForName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const initials = parts.length > 1 ? `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}` : parts[0]?.slice(0, 2) ?? 'TI';
-  return initials.toUpperCase();
-}
-
 export default async function VisitorOnboardingPage() {
   const session = await requireAuth();
 
@@ -28,14 +22,19 @@ export default async function VisitorOnboardingPage() {
     redirect('/');
   }
 
-  const displayName = session.user.name?.trim() || 'Mahi Interiors';
-  const signedInAs = session.user.email?.trim() || displayName;
-  const initials = initialsForName(displayName);
+  const phoneNumber = session.user.phoneNumber?.trim() ?? '';
+  const sessionName = session.user.name?.trim() ?? '';
+  const displayName = sessionName === phoneNumber ? '' : sessionName;
+  const signedInAs = phoneNumber || session.user.email?.trim() || displayName;
 
   return (
     <main className="grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(420px,600px)]">
       <section className="flex min-h-screen items-center justify-center px-6 py-12">
-        <VisitorOnboardingForm displayName={displayName} signedInAs={signedInAs} initials={initials} />
+        <VisitorOnboardingForm
+          displayName={displayName}
+          signedInAs={signedInAs}
+          initialPhoneNumber={phoneNumber}
+        />
       </section>
 
       <aside className="relative hidden min-h-screen overflow-hidden border-l border-border bg-card lg:block">

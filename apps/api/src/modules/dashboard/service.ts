@@ -1,7 +1,7 @@
 import type { ProfileDashboardResponse } from '@repo/contracts';
-import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
+import { publicPortfolioUrl } from '../profiles/portfolio-service.js';
 import { profilesService } from '../profiles/service.js';
 import { dashboardRepository, type ProjectStatusCount } from './repository.js';
 
@@ -9,10 +9,6 @@ type OverviewInput = {
   userId: string;
   orgId: string | null;
 };
-
-function shareUrl(orgSlug: string): string {
-  return new URL(`/d/${orgSlug}`, config.PUBLIC_WEB_URL).toString();
-}
 
 function countProjectBucket(
   counts: ProjectStatusCount[],
@@ -61,7 +57,7 @@ export const dashboardService = {
         total: leadCounts.total,
         new: leadCounts.new,
       },
-      shareUrl: shareUrl(profile.orgSlug),
+      shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.orgSlug),
     };
   },
 };

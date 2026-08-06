@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { ListProjectsResponse } from '@repo/contracts';
 import { DesignerProjectsList } from '../../src/components/designer-projects-list';
@@ -123,5 +124,22 @@ describe('DesignerProjectsList', () => {
       'href',
       '/designer/projects/new',
     );
+  });
+
+  it('focuses project search when pressing the slash shortcut', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    await user.keyboard('/');
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
+  });
+
+  it('focuses project search when the browser reports the slash key by code', () => {
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    fireEvent.keyDown(window, { key: 'Slash', code: 'Slash' });
+
+    expect(screen.getByPlaceholderText('Search')).toHaveFocus();
   });
 });
