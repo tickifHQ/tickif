@@ -23,7 +23,7 @@ const listRoute = createRoute({
       content: { 'application/json': { schema: listTaxonomyResponseSchema } },
     },
     422: {
-      description: 'Invalid parentId format',
+      description: 'Invalid taxonomy kind or parentId format',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -32,8 +32,8 @@ const listRoute = createRoute({
 export const taxonomyRoutes = new OpenAPIHono({ defaultHook: validationHook }).openapi(listRoute, async (c) => {
   const { kind, parentId } = c.req.valid('query');
   const result = await taxonomyService.list(kind, parentId);
-  // Only long-cache non-empty results. Empty responses (unknown kind, unseeded
-  // kind) get a short cache so later seeds surface without waiting 7 days.
+  // Only long-cache non-empty results. Empty responses get a short cache so
+  // later seeds surface without waiting 7 days.
   if (result.terms.length > 0) {
     c.header('Cache-Control', CACHE_CONTROL);
   } else {

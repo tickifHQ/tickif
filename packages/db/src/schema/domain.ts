@@ -15,6 +15,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { TAXONOMY_KIND_VALUES } from '@repo/contracts';
 import { user, organization } from './auth.js';
 
 /**
@@ -87,23 +88,7 @@ export const reviewModerationActionEnum = pgEnum('review_moderation_action', [
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
-export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
-  'city',
-  'locality',
-  'property_type',
-  'property_subtype',
-  'bhk',
-  'room',
-  'scope',
-  'theme',
-  'budget_band',
-  // E-124: per-room attribute vocabularies
-  'material',
-  'finish',
-  'layout',
-  'palette',
-  'size_band',
-]);
+export const taxonomyKindEnum = pgEnum('taxonomy_kind', TAXONOMY_KIND_VALUES);
 
 export const taxonomy = pgTable(
   'taxonomy',
