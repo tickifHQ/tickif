@@ -15,12 +15,11 @@ import { mediaRepository, type ProjectImageListItem } from './repository.js';
 /** The authenticated caller, as resolved by the route from the session. */
 export type Caller = { userId: string; userRole: string };
 
-function pickDerivativeKey(
-  row: ProjectImageListItem,
-  variants: string[],
-): string | null {
+function pickDerivativeKey(row: ProjectImageListItem, variants: string[]): string | null {
   for (const variant of variants) {
-    const webp = row.derivatives.find((derivative) => derivative.variant === variant && derivative.format === 'webp');
+    const webp = row.derivatives.find(
+      (derivative) => derivative.variant === variant && derivative.format === 'webp',
+    );
     if (webp) return webp.key;
 
     const fallback = row.derivatives.find((derivative) => derivative.variant === variant);
@@ -35,10 +34,7 @@ function pickPreviewDerivative(row: ProjectImageListItem): string | null {
 }
 
 function pickViewerDerivative(row: ProjectImageListItem): string | null {
-  return (
-    pickDerivativeKey(row, ['large', 'medium', 'small']) ??
-    null
-  );
+  return pickDerivativeKey(row, ['large', 'medium', 'small']) ?? null;
 }
 
 async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
@@ -73,8 +69,10 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
 }
 
 function assertEditableProject(status: string): void {
-  if (status !== 'draft' && status !== 'changes_requested') {
-    throw AppError.conflict('Only draft or changes-requested project media can be edited');
+  if (status !== 'draft' && status !== 'changes_requested' && status !== 'rejected') {
+    throw AppError.conflict(
+      'Only draft, changes-requested, or rejected project media can be edited',
+    );
   }
 }
 

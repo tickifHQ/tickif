@@ -23,6 +23,7 @@ import {
   projectIdParamSchema,
   projectRoomIdParamSchema,
   projectRoomSchema,
+  projectReviewCommentsResponseSchema,
   projectSlugParamSchema,
   publicProjectBySlugResponseSchema,
   reorderProjectRoomsSchema,
@@ -458,6 +459,25 @@ const moderationHistoryRoute = createRoute({
   },
 });
 
+const reviewCommentsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/review-comments',
+  tags: ['Projects'],
+  summary: 'List review comments for an owned project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Project review comments',
+      content: { 'application/json': { schema: projectReviewCommentsResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot read these review comments'),
+    404: errorJson('Project not found'),
+  },
+});
+
 export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -621,6 +641,11 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(moderationHistoryRoute, async (c) => {
     const { id } = c.req.valid('param');
     const result = await projectsService.moderationHistory(id, caller(c.get('user')));
+    return c.json(result, 200);
+  })
+  .openapi(reviewCommentsRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.reviewComments(id, caller(c.get('user')));
     return c.json(result, 200);
   })
   // --- Public read endpoints (E-195) ---

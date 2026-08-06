@@ -46,10 +46,13 @@ export async function findProjectSearchSource(
         budgetBandSlug: schema.project.budgetBandSlug,
         sizeSqft: schema.project.sizeSqft,
         publishedAt: schema.project.publishedAt,
+        featuredAt: schema.project.featuredAt,
       },
       designer: {
         slug: schema.organization.slug,
         displayName: schema.designerProfile.displayName,
+        avgRating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
       },
       cover: {
         id: cover.id,

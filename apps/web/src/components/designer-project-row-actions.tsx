@@ -4,7 +4,11 @@ import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ProjectStatus } from '@repo/contracts';
-import { deleteProjectResponseSchema, duplicateProjectResponseSchema } from '@repo/contracts';
+import {
+  deleteProjectResponseSchema,
+  duplicateProjectResponseSchema,
+  projectDetailResponseSchema,
+} from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import {
   Dialog,
@@ -21,11 +25,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
-import { Copy, ExternalLink, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, MoreVertical, Pencil, Trash2, Undo2 } from 'lucide-react';
 import { api } from '@/lib/api';
 
 function canDeleteProject(status: ProjectStatus) {
   return status === 'draft' || status === 'changes_requested';
+}
+
+function canWithdrawProject(status: ProjectStatus) {
+  return status === 'submitted';
 }
 
 export function DesignerProjectRowActions({
@@ -41,17 +49,25 @@ export function DesignerProjectRowActions({
   const [isPending, startTransition] = useTransition();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const openDeleteAfterMenuCloseRef = useRef(false);
+  // Radix traps focus in the menu, so opening a dialog from a menu item has to
+  // wait until the menu has finished closing. Holds which dialog to open next.
+  const pendingDialogRef = useRef<'delete' | 'withdraw' | null>(null);
   const refreshAfterDeleteRef = useRef(false);
   const deleteEnabled = canDeleteProject(projectStatus);
+  const withdrawEnabled = canWithdrawProject(projectStatus);
 
   function handleMenuOpenChange(open: boolean) {
     setMenuOpen(open);
-    if (open || !openDeleteAfterMenuCloseRef.current) return;
+    if (open || !pendingDialogRef.current) return;
 
-    openDeleteAfterMenuCloseRef.current = false;
-    window.setTimeout(() => setDeleteOpen(true), 0);
+    const pending = pendingDialogRef.current;
+    pendingDialogRef.current = null;
+    window.setTimeout(() => {
+      if (pending === 'delete') setDeleteOpen(true);
+      else setWithdrawOpen(true);
+    }, 0);
   }
 
   function duplicateProject() {
@@ -93,6 +109,27 @@ export function DesignerProjectRowActions({
         setDeleteOpen(false);
       } catch {
         setError('Could not delete project.');
+      }
+    });
+  }
+
+  function withdrawProject() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const response = await api.api.projects[':id'].withdraw.$post({ param: { id: projectId } });
+        const payload: unknown = await response.json();
+        const parsed = projectDetailResponseSchema.safeParse(payload);
+
+        if (!response.ok || !parsed.success) {
+          setError('Could not withdraw project.');
+          return;
+        }
+
+        setWithdrawOpen(false);
+        router.refresh();
+      } catch {
+        setError('Could not withdraw project.');
       }
     });
   }
@@ -139,12 +176,25 @@ export function DesignerProjectRowActions({
             <ExternalLink className="size-4" />
             View public
           </DropdownMenuItem>
+          {withdrawEnabled ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => {
+                  pendingDialogRef.current = 'withdraw';
+                }}
+              >
+                <Undo2 className="size-4" />
+                Withdraw submission
+              </DropdownMenuItem>
+            </>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
             disabled={!deleteEnabled}
             onSelect={() => {
-              if (deleteEnabled) openDeleteAfterMenuCloseRef.current = true;
+              if (deleteEnabled) pendingDialogRef.current = 'delete';
             }}
           >
             <Trash2 className="size-4" />
@@ -184,6 +234,31 @@ export function DesignerProjectRowActions({
               onClick={deleteProject}
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw this submission?</DialogTitle>
+            <DialogDescription>
+              “{projectTitle}” will return to Drafts so you can make changes before submitting it
+              again.
+            </DialogDescription>
+          </DialogHeader>
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => setWithdrawOpen(false)}
+            >
+              Keep submitted
+            </Button>
+            <Button type="button" disabled={isPending} onClick={withdrawProject}>
+              {isPending ? 'Withdrawing…' : 'Withdraw submission'}
             </Button>
           </DialogFooter>
         </DialogContent>

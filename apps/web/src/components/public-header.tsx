@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
@@ -76,7 +77,8 @@ function getListYourWorkHref({
     return '/login?mode=designer';
   }
 
-  if (userRole === 'designer' || userRole === 'admin' || userRole === 'superadmin') {
+  const parsedRole = platformRoleSchema.safeParse(userRole);
+  if (parsedRole.success && parsedRole.data !== PLATFORM_ROLE.VISITOR) {
     return '/designer/dashboard';
   }
 

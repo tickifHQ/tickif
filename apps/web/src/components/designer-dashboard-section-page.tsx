@@ -163,44 +163,6 @@ const pageConfigs = {
       { label: 'Recommended action', value: 'Add more projects' },
     ],
   },
-  'terms-roles': {
-    eyebrow: 'Teams & Roles',
-    title: 'Manage your studio team and roles',
-    description:
-      'View how team access and responsibilities will be managed for your designer workspace.',
-    icon: UsersRound,
-    badge: 'Workspace owner',
-    primaryAction: { label: 'Update profile', href: '/designer/profile' },
-    secondaryAction: { label: 'Contact support', href: 'mailto:support@tickif.in' },
-    metrics: [
-      { label: 'Admins', value: '1', helper: 'Workspace owner' },
-      { label: 'Roles', value: 'Owner', helper: 'Current access' },
-      { label: 'Invitations', value: 'Not available', helper: 'Coming soon' },
-    ],
-    sections: [
-      {
-        title: 'Workspace roles',
-        description:
-          'Keep ownership and team responsibilities clear before adding more collaborators.',
-        icon: UsersRound,
-      },
-      {
-        title: 'Team access',
-        description: 'Manage who can access this studio and what they are responsible for.',
-        icon: UsersRound,
-      },
-      {
-        title: 'Support handoff',
-        description: 'Escalate account or policy changes to Tickif support when needed.',
-        icon: ShieldCheck,
-      },
-    ],
-    timeline: [
-      { label: 'Current role', value: 'Owner' },
-      { label: 'Team support', value: 'Phase 2' },
-      { label: 'Team management', value: 'Coming soon' },
-    ],
-  },
   'plan-billing': {
     eyebrow: 'Plan & billing',
     title: 'Track plan access and billing readiness',

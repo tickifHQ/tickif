@@ -25,6 +25,8 @@ import type {
   PortfolioProjectStatusCounts,
   PortfolioProjectStatusGroup,
   ProjectResponse,
+  ProjectReviewComment,
+  ProjectReviewCommentsResponse,
   PublicProjectBySlugResponse,
   ListProjectsResponse,
   ProjectRoom,
@@ -48,6 +50,7 @@ import {
   type ProjectModerationEventRecord,
   type ProjectOwnership,
   type ProjectRecord,
+  type ProjectReviewCommentRecord,
   type ProjectRoomRecord,
   type ProjectStatusCountRecord,
   type TaxonomyKind,
@@ -62,7 +65,22 @@ import {
 const REQUIRED_PROJECT_PHOTO_COUNT = 3;
 const PHOTO_COMPLETENESS_KEYS = new Set(['at-least-three-photos', 'image-metadata']);
 
-function toResponse(row: ProjectRecord): ProjectResponse {
+function toReviewComment(row: ProjectReviewCommentRecord): ProjectReviewComment {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    authorLabel: 'Tickif Review Team',
+    body: row.body,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toResponse(
+  row: ProjectRecord,
+  reviewComments: ProjectReviewComment[] = [],
+): ProjectResponse {
   return {
     id: row.id,
     designerId: row.designerId,
@@ -70,6 +88,8 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     slug: row.slug,
     description: row.description,
     status: row.status,
+    rejectionReasonCode: row.rejectionReasonCode,
+    moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
     propertySubtypeSlug: row.propertySubtypeSlug,
     scopeSlug: row.scopeSlug,
@@ -85,6 +105,7 @@ function toResponse(row: ProjectRecord): ProjectResponse {
     metadata: row.metadata ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     submittedAt: row.submittedAt?.toISOString() ?? null,
+    reviewComments,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -104,9 +125,13 @@ function toRoomResponse(row: ProjectRoomRecord): ProjectRoom {
   };
 }
 
-function toDetailResponse(row: ProjectRecord, rooms: ProjectRoomRecord[]): ProjectDetailResponse {
+function toDetailResponse(
+  row: ProjectRecord,
+  rooms: ProjectRoomRecord[],
+  reviewComments: ProjectReviewComment[] = [],
+): ProjectDetailResponse {
   return {
-    ...toResponse(row),
+    ...toResponse(row, reviewComments),
     rooms: rooms.map(toRoomResponse),
   };
 }
@@ -141,7 +166,9 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
 
 function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
+    ) ??
     derivatives.find((derivative) => derivative.variant === 'thumb') ??
     derivatives[0] ??
     null
@@ -237,7 +264,7 @@ function toDesignerProjectCard(
   coverImageUrl: string | null,
 ): DesignerProjectCard {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
-    slug ? labels.get(`${kind}:${slug}`) ?? null : null;
+    slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
 
   // "4 BHK · Apartment" — either part may be missing.
   const propertyType =
@@ -274,7 +301,11 @@ function feedLocalityPairs(
     : [];
 }
 
-function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | null): ProjectListItem {
+function toListItemFields(
+  row: ProjectListItemRecord,
+  coverImageUrl: string | null,
+  reviewComments: ProjectReviewComment[],
+): ProjectListItem {
   return {
     id: row.id,
     slug: row.slug,
@@ -283,7 +314,10 @@ function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | nu
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
+    rejectionReasonCode: row.rejectionReasonCode,
+    moderationNote: row.moderationNote,
     coverImageUrl,
+    reviewComments,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -292,14 +326,16 @@ function toListItemFields(row: ProjectListItemRecord, coverImageUrl: string | nu
 async function toListItem(
   row: ProjectListItemRecord,
   coverImages: Map<string, ProjectCoverImageRecord>,
+  reviewComments: Map<string, ProjectReviewComment[]>,
 ): Promise<ProjectListItem> {
   const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
-  return toListItemFields(row, await coverImageUrl(cover));
+  return toListItemFields(row, await coverImageUrl(cover), reviewComments.get(row.id) ?? []);
 }
 
 async function toPortfolioItem(
   row: ProjectListItemRecord,
   coverImages: Map<string, ProjectCoverImageRecord>,
+  reviewComments: Map<string, ProjectReviewComment[]>,
 ): Promise<PortfolioProjectItem> {
   const cover = row.coverImageId ? coverImages.get(row.coverImageId) : undefined;
   const preview =
@@ -309,17 +345,30 @@ async function toPortfolioItem(
   const url = preview ? await presignDownload({ key: preview.key }) : null;
 
   return {
-    ...toListItemFields(row, url),
+    ...toListItemFields(row, url, reviewComments.get(row.id) ?? []),
     statusGroup: portfolioStatusGroup(row.status),
-    coverImage: cover && preview && url
-      ? {
-          id: cover.id,
-          url,
-          width: preview.width,
-          height: preview.height,
-        }
-      : null,
+    coverImage:
+      cover && preview && url
+        ? {
+            id: cover.id,
+            url,
+            width: preview.width,
+            height: preview.height,
+          }
+        : null,
   };
+}
+
+function groupReviewComments(
+  rows: ProjectReviewCommentRecord[],
+): Map<string, ProjectReviewComment[]> {
+  const grouped = new Map<string, ProjectReviewComment[]>();
+  for (const row of rows) {
+    const comments = grouped.get(row.projectId) ?? [];
+    comments.push(toReviewComment(row));
+    grouped.set(row.projectId, comments);
+  }
+  return grouped;
 }
 
 function portfolioStatusGroup(status: ProjectStatus): PortfolioProjectStatusGroup {
@@ -370,6 +419,7 @@ const transitionRules: TransitionRule[] = [
     toStatus: 'submitted',
     action: 'resubmit',
   },
+  { actorRole: 'designer', fromStatus: 'rejected', toStatus: 'submitted', action: 'resubmit' },
   { actorRole: 'designer', fromStatus: 'submitted', toStatus: 'draft', action: 'withdraw' },
   { actorRole: 'admin', fromStatus: 'submitted', toStatus: 'in_review', action: 'start_review' },
   { actorRole: 'admin', fromStatus: 'in_review', toStatus: 'published', action: 'publish' },
@@ -444,6 +494,7 @@ export async function transitionProject(
     reasonCode?: string | null;
     patch?: Parameters<typeof projectsRepository.transition>[0]['patch'];
     expectedModerationRevision?: number;
+    requireNoUnresolvedReviewComments?: boolean;
   },
   caller: TransitionCaller,
 ): Promise<ProjectRecord> {
@@ -461,7 +512,11 @@ export async function transitionProject(
     reasonCode: input.reasonCode,
     patch: input.patch,
     expectedModerationRevision: input.expectedModerationRevision,
+    requireNoUnresolvedReviewComments: input.requireNoUnresolvedReviewComments,
   });
+  if (transitioned === 'unresolved_review_comments') {
+    throw AppError.conflict('Resolve outstanding review comments before publishing');
+  }
   if (!transitioned) throw AppError.invalidTransition();
   return transitioned;
 }
@@ -497,7 +552,7 @@ function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
 }
 
 function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
-  return status === 'draft' || status === 'changes_requested';
+  return status === 'draft' || status === 'changes_requested' || status === 'rejected';
 }
 
 async function requireEditableProject(
@@ -773,7 +828,7 @@ async function duplicateWithUniqueSlug(
 }
 
 function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] | undefined {
-  if (status === 'draft') return ['draft', 'changes_requested'];
+  if (status === 'draft') return ['draft', 'changes_requested', 'rejected'];
   if (status === 'in_review') return ['submitted', 'in_review'];
   if (status === 'published') return ['published'];
   return undefined;
@@ -880,12 +935,18 @@ export const projectsService = {
       offset: (page - 1) * limit,
       sort: query.sort,
     });
-    const coverImages = await projectsRepository.findCoverImages(
-      items.map((project) => project.coverImageId).filter((id): id is string => !!id),
-    );
+    const [coverImages, reviewCommentRows] = await Promise.all([
+      projectsRepository.findCoverImages(
+        items.map((project) => project.coverImageId).filter((id): id is string => !!id),
+      ),
+      projectsRepository.listUnresolvedReviewComments(
+        items.filter((project) => project.status === 'changes_requested').map(({ id }) => id),
+      ),
+    ]);
+    const reviewComments = groupReviewComments(reviewCommentRows);
 
     return {
-      items: await Promise.all(items.map((item) => toListItem(item, coverImages))),
+      items: await Promise.all(items.map((item) => toListItem(item, coverImages, reviewComments))),
       page,
       total,
       limit,
@@ -917,12 +978,20 @@ export const projectsService = {
         activeOrgId,
       }),
     ]);
-    const coverImages = await projectsRepository.findCoverImages(
-      items.map((project) => project.coverImageId).filter((id): id is string => !!id),
-    );
+    const [coverImages, reviewCommentRows] = await Promise.all([
+      projectsRepository.findCoverImages(
+        items.map((project) => project.coverImageId).filter((id): id is string => !!id),
+      ),
+      projectsRepository.listUnresolvedReviewComments(
+        items.filter((project) => project.status === 'changes_requested').map(({ id }) => id),
+      ),
+    ]);
+    const reviewComments = groupReviewComments(reviewCommentRows);
 
     return {
-      items: await Promise.all(items.map((item) => toPortfolioItem(item, coverImages))),
+      items: await Promise.all(
+        items.map((item) => toPortfolioItem(item, coverImages, reviewComments)),
+      ),
       statusCounts: buildPortfolioStatusCounts(statusCounts),
       page,
       total,
@@ -974,7 +1043,11 @@ export const projectsService = {
       await assertAccess(ownership, caller);
     }
 
-    return toDetailResponse(row.project, row.rooms);
+    const reviewComments =
+      row.project.status === 'changes_requested'
+        ? await projectsRepository.listUnresolvedReviewComments([id])
+        : [];
+    return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {
@@ -1144,7 +1217,11 @@ export const projectsService = {
     const action = assertTransition(project.status, 'submitted', caller.userRole);
     // Narrows `project.status` for `expectedStatus` below. The matrix already rejects
     // every other source status, so this is a type guard rather than a second rule.
-    if (project.status !== 'draft' && project.status !== 'changes_requested') {
+    if (
+      project.status !== 'draft' &&
+      project.status !== 'changes_requested' &&
+      project.status !== 'rejected'
+    ) {
       throw AppError.invalidTransition();
     }
 
@@ -1203,16 +1280,25 @@ export const projectsService = {
     return toDetailResponse(withdrawn, await projectsRepository.listRooms(projectId));
   },
 
-  async moderationHistory(
-    projectId: string,
-    caller: Caller,
-  ): Promise<ModerationHistoryResponse> {
+  async moderationHistory(projectId: string, caller: Caller): Promise<ModerationHistoryResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
 
     const events = await projectsRepository.listModerationHistory(projectId);
     return { items: events.map(toModerationHistoryItem) };
+  },
+
+  async reviewComments(
+    projectId: string,
+    caller: Caller,
+  ): Promise<ProjectReviewCommentsResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+
+    const comments = await projectsRepository.listReviewComments(projectId);
+    return { items: comments.map(toReviewComment) };
   },
 
   /** Public gallery: returns presigned URLs for all ready images of a published project. */

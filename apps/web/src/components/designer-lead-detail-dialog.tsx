@@ -200,6 +200,9 @@ export function DesignerLeadDetailDialog({
                     <div className="mt-1 truncate text-sm text-muted-foreground">
                       {lead.city ?? 'Location not added'}
                     </div>
+                    <div className="mt-1 truncate text-sm text-muted-foreground">
+                      {lead.city ?? 'Location not added'}
+                    </div>
                   </div>
                 </div>
               </div>

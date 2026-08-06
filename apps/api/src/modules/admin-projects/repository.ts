@@ -29,6 +29,11 @@ export type AdminQueueRecord = Pick<
 export type AdminImageRecord = typeof schema.projectImage.$inferSelect;
 export type AdminRoomRecord = typeof schema.projectRoom.$inferSelect;
 export type AdminModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
+export type AdminReviewCommentRecord = typeof schema.projectReviewComment.$inferSelect;
+export type AdminReviewCommentMutationResult =
+  | AdminReviewCommentRecord
+  | 'project_changed'
+  | null;
 
 type CorrectionPatch = Omit<AdminCorrectProjectInput, 'featuredAt'> & {
   featuredAt?: Date | null;
@@ -172,6 +177,94 @@ export const adminProjectsRepository = {
       .from(schema.projectModerationEvent)
       .where(eq(schema.projectModerationEvent.projectId, projectId))
       .orderBy(asc(schema.projectModerationEvent.createdAt), asc(schema.projectModerationEvent.id));
+  },
+
+  async listReviewComments(projectId: string): Promise<AdminReviewCommentRecord[]> {
+    return db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(eq(schema.projectReviewComment.projectId, projectId))
+      .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
+  },
+
+  async hasUnresolvedReviewComments(projectId: string): Promise<boolean> {
+    const [comment] = await db
+      .select({ id: schema.projectReviewComment.id })
+      .from(schema.projectReviewComment)
+      .where(
+        and(
+          eq(schema.projectReviewComment.projectId, projectId),
+          eq(schema.projectReviewComment.status, 'unresolved'),
+        ),
+      )
+      .limit(1);
+    return !!comment;
+  },
+
+  async createReviewComment(input: {
+    projectId: string;
+    authorId: string;
+    body: string;
+    expectedStatus: 'submitted' | 'in_review';
+    expectedReviewerId: string | null;
+  }): Promise<AdminReviewCommentMutationResult> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ status: schema.project.status, reviewedBy: schema.project.reviewedBy })
+        .from(schema.project)
+        .where(eq(schema.project.id, input.projectId))
+        .for('update')
+        .limit(1);
+      if (
+        !project ||
+        project.status !== input.expectedStatus ||
+        project.reviewedBy !== input.expectedReviewerId
+      ) {
+        return 'project_changed';
+      }
+
+      const [comment] = await tx
+        .insert(schema.projectReviewComment)
+        .values({ projectId: input.projectId, authorId: input.authorId, body: input.body })
+        .returning();
+      return comment ?? null;
+    });
+  },
+
+  async updateReviewComment(input: {
+    projectId: string;
+    commentId: string;
+    status: AdminReviewCommentRecord['status'];
+    expectedStatus: AdminProjectRecord['status'];
+    expectedReviewerId: string | null;
+  }): Promise<AdminReviewCommentMutationResult> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ status: schema.project.status, reviewedBy: schema.project.reviewedBy })
+        .from(schema.project)
+        .where(eq(schema.project.id, input.projectId))
+        .for('update')
+        .limit(1);
+      if (
+        !project ||
+        project.status !== input.expectedStatus ||
+        project.reviewedBy !== input.expectedReviewerId
+      ) {
+        return 'project_changed';
+      }
+
+      const [comment] = await tx
+        .update(schema.projectReviewComment)
+        .set({ status: input.status, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.projectReviewComment.id, input.commentId),
+            eq(schema.projectReviewComment.projectId, input.projectId),
+          ),
+        )
+        .returning();
+      return comment ?? null;
+    });
   },
 
   async correctMetadata(input: {

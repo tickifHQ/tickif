@@ -20,6 +20,7 @@ import {
 import type {
   GoogleReviewsResponse,
   PortfolioProjectItem,
+  PortfolioBadge,
   PortfolioResponse,
   RequiredPortfolioField,
   UpdatePortfolioInput,
@@ -73,7 +74,7 @@ type FormState = {
   showHero: boolean;
   showTrustCredentials: boolean;
   showFeaturedTestimonial: boolean;
-  showReviews: boolean;
+  showGoogleReviews: boolean;
   showSocialLinks: boolean;
   showShareBlock: boolean;
   tagline: string;
@@ -85,9 +86,9 @@ type FormState = {
   youtubeHandle: string;
   testimonialWords: string;
   testimonialAuthor: string;
-  testimonialProjectId: string;
-  showOverallRating: boolean;
-  showPositiveReviewsOnly: boolean;
+  testimonialProjectId: string | null;
+  showGoogleOverallRating: boolean;
+  showGooglePositiveReviewsOnly: boolean;
   showTickifBadge: boolean;
 };
 
@@ -125,12 +126,12 @@ type TestimonialProjectOption = {
 };
 
 /** Maps a portfolio badge enum to its display label and illustration. */
-const BADGE_META: Record<string, { label: string; src: string }> = {
-  verified: { label: 'Verified', src: '/illustrations/badges/verified.svg' },
-  new: { label: 'New', src: '/illustrations/badges/new.svg' },
-  'top-performer': { label: 'Top Performer', src: '/illustrations/badges/top-performer.svg' },
-  established: { label: 'Established', src: '/illustrations/badges/established.svg' },
-  'projects-published': { label: 'Projects', src: '/illustrations/badges/projects-published.svg' },
+const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
+  verified: { label: 'Identity verified', src: '/illustrations/badges/verified.svg' },
+  new: { label: 'New on Tickif', src: '/illustrations/badges/new.svg' },
+  'top-performer': { label: 'Top performer', src: '/illustrations/badges/top-performer.svg' },
+  established: { label: 'Established studio', src: '/illustrations/badges/established.svg' },
+  'projects-published': { label: 'Projects published', src: '/illustrations/badges/projects-published.svg' },
 };
 
 function formatProjectOption(project: PortfolioProjectItem) {
@@ -150,7 +151,7 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     showHero: data.showHero,
     showTrustCredentials: data.showTrustCredentials,
     showFeaturedTestimonial: data.showFeaturedTestimonial,
-    showReviews: data.showReviews,
+    showGoogleReviews: data.reviewSettings.google.showReviews,
     showSocialLinks: data.showSocialLinks,
     showShareBlock: data.showShareBlock,
     tagline: data.tagline ?? '',
@@ -162,23 +163,52 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     youtubeHandle: data.youtubeHandle ?? '',
     testimonialWords: data.testimonialWords ?? '',
     testimonialAuthor: data.testimonialAuthor ?? '',
-    testimonialProjectId: data.testimonialProjectId ?? '',
-    showOverallRating: data.showOverallRating,
-    showPositiveReviewsOnly: data.showPositiveReviewsOnly,
+    testimonialProjectId: data.testimonialProjectId,
+    showGoogleOverallRating: data.reviewSettings.google.showOverallRating,
+    showGooglePositiveReviewsOnly: data.reviewSettings.google.showPositiveReviewsOnly,
     showTickifBadge: data.showTickifBadge,
   };
 }
 
 function computeChangedFields(current: FormState, saved: FormState): UpdatePortfolioInput | null {
   const patch: Record<string, unknown> = {};
+  const googleReviewSettings: Record<string, boolean> = {};
+
+  if (current.showGoogleReviews !== saved.showGoogleReviews) {
+    googleReviewSettings.showReviews = current.showGoogleReviews;
+  }
+  if (current.showGoogleOverallRating !== saved.showGoogleOverallRating) {
+    googleReviewSettings.showOverallRating = current.showGoogleOverallRating;
+  }
+  if (
+    current.showGooglePositiveReviewsOnly !== saved.showGooglePositiveReviewsOnly
+  ) {
+    googleReviewSettings.showPositiveReviewsOnly =
+      current.showGooglePositiveReviewsOnly;
+  }
+  if (Object.keys(googleReviewSettings).length > 0) {
+    patch.reviewSettings = { google: googleReviewSettings };
+  }
 
   for (const key of Object.keys(current) as Array<keyof FormState>) {
+    if (
+      key === 'showGoogleReviews' ||
+      key === 'showGoogleOverallRating' ||
+      key === 'showGooglePositiveReviewsOnly'
+    ) {
+      continue;
+    }
     if (current[key] !== saved[key]) {
       const value = current[key];
       // displayName is required server-side (min 2 chars, not nullable):
       // omit it from the patch when cleared instead of sending a value that
       // is guaranteed to fail validation.
       if (key === 'displayName' && typeof value === 'string' && value.trim() === '') {
+        continue;
+      }
+      // testimonialProjectId is nullable — pass through as-is (null or uuid)
+      if (key === 'testimonialProjectId') {
+        patch[key] = value;
         continue;
       }
       // Convert empty strings to null for nullable text fields
@@ -546,8 +576,14 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         const result = await uploadLogo(file);
-        // Refresh portfolio to get new logoUrl
-        setPortfolio((prev) => (prev ? { ...prev, logoUrl: result.logoUrl } : prev));
+        // Refresh portfolio to get new logoUrl and all server-derived fields
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => prev ? { ...prev, logoUrl: result.logoUrl } : prev);
+          setLogoError('Logo updated successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
       }
@@ -559,7 +595,13 @@ export function DesignerPortfolioSettings() {
       setLogoError(null);
       try {
         await deleteLogo();
-        setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+        try {
+          const refreshed = await fetchPortfolio();
+          setPortfolio(refreshed);
+        } catch {
+          setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
+          setLogoError('Logo removed successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+        }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not delete logo.');
       }
@@ -626,9 +668,9 @@ export function DesignerPortfolioSettings() {
         .toUpperCase()
     : 'SM';
   const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl = portfolio.portfolioUrl ?? new URL(portfolioPath, portfolioWebUrl).toString();
-  // Derive the on-screen preview from the copy target so the displayed link
-  // and the copied link never diverge once the backend populates portfolioUrl.
+  const copyUrl = new URL(portfolioPath, portfolioWebUrl).toString();
+  // Derive the on-screen preview from the copy target so both always reflect
+  // the currently-typed slug, giving the designer real-time URL feedback.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
   // Google connection derived state (default `available` true until first load,
@@ -640,18 +682,22 @@ export function DesignerPortfolioSettings() {
     value: project.id,
     label: formatProjectOption(project),
   }));
+  // A saved testimonial project that is no longer published won't be in the
+  // options, so surface a placeholder entry rather than showing nothing selected.
+  const selectedTestimonialProjectId = form.testimonialProjectId;
   const selectedTestimonialProjectMissing =
-    !!form.testimonialProjectId &&
-    !testimonialProjectOptions.some((option) => option.value === form.testimonialProjectId);
-  const testimonialProjectSelectOptions = selectedTestimonialProjectMissing
-    ? [
-        {
-          value: form.testimonialProjectId,
-          label: 'Selected project',
-        },
-        ...testimonialProjectOptions,
-      ]
-    : testimonialProjectOptions;
+    !!selectedTestimonialProjectId &&
+    !testimonialProjectOptions.some((option) => option.value === selectedTestimonialProjectId);
+  const testimonialProjectSelectOptions =
+    selectedTestimonialProjectMissing && selectedTestimonialProjectId
+      ? [
+          {
+            value: selectedTestimonialProjectId,
+            label: 'Selected project',
+          },
+          ...testimonialProjectOptions,
+        ]
+      : testimonialProjectOptions;
 
   // -------------------------------------------------------------------------
   // Render
@@ -820,7 +866,7 @@ export function DesignerPortfolioSettings() {
               {/* Hero */}
               <CollapsibleSection
                 title="Hero"
-                subtitle="Name, tagline, location, stats"
+                subtitle="Logo, studio name, tagline and bio"
                 expanded={sectionExpanded.hero}
                 onToggleExpanded={() => toggleExpanded('hero')}
                 compact
@@ -1020,8 +1066,10 @@ export function DesignerPortfolioSettings() {
               <ToggleableSection
                 title="Reviews"
                 subtitle="What it's like to work with us"
-                enabled={form.showReviews}
-                onToggle={() => updateField('showReviews', !form.showReviews)}
+                enabled={form.showGoogleReviews}
+                onToggle={() =>
+                  updateField('showGoogleReviews', !form.showGoogleReviews)
+                }
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >
@@ -1188,8 +1236,10 @@ export function DesignerPortfolioSettings() {
                           </p>
                         </div>
                         <Switch
-                          checked={form.showOverallRating}
-                          onCheckedChange={(checked) => updateField('showOverallRating', checked)}
+                          checked={form.showGoogleOverallRating}
+                          onCheckedChange={(checked) =>
+                            updateField('showGoogleOverallRating', checked)
+                          }
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -1202,9 +1252,9 @@ export function DesignerPortfolioSettings() {
                           </p>
                         </div>
                         <Switch
-                          checked={form.showPositiveReviewsOnly}
+                          checked={form.showGooglePositiveReviewsOnly}
                           onCheckedChange={(checked) =>
-                            updateField('showPositiveReviewsOnly', checked)
+                            updateField('showGooglePositiveReviewsOnly', checked)
                           }
                         />
                       </div>
@@ -1341,7 +1391,7 @@ export function DesignerPortfolioSettings() {
                   Live preview
                 </span>
               </div>
-              {portfolio.publicLinkEnabled && portfolio.portfolioUrl ? (
+              {portfolio.portfolioUrl ? (
                 <a
                   href={portfolio.portfolioUrl}
                   target="_blank"
@@ -1352,14 +1402,10 @@ export function DesignerPortfolioSettings() {
                   <ArrowRight className="size-3.5" aria-hidden />
                 </a>
               ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-foreground transition-colors"
-                >
+                <span className="flex cursor-not-allowed items-center gap-1.5 text-sm font-medium text-muted-foreground">
                   Open full
                   <ArrowRight className="size-3.5" aria-hidden />
-                </button>
+                </span>
               )}
             </div>
 
@@ -1554,10 +1600,10 @@ function ProjectDropdown({
   value,
 }: {
   disabled?: boolean;
-  onChange: (value: string) => void;
+  onChange: (value: string | null) => void;
   options: TestimonialProjectOption[];
   placeholder: string;
-  value: string;
+  value: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -1573,7 +1619,7 @@ function ProjectDropdown({
     if (!nextOpen) setQuery('');
   }
 
-  function handleSelect(nextValue: string) {
+  function handleSelect(nextValue: string | null) {
     onChange(nextValue);
     setOpen(false);
     setQuery('');
@@ -1613,7 +1659,7 @@ function ProjectDropdown({
             />
           </div>
           <DropdownMenuItem
-            onSelect={() => handleSelect('')}
+            onSelect={() => handleSelect(null)}
             className={cn('justify-between px-3 py-2', !value && 'bg-accent/30')}
           >
             <span className="text-sm text-muted-foreground">{placeholder}</span>

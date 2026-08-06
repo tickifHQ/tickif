@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import {
+  PLATFORM_ROLE,
   leadDetailResponseSchema,
   listLeadsQuerySchema,
   listLeadsResponseSchema,
@@ -120,7 +121,7 @@ async function getLeadDetail(leadId: string | undefined) {
 }
 
 export default async function DesignerLeadsPage({ searchParams }: DesignerLeadsPageProps) {
-  await requireAuth({ requiredRole: 'designer' });
+  await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
   const params = await searchParams;
   const query = parseLeadQuery(params);
   const [leads, tabCounts, selectedLead] = await Promise.all([
