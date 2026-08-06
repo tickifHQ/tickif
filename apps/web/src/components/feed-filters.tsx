@@ -11,7 +11,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
-import { X, Funnel, ChevronDown } from 'lucide-react';
+import { X, Funnel } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -169,7 +169,6 @@ export function FeedFilters({
               <Funnel className="size-3.5" aria-hidden />
               Filters
               {applied.length > 0 ? ` (${applied.length})` : null}
-              <ChevronDown className="size-3" aria-hidden />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
