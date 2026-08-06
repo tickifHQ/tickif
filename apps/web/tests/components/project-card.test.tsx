@@ -10,6 +10,8 @@ const project: ProjectResponse = {
   slug: 'sunlit-bandra-apartment',
   description: null,
   status: 'published',
+  rejectionReasonCode: null,
+  moderationNote: null,
   propertyTypeSlug: null,
   propertySubtypeSlug: null,
   scopeSlug: null,
@@ -25,6 +27,7 @@ const project: ProjectResponse = {
   metadata: null,
   publishedAt: null,
   submittedAt: null,
+  reviewComments: [],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

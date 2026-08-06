@@ -55,6 +55,7 @@ export type SubmitWithUploadCountsResult = {
 };
 
 export type ProjectModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
+export type ProjectReviewCommentRecord = typeof schema.projectReviewComment.$inferSelect;
 
 export type ProjectTransitionPatch = Partial<
   Pick<
@@ -80,7 +81,10 @@ export type TransitionProjectParams = {
   fieldDiff?: ModerationFieldDiff | null;
   patch?: ProjectTransitionPatch;
   expectedModerationRevision?: number;
+  requireNoUnresolvedReviewComments?: boolean;
 };
+
+export type TransitionProjectResult = ProjectRecord | 'unresolved_review_comments' | null;
 
 const freshProcessingImageFilter = sql`
   (
@@ -117,6 +121,8 @@ export type ProjectListItemRecord = Pick<
   | 'citySlug'
   | 'localitySlug'
   | 'status'
+  | 'rejectionReasonCode'
+  | 'moderationNote'
   | 'coverImageId'
   | 'createdAt'
   | 'updatedAt'
@@ -247,6 +253,8 @@ export const projectsRepository = {
           citySlug: schema.project.citySlug,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
+          rejectionReasonCode: schema.project.rejectionReasonCode,
+          moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
           createdAt: schema.project.createdAt,
           updatedAt: schema.project.updatedAt,
@@ -290,6 +298,30 @@ export const projectsRepository = {
       .groupBy(schema.project.status);
   },
 
+  async listReviewComments(projectId: string): Promise<ProjectReviewCommentRecord[]> {
+    return db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(eq(schema.projectReviewComment.projectId, projectId))
+      .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
+  },
+
+  async listUnresolvedReviewComments(
+    projectIds: string[],
+  ): Promise<ProjectReviewCommentRecord[]> {
+    if (projectIds.length === 0) return [];
+    return db
+      .select()
+      .from(schema.projectReviewComment)
+      .where(
+        and(
+          inArray(schema.projectReviewComment.projectId, projectIds),
+          eq(schema.projectReviewComment.status, 'unresolved'),
+        ),
+      )
+      .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
+  },
+
   async findCoverImages(imageIds: string[]): Promise<Map<string, ProjectCoverImageRecord>> {
     const uniqueIds = [...new Set(imageIds)];
     if (uniqueIds.length === 0) return new Map();
@@ -316,21 +348,25 @@ export const projectsRepository = {
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
-    return db
-      .select(feedProjectColumns(cover))
-      .from(schema.project)
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      // Only active designers: suspended studios 404 on their public profile, so their
-      // projects must not surface here either. `id` is the stable tiebreaker for paging.
-      .where(and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')))
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-        desc(schema.project.id),
-      )
-      .limit(params.limit)
-      .offset(params.offset);
+    return (
+      db
+        .select(feedProjectColumns(cover))
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+        // Only active designers: suspended studios 404 on their public profile, so their
+        // projects must not surface here either. `id` is the stable tiebreaker for paging.
+        .where(
+          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+        )
+        .orderBy(
+          sql`${schema.project.publishedAt} desc nulls last`,
+          desc(schema.project.createdAt),
+          desc(schema.project.id),
+        )
+        .limit(params.limit)
+        .offset(params.offset)
+    );
   },
 
   /**
@@ -596,7 +632,7 @@ export const projectsRepository = {
     requirements: {
       minImageCount: number;
       actorUserId: string;
-      expectedStatus: 'draft' | 'changes_requested';
+      expectedStatus: 'draft' | 'changes_requested' | 'rejected';
       /** Derived from the transition matrix by the caller — never re-derived here. */
       action: ModerationAction;
     },
@@ -669,14 +705,56 @@ export const projectsRepository = {
           fromStatus: requirements.expectedStatus,
           toStatus: 'submitted',
         });
+
+        if (requirements.expectedStatus === 'changes_requested') {
+          await tx
+            .update(schema.projectReviewComment)
+            .set({ status: 'resolved', updatedAt: now })
+            .where(
+              and(
+                eq(schema.projectReviewComment.projectId, id),
+                eq(schema.projectReviewComment.status, 'unresolved'),
+              ),
+            );
+        }
       }
 
       return { project, counts, submitted: submitted ?? null };
     });
   },
 
-  async transition(params: TransitionProjectParams): Promise<ProjectRecord | null> {
+  async transition(params: TransitionProjectParams): Promise<TransitionProjectResult> {
     return db.transaction(async (tx) => {
+      if (params.requireNoUnresolvedReviewComments) {
+        const [lockedProject] = await tx
+          .select({ id: schema.project.id })
+          .from(schema.project)
+          .where(
+            and(
+              eq(schema.project.id, params.id),
+              eq(schema.project.status, params.fromStatus),
+              params.expectedModerationRevision === undefined
+                ? undefined
+                : eq(schema.project.moderationRevision, params.expectedModerationRevision),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        if (!lockedProject) return null;
+
+        const [unresolvedComment] = await tx
+          .select({ id: schema.projectReviewComment.id })
+          .from(schema.projectReviewComment)
+          .where(
+            and(
+              eq(schema.projectReviewComment.projectId, params.id),
+              eq(schema.projectReviewComment.status, 'unresolved'),
+            ),
+          )
+          .limit(1);
+        if (unresolvedComment) return 'unresolved_review_comments';
+      }
+
       const [transitioned] = await tx
         .update(schema.project)
         .set({
@@ -818,7 +896,12 @@ export const projectsRepository = {
           ),
         )
         .limit(1);
-      if (reviewedEvent) return 'moderated';
+      const [reviewComment] = await tx
+        .select({ id: schema.projectReviewComment.id })
+        .from(schema.projectReviewComment)
+        .where(eq(schema.projectReviewComment.projectId, id))
+        .limit(1);
+      if (reviewedEvent || reviewComment) return 'moderated';
 
       // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
       // even if the check above ever regresses. Self-service rows must therefore go explicitly.

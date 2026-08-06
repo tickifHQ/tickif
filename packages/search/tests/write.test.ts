@@ -52,6 +52,9 @@ const projectDocument: ProjectSearchDocument = {
   tags: [],
   coverImageKey: 'projects/project-1/cover-medium.webp',
   publishedAt: 1_785_000_000_000,
+  featuredAt: null,
+  avgRating: 4.5,
+  reviewCount: 12,
 };
 
 function collectionSchema(name: string): CollectionSchema {

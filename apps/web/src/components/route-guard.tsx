@@ -3,10 +3,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
-import { rolePassesCheck } from '@/lib/auth-guard';
+import { rolePassesCheck, type RequiredPlatformRole } from '@/lib/auth-guard';
 
 interface RouteGuardProps {
-  requiredRole?: 'designer' | 'admin' | 'superadmin';
+  requiredRole?: RequiredPlatformRole;
   children: React.ReactNode;
 }
 

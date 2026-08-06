@@ -22,10 +22,13 @@ export type ProjectSearchSource = {
     budgetBandSlug: string | null;
     sizeSqft: number | null;
     publishedAt: Date;
+    featuredAt: Date | null;
   };
   designer: {
     slug: string | null;
     displayName: string;
+    avgRating: string;
+    reviewCount: number;
   };
   cover: {
     status: 'processing' | 'ready' | 'failed';
@@ -115,6 +118,9 @@ export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSe
     coverImageKey:
       source.cover?.status === 'ready' ? pickCoverDerivative(source.cover.derivatives) : null,
     publishedAt: source.project.publishedAt.getTime(),
+    featuredAt: source.project.featuredAt?.getTime() ?? null,
+    avgRating: Number(source.designer.avgRating),
+    reviewCount: source.designer.reviewCount,
   };
 }
 

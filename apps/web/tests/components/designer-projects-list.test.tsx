@@ -26,7 +26,10 @@ const projects: ListProjectsResponse = {
       city: 'Chennai',
       locality: 'Velachery',
       status: 'published',
+      rejectionReasonCode: null,
+      moderationNote: null,
       coverImageUrl: null,
+      reviewComments: [],
       createdAt: '2024-01-06T00:00:00.000Z',
       updatedAt: new Date().toISOString(),
     },
@@ -38,7 +41,10 @@ const projects: ListProjectsResponse = {
       city: 'Chennai',
       locality: 'OMR',
       status: 'changes_requested',
+      rejectionReasonCode: null,
+      moderationNote: 'Add clearer room labels.',
       coverImageUrl: null,
+      reviewComments: [],
       createdAt: '2024-01-06T00:00:00.000Z',
       updatedAt: '2024-01-06T00:00:00.000Z',
     },
@@ -61,20 +67,47 @@ describe('DesignerProjectsList', () => {
     expect(screen.getByText('Velachery, Chennai')).toBeInTheDocument();
     expect(screen.getByText('Apartment')).toBeInTheDocument();
     expect(screen.getByText('Villa')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Needs change')).toBeInTheDocument();
-    expect(screen.getByText('Villa').closest('[data-slot="badge"]')).toHaveClass(
-      'bg-feature-lighter',
-      'text-feature',
-    );
-    expect(screen.getByText('Active').closest('[data-slot="badge"]')).toHaveClass(
-      'bg-success-lighter',
-      'text-success',
-    );
+    expect(screen.getAllByText('Live')).toHaveLength(2);
+    expect(screen.getByText('Needs Change')).toBeInTheDocument();
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Changes needed on:');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Add clearer room labels.');
     expect(screen.getByRole('link', { name: /edit 2bhk apartment in velachery/i })).toHaveAttribute(
       'href',
       '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
     );
+  });
+
+  it('renders a distinct chip for every moderation status', () => {
+    const statuses = [
+      'draft',
+      'submitted',
+      'in_review',
+      'published',
+      'changes_requested',
+      'rejected',
+    ] as const;
+    const allStatuses: ListProjectsResponse = {
+      ...projects,
+      total: statuses.length,
+      items: statuses.map((status, index) => ({
+        ...projects.items[0]!,
+        id: `11111111-1111-4111-8111-11111111111${index}`,
+        title: `Status ${status}`,
+        status,
+        rejectionReasonCode: status === 'rejected' ? 'portfolio-mismatch' : null,
+        moderationNote: status === 'changes_requested' ? 'Update the room labels.' : null,
+      })),
+    };
+
+    render(<DesignerProjectsList projects={allStatuses} activeStatus="all" />);
+
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    expect(screen.getAllByText('In review')).toHaveLength(2);
+    expect(screen.getAllByText('Live')).toHaveLength(2);
+    expect(screen.getByText('Needs Change')).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.getAllByRole('tooltip')).toHaveLength(2);
   });
 
   it('shows an empty state when no projects match', () => {
@@ -91,23 +124,6 @@ describe('DesignerProjectsList', () => {
       'href',
       '/designer/projects/new',
     );
-  });
-
-  it('uses the square pen icon for draft projects', () => {
-    render(
-      <DesignerProjectsList
-        projects={{
-          ...projects,
-          total: 1,
-          items: [{ ...projects.items[0]!, status: 'draft' }],
-        }}
-        activeStatus="draft"
-      />,
-    );
-
-    expect(
-      screen.getByText('Draft').closest('[data-slot="badge"]')?.querySelector('.lucide-square-pen'),
-    ).toBeInTheDocument();
   });
 
   it('focuses project search when pressing the slash shortcut', async () => {

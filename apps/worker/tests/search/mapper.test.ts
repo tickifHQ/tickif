@@ -24,8 +24,9 @@ describe('search projection mapper', () => {
         budgetBandSlug: '20-40-lakh',
         sizeSqft: 1400,
         publishedAt: new Date('2026-07-01T00:00:00.000Z'),
+        featuredAt: null,
       },
-      designer: { slug: 'studio-one', displayName: 'Studio One' },
+      designer: { slug: 'studio-one', displayName: 'Studio One', avgRating: '4.75', reviewCount: 16 },
       cover: {
         status: 'ready',
         derivatives: [
@@ -83,6 +84,9 @@ describe('search projection mapper', () => {
       tags: ['custom', 'sunlit'],
       coverImageKey: 'thumb.webp',
       publishedAt: new Date('2026-07-01T00:00:00.000Z').getTime(),
+      featuredAt: null,
+      avgRating: 4.75,
+      reviewCount: 16,
     });
   });
 

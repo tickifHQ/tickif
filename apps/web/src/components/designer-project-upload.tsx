@@ -9,9 +9,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronRight,
   ChevronDown,
   ChevronsUpDown,
   CircleDashed,
+  FileExclamationPoint,
   ImagePlus,
   LayoutList,
   Lightbulb,
@@ -64,8 +66,10 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
+import { DesignerProjectModeration } from '@/components/designer-project-moderation';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
+  canonicalTaxonomySlug,
   deriveDefaultProjectTitle,
   buildImageMetadata as buildImageMetadataInput,
   getBackendProjectSelection,
@@ -941,6 +945,37 @@ function TipsCard() {
   );
 }
 
+function ChangesNeededCard({ note }: { note: string }) {
+  const noteItems = note
+    .split(/\r?\n/)
+    .map((item) => item.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
+
+  return (
+    <div data-testid="changes-needed-card">
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 font-mono uppercase text-destructive',
+        )}
+      >
+        <FileExclamationPoint className="size-3.5" />
+        CHANGES NEEDED ON
+      </div>
+      <Card radius="xl" className="border-destructive/10 bg-destructive/5">
+        <div className="space-y-2 p-2">
+          {noteItems.map((item, index) => (
+            <div key={`${item}-${index}`} className="flex items-start gap-2">
+              <ChevronRight className="mt-0.5 size-4 shrink-0 text-primary" />
+              <p className={cn(typography.bodySmall, 'text-muted-foreground')}>{item}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function WhyItMattersCard() {
   return (
     <div>
@@ -1292,6 +1327,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
+  const [projectStatus, setProjectStatus] = useState<ProjectDetailResponse['status'] | null>(null);
+  const [moderationNote, setModerationNote] = useState<string | null>(null);
+  const [rejectionReasonCode, setRejectionReasonCode] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
@@ -1692,14 +1730,18 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                     title: roomTitleFromRoom(room, roomTerms),
                     description: room.description ?? '',
                     expanded: index === 0,
-                    designStyle:
+                    designStyle: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'theme') ||
-                      roomImages[0]?.themeSlugs[0] ||
-                      '',
-                    materialFinish:
+                        roomImages[0]?.themeSlugs[0] ||
+                        '',
+                      themeTerms,
+                    ),
+                    materialFinish: canonicalTaxonomySlug(
                       firstAttributeLabel(room.metadata, 'finish') ||
-                      roomImages[0]?.finishSlugs[0] ||
-                      '',
+                        roomImages[0]?.finishSlugs[0] ||
+                        '',
+                      finishTerms,
+                    ),
                     tags: room.metadata.labels ?? roomImages[0]?.tagSlugs ?? [],
                     tagInput: '',
                     images: roomImages.map((image, imageIndex) =>
@@ -1715,6 +1757,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
         setProjectId(project.id);
         setLoadedProjectId(project.id);
+        setProjectStatus(project.status);
+        setModerationNote(project.moderationNote);
+        setRejectionReasonCode(project.rejectionReasonCode);
         setProjectName(project.title);
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
@@ -2187,6 +2232,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setRooms(attachedRooms);
       setProjectId(detail.id);
       setLoadedProjectId(detail.id);
+      setProjectStatus(detail.status);
+      setModerationNote(detail.moderationNote);
+      setRejectionReasonCode(detail.rejectionReasonCode);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
@@ -2433,6 +2481,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           ? 'Project submitted for review.'
           : 'Project submitted. Review status will update shortly.',
       );
+      setProjectStatus(submittedProject.status);
+      setModerationNote(submittedProject.moderationNote);
+      setRejectionReasonCode(submittedProject.rejectionReasonCode);
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : 'Could not submit this project.',
@@ -2747,6 +2798,14 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           Let&apos;s get your profile ready to go live.
         </p>
       </div>
+
+      <DesignerProjectModeration
+        projectId={projectId}
+        status={projectStatus}
+        moderationNote={moderationNote}
+        rejectionReasonCode={rejectionReasonCode}
+        showFeedbackAlert={projectStatus !== 'changes_requested'}
+      />
 
       {taxonomyError ? (
         <Alert variant="destructive" className="mt-6">
@@ -3134,6 +3193,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
+          {projectStatus === 'changes_requested' && moderationNote ? (
+            <ChangesNeededCard note={moderationNote} />
+          ) : null}
           <TipsCard />
           <ChecklistCard
             title="REQUIRED INFORMATION"

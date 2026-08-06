@@ -122,6 +122,23 @@ export async function makeProject(overrides: Partial<typeof schema.project.$infe
   return row!;
 }
 
+export async function makeProjectReviewComment(
+  overrides: Partial<typeof schema.projectReviewComment.$inferInsert> = {},
+) {
+  const projectId = overrides.projectId ?? (await makeProject({ status: 'changes_requested' })).id;
+  const authorId = overrides.authorId ?? (await makeUser({ role: 'admin' })).id;
+  const [row] = await db
+    .insert(schema.projectReviewComment)
+    .values({
+      projectId,
+      authorId,
+      body: overrides.body ?? 'Add clearer room labels.',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 export async function makeTaxonomy(overrides: Partial<typeof schema.taxonomy.$inferInsert> = {}) {
   const { kind = 'room', label = 'Living Room', slug, ...rest } = overrides;
   const [row] = await db
@@ -214,6 +231,26 @@ export async function makeConsultationBooking(
       designerProfileId,
       requesterId,
       preferredSlots: [{ date: '2026-08-10', window: 'morning' }],
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
+export async function makeReview(overrides: Partial<typeof schema.review.$inferInsert> = {}) {
+  const designerProfileId = overrides.designerProfileId ?? (await makeDesigner()).id;
+  const authorUserId =
+    overrides.authorUserId ??
+    (await makeUser({ phoneNumber: '+919800000001', phoneNumberVerified: true })).id;
+  const [row] = await db
+    .insert(schema.review)
+    .values({
+      designerProfileId,
+      authorUserId,
+      rating: overrides.rating ?? 5,
+      body:
+        overrides.body ??
+        'A thoughtful and detailed review of the completed design experience.',
       ...overrides,
     })
     .returning();

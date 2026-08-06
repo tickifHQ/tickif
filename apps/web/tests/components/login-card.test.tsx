@@ -1,11 +1,12 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginCard } from '../../src/components/login-card';
 
 const mock = vi.hoisted(() => ({
   router: {
     push: vi.fn(),
+    replace: vi.fn(),
   },
   sendOtp: vi.fn(),
   verify: vi.fn(),
@@ -156,7 +157,40 @@ describe('LoginCard', () => {
     await user.click(googleButtons[googleButtons.length - 1]!);
     expect(mock.signInSocial).toHaveBeenCalledWith({
       provider: 'google',
-      callbackURL: 'http://localhost:3000/designer/onboarding',
+      callbackURL: 'http://localhost:3000/login?mode=designer&authenticated=1',
+    });
+  });
+
+  it('continues a successful email login through the server-rendered login page', async () => {
+    mock.emailOtpSendVerificationOtp.mockResolvedValueOnce({ data: null, error: null });
+    mock.signInEmailOtp.mockResolvedValueOnce({ data: null, error: null });
+    const user = userEvent.setup();
+    render(<LoginCard initialMode="designer" />);
+
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'admin@tickif.com');
+    await user.click(screen.getByRole('button', { name: /^Login$/ }));
+    const inputs = await screen.findAllByRole('textbox');
+    for (const [index, digit] of '123456'.split('').entries()) {
+      await user.type(inputs[index]!, digit);
+    }
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => {
+      expect(mock.router.replace).toHaveBeenCalledWith(
+        '/login?mode=designer&authenticated=1',
+      );
+    });
+  });
+
+  it('uses a safe callback path for Google sign in', async () => {
+    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    const user = userEvent.setup();
+    render(<LoginCard initialMode="designer" callbackPath="/invitations/invitation-1" />);
+    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
+    await user.click(googleButtons[googleButtons.length - 1]!);
+    expect(mock.signInSocial).toHaveBeenCalledWith({
+      provider: 'google',
+      callbackURL: 'http://localhost:3000/invitations/invitation-1',
     });
   });
 

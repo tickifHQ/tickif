@@ -25,6 +25,12 @@ export type ProjectSearchDocument = {
   coverImageKey: string | null;
   /** Unix epoch milliseconds, kept numeric for deterministic sorting. */
   publishedAt: number;
+  /** Unix epoch milliseconds for featured sort. Null → never featured. */
+  featuredAt: number | null;
+  /** Designer's average rating for rating snippet. */
+  avgRating: number;
+  /** Designer's review count for rating snippet. */
+  reviewCount: number;
 };
 
 /** Disposable Typesense projection of an active designer profile. */

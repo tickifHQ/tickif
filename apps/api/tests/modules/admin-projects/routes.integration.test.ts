@@ -4,6 +4,7 @@ import type {
   AdminModerationDetailResponse,
   AdminModerationQueueResponse,
   ErrorResponse,
+  ProjectReviewComment,
 } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeProjectRoom } from '@repo/db/testing';
@@ -48,6 +49,115 @@ async function makeCompleteProject(overrides: Partial<typeof schema.project.$inf
 }
 
 describe('admin project moderation API', () => {
+  it('creates and independently resolves review comments with reviewer scoping', async () => {
+    const admin = await roleSession('+919800002114', 'admin');
+    const otherAdmin = await roleSession('+919800002115', 'admin');
+    const review = await makeCompleteProject({
+      status: 'in_review',
+      reviewedBy: admin.userId,
+    });
+
+    const forbidden = await app.request(
+      `/api/admin/projects/${review.project.id}/review-comments`,
+      {
+        method: 'POST',
+        headers: { cookie: otherAdmin.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ body: 'Add a wider kitchen photo.' }),
+      },
+    );
+    expect(forbidden.status).toBe(403);
+
+    const createdResponse = await app.request(
+      `/api/admin/projects/${review.project.id}/review-comments`,
+      {
+        method: 'POST',
+        headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ body: '  Add a wider kitchen photo.  ' }),
+      },
+    );
+    expect(createdResponse.status).toBe(201);
+    const created = (await createdResponse.json()) as ProjectReviewComment;
+    expect(created).toMatchObject({
+      projectId: review.project.id,
+      authorLabel: 'Tickif Review Team',
+      body: 'Add a wider kitchen photo.',
+      status: 'unresolved',
+    });
+    expect(created).not.toHaveProperty('authorId');
+
+    const blockedPublish = await app.request(
+      `/api/admin/projects/${review.project.id}/publish`,
+      {
+        method: 'POST',
+        headers: { cookie: admin.cookie },
+      },
+    );
+    expect(blockedPublish.status).toBe(409);
+    expect((await blockedPublish.json()) as ErrorResponse).toMatchObject({
+      error: { message: 'Resolve outstanding review comments before publishing' },
+    });
+
+    const resolvedResponse = await app.request(
+      `/api/admin/projects/${review.project.id}/review-comments/${created.id}`,
+      {
+        method: 'PATCH',
+        headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'resolved' }),
+      },
+    );
+    expect(resolvedResponse.status).toBe(200);
+    expect((await resolvedResponse.json()) as ProjectReviewComment).toMatchObject({
+      id: created.id,
+      status: 'resolved',
+    });
+
+    const detailResponse = await app.request(`/api/admin/projects/${review.project.id}`, {
+      headers: { cookie: admin.cookie },
+    });
+    expect(detailResponse.status).toBe(200);
+    expect((await detailResponse.json()) as AdminModerationDetailResponse).toMatchObject({
+      reviewComments: [{ id: created.id, status: 'resolved' }],
+    });
+  });
+
+  it('serializes publishing against concurrent review comment creation', async () => {
+    const admin = await roleSession('+919800002116', 'admin');
+    const review = await makeCompleteProject({
+      status: 'in_review',
+      reviewedBy: admin.userId,
+    });
+
+    const [commentResponse, publishResponse] = await Promise.all([
+      app.request(`/api/admin/projects/${review.project.id}/review-comments`, {
+        method: 'POST',
+        headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ body: 'Add a wider kitchen photo.' }),
+      }),
+      app.request(`/api/admin/projects/${review.project.id}/publish`, {
+        method: 'POST',
+        headers: { cookie: admin.cookie },
+      }),
+    ]);
+
+    expect([commentResponse.status, publishResponse.status]).toContain(409);
+    expect(
+      [commentResponse.status, publishResponse.status].some((status) =>
+        [200, 201].includes(status),
+      ),
+    ).toBe(true);
+
+    const [project] = await db
+      .select({ status: schema.project.status })
+      .from(schema.project)
+      .where(eq(schema.project.id, review.project.id));
+    const unresolved = await db
+      .select({ id: schema.projectReviewComment.id })
+      .from(schema.projectReviewComment)
+      .where(eq(schema.projectReviewComment.projectId, review.project.id));
+    expect(project?.status === 'published' && unresolved.length > 0).toBe(false);
+  });
+
+
   it('requires admin RBAC for the moderation queue', async () => {
     const unauthenticated = await app.request('/api/admin/projects');
     expect(unauthenticated.status).toBe(401);
@@ -110,6 +220,38 @@ describe('admin project moderation API', () => {
     expect((await inReview.json()) as AdminModerationQueueResponse).toMatchObject({
       total: 1,
       items: [{ id: mine.project.id, reviewedBy: admin.userId }],
+    });
+  });
+
+  it('lists published projects in the admin queue for reopening and unpublish flows', async () => {
+    const admin = await roleSession('+919800002117', 'admin');
+    const published = await makeCompleteProject({
+      title: 'Published project',
+      status: 'published',
+      submittedAt: new Date('2026-07-17T10:00:00.000Z'),
+      publishedAt: new Date('2026-07-18T10:00:00.000Z'),
+      reviewedBy: admin.userId,
+    });
+    await db
+      .update(schema.designerProfile)
+      .set({ projectCount: 1 })
+      .where(eq(schema.designerProfile.id, published.designer.id));
+
+    const response = await app.request('/api/admin/projects?status=published', {
+      headers: { cookie: admin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as AdminModerationQueueResponse).toMatchObject({
+      total: 1,
+      items: [
+        {
+          id: published.project.id,
+          title: 'Published project',
+          status: 'published',
+          reviewedBy: admin.userId,
+        },
+      ],
     });
   });
 
@@ -188,13 +330,10 @@ describe('admin project moderation API', () => {
       .set({ projectCount: 1 })
       .where(eq(schema.designerProfile.id, published.designer.id));
 
-    const response = await app.request(
-      `/api/admin/projects/${published.project.id}/start-review`,
-      {
-        method: 'POST',
-        headers: { cookie: admin.cookie },
-      },
-    );
+    const response = await app.request(`/api/admin/projects/${published.project.id}/start-review`, {
+      method: 'POST',
+      headers: { cookie: admin.cookie },
+    });
 
     expect(response.status).toBe(409);
     const [project, profile, events] = await Promise.all([
