@@ -6,6 +6,9 @@ import {
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
 import { X, Funnel, ChevronDown } from 'lucide-react';
@@ -27,6 +30,34 @@ export type FeedFacetOption = {
 
 export type FeedFacetOptions = Partial<Record<FeedFilterKey, FeedFacetOption[]>>;
 export type FeedFacetDistribution = Record<string, Record<string, number>>;
+
+type FeedFilterTag = {
+  facet: FeedFilterKey;
+  slug: string;
+  label: string;
+  count?: number;
+};
+
+function stableTagOrder(tag: Pick<FeedFilterTag, 'facet' | 'slug'>) {
+  let hash = 2166136261;
+  for (const character of `${tag.facet}:${tag.slug}`) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function emptyFilterState(): FeedFilterState {
+  return {
+    city: [],
+    bhk: [],
+    propertyType: [],
+    scope: [],
+    budgetBand: [],
+    room: [],
+    theme: [],
+  };
+}
 
 type FeedFiltersProps = {
   options?: FeedFacetOptions;
@@ -62,6 +93,23 @@ export function FeedFilters({
   const applied = FEED_FACET_DEFINITIONS.flatMap((facet) =>
     selected[facet.key].map((slug) => ({ facet, slug })),
   );
+  const suggestedTags = useMemo<FeedFilterTag[]>(() => {
+    const candidates = FEED_FACET_DEFINITIONS.flatMap((facet) => {
+      const distribution = facetDistribution[facet.apiKey] ?? {};
+      return (options[facet.key] ?? []).map((option) => ({
+        facet: facet.key,
+        slug: option.slug,
+        label: option.label,
+        count: distribution[option.slug],
+      }));
+    });
+
+    return candidates
+      .filter((candidate) => candidate.count === undefined || candidate.count > 0)
+      .sort((left, right) => stableTagOrder(left) - stableTagOrder(right))
+      .slice(0, 10)
+      .map(({ facet, slug, label, count }) => ({ facet, slug, label, count }));
+  }, [facetDistribution, options]);
 
   function update(next: FeedFilterState) {
     router.push(hrefFor(pathname, next, currentParams));
@@ -79,63 +127,109 @@ export function FeedFilters({
   }
 
   function clearAll() {
-    update({ city: [], bhk: [], propertyType: [], scope: [], budgetBand: [], room: [], theme: [] });
+    update(emptyFilterState());
+  }
+
+  function selectSuggestion(tag: FeedFilterTag) {
+    const isSelected = selected[tag.facet].includes(tag.slug);
+    update(isSelected ? emptyFilterState() : { ...emptyFilterState(), [tag.facet]: [tag.slug] });
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Funnel className="size-3.5" aria-hidden />
-          Filters
-        </div>
-        <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
-        {FEED_FACET_DEFINITIONS.map((facet) => {
-          const facetOptions = options[facet.key] ?? [];
-          const distribution = facetDistribution[facet.apiKey] ?? {};
-          const count = selected[facet.key].length;
+    <div className="min-w-0 max-w-full space-y-3">
+      <div className="flex min-w-0 max-w-full items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Funnel className="size-3.5" aria-hidden />
+              Filters
+              {applied.length > 0 ? ` (${applied.length})` : null}
+              <ChevronDown className="size-3" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel>Filter projects</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {FEED_FACET_DEFINITIONS.map((facet) => {
+              const facetOptions = options[facet.key] ?? [];
+              const distribution = facetDistribution[facet.apiKey] ?? {};
+              const count = selected[facet.key].length;
 
+              return (
+                <DropdownMenuSub key={facet.key}>
+                  <DropdownMenuSubTrigger>
+                    <span>{facet.label}</span>
+                    {count > 0 ? ` (${count})` : null}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-60">
+                    <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <div className="max-h-[26rem] overflow-y-auto">
+                      {facetOptions.length > 0 ? (
+                        facetOptions.map((option) => {
+                          const optionCount = distribution[option.slug];
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={option.slug}
+                              checked={selected[facet.key].includes(option.slug)}
+                              disabled={
+                                optionCount === 0 && !selected[facet.key].includes(option.slug)
+                              }
+                              onCheckedChange={(checked) => toggle(facet.key, option.slug, checked)}
+                            >
+                              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                              {optionCount !== undefined ? (
+                                <span className="ml-auto pl-3 text-xs text-muted-foreground">
+                                  {optionCount}
+                                </span>
+                              ) : null}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })
+                      ) : (
+                        <p className="px-2 py-2 text-xs text-muted-foreground">
+                          No options available
+                        </p>
+                      )}
+                    </div>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span className="h-6 w-px shrink-0 bg-border" aria-hidden />
+        <button
+          type="button"
+          aria-pressed={applied.length === 0}
+          onClick={clearAll}
+          className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs transition-colors ${
+            applied.length === 0
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+          }`}
+        >
+          All
+        </button>
+        {suggestedTags.map((tag) => {
+          const isSelected = selected[tag.facet].includes(tag.slug);
           return (
-            <DropdownMenu key={facet.key}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  {facet.label}
-                  {count > 0 ? ` (${count})` : null}
-                  <ChevronDown className="size-3" aria-hidden />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="max-h-[26rem] overflow-y-auto">
-                  {facetOptions.length > 0 ? (
-                    facetOptions.map((option) => {
-                      const optionCount = distribution[option.slug];
-                      return (
-                        <DropdownMenuCheckboxItem
-                          key={option.slug}
-                          checked={selected[facet.key].includes(option.slug)}
-                          disabled={optionCount === 0 && !selected[facet.key].includes(option.slug)}
-                          onCheckedChange={(checked) => toggle(facet.key, option.slug, checked)}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                          {optionCount !== undefined ? (
-                            <span className="ml-auto pl-3 text-xs text-muted-foreground">
-                              {optionCount}
-                            </span>
-                          ) : null}
-                        </DropdownMenuCheckboxItem>
-                      );
-                    })
-                  ) : (
-                    <p className="px-2 py-2 text-xs text-muted-foreground">No options available</p>
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              key={`${tag.facet}-${tag.slug}`}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => selectSuggestion(tag)}
+              className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs transition-colors ${
+                isSelected
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              {tag.label}
+            </button>
           );
         })}
       </div>
