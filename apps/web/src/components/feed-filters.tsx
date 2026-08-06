@@ -13,7 +13,7 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { X, Funnel, ChevronDown } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FEED_FACET_DEFINITIONS,
   FEED_FILTER_KEYS,
@@ -90,9 +90,19 @@ export function FeedFilters({
     const hasFilterInUrl = FEED_FILTER_KEYS.some((key) => currentParams.has(key));
     return hasFilterInUrl || !initialFilters ? parseFeedParams(currentParams) : initialFilters;
   }, [currentParams, initialFilters]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState<FeedFilterState>(selected);
   const applied = FEED_FACET_DEFINITIONS.flatMap((facet) =>
     selected[facet.key].map((slug) => ({ facet, slug })),
   );
+  const draftCount = FEED_FACET_DEFINITIONS.reduce(
+    (total, facet) => total + draft[facet.key].length,
+    0,
+  );
+
+  useEffect(() => {
+    if (!isOpen) setDraft(selected);
+  }, [isOpen, selected]);
   const suggestedTags = useMemo<FeedFilterTag[]>(() => {
     const candidates = FEED_FACET_DEFINITIONS.flatMap((facet) => {
       const distribution = facetDistribution[facet.apiKey] ?? {};
@@ -113,13 +123,19 @@ export function FeedFilters({
 
   function update(next: FeedFilterState) {
     router.push(hrefFor(pathname, next, currentParams));
+    setDraft(next);
   }
 
-  function toggle(facet: FeedFilterKey, slug: string, checked: boolean) {
-    const values = new Set(selected[facet]);
+  function toggleDraft(facet: FeedFilterKey, slug: string, checked: boolean) {
+    const values = new Set(draft[facet]);
     if (checked) values.add(slug);
     else values.delete(slug);
-    update({ ...selected, [facet]: Array.from(values) });
+    setDraft({ ...draft, [facet]: Array.from(values) });
+  }
+
+  function applyDraft() {
+    update(draft);
+    setIsOpen(false);
   }
 
   function remove(facet: FeedFilterKey, slug: string) {
@@ -138,7 +154,13 @@ export function FeedFilters({
   return (
     <div className="min-w-0 max-w-full space-y-3">
       <div className="flex min-w-0 max-w-full items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <DropdownMenu>
+        <DropdownMenu
+          open={isOpen}
+          onOpenChange={(nextOpen) => {
+            setIsOpen(nextOpen);
+            if (nextOpen) setDraft(selected);
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <button
               type="button"
@@ -156,7 +178,7 @@ export function FeedFilters({
             {FEED_FACET_DEFINITIONS.map((facet) => {
               const facetOptions = options[facet.key] ?? [];
               const distribution = facetDistribution[facet.apiKey] ?? {};
-              const count = selected[facet.key].length;
+              const count = draft[facet.key].length;
 
               return (
                 <DropdownMenuSub key={facet.key}>
@@ -174,11 +196,14 @@ export function FeedFilters({
                           return (
                             <DropdownMenuCheckboxItem
                               key={option.slug}
-                              checked={selected[facet.key].includes(option.slug)}
+                              checked={draft[facet.key].includes(option.slug)}
                               disabled={
-                                optionCount === 0 && !selected[facet.key].includes(option.slug)
+                                optionCount === 0 && !draft[facet.key].includes(option.slug)
                               }
-                              onCheckedChange={(checked) => toggle(facet.key, option.slug, checked)}
+                              onCheckedChange={(checked) =>
+                                toggleDraft(facet.key, option.slug, checked)
+                              }
+                              onSelect={(event) => event.preventDefault()}
                             >
                               <span className="min-w-0 flex-1 truncate">{option.label}</span>
                               {optionCount !== undefined ? (
@@ -199,6 +224,16 @@ export function FeedFilters({
                 </DropdownMenuSub>
               );
             })}
+            <DropdownMenuSeparator />
+            <div className="flex justify-end px-1 py-1">
+              <button
+                type="button"
+                onClick={applyDraft}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+              >
+                Apply{draftCount > 0 ? ` (${draftCount})` : null}
+              </button>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="h-6 w-px shrink-0 bg-border" aria-hidden />

@@ -19,11 +19,14 @@ describe('FeedFilters', () => {
     vi.clearAllMocks();
   });
 
-  it('adds a facet value to the URL and shows its count', async () => {
+  it('keeps the menu open for multiple selections and applies them together', async () => {
     render(
       <FeedFilters
-        options={{ city: [{ slug: 'mumbai', label: 'Mumbai' }] }}
-        facetDistribution={{ citySlug: { mumbai: 4 } }}
+        options={{
+          city: [{ slug: 'mumbai', label: 'Mumbai' }],
+          bhk: [{ slug: '3bhk', label: '3 BHK' }],
+        }}
+        facetDistribution={{ citySlug: { mumbai: 4 }, bhkSlug: { '3bhk': 2 } }}
       />,
     );
 
@@ -34,8 +37,19 @@ describe('FeedFilters', () => {
     const cityOption = await screen.findByRole('menuitemcheckbox', { name: /Mumbai/ });
     expect(cityOption).toHaveTextContent('4');
     fireEvent.click(cityOption);
+    expect(cityOption).toHaveAttribute('aria-checked', 'true');
+    expect(mock.push).not.toHaveBeenCalled();
 
-    expect(mock.push).toHaveBeenCalledWith('/?city=mumbai');
+    fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'BHK' }), {
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /3 BHK/ }));
+
+    expect(screen.getByRole('button', { name: /Apply/ })).toHaveTextContent('(2)');
+    expect(mock.push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+    expect(mock.push).toHaveBeenCalledWith('/?city=mumbai&bhk=3bhk');
   });
 
   it('disables zero-count options without hiding them', async () => {
@@ -50,6 +64,7 @@ describe('FeedFilters', () => {
     fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'City' }), {
       pointerType: 'mouse',
     });
+    expect(screen.getByRole('button', { name: 'Apply' })).not.toHaveTextContent('(0)');
     expect(await screen.findByRole('menuitemcheckbox', { name: /Mumbai/ })).toHaveAttribute(
       'aria-disabled',
       'true',
