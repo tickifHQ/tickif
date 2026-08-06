@@ -11,6 +11,7 @@ import {
   makeUser,
   makeProject,
   makeProjectImage,
+  makeProjectReviewComment,
   makeProjectRoom,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -309,6 +310,25 @@ describe('project moderation transitions', () => {
     ]);
     expect(rows).toHaveLength(1);
     expect(events.map((event) => event.action)).toEqual(['start_review', 'request_changes']);
+  });
+
+  it('retains a project that has review comments even without a transition verdict', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002093');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'changes_requested',
+    });
+    await makeProjectReviewComment({ projectId: project.id });
+
+    const deletion = await app.request(`/api/projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+
+    expect(deletion.status).toBe(409);
+    expect(
+      await db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+    ).toHaveLength(1);
   });
 
   it('lets a superadmin withdraw a submitted project', async () => {

@@ -5,6 +5,9 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     hasMembership: vi.fn(),
     findSoleOrganizationForUser: vi.fn(),
     findMembershipRole: vi.fn(),
+    findWorkspaceMembership: vi.fn(),
+    listMembers: vi.fn(),
+    listPendingInvitations: vi.fn(),
   },
 }));
 
@@ -37,5 +40,107 @@ describe('orgsService', () => {
     vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue(role);
 
     await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
+  });
+
+  it('rejects workspace reads without an active organization', async () => {
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: null }),
+    ).rejects.toMatchObject({ code: 'validation_error', status: 422 });
+  });
+
+  it('rejects cross-organization workspace reads', async () => {
+    vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue(null);
+
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-2' }),
+    ).rejects.toMatchObject({ code: 'forbidden', status: 403 });
+  });
+
+  it('returns members and pending invitations for an owner', async () => {
+    vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
+      organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
+      role: 'owner',
+    });
+    vi.mocked(orgsRepository.listMembers).mockResolvedValue([
+      {
+        id: 'member-1',
+        userId: 'user-1',
+        name: 'Asha Rao',
+        email: 'asha@example.com',
+        image: null,
+        role: 'owner',
+        createdAt: new Date('2026-08-05T00:00:00.000Z'),
+      },
+      {
+        id: 'member-2',
+        userId: 'user-2',
+        name: 'Rohan Shah',
+        email: 'rohan@example.com',
+        image: null,
+        role: 'member',
+        createdAt: new Date('2026-08-04T00:00:00.000Z'),
+      },
+    ]);
+    vi.mocked(orgsRepository.listPendingInvitations).mockResolvedValue([
+      {
+        id: 'invitation-1',
+        email: 'new@example.com',
+        role: 'admin',
+        createdAt: new Date('2026-08-05T00:00:00.000Z'),
+        expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
+    ).resolves.toEqual({
+      organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
+      currentUserRole: 'owner',
+      canManage: true,
+      members: [
+        {
+          id: 'member-1',
+          userId: 'user-1',
+          name: 'Asha Rao',
+          email: 'asha@example.com',
+          image: null,
+          role: 'owner',
+          joinedAt: '2026-08-05T00:00:00.000Z',
+          isCurrentUser: true,
+        },
+        {
+          id: 'member-2',
+          userId: 'user-2',
+          name: 'Rohan Shah',
+          email: 'rohan@example.com',
+          image: null,
+          role: 'member',
+          joinedAt: '2026-08-04T00:00:00.000Z',
+          isCurrentUser: false,
+        },
+      ],
+      invitations: [
+        {
+          id: 'invitation-1',
+          email: 'new@example.com',
+          role: 'admin',
+          createdAt: '2026-08-05T00:00:00.000Z',
+          expiresAt: '2026-08-07T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('keeps a regular member read-only and hides pending invitations', async () => {
+    vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
+      organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
+      role: 'member',
+    });
+    vi.mocked(orgsRepository.listMembers).mockResolvedValue([]);
+
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
+    ).resolves.toMatchObject({ currentUserRole: 'member', canManage: false, invitations: [] });
+    expect(orgsRepository.listPendingInvitations).not.toHaveBeenCalled();
   });
 });

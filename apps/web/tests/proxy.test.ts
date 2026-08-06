@@ -26,7 +26,8 @@ describe('isPublicPath', () => {
 
   it('keeps the rest of the workspace private', () => {
     expect(isPublicPath('/designer/portfolio')).toBe(false);
-    expect(isPublicPath('/admin/dashboard')).toBe(false);
+    expect(isPublicPath('/dashboard')).toBe(false);
+    expect(isPublicPath('/moderation')).toBe(false);
     expect(isPublicPath('/onboarding')).toBe(false);
   });
 });

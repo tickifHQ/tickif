@@ -28,10 +28,12 @@
     "studio": "drizzle-kit studio",
     "seed": "tsx src/seeds/index.ts",
     "lint": "eslint src",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@repo/config": "workspace:*",
+    "@repo/contracts": "workspace:*",
     "drizzle-orm": "catalog:",
     "pg": "catalog:"
   },
@@ -43,6 +45,7 @@
     "drizzle-kit": "catalog:",
     "eslint": "^9.18.0",
     "tsx": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -3,6 +3,88 @@ import { describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
+/**
+ * Bug Condition Exploration Test
+ *
+ * Validates: Requirements 1.1, 1.2
+ *
+ * Property 1: Bug Condition — Accent colour not applied to component tree
+ *
+ * When `PublicDesignerProfile` receives a portfolio with a valid `accentColor`,
+ * the `<main>` element SHOULD have an inline style setting `--primary` to that
+ * accent colour value. This test encodes the expected (correct) behavior.
+ *
+ * On UNFIXED code this test is EXPECTED TO FAIL, confirming the bug exists:
+ * the `<main>` element does not have inline style `--primary`; accent colour is ignored.
+ */
+describe('PublicDesignerProfile — accent colour bug condition', () => {
+  it('applies portfolio.accentColor as --primary CSS variable on <main>', () => {
+    const portfolio = makePublicPortfolio({ accentColor: '#4A90D9' });
+
+    const { container } = render(<PublicDesignerProfile portfolio={portfolio} />);
+
+    const mainElement = container.querySelector('main');
+    expect(mainElement).not.toBeNull();
+
+    const styleAttr = mainElement!.getAttribute('style') ?? '';
+    expect(
+      styleAttr,
+      'The <main> element does not have inline style --primary; accent colour is ignored',
+    ).toContain('--primary: #4A90D9');
+  });
+});
+
+/**
+ * Preservation Property Tests
+ *
+ * Validates: Requirements 3.1, 3.2, 3.4
+ *
+ * Property 2: Preservation — Existing sections and layout unchanged
+ *
+ * These tests confirm that all key page sections (hero, credentials, gallery,
+ * reviews, studio details, share block, consultation CTA) render correctly
+ * regardless of the accent colour value. Layout is not affected by accent.
+ *
+ * On UNFIXED code these tests are EXPECTED TO PASS — they verify the baseline
+ * behaviour that must be preserved when the accent colour fix is applied.
+ */
+describe('PublicDesignerProfile — preservation (sections render regardless of accent)', () => {
+  const keyHeadings = [
+    { name: 'Anika Spaces', level: 1 as const }, // hero
+    { name: 'Verified on Tickif' }, // credentials
+    { name: /Selected projects/i }, // gallery
+    { name: /their words/i }, // story / testimonial
+    { name: "What it\u2019s like to work with us." }, // reviews
+    { name: 'Anika Spaces', level: 2 as const }, // studio details
+    { name: /A portfolio worth sharing/i }, // share block
+    { name: "Let's build something you can't imagine living without." }, // CTA
+  ];
+
+  it('renders all key sections with default accent (#FF8F73)', () => {
+    const portfolio = makePublicPortfolio({ accentColor: '#FF8F73' });
+    render(<PublicDesignerProfile portfolio={portfolio} />);
+
+    for (const heading of keyHeadings) {
+      expect(
+        screen.getByRole('heading', heading),
+        `Section heading "${String(heading.name)}" should be present with default accent`,
+      ).toBeInTheDocument();
+    }
+  });
+
+  it('renders all key sections with non-default accent (#4A90D9) — layout unaffected', () => {
+    const portfolio = makePublicPortfolio({ accentColor: '#4A90D9' });
+    render(<PublicDesignerProfile portfolio={portfolio} />);
+
+    for (const heading of keyHeadings) {
+      expect(
+        screen.getByRole('heading', heading),
+        `Section heading "${String(heading.name)}" should be present with non-default accent`,
+      ).toBeInTheDocument();
+    }
+  });
+});
+
 describe('PublicDesignerProfile', () => {
   it('renders every section from the API payload', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
@@ -62,14 +144,60 @@ describe('PublicDesignerProfile', () => {
   it('explains the empty state instead of an empty rail when there are no reviews', () => {
     render(
       <PublicDesignerProfile
-        portfolio={makePublicPortfolio({ reviews: [], reviewSource: null })}
+        portfolio={makePublicPortfolio({ reviews: [] })}
       />,
     );
 
     expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Anika Spaces hasn’t collected reviews on Tickif yet.'),
+      screen.getByText('No reviews are available for Anika Spaces yet.'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps Google ratings visible when Tickif has no published reviews', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: {
+            ...portfolio.stats,
+            tickif: { rating: 0, reviewCount: 0 },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
+    expect(screen.getByText('57 Google reviews')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Google reviews' })).toBeInTheDocument();
+    expect(screen.queryByText('Based on 0 verified reviews')).not.toBeInTheDocument();
+  });
+
+  it('renders both source aggregates without merging their counts', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getByText('Based on 42 verified reviews')).toBeInTheDocument();
+    expect(screen.getByText('Based on 57 Google reviews')).toBeInTheDocument();
+  });
+
+  it('marks only completed Tickif consultations as verified and supports rating-only reviews', () => {
+    const reviews = [
+      makeReview({
+        id: 'tickif-rating-only',
+        source: 'tickif',
+        text: null,
+        verifiedConsultation: true,
+      }),
+    ];
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
+
+    expect(
+      within(screen.getByTestId('review-marquee-primary')).getByLabelText(
+        'Verified consultation',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('“”')).not.toBeInTheDocument();
   });
 
   it('hides sections the designer switched off in portfolio settings', () => {
@@ -159,8 +287,8 @@ describe('PublicDesignerProfile', () => {
             youtubeHandle: null,
           },
           stats: {
-            rating: 0,
-            reviewCount: 0,
+            tickif: null,
+            google: null,
             projectCount: 3,
             yearsExperience: 0,
             startingBudget: null,
@@ -189,7 +317,7 @@ describe('PublicDesignerProfile', () => {
       .closest('[data-slot="card"]');
 
     expect(ratingSummary).toHaveClass('shadow-floating-card');
-    expect(ratingSummary?.parentElement).toHaveClass('pb-20');
+    expect(ratingSummary?.closest('.pb-20')).toBeInTheDocument();
   });
 
   it('builds displayed and copied profile links from the API canonical URL', async () => {

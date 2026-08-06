@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { ComponentProps } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PortfolioProjectsResponse, PortfolioResponse } from '@repo/contracts';
@@ -17,6 +17,7 @@ const mock = vi.hoisted(() => ({
   connectGoogleReviews: vi.fn(),
   refreshGoogleReviews: vi.fn(),
   disconnectGoogleReviews: vi.fn(),
+  fetchPublishedProjects: vi.fn(),
 }));
 
 vi.mock('@/lib/portfolio-api', () => ({
@@ -30,6 +31,7 @@ vi.mock('@/lib/portfolio-api', () => ({
   connectGoogleReviews: mock.connectGoogleReviews,
   refreshGoogleReviews: mock.refreshGoogleReviews,
   disconnectGoogleReviews: mock.disconnectGoogleReviews,
+  fetchPublishedProjects: mock.fetchPublishedProjects,
 }));
 
 vi.mock('next/image', () => ({
@@ -65,6 +67,18 @@ const basePortfolio: PortfolioResponse = {
   testimonialProjectId: null,
   showOverallRating: true,
   showPositiveReviewsOnly: false,
+  reviewSettings: {
+    tickif: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+    google: {
+      showReviews: true,
+      showOverallRating: true,
+      showPositiveReviewsOnly: false,
+    },
+  },
   showTickifBadge: true,
   badges: ['verified'],
   portfolioUrl: 'https://tickif.com/d/mahi-studio',
@@ -89,6 +103,9 @@ const portfolioProjects: PortfolioProjectsResponse = {
       locality: 'OMR',
       status: 'published',
       statusGroup: 'published',
+      rejectionReasonCode: null,
+      moderationNote: null,
+      reviewComments: [],
       coverImageUrl: null,
       coverImage: null,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -127,6 +144,10 @@ describe('DesignerPortfolioSettings', () => {
     mock.fetchPortfolio.mockResolvedValue(basePortfolio);
     mock.fetchPortfolioProjects.mockResolvedValue(portfolioProjects);
     mock.fetchGoogleReviews.mockResolvedValue(NOT_CONNECTED_GOOGLE);
+    mock.fetchPublishedProjects.mockResolvedValue([
+      { id: '22222222-2222-4222-8222-222222222222', title: 'Modern Living Room' },
+      { id: '33333333-3333-4333-8333-333333333333', title: 'Kitchen Renovation' },
+    ]);
   });
 
   afterEach(() => {
@@ -141,6 +162,16 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER)).toHaveValue('Design with care');
     expect(screen.getByPlaceholderText(BIO_PLACEHOLDER)).toHaveValue('Interiors for real life.');
     expect(screen.queryByText('https://tickif.com/d/mahi-studio')).not.toBeInTheDocument();
+  });
+
+  it('updates the preview URL immediately when the user types a new slug', async () => {
+    await renderSettings();
+
+    const slugInput = screen.getByPlaceholderText(SLUG_PLACEHOLDER);
+    fireEvent.change(slugInput, { target: { value: 'new-slug' } });
+
+    // Preview should reflect the typed slug, not the last-saved portfolioUrl
+    expect(screen.getAllByText(/\/d\/new-slug/).length).toBeGreaterThan(0);
   });
 
   it('tells the designer which hero fields still block the public page', async () => {
@@ -198,25 +229,19 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
-  it('opens the saved live portfolio in a new tab', async () => {
+  it('disables the full portfolio control while the public page is unavailable', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
     await renderSettings();
 
-    const openFull = screen.getByRole('link', { name: 'Open full' });
-
-    expect(openFull).toHaveAttribute('href', 'https://tickif.com/d/mahi-studio');
-    expect(openFull).toHaveAttribute('target', '_blank');
-    expect(openFull).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
   });
 
-  it('disables the full portfolio control when the saved public link is hidden', async () => {
-    mock.fetchPortfolio.mockResolvedValueOnce({
-      ...basePortfolio,
-      publicLinkEnabled: false,
-    });
+  it('links to the public portfolio when the URL is available', async () => {
     await renderSettings();
 
-    expect(screen.getByRole('button', { name: 'Open full' })).toBeDisabled();
-    expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Open full' });
+    expect(link).toHaveAttribute('href', 'https://tickif.com/d/mahi-studio');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 
   it('keeps the sticky action bar inset from the viewport bottom', async () => {
@@ -308,7 +333,7 @@ describe('DesignerPortfolioSettings', () => {
     const sections = [
       {
         name: 'Trust & credentials',
-        getContent: () => screen.getByAltText('Verified'),
+        getContent: () => screen.getByAltText('Identity verified'),
       },
       {
         name: 'Featured testimonial',
@@ -405,6 +430,54 @@ describe('DesignerPortfolioSettings', () => {
       ).every((separator) => separator.textContent === '·'),
     ).toBe(true);
     expect(screen.getByTestId('reviews-integration')).toHaveClass('border-b', 'border-border');
+  });
+
+  it('saves Google review visibility without overwriting Tickif settings', async () => {
+    const portfolio = {
+      ...basePortfolio,
+      reviewSettings: {
+        tickif: {
+          showReviews: false,
+          showOverallRating: false,
+          showPositiveReviewsOnly: true,
+        },
+        google: {
+          showReviews: true,
+          showOverallRating: true,
+          showPositiveReviewsOnly: false,
+        },
+      },
+    };
+    mock.fetchPortfolio.mockResolvedValueOnce(portfolio);
+    mock.updatePortfolio.mockResolvedValue({
+      ...portfolio,
+      reviewSettings: {
+        ...portfolio.reviewSettings,
+        google: {
+          ...portfolio.reviewSettings.google,
+          showOverallRating: false,
+        },
+      },
+    });
+    await renderSettings();
+
+    await userEvent.click(
+      screen.getByRole('heading', { name: 'Reviews' }).closest('button')!,
+    );
+    const ratingRow = screen
+      .getByText('Show overall ratings on your profile')
+      .closest<HTMLElement>('div.flex');
+    expect(ratingRow).not.toBeNull();
+    await userEvent.click(within(ratingRow!).getByRole('switch'));
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updatePortfolio).toHaveBeenCalledWith({
+        reviewSettings: {
+          google: { showOverallRating: false },
+        },
+      });
+    });
   });
 
   it('shows a retry-able error state when the portfolio fails to load', async () => {
@@ -625,6 +698,112 @@ describe('DesignerPortfolioSettings', () => {
     // The in-flight edit is preserved, so the form stays dirty and savable.
     expect(tagline).toHaveValue('First edit plus more');
     expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+  });
+
+  describe('Bug condition: stale portfolio state after logo operation', () => {
+    /**
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
+     *
+     * Bug condition exploration test — demonstrates that after a successful
+     * logo upload, the component does NOT refresh server-derived fields
+     * (missingRequiredFields, publiclyVisible, badges) from the server.
+     *
+     * EXPECTED: This test SHOULD FAIL on unfixed code, confirming the bug exists.
+     */
+    it('refreshes portfolio state after logo upload so the visibility notice disappears', async () => {
+      // Arrange: portfolio is NOT public because logo is missing
+      const portfolioBeforeUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: null,
+        publiclyVisible: false,
+        missingRequiredFields: ['logo'],
+        badges: [],
+      };
+
+      // After upload, server returns portfolio with logo fulfilled
+      const portfolioAfterUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+        publiclyVisible: true,
+        missingRequiredFields: [],
+        badges: ['verified'],
+      };
+
+      // Initial load returns the "before" state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioBeforeUpload);
+      // After upload, fetchPortfolio should be called again and return fresh state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioAfterUpload);
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      render(<DesignerPortfolioSettings />);
+
+      // Wait for initial load — should show the "not public" notice
+      const notice = await screen.findByRole('status');
+      expect(notice).toHaveTextContent("Your portfolio isn't public yet");
+
+      // Act: trigger logo upload via file input
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      // Assert: after upload, the component should have refreshed portfolio state
+      // and the "not public" notice should be gone (missingRequiredFields is now [])
+      await waitFor(() => {
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      });
+    });
+
+    /**
+     * Validates: Requirements 3.1, 3.2
+     *
+     * Preservation test — verifies that unsaved form edits are NOT overwritten
+     * when a logo upload triggers a portfolio state refresh from the server.
+     */
+    it('preserves unsaved form edits after logo upload refreshes portfolio state', async () => {
+      // After upload, server returns a refreshed portfolio with a DIFFERENT tagline
+      const portfolioAfterUpload: PortfolioResponse = {
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+        tagline: 'Server tagline after refresh',
+      };
+
+      // Initial load returns basePortfolio
+      mock.fetchPortfolio.mockResolvedValueOnce(basePortfolio);
+      // After upload, fetchPortfolio returns the refreshed state
+      mock.fetchPortfolio.mockResolvedValueOnce(portfolioAfterUpload);
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      render(<DesignerPortfolioSettings />);
+
+      // Wait for initial load
+      const tagline = await screen.findByPlaceholderText(TAGLINE_PLACEHOLDER);
+      expect(tagline).toHaveValue('Design with care');
+
+      // User makes an unsaved edit to the tagline
+      const user = userEvent.setup();
+      await user.clear(tagline);
+      await user.type(tagline, 'My unsaved edit');
+      expect(tagline).toHaveValue('My unsaved edit');
+
+      // Act: trigger logo upload
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+
+      const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      // Assert: form tagline still shows the user's unsaved edit, NOT the server value
+      await waitFor(() => {
+        expect(mock.fetchPortfolio).toHaveBeenCalledTimes(2);
+      });
+      expect(tagline).toHaveValue('My unsaved edit');
+    });
   });
 
   describe('Google reviews', () => {

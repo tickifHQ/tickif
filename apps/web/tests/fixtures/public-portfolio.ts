@@ -42,6 +42,7 @@ export function makeReview(overrides: Partial<PublicPortfolioReview> = {}): Publ
     rating: 4.5,
     relativeTime: '3 months ago',
     text: 'Anika and her team understood what we wanted before we could properly explain it.',
+    verifiedConsultation: false,
     source: 'google',
     ...overrides,
   };
@@ -75,11 +76,15 @@ export function makePublicPortfolio(
       tickifBadge: true,
     },
     stats: {
-      rating: 4.7,
-      reviewCount: 42,
+      tickif: { rating: 4.7, reviewCount: 42 },
+      google: { rating: 4.8, reviewCount: 57 },
       projectCount: 28,
       yearsExperience: 8,
       startingBudget: '₹10L+',
+    },
+    reviewVisibility: {
+      tickif: { reviews: true, overallRating: true },
+      google: { reviews: true, overallRating: true },
     },
     social: {
       websiteUrl: 'https://anikaspaces.in',
@@ -93,7 +98,6 @@ export function makePublicPortfolio(
       projectTitle: 'Adyar Penthouse',
     },
     reviews: [makeReview()],
-    reviewSource: 'google',
     projects: {
       projects: [makeProject()],
       page: 1,

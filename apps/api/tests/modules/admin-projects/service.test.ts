@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AdminImageRecord,
   AdminProjectRecord,
+  AdminReviewCommentRecord,
 } from '../../../src/modules/admin-projects/repository.js';
 
 vi.mock('../../../src/modules/admin-projects/repository.js', () => ({
@@ -12,6 +13,10 @@ vi.mock('../../../src/modules/admin-projects/repository.js', () => ({
     listImages: vi.fn(),
     getReadyImageCounts: vi.fn(),
     listHistory: vi.fn(),
+    listReviewComments: vi.fn(),
+    hasUnresolvedReviewComments: vi.fn(),
+    createReviewComment: vi.fn(),
+    updateReviewComment: vi.fn(),
     correctMetadata: vi.fn(),
   },
 }));
@@ -125,9 +130,78 @@ beforeEach(() => {
     missing: [],
     requirements: [],
   });
+  repo.listReviewComments.mockResolvedValue([]);
+  repo.hasUnresolvedReviewComments.mockResolvedValue(false);
 });
 
 describe('adminProjectsService', () => {
+  const reviewComment = (
+    overrides: Partial<AdminReviewCommentRecord> = {},
+  ): AdminReviewCommentRecord => ({
+    id: '55555555-5555-4555-8555-555555555555',
+    projectId: project().id,
+    authorId: admin.userId,
+    body: 'Add a wider kitchen photo.',
+    status: 'unresolved',
+    createdAt: new Date('2026-08-04T08:00:00.000Z'),
+    updatedAt: new Date('2026-08-04T08:00:00.000Z'),
+    ...overrides,
+  });
+
+  it('creates a masked review comment on a claimed in-review project', async () => {
+    repo.findById.mockResolvedValue(project());
+    repo.createReviewComment.mockResolvedValue(reviewComment());
+
+    const result = await adminProjectsService.createReviewComment(
+      project().id,
+      { body: 'Add a wider kitchen photo.' },
+      admin,
+    );
+
+    expect(repo.createReviewComment).toHaveBeenCalledWith({
+      projectId: project().id,
+      authorId: admin.userId,
+      body: 'Add a wider kitchen photo.',
+      expectedStatus: 'in_review',
+      expectedReviewerId: admin.userId,
+    });
+    expect(result).toMatchObject({ authorLabel: 'Tickif Review Team', status: 'unresolved' });
+    expect(result).not.toHaveProperty('authorId');
+  });
+
+  it('lets the assigned reviewer resolve one comment after requesting changes', async () => {
+    repo.findById.mockResolvedValue(project({ status: 'changes_requested' }));
+    repo.updateReviewComment.mockResolvedValue(reviewComment({ status: 'resolved' }));
+
+    const result = await adminProjectsService.updateReviewComment(
+      project().id,
+      reviewComment().id,
+      { status: 'resolved' },
+      admin,
+    );
+
+    expect(repo.updateReviewComment).toHaveBeenCalledWith({
+      projectId: project().id,
+      commentId: reviewComment().id,
+      status: 'resolved',
+      expectedStatus: 'changes_requested',
+      expectedReviewerId: admin.userId,
+    });
+    expect(result.status).toBe('resolved');
+  });
+
+  it('blocks publishing while a review comment remains unresolved', async () => {
+    repo.findById.mockResolvedValue(project());
+    repo.hasUnresolvedReviewComments.mockResolvedValue(true);
+
+    await expect(adminProjectsService.publish(project().id, admin)).rejects.toMatchObject({
+      status: 409,
+      message: 'Resolve outstanding review comments before publishing',
+    });
+    expect(completeness).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
+  });
+
   it('scopes the in-review queue to the current admin but lets superadmins see all claims', async () => {
     repo.list.mockResolvedValue({ items: [], total: 0 });
     const query = { status: 'in_review', sort: 'oldest', page: 1, limit: 25 } as const;
@@ -194,6 +268,7 @@ describe('adminProjectsService', () => {
         projectId: existing.id,
         toStatus: 'published',
         expectedModerationRevision: 7,
+        requireNoUnresolvedReviewComments: true,
       }),
       admin,
     );

@@ -20,6 +20,7 @@ import {
 import { googleReviewsRepository } from './google-repository.js';
 import { readState } from './google-mapper.js';
 import { projectsService } from '../projects/service.js';
+import { reviewsService } from '../reviews/service.js';
 
 /**
  * Read model for the public designer portfolio page (`/d/{slug}`).
@@ -66,10 +67,11 @@ function sectionsOf(portfolio: PortfolioRecord | null): PublicPortfolioSections 
     hero: portfolio.showHero,
     trustCredentials: portfolio.showTrustCredentials,
     featuredTestimonial: portfolio.showFeaturedTestimonial,
-    reviews: portfolio.showReviews,
+    reviews: portfolio.showTickifReviews || portfolio.showGoogleReviews,
     socialLinks: portfolio.showSocialLinks,
     shareBlock: portfolio.showShareBlock,
-    overallRating: portfolio.showOverallRating,
+    overallRating:
+      portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
     tickifBadge: portfolio.showTickifBadge,
   };
 }
@@ -88,8 +90,24 @@ function toPublicReview(review: GoogleReview, index: number): PublicPortfolioRev
     rating: review.rating,
     relativeTime: review.relativeTime,
     text: review.text,
+    verifiedConsultation: false,
     source: 'google',
   };
+}
+
+function relativeReviewTime(value: string): string {
+  const elapsedDays = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(value).getTime()) / (24 * 60 * 60 * 1000)),
+  );
+  if (elapsedDays === 0) return 'today';
+  if (elapsedDays < 30) return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
+  const elapsedMonths = Math.floor(elapsedDays / 30);
+  if (elapsedMonths < 12) {
+    return `${elapsedMonths} month${elapsedMonths === 1 ? '' : 's'} ago`;
+  }
+  const elapsedYears = Math.floor(elapsedMonths / 12);
+  return `${elapsedYears} year${elapsedYears === 1 ? '' : 's'} ago`;
 }
 
 export const publicPortfolioService = {
@@ -111,9 +129,22 @@ export const publicPortfolioService = {
 
     const sections = sectionsOf(portfolio);
 
-    const [logoUrl, googleRow, cities, projects, startingBudget, testimonial] = await Promise.all([
+    const [
+      logoUrl,
+      googleRow,
+      tickif,
+      cities,
+      projects,
+      startingBudget,
+      testimonial,
+    ] = await Promise.all([
       presignProfileLogo(profile),
       googleReviewsRepository.findByProfileId(profile.id),
+      reviewsService.listPublished({
+        designerProfileId: profile.id,
+        page: 1,
+        limit: 50,
+      }),
       portfolioRepository.findCityLabels(profile.id),
       // The profile was already loaded and status-checked above.
       projectsService.designerProjects(
@@ -129,18 +160,31 @@ export const publicPortfolioService = {
     // 30-day window is withheld and the row reads `stale`, so nothing expired
     // can leak onto a public page even if the worker sweep lagged.
     const google = googleRow ? readState(googleRow) : null;
-    const googleReviews = sections.reviews ? google?.reviews ?? [] : [];
-    const visibleReviews = portfolio?.showPositiveReviewsOnly
-      ? googleReviews.filter((review) => review.rating >= POSITIVE_REVIEW_MIN_RATING)
-      : googleReviews;
-
-    // Google's aggregate is the live signal when connected; the profile counters
-    // are the fallback until Tickif's own review module lands.
+    const tickifSettings = {
+      showReviews: portfolio?.showTickifReviews ?? true,
+      showOverallRating: portfolio?.showTickifOverallRating ?? true,
+      showPositiveReviewsOnly: portfolio?.showTickifPositiveReviewsOnly ?? false,
+    };
+    const googleSettings = {
+      showReviews: portfolio?.showGoogleReviews ?? true,
+      showOverallRating: portfolio?.showGoogleOverallRating ?? true,
+      showPositiveReviewsOnly: portfolio?.showGooglePositiveReviewsOnly ?? false,
+    };
+    const tickifReviews = tickifSettings.showReviews
+      ? tickif.items.filter(
+          (review) =>
+            !tickifSettings.showPositiveReviewsOnly ||
+            review.rating >= POSITIVE_REVIEW_MIN_RATING,
+        )
+      : [];
+    const googleReviews = googleSettings.showReviews
+      ? (google?.reviews ?? []).filter(
+          (review) =>
+            !googleSettings.showPositiveReviewsOnly ||
+            review.rating >= POSITIVE_REVIEW_MIN_RATING,
+        )
+      : [];
     const googleRating = google?.summary.rating ?? null;
-    const rating = googleRating ?? (Number(profile.avgRating) || 0);
-    const reviewCount = googleRating !== null
-      ? google?.summary.userRatingsTotal ?? 0
-      : profile.reviewCount;
 
     return {
       profileId: profile.id,
@@ -158,11 +202,19 @@ export const publicPortfolioService = {
       badges: sections.trustCredentials ? computeBadges(profile) : [],
       sections,
       stats: {
-        // Withheld, not merely hidden — `showOverallRating` behaves like every other
-        // section gate above rather than relying on the client to not render it.
-        // Zeroing `reviewCount` is what the page already keys off at every call site.
-        rating: sections.overallRating ? rating : 0,
-        reviewCount: sections.overallRating ? reviewCount : 0,
+        tickif: tickifSettings.showOverallRating
+          ? {
+              rating: Number(profile.avgRating) || 0,
+              reviewCount: profile.reviewCount,
+            }
+          : null,
+        google:
+          googleSettings.showOverallRating && googleRating !== null
+            ? {
+                rating: googleRating,
+                reviewCount: google?.summary.userRatingsTotal ?? 0,
+              }
+            : null,
         projectCount: profile.projectCount,
         yearsExperience: profile.yearsExperience,
         startingBudget,
@@ -176,8 +228,29 @@ export const publicPortfolioService = {
           }
         : { websiteUrl: null, instagramHandle: null, linkedinHandle: null, youtubeHandle: null },
       testimonial,
-      reviews: visibleReviews.map(toPublicReview),
-      reviewSource: visibleReviews.length > 0 ? 'google' : null,
+      reviewVisibility: {
+        tickif: {
+          reviews: tickifSettings.showReviews,
+          overallRating: tickifSettings.showOverallRating,
+        },
+        google: {
+          reviews: googleSettings.showReviews,
+          overallRating: googleSettings.showOverallRating,
+        },
+      },
+      reviews: [
+        ...tickifReviews.map((review) => ({
+          id: review.id,
+          author: review.author.name,
+          avatarUrl: review.author.avatarUrl,
+          rating: review.rating,
+          relativeTime: relativeReviewTime(review.publishedAt ?? review.createdAt),
+          text: review.body,
+          verifiedConsultation: review.verifiedConsultation,
+          source: 'tickif' as const,
+        })),
+        ...googleReviews.map(toPublicReview),
+      ],
       projects,
       publishedAt: portfolio?.publishedAt?.toISOString() ?? null,
     };

@@ -69,7 +69,7 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
-  it('keeps changes_requested as a persisted project status but not a list bucket', () => {
+  it('keeps moderation statuses persisted while using grouped list buckets', () => {
     expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
     expect(projectListStatus.safeParse('changes_requested').success).toBe(false);
   });

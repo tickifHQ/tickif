@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { PLATFORM_ROLE } from '@repo/contracts';
 import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
 import { VISITOR_ONBOARDED_COOKIE } from '@/lib/visitor-onboarding';
 import { VisitorOnboardingForm } from '@/components/visitor-onboarding-form';
@@ -12,7 +13,7 @@ export const metadata = {
 export default async function VisitorOnboardingPage() {
   const session = await requireAuth();
 
-  if (rolePassesCheck(session.user.role, 'designer')) {
+  if (rolePassesCheck(session.user.role, PLATFORM_ROLE.DESIGNER)) {
     redirect('/designer/dashboard');
   }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { projectReviewCommentSchema } from './review-comments';
 
 /**
  * Shared contracts for the `projects` slice — the single source of truth for
@@ -151,6 +152,8 @@ export const projectResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     status: projectStatus,
+    rejectionReasonCode: z.string().nullable(),
+    moderationNote: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
     propertySubtypeSlug: z.string().nullable(),
     scopeSlug: z.string().nullable(),
@@ -166,6 +169,7 @@ export const projectResponseSchema = z
     metadata: z.record(z.string(), z.unknown()).nullable(),
     publishedAt: z.string().datetime().nullable(),
     submittedAt: z.string().datetime().nullable(),
+    reviewComments: z.array(projectReviewCommentSchema),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -235,7 +239,10 @@ export const projectListItemSchema = z
     city: z.string().nullable(),
     locality: z.string().nullable(),
     status: projectStatus,
+    rejectionReasonCode: z.string().nullable(),
+    moderationNote: z.string().nullable(),
     coverImageUrl: z.string().url().nullable(),
+    reviewComments: z.array(projectReviewCommentSchema),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -469,6 +476,9 @@ export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
     metadata: true,
     submittedAt: true,
     updatedAt: true,
+    rejectionReasonCode: true,
+    moderationNote: true,
+    reviewComments: true,
   })
   .extend({
     designer: designerSummarySchema,

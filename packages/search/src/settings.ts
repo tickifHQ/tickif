@@ -58,6 +58,9 @@ const PROJECT_COLLECTION_FIELDS = [
   { name: 'roomLabels', type: 'string[]' },
   { name: 'tags', type: 'string[]' },
   { name: 'coverImageKey', type: 'string', index: false, optional: true },
+  { name: 'featuredAt', type: 'int64', sort: true, optional: true },
+  { name: 'avgRating', type: 'float', sort: true, optional: true },
+  { name: 'reviewCount', type: 'int32', sort: true, optional: true },
   { name: 'publishedAt', type: 'int64', sort: true },
 ] satisfies CollectionFieldSchema[];
 
