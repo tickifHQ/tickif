@@ -20,6 +20,7 @@ const { presignDownload } = await import('@repo/storage');
 const LABELS = new Map([
   ['city:mumbai', 'Mumbai'],
   ['bhk:3-bhk', '3 BHK'],
+  ['budget_band:40-60-lakh', '₹40L - ₹60L'],
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function createPostgresRow(overrides: Partial<FeedProjectRow> = {}): FeedProject
     title: 'Modern Mumbai Apartment',
     citySlug: 'mumbai',
     bhkSlug: '3-bhk',
+    budgetBandSlug: '40-60-lakh',
     designerName: 'Urban Designs Studio',
     designerSlug: 'urban-designs',
     avgRating: '4.8',
@@ -107,12 +109,14 @@ describe('normalizeTypesenseHit', () => {
     const result = normalizeTypesenseHit(hit);
 
     expect(result).toEqual({
+      id: 'proj-123',
       slug: 'modern-mumbai-apartment',
       title: 'Modern Mumbai Apartment',
       designerName: 'Urban Designs Studio',
       designerSlug: 'urban-designs',
       citySlug: 'mumbai',
       bhkSlug: '3-bhk',
+      budgetBandSlug: '40-60-lakh',
       avgRating: 4.8,
       reviewCount: 12,
       coverImageKey: 'derivatives/projects/proj-123/cover-small.webp',
@@ -176,12 +180,14 @@ describe('normalizePostgresRow', () => {
     const result = normalizePostgresRow(row);
 
     expect(result).toEqual({
+      id: 'proj-123',
       slug: 'modern-mumbai-apartment',
       title: 'Modern Mumbai Apartment',
       designerName: 'Urban Designs Studio',
       designerSlug: 'urban-designs',
       citySlug: 'mumbai',
       bhkSlug: '3-bhk',
+      budgetBandSlug: '40-60-lakh',
       avgRating: 4.8,
       reviewCount: 12,
       coverImageKey: null,
@@ -376,12 +382,13 @@ describe('toDiscoveryCard', () => {
   });
 
   describe('taxonomy label resolution', () => {
-    it('resolves city and bhk taxonomy labels', async () => {
+    it('resolves city, bhk, and budget taxonomy labels', async () => {
       const normalized = normalizePostgresRow(createPostgresRow());
       const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result.city).toBe('Mumbai');
       expect(result.bhk).toBe('3 BHK');
+      expect(result.budget).toBe('₹40L - ₹60L');
     });
 
     it('returns null for city when citySlug is null', async () => {
@@ -406,27 +413,40 @@ describe('toDiscoveryCard', () => {
 
       expect(result.city).toBeNull();
       expect(result.bhk).toBeNull();
+      expect(result.budget).toBeNull();
     });
   });
 
   describe('collectTaxonomyPairs', () => {
-    it('collects the distinct city and bhk pairs a page needs', () => {
+    it('collects the distinct city, bhk, and budget pairs a page needs', () => {
       const items = [
         normalizePostgresRow(createPostgresRow()),
         normalizePostgresRow(createPostgresRow()),
-        normalizePostgresRow(createPostgresRow({ citySlug: 'pune', bhkSlug: '2-bhk' })),
+        normalizePostgresRow(
+          createPostgresRow({
+            citySlug: 'pune',
+            bhkSlug: '2-bhk',
+            budgetBandSlug: '20-40-lakh',
+          }),
+        ),
       ];
 
       expect(collectTaxonomyPairs(items)).toEqual([
         { kind: 'city', slug: 'mumbai' },
         { kind: 'bhk', slug: '3-bhk' },
+        { kind: 'budget_band', slug: '40-60-lakh' },
         { kind: 'city', slug: 'pune' },
         { kind: 'bhk', slug: '2-bhk' },
+        { kind: 'budget_band', slug: '20-40-lakh' },
       ]);
     });
 
     it('skips null slugs', () => {
-      const items = [normalizePostgresRow(createPostgresRow({ citySlug: null, bhkSlug: null }))];
+      const items = [
+        normalizePostgresRow(
+          createPostgresRow({ citySlug: null, bhkSlug: null, budgetBandSlug: null }),
+        ),
+      ];
 
       expect(collectTaxonomyPairs(items)).toEqual([]);
     });
@@ -480,6 +500,7 @@ describe('toDiscoveryCard', () => {
       const result = await toDiscoveryCard(normalized, LABELS);
 
       expect(result).toEqual({
+        id: 'proj-123',
         slug: 'modern-mumbai-apartment',
         title: 'Modern Mumbai Apartment',
         coverImageUrl: 'https://signed.example/derivatives/projects/proj-123/cover-small.webp',
@@ -489,6 +510,7 @@ describe('toDiscoveryCard', () => {
         designerSlug: 'urban-designs',
         city: 'Mumbai',
         bhk: '3 BHK',
+        budget: '₹40L - ₹60L',
         ratingSnippet: '4.8 (12 reviews)',
       });
     });

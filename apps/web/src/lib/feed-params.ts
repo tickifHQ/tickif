@@ -1,4 +1,7 @@
-import type { DiscoveryFeedQuery, FeedProjectsQuery } from '@repo/contracts';
+import type { DiscoveryFeedQuery, SearchProjectsQuery } from '@repo/contracts';
+
+export const HOME_FEED_PAGE_SIZE = 24;
+export const MAX_HOME_FEED_PAGE = Math.floor(1000 / HOME_FEED_PAGE_SIZE);
 
 export const FEED_FILTER_KEYS = [
   'city',
@@ -135,9 +138,9 @@ export function toDiscoveryFeedFilters(state: FeedFilterState): Partial<Discover
   return filters;
 }
 
-/** Map the URL state to the project-feed query until E-208 moves the landing feed fully onto discovery. */
-export function toFeedProjectsFilters(state: FeedFilterState): Partial<FeedProjectsQuery> {
-  const filters: Partial<FeedProjectsQuery> = {};
+/** Map the URL state to the matching project-search filter keys. */
+export function toSearchProjectFilters(state: FeedFilterState): Partial<SearchProjectsQuery> {
+  const filters: Partial<SearchProjectsQuery> = {};
 
   for (const facet of FEED_FACET_DEFINITIONS) {
     const values = state[facet.key];
@@ -146,6 +149,39 @@ export function toFeedProjectsFilters(state: FeedFilterState): Partial<FeedProje
   }
 
   return filters;
+}
+
+/** Parse and bound the crawlable page number accepted by discovery/search. */
+export function parseFeedPage(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(raw ?? '1', 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(Math.max(parsed, 1), MAX_HOME_FEED_PAGE);
+}
+
+/** Normalize the homepage search term to the shared search contract's limit. */
+export function parseFeedQuery(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return (raw ?? '').trim().slice(0, 200);
+}
+
+/** Preserve the active query and filters while changing the crawlable page. */
+export function feedPageHref(
+  input: Record<string, string | string[] | undefined>,
+  page: number,
+): string {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || key === 'page') continue;
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      params.append(key, entry);
+    }
+  }
+
+  if (page > 1) params.set('page', String(page));
+  const query = params.toString();
+  return query ? `/?${query}` : '/';
 }
 
 /** Return whether a query key belongs to the public feed filter set. */

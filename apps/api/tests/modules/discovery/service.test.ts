@@ -36,6 +36,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
   normalizeTypesenseHit: vi.fn((hit) => ({ ...hit, normalized: true })),
   normalizePostgresRow: vi.fn((row) => ({ ...row, normalized: true })),
   toDiscoveryCard: vi.fn(async (item) => ({
+    id: item.id,
     slug: item.slug,
     title: item.title,
     coverImageUrl: null,
@@ -45,6 +46,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
     designerSlug: item.designerSlug,
     city: null,
     bhk: null,
+    budget: null,
     ratingSnippet: null,
   })),
 }));
@@ -55,13 +57,11 @@ vi.mock('../../../src/modules/discovery/filter-builder.js', () => ({
 }));
 
 // Import AFTER the mocks are registered
-const { isTypesenseConfigured, logFallbackEvent, discoveryService } = await import(
-  '../../../src/modules/discovery/service.js'
-);
+const { isTypesenseConfigured, logFallbackEvent, discoveryService } =
+  await import('../../../src/modules/discovery/service.js');
 const { discoveryRepository } = await import('../../../src/modules/discovery/repository.js');
-const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } = await import(
-  '../../../src/modules/discovery/mapper.js'
-);
+const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } =
+  await import('../../../src/modules/discovery/mapper.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Fixtures
@@ -123,6 +123,7 @@ const postgresRow = (slug: string) => ({
   designerSlug: 'designer-slug',
   citySlug: 'mumbai',
   bhkSlug: '3-bhk',
+  budgetBandSlug: null,
   avgRating: '4.5',
   reviewCount: 10,
   coverStatus: 'ready' as const,

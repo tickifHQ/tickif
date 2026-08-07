@@ -30,12 +30,14 @@ import type { TaxonomyKind } from '../projects/repository.js';
  * This ensures contract-identical responses regardless of data source.
  */
 export interface NormalizedFeedItem {
+  id: string;
   slug: string;
   title: string;
   designerName: string;
   designerSlug: string | null;
   citySlug: string | null;
   bhkSlug: string | null;
+  budgetBandSlug: string | null;
   avgRating: number;
   reviewCount: number;
   /** For Typesense: the coverImageKey. For Postgres: null (we have derivatives). */
@@ -57,12 +59,14 @@ export interface NormalizedFeedItem {
  */
 export function normalizeTypesenseHit(hit: ProjectSearchDocument): NormalizedFeedItem {
   return {
+    id: hit.id,
     slug: hit.slug,
     title: hit.title,
     designerName: hit.designerName,
     designerSlug: hit.designerSlug,
     citySlug: hit.citySlug,
     bhkSlug: hit.bhkSlug,
+    budgetBandSlug: hit.budgetBandSlug,
     avgRating: hit.avgRating ?? 0,
     reviewCount: hit.reviewCount ?? 0,
     coverImageKey: hit.coverImageKey,
@@ -78,12 +82,14 @@ export function normalizeTypesenseHit(hit: ProjectSearchDocument): NormalizedFee
  */
 export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
   return {
+    id: row.id,
     slug: row.slug,
     title: row.title,
     designerName: row.designerName,
     designerSlug: row.designerSlug,
     citySlug: row.citySlug,
     bhkSlug: row.bhkSlug,
+    budgetBandSlug: row.budgetBandSlug,
     avgRating: Number(row.avgRating) || 0,
     reviewCount: row.reviewCount,
     coverImageKey: null,
@@ -148,6 +154,7 @@ export function collectTaxonomyPairs(
   for (const item of items) {
     add('city', item.citySlug);
     add('bhk', item.bhkSlug);
+    add('budget_band', item.budgetBandSlug);
   }
 
   return pairs;
@@ -202,6 +209,7 @@ export async function toDiscoveryCard(
   }
 
   return {
+    id: item.id,
     slug: item.slug,
     title: item.title,
     coverImageUrl,
@@ -211,6 +219,7 @@ export async function toDiscoveryCard(
     designerSlug: item.designerSlug,
     city: labelOf(labels, 'city', item.citySlug),
     bhk: labelOf(labels, 'bhk', item.bhkSlug),
+    budget: labelOf(labels, 'budget_band', item.budgetBandSlug),
     ratingSnippet: formatRatingSnippet(item.avgRating, item.reviewCount),
   };
 }

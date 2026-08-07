@@ -155,6 +155,42 @@ describe('GET /api/search', () => {
       const body = await json<SearchProjectsResponse>(res);
       expect(body.hits[0]?.coverImageUrl).toBeNull();
     });
+
+    it('normalizes omitted optional Typesense fields to null', async () => {
+      const doc = mockProjectDocument();
+      const nullableFields = [
+        'description',
+        'designerSlug',
+        'citySlug',
+        'localitySlug',
+        'propertyTypeSlug',
+        'propertySubtypeSlug',
+        'scopeSlug',
+        'bhkSlug',
+        'budgetBandSlug',
+        'sizeSqft',
+      ] as const;
+
+      for (const field of nullableFields) Reflect.deleteProperty(doc, field);
+      vi.mocked(repository.searchProjects).mockResolvedValue(mockProjectSearchResult([doc]));
+
+      const res = await get('/api/search?q=commercial');
+      const body = await json<SearchProjectsResponse>(res);
+
+      expect(res.status).toBe(200);
+      expect(body.hits[0]).toMatchObject({
+        description: null,
+        designerSlug: null,
+        citySlug: null,
+        localitySlug: null,
+        propertyTypeSlug: null,
+        propertySubtypeSlug: null,
+        scopeSlug: null,
+        bhkSlug: null,
+        budgetBandSlug: null,
+        sizeSqft: null,
+      });
+    });
   });
 
   describe('filter combinations', () => {

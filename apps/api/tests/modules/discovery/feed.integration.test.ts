@@ -76,6 +76,7 @@ async function makePublishedProject(
     publishedAt: new Date(),
     citySlug: 'mumbai',
     bhkSlug: '3-bhk',
+    budgetBandSlug: '15l-35l',
     ...overrides,
   });
 }
@@ -116,6 +117,7 @@ async function seedFeedTaxonomy() {
   const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
   await makeTaxonomy({ kind: 'bhk', slug: '3-bhk', label: '3 BHK' });
   await makeTaxonomy({ kind: 'bhk', slug: '2-bhk', label: '2 BHK' });
+  await makeTaxonomy({ kind: 'budget_band', slug: '15l-35l', label: '₹15L - ₹35L' });
   return city;
 }
 
@@ -154,7 +156,7 @@ function makeTypesenseHit(
       propertySubtypeSlug: null,
       scopeSlug: null,
       bhkSlug: project.bhkSlug,
-      budgetBandSlug: null,
+      budgetBandSlug: '15l-35l',
       sizeSqft: null,
       themes: [],
       materials: [],
@@ -475,6 +477,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(card).toHaveProperty('designerSlug');
       expect(card).toHaveProperty('city');
       expect(card).toHaveProperty('bhk');
+      expect(card).toHaveProperty('budget');
       expect(card).toHaveProperty('ratingSnippet');
     });
 
@@ -571,6 +574,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
         designerName: 'Postgres Only Studio',
         city: 'Mumbai',
         bhk: '3 BHK',
+        budget: '₹15L - ₹35L',
         ratingSnippet: '4.8 (25 reviews)',
       });
       // Cover image should be presigned

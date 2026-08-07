@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { DesignerProjectCard, FeedProject } from '@repo/contracts';
+import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/contracts';
 import { PublicProjectCard } from '../../src/components/public-project-card';
 import { ShowcaseCard } from '../../src/components/showcase-card';
 
@@ -28,6 +28,21 @@ const designerProject: DesignerProjectCard = {
   sizeSqft: 1200,
 };
 
+const discoveryProject: DiscoveryCard = {
+  id: '33333333-3333-4333-8333-333333333333',
+  slug: 'discovery-project',
+  title: 'Discovery Project',
+  coverImageUrl: 'https://images.example.com/discovery.jpg',
+  coverImageWidth: 640,
+  coverImageHeight: 800,
+  designerName: 'Studio B',
+  designerSlug: 'studio-b',
+  city: 'Pune',
+  bhk: '2 BHK',
+  budget: '₹15L - ₹35L',
+  ratingSnippet: '4.8 (12 reviews)',
+};
+
 describe('ShowcaseCard', () => {
   it('links feed image cards to the cover image detail page', () => {
     render(<ShowcaseCard project={feedProject} />);
@@ -39,6 +54,17 @@ describe('ShowcaseCard', () => {
     render(<ShowcaseCard project={{ ...feedProject, coverImageId: null }} />);
 
     expect(screen.getByRole('link')).toHaveAttribute('href', `/projects/${feedProject.id}`);
+  });
+
+  it('renders discovery cards with stable dimensions and links by project id', () => {
+    render(<ShowcaseCard project={discoveryProject} />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', `/projects/${discoveryProject.id}`);
+    expect(screen.getByRole('img', { name: discoveryProject.title })).toHaveAttribute(
+      'width',
+      '640',
+    );
+    expect(screen.getByText('₹15L - ₹35L')).toBeInTheDocument();
   });
 });
 

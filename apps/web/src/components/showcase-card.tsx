@@ -1,44 +1,112 @@
 'use client';
 
 import Link from 'next/link';
-import type { FeedProject } from '@repo/contracts';
+import type { DiscoveryCard, FeedProject } from '@repo/contracts';
 
 const FALLBACK_WIDTH = 480;
 const FALLBACK_HEIGHT = 600;
 
-export function ShowcaseCard({ project }: { project: FeedProject }) {
-  const width = project.imageWidth ?? FALLBACK_WIDTH;
-  const height = project.imageHeight ?? FALLBACK_HEIGHT;
-  const imageUrl =
-    project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/${width}/${height}`;
-  const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
-  const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
+type ShowcaseProject = FeedProject | DiscoveryCard;
+
+function isLegacyFeedProject(project: ShowcaseProject): project is FeedProject {
+  return 'studio' in project;
+}
+
+export function ShowcaseCard({
+  project,
+  priority = false,
+}: {
+  project: ShowcaseProject;
+  priority?: boolean;
+}) {
+  const isLegacy = isLegacyFeedProject(project);
+  const width = (isLegacy ? project.imageWidth : project.coverImageWidth) ?? FALLBACK_WIDTH;
+  const height = (isLegacy ? project.imageHeight : project.coverImageHeight) ?? FALLBACK_HEIGHT;
+  const href =
+    isLegacy && project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
+  const location = isLegacy
+    ? [project.locality, project.city].filter(Boolean).join(', ') || null
+    : project.city;
+  const studio = isLegacy ? project.studio : project.designerName;
+  const rating = isLegacy ? project.rating.toFixed(1) : project.ratingSnippet;
+  const tags = isLegacy ? project.tags : [project.bhk].filter((tag): tag is string => !!tag);
 
   return (
-    <Link
-      href={href}
-      className="group relative mb-4 block break-inside-avoid overflow-hidden rounded-xl bg-muted"
-    >
-      <img
-        src={imageUrl}
-        alt={project.title}
-        loading="lazy"
-        className="w-full object-cover"
-        style={{ aspectRatio: `${width} / ${height}` }}
-      />
+    <article className="group relative mb-4 break-inside-avoid overflow-hidden rounded-xl bg-muted">
+      <Link href={href} className="block">
+        {project.coverImageUrl ? (
+          <img
+            src={project.coverImageUrl}
+            alt={project.title}
+            width={width}
+            height={height}
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            decoding="async"
+            draggable={false}
+            onContextMenu={(event) => event.preventDefault()}
+            className="w-full select-none object-cover"
+            style={{ aspectRatio: `${width} / ${height}` }}
+          />
+        ) : (
+          <div
+            role="img"
+            aria-label={`${project.title} image unavailable`}
+            className="grid w-full place-items-center bg-muted text-xs text-muted-foreground"
+            style={{ aspectRatio: `${width} / ${height}` }}
+          >
+            Image coming soon
+          </div>
+        )}
 
-      {project.budget && (
-        <span className="absolute bottom-3 left-3 rounded-full bg-background/95 px-2.5 py-1 font-mono text-[11px] font-medium text-foreground shadow-sm transition-opacity group-hover:opacity-0 sm:opacity-100">
-          {project.budget}
-        </span>
-      )}
+        {project.budget ? (
+          <span className="absolute bottom-3 left-3 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-medium leading-[1.1] text-foreground transition-opacity group-hover:opacity-0 sm:opacity-100">
+            {project.budget}
+          </span>
+        ) : null}
 
-      <div className="absolute right-3 top-3 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-[18px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <h3 className="font-display text-xl leading-tight tracking-tight text-background">
+            {project.title}
+          </h3>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-background/90">
+            <span className="whitespace-nowrap">{studio}</span>
+            {location ? (
+              <>
+                <span className="text-background/50">·</span>
+                <span className="whitespace-nowrap">{location}</span>
+              </>
+            ) : null}
+            {rating ? (
+              <span className="whitespace-nowrap">
+                <span className="text-background/50">·</span>{' '}
+                <span aria-hidden className="text-primary">
+                  ★
+                </span>{' '}
+                {rating}
+              </span>
+            ) : null}
+          </div>
+          {tags.length > 0 ? (
+            <div className="mt-2.5 flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-background/20 px-2 py-[3px] text-[10.5px] font-medium tracking-[0.21px] text-background backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </Link>
+
+      <div className="absolute right-3 top-3 z-10 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
           aria-label="Save"
           className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-          onClick={(e) => e.preventDefault()}
         >
           <svg
             viewBox="0 0 24 24"
@@ -55,7 +123,6 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
           type="button"
           aria-label="Share"
           className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-          onClick={(e) => e.preventDefault()}
         >
           <svg
             viewBox="0 0 24 24"
@@ -72,40 +139,6 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
           </svg>
         </button>
       </div>
-
-      <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-[18px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        <h3 className="font-display text-xl leading-tight tracking-tight text-background">
-          {project.title}
-        </h3>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-background/90">
-          <span className="whitespace-nowrap">{project.studio}</span>
-          {location && (
-            <>
-              <span className="text-background/50">·</span>
-              <span className="whitespace-nowrap">{location}</span>
-            </>
-          )}
-          <span className="whitespace-nowrap">
-            <span className="text-background/50">·</span>{' '}
-            <span aria-hidden className="text-primary">
-              ★
-            </span>{' '}
-            {project.rating.toFixed(1)}
-          </span>
-        </div>
-        {project.tags.length > 0 && (
-          <div className="mt-2.5 flex flex-wrap gap-1">
-            {project.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-background/20 px-2 py-[3px] text-[10.5px] font-medium tracking-[0.21px] text-background backdrop-blur-sm"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </Link>
+    </article>
   );
 }

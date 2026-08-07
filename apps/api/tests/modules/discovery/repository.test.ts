@@ -200,7 +200,7 @@ describe('discoveryRepository.searchFeed', () => {
       page: 2,
       per_page: 12,
       include_fields:
-        'id,slug,title,designerSlug,designerName,citySlug,bhkSlug,coverImageKey,avgRating,reviewCount',
+        'id,slug,title,designerSlug,designerName,citySlug,bhkSlug,budgetBandSlug,coverImageKey,avgRating,reviewCount',
     });
   });
 
@@ -320,6 +320,7 @@ describe('discoveryRepository.searchFeed', () => {
         'designerName',
         'citySlug',
         'bhkSlug',
+        'budgetBandSlug',
         'coverImageKey',
         'avgRating',
         'reviewCount',
@@ -546,6 +547,7 @@ describe('discoveryRepository.listFeedFallback', () => {
           'title',
           'citySlug',
           'bhkSlug',
+          'budgetBandSlug',
           'designerName',
           'designerSlug',
           'avgRating',

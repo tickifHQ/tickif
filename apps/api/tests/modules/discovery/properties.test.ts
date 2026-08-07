@@ -38,6 +38,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
     designerSlug: hit.designerSlug,
     citySlug: hit.citySlug,
     bhkSlug: hit.bhkSlug,
+    budgetBandSlug: hit.budgetBandSlug,
     avgRating: hit.avgRating ?? 0,
     reviewCount: hit.reviewCount ?? 0,
     coverImageKey: hit.coverImageKey,
@@ -51,6 +52,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
     designerSlug: row.designerSlug,
     citySlug: row.citySlug,
     bhkSlug: row.bhkSlug,
+    budgetBandSlug: row.budgetBandSlug,
     avgRating: Number(row.avgRating) || 0,
     reviewCount: row.reviewCount,
     coverImageKey: null,
@@ -58,6 +60,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
     coverStatus: row.coverStatus,
   })),
   toDiscoveryCard: vi.fn(async (item) => ({
+    id: item.id,
     slug: item.slug,
     title: item.title,
     coverImageUrl: null,
@@ -67,6 +70,7 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
     designerSlug: item.designerSlug,
     city: null,
     bhk: null,
+    budget: null,
     ratingSnippet: null,
   })),
 }));
@@ -149,6 +153,7 @@ const createPostgresRow = (
   designerSlug: 'designer-slug',
   citySlug,
   bhkSlug,
+  budgetBandSlug: null,
   avgRating: '4.5',
   reviewCount: 10,
   coverStatus: 'ready' as const,
@@ -725,6 +730,7 @@ describe('Property 5: Response Contract Identity', () => {
       expect(item).toHaveProperty('designerSlug');
       expect(item).toHaveProperty('city');
       expect(item).toHaveProperty('bhk');
+      expect(item).toHaveProperty('budget');
       expect(item).toHaveProperty('ratingSnippet');
     });
   });
@@ -769,6 +775,7 @@ describe('Property 5: Response Contract Identity', () => {
       expect(item).toHaveProperty('designerSlug');
       expect(item).toHaveProperty('city');
       expect(item).toHaveProperty('bhk');
+      expect(item).toHaveProperty('budget');
       expect(item).toHaveProperty('ratingSnippet');
     });
   });
@@ -847,9 +854,8 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('shared mapper enforcement', () => {
     it('both paths normalize through the same mapper', async () => {
-      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } = await import(
-        '../../../src/modules/discovery/mapper.js'
-      );
+      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } =
+        await import('../../../src/modules/discovery/mapper.js');
 
       // Typesense path
       vi.stubEnv('TYPESENSE_HOST', 'localhost');

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  feedPageHref,
+  parseFeedPage,
   parseFeedParams,
+  parseFeedQuery,
   serializeFeedParams,
   toDiscoveryFeedFilters,
-  toFeedProjectsFilters,
+  toSearchProjectFilters,
 } from '../../src/lib/feed-params';
 
 describe('feed params', () => {
@@ -41,8 +44,8 @@ describe('feed params', () => {
     });
   });
 
-  it('maps URL state to the server-rendered project feed query', () => {
-    const filters = toFeedProjectsFilters(
+  it('maps URL state to project-search filter keys', () => {
+    const filters = toSearchProjectFilters(
       parseFeedParams(new URLSearchParams('city=mumbai,pune&propertyType=residential')),
     );
 
@@ -50,5 +53,20 @@ describe('feed params', () => {
       citySlug: ['mumbai', 'pune'],
       propertyTypeSlug: 'residential',
     });
+  });
+
+  it('bounds page numbers to the shared API result window', () => {
+    expect(parseFeedPage(undefined)).toBe(1);
+    expect(parseFeedPage('-2')).toBe(1);
+    expect(parseFeedPage('3')).toBe(3);
+    expect(parseFeedPage('999')).toBe(41);
+  });
+
+  it('normalizes the search query and preserves it in pagination links', () => {
+    expect(parseFeedQuery('  warm kitchen  ')).toBe('warm kitchen');
+    expect(feedPageHref({ q: 'warm kitchen', city: 'pune', page: '1' }, 2)).toBe(
+      '/?q=warm+kitchen&city=pune&page=2',
+    );
+    expect(feedPageHref({ q: 'warm kitchen', page: '2' }, 1)).toBe('/?q=warm+kitchen');
   });
 });

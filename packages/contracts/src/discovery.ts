@@ -42,6 +42,7 @@ export type DiscoveryFeedQuery = z.infer<typeof discoveryFeedQuerySchema>;
 
 export const discoveryCardSchema = z
   .object({
+    id: z.string(),
     slug: z.string(),
     title: z.string(),
     coverImageUrl: z.string().url().nullable(),
@@ -51,6 +52,7 @@ export const discoveryCardSchema = z
     designerSlug: z.string().nullable(),
     city: z.string().nullable(),
     bhk: z.string().nullable(),
+    budget: z.string().nullable(),
     ratingSnippet: z.string().nullable(),
   })
   .meta({ id: 'DiscoveryCard' });

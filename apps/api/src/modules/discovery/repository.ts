@@ -45,6 +45,7 @@ export interface FeedProjectRow {
   title: string;
   citySlug: string | null;
   bhkSlug: string | null;
+  budgetBandSlug: string | null;
   designerName: string;
   designerSlug: string | null;
   avgRating: string;
@@ -92,6 +93,7 @@ const TYPESENSE_INCLUDE_FIELDS = [
   'designerName',
   'citySlug',
   'bhkSlug',
+  'budgetBandSlug',
   'coverImageKey',
   'avgRating',
   'reviewCount',
@@ -181,6 +183,7 @@ export const discoveryRepository = {
         title: schema.project.title,
         citySlug: schema.project.citySlug,
         bhkSlug: schema.project.bhkSlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
         designerName: schema.designerProfile.displayName,
         designerSlug: schema.organization.slug,
         avgRating: schema.designerProfile.avgRating,
