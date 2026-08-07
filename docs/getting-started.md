@@ -47,6 +47,22 @@ needed if you're working on Gmail SSO; phone-OTP login works without them.
 > the current directory, so every workspace command picks it up — you don't need
 > to export anything.
 
+### Production delivery providers
+
+Production uses three external delivery/storage providers. Keep their credentials
+in the deployment secrets manager, never in the repository:
+
+| Capability    | Provider      | Required configuration                                                                               |
+| ------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| Email         | Resend        | `RESEND_API_KEY`, plus `EMAIL_FROM` set to a verified sender/domain                                  |
+| SMS           | Novu          | `SMS_PROVIDER=novu`, `NOVU_SECRET_KEY`, `NOVU_OTP_WORKFLOW_ID`, and `NOVU_BOOKING_WORKFLOW_ID`       |
+| Media storage | Cloudflare R2 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and either `R2_ACCOUNT_ID` or `R2_ENDPOINT` |
+
+`@repo/config` fails production startup when required Resend or R2 values are
+missing, and when a deployment selects Novu without its required values.
+Development can omit Resend and Novu credentials: email logs metadata only and
+SMS uses the console fallback. Production never falls back to console delivery.
+
 ## 4. Start infrastructure
 
 ```bash

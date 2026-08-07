@@ -75,6 +75,16 @@ On verify, better-auth creates rows in `user` and `session` (and consumes the
 (`<phone>@phone.tickif.local`) until the designer completes their profile —
 configured via `signUpOnVerification` in the plugin options.
 
+## Transactional email delivery
+
+Auth emails and organization invitations are delivered through Resend. Production
+requires `RESEND_API_KEY`; `EMAIL_FROM` must use a sender or domain verified in the
+same Resend account. `@repo/config` validates this at startup so a deployment does
+not discover a missing credential on its first email.
+
+Development and test environments may omit the key. In that mode the email sender
+logs only recipient and subject metadata, never the HTML body or any OTP content.
+
 ## better-auth tables & the schema
 
 better-auth's tables (`user`, `session`, `account`, `verification`,

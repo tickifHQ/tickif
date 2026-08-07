@@ -141,9 +141,10 @@ const envSchema = z.object({
   MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
   MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
 
-  // Email delivery via Resend (E-203). Optional in dev (logs to console).
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
+  // Email delivery via Resend (E-203). Optional in dev/test (logs to console),
+  // but asserted below for production so auth emails cannot fail at first use.
+  RESEND_API_KEY: z.string().trim().min(1).optional(),
+  EMAIL_FROM: z.string().trim().min(1).default('Tickif <noreply@tickif.com>'),
 
   // Google Places API key for designer-portfolio Google review fetching.
   // Distinct from the GOOGLE_CLIENT_* OAuth creds above (those are Gmail SSO).
@@ -259,6 +260,13 @@ function assertProductionSmsConfig(env: RawEnv): void {
   }
 }
 
+function assertProductionEmailConfig(env: RawEnv): void {
+  if (env.NODE_ENV !== 'production' || env.RESEND_API_KEY) return;
+  throw new Error(
+    'Invalid environment configuration:\n  - RESEND_API_KEY: required when NODE_ENV=production',
+  );
+}
+
 export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   const parsed = refinedEnvSchema.safeParse(environment);
   if (!parsed.success) {
@@ -270,6 +278,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   const env = parsed.data;
   assertProductionMediaConfig(env);
   assertProductionSmsConfig(env);
+  assertProductionEmailConfig(env);
   return {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
