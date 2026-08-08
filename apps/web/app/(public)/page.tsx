@@ -98,6 +98,12 @@ function budgetSuggestions(options: FeedFacetOptions): FeedFilterSuggestion[] {
   }));
 }
 
+function budgetLabelsBySlug(options: FeedFacetOptions): Record<string, string> {
+  return Object.fromEntries(
+    (options.budgetBand ?? []).map((option) => [option.slug, option.label]),
+  );
+}
+
 function canonicalParams(params: HomeSearchParams, page: number): HomeSearchParams {
   const result: HomeSearchParams = {};
   const query = parseFeedQuery(params.q);
@@ -130,17 +136,30 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const page = parseFeedPage(params.page);
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
-  const request: HomeFeedRequest = { filters, query, sort: 'recent' };
+  const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
   const isDefaultFeed = !query && !hasFilters(filters);
 
+  const sessionPromise = getServerSession();
+  const taxonomyOptionsPromise = fetchTaxonomyOptions();
+  const initialPagePromise = query
+    ? taxonomyOptionsPromise.then((options) =>
+        fetchFeedSafely({ ...baseRequest, budgetLabelsBySlug: budgetLabelsBySlug(options) }, page),
+      )
+    : fetchFeedSafely(baseRequest, page);
+  const featuredPagePromise = isDefaultFeed
+    ? fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
+    : Promise.resolve(emptyHomeFeedPage(1));
+
   const [session, taxonomyOptions, initialPage, featuredPage] = await Promise.all([
-    getServerSession(),
-    fetchTaxonomyOptions(),
-    fetchFeedSafely(request, page),
-    isDefaultFeed
-      ? fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
-      : Promise.resolve(emptyHomeFeedPage(1)),
+    sessionPromise,
+    taxonomyOptionsPromise,
+    initialPagePromise,
+    featuredPagePromise,
   ]);
+  const request: HomeFeedRequest = {
+    ...baseRequest,
+    budgetLabelsBySlug: budgetLabelsBySlug(taxonomyOptions),
+  };
   const filterSuggestions = budgetSuggestions(taxonomyOptions);
 
   const previousHref = page > 1 ? feedPageHref(canonicalParams(params, page - 1), page - 1) : null;
@@ -182,7 +201,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} initialQuery={query} />
 
       <div className="bg-home-hero-gradient-to">
-        {isDefaultFeed && featuredPage.items.length > 0 ? (
+        {isDefaultFeed ? (
           <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="featured-projects">
             <div className="flex items-end justify-between gap-4">
               <div>
@@ -203,7 +222,15 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                 See all projects
               </Link>
             </div>
+
             <div className="mt-4">
+              <FeedFilters
+                options={taxonomyOptions}
+                facetDistribution={initialPage.facetDistribution}
+              />
+            </div>
+
+            <div className="mt-3">
               <ProjectFeed
                 initialPage={{ ...featuredPage, hasMore: false }}
                 request={{ filters, query: '', sort: 'featured' }}
@@ -212,35 +239,35 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
               />
             </div>
           </section>
-        ) : null}
+        ) : (
+          <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
+            <div>
+              <h2 id="project-results" className="font-display text-3xl font-medium tracking-tight">
+                {query ? `Results for “${query}”` : 'Projects'}
+              </h2>
+              <p className="mt-1 text-base text-muted-foreground">
+                {query
+                  ? 'Projects matching your search and filters'
+                  : 'Browse real projects published by Tickif designers'}
+              </p>
+            </div>
 
-        <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
-          <div>
-            <h2 id="project-results" className="font-display text-3xl font-medium tracking-tight">
-              {query ? `Results for “${query}”` : isDefaultFeed ? 'Recently published' : 'Projects'}
-            </h2>
-            <p className="mt-1 text-base text-muted-foreground">
-              {query
-                ? 'Projects matching your search and filters'
-                : 'Browse real projects published by Tickif designers'}
-            </p>
-          </div>
+            <div className="mt-4">
+              <FeedFilters
+                options={taxonomyOptions}
+                facetDistribution={initialPage.facetDistribution}
+              />
+            </div>
 
-          <div className="mt-4">
-            <FeedFilters
-              options={taxonomyOptions}
-              facetDistribution={initialPage.facetDistribution}
-            />
-          </div>
-
-          <div className="mt-3">
-            <ProjectFeed
-              initialPage={initialPage}
-              request={request}
-              filterSuggestions={filterSuggestions}
-            />
-          </div>
-        </section>
+            <div className="mt-3">
+              <ProjectFeed
+                initialPage={initialPage}
+                request={request}
+                filterSuggestions={filterSuggestions}
+              />
+            </div>
+          </section>
+        )}
       </div>
     </>
   );

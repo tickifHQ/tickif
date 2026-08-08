@@ -87,4 +87,15 @@ describe('HomeSearchBar', () => {
 
     expect(mock.push).toHaveBeenCalledWith('/?q=warm+kitchen');
   });
+
+  it('resyncs the input when browser history changes the URL query', () => {
+    const { rerender } = render(<HomeSearchBar initialQuery="sunlit" />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.change(input, { target: { value: 'Sarthak W' } });
+    rerender(<HomeSearchBar initialQuery="Sarthak W" />);
+    rerender(<HomeSearchBar initialQuery="sunlit" />);
+
+    expect(input).toHaveValue('sunlit');
+  });
 });

@@ -16,6 +16,7 @@ export type HomeFeedRequest = {
   filters: FeedFilterState;
   query: string;
   sort?: 'recent' | 'featured';
+  budgetLabelsBySlug?: Record<string, string>;
 };
 
 export type HomeFeedPage = {
@@ -27,8 +28,11 @@ export type HomeFeedPage = {
   relaxedFilters: string[];
 };
 
-function labelFromSlug(value: string | null): string | null {
+function labelFromSlug(value: string | null, labelsBySlug?: Record<string, string>): string | null {
   if (!value) return null;
+  const label = labelsBySlug?.[value];
+  if (label) return label;
+
   return value
     .split('-')
     .filter(Boolean)
@@ -73,7 +77,7 @@ export async function fetchHomeFeedPage(
         designerSlug: hit.designerSlug,
         city: labelFromSlug(hit.citySlug),
         bhk: labelFromSlug(hit.bhkSlug),
-        budget: null,
+        budget: labelFromSlug(hit.budgetBandSlug, request.budgetLabelsBySlug),
         ratingSnippet: null,
       })),
       page: parsed.data.page,

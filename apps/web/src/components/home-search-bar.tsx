@@ -32,6 +32,10 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
   const showDropdown = isFocused && trimmedQuery.length > 0;
 
   useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
     if (!trimmedQuery) {
       setSuggestions(EMPTY_SUGGESTIONS);
       setIsLoading(false);

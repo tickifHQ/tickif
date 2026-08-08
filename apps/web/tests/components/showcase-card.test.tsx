@@ -66,6 +66,19 @@ describe('ShowcaseCard', () => {
     );
     expect(screen.getByText('₹15L - ₹35L')).toBeInTheDocument();
   });
+
+  it('uses the natural image ratio when search results do not include dimensions', () => {
+    render(
+      <ShowcaseCard
+        project={{ ...discoveryProject, coverImageWidth: null, coverImageHeight: null }}
+      />,
+    );
+
+    const image = screen.getByRole('img', { name: discoveryProject.title });
+    expect(image).not.toHaveAttribute('width');
+    expect(image).not.toHaveAttribute('height');
+    expect(image).not.toHaveStyle({ aspectRatio: '480 / 600' });
+  });
 });
 
 describe('PublicProjectCard', () => {

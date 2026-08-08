@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 const mock = vi.hoisted(() => ({
   getServerSession: vi.fn(),
@@ -68,6 +68,18 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           ],
         });
       }
+      if (kind === 'budget_band') {
+        return response({
+          terms: [
+            {
+              id: '55555555-5555-4555-8555-555555555555',
+              label: '₹15L - ₹35L',
+              slug: 'upscale',
+              parentId: null,
+            },
+          ],
+        });
+      }
       return response({ terms: [] });
     }
     if (url.includes('/api/search?')) {
@@ -87,7 +99,7 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           propertySubtypeSlug: null,
           scopeSlug: null,
           bhkSlug: '3-bhk',
-          budgetBandSlug: null,
+          budgetBandSlug: 'upscale',
           sizeSqft: null,
           themes: [],
           materials: [],
@@ -127,13 +139,18 @@ describe('HomePage', () => {
     mockApi();
   });
 
-  it('renders real featured and recent discovery sections for logged-out visitors', async () => {
+  it('renders one featured discovery section with filters above the grid for logged-out visitors', async () => {
     render(await HomePage());
 
     expect(screen.getByText('No commissions · No middlemen')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Featured projects' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Recently published' })).toBeInTheDocument();
-    expect(screen.getAllByText('Test Project')).toHaveLength(2);
+    expect(screen.queryByRole('heading', { name: 'Recently published' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Test Project')).toHaveLength(1);
+    expect(
+      screen
+        .getByRole('button', { name: 'Filters' })
+        .compareDocumentPosition(screen.getByText('Test Project')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('link', { name: 'Homes in Mumbai' })).toHaveAttribute(
       'href',
       '/?city=mumbai',
@@ -229,6 +246,7 @@ describe('HomePage', () => {
 
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
+    expect(within(screen.getByRole('article')).getByText('₹15L - ₹35L')).toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

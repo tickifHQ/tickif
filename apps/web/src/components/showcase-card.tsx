@@ -20,8 +20,12 @@ export function ShowcaseCard({
   priority?: boolean;
 }) {
   const isLegacy = isLegacyFeedProject(project);
-  const width = (isLegacy ? project.imageWidth : project.coverImageWidth) ?? FALLBACK_WIDTH;
-  const height = (isLegacy ? project.imageHeight : project.coverImageHeight) ?? FALLBACK_HEIGHT;
+  const imageWidth = (isLegacy ? project.imageWidth : project.coverImageWidth) ?? null;
+  const imageHeight = (isLegacy ? project.imageHeight : project.coverImageHeight) ?? null;
+  const hasImageDimensions =
+    imageWidth !== null && imageWidth > 0 && imageHeight !== null && imageHeight > 0;
+  const placeholderWidth = hasImageDimensions ? imageWidth : FALLBACK_WIDTH;
+  const placeholderHeight = hasImageDimensions ? imageHeight : FALLBACK_HEIGHT;
   const href =
     isLegacy && project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
   const location = isLegacy
@@ -38,22 +42,24 @@ export function ShowcaseCard({
           <img
             src={project.coverImageUrl}
             alt={project.title}
-            width={width}
-            height={height}
+            width={hasImageDimensions ? imageWidth : undefined}
+            height={hasImageDimensions ? imageHeight : undefined}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             decoding="async"
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
-            className="w-full select-none object-cover"
-            style={{ aspectRatio: `${width} / ${height}` }}
+            className="h-auto w-full select-none object-cover"
+            style={
+              hasImageDimensions ? { aspectRatio: `${imageWidth} / ${imageHeight}` } : undefined
+            }
           />
         ) : (
           <div
             role="img"
             aria-label={`${project.title} image unavailable`}
             className="grid w-full place-items-center bg-muted text-xs text-muted-foreground"
-            style={{ aspectRatio: `${width} / ${height}` }}
+            style={{ aspectRatio: `${placeholderWidth} / ${placeholderHeight}` }}
           >
             Image coming soon
           </div>
