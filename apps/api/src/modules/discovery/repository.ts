@@ -1,6 +1,11 @@
-import { searchClient, searchCollectionName, type ProjectSearchDocument } from '@repo/search';
+import {
+  PROJECT_QUERY_BY,
+  searchClient,
+  searchCollectionName,
+  type ProjectSearchDocument,
+} from '@repo/search';
 import { db, schema, eq, and, or, inArray, sql } from '@repo/db';
-import { exists } from 'drizzle-orm';
+import { exists, ilike } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import {
@@ -39,11 +44,14 @@ export interface FeedProjectRow {
   slug: string;
   title: string;
   citySlug: string | null;
+  localitySlug: string | null;
   bhkSlug: string | null;
+  budgetBandSlug: string | null;
   designerName: string;
   designerSlug: string | null;
   avgRating: string;
   reviewCount: number;
+  coverImageId: string | null;
   coverStatus: 'processing' | 'ready' | 'failed' | null;
   coverDerivatives: Derivative[] | null;
 }
@@ -58,6 +66,7 @@ export interface PostgresListResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SearchFeedParams {
+  q?: string;
   filterBy: string;
   sortBy: string;
   page: number;
@@ -65,6 +74,7 @@ interface SearchFeedParams {
 }
 
 interface ListFeedFallbackParams {
+  q?: string;
   filterBy: DiscoveryFeedFilters;
   sortBy: DiscoverySortPostgres;
   limit: number;
@@ -86,8 +96,14 @@ const TYPESENSE_INCLUDE_FIELDS = [
   'designerSlug',
   'designerName',
   'citySlug',
+  'localitySlug',
   'bhkSlug',
+  'budgetBandSlug',
+  'themes',
   'coverImageKey',
+  'coverImageId',
+  'coverImageWidth',
+  'coverImageHeight',
   'avgRating',
   'reviewCount',
 ].join(',');
@@ -184,6 +200,10 @@ function buildPostgresFilters(filters: DiscoveryFeedFilters): SQL[] {
   return clauses;
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +221,8 @@ export const discoveryRepository = {
       .collections<ProjectSearchDocument>(searchCollectionName('projects'))
       .documents()
       .search({
-        q: '*',
+        q: params.q || '*',
+        query_by: PROJECT_QUERY_BY.join(','),
         filter_by: params.filterBy || undefined,
         sort_by: params.sortBy,
         facet_by: DISCOVERY_FILTER_FIELDS.join(','),
@@ -233,6 +254,13 @@ export const discoveryRepository = {
     const where = and(
       eq(schema.project.status, 'published'),
       eq(schema.designerProfile.status, 'active'),
+      params.q
+        ? or(
+            ilike(schema.project.title, `%${escapeLikePattern(params.q)}%`),
+            ilike(schema.project.description, `%${escapeLikePattern(params.q)}%`),
+            ilike(schema.designerProfile.displayName, `%${escapeLikePattern(params.q)}%`),
+          )
+        : undefined,
       ...filters,
     );
 
@@ -242,11 +270,14 @@ export const discoveryRepository = {
         slug: schema.project.slug,
         title: schema.project.title,
         citySlug: schema.project.citySlug,
+        localitySlug: schema.project.localitySlug,
         bhkSlug: schema.project.bhkSlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
         designerName: schema.designerProfile.displayName,
         designerSlug: schema.organization.slug,
         avgRating: schema.designerProfile.avgRating,
         reviewCount: schema.designerProfile.reviewCount,
+        coverImageId: schema.project.coverImageId,
         coverStatus: cover.status,
         coverDerivatives: cover.derivatives,
       })
@@ -260,6 +291,30 @@ export const discoveryRepository = {
       .offset(params.offset);
 
     return { rows };
+  },
+
+  async findThemeSlugs(projectIds: string[]): Promise<Map<string, string[]>> {
+    if (projectIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        projectId: schema.projectImage.projectId,
+        themeSlugs: schema.projectImage.themeSlugs,
+      })
+      .from(schema.projectImage)
+      .where(
+        and(
+          inArray(schema.projectImage.projectId, projectIds),
+          eq(schema.projectImage.status, 'ready'),
+        ),
+      );
+
+    const themes = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const projectThemes = themes.get(row.projectId) ?? new Set<string>();
+      for (const slug of row.themeSlugs) projectThemes.add(slug);
+      themes.set(row.projectId, projectThemes);
+    }
+    return new Map([...themes].map(([projectId, slugs]) => [projectId, [...slugs].sort()]));
   },
 };
 

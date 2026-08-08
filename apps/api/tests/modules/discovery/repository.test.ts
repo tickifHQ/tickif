@@ -17,6 +17,7 @@ const mockSearchClient = {
 };
 
 vi.mock('@repo/search', () => ({
+  PROJECT_QUERY_BY: ['title'],
   searchClient: vi.fn(() => mockSearchClient),
   searchCollectionName: vi.fn((name: string) => `${name}_alias`),
 }));
@@ -184,6 +185,7 @@ describe('discoveryRepository.searchFeed', () => {
     mockSearch.mockResolvedValue(mockSearchResponse([mockHit({})], 1));
 
     await discoveryRepository.searchFeed({
+      q: 'calm home',
       filterBy: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
       sortBy: 'featuredAt:desc,publishedAt:desc',
       page: 2,
@@ -191,7 +193,8 @@ describe('discoveryRepository.searchFeed', () => {
     });
 
     expect(mockSearch).toHaveBeenCalledWith({
-      q: '*',
+      q: 'calm home',
+      query_by: 'title',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
       sort_by: 'featuredAt:desc,publishedAt:desc',
       facet_by:
@@ -199,7 +202,7 @@ describe('discoveryRepository.searchFeed', () => {
       page: 2,
       per_page: 12,
       include_fields:
-        'id,slug,title,designerSlug,designerName,citySlug,bhkSlug,coverImageKey,avgRating,reviewCount',
+        'id,slug,title,designerSlug,designerName,citySlug,localitySlug,bhkSlug,budgetBandSlug,themes,coverImageKey,coverImageId,coverImageWidth,coverImageHeight,avgRating,reviewCount',
     });
   });
 
@@ -318,8 +321,14 @@ describe('discoveryRepository.searchFeed', () => {
         'designerSlug',
         'designerName',
         'citySlug',
+        'localitySlug',
         'bhkSlug',
+        'budgetBandSlug',
+        'themes',
         'coverImageKey',
+        'coverImageId',
+        'coverImageWidth',
+        'coverImageHeight',
         'avgRating',
         'reviewCount',
       ];
@@ -349,11 +358,14 @@ describe('discoveryRepository.listFeedFallback', () => {
     slug: 'test-project',
     title: 'Test Project',
     citySlug: 'mumbai',
+    localitySlug: 'bandra',
     bhkSlug: '3-bhk',
+    budgetBandSlug: '40-60-lakh',
     designerName: 'Test Designer',
     designerSlug: 'designer-1',
     avgRating: '4.5',
     reviewCount: 10,
+    coverImageId: 'image-1',
     coverStatus: 'ready' as const,
     coverDerivatives: [
       { variant: 'small', format: 'webp', key: 'test.webp', width: 640, height: 480 },
@@ -544,11 +556,14 @@ describe('discoveryRepository.listFeedFallback', () => {
           'slug',
           'title',
           'citySlug',
+          'localitySlug',
           'bhkSlug',
+          'budgetBandSlug',
           'designerName',
           'designerSlug',
           'avgRating',
           'reviewCount',
+          'coverImageId',
           'coverStatus',
           'coverDerivatives',
         ];
