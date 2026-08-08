@@ -4,6 +4,8 @@ export type SearchImageDerivative = {
   variant: string;
   format: string;
   key: string;
+  width: number;
+  height: number;
 };
 
 export type ProjectSearchSource = {
@@ -31,6 +33,7 @@ export type ProjectSearchSource = {
     reviewCount: number;
   };
   cover: {
+    id: string;
     status: 'processing' | 'ready' | 'failed';
     derivatives: SearchImageDerivative[];
   } | null;
@@ -75,17 +78,20 @@ function uniqueSorted(values: Iterable<string>): string[] {
   );
 }
 
-function pickCoverDerivative(derivatives: SearchImageDerivative[]): string | null {
+function pickCoverDerivative(derivatives: SearchImageDerivative[]): SearchImageDerivative | null {
   return (
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
-      ?.key ??
-    derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
-    derivatives[0]?.key ??
+      ??
+    derivatives.find((derivative) => derivative.variant === 'thumb') ??
+    derivatives[0] ??
     null
   );
 }
 
 export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSearchDocument {
+  const cover = source.cover?.status === 'ready'
+    ? pickCoverDerivative(source.cover.derivatives)
+    : null;
   return {
     id: source.project.id,
     slug: source.project.slug,
@@ -115,8 +121,10 @@ export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSe
       ]),
     ),
     tags: uniqueSorted(source.images.flatMap((image) => image.tagSlugs)),
-    coverImageKey:
-      source.cover?.status === 'ready' ? pickCoverDerivative(source.cover.derivatives) : null,
+    coverImageKey: cover?.key ?? null,
+    coverImageId: cover ? (source.cover?.id ?? null) : null,
+    coverImageWidth: cover?.width ?? null,
+    coverImageHeight: cover?.height ?? null,
     publishedAt: source.project.publishedAt.getTime(),
     featuredAt: source.project.featuredAt?.getTime() ?? null,
     avgRating: Number(source.designer.avgRating),

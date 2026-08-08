@@ -28,11 +28,12 @@ describe('search projection mapper', () => {
       },
       designer: { slug: 'studio-one', displayName: 'Studio One', avgRating: '4.75', reviewCount: 16 },
       cover: {
+        id: '11111111-1111-4111-8111-111111111111',
         status: 'ready',
         derivatives: [
-          { variant: 'medium', format: 'webp', key: 'medium.webp' },
-          { variant: 'thumb', format: 'jpeg', key: 'thumb.jpg' },
-          { variant: 'thumb', format: 'webp', key: 'thumb.webp' },
+          { variant: 'medium', format: 'webp', key: 'medium.webp', width: 1280, height: 960 },
+          { variant: 'thumb', format: 'jpeg', key: 'thumb.jpg', width: 320, height: 240 },
+          { variant: 'thumb', format: 'webp', key: 'thumb.webp', width: 320, height: 240 },
         ],
       },
       rooms: [
@@ -83,6 +84,9 @@ describe('search projection mapper', () => {
       roomLabels: ['Formal lounge', 'Living room', 'Open plan', 'Warm'],
       tags: ['custom', 'sunlit'],
       coverImageKey: 'thumb.webp',
+      coverImageId: '11111111-1111-4111-8111-111111111111',
+      coverImageWidth: 320,
+      coverImageHeight: 240,
       publishedAt: new Date('2026-07-01T00:00:00.000Z').getTime(),
       featuredAt: null,
       avgRating: 4.75,
