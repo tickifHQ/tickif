@@ -64,7 +64,7 @@ describe('ShowcaseCard', () => {
       'width',
       '640',
     );
-    expect(screen.getByText('₹15L - ₹35L')).toBeInTheDocument();
+    expect(screen.getByText('₹15-35L')).toBeInTheDocument();
   });
 
   it('uses the natural image ratio when search results do not include dimensions', () => {

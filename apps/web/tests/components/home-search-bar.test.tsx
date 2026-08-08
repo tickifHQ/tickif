@@ -49,6 +49,7 @@ describe('HomeSearchBar', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    window.localStorage.clear();
     mock.suggestGet.mockResolvedValue({
       ok: true,
       status: 200,
@@ -97,5 +98,50 @@ describe('HomeSearchBar', () => {
     rerender(<HomeSearchBar initialQuery="sunlit" />);
 
     expect(input).toHaveValue('sunlit');
+  });
+
+  it('shows a persistent clear action only while the search has text', () => {
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    expect(input).toHaveAttribute('autocomplete', 'off');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'sunlit' } });
+    const clearButton = screen.getByRole('button', { name: 'Clear search' });
+
+    expect(clearButton).toHaveClass('text-primary', 'hover:bg-transparent');
+    expect(clearButton).not.toHaveClass('bg-primary');
+
+    fireEvent.click(clearButton);
+
+    expect(input).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  it('stores submitted queries and shows them when the empty search is focused', () => {
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'sunlit' } });
+    fireEvent.submit(screen.getByRole('search'));
+    fireEvent.change(input, { target: { value: '' } });
+
+    expect(screen.getByRole('option', { name: 'sunlit' })).toBeInTheDocument();
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('runs a recent search when it is selected', () => {
+    window.localStorage.setItem('tickif.homeSearchRecents.v1', JSON.stringify(['Sarthak W']));
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole('option', { name: 'Sarthak W' }));
+
+    expect(input).toHaveValue('Sarthak W');
+    expect(mock.push).toHaveBeenCalledWith('/?q=Sarthak+W');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
   });
 });

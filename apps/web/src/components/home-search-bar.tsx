@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
-import { ArrowRight, Search } from 'lucide-react';
+import { ArrowRight, History, Search, X } from 'lucide-react';
 import { searchSuggestResponseSchema, type SearchSuggestResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { api } from '@/lib/api';
@@ -13,6 +13,35 @@ const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
   designers: [],
   processingTimeMs: 0,
 };
+const RECENT_SEARCHES_STORAGE_KEY = 'tickif.homeSearchRecents.v1';
+const MAX_RECENT_SEARCHES = 5;
+
+function readRecentSearches(): string[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim())
+      .slice(0, MAX_RECENT_SEARCHES);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentSearches(searches: string[]) {
+  try {
+    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(searches));
+  } catch {
+    // Search remains usable when storage is unavailable.
+  }
+}
 
 type HomeSearchBarProps = {
   initialQuery?: string;
@@ -24,16 +53,23 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
   const router = useRouter();
   const listboxId = useId();
   const [query, setQuery] = useState(initialQuery);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestResponse>(EMPTY_SUGGESTIONS);
   const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const trimmedQuery = query.trim();
   const hasSuggestions = suggestions.projects.length + suggestions.designers.length > 0;
-  const showDropdown = isFocused && trimmedQuery.length > 0;
+  const showRecentSearches = isFocused && trimmedQuery.length === 0 && recentSearches.length > 0;
+  const showSearchSuggestions = isFocused && trimmedQuery.length > 0;
+  const showDropdown = showRecentSearches || showSearchSuggestions;
 
   useEffect(() => {
     setQuery(initialQuery);
   }, [initialQuery]);
+
+  useEffect(() => {
+    setRecentSearches(readRecentSearches());
+  }, []);
 
   useEffect(() => {
     if (!trimmedQuery) {
@@ -68,12 +104,28 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
     };
   }, [trimmedQuery]);
 
-  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function runSearch(value: string) {
+    const normalizedQuery = value.trim();
+    if (normalizedQuery) {
+      const nextRecentSearches = [
+        normalizedQuery,
+        ...recentSearches.filter(
+          (recent) => recent.toLocaleLowerCase() !== normalizedQuery.toLocaleLowerCase(),
+        ),
+      ].slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(nextRecentSearches);
+      writeRecentSearches(nextRecentSearches);
+    }
+
     const params = new URLSearchParams();
-    if (trimmedQuery) params.set('q', trimmedQuery);
+    if (normalizedQuery) params.set('q', normalizedQuery);
     router.push(params.size > 0 ? `/?${params.toString()}` : '/');
     setIsFocused(false);
+  }
+
+  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    runSearch(query);
   }
 
   const shellClassName =
@@ -98,8 +150,12 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
         <input
           type="search"
           name="q"
+          autoComplete="off"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIsFocused(true);
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') setIsFocused(false);
           }}
@@ -108,8 +164,20 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
           aria-autocomplete="list"
           aria-controls={showDropdown ? listboxId : undefined}
           aria-expanded={showDropdown}
-          className="h-9 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
+        {query.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 rounded-full p-0 text-primary shadow-none hover:bg-transparent hover:text-primary"
+            aria-label="Clear search"
+            onClick={() => setQuery('')}
+          >
+            <X className="size-3.5" aria-hidden />
+          </Button>
+        ) : null}
         {variant === 'hero' ? (
           <Button type="submit" variant="fancy" size="fancy" className="shrink-0">
             Explore
@@ -127,11 +195,36 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
         <div
           id={listboxId}
           role="listbox"
-          aria-label="Search suggestions"
+          aria-label={showRecentSearches ? 'Recent searches' : 'Search suggestions'}
           className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
           onMouseDown={(event) => event.preventDefault()}
         >
-          {suggestions.projects.length > 0 ? (
+          {showRecentSearches ? (
+            <section aria-labelledby={`${listboxId}-recent`}>
+              <p
+                id={`${listboxId}-recent`}
+                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                Recent searches
+              </p>
+              {recentSearches.map((recentSearch) => (
+                <button
+                  key={recentSearch.toLocaleLowerCase()}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent"
+                  onClick={() => {
+                    setQuery(recentSearch);
+                    runSearch(recentSearch);
+                  }}
+                >
+                  <History className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{recentSearch}</span>
+                </button>
+              ))}
+            </section>
+          ) : suggestions.projects.length > 0 ? (
             <section aria-labelledby={`${listboxId}-projects`}>
               <p
                 id={`${listboxId}-projects`}
@@ -171,7 +264,7 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
             </section>
           ) : null}
 
-          {suggestions.designers.length > 0 ? (
+          {!showRecentSearches && suggestions.designers.length > 0 ? (
             <section aria-labelledby={`${listboxId}-designers`}>
               <p
                 id={`${listboxId}-designers`}
@@ -235,9 +328,9 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
             </section>
           ) : null}
 
-          {isLoading ? (
+          {!showRecentSearches && isLoading ? (
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">Searching…</p>
-          ) : !hasSuggestions ? (
+          ) : !showRecentSearches && !hasSuggestions ? (
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">
               No suggestions found. Press Explore to search all projects.
             </p>

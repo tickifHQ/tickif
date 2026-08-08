@@ -137,7 +137,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
-  const isDefaultFeed = !query && !hasFilters(filters);
+  const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
 
   const sessionPromise = getServerSession();
   const taxonomyOptionsPromise = fetchTaxonomyOptions();

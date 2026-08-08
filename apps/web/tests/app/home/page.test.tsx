@@ -237,6 +237,21 @@ describe('HomePage', () => {
     );
   });
 
+  it('SSR-renders an unfiltered deep-linked page instead of the page-one featured view', async () => {
+    mockApi({ hasMore: true });
+
+    render(await HomePage({ searchParams: Promise.resolve({ page: '2' }) }));
+
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Featured projects' })).not.toBeInTheDocument();
+
+    const feedCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) => {
+      const url = String(input);
+      return url.includes('/api/discovery/feed') && url.includes('page=2');
+    });
+    expect(feedCall).toBeDefined();
+  });
+
   it('renders q through the project search endpoint on the same page', async () => {
     render(await HomePage({ searchParams: Promise.resolve({ q: 'warm kitchen' }) }));
 
@@ -246,7 +261,7 @@ describe('HomePage', () => {
 
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
-    expect(within(screen.getByRole('article')).getByText('₹15L - ₹35L')).toBeInTheDocument();
+    expect(within(screen.getByRole('article')).getByText('₹15-35L')).toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

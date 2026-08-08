@@ -5,11 +5,17 @@ import type { DiscoveryCard, FeedProject } from '@repo/contracts';
 
 const FALLBACK_WIDTH = 480;
 const FALLBACK_HEIGHT = 600;
+const BUDGET_RANGE_PATTERN = /^₹?\s*(\d+(?:\.\d+)?)\s*L?\s*[-–]\s*₹?\s*(\d+(?:\.\d+)?)\s*L?$/i;
 
 type ShowcaseProject = FeedProject | DiscoveryCard;
 
 function isLegacyFeedProject(project: ShowcaseProject): project is FeedProject {
   return 'studio' in project;
+}
+
+function formatCostChipLabel(label: string): string {
+  const range = BUDGET_RANGE_PATTERN.exec(label.trim());
+  return range ? `₹${range[1]}-${range[2]}L` : label;
 }
 
 export function ShowcaseCard({
@@ -34,6 +40,7 @@ export function ShowcaseCard({
   const studio = isLegacy ? project.studio : project.designerName;
   const rating = isLegacy ? project.rating.toFixed(1) : project.ratingSnippet;
   const tags = isLegacy ? project.tags : [project.bhk].filter((tag): tag is string => !!tag);
+  const budgetLabel = project.budget ? formatCostChipLabel(project.budget) : null;
 
   return (
     <article className="group relative mb-4 break-inside-avoid overflow-hidden rounded-xl bg-muted">
@@ -65,9 +72,9 @@ export function ShowcaseCard({
           </div>
         )}
 
-        {project.budget ? (
+        {budgetLabel ? (
           <span className="absolute bottom-3 left-3 whitespace-nowrap rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-medium leading-[1.1] text-foreground transition-opacity group-hover:opacity-0 sm:opacity-100">
-            {project.budget}
+            {budgetLabel}
           </span>
         ) : null}
 
