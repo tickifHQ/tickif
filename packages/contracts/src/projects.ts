@@ -391,15 +391,6 @@ export const publicImageDetailParamSchema = z
   .object({ imageId: z.uuid() })
   .meta({ id: 'PublicImageDetailParam' });
 
-export const publicImageDetailResponseSchema = z
-  .object({
-    project: feedProjectSchema,
-    images: z.array(galleryImageSchema),
-    activeImageId: z.uuid(),
-  })
-  .meta({ id: 'PublicImageDetail' });
-export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
-
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
 export const projectRoomIdParamSchema = z
@@ -626,6 +617,35 @@ export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
   })
   .meta({ id: 'PublicProjectBySlug' });
 export type PublicProjectBySlugResponse = z.infer<typeof publicProjectBySlugResponseSchema>;
+
+/**
+ * Feed-compatible project context embedded in the public image-detail response.
+ * Existing image-page consumers keep the card fields while SSR gains the
+ * truthful project copy and resolved specifications it previously fetched or
+ * substituted separately.
+ */
+export const publicImageDetailProjectSchema = feedProjectSchema
+  .extend({
+    description: z.string().nullable(),
+    buildingName: z.string().nullable(),
+    specifications: publicProjectSpecificationsSchema,
+  })
+  .meta({ id: 'PublicImageDetailProject' });
+export type PublicImageDetailProject = z.infer<typeof publicImageDetailProjectSchema>;
+
+/** GET /api/projects/images/{imageId} — display-ready public image context. */
+export const publicImageDetailResponseSchema = z
+  .object({
+    project: publicImageDetailProjectSchema,
+    images: z.array(publicProjectGalleryImageSchema),
+    activeImage: publicProjectGalleryImageSchema,
+    activeImageId: z.uuid(),
+    designer: publicProjectDesignerSchema,
+    narrative: publicProjectNarrativeSchema.nullable(),
+    recommendations: publicProjectRecommendationsSchema,
+  })
+  .meta({ id: 'PublicImageDetail' });
+export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
 
 // --- Similar projects ---
 
