@@ -1,10 +1,15 @@
-import type { AnalyticsQuery, AnalyticsResponse } from '@repo/contracts';
+import {
+  INTERACTION_EVENT_TYPE,
+  type AnalyticsQuery,
+  type AnalyticsResponse,
+} from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
   reportsRepository,
   type AnalyticsDailyCount,
   type AnalyticsLeadStatusCount,
   type AnalyticsProjectStatusCount,
+  type AnalyticsViewDailyCount,
 } from './repository.js';
 
 type AnalyticsInput = {
@@ -36,9 +41,20 @@ function activitySeries(input: {
   from: Date;
   projects: AnalyticsDailyCount[];
   leads: AnalyticsDailyCount[];
+  views: AnalyticsViewDailyCount[];
 }): AnalyticsResponse['activity'] {
   const projectsByDate = new Map(input.projects.map((item) => [item.date, item.count]));
   const leadsByDate = new Map(input.leads.map((item) => [item.date, item.count]));
+  const projectViewsByDate = new Map(
+    input.views
+      .filter((item) => item.type === INTERACTION_EVENT_TYPE.PROJECT_VIEW)
+      .map((item) => [item.date, item.count]),
+  );
+  const profileViewsByDate = new Map(
+    input.views
+      .filter((item) => item.type === INTERACTION_EVENT_TYPE.PROFILE_VIEW)
+      .map((item) => [item.date, item.count]),
+  );
 
   return Array.from({ length: input.days }, (_, index) => {
     const date = utcDateKey(new Date(input.from.getTime() + index * DAY_MS));
@@ -46,8 +62,24 @@ function activitySeries(input: {
       date,
       projectsCreated: projectsByDate.get(date) ?? 0,
       leadsReceived: leadsByDate.get(date) ?? 0,
+      projectViews: projectViewsByDate.get(date) ?? 0,
+      profileViews: profileViewsByDate.get(date) ?? 0,
     };
   });
+}
+
+function engagementMetrics(counts: AnalyticsViewDailyCount[]): AnalyticsResponse['engagement'] {
+  return counts.reduce<AnalyticsResponse['engagement']>(
+    (totals, item) => {
+      if (item.type === INTERACTION_EVENT_TYPE.PROJECT_VIEW) {
+        totals.projectViews += item.count;
+      } else {
+        totals.profileViews += item.count;
+      }
+      return totals;
+    },
+    { projectViews: 0, profileViews: 0 },
+  );
 }
 
 function projectMetrics(counts: AnalyticsProjectStatusCount[]): AnalyticsResponse['projects'] {
@@ -88,12 +120,14 @@ export const reportsService = {
 
     const to = new Date();
     const from = startOfUtcDay(new Date(to.getTime() - (input.query.days - 1) * DAY_MS));
-    const [projectCounts, leadCounts, projectActivity, leadActivity] = await Promise.all([
-      reportsRepository.countProjectsByStatus(profile.profileId),
-      reportsRepository.countLeadsByStatus(profile.orgId),
-      reportsRepository.countProjectsCreatedByDay({ profileId: profile.profileId, from, to }),
-      reportsRepository.countLeadsReceivedByDay({ orgId: profile.orgId, from, to }),
-    ]);
+    const [projectCounts, leadCounts, projectActivity, leadActivity, viewActivity] =
+      await Promise.all([
+        reportsRepository.countProjectsByStatus(profile.profileId),
+        reportsRepository.countLeadsByStatus(profile.orgId),
+        reportsRepository.countProjectsCreatedByDay({ profileId: profile.profileId, from, to }),
+        reportsRepository.countLeadsReceivedByDay({ orgId: profile.orgId, from, to }),
+        reportsRepository.countViewsByDay({ profileId: profile.profileId, from, to }),
+      ]);
 
     return {
       window: {
@@ -103,24 +137,15 @@ export const reportsService = {
       },
       projects: projectMetrics(projectCounts),
       leads: leadMetrics(leadCounts),
+      engagement: engagementMetrics(viewActivity),
       activity: activitySeries({
         days: input.query.days,
         from,
         projects: projectActivity,
         leads: leadActivity,
+        views: viewActivity,
       }),
-      deferredMetrics: [
-        {
-          key: 'profileViews',
-          label: 'Profile views',
-          reason: 'Requires the Phase 3 interaction event pipeline.',
-        },
-        {
-          key: 'projectViews',
-          label: 'Project views',
-          reason: 'Requires the Phase 3 interaction event pipeline.',
-        },
-      ],
+      deferredMetrics: [],
     };
   },
 };

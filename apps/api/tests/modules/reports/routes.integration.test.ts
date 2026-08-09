@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { analyticsResponseSchema } from '@repo/contracts';
 import { db, schema } from '@repo/db';
@@ -7,7 +8,7 @@ import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
 async function makeDesignerSession(phoneNumber: string) {
   const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
-  const designer = await makeDesigner({ userId });
+  const designer = await makeDesigner({ userId, status: 'active' });
   await db.insert(schema.member).values({
     id: `mem-reports-${userId}`,
     organizationId: designer.orgId,
@@ -44,7 +45,7 @@ describe('GET /api/reports/analytics', () => {
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
     const outsideWindow = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000);
 
-    await makeProject({
+    const ownProject = await makeProject({
       designerId: designer.id,
       status: 'published',
       title: 'Published in window',
@@ -56,7 +57,10 @@ describe('GET /api/reports/analytics', () => {
       title: 'Older draft',
       createdAt: outsideWindow,
     });
-    await makeProject({ title: 'Other organization project', status: 'published' });
+    const otherProject = await makeProject({
+      title: 'Other organization project',
+      status: 'published',
+    });
 
     await makeLead({
       organizationId: designer.orgId,
@@ -69,6 +73,41 @@ describe('GET /api/reports/analytics', () => {
       receivedAt: yesterday,
     });
     await makeLead({ status: 'new', receivedAt: today });
+
+    await db.insert(schema.interactionEvent).values([
+      {
+        type: 'project_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: ownProject.id,
+        designerProfileId: null,
+        createdAt: today,
+      },
+      {
+        type: 'profile_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: null,
+        designerProfileId: designer.id,
+        createdAt: yesterday,
+      },
+      {
+        type: 'project_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: otherProject.id,
+        designerProfileId: null,
+        createdAt: today,
+      },
+      {
+        type: 'project_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: ownProject.id,
+        designerProfileId: null,
+        createdAt: outsideWindow,
+      },
+    ]);
 
     const response = await app.request('/api/reports/analytics?days=7', {
       headers: { cookie },
@@ -95,9 +134,13 @@ describe('GET /api/reports/analytics', () => {
       closed: 0,
       spam: 0,
     });
+    expect(parsed.data.engagement).toEqual({ projectViews: 1, profileViews: 1 });
     expect(parsed.data.activity).toHaveLength(7);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.projectsCreated, 0)).toBe(1);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.leadsReceived, 0)).toBe(2);
+    expect(parsed.data.activity.reduce((sum, point) => sum + point.projectViews, 0)).toBe(1);
+    expect(parsed.data.activity.reduce((sum, point) => sum + point.profileViews, 0)).toBe(1);
+    expect(parsed.data.deferredMetrics).toEqual([]);
   });
 
   it('rejects authenticated designers without an active organization', async () => {

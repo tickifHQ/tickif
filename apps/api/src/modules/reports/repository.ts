@@ -1,4 +1,5 @@
-import { and, db, eq, schema, sql } from '@repo/db';
+import { and, db, eq, or, schema, sql } from '@repo/db';
+import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
   profileId: string;
@@ -18,6 +19,10 @@ export type AnalyticsLeadStatusCount = {
 export type AnalyticsDailyCount = {
   date: string;
   count: number;
+};
+
+export type AnalyticsViewDailyCount = AnalyticsDailyCount & {
+  type: (typeof schema.interactionEventTypeEnum.enumValues)[number];
 };
 
 export const reportsRepository = {
@@ -106,5 +111,39 @@ export const reportsRepository = {
       )
       .groupBy(day)
       .orderBy(day);
+  },
+
+  async countViewsByDay(input: {
+    profileId: string;
+    from: Date;
+    to: Date;
+  }): Promise<AnalyticsViewDailyCount[]> {
+    const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+    return db
+      .select({
+        type: schema.interactionEvent.type,
+        date: day,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(schema.interactionEvent)
+      .leftJoin(schema.project, eq(schema.project.id, schema.interactionEvent.projectId))
+      .where(
+        and(
+          sql<boolean>`${schema.interactionEvent.createdAt} >= ${input.from}`,
+          sql<boolean>`${schema.interactionEvent.createdAt} <= ${input.to}`,
+          or(
+            and(
+              eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROFILE_VIEW),
+              eq(schema.interactionEvent.designerProfileId, input.profileId),
+            ),
+            and(
+              eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
+              eq(schema.project.designerId, input.profileId),
+            ),
+          ),
+        ),
+      )
+      .groupBy(schema.interactionEvent.type, day)
+      .orderBy(day, schema.interactionEvent.type);
   },
 };
