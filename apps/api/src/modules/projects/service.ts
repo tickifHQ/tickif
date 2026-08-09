@@ -59,6 +59,7 @@ import {
   type ProjectRecommendationRecord,
   type PublicProjectGalleryImageRecord,
   type PublicProjectMotifCountRecord,
+  type PublicProjectReadRecord,
   type PublicProjectRoomRecord,
   type ProjectStatusCountRecord,
   type TaxonomyKind,
@@ -447,8 +448,7 @@ function projectTaxonomyPairs(project: ProjectRecord): Array<{ kind: TaxonomyKin
   if (project.scopeSlug) pairs.push({ kind: 'scope', slug: project.scopeSlug });
   if (project.bhkSlug) pairs.push({ kind: 'bhk', slug: project.bhkSlug });
   if (project.citySlug) pairs.push({ kind: 'city', slug: project.citySlug });
-  if (project.budgetBandSlug)
-    pairs.push({ kind: 'budget_band', slug: project.budgetBandSlug });
+  if (project.budgetBandSlug) pairs.push({ kind: 'budget_band', slug: project.budgetBandSlug });
   return pairs;
 }
 
@@ -1457,10 +1457,7 @@ export const projectsService = {
     return { items: events.map(toModerationHistoryItem) };
   },
 
-  async reviewComments(
-    projectId: string,
-    caller: Caller,
-  ): Promise<ProjectReviewCommentsResponse> {
+  async reviewComments(projectId: string, caller: Caller): Promise<ProjectReviewCommentsResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
@@ -1491,27 +1488,46 @@ export const projectsService = {
   },
 
   async getPublicImageDetail(imageId: string): Promise<PublicImageDetailResponse> {
-    const row = await projectsRepository.findPublishedFeedProjectByImageId(imageId);
-    if (!row) throw AppError.notFound('Image not found');
+    const source = await projectsRepository.findPublicProjectByImageId(imageId);
+    if (!source) throw AppError.notFound('Image not found');
 
-    const [labels, localityLabels, galleryImages, cover] = await Promise.all([
-      projectsRepository.findTaxonomyLabels(feedTaxonomyPairs(row)),
-      projectsRepository.findLocalityLabels(feedLocalityPairs(row)),
-      projectsRepository.listPublicGalleryImages(row.id).then(toPublicGalleryImages),
-      coverImageUrl({
-        status: row.coverStatus,
-        derivatives: row.coverDerivatives,
-      }).catch(() => null),
-    ]);
+    const detail = await this.buildPublicProjectDetail(source);
+    const activeImage = detail.images.find((image) => image.id === imageId);
+    if (!activeImage) throw AppError.notFound('Image not found');
 
-    if (!galleryImages.some((image) => image.id === imageId)) {
-      throw AppError.notFound('Image not found');
-    }
+    const coverImage = detail.images.find((image) => image.id === source.project.coverImageId);
+    const specifications = detail.specifications;
+    const tags = [
+      specifications.bhk?.label,
+      specifications.scope?.label ?? specifications.propertySubtype?.label,
+    ].filter((tag): tag is string => Boolean(tag));
 
     return {
-      project: toFeedProject(row, labels, localityLabels, cover),
-      images: galleryImages,
+      project: {
+        id: detail.id,
+        slug: detail.slug,
+        title: detail.title,
+        description: detail.description,
+        buildingName: detail.buildingName,
+        studio: detail.designer.displayName,
+        city: specifications.city?.label ?? null,
+        locality: specifications.locality?.label ?? null,
+        rating: Number(detail.designer.avgRating) || 0,
+        reviewCount: detail.designer.reviewCount,
+        budget: specifications.budgetBand?.label ?? null,
+        tags,
+        coverImageId: source.project.coverImageId,
+        coverImageUrl: detail.coverImageUrl,
+        imageWidth: coverImage?.width ?? null,
+        imageHeight: coverImage?.height ?? null,
+        specifications,
+      },
+      images: detail.images,
+      activeImage,
       activeImageId: imageId,
+      designer: detail.designer,
+      narrative: detail.narrative,
+      recommendations: detail.recommendations,
     };
   },
 
@@ -1527,6 +1543,13 @@ export const projectsService = {
     const result = await projectsRepository.findPublicProjectBySlug(slug);
     if (!result) throw AppError.notFound('Project not found');
 
+    return this.buildPublicProjectDetail(result);
+  },
+
+  /** Shared display projection for slug and image-id public entry points. */
+  async buildPublicProjectDetail(
+    result: PublicProjectReadRecord,
+  ): Promise<PublicProjectBySlugResponse> {
     const { project, designer } = result;
 
     // Keep each DB fan-out below half the shared ten-connection pool. This route

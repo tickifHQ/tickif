@@ -521,7 +521,8 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       request: { params: publicImageDetailParamSchema },
       responses: {
         200: {
-          description: 'Published project context and gallery for the active image',
+          description:
+            'Display-ready published project, designer, gallery, active image, and recommendations',
           content: { 'application/json': { schema: publicImageDetailResponseSchema } },
         },
         404: errorJson('Image not found or not published'),
@@ -682,7 +683,8 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       request: { params: projectSlugParamSchema },
       responses: {
         200: {
-          description: 'Published project read model with rooms, gallery, designer, and recommendations',
+          description:
+            'Published project read model with rooms, gallery, designer, and recommendations',
           content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
         },
         404: errorJson('Project not found or not published'),

@@ -254,6 +254,23 @@ function recommendationBranch(params: {
   )`;
 }
 
+export type PublicProjectReadRecord = {
+  project: ProjectRecord;
+  designer: {
+    id: string;
+    displayName: string;
+    orgSlug: string | null;
+    avgRating: string;
+    reviewCount: number;
+    entityType: typeof schema.designerProfile.$inferSelect.entityType;
+    logoImageId: string | null;
+    bio: string | null;
+    firmType: string | null;
+    foundedYear: number | null;
+    yearsExperience: number;
+  };
+};
+
 /** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
 function feedProjectColumns<TAlias extends string>(
   cover: ReturnType<typeof alias<typeof schema.projectImage, TAlias>>,
@@ -281,6 +298,22 @@ function feedProjectColumns<TAlias extends string>(
     publishedAt: schema.project.publishedAt,
   };
 }
+
+/** Shared joined projection for every public project-detail entry point. */
+const publicProjectReadColumns = {
+  project: schema.project,
+  designerId: schema.designerProfile.id,
+  designerDisplayName: schema.designerProfile.displayName,
+  designerOrgSlug: schema.organization.slug,
+  designerAvgRating: schema.designerProfile.avgRating,
+  designerReviewCount: schema.designerProfile.reviewCount,
+  designerEntityType: schema.designerProfile.entityType,
+  designerLogoImageId: schema.designerProfile.logoImageId,
+  designerBio: schema.designerProfile.bio,
+  designerFirmType: schema.designerProfile.firmType,
+  designerFoundedYear: schema.designerProfile.foundedYear,
+  designerYearsExperience: schema.designerProfile.yearsExperience,
+};
 
 export type DuplicateProjectParams = {
   source: ProjectRecord;
@@ -403,9 +436,7 @@ export const projectsRepository = {
       .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
   },
 
-  async listUnresolvedReviewComments(
-    projectIds: string[],
-  ): Promise<ProjectReviewCommentRecord[]> {
+  async listUnresolvedReviewComments(projectIds: string[]): Promise<ProjectReviewCommentRecord[]> {
     if (projectIds.length === 0) return [];
     return db
       .select()
@@ -464,33 +495,6 @@ export const projectsRepository = {
         .limit(params.limit)
         .offset(params.offset)
     );
-  },
-
-  /**
-   * Public image detail starts from an image id, then resolves the published
-   * active-designer project that owns it. The feed-shaped projection lets the
-   * image page reuse the same public card metadata as discovery.
-   */
-  async findPublishedFeedProjectByImageId(imageId: string): Promise<ProjectFeedItemRecord | null> {
-    const cover = alias(schema.projectImage, 'cover');
-
-    const [row] = await db
-      .select(feedProjectColumns(cover))
-      .from(schema.projectImage)
-      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      .where(
-        and(
-          eq(schema.projectImage.id, imageId),
-          eq(schema.projectImage.status, 'ready'),
-          eq(schema.project.status, 'published'),
-          eq(schema.designerProfile.status, 'active'),
-        ),
-      )
-      .limit(1);
-
-    return row ?? null;
   },
 
   /**
@@ -1448,43 +1452,57 @@ export const projectsRepository = {
    * Published project by slug with joined designer + org for slug resolution.
    * Returns raw data — service handles URL signing and response composition.
    */
-  async findPublicProjectBySlug(slug: string): Promise<{
-    project: ProjectRecord;
-    designer: {
-      id: string;
-      displayName: string;
-      orgSlug: string | null;
-      avgRating: string;
-      reviewCount: number;
-      entityType: typeof schema.designerProfile.$inferSelect.entityType;
-      logoImageId: string | null;
-      bio: string | null;
-      firmType: string | null;
-      foundedYear: number | null;
-      yearsExperience: number;
-    };
-  } | null> {
+  async findPublicProjectBySlug(slug: string): Promise<PublicProjectReadRecord | null> {
     const [row] = await db
-      .select({
-        project: schema.project,
-        designerId: schema.designerProfile.id,
-        designerDisplayName: schema.designerProfile.displayName,
-        designerOrgSlug: schema.organization.slug,
-        designerAvgRating: schema.designerProfile.avgRating,
-        designerReviewCount: schema.designerProfile.reviewCount,
-        designerEntityType: schema.designerProfile.entityType,
-        designerLogoImageId: schema.designerProfile.logoImageId,
-        designerBio: schema.designerProfile.bio,
-        designerFirmType: schema.designerProfile.firmType,
-        designerFoundedYear: schema.designerProfile.foundedYear,
-        designerYearsExperience: schema.designerProfile.yearsExperience,
-      })
+      .select(publicProjectReadColumns)
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .where(
         and(
           eq(schema.project.slug, slug),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      project: row.project,
+      designer: {
+        id: row.designerId,
+        displayName: row.designerDisplayName,
+        orgSlug: row.designerOrgSlug,
+        avgRating: row.designerAvgRating,
+        reviewCount: row.designerReviewCount,
+        entityType: row.designerEntityType,
+        logoImageId: row.designerLogoImageId,
+        bio: row.designerBio,
+        firmType: row.designerFirmType,
+        foundedYear: row.designerFoundedYear,
+        yearsExperience: row.designerYearsExperience,
+      },
+    };
+  },
+
+  /**
+   * Resolve the same canonical public project record from a ready image. Keeping
+   * the publication and active-designer filters in this query prevents an image
+   * identifier from becoming a side channel for private project data.
+   */
+  async findPublicProjectByImageId(imageId: string): Promise<PublicProjectReadRecord | null> {
+    const [row] = await db
+      .select(publicProjectReadColumns)
+      .from(schema.projectImage)
+      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(
+        and(
+          eq(schema.projectImage.id, imageId),
+          eq(schema.projectImage.status, 'ready'),
           eq(schema.project.status, 'published'),
           eq(schema.designerProfile.status, 'active'),
         ),
