@@ -405,6 +405,7 @@ export const lead = pgTable(
     contactNumber: text('contact_number').notNull(),
     budgetBandSlug: text('budget_band_slug'),
     message: text('message'),
+    notes: text('notes'),
     source: text('source').default('enquiry').notNull(),
     status: leadStatusEnum('status').default('new').notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),

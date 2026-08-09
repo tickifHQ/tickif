@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createLeadSchema,
+  leadCountsQuerySchema,
+  leadCountsResponseSchema,
   leadListStatus,
   leadStatus,
   listLeadsQuerySchema,
@@ -49,6 +51,23 @@ describe('lead contracts', () => {
 
   it('validates status updates', () => {
     expect(updateLeadSchema.safeParse({ status: 'spam' }).success).toBe(true);
+    expect(updateLeadSchema.safeParse({ notes: 'Call again on Friday.' }).success).toBe(true);
+    expect(updateLeadSchema.safeParse({ notes: null }).success).toBe(true);
+    expect(updateLeadSchema.safeParse({}).success).toBe(false);
+    expect(updateLeadSchema.safeParse({ notes: 'a'.repeat(2001) }).success).toBe(false);
     expect(updateLeadSchema.safeParse({ status: 'pending' }).success).toBe(false);
+  });
+
+  it('validates lead count queries and responses', () => {
+    expect(leadCountsQuerySchema.parse({ q: ' bandra ' })).toEqual({ q: 'bandra' });
+    expect(
+      leadCountsResponseSchema.safeParse({
+        total: 9,
+        new: 3,
+        contacted: 4,
+        closed: 2,
+        spam: 0,
+      }).success,
+    ).toBe(true);
   });
 });

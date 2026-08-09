@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { testClient } from 'hono/testing';
-import type { LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
+import type { LeadCountsResponse, LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -134,6 +134,52 @@ describe('GET /api/leads', () => {
   });
 });
 
+describe('GET /api/leads/counts', () => {
+  it('rejects unauthenticated count requests', async () => {
+    const res = await app.request('/api/leads/counts');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns all org-scoped status buckets in one response and applies search', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800003009');
+    const bandraProject = await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Apartment',
+    });
+    await makeLead({
+      organizationId: designer.orgId,
+      referredProjectId: bandraProject.id,
+      name: 'Priya Shah',
+      status: 'new',
+    });
+    await makeLead({ organizationId: designer.orgId, name: 'Bandra Owner', status: 'contacted' });
+    await makeLead({ organizationId: designer.orgId, name: 'Unrelated', status: 'closed' });
+    await makeLead({ name: 'Bandra Other Org', status: 'spam' });
+
+    const all = await app.request('/api/leads/counts', { headers: { cookie } });
+    expect(all.status).toBe(200);
+    expect((await all.json()) as LeadCountsResponse).toEqual({
+      total: 3,
+      new: 1,
+      contacted: 1,
+      closed: 1,
+      spam: 0,
+    });
+
+    const searched = await app.request('/api/leads/counts?q=bandra', {
+      headers: { cookie },
+    });
+    expect(searched.status).toBe(200);
+    expect((await searched.json()) as LeadCountsResponse).toEqual({
+      total: 2,
+      new: 1,
+      contacted: 1,
+      closed: 0,
+      spam: 0,
+    });
+  });
+});
+
 describe('POST /api/leads', () => {
   it('creates an internal lead for a caller organization', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800003002');
@@ -189,7 +235,7 @@ describe('POST /api/leads', () => {
 });
 
 describe('GET/PATCH /api/leads/:id', () => {
-  it('reads and updates lead status for an organization member', async () => {
+  it('reads and updates lead status and notes for an organization member', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800003004');
     const lead = await makeLead({
       organizationId: designer.orgId,
@@ -203,9 +249,22 @@ describe('GET/PATCH /api/leads/:id', () => {
 
     const update = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
       status: 'contacted',
+      notes: 'Call again on Friday.',
     });
     expect(update.status).toBe(200);
-    expect(await update.json()).toMatchObject({ id: lead.id, status: 'contacted' });
+    expect(await update.json()).toMatchObject({
+      id: lead.id,
+      status: 'contacted',
+      notes: 'Call again on Friday.',
+    });
+
+    const readBack = await app.request(`/api/leads/${lead.id}`, { headers: { cookie } });
+    expect(readBack.status).toBe(200);
+    expect(await readBack.json()).toMatchObject({
+      id: lead.id,
+      message: null,
+      notes: 'Call again on Friday.',
+    });
   });
 
   it('hides cross-org leads and returns 422 for invalid status', async () => {
@@ -222,6 +281,14 @@ describe('GET/PATCH /api/leads/:id', () => {
       status: 'pending',
     });
     expect(invalidStatus.status).toBe(422);
+
+    const emptyUpdate = await requestJson(`/api/leads/${lead.id}`, 'PATCH', ownerCookie, {});
+    expect(emptyUpdate.status).toBe(422);
+
+    const longNotes = await requestJson(`/api/leads/${lead.id}`, 'PATCH', ownerCookie, {
+      notes: 'a'.repeat(2001),
+    });
+    expect(longNotes.status).toBe(422);
   });
 
   it('returns 404 for missing lead reads and updates', async () => {
