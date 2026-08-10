@@ -210,6 +210,10 @@ export function DesignerAnalyticsDashboard({ analytics, error }: DesignerAnalyti
     { label: 'Closed', count: analytics.leads.closed },
     { label: 'Spam', count: analytics.leads.spam },
   ];
+  const engagementMetrics = [
+    { label: 'Profile views', value: analytics.engagement.profileViews },
+    { label: 'Project views', value: analytics.engagement.projectViews },
+  ];
 
   return (
     <div className="p-6 md:p-8 xl:p-10">
@@ -324,21 +328,23 @@ export function DesignerAnalyticsDashboard({ analytics, error }: DesignerAnalyti
                 <div>
                   <h2 className="text-base font-semibold text-foreground">Engagement metrics</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    View metrics need interaction events before they can be measured accurately.
+                    Daily unique signed-in views, excluding members of your organization.
                   </p>
                 </div>
               </div>
+              <Badge variant="outline" className="mt-4">
+                Last {analytics.window.days} days
+              </Badge>
               <div className="mt-5 space-y-4">
-                {analytics.deferredMetrics.map((metric) => (
+                {engagementMetrics.map((metric) => (
                   <div
-                    key={metric.key}
+                    key={metric.label}
                     className="border-t border-border pt-4 first:border-t-0 first:pt-0"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium text-foreground">{metric.label}</span>
-                      <Badge variant="secondary">Coming soon</Badge>
+                      <span className="text-lg font-semibold text-foreground">{metric.value}</span>
                     </div>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">{metric.reason}</p>
                   </div>
                 ))}
               </div>
