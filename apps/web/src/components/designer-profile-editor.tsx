@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   PROFILE_FOOTPRINT_LIMITS,
@@ -31,6 +30,7 @@ import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { fetchProfileCompletion, updateDesignerProfile } from '@/lib/profile-editor-api';
 import { PROFILE_TAXONOMY_KIND } from '@/lib/profile-editor-types';
 import type { ProfileEditorTaxonomy } from '@/lib/profile-editor-types';
+import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 
 const entityTypeOptions = [
   { value: designerEntityType.enum.individual, label: 'Individual designer' },
@@ -144,6 +144,13 @@ function sameIds(left: string[], right: string[]): boolean {
 }
 
 function formsEqual(left: FormState, right: FormState): boolean {
+  const companyFieldsEqual =
+    left.entityType !== designerEntityType.enum.company ||
+    right.entityType !== designerEntityType.enum.company ||
+    (left.firmType === right.firmType &&
+      left.foundedYear === right.foundedYear &&
+      left.staffCount === right.staffCount);
+
   return (
     left.displayName === right.displayName &&
     left.bio === right.bio &&
@@ -156,9 +163,7 @@ function formsEqual(left: FormState, right: FormState): boolean {
     left.instagramHandle === right.instagramHandle &&
     left.linkedinHandle === right.linkedinHandle &&
     left.youtubeHandle === right.youtubeHandle &&
-    left.firmType === right.firmType &&
-    left.foundedYear === right.foundedYear &&
-    left.staffCount === right.staffCount &&
+    companyFieldsEqual &&
     sameIds(left.cityIds, right.cityIds) &&
     sameIds(left.scopeIds, right.scopeIds) &&
     sameIds(left.themeIds, right.themeIds)
@@ -176,9 +181,17 @@ function formToInput(
   if (form.bio !== saved.bio) input.bio = nullable(form.bio);
   if (form.entityType !== saved.entityType) input.entityType = form.entityType;
   if (form.address !== saved.address) input.address = nullable(form.address);
-  if (form.websiteUrl !== saved.websiteUrl) input.websiteUrl = nullable(form.websiteUrl);
+  if (form.websiteUrl !== saved.websiteUrl) {
+    const websiteUrl = normalizeOptionalUrl(form.websiteUrl);
+    if (websiteUrl && !isPublicHttpUrl(websiteUrl)) errors.websiteUrl = 'Enter a valid URL.';
+    input.websiteUrl = websiteUrl ?? null;
+  }
   if (form.googleBusinessUrl !== saved.googleBusinessUrl) {
-    input.googleBusinessUrl = nullable(form.googleBusinessUrl);
+    const googleBusinessUrl = normalizeOptionalUrl(form.googleBusinessUrl);
+    if (googleBusinessUrl && !isPublicHttpUrl(googleBusinessUrl)) {
+      errors.googleBusinessUrl = 'Enter a valid URL.';
+    }
+    input.googleBusinessUrl = googleBusinessUrl ?? null;
   }
   if (form.instagramHandle !== saved.instagramHandle) {
     input.instagramHandle = nullable(form.instagramHandle);
@@ -244,7 +257,6 @@ export function DesignerProfileEditor({
   taxonomy: ProfileEditorTaxonomy;
   taxonomyError: string | null;
 }) {
-  const router = useRouter();
   const initialForm = useMemo(() => profileToForm(initialProfile), [initialProfile]);
   const [form, setForm] = useState<FormState>(() => initialForm);
   const [savedForm, setSavedForm] = useState<FormState>(() => initialForm);
@@ -275,7 +287,7 @@ export function DesignerProfileEditor({
     const validation = collectValidationErrors(prepared.input, prepared.errors);
     setValidationErrors(validation.errors);
     const input = validation.data;
-    if (!input) {
+    if (!input || Object.keys(input).length === 0) {
       setSaveError('Please fix the highlighted fields.');
       return;
     }
@@ -290,7 +302,6 @@ export function DesignerProfileEditor({
         setSavedForm(serverForm);
         if (submittedRevision === formRevisionRef.current) setForm(serverForm);
         setSaveSuccess(true);
-        router.refresh();
 
         try {
           setCompletion(await fetchProfileCompletion());

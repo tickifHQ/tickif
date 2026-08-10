@@ -43,12 +43,12 @@ function includeSelectedTerms(
   kind: ProfileTaxonomyKind,
 ): ProfileEditorOption[] {
   const merged = new Map<string, ProfileEditorOption>();
+  for (const option of options) merged.set(option.id, { id: option.id, label: option.label });
   for (const term of footprint) {
-    if (term.kind === kind) {
+    if (term.kind === kind && !merged.has(term.id)) {
       merged.set(term.id, { id: term.id, label: term.label });
     }
   }
-  for (const option of options) merged.set(option.id, { id: option.id, label: option.label });
   return [...merged.values()];
 }
 

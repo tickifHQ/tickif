@@ -29,6 +29,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
+import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
@@ -118,31 +119,15 @@ function optionalTrimmed(value: string) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function normalizeUrl(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  return `https://${trimmed}`;
-}
-
 function validateOptionalUrl(
   value: string,
   schema: { safeParse: (value: unknown) => { success: boolean } },
   message: string,
 ) {
-  const normalized = normalizeUrl(value);
+  const normalized = normalizeOptionalUrl(value);
   if (!normalized) return '';
   if (!schema.safeParse(normalized).success) return message;
-
-  try {
-    const url = new URL(normalized);
-    const hostname = url.hostname.toLowerCase();
-    const hasPublicHostname =
-      hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
-    return hasPublicHostname ? '' : message;
-  } catch {
-    return message;
-  }
+  return isPublicHttpUrl(normalized) ? '' : message;
 }
 
 const websiteUrlValidationMessage = 'Enter a valid website URL.';
@@ -330,6 +315,8 @@ export function DesignerOnboarding({
     setSubmitting(true);
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
+      const normalizedWebsiteUrl = normalizeOptionalUrl(websiteUrl);
+      const normalizedGoogleBusinessUrl = normalizeOptionalUrl(googleBusinessUrl);
       const foundedYearValue = Number.parseInt(foundedYear, 10);
       const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
@@ -342,9 +329,9 @@ export function DesignerOnboarding({
           ? { companyName: trimmedCompanyName }
           : {}),
         ...(phone ? { phone } : {}),
-        ...(normalizeUrl(websiteUrl) ? { websiteUrl: normalizeUrl(websiteUrl) } : {}),
-        ...(normalizeUrl(googleBusinessUrl)
-          ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) }
+        ...(normalizedWebsiteUrl ? { websiteUrl: normalizedWebsiteUrl } : {}),
+        ...(normalizedGoogleBusinessUrl
+          ? { googleBusinessUrl: normalizedGoogleBusinessUrl }
           : {}),
         ...(optionalTrimmed(instagramHandle)
           ? { instagramHandle: optionalTrimmed(instagramHandle) }

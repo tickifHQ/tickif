@@ -177,7 +177,34 @@ describe('DesignerProfileEditor', () => {
     expect(await screen.findByText(/profile saved/i)).toBeInTheDocument();
     expect(screen.getByText('80% complete')).toBeInTheDocument();
     expect(mock.fetchProfileCompletion).toHaveBeenCalledOnce();
-    expect(mock.refresh).toHaveBeenCalledOnce();
+    expect(mock.refresh).not.toHaveBeenCalled();
+  });
+
+  it('normalizes bare website URLs before validating and saving them', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const website = screen.getByLabelText(/website/i);
+    const googleBusiness = screen.getByLabelText(/google business url/i);
+    await user.clear(website);
+    await user.type(website, 'mahi2.example.com');
+    await user.clear(googleBusiness);
+    await user.type(googleBusiness, 'g.page/mahi-two');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        websiteUrl: 'https://mahi2.example.com',
+        googleBusinessUrl: 'https://g.page/mahi-two',
+      });
+    });
   });
 
   it('shows contract validation errors without sending an invalid update', async () => {
@@ -331,6 +358,27 @@ describe('DesignerProfileEditor', () => {
     await waitFor(() => {
       expect(mock.updateDesignerProfile).toHaveBeenCalledWith({ entityType: 'individual' });
     });
+  });
+
+  it('does not treat hidden company-only edits as a saveable individual-profile change', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={{ ...profile, entityType: 'individual' }}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText(/listing type/i), 'company');
+    await user.clear(screen.getByLabelText(/firm type/i));
+    await user.type(screen.getByLabelText(/firm type/i), 'LLP');
+    await user.selectOptions(screen.getByLabelText(/listing type/i), 'individual');
+
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByText('All changes are saved.')).toBeInTheDocument();
+    expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
   });
 
   it('keeps unrelated validation errors visible while another field is corrected', async () => {

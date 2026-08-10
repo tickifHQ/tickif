@@ -135,6 +135,32 @@ describe('profile editor SSR data', () => {
     expect(result.taxonomy.cities).toEqual([{ id: selectedCity.id, label: 'Bombay' }]);
   });
 
+  it('preserves API ordering while appending selected terms missing from taxonomy', async () => {
+    const firstCity = {
+      id: '22222222-2222-4222-8222-222222222222',
+      label: 'Bengaluru',
+      slug: 'bengaluru',
+      parentId: null,
+    };
+    mock.taxonomyGet.mockImplementation(
+      async ({ query }: { query: { kind: string } }) =>
+        new Response(
+          JSON.stringify({
+            terms: query.kind === 'city' ? [firstCity, selectedCity] : [],
+          }),
+          { status: 200 },
+        ),
+    );
+    const { getProfileEditorPageData } = await import('../../src/lib/profile-editor-data');
+
+    const result = await getProfileEditorPageData();
+
+    expect(result.taxonomy.cities).toEqual([
+      { id: firstCity.id, label: firstCity.label },
+      { id: selectedCity.id, label: selectedCity.label },
+    ]);
+  });
+
   it('reports completion loading failures instead of silently hiding the state', async () => {
     mock.getProfileCompletion.mockResolvedValue({
       ok: false,
