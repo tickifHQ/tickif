@@ -1,5 +1,25 @@
 import { z } from 'zod';
 import { designerProjectsResponseSchema } from './projects';
+import { taxonomyKindSchema } from './taxonomy';
+
+export const designerEntityType = z
+  .enum(['individual', 'company'])
+  .meta({ id: 'DesignerEntityType' });
+export type DesignerEntityType = z.infer<typeof designerEntityType>;
+
+export const PROFILE_FOOTPRINT_LIMITS = {
+  city: 5,
+  scope: 10,
+  theme: 10,
+} as const;
+
+export const PROFILE_STAFF_COUNT_MAX = 100_000;
+
+const profileStaffCountSchema = z
+  .number()
+  .int('Enter a whole number.')
+  .min(0, 'Enter 0 or more.')
+  .max(PROFILE_STAFF_COUNT_MAX, `Enter ${PROFILE_STAFF_COUNT_MAX} or fewer.`);
 
 /** A single onboarding checklist step. */
 export const completionStepSchema = z.object({
@@ -51,7 +71,7 @@ export type ProfileDashboardResponse = z.infer<typeof profileDashboardResponseSc
  */
 export const onboardDesignerSchema = z
   .object({
-    entityType: z.enum(['individual', 'company']),
+    entityType: designerEntityType,
     userName: z.string().trim().min(2).max(100),
     companyName: z.string().trim().min(2).max(100).optional(),
     bio: z.string().max(500).optional(),
@@ -63,15 +83,21 @@ export const onboardDesignerSchema = z
     youtubeHandle: z.string().trim().max(60).optional(),
     firmType: z.string().trim().max(60).optional(),
     foundedYear: z.number().int().min(1900).max(2100).optional(),
-    staffCount: z.number().int().min(0).optional(),
+    staffCount: profileStaffCountSchema.optional(),
     // Free-text address replaces cityIds in onboarding — city taxonomy linking via profile update.
     // Note: clients still sending cityIds will have it silently stripped (Zod default behavior).
     // The web onboarding UI ships in lockstep with this contract change.
     address: z.string().trim().max(300).optional(),
-    scopeIds: z.array(z.string().uuid()).max(10).default([]),
-    themeIds: z.array(z.string().uuid()).max(10).default([]),
+    scopeIds: z
+      .array(z.string().uuid())
+      .max(PROFILE_FOOTPRINT_LIMITS.scope, `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`)
+      .default([]),
+    themeIds: z
+      .array(z.string().uuid())
+      .max(PROFILE_FOOTPRINT_LIMITS.theme, `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`)
+      .default([]),
   })
-  .refine((d) => d.entityType === 'individual' || !!d.companyName, {
+  .refine((d) => d.entityType === designerEntityType.enum.individual || !!d.companyName, {
     message: 'companyName is required for company entity type',
     path: ['companyName'],
   });
@@ -84,7 +110,7 @@ export const onboardDesignerResponseSchema = z
       id: z.string().uuid(),
       orgId: z.string(),
       displayName: z.string(),
-      entityType: z.enum(['individual', 'company']),
+      entityType: designerEntityType,
       status: z.string(),
       createdAt: z.string(),
     }),
@@ -102,7 +128,7 @@ export type OnboardDesignerResponse = z.infer<typeof onboardDesignerResponseSche
 /** Footprint entry in profile responses. */
 const footprintEntrySchema = z.object({
   id: z.string().uuid(),
-  kind: z.string(),
+  kind: taxonomyKindSchema,
   slug: z.string(),
   label: z.string(),
 });
@@ -115,7 +141,7 @@ const profileBaseSchema = z.object({
   id: z.string().uuid(),
   orgId: z.string(),
   displayName: z.string(),
-  entityType: z.enum(['individual', 'company']),
+  entityType: designerEntityType,
   bio: z.string().nullable(),
   logoImageId: z.string().nullable(),
   status: z.string(),
@@ -194,12 +220,37 @@ export const profileSlugParamSchema = z.object({
 
 // Shared profile field schemas (single source of truth for both endpoints)
 const sharedProfileFields = {
-  displayName: z.string().trim().min(2).max(100).optional(),
-  bio: z.string().max(500).nullable().optional(),
-  websiteUrl: z.string().url().max(200).nullable().optional(),
-  instagramHandle: z.string().trim().max(60).nullable().optional(),
-  linkedinHandle: z.string().trim().max(60).nullable().optional(),
-  youtubeHandle: z.string().trim().max(60).nullable().optional(),
+  displayName: z
+    .string()
+    .trim()
+    .min(2, 'Use at least 2 characters.')
+    .max(100, 'Use 100 characters or fewer.')
+    .optional(),
+  bio: z.string().max(500, 'Use 500 characters or fewer.').nullable().optional(),
+  websiteUrl: z
+    .string()
+    .url('Enter a valid URL.')
+    .max(200, 'Use 200 characters or fewer.')
+    .nullable()
+    .optional(),
+  instagramHandle: z
+    .string()
+    .trim()
+    .max(60, 'Use 60 characters or fewer.')
+    .nullable()
+    .optional(),
+  linkedinHandle: z
+    .string()
+    .trim()
+    .max(60, 'Use 60 characters or fewer.')
+    .nullable()
+    .optional(),
+  youtubeHandle: z
+    .string()
+    .trim()
+    .max(60, 'Use 60 characters or fewer.')
+    .nullable()
+    .optional(),
 };
 
 /**
@@ -208,20 +259,55 @@ const sharedProfileFields = {
  */
 export const updateProfileSchema = z.object({
   ...sharedProfileFields,
-  entityType: z.enum(['individual', 'company']).optional(),
-  googleBusinessUrl: z.string().url().max(200).optional().nullable(),
-  phone: z.string().trim().min(7).max(20).optional().nullable(),
-  firmType: z.string().trim().max(60).optional().nullable(),
-  foundedYear: z.number().int().min(1900).max(2100).optional().nullable(),
-  staffCount: z.number().int().min(0).optional().nullable(),
+  entityType: designerEntityType.optional(),
+  googleBusinessUrl: z
+    .string()
+    .url('Enter a valid URL.')
+    .max(200, 'Use 200 characters or fewer.')
+    .optional()
+    .nullable(),
+  phone: z
+    .string()
+    .trim()
+    .min(7, 'Enter a valid phone number.')
+    .max(20, 'Enter a valid phone number.')
+    .optional()
+    .nullable(),
+  firmType: z
+    .string()
+    .trim()
+    .max(60, 'Use 60 characters or fewer.')
+    .optional()
+    .nullable(),
+  foundedYear: z
+    .number()
+    .int('Enter a whole year.')
+    .min(1900, 'Enter a year from 1900 onward.')
+    .max(2100, 'Enter a year no later than 2100.')
+    .optional()
+    .nullable(),
+  staffCount: profileStaffCountSchema.optional().nullable(),
   testimonialBannerEnabled: z.boolean().optional(),
-  address: z.string().trim().max(300).optional().nullable(),
-  cityIds: z.array(z.string().uuid()).max(5).optional(),
-  scopeIds: z.array(z.string().uuid()).max(10).optional(),
-  themeIds: z.array(z.string().uuid()).max(10).optional(),
-});
+  address: z
+    .string()
+    .trim()
+    .max(300, 'Use 300 characters or fewer.')
+    .optional()
+    .nullable(),
+  cityIds: z
+    .array(z.string().uuid())
+    .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
+    .optional(),
+  scopeIds: z
+    .array(z.string().uuid())
+    .max(PROFILE_FOOTPRINT_LIMITS.scope, `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`)
+    .optional(),
+  themeIds: z
+    .array(z.string().uuid())
+    .max(PROFILE_FOOTPRINT_LIMITS.theme, `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`)
+    .optional(),
+}).meta({ id: 'UpdateProfile' });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
-
 
 // --- Portfolio (E-222) ---
 

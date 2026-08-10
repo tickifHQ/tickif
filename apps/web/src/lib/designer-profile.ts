@@ -1,17 +1,26 @@
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { currentProfileResponseSchema, type CurrentProfileResponse } from '@repo/contracts';
+import {
+  currentProfileResponseSchema,
+  profileCompletionResponseSchema,
+  type CurrentProfileResponse,
+  type ProfileCompletionResponse,
+} from '@repo/contracts';
 import { api } from '@/lib/api';
 
-async function getRequestCookie() {
+const getRequestCookie = cache(async () => {
   const reqHeaders = await headers();
   return reqHeaders.get('cookie');
-}
+});
 
 type CurrentDesignerProfileResult =
   | { status: 'ok'; data: CurrentProfileResponse }
   | { status: 'unauthenticated' | 'missing-active-organization' | 'forbidden' | 'unavailable' };
+
+export type ProfileCompletionResult =
+  | { ok: true; data: ProfileCompletionResponse }
+  | { ok: false; data: null; message: string };
 
 const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfileResult> => {
   const cookie = await getRequestCookie();
@@ -47,3 +56,22 @@ export async function requireCurrentDesignerProfile(): Promise<CurrentProfileRes
   }
   return result.data;
 }
+
+export const getProfileCompletion = cache(async (): Promise<ProfileCompletionResult> => {
+  const cookie = await getRequestCookie();
+  const unavailable = {
+    ok: false,
+    data: null,
+    message: 'Could not load profile completion.',
+  } as const;
+  if (!cookie) return unavailable;
+
+  try {
+    const response = await api.api.profiles.me.completion.$get({}, { headers: { cookie } });
+    if (!response.ok) return unavailable;
+    const parsed = profileCompletionResponseSchema.safeParse(await response.json());
+    return parsed.success ? { ok: true, data: parsed.data } : unavailable;
+  } catch {
+    return unavailable;
+  }
+});
