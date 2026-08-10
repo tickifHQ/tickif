@@ -14,9 +14,12 @@ type RecordViewInput = {
 export const interactionsService = {
   async recordView(input: RecordViewInput): Promise<RecordViewEventResponse> {
     if (input.event.type === INTERACTION_EVENT_TYPE.PROJECT_VIEW) {
-      const isPublic = await interactionsRepository.isPublicProject(input.event.projectId);
-      if (!isPublic) {
+      const orgId = await interactionsRepository.findPublicProjectOrgId(input.event.projectId);
+      if (!orgId) {
         throw AppError.notFound();
+      }
+      if (await interactionsRepository.isOrgMember(input.actorUserId, orgId)) {
+        return { recorded: false };
       }
 
       return {
@@ -28,11 +31,14 @@ export const interactionsService = {
       };
     }
 
-    const isActive = await interactionsRepository.isActiveDesignerProfile(
+    const orgId = await interactionsRepository.findActiveDesignerOrgId(
       input.event.designerProfileId,
     );
-    if (!isActive) {
+    if (!orgId) {
       throw AppError.notFound();
+    }
+    if (await interactionsRepository.isOrgMember(input.actorUserId, orgId)) {
+      return { recorded: false };
     }
 
     return {

@@ -22,9 +22,9 @@ export type InsertViewEvent = ViewEventIdentity &
   );
 
 export const interactionsRepository = {
-  async isPublicProject(projectId: string): Promise<boolean> {
+  async findPublicProjectOrgId(projectId: string): Promise<string | null> {
     const [row] = await db
-      .select({ id: schema.project.id })
+      .select({ orgId: schema.designerProfile.orgId })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.designerProfile.id, schema.project.designerId))
       .where(
@@ -36,12 +36,12 @@ export const interactionsRepository = {
       )
       .limit(1);
 
-    return row !== undefined;
+    return row?.orgId ?? null;
   },
 
-  async isActiveDesignerProfile(designerProfileId: string): Promise<boolean> {
+  async findActiveDesignerOrgId(designerProfileId: string): Promise<string | null> {
     const [row] = await db
-      .select({ id: schema.designerProfile.id })
+      .select({ orgId: schema.designerProfile.orgId })
       .from(schema.designerProfile)
       .where(
         and(
@@ -51,14 +51,26 @@ export const interactionsRepository = {
       )
       .limit(1);
 
+    return row?.orgId ?? null;
+  },
+
+  async isOrgMember(userId: string, organizationId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(
+        and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)),
+      )
+      .limit(1);
     return row !== undefined;
   },
 
   async insertViewEvent(input: InsertViewEvent): Promise<boolean> {
+    const createdAt = new Date();
     const rows = await db
       .insert(schema.interactionEvent)
-      .values(input)
-      .onConflictDoNothing({ target: schema.interactionEvent.eventKey })
+      .values({ ...input, eventDay: createdAt.toISOString().slice(0, 10), createdAt })
+      .onConflictDoNothing()
       .returning({ id: schema.interactionEvent.id });
 
     return rows.length === 1;

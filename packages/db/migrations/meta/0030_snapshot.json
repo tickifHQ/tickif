@@ -1,5 +1,5 @@
 {
-  "id": "a80076a8-d1b3-4071-9678-3527355f8237",
+  "id": "3275feb6-31d8-45ae-9d1c-b3065e85a499",
   "prevId": "0b4b9bfe-ba1b-4992-a9a2-345e9de1c605",
   "version": "7",
   "dialect": "postgresql",
@@ -2182,6 +2182,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "event_day": {
+          "name": "event_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "(now() at time zone 'utc')::date"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2202,6 +2209,62 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "interaction_event_actor_project_day_uniq": {
+          "name": "interaction_event_actor_project_day_uniq",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"interaction_event\".\"type\" = 'project_view' AND \"interaction_event\".\"actor_user_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "interaction_event_actor_profile_day_uniq": {
+          "name": "interaction_event_actor_profile_day_uniq",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "designer_profile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"interaction_event\".\"type\" = 'profile_view' AND \"interaction_event\".\"actor_user_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2248,36 +2311,9 @@
           "method": "btree",
           "with": {}
         },
-        "interaction_event_actor_created_idx": {
-          "name": "interaction_event_actor_created_idx",
+        "interaction_event_created_idx": {
+          "name": "interaction_event_created_idx",
           "columns": [
-            {
-              "expression": "actor_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "interaction_event_anonymous_created_idx": {
-          "name": "interaction_event_anonymous_created_idx",
-          "columns": [
-            {
-              "expression": "anonymous_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "created_at",
               "isExpression": false,
@@ -2339,6 +2375,10 @@
         "interaction_event_target_check": {
           "name": "interaction_event_target_check",
           "value": "\n        (\"interaction_event\".\"type\" = 'project_view' AND \"interaction_event\".\"project_id\" IS NOT NULL AND \"interaction_event\".\"designer_profile_id\" IS NULL)\n        OR\n        (\"interaction_event\".\"type\" = 'profile_view' AND \"interaction_event\".\"project_id\" IS NULL AND \"interaction_event\".\"designer_profile_id\" IS NOT NULL)\n      "
+        },
+        "interaction_event_day_check": {
+          "name": "interaction_event_day_check",
+          "value": "\"interaction_event\".\"event_day\" = (\"interaction_event\".\"created_at\" at time zone 'utc')::date"
         }
       },
       "isRLSEnabled": false

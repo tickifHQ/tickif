@@ -3,8 +3,9 @@ import { AppError } from '../../../src/lib/errors.js';
 
 vi.mock('../../../src/modules/interactions/repository.js', () => ({
   interactionsRepository: {
-    isPublicProject: vi.fn(),
-    isActiveDesignerProfile: vi.fn(),
+    findPublicProjectOrgId: vi.fn(),
+    findActiveDesignerOrgId: vi.fn(),
+    isOrgMember: vi.fn(),
     insertViewEvent: vi.fn(),
   },
 }));
@@ -19,8 +20,9 @@ const identity = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(interactionsRepository.isPublicProject).mockResolvedValue(true);
-  vi.mocked(interactionsRepository.isActiveDesignerProfile).mockResolvedValue(true);
+  vi.mocked(interactionsRepository.findPublicProjectOrgId).mockResolvedValue('org_1');
+  vi.mocked(interactionsRepository.findActiveDesignerOrgId).mockResolvedValue('org_1');
+  vi.mocked(interactionsRepository.isOrgMember).mockResolvedValue(false);
   vi.mocked(interactionsRepository.insertViewEvent).mockResolvedValue(true);
 });
 
@@ -81,9 +83,25 @@ describe('interactionsService.recordView', () => {
     ).resolves.toEqual({ recorded: false });
   });
 
+  it('does not record views from members of the target organization', async () => {
+    vi.mocked(interactionsRepository.isOrgMember).mockResolvedValue(true);
+
+    await expect(
+      interactionsService.recordView({
+        actorUserId: 'user_1',
+        event: {
+          ...identity,
+          type: 'project_view',
+          projectId: '33333333-3333-4333-8333-333333333333',
+        },
+      }),
+    ).resolves.toEqual({ recorded: false });
+    expect(interactionsRepository.insertViewEvent).not.toHaveBeenCalled();
+  });
+
   it('hides non-public projects and inactive profiles before inserting', async () => {
-    vi.mocked(interactionsRepository.isPublicProject).mockResolvedValue(false);
-    vi.mocked(interactionsRepository.isActiveDesignerProfile).mockResolvedValue(false);
+    vi.mocked(interactionsRepository.findPublicProjectOrgId).mockResolvedValue(null);
+    vi.mocked(interactionsRepository.findActiveDesignerOrgId).mockResolvedValue(null);
 
     await expect(
       interactionsService.recordView({

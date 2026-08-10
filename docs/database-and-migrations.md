@@ -97,6 +97,18 @@ One-way, expand/contract migration that rebuilds `project_image` for the media p
   `ORDER BY`. On a large table, run the DROP/CREATE INDEX `CONCURRENTLY` out-of-band for the
   same reason as 0005.
 
+### 0030 — interaction-event retention and daily uniqueness
+
+- `anonymous_id` is a pseudonymous identifier and must be handled as personal data. It
+  must never contain a session token, device fingerprint, IP address, or user-agent value.
+- Retain interaction events for at most **400 days**. Production operations must purge
+  older rows in bounded batches; `interaction_event_created_idx` provides the retention
+  scan path. Account deletion nulls `actor_user_id`, but the retention purge remains the
+  backstop for removing the surviving pseudonymous identifier.
+- Authenticated views are unique per actor, target, event type, and UTC day. The API still
+  accepts an `event_key` for transport retry idempotency, while the two partial daily-unique
+  indexes prevent a new client UUID from inflating the same daily impression.
+
 ## Querying
 
 Import `db`, `schema`, and the common operators from `@repo/db` (re-exported so

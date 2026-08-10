@@ -24,7 +24,7 @@ const recordViewRoute = createRoute({
   },
   responses: {
     202: {
-      description: 'View accepted or previously recorded idempotently',
+      description: 'View accepted, deduplicated, or excluded as an organization self-view',
       content: { 'application/json': { schema: recordViewEventResponseSchema } },
     },
     401: {
