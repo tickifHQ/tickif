@@ -16,7 +16,19 @@ export type HomeFeedRequest = {
   filters: FeedFilterState;
   query: string;
   sort?: 'recent' | 'featured';
+  cityLabelsBySlug?: Record<string, string>;
+  bhkLabelsBySlug?: Record<string, string>;
   budgetLabelsBySlug?: Record<string, string>;
+};
+
+type SearchLabelMaps = Pick<
+  HomeFeedRequest,
+  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug'
+>;
+
+type HomeFeedFetchOptions = {
+  limit?: number;
+  searchLabels?: SearchLabelMaps | Promise<SearchLabelMaps>;
 };
 
 export type HomeFeedPage = {
@@ -44,19 +56,26 @@ function labelFromSlug(value: string | null, labelsBySlug?: Record<string, strin
 export async function fetchHomeFeedPage(
   request: HomeFeedRequest,
   page: number,
+  options: HomeFeedFetchOptions = {},
 ): Promise<HomeFeedPage> {
+  const limit = options.limit ?? HOME_FEED_PAGE_SIZE;
+
   if (request.query) {
-    const response = await api.api.search.$get(
+    const responsePromise = api.api.search.$get(
       {
         query: {
           q: request.query,
           page,
-          limit: HOME_FEED_PAGE_SIZE,
+          limit,
           ...toSearchProjectFilters(request.filters),
         },
       },
       { init: { cache: 'no-store' } },
     );
+    const [response, labels] = await Promise.all([
+      responsePromise,
+      Promise.resolve(options.searchLabels ?? request),
+    ]);
 
     if (!response.ok) {
       throw new Error(`Search request failed with status ${response.status}.`);
@@ -75,9 +94,9 @@ export async function fetchHomeFeedPage(
         coverImageHeight: null,
         designerName: hit.designerName,
         designerSlug: hit.designerSlug,
-        city: labelFromSlug(hit.citySlug),
-        bhk: labelFromSlug(hit.bhkSlug),
-        budget: labelFromSlug(hit.budgetBandSlug, request.budgetLabelsBySlug),
+        city: labelFromSlug(hit.citySlug, labels.cityLabelsBySlug),
+        bhk: labelFromSlug(hit.bhkSlug, labels.bhkLabelsBySlug),
+        budget: labelFromSlug(hit.budgetBandSlug, labels.budgetLabelsBySlug),
         ratingSnippet: null,
       })),
       page: parsed.data.page,
@@ -93,7 +112,7 @@ export async function fetchHomeFeedPage(
       query: {
         sort: request.sort ?? 'recent',
         page,
-        limit: HOME_FEED_PAGE_SIZE,
+        limit,
         ...toDiscoveryFeedFilters(request.filters),
       },
     },

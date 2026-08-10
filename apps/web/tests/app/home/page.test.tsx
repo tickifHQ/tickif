@@ -68,6 +68,18 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           ],
         });
       }
+      if (kind === 'bhk') {
+        return response({
+          terms: [
+            {
+              id: '66666666-6666-4666-8666-666666666666',
+              label: '3 BHK',
+              slug: '3-bhk',
+              parentId: null,
+            },
+          ],
+        });
+      }
       if (kind === 'budget_band') {
         return response({
           terms: [
@@ -159,6 +171,34 @@ describe('HomePage', () => {
       'href',
       '/?room=living-room',
     );
+
+    const discoveryCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/api/discovery/feed'));
+    expect(discoveryCalls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('sort=featured'),
+        expect.stringContaining('limit=1'),
+      ]),
+    );
+  });
+
+  it('renders the taxonomy-driven try-filter card in the logged-out featured feed', async () => {
+    const items = Array.from({ length: 14 }, (_, index) => ({
+      ...discoveryCard,
+      id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
+      slug: `test-project-${index + 1}`,
+      title: `Test Project ${index + 1}`,
+    }));
+    mockApi({ items });
+
+    render(await HomePage());
+
+    expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '₹15-35L' })).toHaveAttribute(
+      'href',
+      '/?budgetBand=upscale',
+    );
   });
 
   it('renders a useful zero-result state', async () => {
@@ -196,6 +236,11 @@ describe('HomePage', () => {
     expect(screen.queryByRole('heading', { name: 'Featured projects' })).not.toBeInTheDocument();
     expect(screen.getByText('Test Project')).toBeInTheDocument();
     expect(screen.getAllByText('Filters').length).toBeGreaterThan(0);
+    expect(
+      (fetch as ReturnType<typeof vi.fn>).mock.calls.some(([input]) =>
+        String(input).includes('sort=featured'),
+      ),
+    ).toBe(false);
   });
 
   it('SSR-renders a deep-linked discovery page with filters', async () => {
@@ -262,6 +307,71 @@ describe('HomePage', () => {
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
     expect(within(screen.getByRole('article')).getByText('₹15-35L')).toBeInTheDocument();
+    expect(within(screen.getByRole('article')).getByText('3 BHK')).toBeInTheDocument();
+  });
+
+  it('starts the search request before taxonomy responses finish', async () => {
+    const taxonomyResolvers: Array<(value: ReturnType<typeof response>) => void> = [];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/taxonomy/terms')) {
+        return new Promise((resolve) => taxonomyResolvers.push(resolve));
+      }
+      if (url.includes('/api/search?')) {
+        return Promise.resolve(
+          response({
+            hits: [],
+            estimatedTotalHits: 0,
+            facetDistribution: {},
+            processingTimeMs: 2,
+            page: 1,
+            limit: 24,
+            fallback: 'none',
+            relaxedFilters: [],
+          }),
+        );
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const pagePromise = HomePage({ searchParams: Promise.resolve({ q: 'warm kitchen' }) });
+    await Promise.resolve();
+    const searchStartedBeforeTaxonomy = (fetch as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([input]) => String(input).includes('/api/search?'),
+    );
+
+    for (const resolveTaxonomy of taxonomyResolvers) {
+      resolveTaxonomy(response({ terms: [] }));
+    }
+    await pagePromise;
+
+    expect(searchStartedBeforeTaxonomy).toBe(true);
+  });
+
+  it('preserves the current search and filters in budget suggestion links', async () => {
+    const items = Array.from({ length: 14 }, (_, index) => ({
+      ...discoveryCard,
+      id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
+      slug: `test-project-${index + 1}`,
+      title: `Test Project ${index + 1}`,
+    }));
+    mockApi({ items });
+
+    render(
+      await HomePage({
+        searchParams: Promise.resolve({
+          q: 'warm kitchen',
+          city: 'mumbai',
+          bhk: '3-bhk',
+          page: '4',
+        }),
+      }),
+    );
+
+    expect(screen.getByRole('link', { name: '₹15-35L' })).toHaveAttribute(
+      'href',
+      '/?q=warm+kitchen&city=mumbai&bhk=3-bhk&budgetBand=upscale',
+    );
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

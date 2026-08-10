@@ -57,9 +57,13 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   return Object.fromEntries(entries) as FeedFacetOptions;
 }
 
-async function fetchFeedSafely(request: HomeFeedRequest, page: number): Promise<HomeFeedPage> {
+async function fetchFeedSafely(
+  request: HomeFeedRequest,
+  page: number,
+  options?: Parameters<typeof fetchHomeFeedPage>[2],
+): Promise<HomeFeedPage> {
   try {
-    return await fetchHomeFeedPage(request, page);
+    return await fetchHomeFeedPage(request, page, options);
   } catch (error) {
     console.error('[HomePage] feed fetch failed', error);
     return emptyHomeFeedPage(page);
@@ -91,17 +95,30 @@ function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
   return shortcuts;
 }
 
-function budgetSuggestions(options: FeedFacetOptions): FeedFilterSuggestion[] {
+function budgetSuggestions(
+  options: FeedFacetOptions,
+  params: HomeSearchParams,
+): FeedFilterSuggestion[] {
+  const currentParams = canonicalParams(params, 1);
+
   return (options.budgetBand ?? []).slice(0, 5).map((option) => ({
-    href: `/?budgetBand=${encodeURIComponent(option.slug)}`,
+    href: feedPageHref({ ...currentParams, budgetBand: option.slug }, 1),
     label: option.label,
   }));
 }
 
-function budgetLabelsBySlug(options: FeedFacetOptions): Record<string, string> {
-  return Object.fromEntries(
-    (options.budgetBand ?? []).map((option) => [option.slug, option.label]),
-  );
+function labelsBySlug(options: FeedFacetOptions, key: keyof FeedFacetOptions) {
+  return Object.fromEntries((options[key] ?? []).map((option) => [option.slug, option.label]));
+}
+
+function searchLabelMaps(
+  options: FeedFacetOptions,
+): Pick<HomeFeedRequest, 'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug'> {
+  return {
+    cityLabelsBySlug: labelsBySlug(options, 'city'),
+    bhkLabelsBySlug: labelsBySlug(options, 'bhk'),
+    budgetLabelsBySlug: labelsBySlug(options, 'budgetBand'),
+  };
 }
 
 function canonicalParams(params: HomeSearchParams, page: number): HomeSearchParams {
@@ -141,26 +158,37 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
   const sessionPromise = getServerSession();
   const taxonomyOptionsPromise = fetchTaxonomyOptions();
-  const initialPagePromise = query
-    ? taxonomyOptionsPromise.then((options) =>
-        fetchFeedSafely({ ...baseRequest, budgetLabelsBySlug: budgetLabelsBySlug(options) }, page),
-      )
-    : fetchFeedSafely(baseRequest, page);
+  const searchPagePromise = query
+    ? fetchFeedSafely(baseRequest, page, {
+        searchLabels: taxonomyOptionsPromise.then(searchLabelMaps),
+      })
+    : null;
+  const initialPagePromise =
+    searchPagePromise ??
+    (isDefaultFeed
+      ? sessionPromise.then((session) =>
+          fetchFeedSafely(baseRequest, page, { limit: session ? undefined : 1 }),
+        )
+      : fetchFeedSafely(baseRequest, page));
   const featuredPagePromise = isDefaultFeed
-    ? fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
+    ? sessionPromise.then((session) =>
+        session
+          ? emptyHomeFeedPage(1)
+          : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1),
+      )
     : Promise.resolve(emptyHomeFeedPage(1));
-
   const [session, taxonomyOptions, initialPage, featuredPage] = await Promise.all([
     sessionPromise,
     taxonomyOptionsPromise,
     initialPagePromise,
     featuredPagePromise,
   ]);
+  const labelMaps = searchLabelMaps(taxonomyOptions);
   const request: HomeFeedRequest = {
     ...baseRequest,
-    budgetLabelsBySlug: budgetLabelsBySlug(taxonomyOptions),
+    ...labelMaps,
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions);
+  const filterSuggestions = budgetSuggestions(taxonomyOptions, params);
 
   const previousHref = page > 1 ? feedPageHref(canonicalParams(params, page - 1), page - 1) : null;
   const nextHref = initialPage.hasMore
@@ -235,7 +263,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                 initialPage={{ ...featuredPage, hasMore: false }}
                 request={{ filters, query: '', sort: 'featured' }}
                 infinite={false}
-                showTryFilter={false}
+                filterSuggestions={filterSuggestions}
               />
             </div>
           </section>

@@ -67,7 +67,7 @@ describe('ShowcaseCard', () => {
     expect(screen.getByText('₹15-35L')).toBeInTheDocument();
   });
 
-  it('uses the natural image ratio when search results do not include dimensions', () => {
+  it('reserves fallback dimensions without forcing the loaded image ratio', () => {
     render(
       <ShowcaseCard
         project={{ ...discoveryProject, coverImageWidth: null, coverImageHeight: null }}
@@ -75,8 +75,8 @@ describe('ShowcaseCard', () => {
     );
 
     const image = screen.getByRole('img', { name: discoveryProject.title });
-    expect(image).not.toHaveAttribute('width');
-    expect(image).not.toHaveAttribute('height');
+    expect(image).toHaveAttribute('width', '480');
+    expect(image).toHaveAttribute('height', '600');
     expect(image).not.toHaveStyle({ aspectRatio: '480 / 600' });
   });
 });

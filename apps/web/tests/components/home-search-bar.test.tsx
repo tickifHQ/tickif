@@ -3,12 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeSearchBar } from '../../src/components/home-search-bar';
 
 const mock = vi.hoisted(() => ({
+  params: new URLSearchParams(),
   push: vi.fn(),
   suggestGet: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mock.push }),
+  useSearchParams: () => mock.params,
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -49,6 +51,7 @@ describe('HomeSearchBar', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    mock.params = new URLSearchParams();
     window.localStorage.clear();
     mock.suggestGet.mockResolvedValue({
       ok: true,
@@ -79,6 +82,29 @@ describe('HomeSearchBar', () => {
       { query: { q: 'kitchen' } },
       { init: { signal: expect.any(AbortSignal) } },
     );
+    expect(screen.getByRole('group', { name: 'Search suggestions' })).toBeInTheDocument();
+    expect(input).not.toHaveAttribute('aria-autocomplete');
+    expect(input).not.toHaveAttribute('aria-controls');
+  });
+
+  it('clears stale suggestions and shows loading immediately for a changed query', async () => {
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'kitchen' } });
+    expect(screen.getByText('Searching…')).toBeInTheDocument();
+    expect(screen.queryByText(/No suggestions found/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(screen.getByText('Warm Kitchen')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'bedroom' } });
+
+    expect(screen.queryByText('Warm Kitchen')).not.toBeInTheDocument();
+    expect(screen.getByText('Searching…')).toBeInTheDocument();
   });
 
   it('submits the search to the homepage query surface', () => {
@@ -87,6 +113,15 @@ describe('HomeSearchBar', () => {
     fireEvent.submit(screen.getByRole('search'));
 
     expect(mock.push).toHaveBeenCalledWith('/?q=warm+kitchen');
+  });
+
+  it('preserves active filters and resets pagination when submitting a search', () => {
+    mock.params = new URLSearchParams('city=mumbai&bhk=3-bhk&page=4');
+    render(<HomeSearchBar initialQuery="warm kitchen" />);
+
+    fireEvent.submit(screen.getByRole('search'));
+
+    expect(mock.push).toHaveBeenCalledWith('/?city=mumbai&bhk=3-bhk&q=warm+kitchen');
   });
 
   it('resyncs the input when browser history changes the URL query', () => {
@@ -128,8 +163,8 @@ describe('HomeSearchBar', () => {
     fireEvent.submit(screen.getByRole('search'));
     fireEvent.change(input, { target: { value: '' } });
 
-    expect(screen.getByRole('option', { name: 'sunlit' })).toBeInTheDocument();
-    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'sunlit' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Recent searches' })).toBeInTheDocument();
   });
 
   it('runs a recent search when it is selected', () => {
@@ -138,10 +173,23 @@ describe('HomeSearchBar', () => {
     const input = screen.getByRole('searchbox', { name: 'Search homes' });
 
     fireEvent.focus(input);
-    fireEvent.click(screen.getByRole('option', { name: 'Sarthak W' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sarthak W' }));
 
     expect(input).toHaveValue('Sarthak W');
     expect(mock.push).toHaveBeenCalledWith('/?q=Sarthak+W');
-    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
+  });
+
+  it('ignores stored recent searches when the persisted shape is invalid', () => {
+    window.localStorage.setItem(
+      'tickif.homeSearchRecents.v1',
+      JSON.stringify(['Sarthak W', { query: 'unexpected shape' }]),
+    );
+    render(<HomeSearchBar />);
+
+    fireEvent.focus(screen.getByRole('searchbox', { name: 'Search homes' }));
+
+    expect(screen.queryByRole('button', { name: 'Sarthak W' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
   });
 });

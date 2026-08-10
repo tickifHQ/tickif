@@ -1,10 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
 import { ArrowRight, History, Search, X } from 'lucide-react';
-import { searchSuggestResponseSchema, type SearchSuggestResponse } from '@repo/contracts';
+import {
+  recentSearchesSchema,
+  searchSuggestResponseSchema,
+  type SearchSuggestResponse,
+} from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { api } from '@/lib/api';
 
@@ -23,13 +27,8 @@ function readRecentSearches(): string[] {
     const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
     if (!stored) return [];
 
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .map((value) => value.trim())
-      .slice(0, MAX_RECENT_SEARCHES);
+    const parsed = recentSearchesSchema.safeParse(JSON.parse(stored));
+    return parsed.success ? parsed.data : [];
   } catch {
     return [];
   }
@@ -51,6 +50,7 @@ type HomeSearchBarProps = {
 /** Homepage search entry with blended project/designer suggestions after a 150 ms debounce. */
 export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSearchBarProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const listboxId = useId();
   const [query, setQuery] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -78,9 +78,10 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
       return;
     }
 
+    setSuggestions(EMPTY_SUGGESTIONS);
+    setIsLoading(true);
     const controller = new AbortController();
     const timeoutId = window.setTimeout(async () => {
-      setIsLoading(true);
       try {
         const response = await api.api.search.suggest.$get(
           { query: { q: trimmedQuery } },
@@ -117,8 +118,10 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
       writeRecentSearches(nextRecentSearches);
     }
 
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     if (normalizedQuery) params.set('q', normalizedQuery);
+    else params.delete('q');
+    params.delete('page');
     router.push(params.size > 0 ? `/?${params.toString()}` : '/');
     setIsFocused(false);
   }
@@ -153,7 +156,10 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
           autoComplete="off"
           value={query}
           onChange={(event) => {
-            setQuery(event.target.value);
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setSuggestions(EMPTY_SUGGESTIONS);
+            setIsLoading(nextQuery.trim().length > 0);
             setIsFocused(true);
           }}
           onKeyDown={(event) => {
@@ -161,9 +167,6 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
           }}
           placeholder="Search by city, style, budget, room type…"
           aria-label="Search homes"
-          aria-autocomplete="list"
-          aria-controls={showDropdown ? listboxId : undefined}
-          aria-expanded={showDropdown}
           className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
         {query.length > 0 ? (
@@ -173,7 +176,11 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
             size="icon"
             className="size-6 shrink-0 rounded-full p-0 text-primary shadow-none hover:bg-transparent hover:text-primary"
             aria-label="Clear search"
-            onClick={() => setQuery('')}
+            onClick={() => {
+              setQuery('');
+              setSuggestions(EMPTY_SUGGESTIONS);
+              setIsLoading(false);
+            }}
           >
             <X className="size-3.5" aria-hidden />
           </Button>
@@ -194,7 +201,7 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
       {showDropdown ? (
         <div
           id={listboxId}
-          role="listbox"
+          role="group"
           aria-label={showRecentSearches ? 'Recent searches' : 'Search suggestions'}
           className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
           onMouseDown={(event) => event.preventDefault()}
@@ -211,8 +218,6 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                 <button
                   key={recentSearch.toLocaleLowerCase()}
                   type="button"
-                  role="option"
-                  aria-selected="false"
                   className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent"
                   onClick={() => {
                     setQuery(recentSearch);
@@ -236,8 +241,6 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                 <Link
                   key={project.id}
                   href={`/projects/${project.id}`}
-                  role="option"
-                  aria-selected="false"
                   className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                 >
                   {project.coverImageUrl ? (
@@ -308,19 +311,12 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                   <Link
                     key={designer.id}
                     href={`/d/${designer.slug}`}
-                    role="option"
-                    aria-selected="false"
                     className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
                   >
                     {content}
                   </Link>
                 ) : (
-                  <div
-                    key={designer.id}
-                    role="option"
-                    aria-selected="false"
-                    className="flex items-center gap-3 rounded-lg px-2 py-2"
-                  >
+                  <div key={designer.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
                     {content}
                   </div>
                 );
