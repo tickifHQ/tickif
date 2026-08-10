@@ -9,6 +9,7 @@ vi.mock('@repo/storage', () => ({
 
 const { collectTaxonomyPairs, normalizePostgresRow, normalizeTypesenseHit, toDiscoveryCard } =
   await import('../../../src/modules/discovery/mapper.js');
+const { presignDownload } = await import('@repo/storage');
 
 const labels = new Map([
   ['city:mumbai', 'Mumbai'],
@@ -41,10 +42,10 @@ function searchHit(overrides: Partial<ProjectSearchDocument> = {}): ProjectSearc
     roomSlugs: [],
     roomLabels: [],
     tags: [],
-    coverImageKey: 'thumb.webp',
+    coverImageKey: 'small.webp',
     coverImageId: '33333333-3333-4333-8333-333333333333',
-    coverImageWidth: 320,
-    coverImageHeight: 240,
+    coverImageWidth: 640,
+    coverImageHeight: 480,
     publishedAt: 1,
     featuredAt: null,
     avgRating: 4.8,
@@ -69,6 +70,7 @@ function postgresRow(overrides: Partial<FeedProjectRow> = {}): FeedProjectRow {
     coverImageId: '33333333-3333-4333-8333-333333333333',
     coverStatus: 'ready',
     coverDerivatives: [
+      { key: 'small.webp', variant: 'small', format: 'webp', width: 640, height: 480 },
       { key: 'thumb.webp', variant: 'thumb', format: 'webp', width: 320, height: 240 },
     ] as Derivative[],
     ...overrides,
@@ -93,9 +95,9 @@ describe('discovery card mapper', () => {
       budget: '₹40-60 lakh',
       tags: ['3 BHK', 'Modern'],
       coverImageId: '33333333-3333-4333-8333-333333333333',
-      coverImageUrl: 'https://signed.example/thumb.webp',
-      imageWidth: 320,
-      imageHeight: 240,
+      coverImageUrl: 'https://signed.example/small.webp',
+      imageWidth: 640,
+      imageHeight: 480,
     });
   });
 
@@ -105,10 +107,75 @@ describe('discovery card mapper', () => {
       studio: 'Studio One',
       locality: 'Bandra',
       tags: ['3 BHK', 'Modern'],
+      coverImageUrl: 'https://signed.example/small.webp',
+      imageWidth: 640,
+      imageHeight: 480,
+    });
+  });
+
+  it.each(['processing', 'failed', null] as const)(
+    'does not expose a Postgres cover while its status is %s',
+    async (coverStatus) => {
+      const card = await toDiscoveryCard(
+        normalizePostgresRow(postgresRow({ coverStatus })),
+        labels,
+        localities,
+      );
+
+      expect(presignDownload).not.toHaveBeenCalled();
+      expect(card).toMatchObject({ coverImageUrl: null, imageWidth: null, imageHeight: null });
+    },
+  );
+
+  it('returns a null URL when signing a ready Postgres cover fails', async () => {
+    vi.mocked(presignDownload).mockRejectedValueOnce(new Error('Presign failed'));
+
+    const card = await toDiscoveryCard(
+      normalizePostgresRow(postgresRow()),
+      labels,
+      localities,
+    );
+
+    expect(card.coverImageUrl).toBeNull();
+  });
+
+  it('falls back from a missing small derivative to the card-sized thumb', async () => {
+    const card = await toDiscoveryCard(
+      normalizePostgresRow(
+        postgresRow({
+          coverDerivatives: [
+            { key: 'large.webp', variant: 'large', format: 'webp', width: 1600, height: 1200 },
+            { key: 'thumb.webp', variant: 'thumb', format: 'webp', width: 320, height: 240 },
+          ],
+        }),
+      ),
+      labels,
+      localities,
+    );
+
+    expect(presignDownload).toHaveBeenCalledWith({ key: 'thumb.webp' });
+    expect(card).toMatchObject({
       coverImageUrl: 'https://signed.example/thumb.webp',
       imageWidth: 320,
       imageHeight: 240,
     });
+  });
+
+  it('does not fall back to oversized derivatives for a feed card', async () => {
+    const card = await toDiscoveryCard(
+      normalizePostgresRow(
+        postgresRow({
+          coverDerivatives: [
+            { key: 'large.webp', variant: 'large', format: 'webp', width: 1600, height: 1200 },
+          ],
+        }),
+      ),
+      labels,
+      localities,
+    );
+
+    expect(presignDownload).not.toHaveBeenCalled();
+    expect(card).toMatchObject({ coverImageUrl: null, imageWidth: null, imageHeight: null });
   });
 
   it('degrades unavailable covers without dropping card identity', async () => {

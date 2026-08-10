@@ -127,9 +127,10 @@ export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
 function pickPreviewDerivative(derivatives: Derivative[] | null): Derivative | null {
   if (!derivatives) return null;
   return (
+    derivatives.find((d) => d.variant === 'small' && d.format === 'webp') ??
+    derivatives.find((d) => d.variant === 'small') ??
     derivatives.find((d) => d.variant === 'thumb' && d.format === 'webp') ??
     derivatives.find((d) => d.variant === 'thumb') ??
-    derivatives[0] ??
     null
   );
 }
