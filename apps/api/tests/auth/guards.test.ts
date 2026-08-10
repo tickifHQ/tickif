@@ -25,6 +25,7 @@ function appWithUser(user: StubUser, ownership?: Ownership | null) {
   app.use('*', async (c, next) => {
     c.set('user', user as AuthVariables['user']);
     c.set('session', null);
+    c.set('sessionFresh', true);
     await next();
   });
   app.get('/admin', requireAnyRole(['admin']), (c) => c.json({ ok: true }));

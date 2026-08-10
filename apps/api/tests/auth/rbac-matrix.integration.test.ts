@@ -300,7 +300,7 @@ describe('RBAC matrix: fresh session state (E-184)', () => {
   it('a warm session_data cookie cannot bypass a server-side ban', async () => {
     // createAuthedSession returns the FULL cookie, including the cached session_data
     // blob — unlike createRoleSession, which strips it. This pins the production
-    // behavior: withSession must bypass the cache so a server-side ban takes effect
+    // behavior: requireAuth must bypass the cache so a server-side ban takes effect
     // immediately even when the client still holds a warm cookie.
     const { cookie } = await createAuthedSession('+919800013001');
     const me = await getSession(new Headers({ cookie }));

@@ -6,6 +6,7 @@ import { orgsService } from '../modules/orgs/service.js';
 export type AuthVariables = {
   user: Session['user'] | null;
   session: Session['session'] | null;
+  sessionFresh: boolean;
 };
 
 /** Platform role union, derived from the configured Better Auth role map. */
@@ -24,11 +25,11 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  * Resolves the better-auth session from the incoming request and attaches
  * `user` / `session` to the Hono context. Always runs; does not block.
  *
- * Session resolution bypasses better-auth's ≤5-min session cookie cache so
- * server-side role, ban, expiry, and organization changes are visible immediately.
+ * Uses better-auth's session cookie cache for public reads. Protected guards
+ * refresh the session once per request before making authorization decisions.
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  const result = await getSession(c.req.raw.headers, { disableCookieCache: true });
+  const result = await getSession(c.req.raw.headers);
   if (result?.session && !result.session.activeOrganizationId) {
     const organizationId = await orgsService.findSoleOrganizationForUser(result.user.id);
     if (organizationId) {
@@ -43,8 +44,24 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
+  c.set('sessionFresh', false);
   await next();
 };
+
+async function getFreshActiveUser(
+  c: Context<{ Variables: AuthVariables }>,
+): Promise<NonNullable<AuthVariables['user']>> {
+  if (!c.get('sessionFresh')) {
+    const result = await getSession(c.req.raw.headers, { disableCookieCache: true });
+    c.set('user', result?.user ?? null);
+    c.set('session', result?.session ?? null);
+    c.set('sessionFresh', true);
+  }
+
+  const user = c.get('user');
+  assertActiveUser(user);
+  return user;
+}
 
 /**
  * Shared guard precondition: an authenticated, non-banned account.
@@ -65,7 +82,7 @@ function assertActiveUser(
 
 /** Guard: require an authenticated, non-banned user. 401 / 403 otherwise. */
 export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  assertActiveUser(c.get('user'));
+  await getFreshActiveUser(c);
   await next();
 };
 
@@ -79,8 +96,7 @@ export function requireAnyRole(
   roles: readonly UserRole[],
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
-    const user = c.get('user');
-    assertActiveUser(user);
+    const user = await getFreshActiveUser(c);
     const { role } = user;
     if (role !== 'superadmin' && !roles.some((r) => r === role)) {
       throw AppError.forbidden();
@@ -108,8 +124,7 @@ export function requireOwnership(
   resolve: OwnershipResolver,
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
-    const user = c.get('user');
-    assertActiveUser(user);
+    const user = await getFreshActiveUser(c);
     const ownership = await resolve(c);
     if (!ownership) {
       throw AppError.notFound();

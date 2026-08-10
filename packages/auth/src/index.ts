@@ -58,7 +58,8 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // refresh expiry every 1 day of use
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60, // 5 min — avoids a DB hit on every getSession call
+      // Public API/web reads use the cache; protected API guards bypass it.
+      maxAge: 5 * 60,
     },
   },
 

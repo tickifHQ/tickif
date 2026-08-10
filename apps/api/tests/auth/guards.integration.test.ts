@@ -27,6 +27,7 @@ function sampleApp() {
   const app = new Hono<{ Variables: AuthVariables }>();
   app.onError(onError);
   app.use('*', withSession);
+  app.get('/session-role', (c) => c.json({ role: c.get('user')?.role ?? null }));
   app.get('/admin-area', requireAnyRole(['admin']), (c) => c.json({ ok: true }));
   app.get('/designer-area', requireRole('designer'), (c) => c.json({ ok: true }));
   app.get('/session-org', requireRole('designer'), (c) =>
@@ -88,14 +89,25 @@ describe('RBAC guards (integration, E-87)', () => {
     expect((await get(app, '/designer-area', superadmin.cookie)).status).toBe(200);
   });
 
-  it('uses fresh role state for protected routes with a warm session cookie', async () => {
+  it('keeps public reads cached while protected routes use fresh role state', async () => {
     const app = sampleApp();
     const { cookie } = await createAuthedSession('+919800000062');
     const session = await getSession(new Headers({ cookie }));
 
+    expect(await (await get(app, '/session-role', cookie)).json()).toEqual({ role: 'visitor' });
+    expect((await get(app, '/admin-area', cookie)).status).toBe(403);
+
     await db.update(schema.user).set({ role: 'admin' }).where(eq(schema.user.id, session!.user.id));
 
+    expect(await (await get(app, '/session-role', cookie)).json()).toEqual({ role: 'visitor' });
     expect((await get(app, '/admin-area', cookie)).status).toBe(200);
+
+    await db
+      .update(schema.user)
+      .set({ role: 'visitor' })
+      .where(eq(schema.user.id, session!.user.id));
+
+    expect((await get(app, '/admin-area', cookie)).status).toBe(403);
   });
 
   it('ownership: owner 200, other designer 403, superadmin 200, unknown id 404', async () => {
