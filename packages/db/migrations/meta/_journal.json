@@ -225,6 +225,13 @@
       "when": 1786374092543,
       "tag": "0031_tearful_johnny_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786375753148,
+      "tag": "0032_overconfident_ozymandias",
+      "breakpoints": true
     }
   ]
 }
