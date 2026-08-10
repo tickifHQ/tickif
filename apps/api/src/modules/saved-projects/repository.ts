@@ -1,34 +1,21 @@
-import { and, db, eq, inArray, schema } from '@repo/db';
+import { and, db, eq, inArray, schema, sql } from '@repo/db';
 
 export const savedProjectsRepository = {
   async savePublished(userId: string, projectId: string): Promise<boolean> {
-    return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ id: schema.project.id })
-        .from(schema.project)
-        .innerJoin(
-          schema.designerProfile,
-          eq(schema.project.designerId, schema.designerProfile.id),
-        )
-        .where(
-          and(
-            eq(schema.project.id, projectId),
-            eq(schema.project.status, 'published'),
-            eq(schema.designerProfile.status, 'active'),
-          ),
-        )
-        .limit(1);
-
-      if (!project) return false;
-
-      await tx
-        .insert(schema.savedProject)
-        .values({ userId, projectId })
-        .onConflictDoNothing({
-          target: [schema.savedProject.userId, schema.savedProject.projectId],
-        });
-      return true;
-    });
+    const result = await db.execute<{ projectId: string }>(sql`
+      insert into ${schema.savedProject} (user_id, project_id)
+      select ${userId}, ${schema.project.id}
+      from ${schema.project}
+      inner join ${schema.designerProfile}
+        on ${schema.project.designerId} = ${schema.designerProfile.id}
+      where ${schema.project.id} = ${projectId}
+        and ${schema.project.status} = 'published'
+        and ${schema.designerProfile.status} = 'active'
+      on conflict (user_id, project_id)
+      do update set user_id = excluded.user_id
+      returning project_id as "projectId"
+    `);
+    return result.rows.length > 0;
   },
 
   async remove(userId: string, projectId: string): Promise<void> {

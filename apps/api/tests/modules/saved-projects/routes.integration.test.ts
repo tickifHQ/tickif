@@ -84,17 +84,51 @@ describe('saved project routes', () => {
 
   it('requires authentication and validates the bounded state query', async () => {
     const project = await makeProject();
-    const unauthenticated = await app.request(`/api/saved-projects/${project.id}`, {
-      method: 'PUT',
-    });
-    expect(unauthenticated.status).toBe(401);
+    expect(
+      (await app.request(`/api/saved-projects/${project.id}`, { method: 'PUT' })).status,
+    ).toBe(401);
+    expect(
+      (await app.request(`/api/saved-projects/${project.id}`, { method: 'DELETE' })).status,
+    ).toBe(401);
+    expect((await app.request(`/api/saved-projects/state?projectIds=${project.id}`)).status).toBe(
+      401,
+    );
 
     const visitor = await createRoleSession('+919800005105', 'visitor');
+    const single = await app.request(`/api/saved-projects/state?projectIds=${project.id}`, {
+      headers: { cookie: visitor.cookie },
+    });
+    expect(single.status).toBe(200);
+    await expect(single.json()).resolves.toEqual({ savedProjectIds: [] });
+
     const tooMany = new URLSearchParams();
     for (let index = 0; index < 49; index += 1) tooMany.append('projectIds', project.id);
     const invalid = await app.request(`/api/saved-projects/state?${tooMany.toString()}`, {
       headers: { cookie: visitor.cookie },
     });
     expect(invalid.status).toBe(422);
+  });
+
+  it('returns documented 403 responses for a banned account', async () => {
+    const visitor = await createRoleSession('+919800005106', 'visitor');
+    const project = await makeProject();
+    await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, visitor.userId));
+
+    const save = await app.request(`/api/saved-projects/${project.id}`, {
+      method: 'PUT',
+      headers: { cookie: visitor.cookie },
+    });
+    expect(save.status).toBe(403);
+
+    const remove = await app.request(`/api/saved-projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie: visitor.cookie },
+    });
+    expect(remove.status).toBe(403);
+
+    const state = await app.request(`/api/saved-projects/state?projectIds=${project.id}`, {
+      headers: { cookie: visitor.cookie },
+    });
+    expect(state.status).toBe(403);
   });
 });

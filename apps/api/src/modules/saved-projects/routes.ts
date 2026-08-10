@@ -36,6 +36,7 @@ const stateRoute = createRoute({
       content: { 'application/json': { schema: savedProjectsStateResponseSchema } },
     },
     401: errorJson('Unauthorized'),
+    403: errorJson('Account suspended'),
     422: errorJson('Invalid project ids'),
   },
 });
@@ -54,6 +55,7 @@ const saveRoute = createRoute({
       content: { 'application/json': { schema: savedProjectStateSchema } },
     },
     401: errorJson('Unauthorized'),
+    403: errorJson('Account suspended'),
     404: errorJson('Published project not found'),
     422: errorJson('Invalid project id'),
   },
@@ -73,6 +75,7 @@ const removeRoute = createRoute({
       content: { 'application/json': { schema: savedProjectStateSchema } },
     },
     401: errorJson('Unauthorized'),
+    403: errorJson('Account suspended'),
     422: errorJson('Invalid project id'),
   },
 });

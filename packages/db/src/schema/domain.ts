@@ -10,6 +10,7 @@ import {
   pgEnum,
   jsonb,
   index,
+  primaryKey,
   uniqueIndex,
   check,
   type AnyPgColumn,
@@ -296,7 +297,7 @@ export const savedProject = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex('saved_project_user_project_uniq').on(t.userId, t.projectId),
+    primaryKey({ columns: [t.userId, t.projectId] }),
     index('saved_project_project_idx').on(t.projectId),
   ],
 );
