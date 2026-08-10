@@ -1,5 +1,11 @@
-import { searchClient, searchCollectionName, type ProjectSearchDocument } from '@repo/search';
-import { db, schema, eq, and, asc, inArray, sql } from '@repo/db';
+import {
+  PROJECT_QUERY_BY,
+  searchClient,
+  searchCollectionName,
+  type ProjectSearchDocument,
+} from '@repo/search';
+import { db, schema, eq, and, asc, or, inArray, sql } from '@repo/db';
+import { ilike } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   DISCOVERY_FACET_TAXONOMY_KINDS,
@@ -44,11 +50,14 @@ export interface FeedProjectRow {
   slug: string;
   title: string;
   citySlug: string | null;
+  localitySlug: string | null;
   bhkSlug: string | null;
+  budgetBandSlug: string | null;
   designerName: string;
   designerSlug: string | null;
   avgRating: string;
   reviewCount: number;
+  coverImageId: string | null;
   coverStatus: 'processing' | 'ready' | 'failed' | null;
   coverDerivatives: Derivative[] | null;
 }
@@ -63,6 +72,7 @@ export interface PostgresListResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SearchFeedParams {
+  q?: string;
   filterBy: string;
   sortBy: string;
   page: number;
@@ -70,6 +80,7 @@ interface SearchFeedParams {
 }
 
 interface ListFeedFallbackParams {
+  q?: string;
   filterBy: DiscoveryFeedFilters;
   sortBy: DiscoverySortPostgres;
   limit: number;
@@ -91,8 +102,14 @@ const TYPESENSE_INCLUDE_FIELDS = [
   'designerSlug',
   'designerName',
   'citySlug',
+  'localitySlug',
   'bhkSlug',
+  'budgetBandSlug',
+  'themes',
   'coverImageKey',
+  'coverImageId',
+  'coverImageWidth',
+  'coverImageHeight',
   'avgRating',
   'reviewCount',
 ].join(',');
@@ -116,14 +133,43 @@ const FACET_TAXONOMY_KINDS: (typeof schema.taxonomyKindEnum.enumValues)[number][
 
 /**
  * Visibility + filter predicate shared by the fallback listing and its facet counts, so a
- * count can never describe a different set of projects than the page it labels.
+ * count can never describe a different set of projects than the page it labels. `q` is part
+ * of that predicate for the same reason: a text-narrowed page with unnarrowed counts would
+ * label itself with facet values it cannot reach.
  */
-function feedVisibilityWhere(filters: DiscoveryFeedFilters) {
+function feedVisibilityWhere(filters: DiscoveryFeedFilters, q?: string) {
   return and(
     eq(schema.project.status, 'published'),
     eq(schema.designerProfile.status, 'active'),
+    ...(q ? [feedTextMatch(q)] : []),
     ...projectFeedFilterClauses(filters),
   );
+}
+
+/**
+ * Degraded-path text match.
+ *
+ * Covers the free-text columns behind `PROJECT_QUERY_BY` — `title`, `description` and
+ * `designerName` — so the fallback is not quietly narrower than Typesense. Dropping
+ * `description` here (as an earlier revision did) meant a query matching only a project's
+ * body text returned hits while Typesense was up and nothing while it was down, which is
+ * the one thing a fallback must not do. The remaining `PROJECT_QUERY_BY` entries are
+ * taxonomy slugs that `projectFeedFilterClauses` already covers as exact filters.
+ *
+ * `ILIKE '%q%'` has a leading wildcard and so cannot use a btree index; all three columns
+ * carry GIN trigram indexes (migration 0036) — see docs/database-and-migrations.md.
+ */
+function feedTextMatch(q: string) {
+  const pattern = `%${escapeLikePattern(q)}%`;
+  return or(
+    ilike(schema.project.title, pattern),
+    ilike(schema.project.description, pattern),
+    ilike(schema.designerProfile.displayName, pattern),
+  );
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,13 +185,15 @@ export const discoveryRepository = {
    */
   async searchFeed(params: SearchFeedParams): Promise<TypesenseSearchResult> {
     const client = searchClient();
+    const sortBy = params.q ? `_text_match:desc,${params.sortBy}` : params.sortBy;
     const result = await client
       .collections<ProjectSearchDocument>(searchCollectionName('projects'))
       .documents()
       .search({
-        q: '*',
+        q: params.q || '*',
+        query_by: PROJECT_QUERY_BY.join(','),
         filter_by: params.filterBy || undefined,
-        sort_by: params.sortBy,
+        sort_by: sortBy,
         facet_by: DISCOVERY_FILTER_FIELDS.join(','),
         max_facet_values: MAX_FACET_VALUES,
         page: params.page,
@@ -172,7 +220,7 @@ export const discoveryRepository = {
   async listFeedFallback(params: ListFeedFallbackParams): Promise<PostgresListResult> {
     const cover = alias(schema.projectImage, 'cover');
 
-    const where = feedVisibilityWhere(params.filterBy);
+    const where = feedVisibilityWhere(params.filterBy, params.q);
 
     const rows = await db
       .select({
@@ -180,11 +228,14 @@ export const discoveryRepository = {
         slug: schema.project.slug,
         title: schema.project.title,
         citySlug: schema.project.citySlug,
+        localitySlug: schema.project.localitySlug,
         bhkSlug: schema.project.bhkSlug,
+        budgetBandSlug: schema.project.budgetBandSlug,
         designerName: schema.designerProfile.displayName,
         designerSlug: schema.organization.slug,
         avgRating: schema.designerProfile.avgRating,
         reviewCount: schema.designerProfile.reviewCount,
+        coverImageId: schema.project.coverImageId,
         coverStatus: cover.status,
         coverDerivatives: cover.derivatives,
       })
@@ -198,6 +249,35 @@ export const discoveryRepository = {
       .offset(params.offset);
 
     return { rows };
+  },
+
+  /**
+   * Theme slugs per project for the degraded path, which has no denormalised `themes`
+   * array to read the way a Typesense document does. Batched over the page's ids so the
+   * card mapper never issues a per-card query.
+   */
+  async findThemeSlugs(projectIds: string[]): Promise<Map<string, string[]>> {
+    if (projectIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        projectId: schema.projectImage.projectId,
+        themeSlugs: schema.projectImage.themeSlugs,
+      })
+      .from(schema.projectImage)
+      .where(
+        and(
+          inArray(schema.projectImage.projectId, projectIds),
+          eq(schema.projectImage.status, 'ready'),
+        ),
+      );
+
+    const themes = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const projectThemes = themes.get(row.projectId) ?? new Set<string>();
+      for (const slug of row.themeSlugs) projectThemes.add(slug);
+      themes.set(row.projectId, projectThemes);
+    }
+    return new Map([...themes].map(([projectId, slugs]) => [projectId, [...slugs].sort()]));
   },
 
   /**
@@ -242,8 +322,10 @@ export const discoveryRepository = {
    * (`roomSlugs`, via project_room → taxonomy) or an unnest (`themes`, over the jsonb array
    * on ready images), hence `count(distinct)` — a project with three bedrooms is still one
    * project. Counts are sparse; `denseFacetDistribution` fills in the zeroes.
+   *
+   * `q` is applied to the CTE as well, so a text-narrowed page gets text-narrowed counts.
    */
-  async countFeedFacets(filters: DiscoveryFeedFilters): Promise<FacetDistribution> {
+  async countFeedFacets(filters: DiscoveryFeedFilters, q?: string): Promise<FacetDistribution> {
     const result = await db.execute<{ field: string; value: string | null; count: number }>(sql`
       with visible as (
         select
@@ -258,7 +340,7 @@ export const discoveryRepository = {
         from ${schema.project}
         inner join ${schema.designerProfile}
           on ${eq(schema.project.designerId, schema.designerProfile.id)}
-        where ${feedVisibilityWhere(filters)}
+        where ${feedVisibilityWhere(filters, q)}
       )
       select 'citySlug' as field, city_slug as value, count(*)::int as count
         from visible where city_slug is not null group by city_slug

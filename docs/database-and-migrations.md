@@ -59,11 +59,11 @@ together. This is intentional — see [auth.md](./auth.md).
 
 ## Useful commands
 
-| Command | What it does |
-| --- | --- |
-| `pnpm db:generate` | Generate a migration from schema changes |
-| `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:studio` | Open Drizzle Studio — a browser UI for the DB |
+| Command                       | What it does                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `pnpm db:generate`            | Generate a migration from schema changes                                        |
+| `pnpm db:migrate`             | Apply pending migrations                                                        |
+| `pnpm db:studio`              | Open Drizzle Studio — a browser UI for the DB                                   |
 | `pnpm --filter @repo/db push` | Push schema directly without a migration (**dev/prototyping only**, never prod) |
 
 ## Destructive migrations
@@ -96,6 +96,51 @@ One-way, expand/contract migration that rebuilds `project_image` for the media p
   adds the covering `(project_id, sort_order, created_at)` index for the list query's
   `ORDER BY`. On a large table, run the DROP/CREATE INDEX `CONCURRENTLY` out-of-band for the
   same reason as 0005.
+
+### 0036 — `pg_trgm` + trigram indexes for the discovery feed's degraded search
+
+The public discovery feed's Postgres fallback matches `?q=` with `ILIKE '%q%'` against
+`project.title`, `project.description` and `designer_profile.display_name`. A leading
+wildcard cannot use a btree index, so this migration enables **`pg_trgm`** and adds three
+GIN trigram indexes:
+
+| Index                                    | Table              | Column         |
+| ---------------------------------------- | ------------------ | -------------- |
+| `project_title_trgm_idx`                 | `project`          | `title`        |
+| `project_description_trgm_idx`           | `project`          | `description`  |
+| `designer_profile_display_name_trgm_idx` | `designer_profile` | `display_name` |
+
+Two things to know before applying this against a populated database:
+
+- **`CREATE EXTENSION IF NOT EXISTS pg_trgm;` is hand-prepended** to the generated file.
+  Drizzle's schema DSL has no way to declare an extension, but `gin_trgm_ops` does not
+  exist without it, so the statement has to lead the migration. Everything after it is
+  drizzle-generated from `packages/db/src/schema/domain.ts`. `pg_trgm` is a _trusted_
+  extension on PostgreSQL 13+, so the database owner can create it without superuser.
+- **The indexes are built non-concurrently** — drizzle wraps each migration in a
+  transaction, and `CREATE INDEX CONCURRENTLY` cannot run inside one. On a large or
+  persistent `project` table this locks out writes for the duration of the build. Same
+  precedent as 0005 and 0007: skip the three `CREATE INDEX` statements and build them
+  out-of-band instead.
+
+  ```sql
+  -- run once, outside the migration, against the target database
+  CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  CREATE INDEX CONCURRENTLY IF NOT EXISTS project_title_trgm_idx
+    ON project USING gin (title gin_trgm_ops);
+  CREATE INDEX CONCURRENTLY IF NOT EXISTS project_description_trgm_idx
+    ON project USING gin (description gin_trgm_ops);
+  CREATE INDEX CONCURRENTLY IF NOT EXISTS designer_profile_display_name_trgm_idx
+    ON designer_profile USING gin (display_name gin_trgm_ops);
+  ```
+
+  Then mark 0036 applied without re-running it (insert its `__drizzle_migrations` row), or
+  apply it only where the indexes do not yet exist. The generated `CREATE INDEX` statements
+  are not `IF NOT EXISTS`, so a plain re-apply fails with error `42P07`.
+
+  A `CONCURRENTLY` build that fails leaves an **invalid** index behind. Check for one with
+  `SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;` and `DROP INDEX` it
+  before retrying.
 
 ### 0032 — interaction-event retention and daily uniqueness
 

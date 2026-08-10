@@ -242,7 +242,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(body.items[0]).toMatchObject({
         slug: project.slug,
         title: 'Typesense Project',
-        designerName: 'Search Studio',
+        studio: 'Search Studio',
       });
     });
 
@@ -428,7 +428,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       // Find our specific project (other tests may have left data)
       const fallbackProject = body.items.find((item) => item.slug === project.slug);
       expect(fallbackProject).toBeDefined();
-      expect(fallbackProject?.designerName).toBe('Fallback Studio');
+      expect(fallbackProject?.studio).toBe('Fallback Studio');
     });
 
     it('falls back on Typesense timeout', async () => {
@@ -467,15 +467,18 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const card = body.items.find((item) => item.slug === project.slug);
       expect(card).toBeDefined();
       expect(card).toHaveProperty('slug');
+      expect(card).toHaveProperty('id');
       expect(card).toHaveProperty('title');
       expect(card).toHaveProperty('coverImageUrl');
-      expect(card).toHaveProperty('coverImageWidth');
-      expect(card).toHaveProperty('coverImageHeight');
-      expect(card).toHaveProperty('designerName');
-      expect(card).toHaveProperty('designerSlug');
+      expect(card).toHaveProperty('imageWidth');
+      expect(card).toHaveProperty('imageHeight');
+      expect(card).toHaveProperty('studio');
       expect(card).toHaveProperty('city');
-      expect(card).toHaveProperty('bhk');
-      expect(card).toHaveProperty('ratingSnippet');
+      expect(card).toHaveProperty('locality');
+      expect(card).toHaveProperty('budget');
+      expect(card).toHaveProperty('tags');
+      expect(card).toHaveProperty('rating');
+      expect(card).toHaveProperty('reviewCount');
     });
 
     it('logs fallback event with correct structure', async () => {
@@ -568,15 +571,35 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(pgProject).toBeDefined();
       expect(pgProject).toMatchObject({
         title: 'Postgres Only Project',
-        designerName: 'Postgres Only Studio',
+        studio: 'Postgres Only Studio',
         city: 'Mumbai',
-        bhk: '3 BHK',
-        ratingSnippet: '4.8 (25 reviews)',
+        rating: 4.8,
+        reviewCount: 25,
+        tags: ['3 BHK'],
       });
       // Cover image should be presigned
       expect(pgProject?.coverImageUrl).toContain('X-Amz-Signature=');
-      expect(pgProject?.coverImageWidth).toBe(640);
-      expect(pgProject?.coverImageHeight).toBe(427);
+      // The card resolves small → thumb → null, and this fixture has both, so the 640px
+      // `small` derivative wins over the 320px `thumb`.
+      expect(pgProject?.coverImageUrl).toContain('small.webp');
+      expect(pgProject?.imageWidth).toBe(640);
+      expect(pgProject?.imageHeight).toBe(427);
+    });
+
+    it('searches published projects by text with the Postgres path', async () => {
+      const designer = await activeDesigner();
+      const uniqueTerm = `calm-${Date.now()}`;
+      const matchingProject = await makePublishedProject(designer.id, {
+        title: `${uniqueTerm} residence`,
+      });
+      await makePublishedProject(designer.id, { title: 'Unrelated residence' });
+
+      const { res, body } = await getFeed(`?q=${encodeURIComponent(uniqueTerm)}`);
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.fallback).toBe('none');
+      expect(body.items.map((item) => item.id)).toEqual([matchingProject.id]);
     });
 
     it('returns correct structure for empty feed', async () => {

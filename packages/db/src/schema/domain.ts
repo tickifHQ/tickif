@@ -220,6 +220,9 @@ export const designerProfile = pgTable(
     uniqueIndex('designer_profile_user_id_unique')
       .on(t.userId)
       .where(sql`${t.userId} IS NOT NULL`),
+    // Paired with `project_title_trgm_idx` — the discovery feed's degraded text search
+    // ORs the designer's display name into the same `ILIKE '%q%'` predicate.
+    index('designer_profile_display_name_trgm_idx').using('gin', t.displayName.op('gin_trgm_ops')),
   ],
 );
 
@@ -325,6 +328,13 @@ export const project = pgTable(
     index('project_in_review_moderation_queue_idx')
       .on(t.reviewedBy, t.submittedAt, t.id)
       .where(sql`${t.status} = 'in_review'`),
+    // Trigram indexes for the discovery feed's degraded (Postgres) text search, which
+    // matches `ILIKE '%q%'`. A leading wildcard cannot use a btree index, so without
+    // these the public `?q=` path sequentially scans `project` on every uncached
+    // request — and `q` is caller-controlled, so it defeats the response cache.
+    // Requires the `pg_trgm` extension (created in migration 0036).
+    index('project_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
+    index('project_description_trgm_idx').using('gin', t.description.op('gin_trgm_ops')),
   ],
 );
 

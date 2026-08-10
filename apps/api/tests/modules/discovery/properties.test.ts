@@ -10,6 +10,7 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
   discoveryRepository: {
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
+    findThemeSlugs: vi.fn(async () => new Map()),
     // Facet counts are densified against this vocabulary; an empty one keeps these
     // property tests focused on filters, sorting and pagination.
     listFacetVocabulary: vi.fn(async () => ({
@@ -32,42 +33,60 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
 vi.mock('../../../src/modules/discovery/mapper.js', () => ({
   collectTaxonomyPairs: vi.fn(() => []),
   normalizeTypesenseHit: vi.fn((hit) => ({
+    id: hit.id,
     slug: hit.slug,
     title: hit.title,
     designerName: hit.designerName,
     designerSlug: hit.designerSlug,
     citySlug: hit.citySlug,
+    localitySlug: hit.localitySlug,
     bhkSlug: hit.bhkSlug,
+    budgetBandSlug: hit.budgetBandSlug,
+    themeSlugs: hit.themes,
     avgRating: hit.avgRating ?? 0,
     reviewCount: hit.reviewCount ?? 0,
     coverImageKey: hit.coverImageKey,
+    coverImageId: hit.coverImageId ?? null,
+    coverImageWidth: hit.coverImageWidth ?? null,
+    coverImageHeight: hit.coverImageHeight ?? null,
     coverDerivatives: null,
     coverStatus: hit.coverImageKey ? 'ready' : null,
   })),
   normalizePostgresRow: vi.fn((row) => ({
+    id: row.id,
     slug: row.slug,
     title: row.title,
     designerName: row.designerName,
     designerSlug: row.designerSlug,
     citySlug: row.citySlug,
+    localitySlug: row.localitySlug,
     bhkSlug: row.bhkSlug,
+    budgetBandSlug: row.budgetBandSlug,
+    themeSlugs: [],
     avgRating: Number(row.avgRating) || 0,
     reviewCount: row.reviewCount,
     coverImageKey: null,
+    coverImageId: row.coverImageId,
+    coverImageWidth: null,
+    coverImageHeight: null,
     coverDerivatives: row.coverDerivatives,
     coverStatus: row.coverStatus,
   })),
   toDiscoveryCard: vi.fn(async (item) => ({
+    id: item.id,
     slug: item.slug,
     title: item.title,
-    coverImageUrl: null,
-    coverImageWidth: null,
-    coverImageHeight: null,
-    designerName: item.designerName,
-    designerSlug: item.designerSlug,
+    studio: item.designerName,
     city: null,
-    bhk: null,
-    ratingSnippet: null,
+    locality: null,
+    rating: item.avgRating,
+    reviewCount: item.reviewCount,
+    budget: null,
+    tags: [],
+    coverImageId: item.coverImageId,
+    coverImageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
   })),
 }));
 
@@ -148,9 +167,12 @@ const createPostgresRow = (
   designerName: 'Designer Name',
   designerSlug: 'designer-slug',
   citySlug,
+  localitySlug: null,
   bhkSlug,
+  budgetBandSlug: null,
   avgRating: '4.5',
   reviewCount: 10,
+  coverImageId: null,
   coverStatus: 'ready' as const,
   coverDerivatives: [
     { variant: 'small', format: 'webp', key: 'small.webp', width: 640, height: 480 },
@@ -719,13 +741,16 @@ describe('Property 5: Response Contract Identity', () => {
       expect(item).toHaveProperty('slug');
       expect(item).toHaveProperty('title');
       expect(item).toHaveProperty('coverImageUrl');
-      expect(item).toHaveProperty('coverImageWidth');
-      expect(item).toHaveProperty('coverImageHeight');
-      expect(item).toHaveProperty('designerName');
-      expect(item).toHaveProperty('designerSlug');
+      expect(item).toHaveProperty('coverImageId');
+      expect(item).toHaveProperty('imageWidth');
+      expect(item).toHaveProperty('imageHeight');
+      expect(item).toHaveProperty('studio');
       expect(item).toHaveProperty('city');
-      expect(item).toHaveProperty('bhk');
-      expect(item).toHaveProperty('ratingSnippet');
+      expect(item).toHaveProperty('locality');
+      expect(item).toHaveProperty('budget');
+      expect(item).toHaveProperty('tags');
+      expect(item).toHaveProperty('rating');
+      expect(item).toHaveProperty('reviewCount');
     });
   });
 
@@ -763,13 +788,16 @@ describe('Property 5: Response Contract Identity', () => {
       expect(item).toHaveProperty('slug');
       expect(item).toHaveProperty('title');
       expect(item).toHaveProperty('coverImageUrl');
-      expect(item).toHaveProperty('coverImageWidth');
-      expect(item).toHaveProperty('coverImageHeight');
-      expect(item).toHaveProperty('designerName');
-      expect(item).toHaveProperty('designerSlug');
+      expect(item).toHaveProperty('coverImageId');
+      expect(item).toHaveProperty('imageWidth');
+      expect(item).toHaveProperty('imageHeight');
+      expect(item).toHaveProperty('studio');
       expect(item).toHaveProperty('city');
-      expect(item).toHaveProperty('bhk');
-      expect(item).toHaveProperty('ratingSnippet');
+      expect(item).toHaveProperty('locality');
+      expect(item).toHaveProperty('budget');
+      expect(item).toHaveProperty('tags');
+      expect(item).toHaveProperty('rating');
+      expect(item).toHaveProperty('reviewCount');
     });
   });
 
@@ -847,9 +875,8 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('shared mapper enforcement', () => {
     it('both paths normalize through the same mapper', async () => {
-      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } = await import(
-        '../../../src/modules/discovery/mapper.js'
-      );
+      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } =
+        await import('../../../src/modules/discovery/mapper.js');
 
       // Typesense path
       vi.stubEnv('TYPESENSE_HOST', 'localhost');

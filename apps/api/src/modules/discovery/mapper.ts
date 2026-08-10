@@ -31,15 +31,22 @@ import type { TaxonomyKind } from '../projects/repository.js';
  */
 export interface NormalizedFeedItem {
   slug: string;
+  id: string;
   title: string;
   designerName: string;
   designerSlug: string | null;
   citySlug: string | null;
+  localitySlug: string | null;
   bhkSlug: string | null;
+  budgetBandSlug: string | null;
+  themeSlugs: string[];
   avgRating: number;
   reviewCount: number;
   /** For Typesense: the coverImageKey. For Postgres: null (we have derivatives). */
   coverImageKey: string | null;
+  coverImageId: string | null;
+  coverImageWidth: number | null;
+  coverImageHeight: number | null;
   /** For Postgres: the cover derivatives. For Typesense: null. */
   coverDerivatives: Derivative[] | null;
   /** For Postgres: the cover status. For Typesense: assumed 'ready' if key exists. */
@@ -57,15 +64,22 @@ export interface NormalizedFeedItem {
  */
 export function normalizeTypesenseHit(hit: ProjectSearchDocument): NormalizedFeedItem {
   return {
+    id: hit.id,
     slug: hit.slug,
     title: hit.title,
     designerName: hit.designerName,
     designerSlug: hit.designerSlug,
     citySlug: hit.citySlug,
+    localitySlug: hit.localitySlug,
     bhkSlug: hit.bhkSlug,
+    budgetBandSlug: hit.budgetBandSlug,
+    themeSlugs: hit.themes,
     avgRating: hit.avgRating ?? 0,
     reviewCount: hit.reviewCount ?? 0,
     coverImageKey: hit.coverImageKey,
+    coverImageId: hit.coverImageId ?? null,
+    coverImageWidth: hit.coverImageWidth ?? null,
+    coverImageHeight: hit.coverImageHeight ?? null,
     coverDerivatives: null,
     coverStatus: hit.coverImageKey ? 'ready' : null,
   };
@@ -78,15 +92,22 @@ export function normalizeTypesenseHit(hit: ProjectSearchDocument): NormalizedFee
  */
 export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
   return {
+    id: row.id,
     slug: row.slug,
     title: row.title,
     designerName: row.designerName,
     designerSlug: row.designerSlug,
     citySlug: row.citySlug,
+    localitySlug: row.localitySlug,
     bhkSlug: row.bhkSlug,
+    budgetBandSlug: row.budgetBandSlug,
+    themeSlugs: [],
     avgRating: Number(row.avgRating) || 0,
     reviewCount: row.reviewCount,
     coverImageKey: null,
+    coverImageId: row.coverImageId,
+    coverImageWidth: null,
+    coverImageHeight: null,
     coverDerivatives: row.coverDerivatives,
     coverStatus: row.coverStatus,
   };
@@ -103,25 +124,15 @@ export function normalizePostgresRow(row: FeedProjectRow): NormalizedFeedItem {
  *
  * @see Requirement 7.3, 7.4, 7.5
  */
-function pickSmallDerivative(derivatives: Derivative[] | null): Derivative | null {
+function pickPreviewDerivative(derivatives: Derivative[] | null): Derivative | null {
   if (!derivatives) return null;
   return (
     derivatives.find((d) => d.variant === 'small' && d.format === 'webp') ??
     derivatives.find((d) => d.variant === 'small') ??
+    derivatives.find((d) => d.variant === 'thumb' && d.format === 'webp') ??
+    derivatives.find((d) => d.variant === 'thumb') ??
     null
   );
-}
-
-/**
- * Format rating snippet: "4.8 (12 reviews)" or "4.8 (1 review)" or null.
- *
- * @see Requirement 7.9
- */
-function formatRatingSnippet(avgRating: number, reviewCount: number): string | null {
-  if (reviewCount === 0) return null;
-  const rating = avgRating.toFixed(1);
-  const reviews = reviewCount === 1 ? '1 review' : `${reviewCount} reviews`;
-  return `${rating} (${reviews})`;
 }
 
 /**
@@ -148,6 +159,8 @@ export function collectTaxonomyPairs(
   for (const item of items) {
     add('city', item.citySlug);
     add('bhk', item.bhkSlug);
+    add('budget_band', item.budgetBandSlug);
+    for (const theme of item.themeSlugs) add('theme', theme);
   }
 
   return pairs;
@@ -178,6 +191,7 @@ function labelOf(
 export async function toDiscoveryCard(
   item: NormalizedFeedItem,
   labels: Map<string, string>,
+  localityLabels: Map<string, string> = new Map(),
 ): Promise<DiscoveryCard> {
   // Resolve cover image URL and dimensions
   let coverImageUrl: string | null = null;
@@ -187,30 +201,41 @@ export async function toDiscoveryCard(
   if (item.coverStatus === 'ready') {
     if (item.coverDerivatives) {
       // Postgres path: we have derivatives, pick small (640px WebP preferred)
-      const small = pickSmallDerivative(item.coverDerivatives);
-      if (small) {
-        coverImageUrl = await presignDownload({ key: small.key }).catch(() => null);
-        coverImageWidth = small.width;
-        coverImageHeight = small.height;
+      const preview = pickPreviewDerivative(item.coverDerivatives);
+      if (preview) {
+        coverImageUrl = await presignDownload({ key: preview.key }).catch(() => null);
+        coverImageWidth = preview.width;
+        coverImageHeight = preview.height;
       }
     } else if (item.coverImageKey) {
       // Typesense path: we only have the key, presign it directly
       // Note: Typesense stores the coverImageKey which should be the small derivative key
       coverImageUrl = await presignDownload({ key: item.coverImageKey }).catch(() => null);
-      // Dimensions not available from Typesense - UI handles null dimensions gracefully
+      coverImageWidth = item.coverImageWidth;
+      coverImageHeight = item.coverImageHeight;
     }
   }
 
   return {
+    id: item.id,
     slug: item.slug,
     title: item.title,
-    coverImageUrl,
-    coverImageWidth,
-    coverImageHeight,
-    designerName: item.designerName,
-    designerSlug: item.designerSlug,
+    studio: item.designerName,
     city: labelOf(labels, 'city', item.citySlug),
-    bhk: labelOf(labels, 'bhk', item.bhkSlug),
-    ratingSnippet: formatRatingSnippet(item.avgRating, item.reviewCount),
+    locality:
+      item.citySlug && item.localitySlug
+        ? (localityLabels.get(`${item.citySlug}:${item.localitySlug}`) ?? null)
+        : null,
+    rating: item.avgRating,
+    reviewCount: item.reviewCount,
+    budget: labelOf(labels, 'budget_band', item.budgetBandSlug),
+    tags: [
+      labelOf(labels, 'bhk', item.bhkSlug),
+      ...item.themeSlugs.map((slug) => labelOf(labels, 'theme', slug)),
+    ].filter((tag): tag is string => tag !== null),
+    coverImageId: item.coverImageId,
+    coverImageUrl,
+    imageWidth: coverImageWidth,
+    imageHeight: coverImageHeight,
   };
 }
