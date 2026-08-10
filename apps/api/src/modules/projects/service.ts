@@ -1085,6 +1085,179 @@ export function buildCompleteness(
   };
 }
 
+type PublicProjectDetailBuildOptions = {
+  includeRooms: boolean;
+  includeMotifs: boolean;
+};
+
+/** Shared display projection for the two validated public lookup paths. */
+async function buildPublicProjectDetail(
+  result: PublicProjectReadRecord,
+  options: PublicProjectDetailBuildOptions,
+): Promise<PublicProjectBySlugResponse> {
+  const { project, designer } = result;
+  if (project.status !== 'published' || designer.status !== 'active') {
+    throw AppError.notFound('Project not found');
+  }
+
+  // Keep each DB fan-out below half the shared ten-connection pool. This route
+  // is public and can receive many simultaneous cold-cache requests.
+  const [rooms, rawGalleryImages, coverImages, narrative] = await Promise.all([
+    options.includeRooms
+      ? projectsRepository.listPublicRooms(project.id)
+      : Promise.resolve([] as PublicProjectRoomRecord[]),
+    projectsRepository.listPublicGalleryImages(project.id),
+    project.coverImageId
+      ? projectsRepository.findCoverImages([project.coverImageId])
+      : Promise.resolve(new Map()),
+    projectsRepository.findPublishedProjectNarrative(project.id),
+  ]);
+
+  const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
+  const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
+    await Promise.all([
+      designer.logoImageId
+        ? presignDownload({ key: designer.logoImageId }).catch(() => null)
+        : Promise.resolve(null),
+      projectsRepository.countPublishedByDesigner(designer.id),
+      projectsRepository.listDesignerFootprintCities(designer.id),
+      options.includeMotifs
+        ? projectsRepository.listPublishedDesignerMotifCounts(designer.id)
+        : Promise.resolve([] as PublicProjectMotifCountRecord[]),
+      projectsRepository.listPublishedRecommendationCandidates({
+        designerId: designer.id,
+        budgetBandSlug: project.budgetBandSlug,
+        citySlug: project.citySlug,
+        sourceThemeSlugs: sourceThemes,
+        excludeProjectIds: [project.id],
+        limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
+      }),
+    ]);
+
+  const seenRecommendationIds = new Set([project.id]);
+  const takeRecommendations = (
+    candidates: ProjectRecommendationRecord[],
+  ): ProjectRecommendationRecord[] => {
+    const selected: ProjectRecommendationRecord[] = [];
+    for (const candidate of candidates) {
+      if (selected.length === PUBLIC_RECOMMENDATION_LIMIT) break;
+      if (seenRecommendationIds.has(candidate.id)) continue;
+      seenRecommendationIds.add(candidate.id);
+      selected.push(candidate);
+    }
+    return selected;
+  };
+
+  const moreFromDesignerRows = takeRecommendations(
+    recommendationCandidates.filter((candidate) => candidate.group === 'moreFromDesigner'),
+  );
+  const sameBudgetDifferentStyleRows = takeRecommendations(
+    recommendationCandidates.filter(
+      (candidate) => candidate.group === 'sameBudgetDifferentStyle',
+    ),
+  );
+  const nearbyRows = takeRecommendations(
+    recommendationCandidates.filter((candidate) => candidate.group === 'nearby'),
+  );
+  const recommendationRows = [
+    ...moreFromDesignerRows,
+    ...sameBudgetDifferentStyleRows,
+    ...nearbyRows,
+  ];
+
+  const [labels, localityLabels] = await Promise.all([
+    projectsRepository.findTaxonomyLabels([
+      ...projectTaxonomyPairs(project),
+      ...galleryTaxonomyPairs(rawGalleryImages),
+      ...motifTaxonomyPairs(motifCounts),
+      ...recommendationRows.flatMap(feedTaxonomyPairs),
+    ]),
+    projectsRepository.findLocalityLabels([
+      ...(project.citySlug && project.localitySlug
+        ? [{ citySlug: project.citySlug, localitySlug: project.localitySlug }]
+        : []),
+      ...recommendationRows.flatMap(feedLocalityPairs),
+    ]),
+  ]);
+
+  const [galleryImages, moreFromDesigner, sameBudgetDifferentStyle, nearby] = await Promise.all([
+    toDetailedPublicGalleryImages(rawGalleryImages, labels),
+    toRecommendationCards(moreFromDesignerRows, labels, localityLabels),
+    toRecommendationCards(sameBudgetDifferentStyleRows, labels, localityLabels),
+    toRecommendationCards(nearbyRows, labels, localityLabels),
+  ]);
+
+  let resolvedCoverUrl: string | null = null;
+  if (project.coverImageId) {
+    const coverImg = coverImages.get(project.coverImageId);
+    if (coverImg) {
+      resolvedCoverUrl = await coverImageUrl({
+        status: coverImg.status,
+        derivatives: coverImg.derivatives,
+      }).catch(() => null);
+    }
+  }
+
+  return {
+    id: project.id,
+    title: project.title,
+    slug: project.slug,
+    description: project.description,
+    status: project.status,
+    propertyTypeSlug: project.propertyTypeSlug,
+    propertySubtypeSlug: project.propertySubtypeSlug,
+    scopeSlug: project.scopeSlug,
+    bhkSlug: project.bhkSlug,
+    sizeSqft: project.sizeSqft,
+    citySlug: project.citySlug,
+    localitySlug: project.localitySlug,
+    buildingName: project.buildingName,
+    budgetBandSlug: project.budgetBandSlug,
+    completedMonth: project.completedMonth,
+    durationMonths: project.durationMonths,
+    publishedAt: project.publishedAt?.toISOString() ?? null,
+    createdAt: project.createdAt.toISOString(),
+    specifications: projectSpecifications(project, labels, localityLabels),
+    rooms: rooms.map((room) => {
+      const emittedPhotoCount = galleryImages.reduce(
+        (count, image) => count + (image.roomId === room.id ? 1 : 0),
+        0,
+      );
+      return toPublicRoom(room, emittedPhotoCount);
+    }),
+    images: galleryImages,
+    coverImageUrl: resolvedCoverUrl,
+    designer: {
+      id: designer.id,
+      displayName: designer.displayName,
+      slug: designer.orgSlug,
+      avgRating: designer.avgRating,
+      reviewCount: designer.reviewCount,
+      entityType: designer.entityType,
+      logoUrl,
+      bio: designer.bio,
+      firmType: designer.firmType,
+      foundedYear: designer.foundedYear,
+      yearsExperience: designer.yearsExperience,
+      projectCount,
+      footprintCities,
+    },
+    narrative: narrative?.body
+      ? {
+          body: narrative.body,
+          rating: narrative.rating,
+          publishedAt: narrative.publishedAt?.toISOString() ?? null,
+        }
+      : null,
+    recurringMotifs: toPublicMotifs(motifCounts, labels),
+    recommendations: {
+      moreFromDesigner,
+      sameBudgetDifferentStyle,
+      nearby,
+    },
+  };
+}
+
 export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
@@ -1491,7 +1664,10 @@ export const projectsService = {
     const source = await projectsRepository.findPublicProjectByImageId(imageId);
     if (!source) throw AppError.notFound('Image not found');
 
-    const detail = await this.buildPublicProjectDetail(source);
+    const detail = await buildPublicProjectDetail(source, {
+      includeRooms: false,
+      includeMotifs: false,
+    });
     const activeImage = detail.images.find((image) => image.id === imageId);
     if (!activeImage) throw AppError.notFound('Image not found');
 
@@ -1543,167 +1719,7 @@ export const projectsService = {
     const result = await projectsRepository.findPublicProjectBySlug(slug);
     if (!result) throw AppError.notFound('Project not found');
 
-    return this.buildPublicProjectDetail(result);
-  },
-
-  /** Shared display projection for slug and image-id public entry points. */
-  async buildPublicProjectDetail(
-    result: PublicProjectReadRecord,
-  ): Promise<PublicProjectBySlugResponse> {
-    const { project, designer } = result;
-
-    // Keep each DB fan-out below half the shared ten-connection pool. This route
-    // is public and can receive many simultaneous cold-cache requests.
-    const [rooms, rawGalleryImages, coverImages, narrative] = await Promise.all([
-      projectsRepository.listPublicRooms(project.id),
-      projectsRepository.listPublicGalleryImages(project.id),
-      project.coverImageId
-        ? projectsRepository.findCoverImages([project.coverImageId])
-        : Promise.resolve(new Map()),
-      projectsRepository.findPublishedProjectNarrative(project.id),
-    ]);
-
-    const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
-    const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
-      await Promise.all([
-        designer.logoImageId
-          ? presignDownload({ key: designer.logoImageId }).catch(() => null)
-          : Promise.resolve(null),
-        projectsRepository.countPublishedByDesigner(designer.id),
-        projectsRepository.listDesignerFootprintCities(designer.id),
-        projectsRepository.listPublishedDesignerMotifCounts(designer.id),
-        projectsRepository.listPublishedRecommendationCandidates({
-          designerId: designer.id,
-          budgetBandSlug: project.budgetBandSlug,
-          citySlug: project.citySlug,
-          sourceThemeSlugs: sourceThemes,
-          excludeProjectIds: [project.id],
-          limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-        }),
-      ]);
-
-    const seenRecommendationIds = new Set([project.id]);
-    const takeRecommendations = (
-      candidates: ProjectRecommendationRecord[],
-    ): ProjectRecommendationRecord[] => {
-      const selected: ProjectRecommendationRecord[] = [];
-      for (const candidate of candidates) {
-        if (selected.length === PUBLIC_RECOMMENDATION_LIMIT) break;
-        if (seenRecommendationIds.has(candidate.id)) continue;
-        seenRecommendationIds.add(candidate.id);
-        selected.push(candidate);
-      }
-      return selected;
-    };
-
-    const moreFromDesignerRows = takeRecommendations(
-      recommendationCandidates.filter((candidate) => candidate.group === 'moreFromDesigner'),
-    );
-    const sameBudgetDifferentStyleRows = takeRecommendations(
-      recommendationCandidates.filter(
-        (candidate) => candidate.group === 'sameBudgetDifferentStyle',
-      ),
-    );
-    const nearbyRows = takeRecommendations(
-      recommendationCandidates.filter((candidate) => candidate.group === 'nearby'),
-    );
-    const recommendationRows = [
-      ...moreFromDesignerRows,
-      ...sameBudgetDifferentStyleRows,
-      ...nearbyRows,
-    ];
-
-    const [labels, localityLabels] = await Promise.all([
-      projectsRepository.findTaxonomyLabels([
-        ...projectTaxonomyPairs(project),
-        ...galleryTaxonomyPairs(rawGalleryImages),
-        ...motifTaxonomyPairs(motifCounts),
-        ...recommendationRows.flatMap(feedTaxonomyPairs),
-      ]),
-      projectsRepository.findLocalityLabels([
-        ...(project.citySlug && project.localitySlug
-          ? [{ citySlug: project.citySlug, localitySlug: project.localitySlug }]
-          : []),
-        ...recommendationRows.flatMap(feedLocalityPairs),
-      ]),
-    ]);
-
-    const [galleryImages, moreFromDesigner, sameBudgetDifferentStyle, nearby] = await Promise.all([
-      toDetailedPublicGalleryImages(rawGalleryImages, labels),
-      toRecommendationCards(moreFromDesignerRows, labels, localityLabels),
-      toRecommendationCards(sameBudgetDifferentStyleRows, labels, localityLabels),
-      toRecommendationCards(nearbyRows, labels, localityLabels),
-    ]);
-
-    let resolvedCoverUrl: string | null = null;
-    if (project.coverImageId) {
-      const coverImg = coverImages.get(project.coverImageId);
-      if (coverImg) {
-        resolvedCoverUrl = await coverImageUrl({
-          status: coverImg.status,
-          derivatives: coverImg.derivatives,
-        }).catch(() => null);
-      }
-    }
-
-    return {
-      id: project.id,
-      title: project.title,
-      slug: project.slug,
-      description: project.description,
-      status: project.status,
-      propertyTypeSlug: project.propertyTypeSlug,
-      propertySubtypeSlug: project.propertySubtypeSlug,
-      scopeSlug: project.scopeSlug,
-      bhkSlug: project.bhkSlug,
-      sizeSqft: project.sizeSqft,
-      citySlug: project.citySlug,
-      localitySlug: project.localitySlug,
-      buildingName: project.buildingName,
-      budgetBandSlug: project.budgetBandSlug,
-      completedMonth: project.completedMonth,
-      durationMonths: project.durationMonths,
-      publishedAt: project.publishedAt?.toISOString() ?? null,
-      createdAt: project.createdAt.toISOString(),
-      specifications: projectSpecifications(project, labels, localityLabels),
-      rooms: rooms.map((room) => {
-        const emittedPhotoCount = galleryImages.reduce(
-          (count, image) => count + (image.roomId === room.id ? 1 : 0),
-          0,
-        );
-        return toPublicRoom(room, emittedPhotoCount);
-      }),
-      images: galleryImages,
-      coverImageUrl: resolvedCoverUrl,
-      designer: {
-        id: designer.id,
-        displayName: designer.displayName,
-        slug: designer.orgSlug,
-        avgRating: designer.avgRating,
-        reviewCount: designer.reviewCount,
-        entityType: designer.entityType,
-        logoUrl,
-        bio: designer.bio,
-        firmType: designer.firmType,
-        foundedYear: designer.foundedYear,
-        yearsExperience: designer.yearsExperience,
-        projectCount,
-        footprintCities,
-      },
-      narrative: narrative?.body
-        ? {
-            body: narrative.body,
-            rating: narrative.rating,
-            publishedAt: narrative.publishedAt?.toISOString() ?? null,
-          }
-        : null,
-      recurringMotifs: toPublicMotifs(motifCounts, labels),
-      recommendations: {
-        moreFromDesigner,
-        sameBudgetDifferentStyle,
-        nearby,
-      },
-    };
+    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
   },
 
   /**

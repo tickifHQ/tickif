@@ -258,6 +258,7 @@ export type PublicProjectReadRecord = {
   project: ProjectRecord;
   designer: {
     id: string;
+    status: typeof schema.designerProfile.$inferSelect.status;
     displayName: string;
     orgSlug: string | null;
     avgRating: string;
@@ -303,6 +304,7 @@ function feedProjectColumns<TAlias extends string>(
 const publicProjectReadColumns = {
   project: schema.project,
   designerId: schema.designerProfile.id,
+  designerStatus: schema.designerProfile.status,
   designerDisplayName: schema.designerProfile.displayName,
   designerOrgSlug: schema.organization.slug,
   designerAvgRating: schema.designerProfile.avgRating,
@@ -1473,6 +1475,7 @@ export const projectsRepository = {
       project: row.project,
       designer: {
         id: row.designerId,
+        status: row.designerStatus,
         displayName: row.designerDisplayName,
         orgSlug: row.designerOrgSlug,
         avgRating: row.designerAvgRating,
@@ -1515,6 +1518,7 @@ export const projectsRepository = {
       project: row.project,
       designer: {
         id: row.designerId,
+        status: row.designerStatus,
         displayName: row.designerDisplayName,
         orgSlug: row.designerOrgSlug,
         avgRating: row.designerAvgRating,

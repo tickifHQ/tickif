@@ -211,6 +211,7 @@ describe('GET /api/projects/images/:imageId', () => {
       projectId: project.id,
       status: 'ready',
       sortOrder: 0,
+      originalKey: `private/${project.id}/active-original.jpg`,
       width: 1200,
       height: 800,
       derivatives: [
@@ -252,7 +253,9 @@ describe('GET /api/projects/images/:imageId', () => {
       nearby: [],
     });
     expect(body.images.map((image) => image.id)).toEqual([activeImage.id, cover.id]);
-    expect(JSON.stringify(body)).not.toContain('originals/');
+    const payload = JSON.stringify(body);
+    expect(payload).not.toContain(activeImage.originalKey);
+    expect(payload).not.toContain(cover.originalKey);
   });
 
   it('returns 404 for non-ready images, unpublished projects, and inactive designers', async () => {
