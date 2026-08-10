@@ -97,6 +97,15 @@ One-way, expand/contract migration that rebuilds `project_image` for the media p
   `ORDER BY`. On a large table, run the DROP/CREATE INDEX `CONCURRENTLY` out-of-band for the
   same reason as 0005.
 
+### 0030 — public project recommendation indexes
+
+- Adds three partial ordering indexes to the existing `project` table for the designer,
+  budget-band, and city recommendation groups.
+- Drizzle creates these indexes non-concurrently inside the migration transaction. Apply
+  this migration before the table is populated or during a write-maintenance window. For
+  a large/persistent table, omit the three index statements from the deploy migration and
+  build the equivalent indexes with `CREATE INDEX CONCURRENTLY` out-of-band.
+
 ## Querying
 
 Import `db`, `schema`, and the common operators from `@repo/db` (re-exported so

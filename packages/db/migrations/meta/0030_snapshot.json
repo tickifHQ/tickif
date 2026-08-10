@@ -1,5 +1,5 @@
 {
-  "id": "6dcf2711-3126-43d6-9d2a-6305facdff5c",
+  "id": "62fe2f3d-0719-4804-beac-213bfffb00c3",
   "prevId": "0b4b9bfe-ba1b-4992-a9a2-345e9de1c605",
   "version": "7",
   "dialect": "postgresql",
@@ -2560,8 +2560,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_published_budget_idx": {
-          "name": "project_published_budget_idx",
+        "project_published_budget_recommendation_idx": {
+          "name": "project_published_budget_recommendation_idx",
           "columns": [
             {
               "expression": "budget_band_slug",
@@ -2570,15 +2570,89 @@
               "nulls": "last"
             },
             {
-              "expression": "published_at",
+              "expression": "\"published_at\" desc nulls last",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"created_at\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"id\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"project\".\"status\" = 'published'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "project_published_designer_recommendation_idx": {
+          "name": "project_published_designer_recommendation_idx",
+          "columns": [
+            {
+              "expression": "designer_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "id",
+              "expression": "\"published_at\" desc nulls last",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"created_at\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"id\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"project\".\"status\" = 'published'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "project_published_city_recommendation_idx": {
+          "name": "project_published_city_recommendation_idx",
+          "columns": [
+            {
+              "expression": "city_slug",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"published_at\" desc nulls last",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"created_at\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"id\" desc",
+              "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],

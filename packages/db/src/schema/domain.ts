@@ -269,8 +269,29 @@ export const project = pgTable(
     index('project_designer_idx').on(t.designerId),
     index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
-    index('project_published_budget_idx')
-      .on(t.budgetBandSlug, t.publishedAt, t.id)
+    index('project_published_budget_recommendation_idx')
+      .on(
+        t.budgetBandSlug,
+        sql`${t.publishedAt} desc nulls last`,
+        sql`${t.createdAt} desc`,
+        sql`${t.id} desc`,
+      )
+      .where(sql`${t.status} = 'published'`),
+    index('project_published_designer_recommendation_idx')
+      .on(
+        t.designerId,
+        sql`${t.publishedAt} desc nulls last`,
+        sql`${t.createdAt} desc`,
+        sql`${t.id} desc`,
+      )
+      .where(sql`${t.status} = 'published'`),
+    index('project_published_city_recommendation_idx')
+      .on(
+        t.citySlug,
+        sql`${t.publishedAt} desc nulls last`,
+        sql`${t.createdAt} desc`,
+        sql`${t.id} desc`,
+      )
       .where(sql`${t.status} = 'published'`),
     index('project_locality_idx').on(t.localitySlug),
     index('project_property_type_idx').on(t.propertyTypeSlug),
