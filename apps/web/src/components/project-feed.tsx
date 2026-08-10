@@ -1,22 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SearchX } from 'lucide-react';
 import { EmptyState } from '@repo/ui/components/empty-state';
 import { Button } from '@repo/ui/components/button';
+import { FeedPagination } from '@/components/feed-pagination';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { TryFilterCard, type FeedFilterSuggestion } from '@/components/try-filter-card';
-import { MAX_HOME_FEED_PAGE } from '@/lib/feed-params';
+import { feedPageHref, MAX_HOME_FEED_PAGE } from '@/lib/feed-params';
 import { fetchHomeFeedPage, type HomeFeedPage, type HomeFeedRequest } from '@/lib/home-feed';
 
 const TRY_FILTER_INDEX = 13;
-const DEFAULT_MASONRY_COLUMN_COUNT = 5;
-const MASONRY_BREAKPOINTS = [
-  { columns: 6, query: '(min-width: 1536px)' },
-  { columns: 5, query: '(min-width: 1280px)' },
-  { columns: 4, query: '(min-width: 1024px)' },
-  { columns: 3, query: '(min-width: 768px)' },
-] as const;
+/**
+ * CSS multi-column masonry. The column count is declared per breakpoint so the
+ * server-rendered markup is already correct — no measuring pass, and the layout
+ * survives with JavaScript disabled.
+ */
+const MASONRY_CLASS_NAME = 'columns-2 gap-x-4 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6';
 
 const FILTER_LABELS: Record<string, string> = {
   budgetBandSlug: 'budget',
@@ -34,6 +34,12 @@ type ProjectFeedProps = {
   infinite?: boolean;
   showTryFilter?: boolean;
   filterSuggestions?: FeedFilterSuggestion[];
+  /**
+   * Canonical query params (query + filters, no `page`) for the crawlable feed.
+   * Supplying them renders the visible prev/next control; omit them for
+   * secondary strips such as the featured rail.
+   */
+  paginationParams?: Record<string, string | string[] | undefined>;
 };
 
 type RenderedFeedPage = Pick<HomeFeedPage, 'items' | 'page'>;
@@ -46,30 +52,6 @@ type FeedEntry =
       project: HomeFeedPage['items'][number];
     }
   | { kind: 'try-filter' };
-
-function useMasonryColumnCount(): number {
-  const [columnCount, setColumnCount] = useState(DEFAULT_MASONRY_COLUMN_COUNT);
-
-  useLayoutEffect(() => {
-    const mediaQueries = MASONRY_BREAKPOINTS.map(({ query }) => window.matchMedia(query));
-    const updateColumnCount = () => {
-      const matchedBreakpoint = MASONRY_BREAKPOINTS.find(
-        (_, index) => mediaQueries[index]?.matches,
-      );
-      setColumnCount(matchedBreakpoint?.columns ?? 2);
-    };
-
-    updateColumnCount();
-    mediaQueries.forEach((mediaQuery) => mediaQuery.addEventListener('change', updateColumnCount));
-    return () => {
-      mediaQueries.forEach((mediaQuery) =>
-        mediaQuery.removeEventListener('change', updateColumnCount),
-      );
-    };
-  }, []);
-
-  return columnCount;
-}
 
 function relaxedFilterMessage(filters: string[]): string {
   const labels = filters.map((filter) => FILTER_LABELS[filter] ?? filter);
@@ -84,6 +66,7 @@ export function ProjectFeed({
   infinite = true,
   showTryFilter = true,
   filterSuggestions = [],
+  paginationParams,
 }: ProjectFeedProps) {
   const [renderedPages, setRenderedPages] = useState<RenderedFeedPage[]>([
     { items: initialPage.items, page: initialPage.page },
@@ -94,8 +77,17 @@ export function ProjectFeed({
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const masonryColumnCount = useMasonryColumnCount();
   const canLoadMore = infinite && hasMore && page < MAX_HOME_FEED_PAGE;
+  // `page` tracks the newest page already appended, so "Next page" never links at
+  // something the visitor is already looking at.
+  const previousHref =
+    paginationParams && initialPage.page > 1
+      ? feedPageHref(paginationParams, initialPage.page - 1)
+      : null;
+  const nextHref =
+    paginationParams && hasMore && page < MAX_HOME_FEED_PAGE
+      ? feedPageHref(paginationParams, page + 1)
+      : null;
   const fallbackMessage =
     initialPage.fallback === 'recent_in_city'
       ? 'Exact matches were unavailable, so we are showing recent projects in this city.'
@@ -159,21 +151,25 @@ export function ProjectFeed({
 
   if (renderedPages.every((renderedPage) => renderedPage.items.length === 0)) {
     return (
-      <EmptyState
-        className="py-20"
-        icon={<SearchX className="size-5" aria-hidden />}
-        title={request.query ? 'No matching projects' : 'No projects found'}
-        description={
-          request.query
-            ? `We could not find projects matching “${request.query}”. Try a broader search or remove a filter.`
-            : 'Try removing a filter or check back when more projects are published.'
-        }
-        action={
-          <Button asChild variant="outline" size="sm">
-            <a href="/">Clear search and filters</a>
-          </Button>
-        }
-      />
+      <div>
+        <EmptyState
+          className="py-20"
+          icon={<SearchX className="size-5" aria-hidden />}
+          title={request.query ? 'No matching projects' : 'No projects found'}
+          description={
+            request.query
+              ? `We could not find projects matching “${request.query}”. Try a broader search or remove a filter.`
+              : 'Try removing a filter or check back when more projects are published.'
+          }
+          action={
+            <Button asChild variant="outline" size="sm">
+              <a href="/">Clear search and filters</a>
+            </Button>
+          }
+        />
+        {/* An over-run page still needs a way back to the results. */}
+        <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={null} />
+      </div>
     );
   }
 
@@ -194,8 +190,6 @@ export function ProjectFeed({
         : [projectEntry];
     }),
   );
-  const masonryColumns = Array.from({ length: masonryColumnCount }, (): FeedEntry[] => []);
-  entries.forEach((entry, index) => masonryColumns[index % masonryColumnCount]?.push(entry));
 
   return (
     <div>
@@ -208,23 +202,16 @@ export function ProjectFeed({
         </p>
       ) : null}
 
-      <div
-        data-masonry-feed
-        className="grid grid-cols-2 items-start gap-x-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
-      >
-        {masonryColumns.map((column, columnIndex) => (
-          <div key={columnIndex} data-feed-column={columnIndex} className="min-w-0">
-            {column.map((entry) =>
-              entry.kind === 'try-filter' ? (
-                <TryFilterCard key="try-filter" suggestions={filterSuggestions} />
-              ) : (
-                <div key={entry.project.id} data-feed-page={entry.page}>
-                  <ShowcaseCard project={entry.project} priority={entry.priority} />
-                </div>
-              ),
-            )}
-          </div>
-        ))}
+      <div data-masonry-feed className={MASONRY_CLASS_NAME}>
+        {entries.map((entry) =>
+          entry.kind === 'try-filter' ? (
+            <TryFilterCard key="try-filter" suggestions={filterSuggestions} />
+          ) : (
+            <div key={entry.project.id} data-feed-page={entry.page} className="break-inside-avoid">
+              <ShowcaseCard project={entry.project} priority={entry.priority} />
+            </div>
+          ),
+        )}
       </div>
 
       {canLoadMore ? (
@@ -250,6 +237,8 @@ export function ProjectFeed({
           {loadError}
         </p>
       ) : null}
+
+      <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={nextHref} />
     </div>
   );
 }

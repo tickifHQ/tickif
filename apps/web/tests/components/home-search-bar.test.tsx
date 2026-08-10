@@ -180,6 +180,47 @@ describe('HomeSearchBar', () => {
     expect(screen.queryByRole('group', { name: 'Recent searches' })).not.toBeInTheDocument();
   });
 
+  it('walks the suggestion dropdown with the arrow keys', async () => {
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'kitchen' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+
+    const project = screen.getByRole('link', { name: /Warm Kitchen/ });
+    const designer = screen.getByRole('link', { name: /4 projects/ });
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(project).toHaveFocus();
+
+    fireEvent.keyDown(project, { key: 'ArrowDown' });
+    expect(designer).toHaveFocus();
+
+    fireEvent.keyDown(designer, { key: 'ArrowUp' });
+    expect(project).toHaveFocus();
+
+    fireEvent.keyDown(project, { key: 'Escape' });
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole('group', { name: 'Search suggestions' })).not.toBeInTheDocument();
+  });
+
+  it('walks recent searches with the arrow keys', () => {
+    window.localStorage.setItem(
+      'tickif.homeSearchRecents.v1',
+      JSON.stringify(['Sarthak W', 'sunlit']),
+    );
+    render(<HomeSearchBar />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+
+    expect(screen.getByRole('button', { name: 'sunlit' })).toHaveFocus();
+  });
+
   it('ignores stored recent searches when the persisted shape is invalid', () => {
     window.localStorage.setItem(
       'tickif.homeSearchRecents.v1',

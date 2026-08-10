@@ -24,15 +24,17 @@ const discoveryCard = {
   id: '11111111-1111-4111-8111-111111111111',
   slug: 'test-project',
   title: 'Test Project',
-  coverImageUrl: 'https://images.example.com/cover.jpg',
-  coverImageWidth: 640,
-  coverImageHeight: 800,
-  designerName: 'Studio A',
-  designerSlug: 'studio-a',
+  studio: 'Studio A',
   city: 'Mumbai',
-  bhk: '3 BHK',
+  locality: null,
+  rating: 4.5,
+  reviewCount: 10,
   budget: '₹15L - ₹35L',
-  ratingSnippet: '4.5 (10 reviews)',
+  tags: ['3 BHK'],
+  coverImageId: null,
+  coverImageUrl: 'https://images.example.com/cover.jpg',
+  imageWidth: 640,
+  imageHeight: 800,
 };
 
 function response(body: unknown, ok = true) {
@@ -103,8 +105,8 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           title: item.title,
           description: null,
           designerId: '22222222-2222-4222-8222-222222222222',
-          designerSlug: item.designerSlug,
-          designerName: item.designerName,
+          designerSlug: 'studio-a',
+          designerName: item.studio,
           citySlug: 'mumbai',
           localitySlug: null,
           propertyTypeSlug: null,
@@ -130,14 +132,17 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
       });
     }
     if (url.includes('/api/discovery/feed')) {
-      const page = Number(new URL(url).searchParams.get('page') ?? '1');
+      const requestUrl = new URL(url);
+      const page = Number(requestUrl.searchParams.get('page') ?? '1');
       return response({
         items,
         page,
-        limit: 24,
+        limit: Number(requestUrl.searchParams.get('limit') ?? '24'),
         hasMore,
         source: 'db',
         facetDistribution: {},
+        fallback: 'none',
+        relaxedFilters: [],
       });
     }
     throw new Error(`Unexpected URL: ${url}`);
@@ -151,17 +156,18 @@ describe('HomePage', () => {
     mockApi();
   });
 
-  it('renders one featured discovery section with filters above the grid for logged-out visitors', async () => {
+  it('renders the featured strip and the reachable recent feed for logged-out visitors', async () => {
     render(await HomePage());
 
     expect(screen.getByText('No commissions · No middlemen')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Featured projects' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Recently published' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Test Project')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Recently published' })).toBeInTheDocument();
+    // Featured strip plus the recent feed — the recent items now render somewhere.
+    expect(screen.getAllByText('Test Project')).toHaveLength(2);
     expect(
       screen
         .getByRole('button', { name: 'Filters' })
-        .compareDocumentPosition(screen.getByText('Test Project')),
+        .compareDocumentPosition(screen.getAllByText('Test Project')[0]!),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('link', { name: 'Homes in Mumbai' })).toHaveAttribute(
       'href',
@@ -176,11 +182,41 @@ describe('HomePage', () => {
       .map(([input]) => String(input))
       .filter((url) => url.includes('/api/discovery/feed'));
     expect(discoveryCalls).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('sort=featured'),
-        expect.stringContaining('limit=1'),
-      ]),
+      expect.arrayContaining([expect.stringContaining('sort=featured')]),
     );
+    // No probe request: both feeds are fetched at the real page size.
+    expect(discoveryCalls.every((url) => url.includes('limit=24'))).toBe(true);
+  });
+
+  it('points "See all projects" at the recent feed instead of the current URL', async () => {
+    render(await HomePage());
+
+    const seeAll = screen.getByRole('link', { name: 'See all projects' });
+    expect(seeAll).toHaveAttribute('href', '#recent-projects-feed');
+    expect(document.getElementById('recent-projects-feed')).not.toBeNull();
+    expect(
+      document
+        .getElementById('recent-projects-feed')
+        ?.contains(screen.getAllByText('Test Project')[1] ?? null),
+    ).toBe(true);
+  });
+
+  it('advertises rel=next only when a full page of results is available', async () => {
+    mockApi({ hasMore: false });
+
+    render(await HomePage());
+
+    expect(document.querySelector('link[rel="next"]')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Next page' })).not.toBeInTheDocument();
+  });
+
+  it('renders a visible next-page control on the logged-out default feed', async () => {
+    mockApi({ hasMore: true });
+
+    render(await HomePage());
+
+    expect(document.querySelector('link[rel="next"]')).toHaveAttribute('href', '/?page=2');
+    expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=2');
   });
 
   it('renders the taxonomy-driven try-filter card in the logged-out featured feed', async () => {
@@ -220,7 +256,8 @@ describe('HomePage', () => {
 
     render(await HomePage());
 
-    expect(screen.getByText('No projects found')).toBeInTheDocument();
+    // Featured strip and recent feed both degrade to the empty state.
+    expect(screen.getAllByText('No projects found')).toHaveLength(2);
   });
 
   it('renders the logged-in search, filters, and real feed without logged-out chrome', async () => {
@@ -265,6 +302,17 @@ describe('HomePage', () => {
       '/?city=mumbai%2Cpune',
     );
     expect(document.querySelector('link[rel="next"]')).toHaveAttribute(
+      'href',
+      '/?city=mumbai%2Cpune&page=3',
+    );
+
+    // …and the same hrefs are reachable as real controls, not just <link> hints.
+    const pagination = screen.getByRole('navigation', { name: 'Feed pages' });
+    expect(within(pagination).getByRole('link', { name: 'Previous page' })).toHaveAttribute(
+      'href',
+      '/?city=mumbai%2Cpune',
+    );
+    expect(within(pagination).getByRole('link', { name: 'Next page' })).toHaveAttribute(
       'href',
       '/?city=mumbai%2Cpune&page=3',
     );
@@ -372,6 +420,21 @@ describe('HomePage', () => {
       'href',
       '/?q=warm+kitchen&city=mumbai&bhk=3-bhk&budgetBand=upscale',
     );
+  });
+
+  it('omits the active budget band from the suggestion chips', async () => {
+    const items = Array.from({ length: 14 }, (_, index) => ({
+      ...discoveryCard,
+      id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
+      slug: `test-project-${index + 1}`,
+      title: `Test Project ${index + 1}`,
+    }));
+    mockApi({ items });
+
+    render(await HomePage({ searchParams: Promise.resolve({ budgetBand: 'upscale' }) }));
+
+    expect(screen.queryByRole('heading', { name: 'Try a filter' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '₹15-35L' })).not.toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

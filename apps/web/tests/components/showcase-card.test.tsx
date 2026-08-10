@@ -28,19 +28,23 @@ const designerProject: DesignerProjectCard = {
   sizeSqft: 1200,
 };
 
+// `discoveryCardSchema` is an alias of `feedProjectSchema`, so a discovery card is
+// the same shape — it just arrives without a cover image row id.
 const discoveryProject: DiscoveryCard = {
   id: '33333333-3333-4333-8333-333333333333',
   slug: 'discovery-project',
   title: 'Discovery Project',
-  coverImageUrl: 'https://images.example.com/discovery.jpg',
-  coverImageWidth: 640,
-  coverImageHeight: 800,
-  designerName: 'Studio B',
-  designerSlug: 'studio-b',
+  studio: 'Studio B',
   city: 'Pune',
-  bhk: '2 BHK',
+  locality: null,
+  rating: 4.8,
+  reviewCount: 12,
   budget: '₹15L - ₹35L',
-  ratingSnippet: '4.8 (12 reviews)',
+  tags: ['2 BHK'],
+  coverImageId: null,
+  coverImageUrl: 'https://images.example.com/discovery.jpg',
+  imageWidth: 640,
+  imageHeight: 800,
 };
 
 describe('ShowcaseCard', () => {
@@ -65,19 +69,31 @@ describe('ShowcaseCard', () => {
       '640',
     );
     expect(screen.getByText('₹15-35L')).toBeInTheDocument();
+    expect(screen.getByText('Studio B')).toBeInTheDocument();
+    expect(screen.getByText('2 BHK')).toBeInTheDocument();
+    expect(screen.getByText('4.8')).toBeInTheDocument();
   });
 
   it('reserves fallback dimensions without forcing the loaded image ratio', () => {
-    render(
-      <ShowcaseCard
-        project={{ ...discoveryProject, coverImageWidth: null, coverImageHeight: null }}
-      />,
-    );
+    render(<ShowcaseCard project={{ ...discoveryProject, imageWidth: null, imageHeight: null }} />);
 
     const image = screen.getByRole('img', { name: discoveryProject.title });
     expect(image).toHaveAttribute('width', '480');
     expect(image).toHaveAttribute('height', '600');
     expect(image).not.toHaveStyle({ aspectRatio: '480 / 600' });
+  });
+
+  it('hides the rating on search-sourced cards that carry no reviews', () => {
+    render(<ShowcaseCard project={{ ...discoveryProject, rating: 0, reviewCount: 0 }} />);
+
+    expect(screen.queryByText('0.0')).not.toBeInTheDocument();
+  });
+
+  it('keeps the placeholder save and share controls out of the accessibility tree', () => {
+    render(<ShowcaseCard project={discoveryProject} />);
+
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 });
 

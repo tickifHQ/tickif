@@ -79,4 +79,25 @@ test.describe('homepage search feed', () => {
     await expect(page.getByRole('article')).toHaveCount(PROJECT_COUNT);
     await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
   });
+
+  test('walks back from a deep-linked result page with the pagination control', async ({
+    page,
+  }) => {
+    await page.goto(`/?q=${SEARCH_TERM}&page=2`);
+
+    const pagination = page.getByRole('navigation', { name: 'Feed pages' });
+    await expect(pagination).toBeVisible();
+    await expect(pagination.getByText('Page 2')).toBeVisible();
+    // 26 fixtures at 24 per page: page 2 is the last page.
+    await expect(pagination.getByRole('link', { name: 'Next page' })).toHaveCount(0);
+
+    // Reachable by keyboard, not just by pointer.
+    const previous = pagination.getByRole('link', { name: 'Previous page' });
+    await previous.focus();
+    await expect(previous).toBeFocused();
+    await previous.press('Enter');
+
+    await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
+    await expect(page.getByRole('article')).toHaveCount(24);
+  });
 });

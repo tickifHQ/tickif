@@ -1,40 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import type { DiscoveryCard, FeedProject } from '@repo/contracts';
+import type { FeedProject } from '@repo/contracts';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
 
 const FALLBACK_WIDTH = 480;
 const FALLBACK_HEIGHT = 600;
 
-type ShowcaseProject = FeedProject | DiscoveryCard;
-
-function isLegacyFeedProject(project: ShowcaseProject): project is FeedProject {
-  return 'studio' in project;
-}
-
+/**
+ * Discovery and the image detail feed both hand us the canonical public project
+ * card (`discoveryCardSchema` is an alias of `feedProjectSchema`), so there is a
+ * single shape to render.
+ */
 export function ShowcaseCard({
   project,
   priority = false,
 }: {
-  project: ShowcaseProject;
+  project: FeedProject;
   priority?: boolean;
 }) {
-  const isLegacy = isLegacyFeedProject(project);
-  const imageWidth = (isLegacy ? project.imageWidth : project.coverImageWidth) ?? null;
-  const imageHeight = (isLegacy ? project.imageHeight : project.coverImageHeight) ?? null;
+  const { imageWidth, imageHeight, tags } = project;
   const hasImageDimensions =
     imageWidth !== null && imageWidth > 0 && imageHeight !== null && imageHeight > 0;
   const placeholderWidth = hasImageDimensions ? imageWidth : FALLBACK_WIDTH;
   const placeholderHeight = hasImageDimensions ? imageHeight : FALLBACK_HEIGHT;
-  const href =
-    isLegacy && project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
-  const location = isLegacy
-    ? [project.locality, project.city].filter(Boolean).join(', ') || null
-    : project.city;
-  const studio = isLegacy ? project.studio : project.designerName;
-  const rating = isLegacy ? project.rating.toFixed(1) : project.ratingSnippet;
-  const tags = isLegacy ? project.tags : [project.bhk].filter((tag): tag is string => !!tag);
+  const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
+  const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
+  // Search-sourced cards have no aggregate rating, so 0 reviews means "no score yet".
+  const rating = project.reviewCount > 0 ? project.rating.toFixed(1) : null;
   const budgetLabel = project.budget ? formatCompactBudgetLabel(project.budget) : null;
 
   return (
@@ -75,7 +68,7 @@ export function ShowcaseCard({
             {project.title}
           </h3>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-background/90">
-            <span className="whitespace-nowrap">{studio}</span>
+            <span className="whitespace-nowrap">{project.studio}</span>
             {location ? (
               <>
                 <span className="text-background/50">·</span>
@@ -107,7 +100,16 @@ export function ShowcaseCard({
         </div>
       </Link>
 
-      <div className="absolute right-3 top-3 z-10 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+      {/*
+        Save/Share are still visual placeholders. Until they are wired up they stay
+        out of the accessibility tree and out of the tab order (`inert`), so keyboard
+        and screen-reader users are not offered controls that do nothing.
+      */}
+      <div
+        inert
+        aria-hidden
+        className="absolute right-3 top-3 z-10 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+      >
         <button
           type="button"
           aria-label="Save"

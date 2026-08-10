@@ -1,7 +1,7 @@
 import {
   discoveryFeedResponseSchema,
   searchProjectsResponseSchema,
-  type DiscoveryCard,
+  type FeedProject,
   type ProjectSearchFallback,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
@@ -19,20 +19,30 @@ export type HomeFeedRequest = {
   cityLabelsBySlug?: Record<string, string>;
   bhkLabelsBySlug?: Record<string, string>;
   budgetLabelsBySlug?: Record<string, string>;
+  themeLabelsBySlug?: Record<string, string>;
 };
 
 type SearchLabelMaps = Pick<
   HomeFeedRequest,
-  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug'
+  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug' | 'themeLabelsBySlug'
 >;
 
+/**
+ * There is deliberately no `limit` override: every page must be requested at
+ * `HOME_FEED_PAGE_SIZE` or `hasMore` stops describing the 24-per-page URLs that
+ * `rel=next` and the pagination control link to.
+ */
 type HomeFeedFetchOptions = {
-  limit?: number;
   searchLabels?: SearchLabelMaps | Promise<SearchLabelMaps>;
 };
 
+/**
+ * Both feed sources now speak the canonical public project card
+ * (`discoveryCardSchema === feedProjectSchema`, owned by the discovery contract),
+ * so the search branch below maps `ProjectHit` onto that same shape.
+ */
 export type HomeFeedPage = {
-  items: DiscoveryCard[];
+  items: FeedProject[];
   page: number;
   hasMore: boolean;
   facetDistribution: Record<string, Record<string, number>>;
@@ -58,7 +68,7 @@ export async function fetchHomeFeedPage(
   page: number,
   options: HomeFeedFetchOptions = {},
 ): Promise<HomeFeedPage> {
-  const limit = options.limit ?? HOME_FEED_PAGE_SIZE;
+  const limit = HOME_FEED_PAGE_SIZE;
 
   if (request.query) {
     const responsePromise = api.api.search.$get(
@@ -89,15 +99,23 @@ export async function fetchHomeFeedPage(
         id: hit.id,
         slug: hit.slug,
         title: hit.title,
-        coverImageUrl: hit.coverImageUrl,
-        coverImageWidth: null,
-        coverImageHeight: null,
-        designerName: hit.designerName,
-        designerSlug: hit.designerSlug,
+        studio: hit.designerName,
         city: labelFromSlug(hit.citySlug, labels.cityLabelsBySlug),
-        bhk: labelFromSlug(hit.bhkSlug, labels.bhkLabelsBySlug),
+        // Localities are not a homepage facet, so there is no label map to consult.
+        locality: labelFromSlug(hit.localitySlug),
+        // Search documents carry no aggregate rating; the card hides a zero-review score.
+        rating: 0,
+        reviewCount: 0,
         budget: labelFromSlug(hit.budgetBandSlug, labels.budgetLabelsBySlug),
-        ratingSnippet: null,
+        tags: [
+          labelFromSlug(hit.bhkSlug, labels.bhkLabelsBySlug),
+          ...hit.themes.map((theme) => labelFromSlug(theme, labels.themeLabelsBySlug)),
+        ].filter((tag): tag is string => tag !== null),
+        // Search exposes the presigned cover URL but not the image row id.
+        coverImageId: null,
+        coverImageUrl: hit.coverImageUrl,
+        imageWidth: null,
+        imageHeight: null,
       })),
       page: parsed.data.page,
       hasMore: parsed.data.page * parsed.data.limit < parsed.data.estimatedTotalHits,
@@ -131,8 +149,8 @@ export async function fetchHomeFeedPage(
     page: parsed.data.page,
     hasMore: parsed.data.hasMore,
     facetDistribution: parsed.data.facetDistribution,
-    fallback: 'none',
-    relaxedFilters: [],
+    fallback: parsed.data.fallback,
+    relaxedFilters: parsed.data.relaxedFilters,
   };
 }
 

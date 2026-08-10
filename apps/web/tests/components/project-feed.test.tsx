@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoveryCard } from '@repo/contracts';
 
@@ -28,15 +28,17 @@ function card(id: string, title: string): DiscoveryCard {
     id,
     slug: id,
     title,
-    coverImageUrl: null,
-    coverImageWidth: 640,
-    coverImageHeight: 800,
-    designerName: 'Studio One',
-    designerSlug: 'studio-one',
+    studio: 'Studio One',
     city: 'Mumbai',
-    bhk: '3 BHK',
+    locality: null,
+    rating: 4.5,
+    reviewCount: 10,
     budget: '₹15L - ₹35L',
-    ratingSnippet: null,
+    tags: ['3 BHK'],
+    coverImageId: null,
+    coverImageUrl: null,
+    imageWidth: 640,
+    imageHeight: 800,
   };
 }
 
@@ -86,9 +88,7 @@ describe('ProjectFeed', () => {
     );
 
     const firstPage = screen.getByText('First Project').closest('[data-feed-page]');
-    const firstColumn = screen.getByText('First Project').closest('[data-feed-column]');
     expect(firstPage).toHaveAttribute('data-feed-page', '1');
-    expect(firstColumn).toHaveAttribute('data-feed-column', '0');
 
     fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
 
@@ -102,8 +102,35 @@ describe('ProjectFeed', () => {
       'data-feed-page',
       '2',
     );
-    expect(screen.getByText('First Project').closest('[data-feed-column]')).toBe(firstColumn);
     expect(document.querySelectorAll('[data-masonry-feed]')).toHaveLength(1);
+  });
+
+  it('declares the masonry column count in CSS so server markup is correct at every breakpoint', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project'), card('project-2', 'Second Project')],
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+      />,
+    );
+
+    const masonry = document.querySelector('[data-masonry-feed]');
+    expect(masonry).toHaveClass('columns-2');
+    expect(masonry).toHaveClass('md:columns-3');
+    expect(masonry).toHaveClass('2xl:columns-6');
+    // Cards are direct children of the single multi-column container: no JS-measured
+    // column wrappers that would scramble order before hydration.
+    expect(document.querySelectorAll('[data-feed-column]')).toHaveLength(0);
+    expect(Array.from(masonry?.children ?? []).map((child) => child.textContent)).toEqual([
+      expect.stringContaining('First Project'),
+      expect.stringContaining('Second Project'),
+    ]);
   });
 
   it('explains when search results were broadened', () => {
@@ -142,6 +169,107 @@ describe('ProjectFeed', () => {
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders a visible previous/next control for a deep-linked page', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project')],
+          page: 3,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{ city: 'mumbai' }}
+      />,
+    );
+
+    const pagination = screen.getByRole('navigation', { name: 'Feed pages' });
+    expect(within(pagination).getByRole('link', { name: 'Previous page' })).toHaveAttribute(
+      'href',
+      '/?city=mumbai&page=2',
+    );
+    expect(within(pagination).getByRole('link', { name: 'Next page' })).toHaveAttribute(
+      'href',
+      '/?city=mumbai&page=4',
+    );
+    expect(within(pagination).getByText('Page 3')).toBeInTheDocument();
+  });
+
+  it('omits the pagination control on page one of an exhausted feed', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project')],
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{}}
+      />,
+    );
+
+    expect(screen.queryByRole('navigation', { name: 'Feed pages' })).not.toBeInTheDocument();
+  });
+
+  it('advances the next-page link past the pages already appended', async () => {
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      items: [card('project-2', 'Second Project')],
+      page: 2,
+      hasMore: true,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project')],
+          page: 1,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{}}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=3'),
+    );
+  });
+
+  it('keeps a way back when a deep page has no results', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [],
+          page: 4,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{}}
+      />,
+    );
+
+    expect(screen.getByText('No projects found')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Previous page' })).toHaveAttribute('href', '/?page=3');
   });
 
   it('stops pagination cleanly at the API window limit', () => {

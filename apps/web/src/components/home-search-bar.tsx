@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, History, Search, X } from 'lucide-react';
 import {
   recentSearchesSchema,
@@ -52,6 +52,8 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
   const router = useRouter();
   const searchParams = useSearchParams();
   const listboxId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestResponse>(EMPTY_SUGGESTIONS);
@@ -131,6 +133,47 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
     runSearch(query);
   }
 
+  /**
+   * Roving focus over the dropdown entries. They are real buttons and links, so
+   * Tab already reaches them; Arrow keys make the list behave the way people
+   * expect an autocomplete to behave.
+   */
+  function moveSuggestionFocus(direction: 1 | -1) {
+    const items = Array.from(
+      dropdownRef.current?.querySelectorAll<HTMLElement>('[data-suggestion-item]') ?? [],
+    );
+    if (items.length === 0) return;
+
+    const activeIndex = items.findIndex((item) => item === document.activeElement);
+    const nextIndex =
+      activeIndex === -1
+        ? direction === 1
+          ? 0
+          : items.length - 1
+        : (activeIndex + direction + items.length) % items.length;
+
+    items[nextIndex]?.focus();
+  }
+
+  function handleDropdownKeys(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveSuggestionFocus(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveSuggestionFocus(-1);
+      return;
+    }
+    if (event.key === 'Escape') {
+      // Return focus first: the refocus fires the form's onFocus, so closing
+      // afterwards is what makes the dropdown stay shut.
+      inputRef.current?.focus();
+      setIsFocused(false);
+    }
+  }
+
   const shellClassName =
     variant === 'hero'
       ? 'border-home-search-border bg-home-search-background shadow-home-search'
@@ -151,6 +194,7 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
       >
         <Search className="size-4 shrink-0 text-primary" aria-hidden />
         <input
+          ref={inputRef}
           type="search"
           name="q"
           autoComplete="off"
@@ -163,7 +207,14 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
             setIsFocused(true);
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Escape') setIsFocused(false);
+            if (event.key === 'Escape') {
+              setIsFocused(false);
+              return;
+            }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              setIsFocused(true);
+              handleDropdownKeys(event);
+            }
           }}
           placeholder="Search by city, style, budget, room type…"
           aria-label="Search homes"
@@ -201,10 +252,12 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
       {showDropdown ? (
         <div
           id={listboxId}
+          ref={dropdownRef}
           role="group"
           aria-label={showRecentSearches ? 'Recent searches' : 'Search suggestions'}
           className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
           onMouseDown={(event) => event.preventDefault()}
+          onKeyDown={handleDropdownKeys}
         >
           {showRecentSearches ? (
             <section aria-labelledby={`${listboxId}-recent`}>
@@ -218,7 +271,8 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                 <button
                   key={recentSearch.toLocaleLowerCase()}
                   type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent"
+                  data-suggestion-item
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent"
                   onClick={() => {
                     setQuery(recentSearch);
                     runSearch(recentSearch);
@@ -241,7 +295,8 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                 <Link
                   key={project.id}
                   href={`/projects/${project.id}`}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+                  data-suggestion-item
+                  className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent focus-visible:bg-accent"
                 >
                   {project.coverImageUrl ? (
                     <img
@@ -311,7 +366,8 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
                   <Link
                     key={designer.id}
                     href={`/d/${designer.slug}`}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+                    data-suggestion-item
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent focus-visible:bg-accent"
                   >
                     {content}
                   </Link>

@@ -32,6 +32,8 @@ type HomePageProps = {
 };
 
 const TAXONOMY_REVALIDATE_SECONDS = 60 * 60 * 24 * 7;
+/** Anchor target for the logged-out "See all projects" link. */
+const RECENT_FEED_SECTION_ID = 'recent-projects-feed';
 
 async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   const entries = await Promise.all(
@@ -98,10 +100,14 @@ function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
 function budgetSuggestions(
   options: FeedFacetOptions,
   params: HomeSearchParams,
+  filters: FeedFilterState,
 ): FeedFilterSuggestion[] {
   const currentParams = canonicalParams(params, 1);
+  // A chip for the band that is already applied would only link to the current page.
+  const activeBands = new Set(filters.budgetBand);
+  const candidates = (options.budgetBand ?? []).filter((option) => !activeBands.has(option.slug));
 
-  return (options.budgetBand ?? []).slice(0, 5).map((option) => ({
+  return candidates.slice(0, 5).map((option) => ({
     href: feedPageHref({ ...currentParams, budgetBand: option.slug }, 1),
     label: option.label,
   }));
@@ -113,11 +119,15 @@ function labelsBySlug(options: FeedFacetOptions, key: keyof FeedFacetOptions) {
 
 function searchLabelMaps(
   options: FeedFacetOptions,
-): Pick<HomeFeedRequest, 'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug'> {
+): Pick<
+  HomeFeedRequest,
+  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug' | 'themeLabelsBySlug'
+> {
   return {
     cityLabelsBySlug: labelsBySlug(options, 'city'),
     bhkLabelsBySlug: labelsBySlug(options, 'bhk'),
     budgetLabelsBySlug: labelsBySlug(options, 'budgetBand'),
+    themeLabelsBySlug: labelsBySlug(options, 'theme'),
   };
 }
 
@@ -158,18 +168,13 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
   const sessionPromise = getServerSession();
   const taxonomyOptionsPromise = fetchTaxonomyOptions();
-  const searchPagePromise = query
+  // One request per feed, always at the real page size: `hasMore` and the
+  // rel=prev/next hints have to describe the 24-per-page scheme the links use.
+  const initialPagePromise = query
     ? fetchFeedSafely(baseRequest, page, {
         searchLabels: taxonomyOptionsPromise.then(searchLabelMaps),
       })
-    : null;
-  const initialPagePromise =
-    searchPagePromise ??
-    (isDefaultFeed
-      ? sessionPromise.then((session) =>
-          fetchFeedSafely(baseRequest, page, { limit: session ? undefined : 1 }),
-        )
-      : fetchFeedSafely(baseRequest, page));
+    : fetchFeedSafely(baseRequest, page);
   const featuredPagePromise = isDefaultFeed
     ? sessionPromise.then((session) =>
         session
@@ -188,7 +193,8 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     ...baseRequest,
     ...labelMaps,
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions, params);
+  const filterSuggestions = budgetSuggestions(taxonomyOptions, params, filters);
+  const paginationParams = canonicalParams(params, 1);
 
   const previousHref = page > 1 ? feedPageHref(canonicalParams(params, page - 1), page - 1) : null;
   const nextHref = initialPage.hasMore
@@ -214,6 +220,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
               initialPage={initialPage}
               request={request}
               filterSuggestions={filterSuggestions}
+              paginationParams={paginationParams}
             />
           </div>
         </section>
@@ -230,43 +237,68 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
       <div className="bg-home-hero-gradient-to">
         {isDefaultFeed ? (
-          <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="featured-projects">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <h2
-                  id="featured-projects"
-                  className="font-display text-3xl font-medium tracking-tight"
+          <>
+            <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="featured-projects">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <h2
+                    id="featured-projects"
+                    className="font-display text-3xl font-medium tracking-tight"
+                  >
+                    Featured projects
+                  </h2>
+                  <p className="mt-1 text-base text-muted-foreground">
+                    Standout spaces selected for the homepage
+                  </p>
+                </div>
+                {/* Jumps to the recent feed rendered below rather than back to this URL. */}
+                <Link
+                  href={`#${RECENT_FEED_SECTION_ID}`}
+                  className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
                 >
-                  Featured projects
-                </h2>
-                <p className="mt-1 text-base text-muted-foreground">
-                  Standout spaces selected for the homepage
-                </p>
+                  See all projects
+                </Link>
               </div>
-              <Link
-                href="/"
-                className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
-              >
-                See all projects
-              </Link>
-            </div>
 
-            <div className="mt-4">
-              <FeedFilters
-                options={taxonomyOptions}
-                facetDistribution={initialPage.facetDistribution}
-              />
-            </div>
+              <div className="mt-4">
+                <FeedFilters
+                  options={taxonomyOptions}
+                  facetDistribution={initialPage.facetDistribution}
+                />
+              </div>
 
-            <div className="mt-3">
-              <ProjectFeed
-                initialPage={{ ...featuredPage, hasMore: false }}
-                request={{ filters, query: '', sort: 'featured' }}
-                infinite={false}
-                filterSuggestions={filterSuggestions}
-              />
-            </div>
-          </section>
+              <div className="mt-3">
+                <ProjectFeed
+                  initialPage={{ ...featuredPage, hasMore: false }}
+                  request={{ filters, query: '', sort: 'featured' }}
+                  infinite={false}
+                  filterSuggestions={filterSuggestions}
+                />
+              </div>
+            </section>
+
+            <section
+              id={RECENT_FEED_SECTION_ID}
+              className="w-full scroll-mt-24 px-5 pb-6 sm:px-6"
+              aria-labelledby="recent-projects"
+            >
+              <h2 id="recent-projects" className="font-display text-3xl font-medium tracking-tight">
+                Recently published
+              </h2>
+              <p className="mt-1 text-base text-muted-foreground">
+                Every project published by Tickif designers, newest first
+              </p>
+
+              <div className="mt-3">
+                <ProjectFeed
+                  initialPage={initialPage}
+                  request={request}
+                  showTryFilter={false}
+                  paginationParams={paginationParams}
+                />
+              </div>
+            </section>
+          </>
         ) : (
           <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
             <div>
@@ -292,6 +324,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                 initialPage={initialPage}
                 request={request}
                 filterSuggestions={filterSuggestions}
+                paginationParams={paginationParams}
               />
             </div>
           </section>
