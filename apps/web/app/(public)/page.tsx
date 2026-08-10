@@ -1,24 +1,39 @@
-import { listTaxonomyResponseSchema, type FeedProject } from '@repo/contracts';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { api } from '@/lib/api';
-import { HomeHero } from '@/components/home-hero';
+import { HomeHero, type HomeShortcut } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { HomeSearchBar } from '@/components/home-search-bar';
-import {
-  FeedFilters,
-  type FeedFacetDistribution,
-  type FeedFacetOptions,
-} from '@/components/feed-filters';
+import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
+import type { FeedFilterSuggestion } from '@/components/try-filter-card';
 import { getServerSession } from '@/lib/auth-guard';
 import {
   FEED_FACET_DEFINITIONS,
+  FEED_FILTER_KEYS,
+  feedPageHref,
+  parseFeedPage,
   parseFeedParams,
-  toDiscoveryFeedFilters,
-  toFeedProjectsFilters,
+  parseFeedQuery,
   type FeedFilterState,
 } from '@/lib/feed-params';
+import {
+  emptyHomeFeedPage,
+  fetchHomeFeedPage,
+  type HomeFeedPage,
+  type HomeFeedRequest,
+} from '@/lib/home-feed';
+
+type HomeSearchParams = Record<string, string | string[] | undefined>;
+
+type HomePageProps = {
+  searchParams?: Promise<HomeSearchParams>;
+};
 
 const TAXONOMY_REVALIDATE_SECONDS = 60 * 60 * 24 * 7;
+/** Anchor target for the logged-out "See all projects" link. */
+const RECENT_FEED_SECTION_ID = 'recent-projects-feed';
 
 async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   const entries = await Promise.all(
@@ -44,76 +59,169 @@ async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   return Object.fromEntries(entries) as FeedFacetOptions;
 }
 
-/** Scope counts to the active filters so cross-facet choices match the rendered feed. */
-async function fetchFacetDistribution(filters: FeedFilterState): Promise<FeedFacetDistribution> {
+async function fetchFeedSafely(
+  request: HomeFeedRequest,
+  page: number,
+  options?: Parameters<typeof fetchHomeFeedPage>[2],
+): Promise<HomeFeedPage> {
   try {
-    const response = await api.api.discovery.feed.$get({
-      query: { limit: 1, ...toDiscoveryFeedFilters(filters) },
-    });
-    if (!response.ok) return {};
-    const data = await response.json();
-    return data.facetDistribution ?? {};
-  } catch {
-    return {};
+    return await fetchHomeFeedPage(request, page, options);
+  } catch (error) {
+    console.error('[HomePage] feed fetch failed', error);
+    return emptyHomeFeedPage(page);
   }
 }
 
-/** Fetches the public feed; the landing page renders its empty state on any failure. */
-async function fetchFeedProjects(filters: FeedFilterState): Promise<FeedProject[]> {
-  try {
-    const res = await api.api.projects.feed.$get(
-      {
-        query: {
-          limit: 30,
-          ...toFeedProjectsFilters(filters),
-        },
-      },
-      {
-        init: { cache: 'no-store' },
-      },
-    );
-    if (!res.ok) {
-      console.error('[HomePage] feed response not ok:', res.status);
-      return [];
-    }
-    const data = await res.json();
-    return data.projects ?? [];
-  } catch (err) {
-    console.error('[HomePage] feed fetch error:', err);
-    return [];
-  }
+function hasFilters(filters: FeedFilterState): boolean {
+  return FEED_FILTER_KEYS.some((key) => filters[key].length > 0);
 }
 
-/**
- * Landing page with two states (Figma "HOME [Logged out]" / "HOME [Logged in]"):
- * - Logged out: trust banner + hero + "Trending projects" feed.
- * - Logged in: prominent search bar straight into the filtered feed.
- */
-type HomePageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-};
+function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
+  const city = (options.city ?? []).slice(0, 4).map((option) => ({
+    href: `/?city=${encodeURIComponent(option.slug)}`,
+    label: `Homes in ${option.label}`,
+  }));
+  const room = (options.room ?? []).slice(0, 4).map((option) => ({
+    href: `/?room=${encodeURIComponent(option.slug)}`,
+    label: `${option.label} ideas`,
+  }));
+  const shortcuts: HomeShortcut[] = [];
 
+  for (let index = 0; index < Math.max(city.length, room.length); index += 1) {
+    const cityShortcut = city[index];
+    const roomShortcut = room[index];
+    if (cityShortcut) shortcuts.push(cityShortcut);
+    if (roomShortcut) shortcuts.push(roomShortcut);
+  }
+
+  return shortcuts;
+}
+
+function budgetSuggestions(
+  options: FeedFacetOptions,
+  params: HomeSearchParams,
+  filters: FeedFilterState,
+): FeedFilterSuggestion[] {
+  const currentParams = canonicalParams(params, 1);
+  // A chip for the band that is already applied would only link to the current page.
+  const activeBands = new Set(filters.budgetBand);
+  const candidates = (options.budgetBand ?? []).filter((option) => !activeBands.has(option.slug));
+
+  return candidates.slice(0, 5).map((option) => ({
+    href: feedPageHref({ ...currentParams, budgetBand: option.slug }, 1),
+    label: option.label,
+  }));
+}
+
+function labelsBySlug(options: FeedFacetOptions, key: keyof FeedFacetOptions) {
+  return Object.fromEntries((options[key] ?? []).map((option) => [option.slug, option.label]));
+}
+
+function searchLabelMaps(
+  options: FeedFacetOptions,
+): Pick<
+  HomeFeedRequest,
+  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug' | 'themeLabelsBySlug'
+> {
+  return {
+    cityLabelsBySlug: labelsBySlug(options, 'city'),
+    bhkLabelsBySlug: labelsBySlug(options, 'bhk'),
+    budgetLabelsBySlug: labelsBySlug(options, 'budgetBand'),
+    themeLabelsBySlug: labelsBySlug(options, 'theme'),
+  };
+}
+
+function canonicalParams(params: HomeSearchParams, page: number): HomeSearchParams {
+  const result: HomeSearchParams = {};
+  const query = parseFeedQuery(params.q);
+  if (query) result.q = query;
+
+  const filters = parseFeedParams(params);
+  for (const key of FEED_FILTER_KEYS) {
+    if (filters[key].length > 0) result[key] = filters[key].join(',');
+  }
+  if (page > 1) result.page = String(page);
+
+  return result;
+}
+
+export async function generateMetadata({
+  searchParams = Promise.resolve({}),
+}: HomePageProps = {}): Promise<Metadata> {
+  const params = await searchParams;
+  const page = parseFeedPage(params.page);
+  return {
+    alternates: {
+      canonical: feedPageHref(canonicalParams(params, page), page),
+    },
+  };
+}
+
+/** Real-data homepage shared by logged-out discovery and the logged-in infinite feed. */
 export default async function HomePage({ searchParams = Promise.resolve({}) }: HomePageProps = {}) {
   const params = await searchParams;
-  const initialFilters: FeedFilterState = parseFeedParams(params);
-  const [session, projects, taxonomyOptions, facetDistribution] = await Promise.all([
-    getServerSession(),
-    fetchFeedProjects(initialFilters),
-    fetchTaxonomyOptions(),
-    fetchFacetDistribution(initialFilters),
+  const page = parseFeedPage(params.page);
+  const query = parseFeedQuery(params.q);
+  const filters = parseFeedParams(params);
+  const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
+  const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
+
+  const sessionPromise = getServerSession();
+  const taxonomyOptionsPromise = fetchTaxonomyOptions();
+  // One request per feed, always at the real page size: `hasMore` and the
+  // rel=prev/next hints have to describe the 24-per-page scheme the links use.
+  const initialPagePromise = query
+    ? fetchFeedSafely(baseRequest, page, {
+        searchLabels: taxonomyOptionsPromise.then(searchLabelMaps),
+      })
+    : fetchFeedSafely(baseRequest, page);
+  const featuredPagePromise = isDefaultFeed
+    ? sessionPromise.then((session) =>
+        session
+          ? emptyHomeFeedPage(1)
+          : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1),
+      )
+    : Promise.resolve(emptyHomeFeedPage(1));
+  const [session, taxonomyOptions, initialPage, featuredPage] = await Promise.all([
+    sessionPromise,
+    taxonomyOptionsPromise,
+    initialPagePromise,
+    featuredPagePromise,
   ]);
+  const labelMaps = searchLabelMaps(taxonomyOptions);
+  const request: HomeFeedRequest = {
+    ...baseRequest,
+    ...labelMaps,
+  };
+  const filterSuggestions = budgetSuggestions(taxonomyOptions, params, filters);
+  const paginationParams = canonicalParams(params, 1);
+
+  const previousHref = page > 1 ? feedPageHref(canonicalParams(params, page - 1), page - 1) : null;
+  const nextHref = initialPage.hasMore
+    ? feedPageHref(canonicalParams(params, page + 1), page + 1)
+    : null;
 
   if (session) {
     return (
       <div className="bg-background">
+        {previousHref ? <link rel="prev" href={previousHref} /> : null}
+        {nextHref ? <link rel="next" href={nextHref} /> : null}
         <section className="w-full px-5 py-6 sm:px-6">
           <h1 className="sr-only">Explore home projects</h1>
-          <HomeSearchBar />
+          <HomeSearchBar initialQuery={query} />
           <div className="mt-5">
-            <FeedFilters options={taxonomyOptions} facetDistribution={facetDistribution} />
+            <FeedFilters
+              options={taxonomyOptions}
+              facetDistribution={initialPage.facetDistribution}
+            />
           </div>
           <div className="mt-4">
-            <ProjectFeed projects={projects} />
+            <ProjectFeed
+              initialPage={initialPage}
+              request={request}
+              filterSuggestions={filterSuggestions}
+              paginationParams={paginationParams}
+            />
           </div>
         </section>
       </div>
@@ -122,36 +230,105 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
   return (
     <>
+      {previousHref ? <link rel="prev" href={previousHref} /> : null}
+      {nextHref ? <link rel="next" href={nextHref} /> : null}
       <TrustStrip />
-      <HomeHero />
+      <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} initialQuery={query} />
 
       <div className="bg-home-hero-gradient-to">
-        <section className="w-full px-5 py-5 sm:px-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-3xl font-medium tracking-tight">
-                Trending projects
+        {isDefaultFeed ? (
+          <>
+            <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="featured-projects">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <h2
+                    id="featured-projects"
+                    className="font-display text-3xl font-medium tracking-tight"
+                  >
+                    Featured projects
+                  </h2>
+                  <p className="mt-1 text-base text-muted-foreground">
+                    Standout spaces selected for the homepage
+                  </p>
+                </div>
+                {/* Jumps to the recent feed rendered below rather than back to this URL. */}
+                <Link
+                  href={`#${RECENT_FEED_SECTION_ID}`}
+                  className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
+                >
+                  See all projects
+                </Link>
+              </div>
+
+              <div className="mt-4">
+                <FeedFilters
+                  options={taxonomyOptions}
+                  facetDistribution={initialPage.facetDistribution}
+                />
+              </div>
+
+              <div className="mt-3">
+                <ProjectFeed
+                  initialPage={{ ...featuredPage, hasMore: false }}
+                  request={{ filters, query: '', sort: 'featured' }}
+                  infinite={false}
+                  filterSuggestions={filterSuggestions}
+                />
+              </div>
+            </section>
+
+            <section
+              id={RECENT_FEED_SECTION_ID}
+              className="w-full scroll-mt-24 px-5 pb-6 sm:px-6"
+              aria-labelledby="recent-projects"
+            >
+              <h2 id="recent-projects" className="font-display text-3xl font-medium tracking-tight">
+                Recently published
               </h2>
               <p className="mt-1 text-base text-muted-foreground">
-                Hand-picked by our editors this week
+                Every project published by Tickif designers, newest first
+              </p>
+
+              <div className="mt-3">
+                <ProjectFeed
+                  initialPage={initialPage}
+                  request={request}
+                  showTryFilter={false}
+                  paginationParams={paginationParams}
+                />
+              </div>
+            </section>
+          </>
+        ) : (
+          <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
+            <div>
+              <h2 id="project-results" className="font-display text-3xl font-medium tracking-tight">
+                {query ? `Results for “${query}”` : 'Projects'}
+              </h2>
+              <p className="mt-1 text-base text-muted-foreground">
+                {query
+                  ? 'Projects matching your search and filters'
+                  : 'Browse real projects published by Tickif designers'}
               </p>
             </div>
-            <a
-              href="/"
-              className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
-            >
-              See all projects →
-            </a>
-          </div>
 
-          <div className="mt-4">
-            <FeedFilters options={taxonomyOptions} facetDistribution={facetDistribution} />
-          </div>
+            <div className="mt-4">
+              <FeedFilters
+                options={taxonomyOptions}
+                facetDistribution={initialPage.facetDistribution}
+              />
+            </div>
 
-          <div className="mt-3">
-            <ProjectFeed projects={projects} />
-          </div>
-        </section>
+            <div className="mt-3">
+              <ProjectFeed
+                initialPage={initialPage}
+                request={request}
+                filterSuggestions={filterSuggestions}
+                paginationParams={paginationParams}
+              />
+            </div>
+          </section>
+        )}
       </div>
     </>
   );
