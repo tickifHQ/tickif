@@ -400,15 +400,6 @@ export const publicImageDetailParamSchema = z
   .object({ imageId: z.uuid() })
   .meta({ id: 'PublicImageDetailParam' });
 
-export const publicImageDetailResponseSchema = z
-  .object({
-    project: feedProjectSchema,
-    images: z.array(galleryImageSchema),
-    activeImageId: z.uuid(),
-  })
-  .meta({ id: 'PublicImageDetail' });
-export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
-
 export const projectIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'ProjectIdParam' });
 
 export const projectRoomIdParamSchema = z
@@ -455,6 +446,15 @@ export type DeleteProjectImageResponse = z.infer<typeof deleteProjectImageRespon
 
 // --- Public read endpoints (E-195) ------------------------------------------
 
+/** A taxonomy value that is safe and ready for public display. */
+export const publicTaxonomyValueSchema = z
+  .object({
+    slug: z.string(),
+    label: z.string(),
+  })
+  .meta({ id: 'PublicTaxonomyValue' });
+export type PublicTaxonomyValue = z.infer<typeof publicTaxonomyValueSchema>;
+
 /** Designer summary card embedded in the public project-by-slug response. */
 export const designerSummarySchema = z
   .object({
@@ -469,33 +469,84 @@ export const designerSummarySchema = z
   .meta({ id: 'DesignerSummary' });
 export type DesignerSummary = z.infer<typeof designerSummarySchema>;
 
+export const publicProjectDesignerSchema = designerSummarySchema
+  .extend({
+    bio: z.string().nullable(),
+    firmType: z.string().nullable(),
+    foundedYear: z.number().int().nullable(),
+    yearsExperience: z.number().int().min(0),
+    projectCount: z.number().int().min(0),
+    footprintCities: z.array(publicTaxonomyValueSchema),
+  })
+  .meta({ id: 'PublicProjectDesigner' });
+export type PublicProjectDesigner = z.infer<typeof publicProjectDesignerSchema>;
+
+export const publicProjectRoomSchema = z
+  .object({
+    id: z.uuid(),
+    roomType: publicTaxonomyValueSchema.nullable(),
+    name: z.string(),
+    description: z.string().nullable(),
+    sortOrder: z.number().int(),
+    photoCount: z.number().int().min(0),
+  })
+  .meta({ id: 'PublicProjectRoom' });
+export type PublicProjectRoom = z.infer<typeof publicProjectRoomSchema>;
+
+export const publicProjectGalleryImageSchema = z
+  .object({
+    id: z.uuid(),
+    url: z.url(),
+    width: z.number().int().nullable(),
+    height: z.number().int().nullable(),
+    roomId: z.uuid().nullable(),
+    roomName: z.string().nullable(),
+    sortOrder: z.number().int(),
+    themes: z.array(publicTaxonomyValueSchema),
+    materials: z.array(publicTaxonomyValueSchema),
+    finishes: z.array(publicTaxonomyValueSchema),
+    tags: z.array(publicTaxonomyValueSchema),
+  })
+  .meta({ id: 'PublicProjectGalleryImage' });
+export type PublicProjectGalleryImage = z.infer<typeof publicProjectGalleryImageSchema>;
+
+export const publicProjectSpecificationsSchema = z
+  .object({
+    propertyType: publicTaxonomyValueSchema.nullable(),
+    propertySubtype: publicTaxonomyValueSchema.nullable(),
+    scope: publicTaxonomyValueSchema.nullable(),
+    bhk: publicTaxonomyValueSchema.nullable(),
+    city: publicTaxonomyValueSchema.nullable(),
+    locality: publicTaxonomyValueSchema.nullable(),
+    budgetBand: publicTaxonomyValueSchema.nullable(),
+  })
+  .meta({ id: 'PublicProjectSpecifications' });
+export type PublicProjectSpecifications = z.infer<typeof publicProjectSpecificationsSchema>;
+
+export const publicProjectNarrativeSchema = z
+  .object({
+    body: z.string().min(1),
+    rating: z.number().int().min(1).max(5),
+    publishedAt: z.iso.datetime().nullable(),
+  })
+  .meta({ id: 'PublicProjectNarrative' });
+export type PublicProjectNarrative = z.infer<typeof publicProjectNarrativeSchema>;
+
+export const projectMotifKindSchema = z.enum(['theme', 'material', 'finish', 'tag']);
+export type ProjectMotifKind = z.infer<typeof projectMotifKindSchema>;
+
+export const publicProjectMotifSchema = publicTaxonomyValueSchema
+  .extend({
+    kind: projectMotifKindSchema,
+    projectCount: z.number().int().min(1),
+  })
+  .meta({ id: 'PublicProjectMotif' });
+export type PublicProjectMotif = z.infer<typeof publicProjectMotifSchema>;
+
 /** Slug path parameter for public project lookup. */
 export const projectSlugParamSchema = z
   .object({ slug: z.string().trim().min(1).max(200) })
   .meta({ id: 'ProjectSlugParam' });
-
-/**
- * GET /api/projects/slug/{slug} — published-only project detail.
- * Composed from existing schemas: project detail + designer summary + gallery.
- */
-export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
-  .omit({
-    designerId: true,
-    coverImageId: true,
-    metadata: true,
-    submittedAt: true,
-    updatedAt: true,
-    rejectionReasonCode: true,
-    moderationNote: true,
-    reviewComments: true,
-  })
-  .extend({
-    designer: designerSummarySchema,
-    images: z.array(galleryImageSchema),
-    coverImageUrl: z.string().url().nullable(),
-  })
-  .meta({ id: 'PublicProjectBySlug' });
-export type PublicProjectBySlugResponse = z.infer<typeof publicProjectBySlugResponseSchema>;
 
 // --- Designer's published projects (paginated) ---
 
@@ -536,6 +587,74 @@ export const designerProjectsResponseSchema = z
   })
   .meta({ id: 'DesignerProjectsResponse' });
 export type DesignerProjectsResponse = z.infer<typeof designerProjectsResponseSchema>;
+
+export const publicProjectRecommendationsSchema = z
+  .object({
+    moreFromDesigner: z.array(designerProjectCardSchema),
+    sameBudgetDifferentStyle: z.array(designerProjectCardSchema),
+    nearby: z.array(designerProjectCardSchema),
+  })
+  .meta({ id: 'PublicProjectRecommendations' });
+export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommendationsSchema>;
+
+/**
+ * GET /api/projects/slug/{slug} — published-only, display-ready project detail.
+ * Product-dependent engagement and trust claims are intentionally not part of
+ * this contract until their source-of-truth workflows exist.
+ */
+export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
+  .omit({
+    designerId: true,
+    coverImageId: true,
+    metadata: true,
+    submittedAt: true,
+    updatedAt: true,
+    rejectionReasonCode: true,
+    moderationNote: true,
+    reviewComments: true,
+    rooms: true,
+  })
+  .extend({
+    specifications: publicProjectSpecificationsSchema,
+    rooms: z.array(publicProjectRoomSchema),
+    images: z.array(publicProjectGalleryImageSchema),
+    coverImageUrl: z.url().nullable(),
+    designer: publicProjectDesignerSchema,
+    narrative: publicProjectNarrativeSchema.nullable(),
+    recurringMotifs: z.array(publicProjectMotifSchema),
+    recommendations: publicProjectRecommendationsSchema,
+  })
+  .meta({ id: 'PublicProjectBySlug' });
+export type PublicProjectBySlugResponse = z.infer<typeof publicProjectBySlugResponseSchema>;
+
+/**
+ * Feed-compatible project context embedded in the public image-detail response.
+ * Existing image-page consumers keep the card fields while SSR gains the
+ * truthful project copy and resolved specifications it previously fetched or
+ * substituted separately.
+ */
+export const publicImageDetailProjectSchema = feedProjectSchema
+  .extend({
+    description: z.string().nullable(),
+    buildingName: z.string().nullable(),
+    specifications: publicProjectSpecificationsSchema,
+  })
+  .meta({ id: 'PublicImageDetailProject' });
+export type PublicImageDetailProject = z.infer<typeof publicImageDetailProjectSchema>;
+
+/** GET /api/projects/images/{imageId} — display-ready public image context. */
+export const publicImageDetailResponseSchema = z
+  .object({
+    project: publicImageDetailProjectSchema,
+    images: z.array(publicProjectGalleryImageSchema),
+    activeImage: publicProjectGalleryImageSchema,
+    activeImageId: z.uuid(),
+    designer: publicProjectDesignerSchema,
+    narrative: publicProjectNarrativeSchema.nullable(),
+    recommendations: publicProjectRecommendationsSchema,
+  })
+  .meta({ id: 'PublicImageDetail' });
+export type PublicImageDetailResponse = z.infer<typeof publicImageDetailResponseSchema>;
 
 // --- Similar projects ---
 

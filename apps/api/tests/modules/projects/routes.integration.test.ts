@@ -8,9 +8,11 @@ import type {
   PortfolioProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
+  PublicProjectBySlugResponse,
   ProjectRoom,
   ProjectReviewCommentsResponse,
 } from '@repo/contracts';
+import { publicProjectBySlugResponseSchema } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -19,6 +21,7 @@ import {
   makeProjectImage,
   makeProjectReviewComment,
   makeProjectRoom,
+  makeReview,
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -268,6 +271,491 @@ describe('GET /api/projects', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ListProjectsResponse;
     expect(body.items.map((item) => item.title)).toEqual(['100% Modular Kitchen']);
+  });
+});
+
+describe('GET /api/projects/slug/{slug}', () => {
+  it('returns the display-ready public project model without private or original media fields', async () => {
+    const city = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
+    await makeTaxonomy({
+      kind: 'locality',
+      slug: 'bandra',
+      label: 'Bandra',
+      parentId: city.id,
+    });
+    await Promise.all([
+      makeTaxonomy({ kind: 'property_type', slug: 'residential', label: 'Residential' }),
+      makeTaxonomy({ kind: 'property_subtype', slug: 'apartment', label: 'Apartment' }),
+      makeTaxonomy({ kind: 'scope', slug: 'full-home', label: 'Full Home' }),
+      makeTaxonomy({ kind: 'bhk', slug: '3-bhk', label: '3 BHK' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' }),
+      makeTaxonomy({ kind: 'theme', slug: 'contemporary', label: 'Contemporary' }),
+      makeTaxonomy({ kind: 'material', slug: 'wood', label: 'Wood' }),
+      makeTaxonomy({ kind: 'finish', slug: 'matte', label: 'Matte' }),
+    ]);
+    const roomType = await makeTaxonomy({
+      kind: 'room',
+      slug: 'living-room',
+      label: 'Living Room',
+    });
+    const designer = await makeDesigner({
+      status: 'active',
+      displayName: 'Studio A',
+      entityType: 'company',
+      bio: 'Residential interior design studio.',
+      firmType: 'Interior design studio',
+      foundedYear: 2018,
+      yearsExperience: 8,
+    });
+    await db.insert(schema.designerProfileFootprint).values({
+      profileId: designer.id,
+      taxonomyId: city.id,
+    });
+    const project = await makeProject({
+      designerId: designer.id,
+      slug: 'sunlit-bandra-apartment',
+      title: 'Sunlit Bandra Apartment',
+      description: 'A warm contemporary apartment.',
+      status: 'published',
+      propertyTypeSlug: 'residential',
+      propertySubtypeSlug: 'apartment',
+      scopeSlug: 'full-home',
+      bhkSlug: '3-bhk',
+      sizeSqft: 1800,
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      budgetBandSlug: 'premium',
+      completedMonth: '2025-06',
+      publishedAt: new Date('2025-07-01T00:00:00.000Z'),
+    });
+    const room = await makeProjectRoom({
+      projectId: project.id,
+      roomTypeId: roomType.id,
+      name: 'Living Room',
+      sortOrder: 0,
+    });
+    const image = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'ready',
+      sortOrder: 0,
+      originalKey: 'originals/private/living-room.jpg',
+      derivatives: [
+        {
+          variant: 'large',
+          format: 'webp',
+          key: 'derivatives/public/living-room-large.webp',
+          width: 1600,
+          height: 1200,
+        },
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/living-room-thumb.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+      width: 1600,
+      height: 1200,
+      themeSlugs: ['contemporary'],
+      materialSlugs: ['wood'],
+      finishSlugs: ['matte'],
+      tagSlugs: ['warm-tones'],
+    });
+    const processingImage = await makeProjectImage({
+      projectId: project.id,
+      roomId: room.id,
+      status: 'processing',
+      sortOrder: 1,
+      originalKey: 'originals/private/processing.jpg',
+      themeSlugs: ['contemporary'],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: image.id })
+      .where(eq(schema.project.id, project.id));
+    await makeReview({
+      designerProfileId: designer.id,
+      projectId: project.id,
+      status: 'published',
+      rating: 5,
+      body: 'The team understood how we wanted the completed home to feel.',
+      createdAt: new Date('2025-07-01T00:00:00.000Z'),
+      updatedAt: new Date('2025-07-02T00:00:00.000Z'),
+      publishedAt: new Date('2025-07-02T00:00:00.000Z'),
+      moderatedAt: new Date('2025-07-02T00:00:00.000Z'),
+    });
+    const recommendedProject = await makeProject({
+      designerId: designer.id,
+      title: 'Bandra Courtyard Home',
+      status: 'published',
+      propertySubtypeSlug: 'apartment',
+      bhkSlug: '3-bhk',
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+      budgetBandSlug: 'premium',
+      completedMonth: '2024-11',
+      publishedAt: new Date('2025-06-01T00:00:00.000Z'),
+    });
+    const recommendedCover = await makeProjectImage({
+      projectId: recommendedProject.id,
+      status: 'ready',
+      themeSlugs: ['contemporary'],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/courtyard-thumb.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+      width: 400,
+      height: 300,
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: recommendedCover.id })
+      .where(eq(schema.project.id, recommendedProject.id));
+
+    // More than one SQL page of newer projects share the source theme. The
+    // different-style candidate must still be found because theme exclusion is
+    // applied before the per-group limit.
+    const otherDesigner = await makeDesigner({ status: 'active', displayName: 'Studio B' });
+    for (let index = 0; index < 13; index += 1) {
+      const overlappingProject = await makeProject({
+        designerId: otherDesigner.id,
+        title: `Contemporary Premium ${index}`,
+        status: 'published',
+        budgetBandSlug: 'premium',
+        citySlug: 'delhi',
+        publishedAt: new Date(`2025-08-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`),
+      });
+      const overlappingCover = await makeProjectImage({
+        projectId: overlappingProject.id,
+        status: 'ready',
+        themeSlugs: ['contemporary'],
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: `derivatives/public/overlap-${index}.webp`,
+            width: 400,
+            height: 300,
+          },
+        ],
+      });
+      await db
+        .update(schema.project)
+        .set({ coverImageId: overlappingCover.id })
+        .where(eq(schema.project.id, overlappingProject.id));
+    }
+    const differentStyleProject = await makeProject({
+      designerId: otherDesigner.id,
+      title: 'Classic Premium Home',
+      status: 'published',
+      budgetBandSlug: 'premium',
+      citySlug: 'delhi',
+      publishedAt: new Date('2025-05-01T00:00:00.000Z'),
+    });
+    const differentStyleCover = await makeProjectImage({
+      projectId: differentStyleProject.id,
+      status: 'ready',
+      themeSlugs: ['traditional'],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/classic-premium.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: differentStyleCover.id })
+      .where(eq(schema.project.id, differentStyleProject.id));
+
+    const response = await app.request('/api/projects/slug/sunlit-bandra-apartment');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=300',
+    );
+    const body = (await response.json()) as PublicProjectBySlugResponse;
+    expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
+    expect(body).toMatchObject({
+      id: project.id,
+      specifications: {
+        propertyType: { slug: 'residential', label: 'Residential' },
+        locality: { slug: 'bandra', label: 'Bandra' },
+      },
+      rooms: [
+        {
+          id: room.id,
+          roomType: { slug: 'living-room', label: 'Living Room' },
+          photoCount: 1,
+        },
+      ],
+      images: [
+        {
+          id: image.id,
+          roomId: room.id,
+          themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+          materials: [{ slug: 'wood', label: 'Wood' }],
+          finishes: [{ slug: 'matte', label: 'Matte' }],
+          tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
+        },
+      ],
+      designer: {
+        displayName: 'Studio A',
+        entityType: 'company',
+        projectCount: 2,
+        footprintCities: [{ slug: 'mumbai', label: 'Mumbai' }],
+      },
+      narrative: { rating: 5 },
+      recurringMotifs: expect.arrayContaining([
+        { kind: 'theme', slug: 'contemporary', label: 'Contemporary', projectCount: 2 },
+      ]),
+      recommendations: {
+        moreFromDesigner: [{ id: recommendedProject.id, completionYear: 2024 }],
+        sameBudgetDifferentStyle: [{ id: differentStyleProject.id }],
+      },
+    });
+    expect(body.images[0]?.url).toContain('living-room-large.webp');
+    expect(body.images).toHaveLength(1);
+    expect(body.images.some((item) => item.id === processingImage.id)).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('originals/private');
+
+    await db
+      .update(schema.taxonomy)
+      .set({ isActive: false })
+      .where(eq(schema.taxonomy.id, roomType.id));
+    const retiredRoomTypeResponse = await app.request(
+      '/api/projects/slug/sunlit-bandra-apartment',
+    );
+    const retiredRoomTypeBody =
+      (await retiredRoomTypeResponse.json()) as PublicProjectBySlugResponse;
+    expect(retiredRoomTypeBody.rooms).toEqual([
+      expect.objectContaining({ id: room.id, roomType: null, photoCount: 1 }),
+    ]);
+  });
+
+  it('fills every recommendation group from real SQL and hides unpublished or inactive-designer projects', async () => {
+    await Promise.all([
+      makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' }),
+      makeTaxonomy({ kind: 'city', slug: 'delhi', label: 'Delhi' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'value', label: 'Value' }),
+      makeTaxonomy({ kind: 'theme', slug: 'contemporary', label: 'Contemporary' }),
+      makeTaxonomy({ kind: 'theme', slug: 'traditional', label: 'Traditional' }),
+    ]);
+
+    /** Project with a `ready` cover carrying `themeSlugs`, wired up as the cover. */
+    async function makeCoveredProject(
+      overrides: Parameters<typeof makeProject>[0],
+      themeSlugs: string[],
+    ) {
+      const created = await makeProject(overrides);
+      const cover = await makeProjectImage({
+        projectId: created.id,
+        status: 'ready',
+        themeSlugs,
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: `derivatives/public/${created.id}-thumb.webp`,
+            width: 400,
+            height: 300,
+          },
+        ],
+        width: 400,
+        height: 300,
+      });
+      await db
+        .update(schema.project)
+        .set({ coverImageId: cover.id })
+        .where(eq(schema.project.id, created.id));
+      return created;
+    }
+
+    // Source project: fully tagged (budget band + one theme), which is the shape
+    // that builds all three recommendation branches.
+    const designer = await makeDesigner({ status: 'active', displayName: 'Studio Source' });
+    const project = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        slug: 'recommendation-source',
+        title: 'Recommendation Source',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-07-01T00:00:00.000Z'),
+      },
+      ['contemporary'],
+    );
+
+    // One expected hit per group.
+    const sameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Second Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-06-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+    const otherStudio = await makeDesigner({ status: 'active', displayName: 'Studio Other' });
+    const differentStyle = await makeCoveredProject(
+      {
+        designerId: otherStudio.id,
+        title: 'Traditional Premium Home',
+        status: 'published',
+        citySlug: 'delhi',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-05-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+    const nearbyStudio = await makeDesigner({ status: 'active', displayName: 'Studio Nearby' });
+    const nearby = await makeCoveredProject(
+      {
+        designerId: nearbyStudio.id,
+        title: 'Nearby Value Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'value',
+        publishedAt: new Date('2025-04-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+
+    // A same-budget project that shares the source theme must be filtered out of
+    // sameBudgetDifferentStyle (and it is in another city, so no nearby fallback).
+    const sharedStyle = await makeCoveredProject(
+      {
+        designerId: otherStudio.id,
+        title: 'Contemporary Premium Home',
+        status: 'published',
+        citySlug: 'delhi',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-08-01T00:00:00.000Z'),
+      },
+      ['contemporary'],
+    );
+
+    // Decoys: each would match a branch on taxonomy alone, so only the
+    // status/designer-status guards can keep them out.
+    const draftSameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Draft',
+        status: 'draft',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const submittedSameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Submitted',
+        status: 'submitted',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const suspendedDesigner = await makeDesigner({
+      status: 'suspended',
+      displayName: 'Studio Suspended',
+    });
+    const suspendedDesignerProject = await makeCoveredProject(
+      {
+        designerId: suspendedDesigner.id,
+        title: 'Suspended Studio Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const draftDesigner = await makeDesigner({ status: 'draft', displayName: 'Studio Unlisted' });
+    const draftDesignerProject = await makeCoveredProject(
+      {
+        designerId: draftDesigner.id,
+        title: 'Unlisted Studio Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+
+    const response = await app.request('/api/projects/slug/recommendation-source');
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as PublicProjectBySlugResponse;
+    expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
+    expect(body.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([sameDesigner.id]);
+    expect(body.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
+      differentStyle.id,
+    ]);
+    expect(body.recommendations.nearby.map((item) => item.id)).toEqual([nearby.id]);
+    // No `completedMonth` on these, so the year can only come from `publishedAt` —
+    // which the raw recommendation query has to hand back as a real Date.
+    expect(body.recommendations.moreFromDesigner[0]?.completionYear).toBe(2025);
+    expect(body.recommendations.nearby[0]?.completionYear).toBe(2025);
+
+    const recommendedIds = [
+      ...body.recommendations.moreFromDesigner,
+      ...body.recommendations.sameBudgetDifferentStyle,
+      ...body.recommendations.nearby,
+    ].map((item) => item.id);
+    expect(recommendedIds).not.toContain(project.id);
+    expect(recommendedIds).not.toContain(sharedStyle.id);
+    expect(recommendedIds).not.toContain(draftSameDesigner.id);
+    expect(recommendedIds).not.toContain(submittedSameDesigner.id);
+    expect(recommendedIds).not.toContain(suspendedDesignerProject.id);
+    expect(recommendedIds).not.toContain(draftDesignerProject.id);
+
+    // Positive control: the decoys above are eligible on every other axis, so
+    // clearing just the status guards has to surface them. Keeps the negative
+    // assertions from passing for an unrelated reason.
+    await db
+      .update(schema.project)
+      .set({ status: 'published' })
+      .where(eq(schema.project.id, draftSameDesigner.id));
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, suspendedDesigner.id));
+
+    const relaxed = await app.request('/api/projects/slug/recommendation-source');
+    expect(relaxed.status).toBe(200);
+    const relaxedBody = (await relaxed.json()) as PublicProjectBySlugResponse;
+    expect(relaxedBody.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([
+      sameDesigner.id,
+      draftSameDesigner.id,
+    ]);
+    expect(relaxedBody.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
+      differentStyle.id,
+      suspendedDesignerProject.id,
+    ]);
+  });
+
+  it('returns 404 for an unpublished project slug', async () => {
+    const designer = await makeDesigner({ status: 'active' });
+    await makeProject({ designerId: designer.id, slug: 'private-draft', status: 'draft' });
+
+    const response = await app.request('/api/projects/slug/private-draft');
+
+    expect(response.status).toBe(404);
   });
 });
 

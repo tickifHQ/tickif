@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
-import type { FeedProjectsResponse, PublicImageDetailResponse } from '@repo/contracts';
+import {
+  publicImageDetailResponseSchema,
+  type FeedProjectsResponse,
+  type PublicImageDetailResponse,
+} from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
   makeDesigner,
@@ -41,7 +45,10 @@ async function makePublishedProject(
   });
 }
 
-async function attachReadyCover(projectId: string) {
+async function attachReadyCover(
+  projectId: string,
+  overrides: Partial<typeof schema.projectImage.$inferInsert> = {},
+) {
   const cover = await makeProjectImage({
     projectId,
     status: 'ready',
@@ -56,6 +63,7 @@ async function attachReadyCover(projectId: string) {
         height: 240,
       },
     ],
+    ...overrides,
   });
   await db
     .update(schema.project)
@@ -381,11 +389,16 @@ describe('GET /api/projects/images/:imageId', () => {
       avgRating: '4.80',
       reviewCount: 7,
     });
-    const project = await makePublishedProject(designer.id, { title: 'Public Image Project' });
-    const cover = await attachReadyCover(project.id);
+    const project = await makePublishedProject(designer.id, {
+      title: 'Public Image Project',
+      description: 'A truthful project description.',
+    });
+    const cover = await attachReadyCover(project.id, { sortOrder: 1 });
     const activeImage = await makeProjectImage({
       projectId: project.id,
       status: 'ready',
+      sortOrder: 0,
+      originalKey: `private/${project.id}/active-original.jpg`,
       width: 1200,
       height: 800,
       derivatives: [
@@ -403,15 +416,59 @@ describe('GET /api/projects/images/:imageId', () => {
     const body = (await res.json()) as PublicImageDetailResponse;
 
     expect(res.status).toBe(200);
+    expect(publicImageDetailResponseSchema.safeParse(body).success).toBe(true);
     expect(body.activeImageId).toBe(activeImage.id);
     expect(body.project).toMatchObject({
       id: project.id,
       coverImageId: cover.id,
       title: 'Public Image Project',
+      description: 'A truthful project description.',
       studio: 'Studio Public',
     });
-    expect(body.images.map((image) => image.id)).toEqual(
-      expect.arrayContaining([cover.id, activeImage.id]),
-    );
+    expect(body.activeImage).toMatchObject({
+      id: activeImage.id,
+      sortOrder: activeImage.sortOrder,
+    });
+    expect(body.designer).toMatchObject({
+      id: designer.id,
+      displayName: 'Studio Public',
+      reviewCount: 7,
+    });
+    expect(body.recommendations).toEqual({
+      moreFromDesigner: [],
+      sameBudgetDifferentStyle: [],
+      nearby: [],
+    });
+    expect(body.images.map((image) => image.id)).toEqual([activeImage.id, cover.id]);
+    const payload = JSON.stringify(body);
+    expect(payload).not.toContain(activeImage.originalKey);
+    expect(payload).not.toContain(cover.originalKey);
+  });
+
+  it('returns 404 for non-ready images, unpublished projects, and inactive designers', async () => {
+    const active = await activeDesigner();
+    const draftProject = await makeProject({ designerId: active.id, status: 'draft' });
+    const draftImage = await makeProjectImage({ projectId: draftProject.id, status: 'ready' });
+
+    const publishedProject = await makePublishedProject(active.id);
+    const processingImage = await makeProjectImage({
+      projectId: publishedProject.id,
+      status: 'processing',
+    });
+
+    const suspended = await makeDesigner({ status: 'suspended' });
+    const suspendedProject = await makePublishedProject(suspended.id);
+    const suspendedImage = await makeProjectImage({
+      projectId: suspendedProject.id,
+      status: 'ready',
+    });
+
+    for (const imageId of [draftImage.id, processingImage.id, suspendedImage.id]) {
+      const response = await app.request(`/api/projects/images/${imageId}`);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'not_found' },
+      });
+    }
   });
 });

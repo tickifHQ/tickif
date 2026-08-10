@@ -1,6 +1,6 @@
 {
-  "id": "47ff8341-0932-4a07-97d9-f3e7c89950dd",
-  "prevId": "4d5be03a-5fac-4699-9a10-7b50751a94f1",
+  "id": "2b4f61b3-b57a-467f-93cf-73c9214b0488",
+  "prevId": "47ff8341-0932-4a07-97d9-f3e7c89950dd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2987,6 +2987,36 @@
           "method": "btree",
           "with": {}
         },
+        "project_bhk_idx": {
+          "name": "project_bhk_idx",
+          "columns": [
+            {
+              "expression": "bhk_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "project_budget_band_idx": {
+          "name": "project_budget_band_idx",
+          "columns": [
+            {
+              "expression": "budget_band_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "project_reviewed_by_idx": {
           "name": "project_reviewed_by_idx",
           "columns": [
@@ -3275,6 +3305,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "project_image_theme_slugs_gin": {
+          "name": "project_image_theme_slugs_gin",
+          "columns": [
+            {
+              "expression": "theme_slugs",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         },
         "project_image_project_sort_idx": {
