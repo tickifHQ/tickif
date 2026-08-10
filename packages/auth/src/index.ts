@@ -3,10 +3,12 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
-import { config } from '@repo/config';
+import { assertProductionEmailConfig, config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
 import { ac, roles } from './permissions.js';
 import { sendEmail } from './email.js';
+
+assertProductionEmailConfig();
 
 /**
  * Tickif auth — better-auth instance.
