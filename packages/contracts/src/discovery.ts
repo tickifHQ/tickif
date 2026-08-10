@@ -8,11 +8,15 @@ import { projectSearchFallback } from './search';
  * Plain zod, no framework deps.
  */
 
-// Helper for filter parameters that accept single string or array of strings
-const taxonomySlugOrArray = z.union([
-  z.string().trim().min(1).max(80),
-  z.array(z.string().trim().min(1).max(80)).max(20),
-]);
+const taxonomySlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a taxonomy slug such as modern or 3-bhk');
+
+// Helper for filter parameters that accept a single slug or a bounded slug array.
+const taxonomySlugOrArray = z.union([taxonomySlug, z.array(taxonomySlug).max(20)]);
 
 export const discoveryFeedQuerySchema = z
   .object({

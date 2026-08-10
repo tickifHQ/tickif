@@ -11,6 +11,18 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
     findThemeSlugs: vi.fn(async () => new Map()),
+    listFacetVocabulary: vi.fn(async () => ({
+      citySlug: [],
+      localitySlug: [],
+      propertyTypeSlug: [],
+      propertySubtypeSlug: [],
+      scopeSlug: [],
+      bhkSlug: [],
+      budgetBandSlug: [],
+      roomSlugs: [],
+      themes: [],
+    })),
+    countFeedFacets: vi.fn(async () => ({})),
   },
 }));
 

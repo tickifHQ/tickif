@@ -1,4 +1,5 @@
 import { db, schema, eq, and, asc } from '@repo/db';
+import type { TaxonomyKind } from '@repo/contracts';
 
 /**
  * Data-access for taxonomy public reads.
@@ -18,11 +19,11 @@ export const taxonomyRepository = {
    * Always filters is_active = true. Orders by sort_order ASC, label ASC.
    */
   async listByKind(
-    kind: string,
+    kind: TaxonomyKind,
     parentId?: string,
   ): Promise<TaxonomyTermRow[]> {
     const conditions = [
-      eq(schema.taxonomy.kind, kind as typeof schema.taxonomyKindEnum.enumValues[number]),
+      eq(schema.taxonomy.kind, kind),
       eq(schema.taxonomy.isActive, true),
     ];
 

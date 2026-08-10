@@ -36,6 +36,7 @@ vi.mock('../../../src/modules/leads/routes.js', async () => {
 
 vi.mock('@repo/auth', () => ({
   getSession: vi.fn(async () => null),
+  getSessionWithHeaders: vi.fn(async () => ({ session: null, headers: new Headers() })),
   auth: { handler: vi.fn(() => new Response(null, { status: 404 })) },
 }));
 

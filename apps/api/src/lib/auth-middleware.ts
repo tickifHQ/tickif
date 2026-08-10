@@ -1,11 +1,23 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { getSession, setActiveOrganization, type PlatformRole, type Session } from '@repo/auth';
+import {
+  getSession,
+  getSessionWithHeaders,
+  setActiveOrganization,
+  type PlatformRole,
+  type Session,
+} from '@repo/auth';
 import { AppError } from './errors.js';
 import { orgsService } from '../modules/orgs/service.js';
 
 export type AuthVariables = {
   user: Session['user'] | null;
   session: Session['session'] | null;
+  /**
+   * Whether `user`/`session` were read past the ≤5-min session cookie cache.
+   * Optional on purpose: only `withSession` and the guards below set it, so a
+   * context that never ran them reads as "not fresh" instead of lying.
+   */
+  sessionFresh?: boolean;
 };
 
 /** Platform role union, derived from the configured Better Auth role map. */
@@ -24,8 +36,12 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  * Resolves the better-auth session from the incoming request and attaches
  * `user` / `session` to the Hono context. Always runs; does not block.
  *
- * Note: reads go through the ≤5-min session cookie cache (E-83), so role/ban
- * changes can be served stale for up to that window by the guards below.
+ * This read goes through better-auth's ≤5-min session cookie cache, so what it
+ * attaches may be stale. That is fine for identity-only reads (rendering "who am
+ * I"), but NOT for authorization: anything that decides access from live account
+ * state (`isBanned`, role, `activeOrganizationId`) must run one of the guards
+ * below, or `withFreshSession` when the route also has to serve anonymous
+ * callers. Each of those refreshes the session at most once per request.
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
@@ -43,6 +59,57 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
+  c.set('sessionFresh', false);
+  await next();
+};
+
+/**
+ * Re-reads the session past the cookie cache, at most once per request, and forwards
+ * better-auth's response cookies so the client's stale `session_data` blob is replaced
+ * (or cleared, when the session is gone) instead of surviving its full TTL.
+ */
+async function refreshSession(c: Context<{ Variables: AuthVariables }>): Promise<void> {
+  // Already refreshed by an earlier guard on this request — nothing to do.
+  if (c.get('sessionFresh')) return;
+  // The cookie cache only ever caches a *positive* session, so a cached read that
+  // found nothing already came from the database. Re-reading it would just double
+  // the query cost of every 401 (and of a revoked-cookie replay).
+  if (!c.get('user')) return;
+
+  const { session: result, headers } = await getSessionWithHeaders(c.req.raw.headers, {
+    disableCookieCache: true,
+  });
+  for (const cookie of headers.getSetCookie()) {
+    c.header('Set-Cookie', cookie, { append: true });
+  }
+  c.set('user', result?.user ?? null);
+  c.set('session', result?.session ?? null);
+  c.set('sessionFresh', true);
+}
+
+async function getFreshActiveUser(
+  c: Context<{ Variables: AuthVariables }>,
+): Promise<NonNullable<AuthVariables['user']>> {
+  await refreshSession(c);
+  const user = c.get('user');
+  assertActiveUser(user);
+  return user;
+}
+
+/**
+ * Optional-auth counterpart to the guards: refreshes the session past the cookie
+ * cache without rejecting anonymous callers.
+ *
+ * Attach this to routes that must keep serving anonymous traffic yet still decide
+ * authorization from live account state further down — e.g. `GET /projects/{id}`,
+ * where a published project is public but draft visibility is decided from the
+ * caller's ban/role. Without it those decisions run on a ≤5-min stale session.
+ */
+export const withFreshSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (
+  c,
+  next,
+) => {
+  await refreshSession(c);
   await next();
 };
 
@@ -65,7 +132,7 @@ function assertActiveUser(
 
 /** Guard: require an authenticated, non-banned user. 401 / 403 otherwise. */
 export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
-  assertActiveUser(c.get('user'));
+  await getFreshActiveUser(c);
   await next();
 };
 
@@ -79,8 +146,7 @@ export function requireAnyRole(
   roles: readonly UserRole[],
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
-    const user = c.get('user');
-    assertActiveUser(user);
+    const user = await getFreshActiveUser(c);
     const { role } = user;
     if (role !== 'superadmin' && !roles.some((r) => r === role)) {
       throw AppError.forbidden();
@@ -108,8 +174,7 @@ export function requireOwnership(
   resolve: OwnershipResolver,
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
-    const user = c.get('user');
-    assertActiveUser(user);
+    const user = await getFreshActiveUser(c);
     const ownership = await resolve(c);
     if (!ownership) {
       throw AppError.notFound();

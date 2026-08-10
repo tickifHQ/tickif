@@ -1,5 +1,10 @@
 import { db, schema, eq, and, sql } from '@repo/db';
 import { inArray } from 'drizzle-orm';
+import {
+  taxonomyKindSchema,
+  type DesignerEntityType,
+  type TaxonomyKind,
+} from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 /**
@@ -13,7 +18,7 @@ type ProfileUpdateData = Partial<{
   displayName: string;
   bio: string | null;
   logoImageId: string | null;
-  entityType: 'individual' | 'company';
+  entityType: DesignerEntityType;
   address: string | null;
   websiteUrl: string | null;
   googleBusinessUrl: string | null;
@@ -30,7 +35,7 @@ type ProfileUpdateData = Partial<{
 async function replaceFootprintByKindInTx(
   tx: Tx,
   profileId: string,
-  kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+  kind: TaxonomyKind,
   taxonomyIds: string[],
 ): Promise<void> {
   const existingIds = await tx
@@ -98,7 +103,7 @@ export const profilesRepository = {
   /** Count footprint entries via SQL count(*) — no row streaming. */
   async countFootprintByKind(
     profileId: string,
-    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    kind: TaxonomyKind,
   ): Promise<number> {
     const [row] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -186,7 +191,7 @@ export const profilesRepository = {
     const found = new Map(rows.map((r) => [r.id, r.kind]));
     const errors: string[] = [];
 
-    const check = (ids: string[], expectedKind: string, label: string) => {
+    const check = (ids: string[], expectedKind: TaxonomyKind, label: string) => {
       const invalid = [...new Set(ids)].filter((id) => {
         const kind = found.get(id);
         return !kind || kind !== expectedKind;
@@ -194,9 +199,15 @@ export const profilesRepository = {
       if (invalid.length > 0) errors.push(`Invalid ${label} IDs: ${invalid.join(', ')}`);
     };
 
-    if (input.cityIds?.length) check(input.cityIds, 'city', 'city');
-    if (input.scopeIds?.length) check(input.scopeIds, 'scope', 'scope');
-    if (input.themeIds?.length) check(input.themeIds, 'theme', 'theme');
+    if (input.cityIds?.length) {
+      check(input.cityIds, taxonomyKindSchema.enum.city, 'city');
+    }
+    if (input.scopeIds?.length) {
+      check(input.scopeIds, taxonomyKindSchema.enum.scope, 'scope');
+    }
+    if (input.themeIds?.length) {
+      check(input.themeIds, taxonomyKindSchema.enum.theme, 'theme');
+    }
 
     return errors;
   },
@@ -308,7 +319,7 @@ export const profilesRepository = {
   /** Get all footprint taxonomy terms for a profile. */
   async getFootprint(
     profileId: string,
-  ): Promise<{ id: string; kind: string; slug: string; label: string }[]> {
+  ): Promise<{ id: string; kind: TaxonomyKind; slug: string; label: string }[]> {
     return db
       .select({
         id: schema.taxonomy.id,
@@ -370,13 +381,28 @@ export const profilesRepository = {
       }
 
       if (footprint.cityIds !== undefined) {
-        await replaceFootprintByKindInTx(tx, profileId, 'city', footprint.cityIds);
+        await replaceFootprintByKindInTx(
+          tx,
+          profileId,
+          taxonomyKindSchema.enum.city,
+          footprint.cityIds,
+        );
       }
       if (footprint.scopeIds !== undefined) {
-        await replaceFootprintByKindInTx(tx, profileId, 'scope', footprint.scopeIds);
+        await replaceFootprintByKindInTx(
+          tx,
+          profileId,
+          taxonomyKindSchema.enum.scope,
+          footprint.scopeIds,
+        );
       }
       if (footprint.themeIds !== undefined) {
-        await replaceFootprintByKindInTx(tx, profileId, 'theme', footprint.themeIds);
+        await replaceFootprintByKindInTx(
+          tx,
+          profileId,
+          taxonomyKindSchema.enum.theme,
+          footprint.themeIds,
+        );
       }
 
       if (hasMutation) {
@@ -399,7 +425,7 @@ export const profilesRepository = {
    */
   async replaceFootprintByKind(
     profileId: string,
-    kind: (typeof schema.taxonomyKindEnum.enumValues)[number],
+    kind: TaxonomyKind,
     taxonomyIds: string[],
   ): Promise<void> {
     await db.transaction((tx) => replaceFootprintByKindInTx(tx, profileId, kind, taxonomyIds));

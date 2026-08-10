@@ -81,6 +81,20 @@ describe('getServerSession', () => {
     expect(mock.redirect).not.toHaveBeenCalled();
   });
 
+  it('bypasses cookie cache for requireAuth even without a role check', async () => {
+    // requireAuth gates a protected layout, so a revoked session must bite immediately
+    // rather than keep rendering it until the cached session_data blob expires.
+    await requireAuth();
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8008/api/auth/get-session?disableCookieCache=true',
+      {
+        headers: { cookie: 'better-auth.session_token=test' },
+        cache: 'no-store',
+      },
+    );
+  });
+
   it('redirects to /login when session is null', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
 

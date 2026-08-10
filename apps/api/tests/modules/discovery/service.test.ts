@@ -6,6 +6,8 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
     findThemeSlugs: vi.fn(async () => new Map<string, string[]>()),
+    listFacetVocabulary: vi.fn(),
+    countFeedFacets: vi.fn(),
   },
 }));
 vi.mock('../../../src/modules/projects/repository.js', () => ({
@@ -64,12 +66,26 @@ const postgresRow = {
   coverDerivatives: null,
 };
 
+const emptyVocabulary = {
+  citySlug: [] as string[],
+  localitySlug: [] as string[],
+  propertyTypeSlug: [] as string[],
+  propertySubtypeSlug: [] as string[],
+  scopeSlug: [] as string[],
+  bhkSlug: [] as string[],
+  budgetBandSlug: [] as string[],
+  roomSlugs: [] as string[],
+  themes: [] as string[],
+};
+
 describe('discoveryService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('TYPESENSE_HOST', 'localhost');
     vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue(emptyVocabulary);
+    vi.mocked(discoveryRepository.countFeedFacets).mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -84,6 +100,10 @@ describe('discoveryService', () => {
   });
 
   it('returns canonical cards and fallback metadata from Typesense', async () => {
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      citySlug: ['mumbai'],
+    });
     vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
       hits: [searchHit as never],
       found: 1,
@@ -100,6 +120,22 @@ describe('discoveryService', () => {
     expect(discoveryRepository.searchFeed).toHaveBeenCalledWith(
       expect.objectContaining({ q: '', page: 1, perPage: 24 }),
     );
+  });
+
+  it('keeps zero-count active facet options in Typesense responses', async () => {
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      citySlug: ['mumbai', 'pune'],
+    });
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
+      hits: [],
+      found: 0,
+      facetDistribution: { citySlug: { mumbai: 3 } },
+    });
+
+    await expect(discoveryService.getFeed(query)).resolves.toMatchObject({
+      facetDistribution: { citySlug: { mumbai: 3, pune: 0 } },
+    });
   });
 
   it('uses the shared relaxation order for bounded text search', async () => {

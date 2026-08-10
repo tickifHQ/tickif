@@ -15,6 +15,7 @@ import {
 import { projectsRepository } from '../projects/repository.js';
 import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
 import type { DiscoveryFeedFilters } from './constants.js';
+import { denseFacetDistribution } from './facets.js';
 import { FALLBACK_DROP_ORDER } from '../search/constants.js';
 
 /**
@@ -155,13 +156,17 @@ export const discoveryService: DiscoveryService = {
     if (isTypesenseConfigured()) {
       try {
         const mutableFilters: DiscoveryFeedFilters = { ...filters };
-        let result = await discoveryRepository.searchFeed({
-          q,
-          filterBy,
-          sortBy: SORT_TYPESENSE[sort],
-          page,
-          perPage: limit,
-        });
+        const [initialResult, vocabulary] = await Promise.all([
+          discoveryRepository.searchFeed({
+            q,
+            filterBy,
+            sortBy: SORT_TYPESENSE[sort],
+            page,
+            perPage: limit,
+          }),
+          discoveryRepository.listFacetVocabulary(),
+        ]);
+        let result = initialResult;
         let fallback: ProjectSearchFallback = 'none';
         const relaxedFilters: string[] = [];
 
@@ -195,13 +200,14 @@ export const discoveryService: DiscoveryService = {
               offset: 0,
             });
             if (recent.rows.length > 0) {
+              const facetCounts = await discoveryRepository.countFeedFacets({ citySlug });
               return {
                 items: await toCards(await normalizePostgresRows(recent.rows)),
                 page,
                 limit,
                 hasMore: recent.rows.length === limit,
                 source: 'db',
-                facetDistribution: {},
+                facetDistribution: denseFacetDistribution(vocabulary, facetCounts),
                 fallback: 'recent_in_city',
                 relaxedFilters,
               };
@@ -220,7 +226,7 @@ export const discoveryService: DiscoveryService = {
           limit,
           hasMore,
           source: 'search' as const,
-          facetDistribution: result.facetDistribution ?? {},
+          facetDistribution: denseFacetDistribution(vocabulary, result.facetDistribution ?? {}),
           fallback,
           relaxedFilters: responseRelaxedFilters,
         };
@@ -246,6 +252,7 @@ export const discoveryService: DiscoveryService = {
     });
     let fallback: ProjectSearchFallback = 'none';
     const relaxedFilters: string[] = [];
+    let effectiveFilters: DiscoveryFeedFilters = filters;
 
     if (q && page === 1 && result.rows.length === 0) {
       const citySlug = firstValue(filters.citySlug);
@@ -257,7 +264,10 @@ export const discoveryService: DiscoveryService = {
           limit,
           offset: 0,
         });
-        if (result.rows.length > 0) fallback = 'recent_in_city';
+        if (result.rows.length > 0) {
+          fallback = 'recent_in_city';
+          effectiveFilters = { citySlug };
+        }
       }
     }
 
@@ -266,6 +276,10 @@ export const discoveryService: DiscoveryService = {
     const items = await toCards(await normalizePostgresRows(result.rows));
     const hasMore = result.rows.length === limit;
     const responseRelaxedFilters = fallback === 'none' ? [] : relaxedFilters;
+    const [facetCounts, vocabulary] = await Promise.all([
+      discoveryRepository.countFeedFacets(effectiveFilters),
+      discoveryRepository.listFacetVocabulary(),
+    ]);
 
     return {
       items,
@@ -273,7 +287,7 @@ export const discoveryService: DiscoveryService = {
       limit,
       hasMore,
       source: 'db' as const,
-      facetDistribution: {},
+      facetDistribution: denseFacetDistribution(vocabulary, facetCounts),
       fallback,
       relaxedFilters: responseRelaxedFilters,
     };
