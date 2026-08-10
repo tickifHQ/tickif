@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
-import { ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
+import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
@@ -72,7 +72,7 @@ export const auth = betterAuth({
       // App-owned account lifecycle. input:false → clients can't set it on signup;
       // defaultValue keeps it present on the session user object.
       status: {
-        type: ['pending', 'active', 'suspended', 'deleted'],
+        type: [...ACCOUNT_STATUS_VALUES],
         required: false,
         input: false,
         defaultValue: 'pending',

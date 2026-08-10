@@ -21,6 +21,8 @@ import { searchRoutes } from './modules/search/index.js';
 import { adminReviewsRoutes, reviewsRoutes } from './modules/reviews/index.js';
 import { orgsRoutes } from './modules/orgs/routes.js';
 import { enquiriesRoutes } from './modules/enquiries/routes.js';
+import { savedProjectsRoutes } from './modules/saved-projects/routes.js';
+import { visitorsRoutes } from './modules/visitors/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -76,6 +78,8 @@ export const app = base
   .route('/api/orgs', orgsRoutes)
   .route('/api/reports', reportsRoutes)
   .route('/api/enquiries', enquiriesRoutes)
+  .route('/api/saved-projects', savedProjectsRoutes)
+  .route('/api/visitors', visitorsRoutes)
   .route('/api/discovery', discoveryRoutes)
   .route('/api/search', searchRoutes)
   .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));

@@ -10,11 +10,13 @@ import {
   pgEnum,
   jsonb,
   index,
+  primaryKey,
   uniqueIndex,
   check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { TAXONOMY_KIND_VALUES } from '@repo/contracts';
 import { user, organization } from './auth.js';
 
 /**
@@ -87,23 +89,7 @@ export const reviewModerationActionEnum = pgEnum('review_moderation_action', [
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
 // v0 hierarchy: city → locality only. Deeper nesting not supported without CHECK revision.
-export const taxonomyKindEnum = pgEnum('taxonomy_kind', [
-  'city',
-  'locality',
-  'property_type',
-  'property_subtype',
-  'bhk',
-  'room',
-  'scope',
-  'theme',
-  'budget_band',
-  // E-124: per-room attribute vocabularies
-  'material',
-  'finish',
-  'layout',
-  'palette',
-  'size_band',
-]);
+export const taxonomyKindEnum = pgEnum('taxonomy_kind', TAXONOMY_KIND_VALUES);
 
 export const taxonomy = pgTable(
   'taxonomy',
@@ -156,6 +142,31 @@ export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
 
 // Profile lifecycle
 export const profileStatusEnum = pgEnum('profile_status', ['draft', 'active', 'suspended']);
+
+/** Demand-side profile data that is not owned by Better Auth. */
+export const visitorProfile = pgTable(
+  'visitor_profile',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    address: text('address'),
+    whatsappNumber: text('whatsapp_number'),
+    onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check(
+      'visitor_profile_address_length_check',
+      sql`${t.address} IS NULL OR char_length(trim(${t.address})) BETWEEN 1 AND 300`,
+    ),
+    check(
+      'visitor_profile_whatsapp_e164_check',
+      sql`${t.whatsappNumber} IS NULL OR ${t.whatsappNumber} ~ '^[+][1-9][0-9]{7,14}$'`,
+    ),
+  ],
+);
 
 export const designerProfile = pgTable(
   'designer_profile',
@@ -281,6 +292,23 @@ export const project = pgTable(
     index('project_in_review_moderation_queue_idx')
       .on(t.reviewedBy, t.submittedAt, t.id)
       .where(sql`${t.status} = 'in_review'`),
+  ],
+);
+
+export const savedProject = pgTable(
+  'saved_project',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.projectId] }),
+    index('saved_project_project_idx').on(t.projectId),
   ],
 );
 
