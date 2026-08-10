@@ -1,5 +1,5 @@
 {
-  "id": "62fe2f3d-0719-4804-beac-213bfffb00c3",
+  "id": "3be47458-2451-4335-9ce8-d504a237193c",
   "prevId": "0b4b9bfe-ba1b-4992-a9a2-345e9de1c605",
   "version": "7",
   "dialect": "postgresql",
@@ -2560,108 +2560,6 @@
           "method": "btree",
           "with": {}
         },
-        "project_published_budget_recommendation_idx": {
-          "name": "project_published_budget_recommendation_idx",
-          "columns": [
-            {
-              "expression": "budget_band_slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"published_at\" desc nulls last",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"created_at\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"id\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project\".\"status\" = 'published'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_published_designer_recommendation_idx": {
-          "name": "project_published_designer_recommendation_idx",
-          "columns": [
-            {
-              "expression": "designer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"published_at\" desc nulls last",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"created_at\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"id\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project\".\"status\" = 'published'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_published_city_recommendation_idx": {
-          "name": "project_published_city_recommendation_idx",
-          "columns": [
-            {
-              "expression": "city_slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"published_at\" desc nulls last",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"created_at\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "\"id\" desc",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"project\".\"status\" = 'published'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "project_locality_idx": {
           "name": "project_locality_idx",
           "columns": [
@@ -3948,6 +3846,89 @@
           "value": "\n        (\"review_moderation_event\".\"action\" = 'submit' and \"review_moderation_event\".\"from_status\" is null and \"review_moderation_event\".\"to_status\" = 'pending')\n        or (\n          \"review_moderation_event\".\"from_status\" is not null\n          and (\n            (\n              \"review_moderation_event\".\"action\" = 'edit'\n              and \"review_moderation_event\".\"from_status\" in ('pending', 'published')\n              and \"review_moderation_event\".\"to_status\" = 'pending'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'publish'\n              and \"review_moderation_event\".\"from_status\" = 'pending'\n              and \"review_moderation_event\".\"to_status\" = 'published'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'reject'\n              and \"review_moderation_event\".\"from_status\" = 'pending'\n              and \"review_moderation_event\".\"to_status\" = 'rejected'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'dispute'\n              and \"review_moderation_event\".\"from_status\" = 'published'\n              and \"review_moderation_event\".\"to_status\" = 'disputed'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'resolve_publish'\n              and \"review_moderation_event\".\"from_status\" = 'disputed'\n              and \"review_moderation_event\".\"to_status\" = 'published'\n            )\n            or (\n              \"review_moderation_event\".\"action\" = 'remove'\n              and \"review_moderation_event\".\"from_status\" = 'disputed'\n              and \"review_moderation_event\".\"to_status\" = 'removed'\n            )\n          )\n        )\n      "
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.saved_project": {
+      "name": "saved_project",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "saved_project_project_idx": {
+          "name": "saved_project_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "saved_project_user_id_user_id_fk": {
+          "name": "saved_project_user_id_user_id_fk",
+          "tableFrom": "saved_project",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "saved_project_project_id_project_id_fk": {
+          "name": "saved_project_project_id_project_id_fk",
+          "tableFrom": "saved_project",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "saved_project_user_id_project_id_pk": {
+          "name": "saved_project_user_id_project_id_pk",
+          "columns": [
+            "user_id",
+            "project_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.taxonomy": {

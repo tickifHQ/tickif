@@ -101,6 +101,8 @@ export function toE164PhoneNumber(country: Country, phone: string): string | nul
 }
 
 type PhoneNumberInputProps = {
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   ariaLabel?: string;
   countryButtonClassName?: string;
   disabled?: boolean;
@@ -116,6 +118,8 @@ type PhoneNumberInputProps = {
 };
 
 export function PhoneNumberInput({
+  ariaDescribedBy,
+  ariaInvalid,
   ariaLabel = 'Phone number',
   countryButtonClassName,
   disabled = false,
@@ -221,6 +225,8 @@ export function PhoneNumberInput({
       <Input
         id={id}
         aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         type="tel"
         inputMode="numeric"
         placeholder={placeholder}

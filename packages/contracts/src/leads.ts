@@ -21,6 +21,13 @@ export const listLeadsQuerySchema = z
   .meta({ id: 'ListLeadsQuery' });
 export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
 
+export const leadCountsQuerySchema = z
+  .object({
+    q: z.string().trim().min(1).max(120).optional(),
+  })
+  .meta({ id: 'LeadCountsQuery' });
+export type LeadCountsQuery = z.infer<typeof leadCountsQuerySchema>;
+
 export const leadListItemSchema = z
   .object({
     id: z.uuid(),
@@ -50,6 +57,7 @@ export const leadDetailResponseSchema = leadListItemSchema
   .extend({
     referredProjectId: z.uuid().nullable(),
     message: z.string().nullable(),
+    notes: z.string().nullable(),
     source: z.string(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -73,9 +81,30 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 
 export const updateLeadSchema = z
   .object({
-    status: leadStatus,
+    status: leadStatus.optional(),
+    notes: z
+      .string()
+      .trim()
+      .max(2000)
+      .nullable()
+      .optional()
+      .transform((value) => (value === '' ? null : value)),
+  })
+  .refine((input) => input.status !== undefined || input.notes !== undefined, {
+    message: 'At least one field is required',
   })
   .meta({ id: 'UpdateLead' });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
+export const leadCountsResponseSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    new: z.number().int().nonnegative(),
+    contacted: z.number().int().nonnegative(),
+    closed: z.number().int().nonnegative(),
+    spam: z.number().int().nonnegative(),
+  })
+  .meta({ id: 'LeadCountsResponse' });
+export type LeadCountsResponse = z.infer<typeof leadCountsResponseSchema>;
 
 export const leadIdParamSchema = z.object({ id: z.uuid() }).meta({ id: 'LeadIdParam' });

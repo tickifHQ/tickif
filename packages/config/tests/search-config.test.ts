@@ -9,6 +9,7 @@ const productionEnvironment = {
   R2_ACCESS_KEY_ID: 'r2-access-key',
   R2_SECRET_ACCESS_KEY: 'r2-secret-key',
   R2_BUCKET: 'tickif-media',
+  RESEND_API_KEY: 'resend-production-key',
 } satisfies NodeJS.ProcessEnv;
 
 describe('Typesense environment configuration', () => {
