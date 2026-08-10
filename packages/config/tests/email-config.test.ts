@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseConfig } from '../src/index.js';
+import { assertProductionEmailConfig, parseConfig } from '../src/index.js';
 
 const productionEnvironment = {
   NODE_ENV: 'production',
@@ -13,34 +13,53 @@ const productionEnvironment = {
 
 describe('email environment configuration', () => {
   it('requires an explicit Resend API key in production', () => {
-    expect(() => parseConfig(productionEnvironment)).toThrow('RESEND_API_KEY');
+    expect(() => assertProductionEmailConfig(productionEnvironment)).toThrow(
+      'RESEND_API_KEY: required when NODE_ENV=production',
+    );
     expect(() =>
-      parseConfig({
+      assertProductionEmailConfig({
         ...productionEnvironment,
         RESEND_API_KEY: '   ',
+        EMAIL_FROM: 'Tickif <hello@tickif.com>',
       }),
-    ).toThrow('RESEND_API_KEY');
+    ).toThrow('RESEND_API_KEY: required when NODE_ENV=production');
   });
 
   it('accepts explicit Resend credentials in production', () => {
-    const parsed = parseConfig({
+    const environment = {
       ...productionEnvironment,
       RESEND_API_KEY: 'resend-production-key',
       EMAIL_FROM: 'Tickif <hello@tickif.com>',
-    });
+    };
+    const parsed = parseConfig(environment);
 
+    expect(() => assertProductionEmailConfig(environment)).not.toThrow();
     expect(parsed.RESEND_API_KEY).toBe('resend-production-key');
     expect(parsed.EMAIL_FROM).toBe('Tickif <hello@tickif.com>');
   });
 
-  it('rejects an empty sender value', () => {
+  it('rejects missing, malformed, and placeholder production senders', () => {
     expect(() =>
-      parseConfig({
+      assertProductionEmailConfig({
         ...productionEnvironment,
         RESEND_API_KEY: 'resend-production-key',
         EMAIL_FROM: '   ',
       }),
-    ).toThrow('EMAIL_FROM');
+    ).toThrow('EMAIL_FROM: required when NODE_ENV=production');
+    expect(() =>
+      assertProductionEmailConfig({
+        ...productionEnvironment,
+        RESEND_API_KEY: 'resend-production-key',
+        EMAIL_FROM: 'noreply',
+      }),
+    ).toThrow('EMAIL_FROM: must be an email address');
+    expect(() =>
+      assertProductionEmailConfig({
+        ...productionEnvironment,
+        RESEND_API_KEY: 'resend-production-key',
+        EMAIL_FROM: 'Tickif <noreply@tickif.com>',
+      }),
+    ).toThrow('EMAIL_FROM: must not use the checked-in placeholder in production');
   });
 
   it('preserves the credential-free development fallback', () => {
@@ -48,9 +67,14 @@ describe('email environment configuration', () => {
       NODE_ENV: 'development',
       BETTER_AUTH_SECRET: 'development-auth-secret',
       BETTER_AUTH_URL: 'http://localhost:3001',
+      RESEND_API_KEY: '',
     });
 
     expect(parsed.RESEND_API_KEY).toBeUndefined();
     expect(parsed.EMAIL_FROM).toBe('Tickif <noreply@tickif.com>');
+  });
+
+  it('does not require email credentials in production processes that do not send email', () => {
+    expect(() => parseConfig(productionEnvironment)).not.toThrow();
   });
 });

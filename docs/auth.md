@@ -79,8 +79,9 @@ configured via `signUpOnVerification` in the plugin options.
 
 Auth emails and organization invitations are delivered through Resend. Production
 requires `RESEND_API_KEY`; `EMAIL_FROM` must use a sender or domain verified in the
-same Resend account. `@repo/config` validates this at startup so a deployment does
-not discover a missing credential on its first email.
+same Resend account. The auth package validates both at startup so a deployment
+does not discover a missing credential on its first email. It also rejects the
+checked-in sender placeholder in production.
 
 Development and test environments may omit the key. In that mode the email sender
 logs only recipient and subject metadata, never the HTML body or any OTP content.

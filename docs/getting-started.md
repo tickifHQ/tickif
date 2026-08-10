@@ -58,8 +58,9 @@ in the deployment secrets manager, never in the repository:
 | SMS           | Novu          | `SMS_PROVIDER=novu`, `NOVU_SECRET_KEY`, `NOVU_OTP_WORKFLOW_ID`, and `NOVU_BOOKING_WORKFLOW_ID`       |
 | Media storage | Cloudflare R2 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and either `R2_ACCOUNT_ID` or `R2_ENDPOINT` |
 
-`@repo/config` fails production startup when required Resend or R2 values are
-missing, and when a deployment selects Novu without its required values.
+The auth process fails production startup when required Resend values are missing,
+while `@repo/config` enforces R2 and selected Novu requirements globally. Worker
+and migration processes that do not send email do not need the Resend secret.
 Development can omit Resend and Novu credentials: email logs metadata only and
 SMS uses the console fallback. Production never falls back to console delivery.
 
