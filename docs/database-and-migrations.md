@@ -97,7 +97,7 @@ One-way, expand/contract migration that rebuilds `project_image` for the media p
   `ORDER BY`. On a large table, run the DROP/CREATE INDEX `CONCURRENTLY` out-of-band for the
   same reason as 0005.
 
-### 0030 — interaction-event retention and daily uniqueness
+### 0032 — interaction-event retention and daily uniqueness
 
 - `anonymous_id` is a pseudonymous identifier and must be handled as personal data. It
   must never contain a session token, device fingerprint, IP address, or user-agent value.
@@ -108,6 +108,15 @@ One-way, expand/contract migration that rebuilds `project_image` for the media p
 - Authenticated views are unique per actor, target, event type, and UTC day. The API still
   accepts an `event_key` for transport retry idempotency, while the two partial daily-unique
   indexes prevent a new client UUID from inflating the same daily impression.
+
+### 0034 — public project recommendation indexes
+
+- Adds three partial ordering indexes to the existing `project` table for the designer,
+  budget-band, and city recommendation groups.
+- Drizzle creates these indexes non-concurrently inside the migration transaction. Apply
+  this migration before the table is populated or during a write-maintenance window. For
+  a large/persistent table, omit the three index statements from the deploy migration and
+  build the equivalent indexes with `CREATE INDEX CONCURRENTLY` out-of-band.
 
 ## Querying
 

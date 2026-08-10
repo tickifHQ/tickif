@@ -682,7 +682,7 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       request: { params: projectSlugParamSchema },
       responses: {
         200: {
-          description: 'Published project with rooms, gallery, and designer summary',
+          description: 'Published project read model with rooms, gallery, designer, and recommendations',
           content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
