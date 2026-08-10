@@ -220,18 +220,40 @@ export type Session = Auth['$Infer']['Session'];
 export type { PlatformRole } from './permissions.js';
 
 /**
+ * Resolve the current better-auth session (user + session) from request headers, keeping
+ * the response headers better-auth produced along the way.
+ *
+ * Those headers matter: on a read that reaches the database better-auth re-issues the
+ * `session_data` cache cookie (and, when the session is gone, expires the session cookies).
+ * A caller that drops them leaves the client holding its old — possibly stale — blob for the
+ * rest of the ≤5-min TTL, so anything that forces a fresh read should forward these onward.
+ *
+ * `disableCookieCache` forces that fresh DB read instead of the ≤5-min cookie cache, so callers
+ * that must see server-side revocation/expiry immediately (e.g. after logout, or before an
+ * authorization decision) aren't served a stale cached copy.
+ */
+export async function getSessionWithHeaders(
+  headers: Headers,
+  opts?: { disableCookieCache?: boolean },
+) {
+  const { headers: responseHeaders, response } = await auth.api.getSession({
+    headers,
+    query: opts?.disableCookieCache ? { disableCookieCache: true } : undefined,
+    returnHeaders: true,
+  });
+  return { session: response, headers: responseHeaders };
+}
+
+/**
  * Resolve the current better-auth session (user + session) from request headers.
  * Returns null when unauthenticated. The one place app code should read sessions.
  *
- * `disableCookieCache` forces a fresh DB read instead of the ≤5-min cookie cache, so callers
- * that must see server-side revocation/expiry immediately (e.g. after logout) aren't served a
- * stale cached copy.
+ * Discards better-auth's response headers — use `getSessionWithHeaders` when the refreshed
+ * `session_data` cookie must reach the client.
  */
-export function getSession(headers: Headers, opts?: { disableCookieCache?: boolean }) {
-  return auth.api.getSession({
-    headers,
-    query: opts?.disableCookieCache ? { disableCookieCache: true } : undefined,
-  });
+export async function getSession(headers: Headers, opts?: { disableCookieCache?: boolean }) {
+  const { session } = await getSessionWithHeaders(headers, opts);
+  return session;
 }
 
 /**
