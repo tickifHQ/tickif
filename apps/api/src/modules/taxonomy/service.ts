@@ -12,15 +12,18 @@ import { taxonomyRepository } from './repository.js';
 
 export const taxonomyService = {
   async list(
-    kind: TaxonomyKind | undefined,
+    kind: string | undefined,
     parentId: string | undefined,
   ): Promise<ListTaxonomyResponse> {
-    if (!kind) return { terms: [] };
+    const parsedKind = taxonomyKindSchema.safeParse(kind);
+    if (!parsedKind.success) return { terms: [] };
+    const validKind: TaxonomyKind = parsedKind.data;
 
     // parentId is only meaningful for locality — ignore it for other kinds
-    const effectiveParentId = kind === taxonomyKindSchema.enum.locality ? parentId : undefined;
+    const effectiveParentId =
+      validKind === taxonomyKindSchema.enum.locality ? parentId : undefined;
 
-    const terms = await taxonomyRepository.listByKind(kind, effectiveParentId);
+    const terms = await taxonomyRepository.listByKind(validKind, effectiveParentId);
     return { terms };
   },
 };

@@ -23,7 +23,7 @@ const listRoute = createRoute({
       content: { 'application/json': { schema: listTaxonomyResponseSchema } },
     },
     422: {
-      description: 'Invalid taxonomy kind or parentId format',
+      description: 'Invalid parentId format',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },

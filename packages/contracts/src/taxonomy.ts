@@ -43,7 +43,9 @@ export type ListTaxonomyResponse = z.infer<typeof listTaxonomyResponseSchema>;
 /** Query params for GET /api/taxonomy/terms */
 export const listTaxonomyQuerySchema = z
   .object({
-    kind: taxonomyKindSchema.optional(),
+    // Unknown kinds intentionally degrade to an empty result for older clients.
+    // The service narrows this string with taxonomyKindSchema before querying.
+    kind: z.string().optional(),
     // UUID format always validated regardless of kind — a malformed parentId is
     // rejected even for non-locality kinds where it's silently ignored at query time.
     parentId: z.uuid().optional(),

@@ -69,9 +69,11 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
 
   // --- Unknown kind ---
 
-  it('rejects an unknown kind', async () => {
+  it('returns empty array for unknown kind', async () => {
     const res = await get('/api/taxonomy/terms?kind=garbage');
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.terms).toEqual([]);
   });
 
   // --- Missing kind ---
@@ -169,7 +171,7 @@ describe('GET /api/taxonomy/terms (E-31)', () => {
   });
 
   it('includes short Cache-Control for empty results', async () => {
-    const res = await get('/api/taxonomy/terms?kind=bhk');
+    const res = await get('/api/taxonomy/terms?kind=garbage');
     expect(res.headers.get('cache-control')).toBe('public, max-age=60');
   });
 

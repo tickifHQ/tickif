@@ -7,10 +7,10 @@ import {
 } from '../src';
 
 describe('profile and taxonomy contracts', () => {
-  it('shares the complete taxonomy enum with query and profile validation', () => {
+  it('shares the complete taxonomy enum while keeping public queries forward-compatible', () => {
     expect(taxonomyKindSchema.options).toContain(taxonomyKindSchema.enum.city);
     expect(listTaxonomyQuerySchema.safeParse({ kind: 'city' }).success).toBe(true);
-    expect(listTaxonomyQuerySchema.safeParse({ kind: 'citys' }).success).toBe(false);
+    expect(listTaxonomyQuerySchema.safeParse({ kind: 'future_kind' }).success).toBe(true);
   });
 
   it('uses shared footprint limits and user-facing validation messages', () => {
