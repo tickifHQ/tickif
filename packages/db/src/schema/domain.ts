@@ -143,6 +143,31 @@ export const entityTypeEnum = pgEnum('entity_type', ['individual', 'company']);
 // Profile lifecycle
 export const profileStatusEnum = pgEnum('profile_status', ['draft', 'active', 'suspended']);
 
+/** Demand-side profile data that is not owned by Better Auth. */
+export const visitorProfile = pgTable(
+  'visitor_profile',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    address: text('address'),
+    whatsappNumber: text('whatsapp_number'),
+    onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check(
+      'visitor_profile_address_length_check',
+      sql`${t.address} IS NULL OR char_length(trim(${t.address})) BETWEEN 1 AND 300`,
+    ),
+    check(
+      'visitor_profile_whatsapp_e164_check',
+      sql`${t.whatsappNumber} IS NULL OR ${t.whatsappNumber} ~ '^[+][1-9][0-9]{7,14}$'`,
+    ),
+  ],
+);
+
 export const designerProfile = pgTable(
   'designer_profile',
   {
