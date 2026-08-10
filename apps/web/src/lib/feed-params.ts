@@ -23,10 +23,19 @@ export type FeedFacetKey =
   | 'roomSlugs'
   | 'themes';
 
+type FeedTaxonomyKind =
+  | 'city'
+  | 'bhk'
+  | 'property_type'
+  | 'scope'
+  | 'budget_band'
+  | 'room'
+  | 'theme';
+
 export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   key: FeedFilterKey;
   apiKey: FeedFacetKey;
-  kind: string;
+  kind: FeedTaxonomyKind;
   label: string;
 }> = [
   { key: 'city', apiKey: 'citySlug', kind: 'city', label: 'City' },
@@ -130,10 +139,10 @@ export function toDiscoveryFeedFilters(state: FeedFilterState): Partial<Discover
 export function toFeedProjectsFilters(state: FeedFilterState): Partial<FeedProjectsQuery> {
   const filters: Partial<FeedProjectsQuery> = {};
 
-  for (const key of FEED_FILTER_KEYS) {
-    const values = state[key];
+  for (const facet of FEED_FACET_DEFINITIONS) {
+    const values = state[facet.key];
     if (values.length === 0) continue;
-    filters[key] = values.length === 1 ? values[0] : values;
+    filters[facet.apiKey] = values.length === 1 ? values[0] : values;
   }
 
   return filters;

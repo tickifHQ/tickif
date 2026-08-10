@@ -196,6 +196,7 @@ describe('discoveryRepository.searchFeed', () => {
       sort_by: 'featuredAt:desc,publishedAt:desc',
       facet_by:
         'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
+      max_facet_values: 250,
       page: 2,
       per_page: 12,
       include_fields:

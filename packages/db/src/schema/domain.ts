@@ -291,6 +291,8 @@ export const project = pgTable(
     index('project_property_type_idx').on(t.propertyTypeSlug),
     index('project_property_subtype_idx').on(t.propertySubtypeSlug),
     index('project_scope_idx').on(t.scopeSlug),
+    index('project_bhk_idx').on(t.bhkSlug),
+    index('project_budget_band_idx').on(t.budgetBandSlug),
     index('project_reviewed_by_idx').on(t.reviewedBy),
     index('project_featured_at_idx').on(t.featuredAt),
     index('project_submitted_moderation_queue_idx')
@@ -858,6 +860,7 @@ export const projectImage = pgTable(
   (t) => [
     index('project_image_project_idx').on(t.projectId),
     index('project_image_room_idx').on(t.roomId),
+    index('project_image_theme_slugs_gin').using('gin', t.themeSlugs),
     // Covers the list query's ORDER BY (project_id, sort_order, created_at) so it's an index scan.
     index('project_image_project_sort_idx').on(t.projectId, t.sortOrder, t.createdAt),
     check(

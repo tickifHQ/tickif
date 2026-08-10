@@ -1039,13 +1039,13 @@ export const projectsService = {
   async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
     const { page, limit } = query;
     const filters: PublishedFeedFilters = {
-      city: query.city,
-      bhk: query.bhk,
-      propertyType: query.propertyType,
-      scope: query.scope,
-      budgetBand: query.budgetBand,
-      room: query.room,
-      theme: query.theme,
+      citySlug: query.citySlug,
+      bhkSlug: query.bhkSlug,
+      propertyTypeSlug: query.propertyTypeSlug,
+      scopeSlug: query.scopeSlug,
+      budgetBandSlug: query.budgetBandSlug,
+      roomSlugs: query.roomSlugs,
+      themes: query.themes,
     };
     const feedRequest: {
       limit: number;

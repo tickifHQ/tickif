@@ -47,8 +47,8 @@ describe('feed params', () => {
     );
 
     expect(filters).toEqual({
-      city: ['mumbai', 'pune'],
-      propertyType: 'residential',
+      citySlug: ['mumbai', 'pune'],
+      propertyTypeSlug: 'residential',
     });
   });
 });

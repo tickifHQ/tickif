@@ -335,13 +335,13 @@ export const feedProjectsQuerySchema = z
     // huge OFFSET onto Postgres (sort + discard the whole published set) per request.
     page: z.coerce.number().int().min(1).max(10000).default(1),
     limit: z.coerce.number().int().min(1).max(30).default(12),
-    city: feedTaxonomySlugOrArray.optional(),
-    bhk: feedTaxonomySlugOrArray.optional(),
-    propertyType: feedTaxonomySlugOrArray.optional(),
-    scope: feedTaxonomySlugOrArray.optional(),
-    budgetBand: feedTaxonomySlugOrArray.optional(),
-    room: feedTaxonomySlugOrArray.optional(),
-    theme: feedTaxonomySlugOrArray.optional(),
+    citySlug: feedTaxonomySlugOrArray.optional(),
+    bhkSlug: feedTaxonomySlugOrArray.optional(),
+    propertyTypeSlug: feedTaxonomySlugOrArray.optional(),
+    scopeSlug: feedTaxonomySlugOrArray.optional(),
+    budgetBandSlug: feedTaxonomySlugOrArray.optional(),
+    roomSlugs: feedTaxonomySlugOrArray.optional(),
+    themes: feedTaxonomySlugOrArray.optional(),
   })
   .meta({ id: 'FeedProjectsQuery' });
 export type FeedProjectsQuery = z.infer<typeof feedProjectsQuerySchema>;

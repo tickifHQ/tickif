@@ -19,7 +19,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { DiscoveryFeedResponse, Derivative } from '@repo/contracts';
 import { db, schema } from '@repo/db';
-import { makeDesigner, makeProject, makeProjectImage, makeTaxonomy } from '@repo/db/testing';
+import {
+  makeDesigner,
+  makeProject,
+  makeProjectImage,
+  makeProjectRoom,
+  makeTaxonomy,
+} from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,11 +88,26 @@ async function attachReadyCover(projectId: string) {
     width: 1920,
     height: 1280,
     derivatives: [
-      { variant: 'small', format: 'webp', key: `derivatives/${projectId}/small.webp`, width: 640, height: 427 },
-      { variant: 'thumb', format: 'webp', key: `derivatives/${projectId}/thumb.webp`, width: 320, height: 213 },
+      {
+        variant: 'small',
+        format: 'webp',
+        key: `derivatives/${projectId}/small.webp`,
+        width: 640,
+        height: 427,
+      },
+      {
+        variant: 'thumb',
+        format: 'webp',
+        key: `derivatives/${projectId}/thumb.webp`,
+        width: 320,
+        height: 213,
+      },
     ] as Derivative[],
   });
-  await db.update(schema.project).set({ coverImageId: cover.id }).where(eq(schema.project.id, projectId));
+  await db
+    .update(schema.project)
+    .set({ coverImageId: cover.id })
+    .where(eq(schema.project.id, projectId));
   return cover;
 }
 
@@ -105,15 +126,19 @@ async function getFeed(query = '') {
 }
 
 /** Create a Typesense search hit fixture matching ProjectSearchDocument. */
-function makeTypesenseHit(project: {
-  id: string;
-  slug: string;
-  title: string;
-  citySlug: string | null;
-  bhkSlug: string | null;
-  featuredAt: Date | null;
-  publishedAt: Date | null;
-}, designer: { displayName: string; slug: string | null; avgRating: string; reviewCount: number }, coverKey?: string) {
+function makeTypesenseHit(
+  project: {
+    id: string;
+    slug: string;
+    title: string;
+    citySlug: string | null;
+    bhkSlug: string | null;
+    featuredAt: Date | null;
+    publishedAt: Date | null;
+  },
+  designer: { displayName: string; slug: string | null; avgRating: string; reviewCount: number },
+  coverKey?: string,
+) {
   return {
     document: {
       id: project.id,
@@ -190,19 +215,22 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
     it('returns search results from Typesense with source: "search"', async () => {
       const designer = await activeDesigner({ displayName: 'Search Studio' });
-      const org = await db.select({ slug: schema.organization.slug })
+      const org = await db
+        .select({ slug: schema.organization.slug })
         .from(schema.organization)
         .where(eq(schema.organization.id, designer.orgId))
         .limit(1);
       const project = await makePublishedProject(designer.id, { title: 'Typesense Project' });
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: org[0]?.slug ?? null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: org[0]?.slug ?? null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -223,12 +251,17 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id, { citySlug: 'delhi' });
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit({ ...project, citySlug: 'delhi' }, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(
+            { ...project, citySlug: 'delhi' },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
+        ],
         found: 1,
       });
 
@@ -248,12 +281,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -271,12 +306,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -294,12 +331,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 50,
       });
 
@@ -331,18 +370,24 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       // Typesense automatically sorts nulls last for optional numeric fields
       mockSearchClient.mockResolvedValue({
         hits: [
-          makeTypesenseHit({ ...featured, featuredAt: now }, {
-            displayName: designer.displayName!,
-            slug: null,
-            avgRating: designer.avgRating!,
-            reviewCount: designer.reviewCount,
-          }),
-          makeTypesenseHit({ ...notFeatured, featuredAt: null }, {
-            displayName: designer.displayName!,
-            slug: null,
-            avgRating: designer.avgRating!,
-            reviewCount: designer.reviewCount,
-          }),
+          makeTypesenseHit(
+            { ...featured, featuredAt: now },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
+          makeTypesenseHit(
+            { ...notFeatured, featuredAt: null },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
         ],
         found: 2,
       });
@@ -399,7 +444,11 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
     });
 
     it('produces response shape matching Typesense path', async () => {
-      const designer = await activeDesigner({ displayName: 'Shape Test Studio', avgRating: '4.20', reviewCount: 5 });
+      const designer = await activeDesigner({
+        displayName: 'Shape Test Studio',
+        avgRating: '4.20',
+        reviewCount: 5,
+      });
       const project = await makePublishedProject(designer.id, { title: 'Shape Test' });
       await attachReadyCover(project.id);
 
@@ -593,10 +642,87 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const { body } = await getFeed(`?citySlug=${uniqueCity}`);
 
       expect(body.source).toBe('db');
-      expect(body.items.every((item) => {
-        // All items should match our filter
-        return item.city === 'Filter City';
-      })).toBe(true);
+      expect(
+        body.items.every((item) => {
+          // All items should match our filter
+          return item.city === 'Filter City';
+        }),
+      ).toBe(true);
+    });
+
+    it('filters by roomSlugs with the real Postgres fallback query', async () => {
+      const room = await makeTaxonomy({
+        kind: 'room',
+        slug: 'living-room',
+        label: 'Living Room',
+      });
+      const designer = await activeDesigner();
+      const matching = await makePublishedProject(designer.id, {
+        title: 'Fallback Living Room',
+      });
+      await makePublishedProject(designer.id, { title: 'Fallback Bedroom' });
+      await makeProjectRoom({ projectId: matching.id, roomTypeId: room.id });
+
+      const { res, body } = await getFeed('?roomSlugs=living-room');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Living Room']);
+    });
+
+    it('filters by themes with the real Postgres fallback query', async () => {
+      const designer = await activeDesigner();
+      const matching = await makePublishedProject(designer.id, { title: 'Fallback Warm' });
+      const nonMatching = await makePublishedProject(designer.id, {
+        title: 'Fallback Minimalist',
+      });
+      await makeProjectImage({
+        projectId: matching.id,
+        status: 'ready',
+        themeSlugs: ['warm'],
+      });
+      await makeProjectImage({
+        projectId: nonMatching.id,
+        status: 'ready',
+        themeSlugs: ['minimalist'],
+      });
+      await makeProjectImage({
+        projectId: nonMatching.id,
+        status: 'processing',
+        themeSlugs: ['warm'],
+      });
+
+      const { res, body } = await getFeed('?themes=warm');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Warm']);
+    });
+
+    it('combines different fallback facets with AND semantics', async () => {
+      const designer = await activeDesigner();
+      await makePublishedProject(designer.id, {
+        title: 'Fallback Mumbai 2 BHK',
+        citySlug: 'mumbai',
+        bhkSlug: '2-bhk',
+      });
+      await makePublishedProject(designer.id, {
+        title: 'Fallback Mumbai 3 BHK',
+        citySlug: 'mumbai',
+        bhkSlug: '3-bhk',
+      });
+
+      const { res, body } = await getFeed('?citySlug=mumbai&bhkSlug=2-bhk');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Mumbai 2 BHK']);
+    });
+
+    it('rejects malformed taxonomy slugs at the public endpoint boundary', async () => {
+      const { res } = await getFeed('?themes=not%20valid');
+
+      expect(res.status).toBe(422);
     });
 
     it('sorts by featured with NULLS LAST in Postgres', async () => {
@@ -638,7 +764,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
     it('excludes projects from non-active designers', async () => {
       const activeDesignerInstance = await activeDesigner({ displayName: 'Active Designer' });
-      const suspendedDesigner = await makeDesigner({ status: 'suspended', displayName: 'Suspended Designer' });
+      const suspendedDesigner = await makeDesigner({
+        status: 'suspended',
+        displayName: 'Suspended Designer',
+      });
 
       const uniqueCity = `status-filter-city-${Date.now()}`;
       await makeTaxonomy({ kind: 'city', slug: uniqueCity, label: 'Status Filter City' });

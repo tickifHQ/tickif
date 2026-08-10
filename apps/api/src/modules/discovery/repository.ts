@@ -1,14 +1,13 @@
 import { searchClient, searchCollectionName, type ProjectSearchDocument } from '@repo/search';
-import { db, schema, eq, and, or, inArray, sql } from '@repo/db';
-import { exists } from 'drizzle-orm';
+import { db, schema, eq, and } from '@repo/db';
 import { alias } from 'drizzle-orm/pg-core';
-import type { SQL } from 'drizzle-orm';
 import {
   DISCOVERY_FILTER_FIELDS,
   type DiscoveryFeedFilters,
   type DiscoverySortPostgres,
 } from './constants.js';
 import type { Derivative } from '@repo/contracts';
+import { projectFeedFilterClauses } from '../projects/feed-filters.repository.js';
 
 /**
  * Discovery feed repository — the ONLY layer importing Drizzle/Typesense.
@@ -96,94 +95,6 @@ const TYPESENSE_INCLUDE_FIELDS = [
 // Helper Functions
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Build Postgres WHERE clauses from filter parameters.
- * Applies inArray (OR logic) for multi-value filters.
- * Matches Typesense filter semantics (Requirement 4.5).
- */
-function buildPostgresFilters(filters: DiscoveryFeedFilters): SQL[] {
-  const clauses: SQL[] = [];
-
-  if (filters.citySlug) {
-    const values = Array.isArray(filters.citySlug) ? filters.citySlug : [filters.citySlug];
-    clauses.push(inArray(schema.project.citySlug, values));
-  }
-  if (filters.localitySlug) {
-    const values = Array.isArray(filters.localitySlug)
-      ? filters.localitySlug
-      : [filters.localitySlug];
-    clauses.push(inArray(schema.project.localitySlug, values));
-  }
-  if (filters.propertyTypeSlug) {
-    const values = Array.isArray(filters.propertyTypeSlug)
-      ? filters.propertyTypeSlug
-      : [filters.propertyTypeSlug];
-    clauses.push(inArray(schema.project.propertyTypeSlug, values));
-  }
-  if (filters.propertySubtypeSlug) {
-    const values = Array.isArray(filters.propertySubtypeSlug)
-      ? filters.propertySubtypeSlug
-      : [filters.propertySubtypeSlug];
-    clauses.push(inArray(schema.project.propertySubtypeSlug, values));
-  }
-  if (filters.scopeSlug) {
-    const values = Array.isArray(filters.scopeSlug) ? filters.scopeSlug : [filters.scopeSlug];
-    clauses.push(inArray(schema.project.scopeSlug, values));
-  }
-  if (filters.bhkSlug) {
-    const values = Array.isArray(filters.bhkSlug) ? filters.bhkSlug : [filters.bhkSlug];
-    clauses.push(inArray(schema.project.bhkSlug, values));
-  }
-  if (filters.budgetBandSlug) {
-    const values = Array.isArray(filters.budgetBandSlug)
-      ? filters.budgetBandSlug
-      : [filters.budgetBandSlug];
-    clauses.push(inArray(schema.project.budgetBandSlug, values));
-  }
-  if (filters.roomSlugs) {
-    const values = Array.isArray(filters.roomSlugs) ? filters.roomSlugs : [filters.roomSlugs];
-    clauses.push(
-      exists(
-        db
-          .select({ id: schema.projectRoom.id })
-          .from(schema.projectRoom)
-          .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
-          .where(
-            and(
-              eq(schema.projectRoom.projectId, schema.project.id),
-              eq(schema.taxonomy.kind, 'room'),
-              inArray(schema.taxonomy.slug, values),
-            ),
-          ),
-      ),
-    );
-  }
-  if (filters.themes) {
-    const values = Array.isArray(filters.themes) ? filters.themes : [filters.themes];
-    clauses.push(
-      exists(
-        db
-          .select({ id: schema.projectImage.id })
-          .from(schema.projectImage)
-          .where(
-            and(
-              eq(schema.projectImage.projectId, schema.project.id),
-              eq(schema.projectImage.status, 'ready'),
-              or(
-                ...values.map(
-                  (theme) =>
-                    sql`${schema.projectImage.themeSlugs} @> ${JSON.stringify([theme])}::jsonb`,
-                ),
-              ),
-            ),
-          ),
-      ),
-    );
-  }
-
-  return clauses;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +116,7 @@ export const discoveryRepository = {
         filter_by: params.filterBy || undefined,
         sort_by: params.sortBy,
         facet_by: DISCOVERY_FILTER_FIELDS.join(','),
+        max_facet_values: 250,
         page: params.page,
         per_page: params.perPage,
         include_fields: TYPESENSE_INCLUDE_FIELDS,
@@ -229,7 +141,7 @@ export const discoveryRepository = {
   async listFeedFallback(params: ListFeedFallbackParams): Promise<PostgresListResult> {
     const cover = alias(schema.projectImage, 'cover');
 
-    const filters = buildPostgresFilters(params.filterBy);
+    const filters = projectFeedFilterClauses(params.filterBy);
     const where = and(
       eq(schema.project.status, 'published'),
       eq(schema.designerProfile.status, 'active'),
@@ -269,6 +181,8 @@ function extractFacetDistribution(
     counts: Array<{ value: string; count: number }>;
   }>,
 ): Record<string, Record<string, number>> {
+  // Typesense omits zero-count facet values; consumers must treat a missing
+  // value inside a present facet bucket as zero.
   if (!facetCounts) return {};
   return Object.fromEntries(
     facetCounts.map(({ field_name, counts }) => [

@@ -239,6 +239,13 @@
       "when": 1786376635598,
       "tag": "0033_green_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786379444503,
+      "tag": "0034_tense_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }
