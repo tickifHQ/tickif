@@ -165,7 +165,7 @@ export const discoveryService: DiscoveryService = {
         let fallback: ProjectSearchFallback = 'none';
         const relaxedFilters: string[] = [];
 
-        if (q && result.hits.length === 0) {
+        if (q && page === 1 && result.hits.length === 0) {
           for (const filterKey of FALLBACK_DROP_ORDER) {
             if (mutableFilters[filterKey] === undefined) continue;
             delete mutableFilters[filterKey];
@@ -184,7 +184,7 @@ export const discoveryService: DiscoveryService = {
           }
         }
 
-        if (q && result.hits.length === 0) {
+        if (q && page === 1 && result.hits.length === 0) {
           const citySlug = firstValue(filters.citySlug);
           if (citySlug) {
             const recent = await discoveryRepository.listFeedFallback({
@@ -237,10 +237,9 @@ export const discoveryService: DiscoveryService = {
     // ─────────────────────────────────────────────────────────────────────────
     // Postgres Fallback Path
     // ─────────────────────────────────────────────────────────────────────────
-    const mutableFilters: DiscoveryFeedFilters = { ...filters };
     let result = await discoveryRepository.listFeedFallback({
       q,
-      filterBy: mutableFilters,
+      filterBy: filters,
       sortBy: SORT_POSTGRES[sort],
       limit,
       offset,
@@ -248,26 +247,7 @@ export const discoveryService: DiscoveryService = {
     let fallback: ProjectSearchFallback = 'none';
     const relaxedFilters: string[] = [];
 
-    if (q && result.rows.length === 0) {
-      for (const filterKey of FALLBACK_DROP_ORDER) {
-        if (mutableFilters[filterKey] === undefined) continue;
-        delete mutableFilters[filterKey];
-        relaxedFilters.push(filterKey);
-        result = await discoveryRepository.listFeedFallback({
-          q,
-          filterBy: mutableFilters,
-          sortBy: SORT_POSTGRES[sort],
-          limit,
-          offset,
-        });
-        if (result.rows.length > 0) {
-          fallback = 'relaxed';
-          break;
-        }
-      }
-    }
-
-    if (q && result.rows.length === 0) {
+    if (q && page === 1 && result.rows.length === 0) {
       const citySlug = firstValue(filters.citySlug);
       if (citySlug) {
         result = await discoveryRepository.listFeedFallback({

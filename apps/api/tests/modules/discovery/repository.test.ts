@@ -196,7 +196,7 @@ describe('discoveryRepository.searchFeed', () => {
       q: 'calm home',
       query_by: 'title',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
-      sort_by: 'featuredAt:desc,publishedAt:desc',
+      sort_by: '_text_match:desc,featuredAt:desc,publishedAt:desc',
       facet_by:
         'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
       page: 2,
@@ -204,6 +204,21 @@ describe('discoveryRepository.searchFeed', () => {
       include_fields:
         'id,slug,title,designerSlug,designerName,citySlug,localitySlug,bhkSlug,budgetBandSlug,themes,coverImageKey,coverImageId,coverImageWidth,coverImageHeight,avgRating,reviewCount',
     });
+  });
+
+  it('keeps the configured sort unchanged when there is no text query', async () => {
+    mockSearch.mockResolvedValue(mockSearchResponse([], 0));
+
+    await discoveryRepository.searchFeed({
+      filterBy: '',
+      sortBy: 'featuredAt:desc,publishedAt:desc',
+      page: 1,
+      perPage: 24,
+    });
+
+    expect(mockSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ sort_by: 'featuredAt:desc,publishedAt:desc' }),
+    );
   });
 
   it('omits filter_by when empty string provided', async () => {

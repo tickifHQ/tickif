@@ -217,6 +217,7 @@ export const discoveryRepository = {
    */
   async searchFeed(params: SearchFeedParams): Promise<TypesenseSearchResult> {
     const client = searchClient();
+    const sortBy = params.q ? `_text_match:desc,${params.sortBy}` : params.sortBy;
     const result = await client
       .collections<ProjectSearchDocument>(searchCollectionName('projects'))
       .documents()
@@ -224,7 +225,7 @@ export const discoveryRepository = {
         q: params.q || '*',
         query_by: PROJECT_QUERY_BY.join(','),
         filter_by: params.filterBy || undefined,
-        sort_by: params.sortBy,
+        sort_by: sortBy,
         facet_by: DISCOVERY_FILTER_FIELDS.join(','),
         page: params.page,
         per_page: params.perPage,
@@ -257,7 +258,6 @@ export const discoveryRepository = {
       params.q
         ? or(
             ilike(schema.project.title, `%${escapeLikePattern(params.q)}%`),
-            ilike(schema.project.description, `%${escapeLikePattern(params.q)}%`),
             ilike(schema.designerProfile.displayName, `%${escapeLikePattern(params.q)}%`),
           )
         : undefined,

@@ -118,6 +118,28 @@ describe('discoveryService', () => {
     expect(discoveryRepository.searchFeed).toHaveBeenCalledTimes(2);
   });
 
+  it('does not relax or restart results when a later Typesense page is empty', async () => {
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 30 });
+
+    const result = await discoveryService.getFeed({
+      ...query,
+      q: 'loft',
+      page: 3,
+      citySlug: 'mumbai',
+      localitySlug: 'bandra',
+    });
+
+    expect(result).toMatchObject({
+      items: [],
+      page: 3,
+      hasMore: false,
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+    expect(discoveryRepository.searchFeed).toHaveBeenCalledTimes(1);
+    expect(discoveryRepository.listFeedFallback).not.toHaveBeenCalled();
+  });
+
   it('falls back to recent projects in the requested city after exhausted search', async () => {
     vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
@@ -140,6 +162,45 @@ describe('discoveryService', () => {
       fallback: 'none',
       relaxedFilters: [],
     });
+  });
+
+  it('runs one bounded Postgres search without filter relaxation', async () => {
+    vi.stubEnv('TYPESENSE_HOST', '');
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
+
+    const result = await discoveryService.getFeed({
+      ...query,
+      q: 'calm',
+      localitySlug: 'bandra',
+      budgetBandSlug: '40-60-lakh',
+    });
+
+    expect(result).toMatchObject({ items: [], fallback: 'none', relaxedFilters: [] });
+    expect(discoveryRepository.listFeedFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart an empty later Postgres page at offset zero', async () => {
+    vi.stubEnv('TYPESENSE_HOST', '');
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
+
+    const result = await discoveryService.getFeed({
+      ...query,
+      q: 'loft',
+      page: 3,
+      citySlug: 'mumbai',
+    });
+
+    expect(result).toMatchObject({
+      items: [],
+      page: 3,
+      hasMore: false,
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+    expect(discoveryRepository.listFeedFallback).toHaveBeenCalledTimes(1);
+    expect(discoveryRepository.listFeedFallback).toHaveBeenCalledWith(
+      expect.objectContaining({ offset: 48 }),
+    );
   });
 });
 
