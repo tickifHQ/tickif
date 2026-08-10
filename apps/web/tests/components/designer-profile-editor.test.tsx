@@ -177,7 +177,7 @@ describe('DesignerProfileEditor', () => {
     expect(await screen.findByText(/profile saved/i)).toBeInTheDocument();
     expect(screen.getByText('80% complete')).toBeInTheDocument();
     expect(mock.fetchProfileCompletion).toHaveBeenCalledOnce();
-    expect(mock.refresh).not.toHaveBeenCalled();
+    expect(mock.refresh).toHaveBeenCalledOnce();
   });
 
   it('normalizes bare website URLs before validating and saving them', async () => {

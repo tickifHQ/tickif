@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   PROFILE_FOOTPRINT_LIMITS,
+  PROFILE_STAFF_COUNT_MAX,
   listTaxonomyQuerySchema,
+  onboardDesignerSchema,
   taxonomyKindSchema,
   updateProfileSchema,
 } from '../src';
@@ -31,5 +33,22 @@ describe('profile and taxonomy contracts', () => {
       foundedYear: ['Enter a year from 1900 onward.'],
       cityIds: [`Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`],
     });
+  });
+
+  it('bounds staff count consistently for onboarding and profile updates', () => {
+    const staffCount = PROFILE_STAFF_COUNT_MAX + 1;
+    const update = updateProfileSchema.safeParse({ staffCount });
+    const onboarding = onboardDesignerSchema.safeParse({
+      entityType: 'individual',
+      userName: 'Designer Name',
+      staffCount,
+    });
+
+    expect(update.success).toBe(false);
+    expect(onboarding.success).toBe(false);
+    if (update.success) return;
+    expect(update.error.flatten().fieldErrors.staffCount).toEqual([
+      `Enter ${PROFILE_STAFF_COUNT_MAX} or fewer.`,
+    ]);
   });
 });

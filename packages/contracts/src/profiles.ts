@@ -13,6 +13,14 @@ export const PROFILE_FOOTPRINT_LIMITS = {
   theme: 10,
 } as const;
 
+export const PROFILE_STAFF_COUNT_MAX = 100_000;
+
+const profileStaffCountSchema = z
+  .number()
+  .int('Enter a whole number.')
+  .min(0, 'Enter 0 or more.')
+  .max(PROFILE_STAFF_COUNT_MAX, `Enter ${PROFILE_STAFF_COUNT_MAX} or fewer.`);
+
 /** A single onboarding checklist step. */
 export const completionStepSchema = z.object({
   key: z.string(),
@@ -75,7 +83,7 @@ export const onboardDesignerSchema = z
     youtubeHandle: z.string().trim().max(60).optional(),
     firmType: z.string().trim().max(60).optional(),
     foundedYear: z.number().int().min(1900).max(2100).optional(),
-    staffCount: z.number().int().min(0).optional(),
+    staffCount: profileStaffCountSchema.optional(),
     // Free-text address replaces cityIds in onboarding — city taxonomy linking via profile update.
     // Note: clients still sending cityIds will have it silently stripped (Zod default behavior).
     // The web onboarding UI ships in lockstep with this contract change.
@@ -278,7 +286,7 @@ export const updateProfileSchema = z.object({
     .max(2100, 'Enter a year no later than 2100.')
     .optional()
     .nullable(),
-  staffCount: z.number().int().min(0).optional().nullable(),
+  staffCount: profileStaffCountSchema.optional().nullable(),
   testimonialBannerEnabled: z.boolean().optional(),
   address: z
     .string()

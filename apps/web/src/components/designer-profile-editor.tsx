@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import {
   PROFILE_FOOTPRINT_LIMITS,
   designerEntityType,
@@ -257,6 +258,7 @@ export function DesignerProfileEditor({
   taxonomy: ProfileEditorTaxonomy;
   taxonomyError: string | null;
 }) {
+  const router = useRouter();
   const initialForm = useMemo(() => profileToForm(initialProfile), [initialProfile]);
   const [form, setForm] = useState<FormState>(() => initialForm);
   const [savedForm, setSavedForm] = useState<FormState>(() => initialForm);
@@ -302,6 +304,7 @@ export function DesignerProfileEditor({
         setSavedForm(serverForm);
         if (submittedRevision === formRevisionRef.current) setForm(serverForm);
         setSaveSuccess(true);
+        router.refresh();
 
         try {
           setCompletion(await fetchProfileCompletion());
