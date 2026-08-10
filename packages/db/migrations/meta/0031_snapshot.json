@@ -1,6 +1,6 @@
 {
-  "id": "a478bf67-80a9-49e3-a21a-25473b46beb9",
-  "prevId": "a80076a8-d1b3-4071-9678-3527355f8237",
+  "id": "296f66b7-a99a-462a-9897-c7ea99ed5b53",
+  "prevId": "3be47458-2451-4335-9ce8-d504a237193c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2124,225 +2124,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.interaction_event": {
-      "name": "interaction_event",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "bigint",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "interaction_event_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "9223372036854775807",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "event_key": {
-          "name": "event_key",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "interaction_event_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "anonymous_id": {
-          "name": "anonymous_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor_user_id": {
-          "name": "actor_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "designer_profile_id": {
-          "name": "designer_profile_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "interaction_event_event_key_uniq": {
-          "name": "interaction_event_event_key_uniq",
-          "columns": [
-            {
-              "expression": "event_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "interaction_event_project_created_idx": {
-          "name": "interaction_event_project_created_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "interaction_event_profile_created_idx": {
-          "name": "interaction_event_profile_created_idx",
-          "columns": [
-            {
-              "expression": "designer_profile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "interaction_event_actor_created_idx": {
-          "name": "interaction_event_actor_created_idx",
-          "columns": [
-            {
-              "expression": "actor_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "interaction_event_anonymous_created_idx": {
-          "name": "interaction_event_anonymous_created_idx",
-          "columns": [
-            {
-              "expression": "anonymous_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "interaction_event_actor_user_id_user_id_fk": {
-          "name": "interaction_event_actor_user_id_user_id_fk",
-          "tableFrom": "interaction_event",
-          "tableTo": "user",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "interaction_event_project_id_project_id_fk": {
-          "name": "interaction_event_project_id_project_id_fk",
-          "tableFrom": "interaction_event",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "interaction_event_designer_profile_id_designer_profile_id_fk": {
-          "name": "interaction_event_designer_profile_id_designer_profile_id_fk",
-          "tableFrom": "interaction_event",
-          "tableTo": "designer_profile",
-          "columnsFrom": [
-            "designer_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "interaction_event_target_check": {
-          "name": "interaction_event_target_check",
-          "value": "\n        (\"interaction_event\".\"type\" = 'project_view' AND \"interaction_event\".\"project_id\" IS NOT NULL AND \"interaction_event\".\"designer_profile_id\" IS NULL)\n        OR\n        (\"interaction_event\".\"type\" = 'profile_view' AND \"interaction_event\".\"project_id\" IS NULL AND \"interaction_event\".\"designer_profile_id\" IS NOT NULL)\n      "
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.lead": {
       "name": "lead",
       "schema": "",
@@ -2386,12 +2167,6 @@
         },
         "message": {
           "name": "message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -4073,6 +3848,89 @@
       },
       "isRLSEnabled": false
     },
+    "public.saved_project": {
+      "name": "saved_project",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "saved_project_project_idx": {
+          "name": "saved_project_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "saved_project_user_id_user_id_fk": {
+          "name": "saved_project_user_id_user_id_fk",
+          "tableFrom": "saved_project",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "saved_project_project_id_project_id_fk": {
+          "name": "saved_project_project_id_project_id_fk",
+          "tableFrom": "saved_project",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "saved_project_user_id_project_id_pk": {
+          "name": "saved_project_user_id_project_id_pk",
+          "columns": [
+            "user_id",
+            "project_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.taxonomy": {
       "name": "taxonomy",
       "schema": "",
@@ -4278,6 +4136,80 @@
       },
       "isRLSEnabled": false
     },
+    "public.visitor_profile": {
+      "name": "visitor_profile",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "whatsapp_number": {
+          "name": "whatsapp_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "onboarding_completed_at": {
+          "name": "onboarding_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "visitor_profile_user_id_user_id_fk": {
+          "name": "visitor_profile_user_id_user_id_fk",
+          "tableFrom": "visitor_profile",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "visitor_profile_address_length_check": {
+          "name": "visitor_profile_address_length_check",
+          "value": "\"visitor_profile\".\"address\" IS NULL OR char_length(trim(\"visitor_profile\".\"address\")) BETWEEN 1 AND 300"
+        },
+        "visitor_profile_whatsapp_e164_check": {
+          "name": "visitor_profile_whatsapp_e164_check",
+          "value": "\"visitor_profile\".\"whatsapp_number\" IS NULL OR \"visitor_profile\".\"whatsapp_number\" ~ '^[+][1-9][0-9]{7,14}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.search_projection_outbox": {
       "name": "search_projection_outbox",
       "schema": "",
@@ -4446,14 +4378,6 @@
         "connected",
         "error",
         "stale"
-      ]
-    },
-    "public.interaction_event_type": {
-      "name": "interaction_event_type",
-      "schema": "public",
-      "values": [
-        "project_view",
-        "profile_view"
       ]
     },
     "public.lead_status": {

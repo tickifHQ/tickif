@@ -1,16 +1,14 @@
 import { headers } from 'next/headers';
 import {
   PLATFORM_ROLE,
-  profileCompletionResponseSchema,
   profileDashboardResponseSchema,
-  type ProfileCompletionResponse,
   type ProfileDashboardResponse,
 } from '@repo/contracts';
 import { DesignerDashboardOverview } from '@/components/designer-dashboard-overview';
 import { env } from '@/env';
 import { requireAuth } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
-import { getCurrentDesignerProfile } from '@/lib/designer-profile';
+import { getCurrentDesignerProfile, getProfileCompletion } from '@/lib/designer-profile';
 
 export const metadata = {
   title: 'Designer dashboard · Tickif',
@@ -19,10 +17,6 @@ export const metadata = {
 type DashboardResult =
   | { ok: true; data: ProfileDashboardResponse }
   | { ok: false; data: ProfileDashboardResponse; message: string };
-
-type CompletionResult =
-  | { ok: true; data: ProfileCompletionResponse }
-  | { ok: false; data: null; message: string };
 
 const emptyDashboard: ProfileDashboardResponse = {
   profileCompletion: { score: 0, missing: [] },
@@ -56,34 +50,6 @@ async function getDashboardSummary(): Promise<DashboardResult> {
     return { ok: true, data: parsed.data };
   } catch {
     return { ok: false, data: emptyDashboard, message: 'Could not load dashboard summary.' };
-  }
-}
-
-async function getProfileCompletion(): Promise<CompletionResult> {
-  const reqHeaders = await headers();
-  const cookie = reqHeaders.get('cookie');
-
-  if (!cookie) {
-    return { ok: false, data: null, message: 'Could not load profile completion.' };
-  }
-
-  try {
-    const response = await api.api.profiles.me.completion.$get({}, { headers: { cookie } });
-
-    if (!response.ok) {
-      return { ok: false, data: null, message: 'Could not load profile completion.' };
-    }
-
-    const payload = await response.json();
-    const parsed = profileCompletionResponseSchema.safeParse(payload);
-
-    if (!parsed.success) {
-      return { ok: false, data: null, message: 'Could not load profile completion.' };
-    }
-
-    return { ok: true, data: parsed.data };
-  } catch {
-    return { ok: false, data: null, message: 'Could not load profile completion.' };
   }
 }
 

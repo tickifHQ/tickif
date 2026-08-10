@@ -25,6 +25,32 @@ loadRootEnv();
 
 const LOCAL_TYPESENSE_HOST = 'http://localhost:8108';
 const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
+const DEFAULT_EMAIL_FROM = 'Tickif <noreply@tickif.com>';
+const DEFAULT_EMAIL_ADDRESS = 'noreply@tickif.com';
+const NAMED_EMAIL_FROM_PATTERN = /^[^<>\r\n]+<([^<>\r\n]+)>$/;
+
+function blankStringToUndefined(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? undefined : value;
+}
+
+function emailAddressFromSender(value: string): string | null {
+  const namedSender = NAMED_EMAIL_FROM_PATTERN.exec(value);
+  if (namedSender) return namedSender[1]?.trim() ?? null;
+  if (value.includes('<') || value.includes('>')) return null;
+  return value;
+}
+
+const emailFromSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) => {
+      const address = emailAddressFromSender(value);
+      return address !== null && z.email().safeParse(address).success;
+    },
+    { message: 'must be an email address or Name <email@example.com>' },
+  );
 
 /**
  * Single source of truth for environment configuration.
@@ -141,9 +167,13 @@ const envSchema = z.object({
   MEDIA_DEDUP_HAMMING_THRESHOLD: z.coerce.number().int().min(0).max(64).default(10),
   MEDIA_DEDUP_ACTION: z.enum(['reject', 'flag']).default('reject'),
 
-  // Email delivery via Resend (E-203). Optional in dev (logs to console).
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('Tickif <noreply@tickif.com>'),
+  // Email delivery via Resend (E-203). Optional in dev/test (logs to console),
+  // but asserted below for production so auth emails cannot fail at first use.
+  RESEND_API_KEY: z.preprocess(
+    blankStringToUndefined,
+    z.string().trim().min(1).optional(),
+  ),
+  EMAIL_FROM: emailFromSchema.default(DEFAULT_EMAIL_FROM),
 
   // Google Places API key for designer-portfolio Google review fetching.
   // Distinct from the GOOGLE_CLIENT_* OAuth creds above (those are Gmail SSO).
@@ -280,6 +310,36 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     TYPESENSE_SEARCH_API_KEY:
       env.TYPESENSE_SEARCH_API_KEY ?? env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
   };
+}
+
+/** Validate Resend only in the auth process that sends transactional email. */
+export function assertProductionEmailConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  if (environment.NODE_ENV !== 'production') return;
+
+  const resendApiKey = blankStringToUndefined(environment.RESEND_API_KEY);
+  const emailFrom = blankStringToUndefined(environment.EMAIL_FROM);
+  const issues: string[] = [];
+
+  if (typeof resendApiKey !== 'string') {
+    issues.push('  - RESEND_API_KEY: required when NODE_ENV=production');
+  }
+
+  if (typeof emailFrom !== 'string') {
+    issues.push('  - EMAIL_FROM: required when NODE_ENV=production');
+  } else {
+    const parsedSender = emailFromSchema.safeParse(emailFrom);
+    if (!parsedSender.success) {
+      issues.push('  - EMAIL_FROM: must be an email address or Name <email@example.com>');
+    } else if (emailAddressFromSender(parsedSender.data)?.toLowerCase() === DEFAULT_EMAIL_ADDRESS) {
+      issues.push('  - EMAIL_FROM: must not use the checked-in placeholder in production');
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new Error(`Invalid email environment configuration:\n${issues.join('\n')}`);
+  }
 }
 
 /** Validate search credentials only in processes that actually use Typesense. */
