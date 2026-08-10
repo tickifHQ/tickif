@@ -10,6 +10,7 @@ import {
 } from './mapper.js';
 import { projectsRepository } from '../projects/repository.js';
 import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
+import { denseFacetDistribution } from './facets.js';
 
 /**
  * Discovery feed service — the ORCHESTRATION layer.
@@ -125,18 +126,30 @@ export const discoveryService: DiscoveryService = {
     // ─────────────────────────────────────────────────────────────────────────
     if (isTypesenseConfigured()) {
       try {
-        const result = await discoveryRepository.searchFeed({
-          filterBy,
-          sortBy: SORT_TYPESENSE[sort],
-          page,
-          perPage: limit,
-        });
+        // The vocabulary is what makes zero counts expressible: Typesense only reports
+        // facet values it actually matched, so absent options have to be filled in.
+        const [result, vocabulary] = await Promise.all([
+          discoveryRepository.searchFeed({
+            filterBy,
+            sortBy: SORT_TYPESENSE[sort],
+            page,
+            perPage: limit,
+          }),
+          discoveryRepository.listFacetVocabulary(),
+        ]);
 
         // Normalize then map through shared mapper (Design Invariant 1)
         const items = await toCards(result.hits.map(normalizeTypesenseHit));
         const hasMore = result.found > offset + result.hits.length;
 
-        return { items, page, limit, hasMore, source: 'search' as const };
+        return {
+          items,
+          page,
+          limit,
+          hasMore,
+          source: 'search' as const,
+          facetDistribution: denseFacetDistribution(vocabulary, result.facetDistribution ?? {}),
+        };
       } catch (error) {
         // Fallback on Typesense error
         const reason = error instanceof Error ? error.message : 'unknown';
@@ -150,18 +163,29 @@ export const discoveryService: DiscoveryService = {
     // ─────────────────────────────────────────────────────────────────────────
     // Postgres Fallback Path
     // ─────────────────────────────────────────────────────────────────────────
-    const result = await discoveryRepository.listFeedFallback({
-      filterBy: filters,
-      sortBy: SORT_POSTGRES[sort],
-      limit,
-      offset,
-    });
+    const [result, facetCounts, vocabulary] = await Promise.all([
+      discoveryRepository.listFeedFallback({
+        filterBy: filters,
+        sortBy: SORT_POSTGRES[sort],
+        limit,
+        offset,
+      }),
+      discoveryRepository.countFeedFacets(filters),
+      discoveryRepository.listFacetVocabulary(),
+    ]);
 
     // Normalize then map through shared mapper (SAME as Typesense path)
     // This enforces contract-identical responses (Design Invariant 1)
     const items = await toCards(result.rows.map(normalizePostgresRow));
     const hasMore = result.rows.length === limit;
 
-    return { items, page, limit, hasMore, source: 'db' as const };
+    return {
+      items,
+      page,
+      limit,
+      hasMore,
+      source: 'db' as const,
+      facetDistribution: denseFacetDistribution(vocabulary, facetCounts),
+    };
   },
 };

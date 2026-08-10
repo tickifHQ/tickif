@@ -1021,4 +1021,32 @@ describe('projectsService.feed', () => {
       coverImageUrl: null,
     });
   });
+
+  it('forwards taxonomy filters to the published feed repository', async () => {
+    vi.mocked(projectsRepository.listPublishedFeed).mockResolvedValue([]);
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+
+    await projectsService.feed({
+      page: 1,
+      limit: 12,
+      citySlug: ['mumbai', 'pune'],
+      roomSlugs: 'living-room',
+      themes: 'modern',
+    });
+
+    expect(projectsRepository.listPublishedFeed).toHaveBeenCalledWith({
+      limit: 13,
+      offset: 0,
+      filters: {
+        citySlug: ['mumbai', 'pune'],
+        bhkSlug: undefined,
+        propertyTypeSlug: undefined,
+        scopeSlug: undefined,
+        budgetBandSlug: undefined,
+        roomSlugs: 'living-room',
+        themes: 'modern',
+      },
+    });
+  });
 });

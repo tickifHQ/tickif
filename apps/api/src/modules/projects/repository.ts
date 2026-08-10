@@ -5,6 +5,7 @@ import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
+  FeedProjectsQuery,
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
@@ -16,6 +17,7 @@ import type {
   UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { projectFeedFilterClauses } from './feed-filters.repository.js';
 
 /**
  * Data-access for projects. This is the ONLY layer that imports Drizzle.
@@ -161,6 +163,17 @@ export type ProjectFeedItemRecord = {
   completedMonth: string | null;
   publishedAt: Date | null;
 };
+
+export type PublishedFeedFilters = Pick<
+  FeedProjectsQuery,
+  | 'citySlug'
+  | 'bhkSlug'
+  | 'propertyTypeSlug'
+  | 'scopeSlug'
+  | 'budgetBandSlug'
+  | 'roomSlugs'
+  | 'themes'
+>;
 
 export type PublicProjectRoomRecord = Pick<
   ProjectRoomRecord,
@@ -484,6 +497,7 @@ export const projectsRepository = {
   async listPublishedFeed(params: {
     limit: number;
     offset: number;
+    filters?: PublishedFeedFilters;
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
@@ -496,7 +510,11 @@ export const projectsRepository = {
         // Only active designers: suspended studios 404 on their public profile, so their
         // projects must not surface here either. `id` is the stable tiebreaker for paging.
         .where(
-          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+          and(
+            eq(schema.project.status, 'published'),
+            eq(schema.designerProfile.status, 'active'),
+            ...projectFeedFilterClauses(params.filters),
+          ),
         )
         .orderBy(
           sql`${schema.project.publishedAt} desc nulls last`,

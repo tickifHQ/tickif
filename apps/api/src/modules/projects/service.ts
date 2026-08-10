@@ -62,6 +62,7 @@ import {
   type PublicProjectReadRecord,
   type PublicProjectRoomRecord,
   type ProjectStatusCountRecord,
+  type PublishedFeedFilters,
   type TaxonomyKind,
 } from './repository.js';
 
@@ -1348,10 +1349,27 @@ export const projectsService = {
    */
   async feed(query: FeedProjectsQuery): Promise<FeedProjectsResponse> {
     const { page, limit } = query;
-    const rows = await projectsRepository.listPublishedFeed({
+    const filters: PublishedFeedFilters = {
+      citySlug: query.citySlug,
+      bhkSlug: query.bhkSlug,
+      propertyTypeSlug: query.propertyTypeSlug,
+      scopeSlug: query.scopeSlug,
+      budgetBandSlug: query.budgetBandSlug,
+      roomSlugs: query.roomSlugs,
+      themes: query.themes,
+    };
+    const feedRequest: {
+      limit: number;
+      offset: number;
+      filters?: PublishedFeedFilters;
+    } = {
       limit: limit + 1,
       offset: (page - 1) * limit,
-    });
+    };
+    if (Object.values(filters).some((value) => value !== undefined)) {
+      feedRequest.filters = filters;
+    }
+    const rows = await projectsRepository.listPublishedFeed(feedRequest);
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
 

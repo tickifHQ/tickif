@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createProjectRoomSchema,
   createProjectSchema,
+  feedProjectsQuerySchema,
   linkProjectImageSchema,
   listProjectsQuerySchema,
   portfolioProjectsQuerySchema,
@@ -105,6 +106,24 @@ describe('portfolioProjectsQuerySchema', () => {
     });
     expect(portfolioProjectsQuerySchema.safeParse({ status: 'unknown' }).success).toBe(false);
     expect(portfolioProjectsQuerySchema.safeParse({ limit: 51 }).success).toBe(false);
+  });
+});
+
+describe('feedProjectsQuerySchema', () => {
+  it('uses the same taxonomy filter vocabulary as the discovery feed', () => {
+    expect(
+      feedProjectsQuerySchema.parse({
+        citySlug: ['mumbai', 'pune'],
+        bhkSlug: '3-bhk',
+        roomSlugs: 'living-room',
+        themes: ['modern', 'warm'],
+      }),
+    ).toMatchObject({
+      citySlug: ['mumbai', 'pune'],
+      bhkSlug: '3-bhk',
+      roomSlugs: 'living-room',
+      themes: ['modern', 'warm'],
+    });
   });
 });
 

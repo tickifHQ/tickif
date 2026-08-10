@@ -10,6 +10,20 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
   discoveryRepository: {
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
+    // Facet counts are densified against this vocabulary; an empty one keeps these
+    // property tests focused on filters, sorting and pagination.
+    listFacetVocabulary: vi.fn(async () => ({
+      citySlug: [],
+      localitySlug: [],
+      propertyTypeSlug: [],
+      propertySubtypeSlug: [],
+      scopeSlug: [],
+      bhkSlug: [],
+      budgetBandSlug: [],
+      roomSlugs: [],
+      themes: [],
+    })),
+    countFeedFacets: vi.fn(async () => ({})),
   },
 }));
 
