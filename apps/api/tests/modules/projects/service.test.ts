@@ -1030,22 +1030,22 @@ describe('projectsService.feed', () => {
     await projectsService.feed({
       page: 1,
       limit: 12,
-      city: ['mumbai', 'pune'],
-      room: 'living-room',
-      theme: 'modern',
+      citySlug: ['mumbai', 'pune'],
+      roomSlugs: 'living-room',
+      themes: 'modern',
     });
 
     expect(projectsRepository.listPublishedFeed).toHaveBeenCalledWith({
       limit: 13,
       offset: 0,
       filters: {
-        city: ['mumbai', 'pune'],
-        bhk: undefined,
-        propertyType: undefined,
-        scope: undefined,
-        budgetBand: undefined,
-        room: 'living-room',
-        theme: 'modern',
+        citySlug: ['mumbai', 'pune'],
+        bhkSlug: undefined,
+        propertyTypeSlug: undefined,
+        scopeSlug: undefined,
+        budgetBandSlug: undefined,
+        roomSlugs: 'living-room',
+        themes: 'modern',
       },
     });
   });

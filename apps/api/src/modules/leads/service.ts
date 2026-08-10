@@ -1,5 +1,7 @@
 import type {
   CreateLeadInput,
+  LeadCountsQuery,
+  LeadCountsResponse,
   LeadDetailResponse,
   LeadListItem,
   LeadStatus,
@@ -45,6 +47,7 @@ function toDetail(row: LeadDetailRecord): LeadDetailResponse {
     ...toListItem(row),
     referredProjectId: row.referredProjectId,
     message: row.message,
+    notes: row.notes,
     source: row.source,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -59,6 +62,16 @@ function countLeadBucket(counts: LeadStatusCount[], status: LeadStatus): number 
   return counts
     .filter((count) => count.status === status)
     .reduce((sum, count) => sum + count.count, 0);
+}
+
+function toCounts(counts: LeadStatusCount[]): LeadCountsResponse {
+  return {
+    total: counts.reduce((sum, count) => sum + count.count, 0),
+    new: countLeadBucket(counts, 'new'),
+    contacted: countLeadBucket(counts, 'contacted'),
+    closed: countLeadBucket(counts, 'closed'),
+    spam: countLeadBucket(counts, 'spam'),
+  };
 }
 
 async function assertOrgMember(userId: string, organizationId: string): Promise<void> {
@@ -132,13 +145,20 @@ export const leadsService = {
     return toDetail(row);
   },
 
+  async counts(query: LeadCountsQuery, caller: Caller): Promise<LeadCountsResponse> {
+    if (caller.isBanned) throw AppError.forbidden('Account suspended');
+    const activeOrganizationId = requireActiveOrganization(caller);
+    await assertOrgMember(caller.userId, activeOrganizationId);
+    return toCounts(await leadsRepository.countByStatus(activeOrganizationId, query.q));
+  },
+
   async update(id: string, input: UpdateLeadInput, caller: Caller): Promise<LeadDetailResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const existing = await leadsRepository.findById(id);
     if (!existing) throw AppError.notFound('Lead not found');
     await assertLeadInActiveOrganization(caller, existing.organizationId);
 
-    const row = await leadsRepository.updateStatus(id, input.status);
+    const row = await leadsRepository.update(id, input);
     if (!row) throw AppError.notFound('Lead not found');
     return toDetail(row);
   },
@@ -163,10 +183,10 @@ export const leadsService = {
   },
 
   async countForOrganization(organizationId: string): Promise<LeadCounts> {
-    const counts = await leadsRepository.countByStatus(organizationId);
+    const counts = toCounts(await leadsRepository.countByStatus(organizationId));
     return {
-      total: counts.reduce((sum, count) => sum + count.count, 0),
-      new: countLeadBucket(counts, 'new'),
+      total: counts.total,
+      new: counts.new,
     };
   },
 };

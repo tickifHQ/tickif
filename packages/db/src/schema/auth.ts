@@ -1,5 +1,5 @@
 import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
-import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES } from '@repo/contracts';
+import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES, type AccountStatus } from '@repo/contracts';
 
 /**
  * better-auth tables (the committed source of truth).
@@ -22,7 +22,7 @@ import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES } from '@repo/contracts';
  */
 
 /** Account lifecycle. 'pending' until profile completion; 'suspended' reserved for Epic-3 bans. */
-export type UserStatus = 'pending' | 'active' | 'suspended' | 'deleted';
+export type UserStatus = AccountStatus;
 
 /** Platform authorization roles (E-86). Postgres enum order is part of the schema contract — append new roles, never reorder (pinned by role.test.ts). */
 export const userRole = pgEnum('user_role', PLATFORM_ROLE_VALUES);

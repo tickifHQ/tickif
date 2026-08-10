@@ -296,13 +296,12 @@ describe('RBAC matrix: real app routes (E-89)', () => {
   });
 });
 
-describe('RBAC matrix: cookie-cache revocation window (E-89)', () => {
-  it('a warm session_data cookie keeps passing until the 5-min cache expires (accepted E-83 tradeoff)', async () => {
+describe('RBAC matrix: fresh session state (E-184)', () => {
+  it('a warm session_data cookie cannot bypass a server-side ban', async () => {
     // createAuthedSession returns the FULL cookie, including the cached session_data
     // blob — unlike createRoleSession, which strips it. This pins the production
-    // behavior: a ban flips the DB instantly, but a client holding a warm cookie
-    // keeps passing guards until the cookie cache (5 min) expires. Documented in
-    // withSession + ADR 0001; if that tradeoff is ever closed, this row must flip.
+    // behavior: requireAuth must bypass the cache so a server-side ban takes effect
+    // immediately even when the client still holds a warm cookie.
     const { cookie } = await createAuthedSession('+919800013001');
     const me = await getSession(new Headers({ cookie }));
 
@@ -315,14 +314,7 @@ describe('RBAC matrix: cookie-cache revocation window (E-89)', () => {
 
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, me!.user.id));
 
-    // warm cached blob: still 200 inside the window
-    expect((await request(sample, '/authed', cookie)).status).toBe(200);
-    // fresh read (cached blob stripped): the ban bites immediately
-    const fresh = cookie
-      .split('; ')
-      .filter((c) => !c.startsWith('better-auth.session_data'))
-      .join('; ');
-    expect((await request(sample, '/authed', fresh)).status).toBe(403);
+    expect((await request(sample, '/authed', cookie)).status).toBe(403);
   });
 });
 

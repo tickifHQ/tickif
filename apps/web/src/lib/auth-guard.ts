@@ -106,13 +106,16 @@ const fetchSession = cache(async (disableCookieCache: boolean): Promise<SessionD
 /**
  * Throwing variant — redirects on failure.
  * Used in protected/designer/admin layouts.
+ *
+ * Always bypasses the ≤5-min session cookie cache: this is an authorization
+ * decision, so a revoked session or a demoted role must bite immediately rather
+ * than keep rendering a protected layout until the cached blob expires. The
+ * non-throwing `getServerSession` still uses the cache for identity-only reads.
  */
 export async function requireAuth(options?: {
   requiredRole?: RequiredPlatformRole;
 }): Promise<SessionData> {
-  const session = await getServerSession({
-    disableCookieCache: Boolean(options?.requiredRole),
-  });
+  const session = await getServerSession({ disableCookieCache: true });
 
   if (!session) {
     redirect('/login');

@@ -1,6 +1,6 @@
-import { ilike } from 'drizzle-orm';
+import { ilike, type SQL } from 'drizzle-orm';
 import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
-import type { CreateLeadInput, LeadStatus } from '@repo/contracts';
+import type { CreateLeadInput, LeadStatus, UpdateLeadInput } from '@repo/contracts';
 
 export type LeadRecord = typeof schema.lead.$inferSelect;
 
@@ -15,7 +15,13 @@ export type LeadListRecord = Pick<
 export type LeadDetailRecord = LeadListRecord &
   Pick<
     LeadRecord,
-    'organizationId' | 'referredProjectId' | 'message' | 'source' | 'createdAt' | 'updatedAt'
+    | 'organizationId'
+    | 'referredProjectId'
+    | 'message'
+    | 'notes'
+    | 'source'
+    | 'createdAt'
+    | 'updatedAt'
   >;
 
 export type LeadStatusCount = {
@@ -48,6 +54,7 @@ function leadProjection() {
     contactNumber: schema.lead.contactNumber,
     budgetBandSlug: schema.lead.budgetBandSlug,
     message: schema.lead.message,
+    notes: schema.lead.notes,
     source: schema.lead.source,
     status: schema.lead.status,
     receivedAt: schema.lead.receivedAt,
@@ -56,6 +63,20 @@ function leadProjection() {
     city: schema.project.citySlug,
     referredProjectTitle: schema.project.title,
   };
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function leadSearchFilter(q?: string): SQL | undefined {
+  if (!q) return undefined;
+  const pattern = `%${escapeLikePattern(q)}%`;
+  return or(
+    ilike(schema.lead.name, pattern),
+    ilike(schema.lead.contactNumber, pattern),
+    ilike(schema.project.title, pattern),
+  );
 }
 
 export const leadsRepository = {
@@ -68,13 +89,7 @@ export const leadsRepository = {
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
-      params.q
-        ? or(
-            ilike(schema.lead.name, `%${params.q}%`),
-            ilike(schema.lead.contactNumber, `%${params.q}%`),
-            ilike(schema.project.title, `%${params.q}%`),
-          )
-        : undefined,
+      leadSearchFilter(params.q),
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
 
@@ -123,10 +138,14 @@ export const leadsRepository = {
     return row ?? null;
   },
 
-  async updateStatus(id: string, status: LeadStatus): Promise<LeadDetailRecord | null> {
+  async update(id: string, input: UpdateLeadInput): Promise<LeadDetailRecord | null> {
     const [row] = await db
       .update(schema.lead)
-      .set({ status, updatedAt: new Date() })
+      .set({
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.lead.id, id))
       .returning({ id: schema.lead.id });
     if (!row) return null;
@@ -172,14 +191,25 @@ export const leadsRepository = {
     return !!row;
   },
 
-  async countByStatus(organizationId: string): Promise<LeadStatusCount[]> {
+  async countByStatus(organizationId: string, q?: string): Promise<LeadStatusCount[]> {
+    const projection = {
+      status: schema.lead.status,
+      count: sql<number>`count(*)::int`,
+    };
+
+    if (!q) {
+      return db
+        .select(projection)
+        .from(schema.lead)
+        .where(eq(schema.lead.organizationId, organizationId))
+        .groupBy(schema.lead.status);
+    }
+
     return db
-      .select({
-        status: schema.lead.status,
-        count: sql<number>`count(*)::int`,
-      })
+      .select(projection)
       .from(schema.lead)
-      .where(eq(schema.lead.organizationId, organizationId))
+      .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
+      .where(and(eq(schema.lead.organizationId, organizationId), leadSearchFilter(q)))
       .groupBy(schema.lead.status);
   },
 };

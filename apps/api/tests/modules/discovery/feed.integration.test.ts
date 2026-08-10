@@ -19,7 +19,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { DiscoveryFeedResponse, Derivative } from '@repo/contracts';
 import { db, schema } from '@repo/db';
-import { makeDesigner, makeProject, makeProjectImage, makeTaxonomy } from '@repo/db/testing';
+import {
+  makeDesigner,
+  makeProject,
+  makeProjectImage,
+  makeProjectRoom,
+  makeTaxonomy,
+} from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,11 +88,26 @@ async function attachReadyCover(projectId: string) {
     width: 1920,
     height: 1280,
     derivatives: [
-      { variant: 'small', format: 'webp', key: `derivatives/${projectId}/small.webp`, width: 640, height: 427 },
-      { variant: 'thumb', format: 'webp', key: `derivatives/${projectId}/thumb.webp`, width: 320, height: 213 },
+      {
+        variant: 'small',
+        format: 'webp',
+        key: `derivatives/${projectId}/small.webp`,
+        width: 640,
+        height: 427,
+      },
+      {
+        variant: 'thumb',
+        format: 'webp',
+        key: `derivatives/${projectId}/thumb.webp`,
+        width: 320,
+        height: 213,
+      },
     ] as Derivative[],
   });
-  await db.update(schema.project).set({ coverImageId: cover.id }).where(eq(schema.project.id, projectId));
+  await db
+    .update(schema.project)
+    .set({ coverImageId: cover.id })
+    .where(eq(schema.project.id, projectId));
   return cover;
 }
 
@@ -105,15 +126,19 @@ async function getFeed(query = '') {
 }
 
 /** Create a Typesense search hit fixture matching ProjectSearchDocument. */
-function makeTypesenseHit(project: {
-  id: string;
-  slug: string;
-  title: string;
-  citySlug: string | null;
-  bhkSlug: string | null;
-  featuredAt: Date | null;
-  publishedAt: Date | null;
-}, designer: { displayName: string; slug: string | null; avgRating: string; reviewCount: number }, coverKey?: string) {
+function makeTypesenseHit(
+  project: {
+    id: string;
+    slug: string;
+    title: string;
+    citySlug: string | null;
+    bhkSlug: string | null;
+    featuredAt: Date | null;
+    publishedAt: Date | null;
+  },
+  designer: { displayName: string; slug: string | null; avgRating: string; reviewCount: number },
+  coverKey?: string,
+) {
   return {
     document: {
       id: project.id,
@@ -190,19 +215,22 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
     it('returns search results from Typesense with source: "search"', async () => {
       const designer = await activeDesigner({ displayName: 'Search Studio' });
-      const org = await db.select({ slug: schema.organization.slug })
+      const org = await db
+        .select({ slug: schema.organization.slug })
         .from(schema.organization)
         .where(eq(schema.organization.id, designer.orgId))
         .limit(1);
       const project = await makePublishedProject(designer.id, { title: 'Typesense Project' });
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: org[0]?.slug ?? null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: org[0]?.slug ?? null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -223,12 +251,17 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id, { citySlug: 'delhi' });
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit({ ...project, citySlug: 'delhi' }, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(
+            { ...project, citySlug: 'delhi' },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
+        ],
         found: 1,
       });
 
@@ -248,12 +281,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -271,12 +306,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 1,
       });
 
@@ -294,12 +331,14 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const project = await makePublishedProject(designer.id);
 
       mockSearchClient.mockResolvedValue({
-        hits: [makeTypesenseHit(project, {
-          displayName: designer.displayName!,
-          slug: null,
-          avgRating: designer.avgRating!,
-          reviewCount: designer.reviewCount,
-        })],
+        hits: [
+          makeTypesenseHit(project, {
+            displayName: designer.displayName!,
+            slug: null,
+            avgRating: designer.avgRating!,
+            reviewCount: designer.reviewCount,
+          }),
+        ],
         found: 50,
       });
 
@@ -331,18 +370,24 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       // Typesense automatically sorts nulls last for optional numeric fields
       mockSearchClient.mockResolvedValue({
         hits: [
-          makeTypesenseHit({ ...featured, featuredAt: now }, {
-            displayName: designer.displayName!,
-            slug: null,
-            avgRating: designer.avgRating!,
-            reviewCount: designer.reviewCount,
-          }),
-          makeTypesenseHit({ ...notFeatured, featuredAt: null }, {
-            displayName: designer.displayName!,
-            slug: null,
-            avgRating: designer.avgRating!,
-            reviewCount: designer.reviewCount,
-          }),
+          makeTypesenseHit(
+            { ...featured, featuredAt: now },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
+          makeTypesenseHit(
+            { ...notFeatured, featuredAt: null },
+            {
+              displayName: designer.displayName!,
+              slug: null,
+              avgRating: designer.avgRating!,
+              reviewCount: designer.reviewCount,
+            },
+          ),
         ],
         found: 2,
       });
@@ -399,7 +444,11 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
     });
 
     it('produces response shape matching Typesense path', async () => {
-      const designer = await activeDesigner({ displayName: 'Shape Test Studio', avgRating: '4.20', reviewCount: 5 });
+      const designer = await activeDesigner({
+        displayName: 'Shape Test Studio',
+        avgRating: '4.20',
+        reviewCount: 5,
+      });
       const project = await makePublishedProject(designer.id, { title: 'Shape Test' });
       await attachReadyCover(project.id);
 
@@ -530,8 +579,11 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       });
       // Cover image should be presigned
       expect(pgProject?.coverImageUrl).toContain('X-Amz-Signature=');
-      expect(pgProject?.imageWidth).toBe(320);
-      expect(pgProject?.imageHeight).toBe(213);
+      // The card resolves small → thumb → null, and this fixture has both, so the 640px
+      // `small` derivative wins over the 320px `thumb`.
+      expect(pgProject?.coverImageUrl).toContain('small.webp');
+      expect(pgProject?.imageWidth).toBe(640);
+      expect(pgProject?.imageHeight).toBe(427);
     });
 
     it('searches published projects by text with the Postgres path', async () => {
@@ -613,10 +665,87 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const { body } = await getFeed(`?citySlug=${uniqueCity}`);
 
       expect(body.source).toBe('db');
-      expect(body.items.every((item) => {
-        // All items should match our filter
-        return item.city === 'Filter City';
-      })).toBe(true);
+      expect(
+        body.items.every((item) => {
+          // All items should match our filter
+          return item.city === 'Filter City';
+        }),
+      ).toBe(true);
+    });
+
+    it('filters by roomSlugs with the real Postgres fallback query', async () => {
+      const room = await makeTaxonomy({
+        kind: 'room',
+        slug: 'living-room',
+        label: 'Living Room',
+      });
+      const designer = await activeDesigner();
+      const matching = await makePublishedProject(designer.id, {
+        title: 'Fallback Living Room',
+      });
+      await makePublishedProject(designer.id, { title: 'Fallback Bedroom' });
+      await makeProjectRoom({ projectId: matching.id, roomTypeId: room.id });
+
+      const { res, body } = await getFeed('?roomSlugs=living-room');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Living Room']);
+    });
+
+    it('filters by themes with the real Postgres fallback query', async () => {
+      const designer = await activeDesigner();
+      const matching = await makePublishedProject(designer.id, { title: 'Fallback Warm' });
+      const nonMatching = await makePublishedProject(designer.id, {
+        title: 'Fallback Minimalist',
+      });
+      await makeProjectImage({
+        projectId: matching.id,
+        status: 'ready',
+        themeSlugs: ['warm'],
+      });
+      await makeProjectImage({
+        projectId: nonMatching.id,
+        status: 'ready',
+        themeSlugs: ['minimalist'],
+      });
+      await makeProjectImage({
+        projectId: nonMatching.id,
+        status: 'processing',
+        themeSlugs: ['warm'],
+      });
+
+      const { res, body } = await getFeed('?themes=warm');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Warm']);
+    });
+
+    it('combines different fallback facets with AND semantics', async () => {
+      const designer = await activeDesigner();
+      await makePublishedProject(designer.id, {
+        title: 'Fallback Mumbai 2 BHK',
+        citySlug: 'mumbai',
+        bhkSlug: '2-bhk',
+      });
+      await makePublishedProject(designer.id, {
+        title: 'Fallback Mumbai 3 BHK',
+        citySlug: 'mumbai',
+        bhkSlug: '3-bhk',
+      });
+
+      const { res, body } = await getFeed('?citySlug=mumbai&bhkSlug=2-bhk');
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title)).toEqual(['Fallback Mumbai 2 BHK']);
+    });
+
+    it('rejects malformed taxonomy slugs at the public endpoint boundary', async () => {
+      const { res } = await getFeed('?themes=not%20valid');
+
+      expect(res.status).toBe(422);
     });
 
     it('sorts by featured with NULLS LAST in Postgres', async () => {
@@ -658,7 +787,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
     it('excludes projects from non-active designers', async () => {
       const activeDesignerInstance = await activeDesigner({ displayName: 'Active Designer' });
-      const suspendedDesigner = await makeDesigner({ status: 'suspended', displayName: 'Suspended Designer' });
+      const suspendedDesigner = await makeDesigner({
+        status: 'suspended',
+        displayName: 'Suspended Designer',
+      });
 
       const uniqueCity = `status-filter-city-${Date.now()}`;
       await makeTaxonomy({ kind: 'city', slug: uniqueCity, label: 'Status Filter City' });
@@ -715,6 +847,194 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(titles).toContain('Published Project');
       expect(titles).not.toContain('Draft Project');
       expect(titles).not.toContain('Submitted Project');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 9.4: Filter composition and facet distribution on the Postgres path
+  //
+  // `roomSlugs` and `themes` are correlated EXISTS subqueries (project_room → taxonomy,
+  // and a jsonb containment test over `project_image.theme_slugs` on ready images). A
+  // mocked Drizzle builder cannot execute either, so composition and visibility are
+  // pinned here against the real database.
+  //
+  // The facet distribution is asserted here too: it is only *dense* — one entry per
+  // active taxonomy option, zeros included — because the API fills in the values neither
+  // Typesense nor a GROUP BY reports.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe('9.4 Filter composition and facet distribution', () => {
+    beforeEach(async () => {
+      vi.stubEnv('TYPESENSE_HOST', '');
+      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      // Facet counts are keyed by the active taxonomy vocabulary, so the terms the
+      // fixtures reference have to exist (truncateAll clears them between tests).
+      await seedFeedTaxonomy();
+    });
+
+    const tagThemes = (projectId: string, themes: string[]) =>
+      makeProjectImage({ projectId, status: 'ready', themeSlugs: themes });
+
+    it('ORs multiple values inside one facet', async () => {
+      const designer = await activeDesigner();
+      const warm = await makePublishedProject(designer.id, { title: 'Warm' });
+      await tagThemes(warm.id, ['warm']);
+      const minimal = await makePublishedProject(designer.id, { title: 'Minimal' });
+      await tagThemes(minimal.id, ['minimal']);
+      const coastal = await makePublishedProject(designer.id, { title: 'Coastal' });
+      await tagThemes(coastal.id, ['coastal']);
+
+      const { body } = await getFeed('?themes=warm&themes=minimal');
+
+      expect(body.source).toBe('db');
+      expect(body.items.map((item) => item.title).sort()).toEqual(['Minimal', 'Warm']);
+    });
+
+    it('ANDs one EXISTS facet against the other', async () => {
+      const designer = await activeDesigner();
+      const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+      const both = await makePublishedProject(designer.id, { title: 'Warm Kitchen' });
+      await tagThemes(both.id, ['warm']);
+      await makeProjectRoom({ projectId: both.id, roomTypeId: kitchen.id });
+
+      const themeOnly = await makePublishedProject(designer.id, { title: 'Warm No Kitchen' });
+      await tagThemes(themeOnly.id, ['warm']);
+
+      const roomOnly = await makePublishedProject(designer.id, { title: 'Kitchen Not Warm' });
+      await tagThemes(roomOnly.id, ['minimal']);
+      await makeProjectRoom({ projectId: roomOnly.id, roomTypeId: kitchen.id });
+
+      const { body } = await getFeed('?themes=warm&roomSlugs=kitchen');
+
+      expect(body.items.map((item) => item.title)).toEqual(['Warm Kitchen']);
+    });
+
+    it('resolves an unknown slug to an empty page rather than an error', async () => {
+      const designer = await activeDesigner();
+      const project = await makePublishedProject(designer.id, { title: 'Warm' });
+      await tagThemes(project.id, ['warm']);
+
+      for (const query of ['?themes=no-such-theme', '?roomSlugs=no-such-room']) {
+        const { res, body } = await getFeed(query);
+        expect(res.status).toBe(200);
+        expect(body.items).toEqual([]);
+      }
+    });
+
+    it('never surfaces an unpublished project or a suspended designer through a filter', async () => {
+      const active = await activeDesigner({ displayName: 'Active Studio' });
+      const suspended = await makeDesigner({ status: 'suspended', displayName: 'Suspended' });
+      await makeTaxonomy({ kind: 'theme', slug: 'warm', label: 'Warm' });
+      const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+      const visible = await makePublishedProject(active.id, { title: 'Visible' });
+      await tagThemes(visible.id, ['warm']);
+      await makeProjectRoom({ projectId: visible.id, roomTypeId: kitchen.id });
+
+      // Identically tagged, but a draft: the filter must not resurrect it.
+      const draft = await makeProject({
+        designerId: active.id,
+        status: 'draft',
+        title: 'Draft Warm',
+      });
+      await tagThemes(draft.id, ['warm']);
+      await makeProjectRoom({ projectId: draft.id, roomTypeId: kitchen.id });
+
+      // Identically tagged and published, but the studio is suspended.
+      const hidden = await makePublishedProject(suspended.id, { title: 'Suspended Warm' });
+      await tagThemes(hidden.id, ['warm']);
+      await makeProjectRoom({ projectId: hidden.id, roomTypeId: kitchen.id });
+
+      const byTheme = await getFeed('?themes=warm');
+      expect(byTheme.body.items.map((item) => item.title)).toEqual(['Visible']);
+      const byRoom = await getFeed('?roomSlugs=kitchen');
+      expect(byRoom.body.items.map((item) => item.title)).toEqual(['Visible']);
+      // …and the counts agree with the page: one visible project, not three.
+      expect(byTheme.body.facetDistribution.themes?.warm).toBe(1);
+      expect(byRoom.body.facetDistribution.roomSlugs?.kitchen).toBe(1);
+    });
+
+    it('reports a zero count for every active taxonomy option with nothing behind it', async () => {
+      await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
+      await makeTaxonomy({ kind: 'theme', slug: 'warm', label: 'Warm' });
+      await makeTaxonomy({ kind: 'theme', slug: 'minimal', label: 'Minimal' });
+      await makeTaxonomy({ kind: 'theme', slug: 'retired', label: 'Retired', isActive: false });
+      const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+      await makeTaxonomy({ kind: 'room', slug: 'balcony', label: 'Balcony' });
+
+      const designer = await activeDesigner();
+      const project = await makePublishedProject(designer.id, {
+        title: 'Mumbai Warm',
+        citySlug: 'mumbai',
+        bhkSlug: '3-bhk',
+      });
+      await tagThemes(project.id, ['warm']);
+      await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id });
+
+      const { body } = await getFeed();
+
+      expect(body.source).toBe('db');
+      // The zeroes are what make "this option exists but matches nothing" expressible —
+      // without them the filter UI cannot tell an empty option from an unknown one.
+      expect(body.facetDistribution.citySlug).toEqual({ mumbai: 1, pune: 0 });
+      expect(body.facetDistribution.themes).toEqual({ warm: 1, minimal: 0 });
+      expect(body.facetDistribution.roomSlugs).toEqual({ kitchen: 1, balcony: 0 });
+      expect(body.facetDistribution.bhkSlug).toEqual({ '3-bhk': 1, '2-bhk': 0 });
+      // Every facet the UI renders is present, on the fallback path too.
+      expect(Object.keys(body.facetDistribution).sort()).toEqual([
+        'bhkSlug',
+        'budgetBandSlug',
+        'citySlug',
+        'localitySlug',
+        'propertySubtypeSlug',
+        'propertyTypeSlug',
+        'roomSlugs',
+        'scopeSlug',
+        'themes',
+      ]);
+      // Inactive terms are not offered by GET /api/taxonomy/terms, so they get no count.
+      expect(body.facetDistribution.themes).not.toHaveProperty('retired');
+    });
+
+    it('counts a project once even when several of its rooms or images match', async () => {
+      await makeTaxonomy({ kind: 'theme', slug: 'warm', label: 'Warm' });
+      const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+      const designer = await activeDesigner();
+      const project = await makePublishedProject(designer.id, { title: 'Two Kitchens' });
+      await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 1' });
+      await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 2' });
+      await tagThemes(project.id, ['warm']);
+      await tagThemes(project.id, ['warm']);
+
+      const { body } = await getFeed();
+
+      expect(body.facetDistribution.roomSlugs).toEqual({ kitchen: 1 });
+      expect(body.facetDistribution.themes).toEqual({ warm: 1 });
+    });
+
+    it('counts over the filtered set, not the whole corpus', async () => {
+      await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
+      await makeTaxonomy({ kind: 'theme', slug: 'warm', label: 'Warm' });
+      const designer = await activeDesigner();
+
+      const mumbai = await makePublishedProject(designer.id, {
+        title: 'Mumbai Warm',
+        citySlug: 'mumbai',
+      });
+      await tagThemes(mumbai.id, ['warm']);
+      const pune = await makePublishedProject(designer.id, {
+        title: 'Pune Warm',
+        citySlug: 'pune',
+      });
+      await tagThemes(pune.id, ['warm']);
+
+      const all = await getFeed();
+      expect(all.body.facetDistribution.themes).toEqual({ warm: 2 });
+
+      const filtered = await getFeed('?citySlug=mumbai');
+      expect(filtered.body.facetDistribution.themes).toEqual({ warm: 1 });
+      expect(filtered.body.facetDistribution.citySlug).toEqual({ mumbai: 1, pune: 0 });
     });
   });
 });

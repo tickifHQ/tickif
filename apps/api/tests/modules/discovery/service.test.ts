@@ -1,11 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoveryFeedQuery } from '@repo/contracts';
 
+/** Every facet present with no options — spread and override the one under test. */
+const emptyVocabulary = {
+  citySlug: [] as string[],
+  localitySlug: [] as string[],
+  propertyTypeSlug: [] as string[],
+  propertySubtypeSlug: [] as string[],
+  scopeSlug: [] as string[],
+  bhkSlug: [] as string[],
+  budgetBandSlug: [] as string[],
+  roomSlugs: [] as string[],
+  themes: [] as string[],
+};
+
 vi.mock('../../../src/modules/discovery/repository.js', () => ({
   discoveryRepository: {
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
     findThemeSlugs: vi.fn(async () => new Map<string, string[]>()),
+    // Facet plumbing: both paths report sparse counts, which the service densifies
+    // against this vocabulary. Default to an empty vocabulary → empty distribution.
+    listFacetVocabulary: vi.fn(async () => ({ ...emptyVocabulary })),
+    countFeedFacets: vi.fn(async () => ({})),
   },
 }));
 vi.mock('../../../src/modules/projects/repository.js', () => ({
@@ -36,9 +53,8 @@ vi.mock('../../../src/modules/discovery/mapper.js', () => ({
   })),
 }));
 
-const { discoveryService, isTypesenseConfigured, logFallbackEvent } = await import(
-  '../../../src/modules/discovery/service.js'
-);
+const { discoveryService, isTypesenseConfigured, logFallbackEvent } =
+  await import('../../../src/modules/discovery/service.js');
 const { discoveryRepository } = await import('../../../src/modules/discovery/repository.js');
 
 const query: DiscoveryFeedQuery = { sort: 'recent', page: 1, limit: 24 };
@@ -84,6 +100,10 @@ describe('discoveryService', () => {
   });
 
   it('returns canonical cards and fallback metadata from Typesense', async () => {
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      citySlug: ['mumbai'],
+    });
     vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
       hits: [searchHit as never],
       found: 1,
@@ -152,6 +172,54 @@ describe('discoveryService', () => {
     );
   });
 
+  it('logs recent_in_city, and reports neither more pages nor unhelpful relaxations', async () => {
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
+    // A full page of rows — the pre-fix `rows.length === limit` would advertise hasMore.
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
+      rows: Array.from({ length: 2 }, () => postgresRow),
+    });
+
+    const result = await discoveryService.getFeed({
+      ...query,
+      limit: 2,
+      q: 'missing',
+      citySlug: 'mumbai',
+      // Dropped by relaxation without ever producing a hit, so it must not be reported.
+      localitySlug: 'bandra',
+    });
+
+    expect(result).toMatchObject({
+      fallback: 'recent_in_city',
+      hasMore: false,
+      relaxedFilters: [],
+    });
+    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    expect(logged).toContainEqual(
+      expect.objectContaining({ type: 'discovery.fallback', reason: 'recent_in_city' }),
+    );
+  });
+
+  it('reports no further pages when the Postgres path itself lands on recent_in_city', async () => {
+    vi.stubEnv('TYPESENSE_HOST', '');
+    vi.mocked(discoveryRepository.listFeedFallback)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [postgresRow, postgresRow] });
+
+    const result = await discoveryService.getFeed({
+      ...query,
+      limit: 2,
+      q: 'missing',
+      citySlug: 'mumbai',
+    });
+
+    expect(result).toMatchObject({
+      source: 'db',
+      fallback: 'recent_in_city',
+      hasMore: false,
+      relaxedFilters: [],
+    });
+  });
+
   it('uses Postgres when Typesense is unavailable and keeps the response shape identical', async () => {
     vi.stubEnv('TYPESENSE_HOST', '');
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
@@ -200,6 +268,109 @@ describe('discoveryService', () => {
     expect(discoveryRepository.listFeedFallback).toHaveBeenCalledTimes(1);
     expect(discoveryRepository.listFeedFallback).toHaveBeenCalledWith(
       expect.objectContaining({ offset: 48 }),
+    );
+  });
+
+  it('logs the Typesense error reason before degrading to Postgres', async () => {
+    vi.mocked(discoveryRepository.searchFeed).mockRejectedValue(new Error('Connection refused'));
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
+
+    const result = await discoveryService.getFeed(query);
+
+    expect(result.source).toBe('db');
+    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    expect(logged).toContainEqual(
+      expect.objectContaining({ type: 'discovery.fallback', reason: 'Connection refused' }),
+    );
+  });
+
+  it('logs "unknown" when the Typesense rejection is not an Error', async () => {
+    vi.mocked(discoveryRepository.searchFeed).mockRejectedValue('string error');
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
+
+    await discoveryService.getFeed(query);
+
+    const logged = vi.mocked(console.log).mock.calls.map((call) => JSON.parse(call[0] as string));
+    expect(logged).toContainEqual(expect.objectContaining({ reason: 'unknown' }));
+  });
+});
+
+describe('facet distribution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({ ...emptyVocabulary });
+    vi.mocked(discoveryRepository.countFeedFacets).mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('fills every taxonomy option Typesense omitted with a zero count', async () => {
+    vi.stubEnv('TYPESENSE_HOST', 'localhost');
+    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      citySlug: ['mumbai', 'pune'],
+      themes: ['warm', 'minimal'],
+    });
+    // Typesense never emits `count: 0` — pune and minimal are simply absent.
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
+      hits: [],
+      found: 0,
+      facetDistribution: { citySlug: { mumbai: 3 }, themes: { warm: 1 } },
+    });
+
+    const result = await discoveryService.getFeed(query);
+
+    expect(result.source).toBe('search');
+    expect(result.facetDistribution.citySlug).toEqual({ mumbai: 3, pune: 0 });
+    expect(result.facetDistribution.themes).toEqual({ warm: 1, minimal: 0 });
+  });
+
+  it('reports a facet the vocabulary knows about even when nothing matched at all', async () => {
+    vi.stubEnv('TYPESENSE_HOST', 'localhost');
+    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      bhkSlug: ['2-bhk'],
+    });
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
+
+    const result = await discoveryService.getFeed(query);
+
+    expect(result.facetDistribution.bhkSlug).toEqual({ '2-bhk': 0 });
+  });
+
+  it('densifies the Postgres path from its own counts, so both paths agree in shape', async () => {
+    vi.stubEnv('TYPESENSE_HOST', '');
+    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
+    vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+      ...emptyVocabulary,
+      citySlug: ['mumbai', 'pune'],
+    });
+    vi.mocked(discoveryRepository.countFeedFacets).mockResolvedValue({ citySlug: { mumbai: 2 } });
+
+    const result = await discoveryService.getFeed({ ...query, citySlug: 'mumbai' });
+
+    expect(discoveryRepository.countFeedFacets).toHaveBeenCalledWith({ citySlug: 'mumbai' }, '');
+    expect(result.source).toBe('db');
+    expect(result.facetDistribution.citySlug).toEqual({ mumbai: 2, pune: 0 });
+  });
+
+  it('counts facets over the same text-narrowed set as the page it labels', async () => {
+    vi.stubEnv('TYPESENSE_HOST', '');
+    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
+
+    await discoveryService.getFeed({ ...query, q: 'calm', citySlug: 'mumbai' });
+
+    expect(discoveryRepository.countFeedFacets).toHaveBeenCalledWith(
+      { citySlug: 'mumbai' },
+      'calm',
     );
   });
 });

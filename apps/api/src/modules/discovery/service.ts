@@ -15,6 +15,7 @@ import {
 import { projectsRepository } from '../projects/repository.js';
 import { SORT_TYPESENSE, SORT_POSTGRES } from './constants.js';
 import type { DiscoveryFeedFilters } from './constants.js';
+import { denseFacetDistribution } from './facets.js';
 import { FALLBACK_DROP_ORDER } from '../search/constants.js';
 
 /**
@@ -154,14 +155,20 @@ export const discoveryService: DiscoveryService = {
     // ─────────────────────────────────────────────────────────────────────────
     if (isTypesenseConfigured()) {
       try {
+        // The vocabulary is what makes zero counts expressible: Typesense only reports
+        // facet values it actually matched, so absent options have to be filled in.
         const mutableFilters: DiscoveryFeedFilters = { ...filters };
-        let result = await discoveryRepository.searchFeed({
-          q,
-          filterBy,
-          sortBy: SORT_TYPESENSE[sort],
-          page,
-          perPage: limit,
-        });
+        const [initialResult, vocabulary] = await Promise.all([
+          discoveryRepository.searchFeed({
+            q,
+            filterBy,
+            sortBy: SORT_TYPESENSE[sort],
+            page,
+            perPage: limit,
+          }),
+          discoveryRepository.listFacetVocabulary(),
+        ]);
+        let result = initialResult;
         let fallback: ProjectSearchFallback = 'none';
         const relaxedFilters: string[] = [];
 
@@ -195,15 +202,25 @@ export const discoveryService: DiscoveryService = {
               offset: 0,
             });
             if (recent.rows.length > 0) {
+              // This answer comes from Postgres, so it is a fallback like any other and has
+              // to show up in the fallback log — otherwise a `source: 'db'` response with
+              // Typesense healthy is invisible to operators.
+              logFallbackEvent('recent_in_city', { sort });
+              const recentFacetCounts = await discoveryRepository.countFeedFacets({ citySlug });
               return {
                 items: await toCards(await normalizePostgresRows(recent.rows)),
                 page,
                 limit,
-                hasMore: recent.rows.length === limit,
+                // Deliberately false. Relaxation only runs on page 1, so page 2 of this
+                // query would re-run the original search and come back empty — advertising
+                // `hasMore: true` on a full fallback page points the client at a dead end.
+                hasMore: false,
                 source: 'db',
-                facetDistribution: {},
+                facetDistribution: denseFacetDistribution(vocabulary, recentFacetCounts),
                 fallback: 'recent_in_city',
-                relaxedFilters,
+                // The relaxation attempts above all failed (they are why we got here), so
+                // reporting them would claim credit for drops that changed nothing.
+                relaxedFilters: [],
               };
             }
           }
@@ -220,7 +237,7 @@ export const discoveryService: DiscoveryService = {
           limit,
           hasMore,
           source: 'search' as const,
-          facetDistribution: result.facetDistribution ?? {},
+          facetDistribution: denseFacetDistribution(vocabulary, result.facetDistribution ?? {}),
           fallback,
           relaxedFilters: responseRelaxedFilters,
         };
@@ -237,15 +254,23 @@ export const discoveryService: DiscoveryService = {
     // ─────────────────────────────────────────────────────────────────────────
     // Postgres Fallback Path
     // ─────────────────────────────────────────────────────────────────────────
-    let result = await discoveryRepository.listFeedFallback({
-      q,
-      filterBy: filters,
-      sortBy: SORT_POSTGRES[sort],
-      limit,
-      offset,
-    });
+    const [initialResult, initialFacetCounts, vocabulary] = await Promise.all([
+      discoveryRepository.listFeedFallback({
+        q,
+        filterBy: filters,
+        sortBy: SORT_POSTGRES[sort],
+        limit,
+        offset,
+      }),
+      discoveryRepository.countFeedFacets(filters, q),
+      discoveryRepository.listFacetVocabulary(),
+    ]);
+    let result = initialResult;
+    let facetCounts = initialFacetCounts;
+    // Only 'none' or 'recent_in_city' are reachable here: filter relaxation is a Typesense
+    // affordance (it needs `_text_match` ranking to be worth anything), so this path never
+    // reports 'relaxed' and never has relaxed filters to name.
     let fallback: ProjectSearchFallback = 'none';
-    const relaxedFilters: string[] = [];
 
     if (q && page === 1 && result.rows.length === 0) {
       const citySlug = firstValue(filters.citySlug);
@@ -257,15 +282,20 @@ export const discoveryService: DiscoveryService = {
           limit,
           offset: 0,
         });
-        if (result.rows.length > 0) fallback = 'recent_in_city';
+        if (result.rows.length > 0) {
+          fallback = 'recent_in_city';
+          facetCounts = await discoveryRepository.countFeedFacets({ citySlug });
+        }
       }
     }
 
     // Normalize then map through shared mapper (SAME as Typesense path)
     // This enforces contract-identical responses (Design Invariant 1)
     const items = await toCards(await normalizePostgresRows(result.rows));
-    const hasMore = result.rows.length === limit;
-    const responseRelaxedFilters = fallback === 'none' ? [] : relaxedFilters;
+    // A `recent_in_city` page is a terminus: it re-queried at offset 0 with different
+    // filters, and page 2 would fall back to the original (empty) query, so there is
+    // nothing more to page to.
+    const hasMore = fallback === 'recent_in_city' ? false : result.rows.length === limit;
 
     return {
       items,
@@ -273,9 +303,9 @@ export const discoveryService: DiscoveryService = {
       limit,
       hasMore,
       source: 'db' as const,
-      facetDistribution: {},
+      facetDistribution: denseFacetDistribution(vocabulary, facetCounts),
       fallback,
-      relaxedFilters: responseRelaxedFilters,
+      relaxedFilters: [],
     };
   },
 };

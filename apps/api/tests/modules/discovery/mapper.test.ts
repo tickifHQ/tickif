@@ -130,11 +130,7 @@ describe('discovery card mapper', () => {
   it('returns a null URL when signing a ready Postgres cover fails', async () => {
     vi.mocked(presignDownload).mockRejectedValueOnce(new Error('Presign failed'));
 
-    const card = await toDiscoveryCard(
-      normalizePostgresRow(postgresRow()),
-      labels,
-      localities,
-    );
+    const card = await toDiscoveryCard(normalizePostgresRow(postgresRow()), labels, localities);
 
     expect(card.coverImageUrl).toBeNull();
   });

@@ -10,7 +10,7 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
   leadsRepository: {
     list: vi.fn(),
     findById: vi.fn(),
-    updateStatus: vi.fn(),
+    update: vi.fn(),
     create: vi.fn(),
     findProjectOrganization: vi.fn(),
     budgetBandExists: vi.fn(),
@@ -49,6 +49,7 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
   organizationId: 'org_1',
   referredProjectId: '22222222-2222-4222-8222-222222222222',
   message: 'Need a renovation',
+  notes: null,
   source: 'enquiry',
   createdAt: new Date('2026-06-26T10:00:00.000Z'),
   updatedAt: new Date('2026-06-26T10:00:00.000Z'),
@@ -114,6 +115,55 @@ describe('leadsService.getById', () => {
       status: 404,
     });
     expect(orgsService.isMember).not.toHaveBeenCalled();
+  });
+});
+
+describe('leadsService.counts', () => {
+  it('returns every status bucket for the active organization and search', async () => {
+    const counts: LeadStatusCount[] = [
+      { status: 'new', count: 3 },
+      { status: 'contacted', count: 4 },
+      { status: 'closed', count: 2 },
+    ];
+    vi.mocked(leadsRepository.countByStatus).mockResolvedValue(counts);
+
+    await expect(leadsService.counts({ q: 'bandra' }, caller)).resolves.toEqual({
+      total: 9,
+      new: 3,
+      contacted: 4,
+      closed: 2,
+      spam: 0,
+    });
+    expect(leadsRepository.countByStatus).toHaveBeenCalledWith('org_1', 'bandra');
+  });
+
+  it('rejects counts without an active organization', async () => {
+    await expect(leadsService.counts({}, { ...caller, activeOrgId: null })).rejects.toMatchObject({
+      status: 422,
+    });
+    expect(leadsRepository.countByStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('leadsService.update', () => {
+  it('persists designer notes separately from the homeowner message', async () => {
+    const updated = leadDetailRow({ notes: 'Call again on Friday.' });
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(leadsRepository.update).mockResolvedValue(updated);
+
+    const result = await leadsService.update(
+      leadDetailRow().id,
+      { notes: 'Call again on Friday.' },
+      caller,
+    );
+
+    expect(leadsRepository.update).toHaveBeenCalledWith(leadDetailRow().id, {
+      notes: 'Call again on Friday.',
+    });
+    expect(result).toMatchObject({
+      message: 'Need a renovation',
+      notes: 'Call again on Friday.',
+    });
   });
 });
 

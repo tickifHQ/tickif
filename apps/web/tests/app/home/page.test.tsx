@@ -103,9 +103,25 @@ describe('HomePage', () => {
     render(await HomePage({ searchParams: Promise.resolve({ city: 'mumbai,pune' }) }));
 
     const feedCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
-      String(input).includes('/api/projects/feed?limit=30&city=mumbai&city=pune'),
+      String(input).includes('/api/projects/feed?limit=30&citySlug=mumbai&citySlug=pune'),
+    );
+    const facetCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
+      String(input).includes('/api/discovery/feed?limit=1&citySlug=mumbai&citySlug=pune'),
     );
 
     expect(feedCall?.[1]).toEqual(expect.objectContaining({ cache: 'no-store' }));
+    expect(facetCall).toBeDefined();
+  });
+
+  it('revalidates taxonomy requests instead of refetching them on every render', async () => {
+    render(await HomePage());
+
+    const taxonomyCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([input]) =>
+      String(input).includes('/api/taxonomy/terms?kind=city'),
+    );
+
+    expect(taxonomyCall?.[1]).toEqual(
+      expect.objectContaining({ next: { revalidate: 60 * 60 * 24 * 7 } }),
+    );
   });
 });

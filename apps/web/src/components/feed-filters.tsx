@@ -13,10 +13,9 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { X, Funnel } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   FEED_FACET_DEFINITIONS,
-  FEED_FILTER_KEYS,
   parseFeedParams,
   serializeFeedParams,
   type FeedFilterKey,
@@ -62,7 +61,6 @@ function emptyFilterState(): FeedFilterState {
 type FeedFiltersProps = {
   options?: FeedFacetOptions;
   facetDistribution?: FeedFacetDistribution;
-  initialFilters?: FeedFilterState;
 };
 
 function optionLabel(options: FeedFacetOption[] | undefined, slug: string) {
@@ -77,21 +75,18 @@ function hrefFor(pathname: string, state: FeedFilterState, current: URLSearchPar
 }
 
 /** Taxonomy-driven filter controls with shareable URL state and applied chips. */
-export function FeedFilters({
-  options = {},
-  facetDistribution = {},
-  initialFilters,
-}: FeedFiltersProps) {
+export function FeedFilters({ options = {}, facetDistribution = {} }: FeedFiltersProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentParams = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams]);
-  const selected = useMemo(() => {
-    const hasFilterInUrl = FEED_FILTER_KEYS.some((key) => currentParams.has(key));
-    return hasFilterInUrl || !initialFilters ? parseFeedParams(currentParams) : initialFilters;
-  }, [currentParams, initialFilters]);
+  const selected = useMemo(() => parseFeedParams(currentParams), [currentParams]);
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<FeedFilterState>(selected);
+  const [activeSuggestion, setActiveSuggestion] = useState<Pick<
+    FeedFilterTag,
+    'facet' | 'slug'
+  > | null>(null);
   const applied = FEED_FACET_DEFINITIONS.flatMap((facet) =>
     selected[facet.key].map((slug) => ({ facet, slug })),
   );
@@ -100,23 +95,23 @@ export function FeedFilters({
     0,
   );
 
-  useEffect(() => {
-    if (!isOpen) setDraft(selected);
-  }, [isOpen, selected]);
   const suggestedTags = useMemo<FeedFilterTag[]>(() => {
     const candidates = FEED_FACET_DEFINITIONS.flatMap((facet) => {
-      const distribution = facetDistribution[facet.apiKey] ?? {};
+      const distribution = facetDistribution[facet.apiKey];
       return (options[facet.key] ?? []).map((option) => ({
         facet: facet.key,
         slug: option.slug,
         label: option.label,
-        count: distribution[option.slug],
+        count: distribution ? (distribution[option.slug] ?? 0) : undefined,
       }));
     });
 
     return candidates
       .filter((candidate) => candidate.count === undefined || candidate.count > 0)
-      .sort((left, right) => stableTagOrder(left) - stableTagOrder(right))
+      .sort(
+        (left, right) =>
+          (right.count ?? -1) - (left.count ?? -1) || stableTagOrder(left) - stableTagOrder(right),
+      )
       .slice(0, 10)
       .map(({ facet, slug, label, count }) => ({ facet, slug, label, count }));
   }, [facetDistribution, options]);
@@ -134,21 +129,63 @@ export function FeedFilters({
   }
 
   function applyDraft() {
+    setActiveSuggestion(null);
     update(draft);
     setIsOpen(false);
   }
 
   function remove(facet: FeedFilterKey, slug: string) {
+    if (activeSuggestion?.facet === facet && activeSuggestion.slug === slug) {
+      setActiveSuggestion(null);
+    }
     update({ ...selected, [facet]: selected[facet].filter((value) => value !== slug) });
   }
 
   function clearAll() {
+    setActiveSuggestion(null);
     update(emptyFilterState());
   }
 
   function selectSuggestion(tag: FeedFilterTag) {
-    const isSelected = selected[tag.facet].includes(tag.slug);
-    update(isSelected ? emptyFilterState() : { ...emptyFilterState(), [tag.facet]: [tag.slug] });
+    const trackedSuggestion =
+      activeSuggestion && selected[activeSuggestion.facet].includes(activeSuggestion.slug)
+        ? activeSuggestion
+        : null;
+    const soleAppliedFilter = applied.length === 1 ? applied[0] : undefined;
+    const inferredSuggestion =
+      !trackedSuggestion &&
+      soleAppliedFilter &&
+      suggestedTags.some(
+        (candidate) =>
+          candidate.facet === soleAppliedFilter.facet.key &&
+          candidate.slug === soleAppliedFilter.slug,
+      )
+        ? { facet: soleAppliedFilter.facet.key, slug: soleAppliedFilter.slug }
+        : null;
+    const previousSuggestion = trackedSuggestion ?? inferredSuggestion;
+    const next: FeedFilterState = Object.fromEntries(
+      FEED_FACET_DEFINITIONS.map((facet) => [facet.key, [...selected[facet.key]]]),
+    ) as FeedFilterState;
+
+    if (previousSuggestion) {
+      next[previousSuggestion.facet] = next[previousSuggestion.facet].filter(
+        (slug) => slug !== previousSuggestion.slug,
+      );
+    }
+
+    const isSameSuggestion =
+      previousSuggestion?.facet === tag.facet && previousSuggestion.slug === tag.slug;
+    const isSelectedFilter = !previousSuggestion && next[tag.facet].includes(tag.slug);
+
+    if (isSameSuggestion || isSelectedFilter) {
+      next[tag.facet] = next[tag.facet].filter((slug) => slug !== tag.slug);
+      setActiveSuggestion(null);
+    } else {
+      next[tag.facet] = [...new Set([...next[tag.facet], tag.slug])];
+      setActiveSuggestion({ facet: tag.facet, slug: tag.slug });
+    }
+
+    update(next);
   }
 
   return (
@@ -176,7 +213,7 @@ export function FeedFilters({
             <DropdownMenuSeparator />
             {FEED_FACET_DEFINITIONS.map((facet) => {
               const facetOptions = options[facet.key] ?? [];
-              const distribution = facetDistribution[facet.apiKey] ?? {};
+              const distribution = facetDistribution[facet.apiKey];
               const count = draft[facet.key].length;
 
               return (
@@ -191,7 +228,9 @@ export function FeedFilters({
                     <div className="max-h-[26rem] overflow-y-auto">
                       {facetOptions.length > 0 ? (
                         facetOptions.map((option) => {
-                          const optionCount = distribution[option.slug];
+                          const optionCount = distribution
+                            ? (distribution[option.slug] ?? 0)
+                            : undefined;
                           return (
                             <DropdownMenuCheckboxItem
                               key={option.slug}

@@ -55,8 +55,13 @@ describe('FeedFilters', () => {
   it('disables zero-count options without hiding them', async () => {
     render(
       <FeedFilters
-        options={{ city: [{ slug: 'mumbai', label: 'Mumbai' }] }}
-        facetDistribution={{ citySlug: { mumbai: 0 } }}
+        options={{
+          city: [
+            { slug: 'mumbai', label: 'Mumbai' },
+            { slug: 'pune', label: 'Pune' },
+          ],
+        }}
+        facetDistribution={{ citySlug: { mumbai: 4 } }}
       />,
     );
 
@@ -65,7 +70,11 @@ describe('FeedFilters', () => {
       pointerType: 'mouse',
     });
     expect(screen.getByRole('button', { name: 'Apply' })).not.toHaveTextContent('(0)');
-    expect(await screen.findByRole('menuitemcheckbox', { name: /Mumbai/ })).toHaveAttribute(
+    expect(await screen.findByRole('menuitemcheckbox', { name: /Mumbai/ })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('menuitemcheckbox', { name: /Pune/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     );
@@ -111,6 +120,45 @@ describe('FeedFilters', () => {
     expect(mock.push).toHaveBeenLastCalledWith('/?budgetBand=under-5l');
   });
 
+  it('preserves dropdown filters while replacing only the active suggestion', () => {
+    mock.params = new URLSearchParams('city=mumbai&bhk=3bhk');
+    const options = {
+      city: [{ slug: 'mumbai', label: 'Mumbai' }],
+      bhk: [{ slug: '3bhk', label: '3 BHK' }],
+      room: [{ slug: 'dining', label: 'Dining spaces' }],
+      budgetBand: [{ slug: 'under-5l', label: 'Under ₹5L' }],
+    };
+    const view = render(<FeedFilters options={options} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dining spaces' }));
+    expect(mock.push).toHaveBeenLastCalledWith('/?city=mumbai&bhk=3bhk&room=dining');
+
+    mock.params = new URLSearchParams('city=mumbai&bhk=3bhk&room=dining');
+    view.rerender(<FeedFilters options={options} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Under ₹5L' }));
+    expect(mock.push).toHaveBeenLastCalledWith('/?city=mumbai&bhk=3bhk&budgetBand=under-5l');
+  });
+
+  it('ranks suggestion tags by available project count', () => {
+    render(
+      <FeedFilters
+        options={{
+          city: [
+            { slug: 'mumbai', label: 'Mumbai' },
+            { slug: 'pune', label: 'Pune' },
+          ],
+        }}
+        facetDistribution={{ citySlug: { mumbai: 2, pune: 8 } }}
+      />,
+    );
+
+    const suggestions = screen
+      .getAllByRole('button')
+      .filter((button) => ['Mumbai', 'Pune'].includes(button.textContent ?? ''));
+    expect(suggestions.map((button) => button.textContent)).toEqual(['Pune', 'Mumbai']);
+  });
+
   it('marks All active by default and clears every selected filter', () => {
     mock.params = new URLSearchParams('city=mumbai&theme=warm');
     render(
@@ -154,5 +202,10 @@ describe('FeedFilters', () => {
     view.rerender(<FeedFilters options={{ city: [{ slug: 'mumbai', label: 'Mumbai' }] }} />);
 
     expect(screen.getByRole('button', { name: 'Remove Mumbai filter' })).toBeInTheDocument();
+
+    mock.params = new URLSearchParams();
+    view.rerender(<FeedFilters options={{ city: [{ slug: 'mumbai', label: 'Mumbai' }] }} />);
+
+    expect(screen.queryByRole('button', { name: 'Remove Mumbai filter' })).not.toBeInTheDocument();
   });
 });

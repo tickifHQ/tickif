@@ -49,6 +49,32 @@ Inside a handler you can read the caller with `c.get('user')`.
 > `.openapi()` calls — it breaks the OpenAPIHono type chain. See
 > [adding-a-module.md](./adding-a-module.md) and [troubleshooting.md](./troubleshooting.md).
 
+### Fresh vs cached session state
+
+`withSession` resolves the session through better-auth's ≤5-min session cookie
+cache, so what it attaches to the context can be stale. That's fine for
+identity-only reads ("who am I", rendering a name), but **not** for authorization.
+Every guard (`requireAuth`, `requireAnyRole`, `requireRole`, `requireOwnership`)
+therefore re-reads the session past the cache — at most once per request — before
+deciding, and forwards better-auth's refreshed `session_data` cookie so the
+client's stale copy is replaced rather than living out its TTL.
+
+Some routes need live state *and* must keep serving anonymous callers — e.g.
+`GET /api/projects/{id}`, where a published project is public but draft visibility
+is decided from the caller's ban/role. Those declare `withFreshSession`, the
+optional-auth counterpart: it refreshes the session without rejecting anonymous
+requests.
+
+```ts
+middleware: [withFreshSession] as const,   // optional auth, never cached state
+```
+
+Rule of thumb: if a handler or service reads `isBanned`, `role`, or
+`activeOrganizationId` to decide what the caller may see, the route must declare a
+guard or `withFreshSession`. On the web side the same split applies:
+`requireAuth()` in `apps/web/src/lib/auth-guard.ts` always bypasses the cache,
+while the non-throwing `getServerSession()` may use it.
+
 ## The phone-OTP flow (and how to test it)
 
 In dev, the SMS worker can use the `console` sender, which **logs the code to the
@@ -74,6 +100,17 @@ On verify, better-auth creates rows in `user` and `session` (and consumes the
 `verification` row). On first sign-up it derives a placeholder email
 (`<phone>@phone.tickif.local`) until the designer completes their profile —
 configured via `signUpOnVerification` in the plugin options.
+
+## Transactional email delivery
+
+Auth emails and organization invitations are delivered through Resend. Production
+requires `RESEND_API_KEY`; `EMAIL_FROM` must use a sender or domain verified in the
+same Resend account. The auth package validates both at startup so a deployment
+does not discover a missing credential on its first email. It also rejects the
+checked-in sender placeholder in production.
+
+Development and test environments may omit the key. In that mode the email sender
+logs only recipient and subject metadata, never the HTML body or any OTP content.
 
 ## better-auth tables & the schema
 

@@ -11,6 +11,20 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
     findThemeSlugs: vi.fn(async () => new Map()),
+    // Facet counts are densified against this vocabulary; an empty one keeps these
+    // property tests focused on filters, sorting and pagination.
+    listFacetVocabulary: vi.fn(async () => ({
+      citySlug: [],
+      localitySlug: [],
+      propertyTypeSlug: [],
+      propertySubtypeSlug: [],
+      scopeSlug: [],
+      bhkSlug: [],
+      budgetBandSlug: [],
+      roomSlugs: [],
+      themes: [],
+    })),
+    countFeedFacets: vi.fn(async () => ({})),
   },
 }));
 
@@ -861,9 +875,8 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('shared mapper enforcement', () => {
     it('both paths normalize through the same mapper', async () => {
-      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } = await import(
-        '../../../src/modules/discovery/mapper.js'
-      );
+      const { normalizeTypesenseHit, normalizePostgresRow, toDiscoveryCard } =
+        await import('../../../src/modules/discovery/mapper.js');
 
       // Typesense path
       vi.stubEnv('TYPESENSE_HOST', 'localhost');
