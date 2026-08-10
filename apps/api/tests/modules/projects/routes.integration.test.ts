@@ -543,6 +543,212 @@ describe('GET /api/projects/slug/{slug}', () => {
     ]);
   });
 
+  it('fills every recommendation group from real SQL and hides unpublished or inactive-designer projects', async () => {
+    await Promise.all([
+      makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' }),
+      makeTaxonomy({ kind: 'city', slug: 'delhi', label: 'Delhi' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'premium', label: 'Premium' }),
+      makeTaxonomy({ kind: 'budget_band', slug: 'value', label: 'Value' }),
+      makeTaxonomy({ kind: 'theme', slug: 'contemporary', label: 'Contemporary' }),
+      makeTaxonomy({ kind: 'theme', slug: 'traditional', label: 'Traditional' }),
+    ]);
+
+    /** Project with a `ready` cover carrying `themeSlugs`, wired up as the cover. */
+    async function makeCoveredProject(
+      overrides: Parameters<typeof makeProject>[0],
+      themeSlugs: string[],
+    ) {
+      const created = await makeProject(overrides);
+      const cover = await makeProjectImage({
+        projectId: created.id,
+        status: 'ready',
+        themeSlugs,
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: `derivatives/public/${created.id}-thumb.webp`,
+            width: 400,
+            height: 300,
+          },
+        ],
+        width: 400,
+        height: 300,
+      });
+      await db
+        .update(schema.project)
+        .set({ coverImageId: cover.id })
+        .where(eq(schema.project.id, created.id));
+      return created;
+    }
+
+    // Source project: fully tagged (budget band + one theme), which is the shape
+    // that builds all three recommendation branches.
+    const designer = await makeDesigner({ status: 'active', displayName: 'Studio Source' });
+    const project = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        slug: 'recommendation-source',
+        title: 'Recommendation Source',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-07-01T00:00:00.000Z'),
+      },
+      ['contemporary'],
+    );
+
+    // One expected hit per group.
+    const sameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Second Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-06-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+    const otherStudio = await makeDesigner({ status: 'active', displayName: 'Studio Other' });
+    const differentStyle = await makeCoveredProject(
+      {
+        designerId: otherStudio.id,
+        title: 'Traditional Premium Home',
+        status: 'published',
+        citySlug: 'delhi',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-05-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+    const nearbyStudio = await makeDesigner({ status: 'active', displayName: 'Studio Nearby' });
+    const nearby = await makeCoveredProject(
+      {
+        designerId: nearbyStudio.id,
+        title: 'Nearby Value Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'value',
+        publishedAt: new Date('2025-04-01T00:00:00.000Z'),
+      },
+      ['traditional'],
+    );
+
+    // A same-budget project that shares the source theme must be filtered out of
+    // sameBudgetDifferentStyle (and it is in another city, so no nearby fallback).
+    const sharedStyle = await makeCoveredProject(
+      {
+        designerId: otherStudio.id,
+        title: 'Contemporary Premium Home',
+        status: 'published',
+        citySlug: 'delhi',
+        budgetBandSlug: 'premium',
+        publishedAt: new Date('2025-08-01T00:00:00.000Z'),
+      },
+      ['contemporary'],
+    );
+
+    // Decoys: each would match a branch on taxonomy alone, so only the
+    // status/designer-status guards can keep them out.
+    const draftSameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Draft',
+        status: 'draft',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const submittedSameDesigner = await makeCoveredProject(
+      {
+        designerId: designer.id,
+        title: 'Studio Source Submitted',
+        status: 'submitted',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const suspendedDesigner = await makeDesigner({
+      status: 'suspended',
+      displayName: 'Studio Suspended',
+    });
+    const suspendedDesignerProject = await makeCoveredProject(
+      {
+        designerId: suspendedDesigner.id,
+        title: 'Suspended Studio Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+    const draftDesigner = await makeDesigner({ status: 'draft', displayName: 'Studio Unlisted' });
+    const draftDesignerProject = await makeCoveredProject(
+      {
+        designerId: draftDesigner.id,
+        title: 'Unlisted Studio Home',
+        status: 'published',
+        citySlug: 'mumbai',
+        budgetBandSlug: 'premium',
+      },
+      ['traditional'],
+    );
+
+    const response = await app.request('/api/projects/slug/recommendation-source');
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as PublicProjectBySlugResponse;
+    expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
+    expect(body.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([sameDesigner.id]);
+    expect(body.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
+      differentStyle.id,
+    ]);
+    expect(body.recommendations.nearby.map((item) => item.id)).toEqual([nearby.id]);
+    // No `completedMonth` on these, so the year can only come from `publishedAt` —
+    // which the raw recommendation query has to hand back as a real Date.
+    expect(body.recommendations.moreFromDesigner[0]?.completionYear).toBe(2025);
+    expect(body.recommendations.nearby[0]?.completionYear).toBe(2025);
+
+    const recommendedIds = [
+      ...body.recommendations.moreFromDesigner,
+      ...body.recommendations.sameBudgetDifferentStyle,
+      ...body.recommendations.nearby,
+    ].map((item) => item.id);
+    expect(recommendedIds).not.toContain(project.id);
+    expect(recommendedIds).not.toContain(sharedStyle.id);
+    expect(recommendedIds).not.toContain(draftSameDesigner.id);
+    expect(recommendedIds).not.toContain(submittedSameDesigner.id);
+    expect(recommendedIds).not.toContain(suspendedDesignerProject.id);
+    expect(recommendedIds).not.toContain(draftDesignerProject.id);
+
+    // Positive control: the decoys above are eligible on every other axis, so
+    // clearing just the status guards has to surface them. Keeps the negative
+    // assertions from passing for an unrelated reason.
+    await db
+      .update(schema.project)
+      .set({ status: 'published' })
+      .where(eq(schema.project.id, draftSameDesigner.id));
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, suspendedDesigner.id));
+
+    const relaxed = await app.request('/api/projects/slug/recommendation-source');
+    expect(relaxed.status).toBe(200);
+    const relaxedBody = (await relaxed.json()) as PublicProjectBySlugResponse;
+    expect(relaxedBody.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([
+      sameDesigner.id,
+      draftSameDesigner.id,
+    ]);
+    expect(relaxedBody.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
+      differentStyle.id,
+      suspendedDesignerProject.id,
+    ]);
+  });
+
   it('returns 404 for an unpublished project slug', async () => {
     const designer = await makeDesigner({ status: 'active' });
     await makeProject({ designerId: designer.id, slug: 'private-draft', status: 'draft' });

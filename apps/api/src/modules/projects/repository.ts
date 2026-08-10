@@ -207,6 +207,15 @@ export type ProjectRecommendationRecord = ProjectFeedItemRecord & {
   group: ProjectRecommendationGroup;
 };
 
+/**
+ * Recommendation row exactly as `db.execute` returns it. Raw SQL bypasses Drizzle's
+ * column decoders, so `timestamp` columns arrive as strings and have to be mapped
+ * back before the row can be treated as a `ProjectRecommendationRecord`.
+ */
+type RawProjectRecommendationRow = Omit<ProjectRecommendationRecord, 'publishedAt'> & {
+  publishedAt: string | null;
+};
+
 function recommendationBranch(params: {
   group: ProjectRecommendationGroup;
   match: SQL;
@@ -1641,7 +1650,7 @@ export const projectsRepository = {
               cross join lateral jsonb_array_elements_text(themed_image.theme_slugs) as theme(slug)
               where themed_image.project_id = ${schema.project.id}
                 and themed_image.status = 'ready'
-                and theme.slug = any(${params.sourceThemeSlugs}::text[])
+                and ${inArray(sql`theme.slug`, params.sourceThemeSlugs)}
             )
           `,
           excluded,
@@ -1661,7 +1670,7 @@ export const projectsRepository = {
       );
     }
 
-    const result = await db.execute<ProjectRecommendationRecord>(sql`
+    const result = await db.execute<RawProjectRecommendationRow>(sql`
       select
         "group", "id", "slug", "title", "citySlug", "localitySlug",
         "budgetBandSlug", "scopeSlug", "bhkSlug", "propertySubtypeSlug",
@@ -1671,7 +1680,12 @@ export const projectsRepository = {
       from (${sql.join(branches, sql` union all `)}) as grouped_recommendations
       order by "group", "publishedAt" desc nulls last, recommendation_created_at desc, "id" desc
     `);
-    return result.rows;
+    // `db.execute` skips Drizzle's column decoders, and node-postgres is configured
+    // to hand timestamps back as raw strings, so rehydrate `publishedAt` with the
+    // column's own mapper (keeps the naive-UTC handling identical to the ORM path).
+    const toPublishedAt = (value: string | null): Date | null =>
+      value === null ? null : (schema.project.publishedAt.mapFromDriverValue(value) as Date);
+    return result.rows.map((row) => ({ ...row, publishedAt: toPublishedAt(row.publishedAt) }));
   },
 
   /**
