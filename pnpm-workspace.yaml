@@ -107,4 +107,4 @@ catalog:
   '@testing-library/jest-dom': ^6.9.1
   happy-dom: ^20.10.6
   '@vitejs/plugin-react': ^6.0.2
-  '@playwright/test': ^1.60.0
+  '@playwright/test': ^1.62.1
