@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { feedProjectSchema, type FeedProject } from './projects';
+import { projectSearchFallback } from './search';
 
 /**
  * Discovery feed contracts — single source of truth for the public discovery
@@ -21,6 +23,7 @@ export const discoveryFeedQuerySchema = z
     sort: z.enum(['recent', 'featured']).default('recent'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(48).default(24),
+    q: z.string().trim().max(200).optional(),
     // Filter parameters
     citySlug: taxonomySlugOrArray.optional(),
     localitySlug: taxonomySlugOrArray.optional(),
@@ -40,24 +43,9 @@ export const discoveryFeedQuerySchema = z
 
 export type DiscoveryFeedQuery = z.infer<typeof discoveryFeedQuerySchema>;
 
-export const discoveryCardSchema = z
-  .object({
-    id: z.string(),
-    slug: z.string(),
-    title: z.string(),
-    coverImageUrl: z.string().url().nullable(),
-    coverImageWidth: z.number().int().nullable(),
-    coverImageHeight: z.number().int().nullable(),
-    designerName: z.string(),
-    designerSlug: z.string().nullable(),
-    city: z.string().nullable(),
-    bhk: z.string().nullable(),
-    budget: z.string().nullable(),
-    ratingSnippet: z.string().nullable(),
-  })
-  .meta({ id: 'DiscoveryCard' });
-
-export type DiscoveryCard = z.infer<typeof discoveryCardSchema>;
+/** Discovery reuses the canonical public project card without a second shape. */
+export const discoveryCardSchema = feedProjectSchema;
+export type DiscoveryCard = FeedProject;
 
 export const discoveryFeedResponseSchema = z
   .object({
@@ -67,6 +55,8 @@ export const discoveryFeedResponseSchema = z
     hasMore: z.boolean(),
     source: z.enum(['search', 'db']),
     facetDistribution: z.record(z.string(), z.record(z.string(), z.number())),
+    fallback: projectSearchFallback,
+    relaxedFilters: z.array(z.string()),
   })
   .meta({ id: 'DiscoveryFeedResponse' });
 
