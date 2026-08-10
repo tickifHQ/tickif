@@ -7,6 +7,7 @@ import {
   type VisitorProfileResponse,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { VisitorProfileAccessDeniedError, VisitorProfileConstraintError } from './errors.js';
 import { visitorsRepository, type VisitorProfileRecord } from './repository.js';
 
 export type VisitorCaller = {
@@ -17,6 +18,7 @@ export type VisitorCaller = {
 };
 
 function assertEligibleVisitor(caller: VisitorCaller): void {
+  // This self-service API is visitor-only by design; superadmin does not bypass the role gate.
   const hasActiveLifecycle =
     caller.status === ACCOUNT_STATUS.PENDING || caller.status === ACCOUNT_STATUS.ACTIVE;
   if (caller.isBanned || caller.role !== PLATFORM_ROLE.VISITOR || !hasActiveLifecycle) {
@@ -28,7 +30,7 @@ function toResponse(row: VisitorProfileRecord): VisitorProfileResponse {
   return {
     address: row.address,
     whatsappNumber: row.whatsappNumber,
-    onboardingCompletedAt: row.onboardingCompletedAt.toISOString(),
+    onboardingCompletedAt: row.onboardingCompletedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -47,6 +49,16 @@ export const visitorsService = {
     caller: VisitorCaller,
   ): Promise<VisitorProfileResponse> {
     assertEligibleVisitor(caller);
-    return toResponse(await visitorsRepository.upsertCompleted(caller.userId, input));
+    try {
+      return toResponse(await visitorsRepository.upsertCompleted(caller.userId, input));
+    } catch (error) {
+      if (error instanceof VisitorProfileAccessDeniedError) {
+        throw AppError.forbidden('Visitor profile access is not permitted');
+      }
+      if (error instanceof VisitorProfileConstraintError) {
+        throw AppError.unprocessable('Invalid visitor onboarding profile');
+      }
+      throw error;
+    }
   },
 };

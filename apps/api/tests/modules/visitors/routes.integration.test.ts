@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ACCOUNT_STATUS, PLATFORM_ROLE, visitorProfileResponseSchema } from '@repo/contracts';
-import { db, eq, schema, sql } from '@repo/db';
+import { db, eq, inArray, schema, sql } from '@repo/db';
 import { app } from '../../../src/app.js';
+import { VisitorProfileAccessDeniedError } from '../../../src/modules/visitors/errors.js';
+import { visitorsRepository } from '../../../src/modules/visitors/repository.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 async function requestJson(
@@ -96,6 +98,26 @@ describe('/api/visitors/me', () => {
       .from(schema.visitorProfile)
       .where(eq(schema.visitorProfile.userId, userId));
     expect(count?.value).toBe(1);
+    const [account] = await db
+      .select({ status: schema.user.status })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId));
+    expect(account?.status).toBe(ACCOUNT_STATUS.ACTIVE);
+  });
+
+  it('enforces address and WhatsApp checks for writes that bypass Zod', async () => {
+    const { userId } = await createRoleSession('+919800005010', PLATFORM_ROLE.VISITOR);
+
+    await expect(
+      db.insert(schema.visitorProfile).values({ userId, address: 'a'.repeat(301) }),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'visitor_profile_address_length_check' },
+    });
+    await expect(
+      db.insert(schema.visitorProfile).values({ userId, whatsappNumber: '98000005010' }),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'visitor_profile_whatsapp_e164_check' },
+    });
   });
 
   it('rejects malformed and ambiguous onboarding data without persisting it', async () => {
@@ -140,7 +162,36 @@ describe('/api/visitors/me', () => {
     const banned = await createRoleSession('+919800005009', PLATFORM_ROLE.VISITOR);
     await db.update(schema.user).set({ banned: true }).where(eq(schema.user.id, banned.userId));
 
+    await expect(
+      visitorsRepository.upsertCompleted(suspended.userId, {
+        address: 'Must not persist',
+        whatsappNumber: '+919800005008',
+      }),
+    ).rejects.toBeInstanceOf(VisitorProfileAccessDeniedError);
+
     expect((await requestJson('GET', suspended.cookie)).status).toBe(403);
     expect((await requestJson('GET', banned.cookie)).status).toBe(403);
+    expect(
+      (
+        await requestJson('PUT', suspended.cookie, {
+          address: 'Must not persist',
+          whatsappNumber: '+919800005008',
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await requestJson('PUT', banned.cookie, {
+          address: 'Must not persist',
+          whatsappNumber: '+919800005009',
+        })
+      ).status,
+    ).toBe(403);
+
+    const profiles = await db
+      .select({ userId: schema.visitorProfile.userId })
+      .from(schema.visitorProfile)
+      .where(inArray(schema.visitorProfile.userId, [suspended.userId, banned.userId]));
+    expect(profiles).toEqual([]);
   });
 });

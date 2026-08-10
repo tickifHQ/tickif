@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
 import type { VisitorProfileRecord } from '../../../src/modules/visitors/repository.js';
+import {
+  VisitorProfileAccessDeniedError,
+  VisitorProfileConstraintError,
+} from '../../../src/modules/visitors/errors.js';
 
 vi.mock('../../../src/modules/visitors/repository.js', () => ({
   visitorsRepository: {
@@ -78,6 +82,22 @@ describe('visitorsService.upsertMine', () => {
         { ...pendingVisitor, status: ACCOUNT_STATUS.ACTIVE },
       ),
     ).resolves.toMatchObject({ address: null });
+  });
+
+  it('maps fresh database eligibility and constraint failures to safe API errors', async () => {
+    vi.mocked(visitorsRepository.upsertCompleted)
+      .mockRejectedValueOnce(new VisitorProfileAccessDeniedError())
+      .mockRejectedValueOnce(new VisitorProfileConstraintError());
+    const input = { address: null, whatsappNumber: null };
+
+    await expect(visitorsService.upsertMine(input, pendingVisitor)).rejects.toMatchObject({
+      status: 403,
+      message: 'Visitor profile access is not permitted',
+    });
+    await expect(visitorsService.upsertMine(input, pendingVisitor)).rejects.toMatchObject({
+      status: 422,
+      message: 'Invalid visitor onboarding profile',
+    });
   });
 });
 
