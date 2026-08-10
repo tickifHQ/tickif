@@ -6,6 +6,20 @@ vi.mock('../../../src/modules/discovery/repository.js', () => ({
   discoveryRepository: {
     searchFeed: vi.fn(),
     listFeedFallback: vi.fn(),
+    // Facet plumbing: both paths report sparse counts, which the service densifies
+    // against this vocabulary. Default to an empty vocabulary → empty distribution.
+    listFacetVocabulary: vi.fn(async () => ({
+      citySlug: [],
+      localitySlug: [],
+      propertyTypeSlug: [],
+      propertySubtypeSlug: [],
+      scopeSlug: [],
+      bhkSlug: [],
+      budgetBandSlug: [],
+      roomSlugs: [],
+      themes: [],
+    })),
+    countFeedFacets: vi.fn(async () => ({})),
   },
 }));
 
@@ -57,6 +71,19 @@ const defaultQuery: DiscoveryFeedQuery = {
   sort: 'recent',
   page: 1,
   limit: 24,
+};
+
+/** Every facet present with no options — spread and override the one under test. */
+const emptyVocabulary = {
+  citySlug: [] as string[],
+  localitySlug: [] as string[],
+  propertyTypeSlug: [] as string[],
+  propertySubtypeSlug: [] as string[],
+  scopeSlug: [] as string[],
+  bhkSlug: [] as string[],
+  budgetBandSlug: [] as string[],
+  roomSlugs: [] as string[],
+  themes: [] as string[],
 };
 
 const typesenseHit = (slug: string) => ({
@@ -347,9 +374,7 @@ describe('discoveryService.getFeed', () => {
     });
 
     it('logs fallback event with error reason', async () => {
-      vi.mocked(discoveryRepository.searchFeed).mockRejectedValue(
-        new Error('Connection refused'),
-      );
+      vi.mocked(discoveryRepository.searchFeed).mockRejectedValue(new Error('Connection refused'));
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
         rows: [postgresRow('project-1')],
       });
@@ -489,6 +514,61 @@ describe('discoveryService.getFeed', () => {
       const result = await discoveryService.getFeed(defaultQuery);
 
       expect(result.hasMore).toBe(false);
+    });
+  });
+
+  describe('facet distribution', () => {
+    it('fills every taxonomy option Typesense omitted with a zero count', async () => {
+      vi.stubEnv('TYPESENSE_HOST', 'localhost');
+      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+        ...emptyVocabulary,
+        citySlug: ['mumbai', 'pune'],
+        themes: ['warm', 'minimal'],
+      });
+      // Typesense never emits `count: 0` — pune and minimal are simply absent.
+      vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
+        hits: [],
+        found: 0,
+        facetDistribution: { citySlug: { mumbai: 3 }, themes: { warm: 1 } },
+      });
+
+      const result = await discoveryService.getFeed(defaultQuery);
+
+      expect(result.source).toBe('search');
+      expect(result.facetDistribution.citySlug).toEqual({ mumbai: 3, pune: 0 });
+      expect(result.facetDistribution.themes).toEqual({ warm: 1, minimal: 0 });
+    });
+
+    it('reports a facet the vocabulary knows about even when nothing matched at all', async () => {
+      vi.stubEnv('TYPESENSE_HOST', 'localhost');
+      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+        ...emptyVocabulary,
+        bhkSlug: ['2-bhk'],
+      });
+      vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
+
+      const result = await discoveryService.getFeed(defaultQuery);
+
+      expect(result.facetDistribution.bhkSlug).toEqual({ '2-bhk': 0 });
+    });
+
+    it('densifies the Postgres path from its own counts, so both paths agree in shape', async () => {
+      vi.stubEnv('TYPESENSE_HOST', '');
+      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
+      vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
+        ...emptyVocabulary,
+        citySlug: ['mumbai', 'pune'],
+      });
+      vi.mocked(discoveryRepository.countFeedFacets).mockResolvedValue({ citySlug: { mumbai: 2 } });
+
+      const result = await discoveryService.getFeed({ ...defaultQuery, citySlug: 'mumbai' });
+
+      expect(discoveryRepository.countFeedFacets).toHaveBeenCalledWith({ citySlug: 'mumbai' });
+      expect(result.source).toBe('db');
+      expect(result.facetDistribution.citySlug).toEqual({ mumbai: 2, pune: 0 });
     });
   });
 
