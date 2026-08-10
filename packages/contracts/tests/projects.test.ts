@@ -5,6 +5,7 @@ import {
   linkProjectImageSchema,
   listProjectsQuerySchema,
   portfolioProjectsQuerySchema,
+  publicImageDetailResponseSchema,
   projectListStatus,
   projectStatus,
   projectRoomSchema,
@@ -103,6 +104,41 @@ describe('portfolioProjectsQuerySchema', () => {
     });
     expect(portfolioProjectsQuerySchema.safeParse({ status: 'unknown' }).success).toBe(false);
     expect(portfolioProjectsQuerySchema.safeParse({ limit: 51 }).success).toBe(false);
+  });
+});
+
+describe('publicImageDetailResponseSchema', () => {
+  it('accepts a public image detail payload keyed by the active image id', () => {
+    const result = publicImageDetailResponseSchema.safeParse({
+      project: {
+        id: VALID_UUID,
+        slug: 'sunlit-bandra-apartment',
+        title: 'Sunlit Bandra Apartment',
+        studio: 'Studio A',
+        city: 'Mumbai',
+        locality: 'Bandra',
+        rating: 4.5,
+        reviewCount: 10,
+        budget: '₹15L - ₹35L',
+        tags: ['3 BHK'],
+        coverImageId: '22222222-2222-4222-8222-222222222222',
+        coverImageUrl: null,
+        imageWidth: 480,
+        imageHeight: 600,
+      },
+      images: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          url: 'https://images.example.com/living-room.webp',
+          width: 1200,
+          height: 900,
+          roomName: 'Living Room',
+        },
+      ],
+      activeImageId: '22222222-2222-4222-8222-222222222222',
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

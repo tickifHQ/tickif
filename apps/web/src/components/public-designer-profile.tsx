@@ -27,6 +27,7 @@ import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
 import { cn } from '@repo/ui/lib/utils';
 import { CopyLinkButton } from '@/components/copy-link-button';
+import { EnquiryCta } from '@/components/enquiry-cta';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -307,10 +308,16 @@ function HeroSection({ portfolio, view }: SectionProps) {
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <LoginGatedAction variant="emphasis" className="min-w-36" href={view.loginHref}>
+            <EnquiryCta
+              context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+              designerProfileId={portfolio.profileId}
+              loginHref={view.loginHref}
+              variant="emphasis"
+              className="min-w-36"
+            >
               <MessageSquare className="size-4" />
               Enquire
-            </LoginGatedAction>
+            </EnquiryCta>
             <LoginGatedAction
               variant="outline"
               className="text-primary"
@@ -536,14 +543,16 @@ function StorySection({ portfolio, view }: SectionProps) {
                   ) : null}
                 </div>
 
-                <LoginGatedAction
+                <EnquiryCta
+                  context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+                  designerProfileId={portfolio.profileId}
+                  loginHref={view.loginHref}
                   variant="emphasis"
                   className="mt-5 h-8 w-full"
-                  href={view.loginHref}
                 >
                   <MessageSquare className="size-4" />
                   Enquire
-                </LoginGatedAction>
+                </EnquiryCta>
               </div>
 
               {headlineRating && headlineRating.reviewCount > 0 ? (
@@ -928,14 +937,16 @@ function ShareSection({ portfolio, view }: SectionProps) {
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <LoginGatedAction
+            <EnquiryCta
+              context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+              designerProfileId={portfolio.profileId}
+              loginHref={view.loginHref}
               variant="emphasis"
               className="h-10 px-6 shadow-sm"
-              href={view.loginHref}
             >
               <MessageSquare className="size-4" />
               Enquire
-            </LoginGatedAction>
+            </EnquiryCta>
             <CopyLinkButton
               value={view.publicProfileHref}
               variant="outline"

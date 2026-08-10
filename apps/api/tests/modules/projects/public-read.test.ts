@@ -15,6 +15,7 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectBySlug: vi.fn(),
+    findPublishedFeedProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
     findSimilarPublished: vi.fn(),
     findDesignerById: vi.fn(),
@@ -24,7 +25,11 @@ vi.mock('../../../src/modules/projects/repository.js', () => ({
     findCoverImages: vi.fn(),
     findTaxonomyLabels: vi.fn(),
     findLocalityLabels: vi.fn(),
-    slugify: (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60),
+    slugify: (t: string) =>
+      t
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .slice(0, 60),
   },
 }));
 
@@ -93,8 +98,11 @@ function makeFeedRow(overrides: Partial<ProjectFeedItemRecord> = {}): ProjectFee
     studio: 'Studio A',
     rating: '4.5',
     reviewCount: 10,
+    coverImageId: '22222222-2222-4222-8222-222222222222',
     coverStatus: 'ready',
-    coverDerivatives: [{ variant: 'thumb', format: 'webp', key: 'derivatives/thumb.webp', width: 400, height: 300 }],
+    coverDerivatives: [
+      { variant: 'thumb', format: 'webp', key: 'derivatives/thumb.webp', width: 400, height: 300 },
+    ],
     coverWidth: 400,
     coverHeight: 300,
     sizeSqft: 1200,
@@ -129,7 +137,9 @@ describe('projectsService.getPublicBySlug', () => {
   it('returns 404 when designer is inactive (filtered by repo query)', async () => {
     vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
 
-    await expect(projectsService.getPublicBySlug('inactive-designer-project')).rejects.toMatchObject({
+    await expect(
+      projectsService.getPublicBySlug('inactive-designer-project'),
+    ).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -149,10 +159,36 @@ describe('projectsService.getPublicBySlug', () => {
     });
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([makeRoom()]);
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
-      { id: 'img-1', derivatives: [{ variant: 'large', format: 'webp', key: 'deriv/large.webp', width: 1200, height: 900 }], width: 1200, height: 900, sortOrder: 0, roomName: 'Living Room' },
+      {
+        id: 'img-1',
+        derivatives: [
+          { variant: 'large', format: 'webp', key: 'deriv/large.webp', width: 1200, height: 900 },
+        ],
+        width: 1200,
+        height: 900,
+        sortOrder: 0,
+        roomName: 'Living Room',
+      },
     ]);
     vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
-      new Map([['cover-img-1', { id: 'cover-img-1', status: 'ready', derivatives: [{ variant: 'thumb', format: 'webp', key: 'deriv/cover.webp', width: 400, height: 300 }] }]]),
+      new Map([
+        [
+          'cover-img-1',
+          {
+            id: 'cover-img-1',
+            status: 'ready',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'deriv/cover.webp',
+                width: 400,
+                height: 300,
+              },
+            ],
+          },
+        ],
+      ]),
     );
 
     const result = await projectsService.getPublicBySlug('modern-apartment');
@@ -173,8 +209,13 @@ describe('projectsService.getPublicBySlug', () => {
     vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue({
       project: makeProject({ coverImageId: null }),
       designer: {
-        id: 'designer-1', displayName: 'Studio A', orgSlug: 'studio-a',
-        avgRating: '4.5', reviewCount: 10, entityType: 'individual', logoImageId: null,
+        id: 'designer-1',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'individual',
+        logoImageId: null,
       },
     });
     vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
@@ -187,6 +228,96 @@ describe('projectsService.getPublicBySlug', () => {
     expect(result.designer.logoUrl).toBeNull();
     expect(result.images).toEqual([]);
     expect(result.rooms).toEqual([]);
+  });
+});
+
+// =============================================================================
+// getPublicImageDetail
+// =============================================================================
+
+describe('projectsService.getPublicImageDetail', () => {
+  it('returns 404 when the image is not public', async () => {
+    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(null);
+
+    await expect(
+      projectsService.getPublicImageDetail('22222222-2222-4222-8222-222222222222'),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns the active image with published project context and gallery URLs', async () => {
+    const activeImageId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(
+      makeFeedRow({
+        id: '11111111-1111-4111-8111-111111111111',
+        coverDerivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: 'deriv/cover.webp',
+            width: 400,
+            height: 300,
+          },
+        ],
+      }),
+    );
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
+      new Map([
+        ['city:mumbai', 'Mumbai'],
+        ['bhk:3-bhk', '3 BHK'],
+        ['scope:full-home', 'Full Home'],
+      ]),
+    );
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(
+      new Map([['mumbai:bandra', 'Bandra']]),
+    );
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
+      {
+        id: activeImageId,
+        derivatives: [
+          {
+            variant: 'large',
+            format: 'webp',
+            key: 'deriv/living.webp',
+            width: 1200,
+            height: 900,
+          },
+        ],
+        width: 1200,
+        height: 900,
+        sortOrder: 0,
+        roomName: 'Living Room',
+      },
+    ]);
+
+    const result = await projectsService.getPublicImageDetail(activeImageId);
+
+    expect(result.activeImageId).toBe(activeImageId);
+    expect(result.project.id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(result.project.city).toBe('Mumbai');
+    expect(result.project.locality).toBe('Bandra');
+    expect(result.project.coverImageUrl).toContain('signed.example/deriv/cover.webp');
+    expect(result.images).toEqual([
+      {
+        id: activeImageId,
+        url: 'https://signed.example/deriv/living.webp',
+        width: 1200,
+        height: 900,
+        roomName: 'Living Room',
+      },
+    ]);
+  });
+
+  it('returns 404 when the active image cannot be signed into the gallery', async () => {
+    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(
+      makeFeedRow(),
+    );
+    vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);
+
+    await expect(
+      projectsService.getPublicImageDetail('22222222-2222-4222-8222-222222222222'),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -204,7 +335,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('returns 404 when designer is inactive', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'suspended' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'suspended',
+    });
 
     await expect(
       projectsService.designerProjects('d1', { page: 1, limit: 12 }),
@@ -212,7 +346,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('returns empty projects when designer has no published work', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
@@ -224,13 +361,20 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('returns paginated projects with hasMore=true', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     // Return limit+1 rows to indicate hasMore
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue(
       Array.from({ length: 13 }, (_, i) => makeFeedRow({ id: `p-${i}`, slug: `project-${i}` })),
     );
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
-      new Map([['city:mumbai', 'Mumbai'], ['bhk:3-bhk', '3 BHK'], ['scope:full-home', 'Full Home']]),
+      new Map([
+        ['city:mumbai', 'Mumbai'],
+        ['bhk:3-bhk', '3 BHK'],
+        ['scope:full-home', 'Full Home'],
+      ]),
     );
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(
       new Map([['mumbai:bandra', 'Bandra']]),
@@ -245,7 +389,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('returns hasMore=false when fewer results than limit', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([makeFeedRow()]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
@@ -257,7 +404,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('adds the portfolio card fields the public gallery renders and sorts on', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
       makeFeedRow({ propertySubtypeSlug: 'apartment', sizeSqft: 2400, completedMonth: '2024-06' }),
     ]);
@@ -279,7 +429,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('falls back to the publish year when completedMonth is unset', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
       makeFeedRow({ completedMonth: null, publishedAt: new Date('2023-11-02T00:00:00.000Z') }),
     ]);
@@ -292,7 +445,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('parses a free-text completedMonth and reports null when there is no year at all', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
       makeFeedRow({ id: 'p-free', completedMonth: 'June 2022' }),
       makeFeedRow({ id: 'p-none', completedMonth: 'sometime', publishedAt: null }),
@@ -307,7 +463,10 @@ describe('projectsService.designerProjects', () => {
   });
 
   it('reports a null propertyType when neither taxonomy label resolves', async () => {
-    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({ id: 'd1', status: 'active' });
+    vi.mocked(projectsRepository.findDesignerById).mockResolvedValue({
+      id: 'd1',
+      status: 'active',
+    });
     vi.mocked(projectsRepository.listPublishedByDesigner).mockResolvedValue([
       makeFeedRow({ bhkSlug: null, propertySubtypeSlug: null }),
     ]);

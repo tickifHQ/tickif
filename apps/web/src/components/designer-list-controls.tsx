@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '@repo/ui/components/input';
 import { cn } from '@repo/ui/lib/utils';
 import { Search } from 'lucide-react';
@@ -53,7 +53,14 @@ export function DesignerListControls<TValue extends string>({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [localQuery, setLocalQuery] = useState(searchValue ?? '');
+
+  useEffect(() => {
+    setLocalQuery(searchValue ?? '');
+  }, [searchValue]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -76,6 +83,38 @@ export function DesignerListControls<TValue extends string>({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function handleSearchChange(value: string) {
+    setLocalQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // Auto-search once 3+ characters are typed, or clear search if emptied
+    if (value.length >= 3 || value.length === 0) {
+      debounceRef.current = setTimeout(() => {
+        const href = queryHref(pathname, searchParams, {
+          q: value || null,
+          page: 1,
+        });
+        router.push(href);
+      }, 300);
+    }
+  }
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const href = queryHref(pathname, searchParams, {
+      q: localQuery || null,
+      page: 1,
+    });
+    router.push(href);
+  }
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -107,18 +146,17 @@ export function DesignerListControls<TValue extends string>({
           );
         })}
       </div>
-      <form action={pathname} className="relative w-full sm:w-[17.5rem]">
+      <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-[17.5rem]">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={searchInputRef}
           name="q"
-          defaultValue={searchValue}
+          value={localQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
           aria-keyshortcuts="/"
           className="h-8 rounded-md pl-9 pr-9 text-[13px] shadow-xs"
         />
-        {activeTab !== 'all' ? <input type="hidden" name="status" value={activeTab} /> : null}
-        <input type="hidden" name="page" value="1" />
         <kbd className="pointer-events-none absolute top-1/2 right-2 inline-flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded border border-border bg-muted px-1 text-[11px] leading-none font-medium text-muted-foreground">
           /
         </kbd>

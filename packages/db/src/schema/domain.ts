@@ -55,6 +55,8 @@ export const projectReviewCommentStatusEnum = pgEnum('project_review_comment_sta
 
 export const leadStatusEnum = pgEnum('lead_status', ['new', 'contacted', 'closed', 'spam']);
 
+export const enquiryStatusEnum = pgEnum('enquiry_status', ['open', 'responded', 'closed']);
+
 export const bookingStatusEnum = pgEnum('booking_status', [
   'requested',
   'confirmed',
@@ -353,6 +355,40 @@ export const lead = pgTable(
     index('lead_organization_idx').on(t.organizationId),
     index('lead_referred_project_idx').on(t.referredProjectId),
     index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
+  ],
+);
+
+export const enquiry = pgTable(
+  'enquiry',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    requesterId: text('requester_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    designerProfileId: uuid('designer_profile_id')
+      .notNull()
+      .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    referredProjectId: uuid('referred_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    subject: text('subject').notNull(),
+    description: text('description').notNull(),
+    templateUsed: text('template_used'),
+    budget: text('budget').notNull(),
+    timeline: text('timeline'),
+    status: enquiryStatusEnum('status').default('open').notNull(),
+    leadId: uuid('lead_id').references(() => lead.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('enquiry_requester_idx').on(t.requesterId),
+    index('enquiry_designer_profile_idx').on(t.designerProfileId),
+    index('enquiry_organization_idx').on(t.organizationId),
+    index('enquiry_requester_designer_status_idx').on(t.requesterId, t.designerProfileId, t.status),
   ],
 );
 
