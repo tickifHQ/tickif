@@ -10,6 +10,7 @@ import {
   pgEnum,
   jsonb,
   index,
+  primaryKey,
   uniqueIndex,
   check,
   type AnyPgColumn,
@@ -266,6 +267,23 @@ export const project = pgTable(
     index('project_in_review_moderation_queue_idx')
       .on(t.reviewedBy, t.submittedAt, t.id)
       .where(sql`${t.status} = 'in_review'`),
+  ],
+);
+
+export const savedProject = pgTable(
+  'saved_project',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.projectId] }),
+    index('saved_project_project_idx').on(t.projectId),
   ],
 );
 
