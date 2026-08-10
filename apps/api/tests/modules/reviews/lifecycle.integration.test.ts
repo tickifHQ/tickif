@@ -221,6 +221,7 @@ describe('review lifecycle', () => {
       referredProjectId: project.id,
       status: 'completed',
       confirmedSlot: { date: '2026-08-10', window: 'morning' },
+      requestedAt: new Date('2026-08-10T08:00:00.000Z'),
       confirmedAt: new Date('2026-08-10T09:00:00.000Z'),
       completedAt: new Date('2026-08-10T10:00:00.000Z'),
     });
