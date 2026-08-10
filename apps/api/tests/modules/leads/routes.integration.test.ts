@@ -153,7 +153,12 @@ describe('GET /api/leads/counts', () => {
       status: 'new',
     });
     await makeLead({ organizationId: designer.orgId, name: 'Bandra Owner', status: 'contacted' });
-    await makeLead({ organizationId: designer.orgId, name: 'Unrelated', status: 'closed' });
+    await makeLead({
+      organizationId: designer.orgId,
+      name: 'Unrelated',
+      contactNumber: '+919876543210',
+      status: 'closed',
+    });
     await makeLead({ name: 'Bandra Other Org', status: 'spam' });
 
     const all = await app.request('/api/leads/counts', { headers: { cookie } });
@@ -177,6 +182,34 @@ describe('GET /api/leads/counts', () => {
       closed: 0,
       spam: 0,
     });
+
+    const phoneQuery = '987654';
+    const [phoneCounts, phoneList] = await Promise.all([
+      app.request(`/api/leads/counts?q=${phoneQuery}`, { headers: { cookie } }),
+      client.api.leads.$get({ query: { q: phoneQuery } }, { headers: { cookie } }),
+    ]);
+    expect(phoneCounts.status).toBe(200);
+    expect(phoneList.status).toBe(200);
+    const phoneCountBody = (await phoneCounts.json()) as LeadCountsResponse;
+    const phoneListBody = (await phoneList.json()) as ListLeadsResponse;
+    expect(phoneCountBody.total).toBe(1);
+    expect(phoneCountBody.total).toBe(phoneListBody.total);
+  });
+
+  it('treats LIKE metacharacters as literal count and list search text', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800003010');
+    await makeLead({ organizationId: designer.orgId, name: 'Estimate 50% Owner' });
+    await makeLead({ organizationId: designer.orgId, name: 'Estimate 500 Owner' });
+
+    const [counts, list] = await Promise.all([
+      app.request('/api/leads/counts?q=50%25', { headers: { cookie } }),
+      client.api.leads.$get({ query: { q: '50%' } }, { headers: { cookie } }),
+    ]);
+
+    expect(counts.status).toBe(200);
+    expect(list.status).toBe(200);
+    expect(((await counts.json()) as LeadCountsResponse).total).toBe(1);
+    expect(((await list.json()) as ListLeadsResponse).total).toBe(1);
   });
 });
 
@@ -258,12 +291,37 @@ describe('GET/PATCH /api/leads/:id', () => {
       notes: 'Call again on Friday.',
     });
 
+    const statusOnly = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      status: 'closed',
+    });
+    expect(statusOnly.status).toBe(200);
+    expect(await statusOnly.json()).toMatchObject({
+      status: 'closed',
+      notes: 'Call again on Friday.',
+    });
+
+    const notesOnly = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      notes: 'Follow up next week.',
+    });
+    expect(notesOnly.status).toBe(200);
+    expect(await notesOnly.json()).toMatchObject({
+      status: 'closed',
+      notes: 'Follow up next week.',
+    });
+
+    const clearNotes = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      notes: '',
+    });
+    expect(clearNotes.status).toBe(200);
+    expect(await clearNotes.json()).toMatchObject({ status: 'closed', notes: null });
+
     const readBack = await app.request(`/api/leads/${lead.id}`, { headers: { cookie } });
     expect(readBack.status).toBe(200);
     expect(await readBack.json()).toMatchObject({
       id: lead.id,
       message: null,
-      notes: 'Call again on Friday.',
+      status: 'closed',
+      notes: null,
     });
   });
 
@@ -276,6 +334,11 @@ describe('GET/PATCH /api/leads/:id', () => {
       headers: { cookie: stranger.cookie },
     });
     expect(crossOrg.status).toBe(404);
+
+    const crossOrgUpdate = await requestJson(`/api/leads/${lead.id}`, 'PATCH', stranger.cookie, {
+      notes: 'This must not be persisted.',
+    });
+    expect(crossOrgUpdate.status).toBe(404);
 
     const invalidStatus = await requestJson(`/api/leads/${lead.id}`, 'PATCH', ownerCookie, {
       status: 'pending',

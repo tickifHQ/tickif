@@ -82,7 +82,13 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export const updateLeadSchema = z
   .object({
     status: leadStatus.optional(),
-    notes: z.string().trim().min(1).max(2000).nullable().optional(),
+    notes: z
+      .string()
+      .trim()
+      .max(2000)
+      .nullable()
+      .optional()
+      .transform((value) => (value === '' ? null : value)),
   })
   .refine((input) => input.status !== undefined || input.notes !== undefined, {
     message: 'At least one field is required',

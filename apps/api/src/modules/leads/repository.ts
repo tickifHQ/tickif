@@ -1,4 +1,4 @@
-import { ilike } from 'drizzle-orm';
+import { ilike, type SQL } from 'drizzle-orm';
 import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
 import type { CreateLeadInput, LeadStatus, UpdateLeadInput } from '@repo/contracts';
 
@@ -65,6 +65,20 @@ function leadProjection() {
   };
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function leadSearchFilter(q?: string): SQL | undefined {
+  if (!q) return undefined;
+  const pattern = `%${escapeLikePattern(q)}%`;
+  return or(
+    ilike(schema.lead.name, pattern),
+    ilike(schema.lead.contactNumber, pattern),
+    ilike(schema.project.title, pattern),
+  );
+}
+
 export const leadsRepository = {
   async list(params: ListLeadsParams): Promise<{ items: LeadListRecord[]; total: number }> {
     const filters = [
@@ -75,13 +89,7 @@ export const leadsRepository = {
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
-      params.q
-        ? or(
-            ilike(schema.lead.name, `%${params.q}%`),
-            ilike(schema.lead.contactNumber, `%${params.q}%`),
-            ilike(schema.project.title, `%${params.q}%`),
-          )
-        : undefined,
+      leadSearchFilter(params.q),
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
 
@@ -184,21 +192,24 @@ export const leadsRepository = {
   },
 
   async countByStatus(organizationId: string, q?: string): Promise<LeadStatusCount[]> {
+    const projection = {
+      status: schema.lead.status,
+      count: sql<number>`count(*)::int`,
+    };
+
+    if (!q) {
+      return db
+        .select(projection)
+        .from(schema.lead)
+        .where(eq(schema.lead.organizationId, organizationId))
+        .groupBy(schema.lead.status);
+    }
+
     return db
-      .select({
-        status: schema.lead.status,
-        count: sql<number>`count(*)::int`,
-      })
+      .select(projection)
       .from(schema.lead)
       .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
-      .where(
-        and(
-          eq(schema.lead.organizationId, organizationId),
-          q
-            ? or(ilike(schema.lead.name, `%${q}%`), ilike(schema.project.title, `%${q}%`))
-            : undefined,
-        ),
-      )
+      .where(and(eq(schema.lead.organizationId, organizationId), leadSearchFilter(q)))
       .groupBy(schema.lead.status);
   },
 };

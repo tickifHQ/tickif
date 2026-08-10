@@ -53,6 +53,8 @@ describe('lead contracts', () => {
     expect(updateLeadSchema.safeParse({ status: 'spam' }).success).toBe(true);
     expect(updateLeadSchema.safeParse({ notes: 'Call again on Friday.' }).success).toBe(true);
     expect(updateLeadSchema.safeParse({ notes: null }).success).toBe(true);
+    expect(updateLeadSchema.parse({ notes: '' })).toEqual({ notes: null });
+    expect(updateLeadSchema.parse({ notes: '   ' })).toEqual({ notes: null });
     expect(updateLeadSchema.safeParse({}).success).toBe(false);
     expect(updateLeadSchema.safeParse({ notes: 'a'.repeat(2001) }).success).toBe(false);
     expect(updateLeadSchema.safeParse({ status: 'pending' }).success).toBe(false);
