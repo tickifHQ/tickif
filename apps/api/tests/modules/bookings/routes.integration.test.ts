@@ -14,8 +14,19 @@ vi.mock('@repo/queue', () => ({
   enqueueBookingNotification: vi.fn(async () => {}),
 }));
 
-const slot = { date: '2026-08-10', window: 'morning' } as const;
-const secondSlot = { date: '2026-08-11', window: 'afternoon' } as const;
+/**
+ * `requestedSlotsSchema` rejects any slot before today, resolved in IST, so these
+ * dates must be derived rather than hardcoded — a literal turns the POST tests into
+ * a 422 the moment IST rolls past it. Resolved in IST to match the schema, and
+ * offset from tomorrow rather than today so a run crossing IST midnight can't
+ * strand the earliest slot in the past.
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const istDay = (daysFromNow: number): string =>
+  new Date(Date.now() + IST_OFFSET_MS + daysFromNow * 86_400_000).toISOString().slice(0, 10);
+
+const slot = { date: istDay(1), window: 'morning' } as const;
+const secondSlot = { date: istDay(2), window: 'afternoon' } as const;
 
 async function makeDesignerSession(phoneNumber: string) {
   const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
@@ -164,7 +175,7 @@ describe('POST /api/bookings', () => {
         designerProfileId: designer.id,
         organizationId: designer.orgId,
         requesterId: userId,
-        preferredSlots: [{ date: `2026-08-${10 + index}`, window: 'morning' }],
+        preferredSlots: [{ date: istDay(1 + index), window: 'morning' }],
       });
     }
 
@@ -175,7 +186,7 @@ describe('POST /api/bookings', () => {
       }),
       requestJson('/api/bookings', 'POST', cookie, {
         designerProfileId: designer.id,
-        preferredSlots: [{ date: '2026-08-12', window: 'evening' }],
+        preferredSlots: [{ date: istDay(3), window: 'evening' }],
       }),
     ]);
 
