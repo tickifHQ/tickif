@@ -1611,7 +1611,7 @@ export const projectsRepository = {
   }): Promise<ProjectRecommendationRecord[]> {
     const excluded =
       params.excludeProjectIds.length > 0
-        ? sql`not (${schema.project.id} = any(${params.excludeProjectIds}::uuid[]))`
+        ? notInArray(schema.project.id, params.excludeProjectIds)
         : sql`true`;
     const branches: SQL[] = [
       recommendationBranch({
