@@ -1,6 +1,6 @@
 {
-  "id": "3be47458-2451-4335-9ce8-d504a237193c",
-  "prevId": "0b4b9bfe-ba1b-4992-a9a2-345e9de1c605",
+  "id": "296f66b7-a99a-462a-9897-c7ea99ed5b53",
+  "prevId": "3be47458-2451-4335-9ce8-d504a237193c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4132,6 +4132,80 @@
         "taxonomy_slug_format_check": {
           "name": "taxonomy_slug_format_check",
           "value": "\"taxonomy\".\"slug\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.visitor_profile": {
+      "name": "visitor_profile",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "whatsapp_number": {
+          "name": "whatsapp_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "onboarding_completed_at": {
+          "name": "onboarding_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "visitor_profile_user_id_user_id_fk": {
+          "name": "visitor_profile_user_id_user_id_fk",
+          "tableFrom": "visitor_profile",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "visitor_profile_address_length_check": {
+          "name": "visitor_profile_address_length_check",
+          "value": "\"visitor_profile\".\"address\" IS NULL OR char_length(trim(\"visitor_profile\".\"address\")) BETWEEN 1 AND 300"
+        },
+        "visitor_profile_whatsapp_e164_check": {
+          "name": "visitor_profile_whatsapp_e164_check",
+          "value": "\"visitor_profile\".\"whatsapp_number\" IS NULL OR \"visitor_profile\".\"whatsapp_number\" ~ '^[+][1-9][0-9]{7,14}$'"
         }
       },
       "isRLSEnabled": false

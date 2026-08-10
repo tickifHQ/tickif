@@ -14,4 +14,5 @@ export * from './discovery';
 export * from './reviews';
 export * from './organizations';
 export * from './enquiries';
+export * from './saved-projects';
 export * from './visitors';

@@ -6,8 +6,11 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
 import {
+  PROFILE_FOOTPRINT_LIMITS,
+  designerEntityType,
+  listTaxonomyResponseSchema,
   onboardDesignerSchema,
-  type ListTaxonomyResponse,
+  onboardDesignerResponseSchema,
   type OnboardDesignerInput,
   type OnboardDesignerResponse,
   type TaxonomyTerm,
@@ -16,7 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -26,9 +28,16 @@ import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { handleApiResponse } from '@/lib/api-response';
+import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
+import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
+import {
+  PROFILE_TAXONOMY_KIND,
+  type ProfileTaxonomyKind,
+} from '@/lib/profile-editor-types';
 
 type EntityType = OnboardDesignerInput['entityType'];
 
@@ -51,14 +60,14 @@ const entityOptions: Array<{
   descriptionClassName?: string;
 }> = [
   {
-    value: 'individual',
+    value: designerEntityType.enum.individual,
     title: 'Just me',
     description: 'Solo designer or personal brand.',
     illustration: '/illustrations/onboarding-workspace-desk.svg',
     icon: UserRound,
   },
   {
-    value: 'company',
+    value: designerEntityType.enum.company,
     title: 'Interior company (firm)',
     description: 'An Interior design firm or corporate with a team.',
     illustration: '/illustrations/onboarding-profile-chair.svg',
@@ -72,7 +81,10 @@ const onboardingIllustrations = {
 } as const;
 
 type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
-type TaxonomyKind = 'scope' | 'theme';
+type TaxonomyKind = Extract<
+  ProfileTaxonomyKind,
+  typeof PROFILE_TAXONOMY_KIND.SCOPE | typeof PROFILE_TAXONOMY_KIND.THEME
+>;
 type TaxonomyOptions = Record<TaxonomyKind, TaxonomyTerm[]>;
 
 const firmTypeOptions = [
@@ -107,31 +119,15 @@ function optionalTrimmed(value: string) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function normalizeUrl(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  return `https://${trimmed}`;
-}
-
 function validateOptionalUrl(
   value: string,
   schema: { safeParse: (value: unknown) => { success: boolean } },
   message: string,
 ) {
-  const normalized = normalizeUrl(value);
+  const normalized = normalizeOptionalUrl(value);
   if (!normalized) return '';
   if (!schema.safeParse(normalized).success) return message;
-
-  try {
-    const url = new URL(normalized);
-    const hostname = url.hostname.toLowerCase();
-    const hasPublicHostname =
-      hostname.includes('.') && !hostname.startsWith('.') && !hostname.endsWith('.');
-    return hasPublicHostname ? '' : message;
-  } catch {
-    return message;
-  }
+  return isPublicHttpUrl(normalized) ? '' : message;
 }
 
 const websiteUrlValidationMessage = 'Enter a valid website URL.';
@@ -162,28 +158,22 @@ function teamSizeToStaffCount(teamSize: string) {
 
 async function fetchTaxonomyTerms(kind: TaxonomyKind) {
   const res = await api.api.taxonomy.terms.$get({ query: { kind } });
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(`Could not load ${kind} options.`);
-  }
-
-  return (data as ListTaxonomyResponse).terms;
+  return (await handleApiResponse(
+    res,
+    listTaxonomyResponseSchema,
+    `Could not load ${kind} options.`,
+  )).terms;
 }
 
 async function submitWithApi(input: OnboardDesignerInput) {
   const res = await api.api.profiles.me.$post({ json: input });
-  const data = await res.json();
+  const data = await handleApiResponse(
+    res,
+    onboardDesignerResponseSchema,
+    'Could not finish onboarding. Please try again.',
+  );
 
-  if (!res.ok) {
-    const message =
-      'error' in data && data.error && typeof data.error.message === 'string'
-        ? data.error.message
-        : 'Could not finish onboarding. Please try again.';
-    throw new Error(message);
-  }
-
-  return { data: data as OnboardDesignerResponse, created: res.status === 201 };
+  return { data, created: res.status === 201 };
 }
 
 async function signOutToLogin() {
@@ -199,7 +189,7 @@ export function DesignerOnboarding({
   const router = useRouter();
   const formId = useId();
   const [step, setStep] = useState<OnboardingStep>('entity');
-  const [entityType, setEntityType] = useState<EntityType>('individual');
+  const [entityType, setEntityType] = useState<EntityType>(designerEntityType.enum.individual);
   const [userName, setUserName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [address, setAddress] = useState('');
@@ -231,8 +221,10 @@ export function DesignerOnboarding({
     ? `@${companyName.trim().toLowerCase().replaceAll(/\s+/g, '')}`
     : '@yourstudio';
   const canSubmit = useMemo(() => {
-    const hasIndividualName = entityType === 'company' || userName.trim().length >= 2;
-    const hasCompany = entityType === 'individual' || companyName.trim().length >= 2;
+    const hasIndividualName =
+      entityType === designerEntityType.enum.company || userName.trim().length >= 2;
+    const hasCompany =
+      entityType === designerEntityType.enum.individual || companyName.trim().length >= 2;
     return hasIndividualName && hasCompany && !submitting;
   }, [companyName, entityType, submitting, userName]);
 
@@ -245,8 +237,8 @@ export function DesignerOnboarding({
 
       try {
         const [scope, theme] = await Promise.all([
-          fetchTaxonomyTerms('scope'),
-          fetchTaxonomyTerms('theme'),
+          fetchTaxonomyTerms(PROFILE_TAXONOMY_KIND.SCOPE),
+          fetchTaxonomyTerms(PROFILE_TAXONOMY_KIND.THEME),
         ]);
 
         if (!cancelled) {
@@ -296,25 +288,26 @@ export function DesignerOnboarding({
     const trimmedUserName = userName.trim();
     const trimmedCompanyName = companyName.trim();
     const fallbackUserName = signedInName?.trim() || trimmedCompanyName;
-    const effectiveUserName = entityType === 'company' ? fallbackUserName : trimmedUserName;
+    const effectiveUserName =
+      entityType === designerEntityType.enum.company ? fallbackUserName : trimmedUserName;
 
-    if (entityType === 'individual' && trimmedUserName.length < 2) {
+    if (entityType === designerEntityType.enum.individual && trimmedUserName.length < 2) {
       setError('Add your name so clients know who they are meeting.');
       return;
     }
-    if (entityType === 'company' && trimmedCompanyName.length < 2) {
+    if (entityType === designerEntityType.enum.company && trimmedCompanyName.length < 2) {
       setError('Add your company name to create the studio workspace.');
       return;
     }
-    if (entityType === 'individual' && step === 'details') {
+    if (entityType === designerEntityType.enum.individual && step === 'details') {
       setStep('presence');
       return;
     }
-    if (entityType === 'company' && step === 'details') {
+    if (entityType === designerEntityType.enum.company && step === 'details') {
       setStep('presence');
       return;
     }
-    if (entityType === 'company' && step === 'presence') {
+    if (entityType === designerEntityType.enum.company && step === 'presence') {
       setStep('services');
       return;
     }
@@ -322,6 +315,8 @@ export function DesignerOnboarding({
     setSubmitting(true);
     try {
       const phone = toE164PhoneNumber(whatsappCountry, whatsappNumber) ?? undefined;
+      const normalizedWebsiteUrl = normalizeOptionalUrl(websiteUrl);
+      const normalizedGoogleBusinessUrl = normalizeOptionalUrl(googleBusinessUrl);
       const foundedYearValue = Number.parseInt(foundedYear, 10);
       const staffCount = teamSizeToStaffCount(teamSize);
       const payload: OnboardDesignerInput = {
@@ -330,11 +325,13 @@ export function DesignerOnboarding({
         address: address.trim() || undefined,
         scopeIds: selectedScopeIds,
         themeIds: selectedThemeIds,
-        ...(entityType === 'company' ? { companyName: trimmedCompanyName } : {}),
+        ...(entityType === designerEntityType.enum.company
+          ? { companyName: trimmedCompanyName }
+          : {}),
         ...(phone ? { phone } : {}),
-        ...(normalizeUrl(websiteUrl) ? { websiteUrl: normalizeUrl(websiteUrl) } : {}),
-        ...(normalizeUrl(googleBusinessUrl)
-          ? { googleBusinessUrl: normalizeUrl(googleBusinessUrl) }
+        ...(normalizedWebsiteUrl ? { websiteUrl: normalizedWebsiteUrl } : {}),
+        ...(normalizedGoogleBusinessUrl
+          ? { googleBusinessUrl: normalizedGoogleBusinessUrl }
           : {}),
         ...(optionalTrimmed(instagramHandle)
           ? { instagramHandle: optionalTrimmed(instagramHandle) }
@@ -345,13 +342,13 @@ export function DesignerOnboarding({
         ...(optionalTrimmed(youtubeHandle)
           ? { youtubeHandle: optionalTrimmed(youtubeHandle) }
           : {}),
-        ...(entityType === 'company' && optionalTrimmed(firmType)
+        ...(entityType === designerEntityType.enum.company && optionalTrimmed(firmType)
           ? { firmType: optionalTrimmed(firmType) }
           : {}),
-        ...(entityType === 'company' && Number.isFinite(foundedYearValue)
+        ...(entityType === designerEntityType.enum.company && Number.isFinite(foundedYearValue)
           ? { foundedYear: foundedYearValue }
           : {}),
-        ...(entityType === 'company' && staffCount ? { staffCount } : {}),
+        ...(entityType === designerEntityType.enum.company && staffCount ? { staffCount } : {}),
       };
       const response = await onSubmitOnboarding(payload);
       setResult(response.data);
@@ -429,7 +426,7 @@ export function DesignerOnboarding({
           </h1>
         </div>
 
-        {entityType === 'individual' && step === 'details' ? (
+        {entityType === designerEntityType.enum.individual && step === 'details' ? (
           <div className="flex flex-col gap-5">
             <div className="flex items-start gap-6">
               <div className="relative shrink-0">
@@ -498,7 +495,7 @@ export function DesignerOnboarding({
               />
             </div>
           </div>
-        ) : entityType === 'individual' && step === 'presence' ? (
+        ) : entityType === designerEntityType.enum.individual && step === 'presence' ? (
           <PresenceFields
             firstName={firstName}
             formId={formId}
@@ -515,7 +512,7 @@ export function DesignerOnboarding({
             websiteUrlError={websiteUrlError}
             googleBusinessUrlError={googleBusinessUrlError}
           />
-        ) : entityType === 'company' && step === 'details' ? (
+        ) : entityType === designerEntityType.enum.company && step === 'details' ? (
           <CompanyBasicsFields
             address={address}
             companyName={companyName}
@@ -525,7 +522,7 @@ export function DesignerOnboarding({
             onCompanyNameChange={setCompanyName}
             onFirmTypeChange={setFirmType}
           />
-        ) : entityType === 'company' && step === 'presence' ? (
+        ) : entityType === designerEntityType.enum.company && step === 'presence' ? (
           <CompanyPresenceFields
             formId={formId}
             googleBusinessUrl={googleBusinessUrl}
@@ -546,7 +543,7 @@ export function DesignerOnboarding({
             websiteUrlError={websiteUrlError}
             googleBusinessUrlError={googleBusinessUrlError}
           />
-        ) : entityType === 'company' && step === 'services' ? (
+        ) : entityType === designerEntityType.enum.company && step === 'services' ? (
           <CompanyServicesFields
             formId={formId}
             foundedYear={foundedYear}
@@ -815,8 +812,10 @@ function CompanyServicesFields({
 
       <TaxonomyMultiSelect
         id={`${formId}-services`}
+        density="compact"
         label="Services offered"
         labelHint="Select all that apply"
+        limit={PROFILE_FOOTPRINT_LIMITS.scope}
         emptyLabel={taxonomyLoading ? 'Loading services...' : 'No services available'}
         options={scopeOptions}
         values={selectedScopeIds}
@@ -825,8 +824,10 @@ function CompanyServicesFields({
 
       <TaxonomyMultiSelect
         id={`${formId}-themes`}
+        density="compact"
         label="Design themes"
         labelHint="Select all that apply"
+        limit={PROFILE_FOOTPRINT_LIMITS.theme}
         emptyLabel={taxonomyLoading ? 'Loading themes...' : 'No themes available'}
         options={themeOptions}
         values={selectedThemeIds}
@@ -849,82 +850,6 @@ function CompanyServicesFields({
           onValueChange={onTeamSizeChange}
         />
       </div>
-    </div>
-  );
-}
-
-function TaxonomyMultiSelect({
-  emptyLabel,
-  id,
-  label,
-  labelHint,
-  onValuesChange,
-  options,
-  values,
-}: {
-  id: string;
-  label: string;
-  labelHint?: string;
-  values: string[];
-  options: readonly TaxonomyTerm[];
-  emptyLabel: string;
-  onValuesChange: (values: string[]) => void;
-}) {
-  const selectedLabels = options
-    .filter((option) => values.includes(option.id))
-    .map((option) => option.label);
-  const displayValue = selectedLabels.length > 0 ? selectedLabels.join(', ') : 'Select options';
-
-  function toggleOption(optionId: string) {
-    if (values.includes(optionId)) {
-      onValuesChange(values.filter((value) => value !== optionId));
-      return;
-    }
-    onValuesChange([...values, optionId]);
-  }
-
-  return (
-    <div className="grid gap-1">
-      <Label htmlFor={id} className="text-[13px] font-medium leading-relaxed">
-        {label}{' '}
-        {labelHint ? (
-          <span className="font-normal text-muted-foreground">({labelHint})</span>
-        ) : null}
-      </Label>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            id={id}
-            type="button"
-            className="flex h-8 w-full items-center justify-between gap-3 rounded-md border bg-background px-2 text-left text-[13px] font-medium shadow-xs outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <span className="min-w-0 truncate">{displayValue}</span>
-            <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          sideOffset={2}
-          collisionPadding={8}
-          className="w-[var(--radix-dropdown-menu-trigger-width)]"
-        >
-          {options.length > 0 ? (
-            options.map((option) => (
-              <DropdownMenuCheckboxItem
-                key={option.id}
-                checked={values.includes(option.id)}
-                onCheckedChange={() => toggleOption(option.id)}
-                onSelect={(event) => event.preventDefault()}
-                className="text-[13px]"
-              >
-                {option.label}
-              </DropdownMenuCheckboxItem>
-            ))
-          ) : (
-            <div className="px-2 py-4 text-center text-xs text-muted-foreground">{emptyLabel}</div>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   );
 }

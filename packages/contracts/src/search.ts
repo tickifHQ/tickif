@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { designerEntityType } from './profiles';
 
 /**
  * Shared contracts for the `search` slice — the single source of truth for
@@ -109,11 +110,6 @@ export const designerSortOption = z
   .enum(['relevance', 'avgRating:desc', 'projectCount:desc', 'reviewCount:desc', 'yearsExperience:desc'])
   .meta({ id: 'DesignerSortOption' });
 export type DesignerSortOption = z.infer<typeof designerSortOption>;
-
-export const designerEntityType = z
-  .enum(['individual', 'company'])
-  .meta({ id: 'DesignerEntityType' });
-export type DesignerEntityType = z.infer<typeof designerEntityType>;
 
 export const searchDesignersQuerySchema = z
   .object({
