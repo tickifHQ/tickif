@@ -1,11 +1,5 @@
 import { z } from 'zod';
-
-/** E.164 without formatting separators: leading + and 8–15 digits total. */
-export const e164PhoneNumberSchema = z
-  .string()
-  .trim()
-  .regex(/^\+[1-9]\d{7,14}$/, 'Enter a valid E.164 phone number')
-  .meta({ id: 'E164PhoneNumber' });
+import { e164PhoneNumberSchema } from './common';
 
 const visitorAddressSchema = z.string().trim().min(1).max(300);
 
@@ -22,7 +16,7 @@ export const visitorProfileResponseSchema = z
   .object({
     address: visitorAddressSchema.nullable(),
     whatsappNumber: e164PhoneNumberSchema.nullable(),
-    onboardingCompletedAt: z.string().datetime(),
+    onboardingCompletedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

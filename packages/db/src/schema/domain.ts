@@ -166,9 +166,7 @@ export const visitorProfile = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     address: text('address'),
     whatsappNumber: text('whatsapp_number'),
-    onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    onboardingCompletedAt: timestamp('onboarding_completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

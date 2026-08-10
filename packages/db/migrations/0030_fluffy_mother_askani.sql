@@ -2,7 +2,7 @@ CREATE TABLE "visitor_profile" (
 	"user_id" text PRIMARY KEY NOT NULL,
 	"address" text,
 	"whatsapp_number" text,
-	"onboarding_completed_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"onboarding_completed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "visitor_profile_address_length_check" CHECK ("visitor_profile"."address" IS NULL OR char_length(trim("visitor_profile"."address")) BETWEEN 1 AND 300),

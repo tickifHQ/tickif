@@ -1,5 +1,5 @@
 {
-  "id": "ae3f2220-5402-4266-9f6d-805142628fff",
+  "id": "55a8eb2e-3930-4dd9-b48e-13871d60966f",
   "prevId": "0b4b9bfe-ba1b-4992-a9a2-345e9de1c605",
   "version": "7",
   "dialect": "postgresql",
@@ -4079,8 +4079,7 @@
           "name": "onboarding_completed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

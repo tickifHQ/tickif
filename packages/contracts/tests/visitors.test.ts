@@ -64,5 +64,14 @@ describe('visitor profile contracts', () => {
         updatedAt: '2026-08-09T10:00:00.000Z',
       }).success,
     ).toBe(true);
+    expect(
+      visitorProfileResponseSchema.safeParse({
+        address: null,
+        whatsappNumber: null,
+        onboardingCompletedAt: null,
+        createdAt: '2026-08-09T10:00:00.000Z',
+        updatedAt: '2026-08-09T10:00:00.000Z',
+      }).success,
+    ).toBe(true);
   });
 });

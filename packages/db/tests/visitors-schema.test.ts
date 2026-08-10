@@ -32,5 +32,8 @@ describe('visitor profile schema', () => {
     expect(timestamps.every((column) => 'withTimezone' in column && column.withTimezone)).toBe(
       true,
     );
+    expect(
+      timestamps.find((column) => column.name === 'onboarding_completed_at')?.notNull,
+    ).toBe(false);
   });
 });
