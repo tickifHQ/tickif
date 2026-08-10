@@ -945,6 +945,7 @@ describe('projectsService.feed', () => {
     studio: 'Studio Noir',
     rating: '4.70',
     reviewCount: 12,
+    coverImageId: '22222222-2222-4222-8222-222222222222',
     coverStatus: 'ready',
     coverDerivatives: [
       {
@@ -994,6 +995,7 @@ describe('projectsService.feed', () => {
       rating: 4.7,
       reviewCount: 12,
       tags: ['2 BHK', 'Full Home'],
+      coverImageId: '22222222-2222-4222-8222-222222222222',
       coverImageUrl: 'https://signed.example/derivatives/cover/thumb.webp',
       imageWidth: 480,
       imageHeight: 640,

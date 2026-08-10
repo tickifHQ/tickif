@@ -149,6 +149,7 @@ export type ProjectFeedItemRecord = {
   studio: string;
   rating: string; // designer_profile.avg_rating is numeric → string over the wire
   reviewCount: number;
+  coverImageId: string | null;
   coverStatus: ProjectImageRecord['status'] | null;
   coverDerivatives: ProjectImageRecord['derivatives'] | null;
   coverWidth: number | null;
@@ -175,6 +176,7 @@ function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.project
     studio: schema.designerProfile.displayName,
     rating: schema.designerProfile.avgRating,
     reviewCount: schema.designerProfile.reviewCount,
+    coverImageId: schema.project.coverImageId,
     coverStatus: cover.status,
     coverDerivatives: cover.derivatives,
     coverWidth: cover.width,
@@ -367,6 +369,33 @@ export const projectsRepository = {
         .limit(params.limit)
         .offset(params.offset)
     );
+  },
+
+  /**
+   * Public image detail starts from an image id, then resolves the published
+   * active-designer project that owns it. The feed-shaped projection lets the
+   * image page reuse the same public card metadata as discovery.
+   */
+  async findPublishedFeedProjectByImageId(imageId: string): Promise<ProjectFeedItemRecord | null> {
+    const cover = alias(schema.projectImage, 'cover');
+
+    const [row] = await db
+      .select(feedProjectColumns(cover))
+      .from(schema.projectImage)
+      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .where(
+        and(
+          eq(schema.projectImage.id, imageId),
+          eq(schema.projectImage.status, 'ready'),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .limit(1);
+
+    return row ?? null;
   },
 
   /**

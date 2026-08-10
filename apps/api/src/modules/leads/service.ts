@@ -109,6 +109,8 @@ export const leadsService = {
       activeOrgId: activeOrganizationId,
       status: listStatus(query.status),
       q: query.q,
+      sortBy: query.sortBy,
+      sortOrder: query.sortOrder,
       limit,
       offset: (page - 1) * limit,
     });
