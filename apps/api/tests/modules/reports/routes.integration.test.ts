@@ -44,6 +44,7 @@ describe('GET /api/reports/analytics', () => {
     const today = new Date();
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
     const outsideWindow = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000);
+    const eventDay = (date: Date) => date.toISOString().slice(0, 10);
 
     const ownProject = await makeProject({
       designerId: designer.id,
@@ -57,7 +58,9 @@ describe('GET /api/reports/analytics', () => {
       title: 'Older draft',
       createdAt: outsideWindow,
     });
+    const otherDesigner = await makeDesigner({ status: 'active' });
     const otherProject = await makeProject({
+      designerId: otherDesigner.id,
       title: 'Other organization project',
       status: 'published',
     });
@@ -81,6 +84,16 @@ describe('GET /api/reports/analytics', () => {
         anonymousId: randomUUID(),
         projectId: ownProject.id,
         designerProfileId: null,
+        eventDay: eventDay(today),
+        createdAt: today,
+      },
+      {
+        type: 'profile_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: null,
+        designerProfileId: otherDesigner.id,
+        eventDay: eventDay(today),
         createdAt: today,
       },
       {
@@ -89,6 +102,7 @@ describe('GET /api/reports/analytics', () => {
         anonymousId: randomUUID(),
         projectId: null,
         designerProfileId: designer.id,
+        eventDay: eventDay(yesterday),
         createdAt: yesterday,
       },
       {
@@ -97,6 +111,7 @@ describe('GET /api/reports/analytics', () => {
         anonymousId: randomUUID(),
         projectId: otherProject.id,
         designerProfileId: null,
+        eventDay: eventDay(today),
         createdAt: today,
       },
       {
@@ -105,6 +120,7 @@ describe('GET /api/reports/analytics', () => {
         anonymousId: randomUUID(),
         projectId: ownProject.id,
         designerProfileId: null,
+        eventDay: eventDay(outsideWindow),
         createdAt: outsideWindow,
       },
     ]);

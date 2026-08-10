@@ -1,4 +1,4 @@
-import { and, db, eq, or, schema, sql } from '@repo/db';
+import { and, db, eq, gte, lte, schema, sql } from '@repo/db';
 import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
@@ -119,31 +119,43 @@ export const reportsRepository = {
     to: Date;
   }): Promise<AnalyticsViewDailyCount[]> {
     const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
-    return db
-      .select({
-        type: schema.interactionEvent.type,
-        date: day,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(schema.interactionEvent)
-      .leftJoin(schema.project, eq(schema.project.id, schema.interactionEvent.projectId))
-      .where(
-        and(
-          sql<boolean>`${schema.interactionEvent.createdAt} >= ${input.from}`,
-          sql<boolean>`${schema.interactionEvent.createdAt} <= ${input.to}`,
-          or(
-            and(
-              eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROFILE_VIEW),
-              eq(schema.interactionEvent.designerProfileId, input.profileId),
-            ),
-            and(
-              eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
-              eq(schema.project.designerId, input.profileId),
-            ),
+    const [profileViews, projectViews] = await Promise.all([
+      db
+        .select({
+          type: schema.interactionEvent.type,
+          date: day,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(schema.interactionEvent)
+        .where(
+          and(
+            eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROFILE_VIEW),
+            eq(schema.interactionEvent.designerProfileId, input.profileId),
+            gte(schema.interactionEvent.createdAt, input.from),
+            lte(schema.interactionEvent.createdAt, input.to),
           ),
-        ),
-      )
-      .groupBy(schema.interactionEvent.type, day)
-      .orderBy(day, schema.interactionEvent.type);
+        )
+        .groupBy(schema.interactionEvent.type, day)
+        .orderBy(day),
+      db
+        .select({
+          type: schema.interactionEvent.type,
+          date: day,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(schema.interactionEvent)
+        .innerJoin(schema.project, eq(schema.project.id, schema.interactionEvent.projectId))
+        .where(
+          and(
+            eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
+            eq(schema.project.designerId, input.profileId),
+            gte(schema.interactionEvent.createdAt, input.from),
+            lte(schema.interactionEvent.createdAt, input.to),
+          ),
+        )
+        .groupBy(schema.interactionEvent.type, day)
+        .orderBy(day),
+    ]);
+    return [...profileViews, ...projectViews];
   },
 };
