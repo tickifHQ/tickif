@@ -4,12 +4,20 @@ import type { AuthVariables, Ownership } from '../../src/lib/auth-middleware.js'
 import { requireRole, requireAnyRole, requireOwnership } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
 
-const { isOrgMemberMock } = vi.hoisted(() => ({ isOrgMemberMock: vi.fn() }));
+const { isOrgMemberMock, getSessionWithHeadersMock } = vi.hoisted(() => ({
+  isOrgMemberMock: vi.fn(),
+  getSessionWithHeadersMock: vi.fn(),
+}));
 vi.mock('../../src/modules/orgs/service.js', () => ({
   orgsService: {
     findSoleOrganizationForUser: vi.fn(),
     isMember: isOrgMemberMock,
   },
+}));
+vi.mock('@repo/auth', () => ({
+  getSession: vi.fn(),
+  getSessionWithHeaders: getSessionWithHeadersMock,
+  setActiveOrganization: vi.fn(),
 }));
 
 type StubUser = {
@@ -50,6 +58,7 @@ function appWithUser(user: StubUser, ownership?: Ownership | null) {
 describe('RBAC guards (unit)', () => {
   beforeEach(() => {
     isOrgMemberMock.mockReset();
+    getSessionWithHeadersMock.mockReset();
   });
 
   it('401s unauthenticated users on role and ownership gates', async () => {
@@ -149,6 +158,23 @@ describe('RBAC guards (unit)', () => {
     // banned superadmin is still banned
     const bannedSu = { id: 'b3', role: 'superadmin', banned: true };
     expect((await appWithUser(bannedSu).request('/admin')).status).toBe(403);
+  });
+
+  it('does not re-read the session when the cached read already found nobody', async () => {
+    const app = new Hono<{ Variables: AuthVariables }>();
+    app.onError(onError);
+    app.use('*', async (c, next) => {
+      c.set('user', null);
+      c.set('session', null);
+      c.set('sessionFresh', false);
+      await next();
+    });
+    app.get('/admin', requireAnyRole(['admin']), (c) => c.json({ ok: true }));
+
+    expect((await app.request('/admin')).status).toBe(401);
+    // The cookie cache only ever caches a positive session, so a second lookup could not
+    // change the answer — a revoked-cookie replay must not double the query cost.
+    expect(getSessionWithHeadersMock).not.toHaveBeenCalled();
   });
 
   it('ownership: a throwing resolver surfaces as 500, never a pass', async () => {
