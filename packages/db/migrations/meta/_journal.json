@@ -232,6 +232,13 @@
       "when": 1786375753148,
       "tag": "0032_overconfident_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786376635598,
+      "tag": "0033_green_wasp",
+      "breakpoints": true
     }
   ]
 }
