@@ -9,13 +9,15 @@ const FALLBACK_HEIGHT = 600;
 export function ShowcaseCard({ project }: { project: FeedProject }) {
   const width = project.imageWidth ?? FALLBACK_WIDTH;
   const height = project.imageHeight ?? FALLBACK_HEIGHT;
-  const imageUrl = project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/${width}/${height}`;
+  const imageUrl =
+    project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/${width}/${height}`;
+  const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
 
   return (
     <Link
-      href={`/projects/${project.id}`}
-      className="group relative mb-4 block break-inside-avoid overflow-hidden rounded-xl bg-[#e9e2d0]"
+      href={href}
+      className="group relative mb-4 block break-inside-avoid overflow-hidden rounded-xl bg-muted"
     >
       <img
         src={imageUrl}
@@ -35,38 +37,59 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
         <button
           type="button"
           aria-label="Save"
-          className="grid size-8 place-items-center rounded-full bg-white/95 text-foreground shadow-md backdrop-blur"
+          className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
           onClick={(e) => e.preventDefault()}
         >
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <svg
+            viewBox="0 0 24 24"
+            className="size-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
             <path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3.5 1.5 6.5 4.5 3-3 4.5-4.5 6.5-4.5C22 5.5 23.5 9 21.5 12.5 19 16.65 12 21 12 21Z" />
           </svg>
         </button>
         <button
           type="button"
           aria-label="Share"
-          className="grid size-8 place-items-center rounded-full bg-white/95 text-foreground shadow-md backdrop-blur"
+          className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
           onClick={(e) => e.preventDefault()}
         >
-          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+          <svg
+            viewBox="0 0 24 24"
+            className="size-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden
+          >
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
             <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
           </svg>
         </button>
       </div>
 
-      <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-[#0f0c05]/80 p-[18px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        <h3 className="font-display text-xl leading-tight tracking-tight text-white">{project.title}</h3>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-white/90">
+      <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-[18px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <h3 className="font-display text-xl leading-tight tracking-tight text-background">
+          {project.title}
+        </h3>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-background/90">
           <span className="whitespace-nowrap">{project.studio}</span>
           {location && (
             <>
-              <span className="text-white/50">·</span>
+              <span className="text-background/50">·</span>
               <span className="whitespace-nowrap">{location}</span>
             </>
           )}
           <span className="whitespace-nowrap">
-            <span className="text-white/50">·</span> <span aria-hidden className="text-amber-300">★</span>{' '}
+            <span className="text-background/50">·</span>{' '}
+            <span aria-hidden className="text-primary">
+              ★
+            </span>{' '}
             {project.rating.toFixed(1)}
           </span>
         </div>
@@ -75,7 +98,7 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
             {project.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-white/[0.18] px-2 py-[3px] text-[10.5px] font-medium tracking-[0.21px] text-white backdrop-blur-sm"
+                className="rounded-full bg-background/20 px-2 py-[3px] text-[10.5px] font-medium tracking-[0.21px] text-background backdrop-blur-sm"
               >
                 {tag}
               </span>

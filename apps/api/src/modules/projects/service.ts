@@ -25,6 +25,7 @@ import type {
   PortfolioProjectStatusCounts,
   PortfolioProjectStatusGroup,
   ProjectResponse,
+  PublicImageDetailResponse,
   ProjectReviewComment,
   ProjectReviewCommentsResponse,
   PublicProjectBySlugResponse,
@@ -207,6 +208,34 @@ async function coverImageUrl(coverImage?: {
   return preview ? presignDownload({ key: preview.key }) : null;
 }
 
+async function toPublicGalleryImages(
+  images: Array<{
+    id: string;
+    derivatives: Derivative[];
+    width: number | null;
+    height: number | null;
+    roomName: string | null;
+  }>,
+) {
+  const gallery = await Promise.all(
+    images.map(async (img) => {
+      const key = pickGalleryDerivative(img.derivatives ?? []);
+      if (!key) return null;
+      const url = await presignDownload({ key }).catch(() => null);
+      if (!url) return null;
+      return {
+        id: img.id,
+        url,
+        width: img.width,
+        height: img.height,
+        roomName: img.roomName,
+      };
+    }),
+  );
+
+  return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
 function toFeedProject(
   row: ProjectFeedItemRecord,
   labels: Map<string, string>,
@@ -235,6 +264,7 @@ function toFeedProject(
     reviewCount: row.reviewCount,
     budget: labelOf('budget_band', row.budgetBandSlug),
     tags,
+    coverImageId: row.coverImageId,
     coverImageUrl,
     imageWidth: row.coverWidth,
     imageHeight: row.coverHeight,
@@ -1319,24 +1349,32 @@ export const projectsService = {
 
     const images = await projectsRepository.listPublicGalleryImages(projectId);
 
-    // Presign each image's best derivative for fullscreen display
-    const gallery = await Promise.all(
-      images.map(async (img) => {
-        const key = pickGalleryDerivative(img.derivatives ?? []);
-        if (!key) return null;
-        const url = await presignDownload({ key }).catch(() => null);
-        if (!url) return null;
-        return {
-          id: img.id,
-          url,
-          width: img.width,
-          height: img.height,
-          roomName: img.roomName,
-        };
-      }),
-    );
+    return toPublicGalleryImages(images);
+  },
 
-    return gallery.filter((item): item is NonNullable<typeof item> => item !== null);
+  async getPublicImageDetail(imageId: string): Promise<PublicImageDetailResponse> {
+    const row = await projectsRepository.findPublishedFeedProjectByImageId(imageId);
+    if (!row) throw AppError.notFound('Image not found');
+
+    const [labels, localityLabels, galleryImages, cover] = await Promise.all([
+      projectsRepository.findTaxonomyLabels(feedTaxonomyPairs(row)),
+      projectsRepository.findLocalityLabels(feedLocalityPairs(row)),
+      projectsRepository.listPublicGalleryImages(row.id).then(toPublicGalleryImages),
+      coverImageUrl({
+        status: row.coverStatus,
+        derivatives: row.coverDerivatives,
+      }).catch(() => null),
+    ]);
+
+    if (!galleryImages.some((image) => image.id === imageId)) {
+      throw AppError.notFound('Image not found');
+    }
+
+    return {
+      project: toFeedProject(row, labels, localityLabels, cover),
+      images: galleryImages,
+      activeImageId: imageId,
+    };
   },
 
   // ---------------------------------------------------------------------------
@@ -1365,18 +1403,7 @@ export const projectsService = {
         : Promise.resolve(null),
     ]);
 
-    // Presign gallery images (parallel)
-    const galleryImages = (
-      await Promise.all(
-        rawGalleryImages.map(async (img) => {
-          const key = pickGalleryDerivative(img.derivatives ?? []);
-          if (!key) return null;
-          const url = await presignDownload({ key }).catch(() => null);
-          if (!url) return null;
-          return { id: img.id, url, width: img.width, height: img.height, roomName: img.roomName };
-        }),
-      )
-    ).filter((item): item is NonNullable<typeof item> => item !== null);
+    const galleryImages = await toPublicGalleryImages(rawGalleryImages);
 
     // Resolve cover URL
     let resolvedCoverUrl: string | null = null;

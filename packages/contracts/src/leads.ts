@@ -13,6 +13,8 @@ export const listLeadsQuerySchema = z
   .object({
     status: leadListStatus,
     q: z.string().trim().min(1).max(120).optional(),
+    sortBy: z.enum(['name', 'receivedAt', 'budget']).default('receivedAt').optional(),
+    sortOrder: z.enum(['asc', 'desc']).default('desc').optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(12),
   })

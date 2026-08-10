@@ -18,6 +18,8 @@ import {
   portfolioProjectsResponseSchema,
   projectCompletenessResponseSchema,
   projectDetailResponseSchema,
+  publicImageDetailParamSchema,
+  publicImageDetailResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
   projectIdParamSchema,
@@ -508,6 +510,28 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       const images = await projectsService.getGallery(id);
       c.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
       return c.json({ images }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: 'get',
+      path: '/images/{imageId}',
+      tags: ['Projects'],
+      summary: 'Public image detail by image id',
+      request: { params: publicImageDetailParamSchema },
+      responses: {
+        200: {
+          description: 'Published project context and gallery for the active image',
+          content: { 'application/json': { schema: publicImageDetailResponseSchema } },
+        },
+        404: errorJson('Image not found or not published'),
+      },
+    }),
+    async (c) => {
+      const { imageId } = c.req.valid('param');
+      const result = await projectsService.getPublicImageDetail(imageId);
+      c.header('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      return c.json(result, 200);
     },
   )
   .openapi(portfolioRoute, async (c) => {

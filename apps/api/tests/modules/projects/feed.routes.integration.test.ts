@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
-import type { FeedProjectsResponse } from '@repo/contracts';
+import type { FeedProjectsResponse, PublicImageDetailResponse } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeTaxonomy } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -42,10 +42,19 @@ async function attachReadyCover(projectId: string) {
     width: 480,
     height: 640,
     derivatives: [
-      { variant: 'thumb', format: 'webp', key: `derivatives/${projectId}/thumb.webp`, width: 320, height: 240 },
+      {
+        variant: 'thumb',
+        format: 'webp',
+        key: `derivatives/${projectId}/thumb.webp`,
+        width: 320,
+        height: 240,
+      },
     ],
   });
-  await db.update(schema.project).set({ coverImageId: cover.id }).where(eq(schema.project.id, projectId));
+  await db
+    .update(schema.project)
+    .set({ coverImageId: cover.id })
+    .where(eq(schema.project.id, projectId));
   return cover;
 }
 
@@ -126,7 +135,10 @@ describe('GET /api/projects/feed', () => {
     const designer = await activeDesigner();
     const project = await makePublishedProject(designer.id, { title: 'No Cover Yet' });
     const cover = await makeProjectImage({ projectId: project.id, status: 'processing' });
-    await db.update(schema.project).set({ coverImageId: cover.id }).where(eq(schema.project.id, project.id));
+    await db
+      .update(schema.project)
+      .set({ coverImageId: cover.id })
+      .where(eq(schema.project.id, project.id));
 
     const { body } = await getFeed();
     expect(body.projects[0]?.coverImageUrl).toBeNull();
@@ -146,8 +158,18 @@ describe('GET /api/projects/feed', () => {
     const mumbai = await makeTaxonomy({ kind: 'city', slug: 'mumbai', label: 'Mumbai' });
     const pune = await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
     // Same locality slug under two different cities, with different labels.
-    await makeTaxonomy({ kind: 'locality', slug: 'andheri', label: 'Andheri', parentId: mumbai.id });
-    await makeTaxonomy({ kind: 'locality', slug: 'andheri', label: 'Andheri West', parentId: pune.id });
+    await makeTaxonomy({
+      kind: 'locality',
+      slug: 'andheri',
+      label: 'Andheri',
+      parentId: mumbai.id,
+    });
+    await makeTaxonomy({
+      kind: 'locality',
+      slug: 'andheri',
+      label: 'Andheri West',
+      parentId: pune.id,
+    });
 
     const designer = await activeDesigner();
     await makePublishedProject(designer.id, {
@@ -161,5 +183,48 @@ describe('GET /api/projects/feed', () => {
 
     const { body } = await getFeed();
     expect(body.projects[0]).toMatchObject({ city: 'Pune', locality: 'Andheri West' });
+  });
+});
+
+describe('GET /api/projects/images/:imageId', () => {
+  it('serves a public image detail payload for a ready image in a published project', async () => {
+    await seedFeedTaxonomy();
+    const designer = await activeDesigner({
+      displayName: 'Studio Public',
+      avgRating: '4.80',
+      reviewCount: 7,
+    });
+    const project = await makePublishedProject(designer.id, { title: 'Public Image Project' });
+    const cover = await attachReadyCover(project.id);
+    const activeImage = await makeProjectImage({
+      projectId: project.id,
+      status: 'ready',
+      width: 1200,
+      height: 800,
+      derivatives: [
+        {
+          variant: 'large',
+          format: 'webp',
+          key: `derivatives/${project.id}/active-large.webp`,
+          width: 1200,
+          height: 800,
+        },
+      ],
+    });
+
+    const res = await app.request(`/api/projects/images/${activeImage.id}`);
+    const body = (await res.json()) as PublicImageDetailResponse;
+
+    expect(res.status).toBe(200);
+    expect(body.activeImageId).toBe(activeImage.id);
+    expect(body.project).toMatchObject({
+      id: project.id,
+      coverImageId: cover.id,
+      title: 'Public Image Project',
+      studio: 'Studio Public',
+    });
+    expect(body.images.map((image) => image.id)).toEqual(
+      expect.arrayContaining([cover.id, activeImage.id]),
+    );
   });
 });

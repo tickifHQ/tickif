@@ -1,5 +1,5 @@
 import { ilike } from 'drizzle-orm';
-import { db, schema, eq, and, or, desc, sql } from '@repo/db';
+import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
 import type { CreateLeadInput, LeadStatus } from '@repo/contracts';
 
 export type LeadRecord = typeof schema.lead.$inferSelect;
@@ -28,6 +28,8 @@ export type ListLeadsParams = {
   activeOrgId: string;
   status?: LeadStatus;
   q?: string;
+  sortBy?: 'name' | 'receivedAt' | 'budget';
+  sortOrder?: 'asc' | 'desc';
   limit: number;
   offset: number;
 };
@@ -67,10 +69,21 @@ export const leadsRepository = {
       eq(schema.lead.organizationId, params.activeOrgId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
       params.q
-        ? or(ilike(schema.lead.name, `%${params.q}%`), ilike(schema.project.title, `%${params.q}%`))
+        ? or(
+            ilike(schema.lead.name, `%${params.q}%`),
+            ilike(schema.lead.contactNumber, `%${params.q}%`),
+            ilike(schema.project.title, `%${params.q}%`),
+          )
         : undefined,
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
+
+    const direction = params.sortOrder === 'asc' ? asc : desc;
+    const sortColumn = params.sortBy === 'name'
+      ? schema.lead.name
+      : params.sortBy === 'budget'
+        ? schema.lead.budgetBandSlug
+        : schema.lead.receivedAt;
 
     const [items, [count]] = await Promise.all([
       db
@@ -87,7 +100,7 @@ export const leadsRepository = {
         .from(schema.lead)
         .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
         .where(where)
-        .orderBy(desc(schema.lead.receivedAt))
+        .orderBy(direction(sortColumn))
         .limit(params.limit)
         .offset(params.offset),
       db
