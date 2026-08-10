@@ -307,14 +307,17 @@ function toPublicMotifs(
   });
 }
 
-function toPublicRoom(room: PublicProjectRoomRecord) {
+function toPublicRoom(room: PublicProjectRoomRecord, photoCount: number) {
   return {
     id: room.id,
-    roomType: { slug: room.roomTypeSlug, label: room.roomTypeLabel },
+    roomType:
+      room.roomTypeSlug && room.roomTypeLabel
+        ? { slug: room.roomTypeSlug, label: room.roomTypeLabel }
+        : null,
     name: room.name,
     description: room.description,
     sortOrder: room.sortOrder,
-    photoCount: room.photoCount,
+    photoCount,
   };
 }
 
@@ -1526,77 +1529,61 @@ export const projectsService = {
 
     const { project, designer } = result;
 
-    const [
-      rooms,
-      rawGalleryImages,
-      coverImages,
-      logoUrl,
-      projectCount,
-      footprintCities,
-      narrative,
-      motifCounts,
-      moreCandidates,
-      budgetCandidates,
-      nearbyCandidates,
-    ] = await Promise.all([
+    // Keep each DB fan-out below half the shared ten-connection pool. This route
+    // is public and can receive many simultaneous cold-cache requests.
+    const [rooms, rawGalleryImages, coverImages, narrative] = await Promise.all([
       projectsRepository.listPublicRooms(project.id),
       projectsRepository.listPublicGalleryImages(project.id),
       project.coverImageId
         ? projectsRepository.findCoverImages([project.coverImageId])
         : Promise.resolve(new Map()),
-      designer.logoImageId
-        ? presignDownload({ key: designer.logoImageId }).catch(() => null)
-        : Promise.resolve(null),
-      projectsRepository.countPublishedByDesigner(designer.id),
-      projectsRepository.listDesignerFootprintCities(designer.id),
       projectsRepository.findPublishedProjectNarrative(project.id),
-      projectsRepository.listPublishedDesignerMotifCounts(designer.id),
-      projectsRepository.listPublishedRecommendationCandidates({
-        designerId: designer.id,
-        excludeProjectIds: [project.id],
-        limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-      }),
-      project.budgetBandSlug
-        ? projectsRepository.listPublishedRecommendationCandidates({
-            budgetBandSlug: project.budgetBandSlug,
-            excludeProjectIds: [project.id],
-            limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-          })
-        : Promise.resolve([]),
-      project.citySlug
-        ? projectsRepository.listPublishedRecommendationCandidates({
-            citySlug: project.citySlug,
-            excludeProjectIds: [project.id],
-            limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-          })
-        : Promise.resolve([]),
     ]);
+
+    const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
+    const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
+      await Promise.all([
+        designer.logoImageId
+          ? presignDownload({ key: designer.logoImageId }).catch(() => null)
+          : Promise.resolve(null),
+        projectsRepository.countPublishedByDesigner(designer.id),
+        projectsRepository.listDesignerFootprintCities(designer.id),
+        projectsRepository.listPublishedDesignerMotifCounts(designer.id),
+        projectsRepository.listPublishedRecommendationCandidates({
+          designerId: designer.id,
+          budgetBandSlug: project.budgetBandSlug,
+          citySlug: project.citySlug,
+          sourceThemeSlugs: sourceThemes,
+          excludeProjectIds: [project.id],
+          limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
+        }),
+      ]);
 
     const seenRecommendationIds = new Set([project.id]);
     const takeRecommendations = (
       candidates: ProjectRecommendationRecord[],
-      predicate: (candidate: ProjectRecommendationRecord) => boolean = () => true,
     ): ProjectRecommendationRecord[] => {
       const selected: ProjectRecommendationRecord[] = [];
       for (const candidate of candidates) {
         if (selected.length === PUBLIC_RECOMMENDATION_LIMIT) break;
-        if (seenRecommendationIds.has(candidate.id) || !predicate(candidate)) continue;
+        if (seenRecommendationIds.has(candidate.id)) continue;
         seenRecommendationIds.add(candidate.id);
         selected.push(candidate);
       }
       return selected;
     };
 
-    const sourceThemes = new Set(rawGalleryImages.flatMap((image) => image.themeSlugs));
-    const moreFromDesignerRows = takeRecommendations(moreCandidates);
-    const sameBudgetDifferentStyleRows = takeRecommendations(
-      budgetCandidates,
-      (candidate) =>
-        sourceThemes.size > 0 &&
-        candidate.themeSlugs.length > 0 &&
-        candidate.themeSlugs.every((slug) => !sourceThemes.has(slug)),
+    const moreFromDesignerRows = takeRecommendations(
+      recommendationCandidates.filter((candidate) => candidate.group === 'moreFromDesigner'),
     );
-    const nearbyRows = takeRecommendations(nearbyCandidates);
+    const sameBudgetDifferentStyleRows = takeRecommendations(
+      recommendationCandidates.filter(
+        (candidate) => candidate.group === 'sameBudgetDifferentStyle',
+      ),
+    );
+    const nearbyRows = takeRecommendations(
+      recommendationCandidates.filter((candidate) => candidate.group === 'nearby'),
+    );
     const recommendationRows = [
       ...moreFromDesignerRows,
       ...sameBudgetDifferentStyleRows,
@@ -1656,7 +1643,13 @@ export const projectsService = {
       publishedAt: project.publishedAt?.toISOString() ?? null,
       createdAt: project.createdAt.toISOString(),
       specifications: projectSpecifications(project, labels, localityLabels),
-      rooms: rooms.map(toPublicRoom),
+      rooms: rooms.map((room) => {
+        const emittedPhotoCount = galleryImages.reduce(
+          (count, image) => count + (image.roomId === room.id ? 1 : 0),
+          0,
+        );
+        return toPublicRoom(room, emittedPhotoCount);
+      }),
       images: galleryImages,
       coverImageUrl: resolvedCoverUrl,
       designer: {

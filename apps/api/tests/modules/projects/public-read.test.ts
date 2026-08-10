@@ -116,7 +116,7 @@ function makeFeedRow(overrides: Partial<ProjectFeedItemRecord> = {}): ProjectFee
 function makeRecommendationRow(
   overrides: Partial<ProjectRecommendationRecord> = {},
 ): ProjectRecommendationRecord {
-  return { ...makeFeedRow(), themeSlugs: [], ...overrides };
+  return { ...makeFeedRow(), group: 'moreFromDesigner', ...overrides };
 }
 
 // =============================================================================
@@ -176,7 +176,6 @@ describe('projectsService.getPublicBySlug', () => {
         sortOrder: 0,
         roomTypeSlug: 'living-room',
         roomTypeLabel: 'Living Room',
-        photoCount: 1,
       },
     ]);
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
@@ -194,6 +193,19 @@ describe('projectsService.getPublicBySlug', () => {
         materialSlugs: ['wood'],
         finishSlugs: ['matte'],
         tagSlugs: ['warm-tones'],
+      },
+      {
+        id: '44444444-4444-4444-8444-444444444444',
+        roomId: '22222222-2222-4222-8222-222222222222',
+        derivatives: [],
+        width: null,
+        height: null,
+        sortOrder: 1,
+        roomName: 'Living Room',
+        themeSlugs: [],
+        materialSlugs: [],
+        finishSlugs: [],
+        tagSlugs: [],
       },
     ]);
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
@@ -250,6 +262,7 @@ describe('projectsService.getPublicBySlug', () => {
     expect(result.slug).toBe('modern-apartment');
     expect(result.rooms).toHaveLength(1);
     expect(result.rooms[0]?.name).toBe('Living Room');
+    expect(result.rooms[0]?.photoCount).toBe(1);
     expect(result.images).toHaveLength(1);
     expect(result.images[0]?.url).toContain('signed.example');
     expect(result.images[0]).toMatchObject({
@@ -338,30 +351,31 @@ describe('projectsService.getPublicBySlug', () => {
         ['budget_band:10-20l', '₹10L - ₹20L'],
       ]),
     );
-    const more = makeRecommendationRow({ id: 'more', slug: 'more', themeSlugs: ['classic'] });
+    const more = makeRecommendationRow({ id: 'more', slug: 'more' });
     const budget = makeRecommendationRow({
       id: 'budget',
       slug: 'budget',
-      themeSlugs: ['traditional'],
+      group: 'sameBudgetDifferentStyle',
     });
     const overlappingBudget = makeRecommendationRow({
       id: 'overlap',
       slug: 'overlap',
-      themeSlugs: ['contemporary'],
+      group: 'sameBudgetDifferentStyle',
     });
-    const nearby = makeRecommendationRow({ id: 'nearby', slug: 'nearby' });
-    vi.mocked(projectsRepository.listPublishedRecommendationCandidates).mockImplementation(
-      async (params) => {
-        if (params.designerId) return [more];
-        if (params.budgetBandSlug) return [more, overlappingBudget, budget];
-        return [budget, nearby];
-      },
-    );
+    const nearby = makeRecommendationRow({ id: 'nearby', slug: 'nearby', group: 'nearby' });
+    vi.mocked(projectsRepository.listPublishedRecommendationCandidates).mockResolvedValue([
+      more,
+      overlappingBudget,
+      budget,
+      budget,
+      nearby,
+    ]);
 
     const result = await projectsService.getPublicBySlug('modern-apartment');
 
     expect(result.recommendations.moreFromDesigner.map((project) => project.id)).toEqual(['more']);
     expect(result.recommendations.sameBudgetDifferentStyle.map((project) => project.id)).toEqual([
+      'overlap',
       'budget',
     ]);
     expect(result.recommendations.nearby.map((project) => project.id)).toEqual(['nearby']);

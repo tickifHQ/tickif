@@ -1,4 +1,4 @@
-import { ilike, inArray } from 'drizzle-orm';
+import { ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
@@ -166,9 +166,8 @@ export type PublicProjectRoomRecord = Pick<
   ProjectRoomRecord,
   'id' | 'name' | 'description' | 'sortOrder'
 > & {
-  roomTypeSlug: string;
-  roomTypeLabel: string;
-  photoCount: number;
+  roomTypeSlug: string | null;
+  roomTypeLabel: string | null;
 };
 
 export type PublicProjectGalleryImageRecord = Pick<
@@ -198,9 +197,62 @@ export type PublicProjectMotifCountRecord = {
   projectCount: number;
 };
 
+export const PROJECT_RECOMMENDATION_GROUPS = [
+  'moreFromDesigner',
+  'sameBudgetDifferentStyle',
+  'nearby',
+] as const;
+export type ProjectRecommendationGroup = (typeof PROJECT_RECOMMENDATION_GROUPS)[number];
 export type ProjectRecommendationRecord = ProjectFeedItemRecord & {
-  themeSlugs: string[];
+  group: ProjectRecommendationGroup;
 };
+
+function recommendationBranch(params: {
+  group: ProjectRecommendationGroup;
+  match: SQL;
+  excluded: SQL;
+  limit: number;
+}): SQL {
+  return sql`(
+    select
+      ${params.group}::text as "group",
+      ${schema.project.id} as "id",
+      ${schema.project.slug} as "slug",
+      ${schema.project.title} as "title",
+      ${schema.project.citySlug} as "citySlug",
+      ${schema.project.localitySlug} as "localitySlug",
+      ${schema.project.budgetBandSlug} as "budgetBandSlug",
+      ${schema.project.scopeSlug} as "scopeSlug",
+      ${schema.project.bhkSlug} as "bhkSlug",
+      ${schema.project.propertySubtypeSlug} as "propertySubtypeSlug",
+      ${schema.designerProfile.displayName} as "studio",
+      ${schema.designerProfile.avgRating} as "rating",
+      ${schema.designerProfile.reviewCount} as "reviewCount",
+      ${schema.project.coverImageId} as "coverImageId",
+      recommendation_cover.status as "coverStatus",
+      recommendation_cover.derivatives as "coverDerivatives",
+      recommendation_cover.width as "coverWidth",
+      recommendation_cover.height as "coverHeight",
+      ${schema.project.sizeSqft} as "sizeSqft",
+      ${schema.project.completedMonth} as "completedMonth",
+      ${schema.project.publishedAt} as "publishedAt",
+      ${schema.project.createdAt} as recommendation_created_at
+    from ${schema.project}
+    inner join ${schema.designerProfile}
+      on ${schema.project.designerId} = ${schema.designerProfile.id}
+    inner join ${schema.projectImage} as recommendation_cover
+      on ${schema.project.coverImageId} = recommendation_cover.id
+      and recommendation_cover.status = 'ready'
+    where ${schema.project.status} = 'published'
+      and ${schema.designerProfile.status} = 'active'
+      and ${params.match}
+      and ${params.excluded}
+    order by ${schema.project.publishedAt} desc nulls last,
+      ${schema.project.createdAt} desc,
+      ${schema.project.id} desc
+    limit ${params.limit}
+  )`;
+}
 
 /** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
 function feedProjectColumns<TAlias extends string>(
@@ -227,26 +279,6 @@ function feedProjectColumns<TAlias extends string>(
     sizeSqft: schema.project.sizeSqft,
     completedMonth: schema.project.completedMonth,
     publishedAt: schema.project.publishedAt,
-  };
-}
-
-function recommendationProjectColumns<TAlias extends string>(
-  cover: ReturnType<typeof alias<typeof schema.projectImage, TAlias>>,
-) {
-  return {
-    ...feedProjectColumns(cover),
-    themeSlugs: sql<string[]>`
-      coalesce(
-        (
-          select jsonb_agg(distinct theme.slug order by theme.slug)
-          from ${schema.projectImage} as recommendation_image
-          cross join lateral jsonb_array_elements_text(recommendation_image.theme_slugs) as theme(slug)
-          where recommendation_image.project_id = ${schema.project.id}
-            and recommendation_image.status = 'ready'
-        ),
-        '[]'::jsonb
-      )
-    `.as('theme_slugs'),
   };
 }
 
@@ -1323,7 +1355,7 @@ export const projectsRepository = {
     });
   },
 
-  /** Public rooms with their controlled room type and ready-image count. */
+  /** Public rooms with an active controlled room type when one is available. */
   async listPublicRooms(projectId: string): Promise<PublicProjectRoomRecord[]> {
     return db
       .select({
@@ -1333,34 +1365,17 @@ export const projectsRepository = {
         sortOrder: schema.projectRoom.sortOrder,
         roomTypeSlug: schema.taxonomy.slug,
         roomTypeLabel: schema.taxonomy.label,
-        photoCount: sql<number>`count(${schema.projectImage.id})::int`,
       })
       .from(schema.projectRoom)
-      .innerJoin(
+      .leftJoin(
         schema.taxonomy,
         and(
           eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
           eq(schema.taxonomy.kind, 'room'),
-        ),
-      )
-      .leftJoin(
-        schema.projectImage,
-        and(
-          eq(schema.projectImage.roomId, schema.projectRoom.id),
-          eq(schema.projectImage.projectId, projectId),
-          eq(schema.projectImage.status, 'ready'),
+          eq(schema.taxonomy.isActive, true),
         ),
       )
       .where(eq(schema.projectRoom.projectId, projectId))
-      .groupBy(
-        schema.projectRoom.id,
-        schema.projectRoom.name,
-        schema.projectRoom.description,
-        schema.projectRoom.sortOrder,
-        schema.projectRoom.createdAt,
-        schema.taxonomy.slug,
-        schema.taxonomy.label,
-      )
       .orderBy(
         asc(schema.projectRoom.sortOrder),
         asc(schema.projectRoom.createdAt),
@@ -1589,36 +1604,74 @@ export const projectsRepository = {
   async listPublishedRecommendationCandidates(params: {
     excludeProjectIds: string[];
     limit: number;
-    designerId?: string;
-    budgetBandSlug?: string;
-    citySlug?: string;
+    designerId: string;
+    budgetBandSlug: string | null;
+    citySlug: string | null;
+    sourceThemeSlugs: string[];
   }): Promise<ProjectRecommendationRecord[]> {
-    const cover = alias(schema.projectImage, 'recommendation_cover');
-    return db
-      .select(recommendationProjectColumns(cover))
-      .from(schema.project)
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .innerJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.status, 'ready')))
-      .where(
-        and(
-          eq(schema.project.status, 'published'),
-          eq(schema.designerProfile.status, 'active'),
-          params.excludeProjectIds.length > 0
-            ? notInArray(schema.project.id, params.excludeProjectIds)
-            : undefined,
-          params.designerId ? eq(schema.project.designerId, params.designerId) : undefined,
-          params.budgetBandSlug
-            ? eq(schema.project.budgetBandSlug, params.budgetBandSlug)
-            : undefined,
-          params.citySlug ? eq(schema.project.citySlug, params.citySlug) : undefined,
-        ),
-      )
-      .orderBy(
-        sql`${schema.project.publishedAt} desc nulls last`,
-        desc(schema.project.createdAt),
-        desc(schema.project.id),
-      )
-      .limit(params.limit);
+    const excluded =
+      params.excludeProjectIds.length > 0
+        ? sql`not (${schema.project.id} = any(${params.excludeProjectIds}::uuid[]))`
+        : sql`true`;
+    const branches: SQL[] = [
+      recommendationBranch({
+        group: 'moreFromDesigner',
+        match: sql`${schema.project.designerId} = ${params.designerId}`,
+        excluded,
+        limit: params.limit,
+      }),
+    ];
+
+    if (params.budgetBandSlug && params.sourceThemeSlugs.length > 0) {
+      branches.push(
+        recommendationBranch({
+          group: 'sameBudgetDifferentStyle',
+          match: sql`
+            ${schema.project.budgetBandSlug} = ${params.budgetBandSlug}
+            and exists (
+              select 1
+              from ${schema.projectImage} as styled_image
+              where styled_image.project_id = ${schema.project.id}
+                and styled_image.status = 'ready'
+                and jsonb_array_length(styled_image.theme_slugs) > 0
+            )
+            and not exists (
+              select 1
+              from ${schema.projectImage} as themed_image
+              cross join lateral jsonb_array_elements_text(themed_image.theme_slugs) as theme(slug)
+              where themed_image.project_id = ${schema.project.id}
+                and themed_image.status = 'ready'
+                and theme.slug = any(${params.sourceThemeSlugs}::text[])
+            )
+          `,
+          excluded,
+          limit: params.limit,
+        }),
+      );
+    }
+
+    if (params.citySlug) {
+      branches.push(
+        recommendationBranch({
+          group: 'nearby',
+          match: sql`${schema.project.citySlug} = ${params.citySlug}`,
+          excluded,
+          limit: params.limit,
+        }),
+      );
+    }
+
+    const result = await db.execute<ProjectRecommendationRecord>(sql`
+      select
+        "group", "id", "slug", "title", "citySlug", "localitySlug",
+        "budgetBandSlug", "scopeSlug", "bhkSlug", "propertySubtypeSlug",
+        "studio", "rating", "reviewCount", "coverImageId", "coverStatus",
+        "coverDerivatives", "coverWidth", "coverHeight", "sizeSqft",
+        "completedMonth", "publishedAt"
+      from (${sql.join(branches, sql` union all `)}) as grouped_recommendations
+      order by "group", "publishedAt" desc nulls last, recommendation_created_at desc, "id" desc
+    `);
+    return result.rows;
   },
 
   /**

@@ -484,7 +484,7 @@ export type PublicProjectDesigner = z.infer<typeof publicProjectDesignerSchema>;
 export const publicProjectRoomSchema = z
   .object({
     id: z.uuid(),
-    roomType: publicTaxonomyValueSchema,
+    roomType: publicTaxonomyValueSchema.nullable(),
     name: z.string(),
     description: z.string().nullable(),
     sortOrder: z.number().int(),

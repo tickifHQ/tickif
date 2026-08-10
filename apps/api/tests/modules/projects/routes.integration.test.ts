@@ -419,6 +419,65 @@ describe('GET /api/projects/slug/{slug}', () => {
       .set({ coverImageId: recommendedCover.id })
       .where(eq(schema.project.id, recommendedProject.id));
 
+    // More than one SQL page of newer projects share the source theme. The
+    // different-style candidate must still be found because theme exclusion is
+    // applied before the per-group limit.
+    const otherDesigner = await makeDesigner({ status: 'active', displayName: 'Studio B' });
+    for (let index = 0; index < 13; index += 1) {
+      const overlappingProject = await makeProject({
+        designerId: otherDesigner.id,
+        title: `Contemporary Premium ${index}`,
+        status: 'published',
+        budgetBandSlug: 'premium',
+        citySlug: 'delhi',
+        publishedAt: new Date(`2025-08-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`),
+      });
+      const overlappingCover = await makeProjectImage({
+        projectId: overlappingProject.id,
+        status: 'ready',
+        themeSlugs: ['contemporary'],
+        derivatives: [
+          {
+            variant: 'thumb',
+            format: 'webp',
+            key: `derivatives/public/overlap-${index}.webp`,
+            width: 400,
+            height: 300,
+          },
+        ],
+      });
+      await db
+        .update(schema.project)
+        .set({ coverImageId: overlappingCover.id })
+        .where(eq(schema.project.id, overlappingProject.id));
+    }
+    const differentStyleProject = await makeProject({
+      designerId: otherDesigner.id,
+      title: 'Classic Premium Home',
+      status: 'published',
+      budgetBandSlug: 'premium',
+      citySlug: 'delhi',
+      publishedAt: new Date('2025-05-01T00:00:00.000Z'),
+    });
+    const differentStyleCover = await makeProjectImage({
+      projectId: differentStyleProject.id,
+      status: 'ready',
+      themeSlugs: ['traditional'],
+      derivatives: [
+        {
+          variant: 'thumb',
+          format: 'webp',
+          key: 'derivatives/public/classic-premium.webp',
+          width: 400,
+          height: 300,
+        },
+      ],
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: differentStyleCover.id })
+      .where(eq(schema.project.id, differentStyleProject.id));
+
     const response = await app.request('/api/projects/slug/sunlit-bandra-apartment');
 
     expect(response.status).toBe(200);
@@ -462,12 +521,26 @@ describe('GET /api/projects/slug/{slug}', () => {
       ]),
       recommendations: {
         moreFromDesigner: [{ id: recommendedProject.id, completionYear: 2024 }],
+        sameBudgetDifferentStyle: [{ id: differentStyleProject.id }],
       },
     });
     expect(body.images[0]?.url).toContain('living-room-large.webp');
     expect(body.images).toHaveLength(1);
     expect(body.images.some((item) => item.id === processingImage.id)).toBe(false);
     expect(JSON.stringify(body)).not.toContain('originals/private');
+
+    await db
+      .update(schema.taxonomy)
+      .set({ isActive: false })
+      .where(eq(schema.taxonomy.id, roomType.id));
+    const retiredRoomTypeResponse = await app.request(
+      '/api/projects/slug/sunlit-bandra-apartment',
+    );
+    const retiredRoomTypeBody =
+      (await retiredRoomTypeResponse.json()) as PublicProjectBySlugResponse;
+    expect(retiredRoomTypeBody.rooms).toEqual([
+      expect.objectContaining({ id: room.id, roomType: null, photoCount: 1 }),
+    ]);
   });
 
   it('returns 404 for an unpublished project slug', async () => {

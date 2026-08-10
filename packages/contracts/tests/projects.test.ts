@@ -176,7 +176,7 @@ describe('publicProjectBySlugResponseSchema', () => {
       rooms: [
         {
           id: '22222222-2222-4222-8222-222222222222',
-          roomType: { slug: 'living-room', label: 'Living Room' },
+          roomType: null,
           name: 'Living Room',
           description: null,
           sortOrder: 0,
