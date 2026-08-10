@@ -15,7 +15,7 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectBySlug: vi.fn(),
-    findPublishedFeedProjectByImageId: vi.fn(),
+    findPublicProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
     findSimilarPublished: vi.fn(),
     findDesignerById: vi.fn(),
@@ -156,6 +156,7 @@ describe('projectsService.getPublicBySlug', () => {
       project: makeProject(),
       designer: {
         id: 'designer-1',
+        status: 'active',
         displayName: 'Studio A',
         orgSlug: 'studio-a',
         avgRating: '4.5',
@@ -287,6 +288,7 @@ describe('projectsService.getPublicBySlug', () => {
       project: makeProject({ coverImageId: null }),
       designer: {
         id: 'designer-1',
+        status: 'active',
         displayName: 'Studio A',
         orgSlug: 'studio-a',
         avgRating: '4.5',
@@ -315,6 +317,7 @@ describe('projectsService.getPublicBySlug', () => {
       project: makeProject(),
       designer: {
         id: 'designer-1',
+        status: 'active',
         displayName: 'Studio A',
         orgSlug: 'studio-a',
         avgRating: '4.5',
@@ -388,34 +391,68 @@ describe('projectsService.getPublicBySlug', () => {
 
 describe('projectsService.getPublicImageDetail', () => {
   it('returns 404 when the image is not public', async () => {
-    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue(null);
 
     await expect(
       projectsService.getPublicImageDetail('22222222-2222-4222-8222-222222222222'),
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  it('fails closed if a public lookup ever returns a non-public record', async () => {
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
+      project: makeProject({ status: 'draft' }),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'individual',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 0,
+      },
+    });
+
+    await expect(
+      projectsService.getPublicImageDetail('22222222-2222-4222-8222-222222222222'),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(projectsRepository.listPublicGalleryImages).not.toHaveBeenCalled();
+  });
+
   it('returns the active image with published project context and gallery URLs', async () => {
     const activeImageId = '22222222-2222-4222-8222-222222222222';
-    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(
-      makeFeedRow({
-        id: '11111111-1111-4111-8111-111111111111',
-        coverDerivatives: [
-          {
-            variant: 'thumb',
-            format: 'webp',
-            key: 'deriv/cover.webp',
-            width: 400,
-            height: 300,
-          },
-        ],
-      }),
-    );
+    const projectId = '11111111-1111-4111-8111-111111111111';
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
+      project: makeProject({ id: projectId, coverImageId: activeImageId }),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'company',
+        logoImageId: null,
+        bio: 'Residential design studio',
+        firmType: 'Interior design studio',
+        foundedYear: 2018,
+        yearsExperience: 8,
+      },
+    });
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
       new Map([
+        ['property_type:apartment', 'Apartment'],
         ['city:mumbai', 'Mumbai'],
         ['bhk:3-bhk', '3 BHK'],
         ['scope:full-home', 'Full Home'],
+        ['budget_band:10-20l', '₹10L - ₹20L'],
+        ['theme:contemporary', 'Contemporary'],
+        ['material:wood', 'Wood'],
+        ['finish:matte', 'Matte'],
       ]),
     );
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(
@@ -438,38 +475,182 @@ describe('projectsService.getPublicImageDetail', () => {
         height: 900,
         sortOrder: 0,
         roomName: 'Living Room',
-        themeSlugs: [],
-        materialSlugs: [],
-        finishSlugs: [],
-        tagSlugs: [],
+        themeSlugs: ['contemporary'],
+        materialSlugs: ['wood'],
+        finishSlugs: ['matte'],
+        tagSlugs: ['warm-tones'],
       },
     ]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          activeImageId,
+          {
+            id: activeImageId,
+            status: 'ready',
+            derivatives: [
+              {
+                variant: 'thumb',
+                format: 'webp',
+                key: 'deriv/cover.webp',
+                width: 400,
+                height: 300,
+              },
+            ],
+          },
+        ],
+      ]),
+    );
+    vi.mocked(projectsRepository.countPublishedByDesigner).mockResolvedValue(24);
+    vi.mocked(projectsRepository.listDesignerFootprintCities).mockResolvedValue([
+      { slug: 'mumbai', label: 'Mumbai' },
+    ]);
+    vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue({
+      body: 'The team understood how we wanted the completed home to feel.',
+      rating: 5,
+      publishedAt: new Date('2025-07-02T00:00:00.000Z'),
+    });
 
     const result = await projectsService.getPublicImageDetail(activeImageId);
 
+    expect(projectsRepository.findPublicProjectByImageId).toHaveBeenCalledWith(activeImageId);
+    expect(projectsRepository.findPublicProjectBySlug).not.toHaveBeenCalled();
+    expect(projectsRepository.listPublicRooms).not.toHaveBeenCalled();
+    expect(projectsRepository.listPublishedDesignerMotifCounts).not.toHaveBeenCalled();
     expect(result.activeImageId).toBe(activeImageId);
-    expect(result.project.id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(result.activeImage).toMatchObject({
+      id: activeImageId,
+      roomName: 'Living Room',
+      themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+      materials: [{ slug: 'wood', label: 'Wood' }],
+      finishes: [{ slug: 'matte', label: 'Matte' }],
+      tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
+    });
+    expect(result.project.id).toBe(projectId);
     expect(result.project.city).toBe('Mumbai');
     expect(result.project.locality).toBe('Bandra');
+    expect(result.project.description).toBe('A modern apartment design');
+    expect(result.project.specifications.budgetBand).toEqual({
+      slug: '10-20l',
+      label: '₹10L - ₹20L',
+    });
     expect(result.project.coverImageUrl).toContain('signed.example/deriv/cover.webp');
+    expect(result.designer).toMatchObject({
+      displayName: 'Studio A',
+      projectCount: 24,
+      footprintCities: [{ slug: 'mumbai', label: 'Mumbai' }],
+    });
+    expect(result.narrative?.rating).toBe(5);
+    expect(result.recommendations).toEqual({
+      moreFromDesigner: [],
+      sameBudgetDifferentStyle: [],
+      nearby: [],
+    });
     expect(result.images).toEqual([
       {
         id: activeImageId,
         url: 'https://signed.example/deriv/living.webp',
         width: 1200,
         height: 900,
+        roomId: null,
         roomName: 'Living Room',
+        sortOrder: 0,
+        themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+        materials: [{ slug: 'wood', label: 'Wood' }],
+        finishes: [{ slug: 'matte', label: 'Matte' }],
+        tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
       },
     ]);
   });
 
-  it('returns 404 when the active image cannot be signed into the gallery', async () => {
-    vi.mocked(projectsRepository.findPublishedFeedProjectByImageId).mockResolvedValue(
-      makeFeedRow(),
+  it('returns no cover media when the configured cover is not ready', async () => {
+    const activeImageId = '22222222-2222-4222-8222-222222222222';
+    const processingCoverId = '33333333-3333-4333-8333-333333333333';
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
+      project: makeProject({ coverImageId: processingCoverId }),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'individual',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 0,
+      },
+    });
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
+      {
+        id: activeImageId,
+        roomId: null,
+        derivatives: [
+          {
+            variant: 'large',
+            format: 'webp',
+            key: 'deriv/active.webp',
+            width: 1200,
+            height: 900,
+          },
+        ],
+        width: 1200,
+        height: 900,
+        sortOrder: 0,
+        roomName: null,
+        themeSlugs: [],
+        materialSlugs: [],
+        finishSlugs: [],
+        tagSlugs: [],
+      },
+    ]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(
+      new Map([
+        [
+          processingCoverId,
+          {
+            id: processingCoverId,
+            status: 'processing',
+            derivatives: [],
+          },
+        ],
+      ]),
     );
+
+    const result = await projectsService.getPublicImageDetail(activeImageId);
+
+    expect(result.project).toMatchObject({
+      coverImageId: processingCoverId,
+      coverImageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    });
+  });
+
+  it('returns 404 when the active image cannot be signed into the gallery', async () => {
+    vi.mocked(projectsRepository.findPublicProjectByImageId).mockResolvedValue({
+      project: makeProject(),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'individual',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 0,
+      },
+    });
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
 
     await expect(
       projectsService.getPublicImageDetail('22222222-2222-4222-8222-222222222222'),

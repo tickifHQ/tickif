@@ -109,7 +109,107 @@ describe('portfolioProjectsQuerySchema', () => {
 });
 
 describe('publicImageDetailResponseSchema', () => {
-  it('accepts a public image detail payload keyed by the active image id', () => {
+  it('accepts a display-ready public image detail payload keyed by the active image id', () => {
+    const payload = {
+      project: {
+        id: VALID_UUID,
+        slug: 'sunlit-bandra-apartment',
+        title: 'Sunlit Bandra Apartment',
+        description: 'A warm contemporary apartment.',
+        buildingName: 'Sea View',
+        studio: 'Studio A',
+        city: 'Mumbai',
+        locality: 'Bandra',
+        rating: 4.5,
+        reviewCount: 10,
+        budget: '₹15L - ₹35L',
+        tags: ['3 BHK'],
+        coverImageId: '22222222-2222-4222-8222-222222222222',
+        coverImageUrl: null,
+        imageWidth: 480,
+        imageHeight: 600,
+        specifications: {
+          propertyType: { slug: 'residential', label: 'Residential' },
+          propertySubtype: { slug: 'apartment', label: 'Apartment' },
+          scope: { slug: 'full-home', label: 'Full Home' },
+          bhk: { slug: '3-bhk', label: '3 BHK' },
+          city: { slug: 'mumbai', label: 'Mumbai' },
+          locality: { slug: 'bandra', label: 'Bandra' },
+          budgetBand: { slug: 'premium', label: 'Premium' },
+        },
+      },
+      images: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          url: 'https://images.example.com/living-room.webp',
+          width: 1200,
+          height: 900,
+          roomId: '33333333-3333-4333-8333-333333333333',
+          roomName: 'Living Room',
+          sortOrder: 0,
+          themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+          materials: [{ slug: 'wood', label: 'Wood' }],
+          finishes: [{ slug: 'matte', label: 'Matte' }],
+          tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
+        },
+      ],
+      activeImage: {
+        id: '22222222-2222-4222-8222-222222222222',
+        url: 'https://images.example.com/living-room.webp',
+        width: 1200,
+        height: 900,
+        roomId: '33333333-3333-4333-8333-333333333333',
+        roomName: 'Living Room',
+        sortOrder: 0,
+        themes: [{ slug: 'contemporary', label: 'Contemporary' }],
+        materials: [{ slug: 'wood', label: 'Wood' }],
+        finishes: [{ slug: 'matte', label: 'Matte' }],
+        tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
+      },
+      activeImageId: '22222222-2222-4222-8222-222222222222',
+      designer: {
+        id: '44444444-4444-4444-8444-444444444444',
+        displayName: 'Studio A',
+        slug: 'studio-a',
+        avgRating: '4.80',
+        reviewCount: 12,
+        entityType: 'company',
+        logoUrl: null,
+        bio: 'Residential interior design studio.',
+        firmType: 'Interior design studio',
+        foundedYear: 2018,
+        yearsExperience: 8,
+        projectCount: 24,
+        footprintCities: [{ slug: 'mumbai', label: 'Mumbai' }],
+      },
+      narrative: {
+        body: 'The team understood how we wanted the home to feel.',
+        rating: 5,
+        publishedAt: '2025-07-02T00:00:00.000Z',
+      },
+      recommendations: {
+        moreFromDesigner: [],
+        sameBudgetDifferentStyle: [],
+        nearby: [],
+      },
+    };
+
+    const result = publicImageDetailResponseSchema.safeParse(payload);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      project: {
+        description: 'A warm contemporary apartment.',
+        specifications: { city: { slug: 'mumbai', label: 'Mumbai' } },
+      },
+      activeImage: { id: '22222222-2222-4222-8222-222222222222' },
+      designer: { id: '44444444-4444-4444-8444-444444444444' },
+      narrative: { rating: 5 },
+      recommendations: { moreFromDesigner: [] },
+    });
+  });
+
+  it('rejects the legacy feed-only image detail payload', () => {
     const result = publicImageDetailResponseSchema.safeParse({
       project: {
         id: VALID_UUID,
@@ -122,24 +222,16 @@ describe('publicImageDetailResponseSchema', () => {
         reviewCount: 10,
         budget: '₹15L - ₹35L',
         tags: ['3 BHK'],
-        coverImageId: '22222222-2222-4222-8222-222222222222',
+        coverImageId: null,
         coverImageUrl: null,
-        imageWidth: 480,
-        imageHeight: 600,
+        imageWidth: null,
+        imageHeight: null,
       },
-      images: [
-        {
-          id: '22222222-2222-4222-8222-222222222222',
-          url: 'https://images.example.com/living-room.webp',
-          width: 1200,
-          height: 900,
-          roomName: 'Living Room',
-        },
-      ],
+      images: [],
       activeImageId: '22222222-2222-4222-8222-222222222222',
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 });
 
