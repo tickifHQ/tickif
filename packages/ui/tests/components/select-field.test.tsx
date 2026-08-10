@@ -54,4 +54,23 @@ describe('SelectField', () => {
 
     expect(onValueChange).toHaveBeenCalledWith('');
   });
+
+  it('associates a validation error with the select', () => {
+    render(
+      <SelectField
+        id="status"
+        error="Choose a valid status."
+        label="Status"
+        value="new"
+        onValueChange={vi.fn()}
+        placeholder="Select status"
+        options={[{ label: 'New', value: 'new' }]}
+      />,
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Status' });
+    const error = screen.getByText('Choose a valid status.');
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAttribute('aria-describedby', error.id);
+  });
 });

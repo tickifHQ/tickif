@@ -19,31 +19,21 @@ const analytics: AnalyticsResponse = {
     changesRequested: 1,
   },
   leads: { total: 4, new: 2, contacted: 1, closed: 1, spam: 0 },
+  engagement: { projectViews: 12, profileViews: 5 },
   activity: [
-    { date: '2026-08-01', projectsCreated: 0, leadsReceived: 0 },
-    { date: '2026-08-02', projectsCreated: 1, leadsReceived: 0 },
-    { date: '2026-08-03', projectsCreated: 0, leadsReceived: 2 },
-    { date: '2026-08-04', projectsCreated: 0, leadsReceived: 0 },
-    { date: '2026-08-05', projectsCreated: 1, leadsReceived: 1 },
-    { date: '2026-08-06', projectsCreated: 0, leadsReceived: 0 },
-    { date: '2026-08-07', projectsCreated: 0, leadsReceived: 1 },
+    { date: '2026-08-01', projectsCreated: 0, leadsReceived: 0, projectViews: 1, profileViews: 0 },
+    { date: '2026-08-02', projectsCreated: 1, leadsReceived: 0, projectViews: 2, profileViews: 1 },
+    { date: '2026-08-03', projectsCreated: 0, leadsReceived: 2, projectViews: 1, profileViews: 1 },
+    { date: '2026-08-04', projectsCreated: 0, leadsReceived: 0, projectViews: 3, profileViews: 0 },
+    { date: '2026-08-05', projectsCreated: 1, leadsReceived: 1, projectViews: 2, profileViews: 1 },
+    { date: '2026-08-06', projectsCreated: 0, leadsReceived: 0, projectViews: 1, profileViews: 1 },
+    { date: '2026-08-07', projectsCreated: 0, leadsReceived: 1, projectViews: 2, profileViews: 1 },
   ],
-  deferredMetrics: [
-    {
-      key: 'profileViews',
-      label: 'Profile views',
-      reason: 'Requires the Phase 3 interaction event pipeline.',
-    },
-    {
-      key: 'projectViews',
-      label: 'Project views',
-      reason: 'Requires the Phase 3 interaction event pipeline.',
-    },
-  ],
+  deferredMetrics: [],
 };
 
 describe('DesignerAnalyticsDashboard', () => {
-  it('renders real metrics, activity, status breakdowns, and deferred view metrics', () => {
+  it('renders real metrics, activity, status breakdowns, and windowed view metrics', () => {
     render(<DesignerAnalyticsDashboard analytics={analytics} />);
 
     expect(
@@ -59,8 +49,11 @@ describe('DesignerAnalyticsDashboard', () => {
     expect(screen.getByRole('heading', { name: /project status/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /lead funnel/i })).toBeInTheDocument();
     expect(screen.getByText('Profile views')).toBeInTheDocument();
+    expect(screen.getByText('Profile views').parentElement).toHaveTextContent('5');
     expect(screen.getByText('Project views')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getByText('Project views').parentElement).toHaveTextContent('12');
+    expect(screen.getByText('Last 7 days')).toBeInTheDocument();
+    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
   it('renders an intentional empty state when the window has no activity', () => {

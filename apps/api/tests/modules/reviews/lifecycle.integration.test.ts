@@ -214,15 +214,21 @@ describe('review lifecycle', () => {
   it('marks only a completed matching consultation as verified', async () => {
     const { designer, author } = await makeReviewFixture();
     const project = await makeProject({ designerId: designer.id, status: 'published' });
+    // Derive the lifecycle timestamps from the current time: requestedAt defaults to now(),
+    // and consultation_booking_timestamp_order_check requires requestedAt <= confirmedAt <= completedAt.
+    const requestedAt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const confirmedAt = new Date(requestedAt.getTime() + 60 * 60 * 1000);
+    const completedAt = new Date(confirmedAt.getTime() + 60 * 60 * 1000);
     const booking = await makeConsultationBooking({
       designerProfileId: designer.id,
       organizationId: designer.orgId,
       requesterId: author.id,
       referredProjectId: project.id,
       status: 'completed',
-      confirmedSlot: { date: '2026-08-10', window: 'morning' },
-      confirmedAt: new Date('2026-08-10T09:00:00.000Z'),
-      completedAt: new Date('2026-08-10T10:00:00.000Z'),
+      confirmedSlot: { date: confirmedAt.toISOString().slice(0, 10), window: 'morning' },
+      requestedAt,
+      confirmedAt,
+      completedAt,
     });
 
     const review = await reviewsService.create(
