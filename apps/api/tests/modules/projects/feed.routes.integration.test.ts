@@ -266,6 +266,113 @@ describe('GET /api/projects/feed', () => {
   });
 });
 
+/**
+ * Composition and visibility for the two correlated `EXISTS` filters — `roomSlugs` joins
+ * project_room → taxonomy, `themes` tests jsonb containment on ready images. Both are
+ * shared with the discovery feed via `projectFeedFilterClauses`, and neither is
+ * expressible against a mocked Drizzle builder, so they are pinned against the real DB.
+ */
+describe('GET /api/projects/feed — filter composition', () => {
+  const tagThemes = (projectId: string, themes: string[]) =>
+    makeProjectImage({ projectId, status: 'ready', themeSlugs: themes });
+
+  it('ORs multiple values inside one facet', async () => {
+    const designer = await activeDesigner();
+    const warm = await makePublishedProject(designer.id, { title: 'Warm' });
+    await tagThemes(warm.id, ['warm']);
+    const minimal = await makePublishedProject(designer.id, { title: 'Minimal' });
+    await tagThemes(minimal.id, ['minimal']);
+    const coastal = await makePublishedProject(designer.id, { title: 'Coastal' });
+    await tagThemes(coastal.id, ['coastal']);
+
+    const { body } = await getFeed('?themes=warm&themes=minimal');
+
+    expect(body.projects.map((p) => p.title).sort()).toEqual(['Minimal', 'Warm']);
+  });
+
+  it('ANDs one EXISTS facet against the other and against a column facet', async () => {
+    const designer = await activeDesigner();
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+    const both = await makePublishedProject(designer.id, {
+      title: 'Warm Kitchen',
+      bhkSlug: '2-bhk',
+    });
+    await tagThemes(both.id, ['warm']);
+    await makeProjectRoom({ projectId: both.id, roomTypeId: kitchen.id });
+
+    const themeOnly = await makePublishedProject(designer.id, { title: 'Warm No Kitchen' });
+    await tagThemes(themeOnly.id, ['warm']);
+
+    const roomOnly = await makePublishedProject(designer.id, { title: 'Kitchen Not Warm' });
+    await tagThemes(roomOnly.id, ['minimal']);
+    await makeProjectRoom({ projectId: roomOnly.id, roomTypeId: kitchen.id });
+
+    const paired = await getFeed('?themes=warm&roomSlugs=kitchen');
+    expect(paired.body.projects.map((p) => p.title)).toEqual(['Warm Kitchen']);
+
+    const narrowed = await getFeed('?themes=warm&roomSlugs=kitchen&bhkSlug=2-bhk');
+    expect(narrowed.body.projects.map((p) => p.title)).toEqual(['Warm Kitchen']);
+
+    const mismatched = await getFeed('?themes=warm&roomSlugs=kitchen&bhkSlug=4-bhk');
+    expect(mismatched.body.projects).toEqual([]);
+  });
+
+  it('never surfaces an unpublished project or a suspended designer through a filter', async () => {
+    const active = await activeDesigner({ displayName: 'Active Studio' });
+    const suspended = await makeDesigner({ status: 'suspended', displayName: 'Suspended Studio' });
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+    const visible = await makePublishedProject(active.id, { title: 'Visible' });
+    await tagThemes(visible.id, ['warm']);
+    await makeProjectRoom({ projectId: visible.id, roomTypeId: kitchen.id });
+
+    // Identically tagged, but a draft: the filter must not resurrect it.
+    const draft = await makeProject({
+      designerId: active.id,
+      status: 'draft',
+      title: 'Draft Warm',
+    });
+    await tagThemes(draft.id, ['warm']);
+    await makeProjectRoom({ projectId: draft.id, roomTypeId: kitchen.id });
+
+    // Identically tagged and published, but the studio is suspended.
+    const hidden = await makePublishedProject(suspended.id, { title: 'Suspended Warm' });
+    await tagThemes(hidden.id, ['warm']);
+    await makeProjectRoom({ projectId: hidden.id, roomTypeId: kitchen.id });
+
+    expect((await getFeed('?themes=warm')).body.projects.map((p) => p.title)).toEqual(['Visible']);
+    expect((await getFeed('?roomSlugs=kitchen')).body.projects.map((p) => p.title)).toEqual([
+      'Visible',
+    ]);
+  });
+
+  it('returns a matching project once even when several of its rooms or images match', async () => {
+    const designer = await activeDesigner();
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+    const project = await makePublishedProject(designer.id, { title: 'Two Kitchens' });
+    await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 1' });
+    await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 2' });
+    await tagThemes(project.id, ['warm']);
+    await tagThemes(project.id, ['warm']);
+
+    expect((await getFeed('?roomSlugs=kitchen')).body.projects).toHaveLength(1);
+    expect((await getFeed('?themes=warm')).body.projects).toHaveLength(1);
+  });
+
+  it('resolves an unknown room or theme slug to an empty feed rather than an error', async () => {
+    const designer = await activeDesigner();
+    const project = await makePublishedProject(designer.id, { title: 'Warm' });
+    await tagThemes(project.id, ['warm']);
+
+    for (const query of ['?themes=no-such-theme', '?roomSlugs=no-such-room']) {
+      const { res, body } = await getFeed(query);
+      expect(res.status).toBe(200);
+      expect(body.projects).toEqual([]);
+    }
+  });
+});
+
 describe('GET /api/projects/images/:imageId', () => {
   it('serves a public image detail payload for a ready image in a published project', async () => {
     await seedFeedTaxonomy();
