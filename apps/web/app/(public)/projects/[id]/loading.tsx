@@ -21,7 +21,7 @@ export default function ProjectDetailLoading() {
             <Skeleton className="h-10 w-3/4 motion-reduce:animate-none" />
             <Skeleton className="mt-3 h-5 w-48 motion-reduce:animate-none" />
 
-            <div className="mt-6 grid gap-px overflow-hidden rounded-xl bg-border p-px sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border sm:grid-cols-2 lg:grid-cols-4">
               {SPECIFICATION_SKELETONS.map((key) => (
                 <div key={key} className="bg-muted px-4 py-3">
                   <Skeleton className="h-3 w-16 bg-background motion-reduce:animate-none" />

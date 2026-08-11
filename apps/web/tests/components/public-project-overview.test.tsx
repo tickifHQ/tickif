@@ -30,7 +30,13 @@ describe('PublicProjectOverview', () => {
     expect(screen.getAllByText('Anika Spaces').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Founded 2018/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/8 years of experience/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('28 Projects').length).toBeGreaterThan(0);
+    const projectCounts = screen.getAllByText('28 Projects');
+    expect(projectCounts.length).toBeGreaterThan(0);
+    for (const projectCount of projectCounts) {
+      expect(projectCount.closest('p')?.querySelector('[data-slot="tickif-brand-icon"]')).toHaveClass(
+        'text-muted-foreground',
+      );
+    }
     expect(screen.getAllByText('published').length).toBeGreaterThan(0);
     expect(screen.getAllByText('4.8').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/36 reviews/).length).toBeGreaterThan(0);
@@ -46,7 +52,8 @@ describe('PublicProjectOverview', () => {
     );
 
     const specifications = screen.getByLabelText('Project specifications');
-    expect(specifications).toHaveClass('bg-border-strong', 'p-px');
+    expect(specifications).toHaveClass('border', 'border-border-strong');
+    expect(specifications).not.toHaveClass('bg-border-strong', 'p-px');
     expect(within(specifications).getByText('Mylapore, Chennai')).toHaveClass(
       'text-foreground-disabled',
     );

@@ -45,7 +45,6 @@ describe('PublicProjectStory', () => {
       '#project-room-22222222-2222-4222-8222-222222222222',
     );
     expect(kitchenLink).not.toHaveAttribute('aria-current');
-
     fireEvent.click(kitchenLink);
 
     expect(kitchenLink).toHaveAttribute('aria-current', 'location');
@@ -58,13 +57,19 @@ describe('PublicProjectStory', () => {
 
   it('renders room images and sourced materials and finishes', () => {
     const project = makePublicProject();
+    project.images.push({
+      ...project.images[0]!,
+      id: '99999999-9999-4999-8999-999999999999',
+      url: 'https://images.example.com/living-room-detail.jpg',
+      sortOrder: 1,
+    });
     render(<PublicProjectStory project={project} />);
 
     const roomGallery = screen.getByRole('region', { name: 'Room-by-room project gallery' });
     expect(within(roomGallery).getByRole('heading', { name: 'Living Room' })).toBeInTheDocument();
-    expect(within(roomGallery).getByText('1 photo')).toBeInTheDocument();
+    expect(within(roomGallery).getByText('2 photos')).toBeInTheDocument();
     expect(
-      within(roomGallery).getByRole('link', { name: 'Open Living Room image' }),
+      within(roomGallery).getAllByRole('link', { name: 'Open Living Room image' })[0],
     ).toHaveAttribute('href', `/image/${project.images[0]!.id}`);
     expect(within(roomGallery).getByText('Teak')).toBeInTheDocument();
     expect(within(roomGallery).getByText('Matte')).toBeInTheDocument();

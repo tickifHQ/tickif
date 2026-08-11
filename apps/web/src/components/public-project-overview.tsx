@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   BadgeCheck,
   CalendarDays,
-  FolderKanban,
   MessageSquare,
   Shield,
   Star,
@@ -168,7 +167,7 @@ function DesignerCard({ project }: { project: PublicProjectDetailResponse }) {
               </p>
             ) : null}
             <p className="flex items-center gap-1.5">
-              <FolderKanban aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+              <TickifBrandIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
               <span>
                 <span className="text-foreground">
                   {designer.projectCount} {designer.projectCount === 1 ? 'Project' : 'Projects'}
@@ -283,7 +282,7 @@ export function PublicProjectOverview({ project }: { project: PublicProjectDetai
             {specifications.length > 0 ? (
               <dl
                 aria-label="Project specifications"
-                className="mt-6 overflow-hidden rounded-xl bg-border-strong p-px"
+                className="mt-6 overflow-hidden rounded-xl border border-border-strong"
               >
                 <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
                   {specifications.map((specification) => (

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Carousel,
   CarouselContent,
+  CarouselControls,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
@@ -43,8 +44,10 @@ describe('Carousel', () => {
           <CarouselItem>Living room</CarouselItem>
           <CarouselItem>Dining area</CarouselItem>
         </CarouselContent>
-        <CarouselPrevious />
-        <CarouselNext />
+        <CarouselControls>
+          <CarouselPrevious />
+          <CarouselNext />
+        </CarouselControls>
       </Carousel>,
     );
 
@@ -71,5 +74,25 @@ describe('Carousel', () => {
       key: 'ArrowLeft',
     });
     expect(carouselMocks.scrollPrev).toHaveBeenCalledOnce();
+  });
+
+  it('hides controls when every slide fits in the viewport', () => {
+    carouselMocks.api.canScrollNext.mockReturnValue(false);
+    carouselMocks.api.canScrollPrev.mockReturnValue(false);
+
+    render(
+      <Carousel aria-label="Project images">
+        <CarouselContent>
+          <CarouselItem>Living room</CarouselItem>
+        </CarouselContent>
+        <CarouselControls>
+          <CarouselPrevious />
+          <CarouselNext />
+        </CarouselControls>
+      </Carousel>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Previous slide' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next slide' })).toBeNull();
   });
 });

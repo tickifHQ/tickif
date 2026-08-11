@@ -167,6 +167,14 @@ export function CarouselItem({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
+export function CarouselControls({ className, ...props }: ComponentProps<'div'>) {
+  const { canScrollNext, canScrollPrev } = useCarousel();
+
+  if (!canScrollNext && !canScrollPrev) return null;
+
+  return <div data-slot="carousel-controls" className={className} {...props} />;
+}
+
 export function CarouselPrevious({
   className,
   variant = 'outline',

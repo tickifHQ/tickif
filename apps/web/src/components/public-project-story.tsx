@@ -6,11 +6,18 @@ import type {
 } from '@repo/contracts';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Card } from '@repo/ui/components/card';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselControls,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@repo/ui/components/carousel';
 import { Separator } from '@repo/ui/components/separator';
 import {
   BadgeCheck,
   CalendarDays,
-  FolderKanban,
   MessageSquare,
   Quote,
   Shield,
@@ -102,22 +109,38 @@ function RoomSections({ project }: { project: PublicProjectDetailResponse }) {
                 </p>
               </header>
 
-              <div className="mt-3 flex gap-4 overflow-x-auto rounded-sm pb-2">
-                {images.map((image) => (
-                  <Link
-                    key={image.id}
-                    href={`/image/${image.id}`}
-                    aria-label={`Open ${room.name} image`}
-                    className="group relative h-106 w-72 shrink-0 overflow-hidden rounded-sm bg-muted sm:w-88"
-                  >
-                    <img
-                      src={image.url}
-                      alt={`${room.name} in ${project.title}`}
-                      className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
-                    />
-                  </Link>
-                ))}
-              </div>
+              <Carousel opts={{ align: 'start', loop: false }} className="mt-3">
+                <CarouselContent className="pb-2">
+                  {images.map((image) => (
+                    <CarouselItem key={image.id} className="basis-auto">
+                      <Link
+                        href={`/image/${image.id}`}
+                        aria-label={`Open ${room.name} image`}
+                        className="group relative block h-106 w-72 overflow-hidden rounded-sm bg-muted sm:w-88"
+                      >
+                        <img
+                          src={image.url}
+                          alt={`${room.name} in ${project.title}`}
+                          className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                        />
+                      </Link>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+
+                <CarouselControls className="contents">
+                  <CarouselPrevious
+                    aria-label={`Previous ${room.name} images`}
+                    variant="neutral"
+                    className="left-3 size-9 rounded-md"
+                  />
+                  <CarouselNext
+                    aria-label={`Next ${room.name} images`}
+                    variant="neutral"
+                    className="right-3 size-9 rounded-md"
+                  />
+                </CarouselControls>
+              </Carousel>
 
               {finishes.length > 0 ? (
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -189,7 +212,7 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
 
         <div className="mt-5 flex flex-col gap-2 text-xs font-medium leading-relaxed">
           <p className="flex items-center gap-1.5">
-            <FolderKanban aria-hidden className="size-3.5 text-muted-foreground" />
+            <TickifBrandIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
             <span>{designer.projectCount} Projects</span>
             <span className="text-foreground-disabled">published</span>
           </p>

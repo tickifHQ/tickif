@@ -1,6 +1,14 @@
 import Link from 'next/link';
 import type { DesignerProjectCard, PublicProjectDetailResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselControls,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@repo/ui/components/carousel';
 import { ArrowRight } from 'lucide-react';
 import { PublicProjectCard } from '@/components/public-project-card';
 import { feedPageHref } from '@/lib/feed-params';
@@ -44,19 +52,36 @@ function RecommendationGroup({
         ) : null}
       </header>
 
-      <div className="mt-3.5 flex gap-6 overflow-x-auto pb-2">
-        {projects.map((recommendedProject) => (
-          <div key={recommendedProject.id} className="w-72 shrink-0 sm:w-80 lg:w-96">
-            <PublicProjectCard
-              project={recommendedProject}
-              studioName={recommendedProject.studio}
-              presentation="recommendation"
-              destination="project"
-              showRating
-            />
-          </div>
-        ))}
-      </div>
+      <Carousel opts={{ align: 'start', loop: false }} className="mt-3.5">
+        <CarouselContent className="pb-2">
+          {projects.map((recommendedProject) => (
+            <CarouselItem key={recommendedProject.id} className="basis-auto">
+              <div className="w-72 sm:w-80 lg:w-96">
+                <PublicProjectCard
+                  project={recommendedProject}
+                  studioName={recommendedProject.studio}
+                  presentation="recommendation"
+                  destination="project"
+                  showRating
+                />
+              </div>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+
+        <CarouselControls className="contents">
+          <CarouselPrevious
+            aria-label={`Previous ${title} projects`}
+            variant="neutral"
+            className="left-3 size-9 rounded-md"
+          />
+          <CarouselNext
+            aria-label={`Next ${title} projects`}
+            variant="neutral"
+            className="right-3 size-9 rounded-md"
+          />
+        </CarouselControls>
+      </Carousel>
     </section>
   );
 }
