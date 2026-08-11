@@ -22,7 +22,7 @@ describe('TryFilterCard', () => {
     expect(
       screen.getByText('These came up for explorers with your budget but a different style.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '₹3-5L' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '₹3–5L' })).toHaveAttribute(
       'href',
       '/?budgetBand=3l-5l',
     );

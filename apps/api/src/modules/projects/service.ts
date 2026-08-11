@@ -388,10 +388,14 @@ function toDesignerProjectCard(
     [labelOf('bhk', row.bhkSlug), labelOf('property_subtype', row.propertySubtypeSlug)]
       .filter((part): part is string => !!part)
       .join(' · ') || null;
+  const bhk = labelOf('bhk', row.bhkSlug);
+  const theme = labelOf('theme', row.coverThemeSlugs?.[0] ?? null);
 
   return {
     ...toFeedProject(row, labels, localityLabels, coverImageUrl),
     propertyType,
+    bhk,
+    theme,
     completionYear: completionYearOf(row),
     sizeSqft: row.sizeSqft,
   };
@@ -406,6 +410,7 @@ function feedTaxonomyPairs(row: ProjectFeedItemRecord): { kind: TaxonomyKind; sl
   if (row.scopeSlug) pairs.push({ kind: 'scope', slug: row.scopeSlug });
   if (row.propertySubtypeSlug)
     pairs.push({ kind: 'property_subtype', slug: row.propertySubtypeSlug });
+  if (row.coverThemeSlugs?.[0]) pairs.push({ kind: 'theme', slug: row.coverThemeSlugs[0] });
   return pairs;
 }
 
@@ -1153,9 +1158,7 @@ async function buildPublicProjectDetail(
     recommendationCandidates.filter((candidate) => candidate.group === 'moreFromDesigner'),
   );
   const sameBudgetDifferentStyleRows = takeRecommendations(
-    recommendationCandidates.filter(
-      (candidate) => candidate.group === 'sameBudgetDifferentStyle',
-    ),
+    recommendationCandidates.filter((candidate) => candidate.group === 'sameBudgetDifferentStyle'),
   );
   const nearbyRows = takeRecommendations(
     recommendationCandidates.filter((candidate) => candidate.group === 'nearby'),
@@ -1187,6 +1190,7 @@ async function buildPublicProjectDetail(
     toRecommendationCards(sameBudgetDifferentStyleRows, labels, localityLabels),
     toRecommendationCards(nearbyRows, labels, localityLabels),
   ]);
+  const saveCount = await projectsRepository.countProjectSaves(project.id);
 
   let resolvedCoverUrl: string | null = null;
   if (project.coverImageId) {
@@ -1228,6 +1232,7 @@ async function buildPublicProjectDetail(
     }),
     images: galleryImages,
     coverImageUrl: resolvedCoverUrl,
+    saveCount,
     designer: {
       id: designer.id,
       displayName: designer.displayName,
@@ -1236,6 +1241,7 @@ async function buildPublicProjectDetail(
       reviewCount: designer.reviewCount,
       entityType: designer.entityType,
       logoUrl,
+      isVerified: designer.status === 'active',
       bio: designer.bio,
       firmType: designer.firmType,
       foundedYear: designer.foundedYear,
@@ -1247,6 +1253,11 @@ async function buildPublicProjectDetail(
       ? {
           body: narrative.body,
           rating: narrative.rating,
+          author: {
+            name: narrative.authorName,
+            avatarUrl: narrative.authorImage,
+          },
+          verifiedConsultation: narrative.bookingId !== null,
           publishedAt: narrative.publishedAt?.toISOString() ?? null,
         }
       : null,
@@ -1407,6 +1418,13 @@ export const projectsService = {
         ? await projectsRepository.listUnresolvedReviewComments([id])
         : [];
     return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
+  },
+
+  async getPublicById(id: string): Promise<PublicProjectBySlugResponse> {
+    const result = await projectsRepository.findPublicProjectById(id);
+    if (!result) throw AppError.notFound('Project not found');
+
+    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {

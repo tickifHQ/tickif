@@ -22,6 +22,7 @@
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.21 0.006 286);
+  --foreground-disabled: #a1a1aa;
   --surface-subtle: #eef2f0;
   --surface-subtle-border: #e2e8e5;
   --home-hero-gradient-from: #e8f0eb;
@@ -56,6 +57,7 @@
   --feature: #7d52f4;
   --feature-lighter: #efebff;
   --border: oklch(0.92 0.004 286);
+  --border-strong: #d4d4d8;
   --input: oklch(0.92 0.004 286);
   --ring: oklch(0.616 0.116 170);
   --button-neutral: oklch(1 0 0);
@@ -87,6 +89,7 @@
 [data-theme='tickif'].dark {
   --background: oklch(0.183 0.02 266);
   --foreground: oklch(0.985 0.001 286);
+  --foreground-disabled: oklch(0.712 0.013 286);
   --surface-subtle: oklch(0.23 0.012 170);
   --surface-subtle-border: oklch(0.3 0.012 170);
   --home-hero-gradient-from: color-mix(in oklab, var(--primary) 12%, var(--background));
@@ -121,6 +124,7 @@
   --feature: #9f7dff;
   --feature-lighter: color-mix(in oklab, var(--feature) 20%, var(--card));
   --border: oklch(0.3 0.006 286);
+  --border-strong: oklch(0.4 0.006 286);
   --input: oklch(0.33 0.006 286);
   --ring: oklch(0.72 0.13 168);
   --button-inverted: #27272a;

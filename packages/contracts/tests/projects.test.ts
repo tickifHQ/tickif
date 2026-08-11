@@ -194,6 +194,7 @@ describe('publicImageDetailResponseSchema', () => {
         reviewCount: 12,
         entityType: 'company',
         logoUrl: null,
+        isVerified: true,
         bio: 'Residential interior design studio.',
         firmType: 'Interior design studio',
         foundedYear: 2018,
@@ -204,6 +205,8 @@ describe('publicImageDetailResponseSchema', () => {
       narrative: {
         body: 'The team understood how we wanted the home to feel.',
         rating: 5,
+        author: { name: 'Priya K.', avatarUrl: null },
+        verifiedConsultation: true,
         publishedAt: '2025-07-02T00:00:00.000Z',
       },
       recommendations: {
@@ -310,6 +313,7 @@ describe('publicProjectBySlugResponseSchema', () => {
         },
       ],
       coverImageUrl: 'https://images.example.com/cover.webp',
+      saveCount: 145,
       designer: {
         id: '44444444-4444-4444-8444-444444444444',
         displayName: 'Studio A',
@@ -318,6 +322,7 @@ describe('publicProjectBySlugResponseSchema', () => {
         reviewCount: 12,
         entityType: 'company',
         logoUrl: null,
+        isVerified: true,
         bio: 'Residential interior design studio.',
         firmType: 'Interior design studio',
         foundedYear: 2018,
@@ -328,6 +333,8 @@ describe('publicProjectBySlugResponseSchema', () => {
       narrative: {
         body: 'The team understood how we wanted the home to feel.',
         rating: 5,
+        author: { name: 'Priya K.', avatarUrl: null },
+        verifiedConsultation: true,
         publishedAt: '2025-07-02T00:00:00.000Z',
       },
       recurringMotifs: [

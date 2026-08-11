@@ -1,23 +1,30 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@repo/ui/lib/utils';
 import { Button, buttonVariants } from '@repo/ui/components/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@repo/ui/components/dialog';
+import type { ButtonVariantProps } from '@repo/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@repo/ui/components/dialog';
 import { MessageSquare } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { EnquiryDialog } from '@/components/enquiry-dialog';
 import { api } from '@/lib/api';
 
 type EnquiryContext =
-  | { type: 'project'; projectName: string; designerName: string; designerLocation?: string | null; designerLogoUrl?: string | null }
-  | { type: 'designer'; designerName: string; designerLocation?: string | null; designerLogoUrl?: string | null };
+  | {
+      type: 'project';
+      projectName: string;
+      designerName: string;
+      designerLocation?: string | null;
+      designerLogoUrl?: string | null;
+    }
+  | {
+      type: 'designer';
+      designerName: string;
+      designerLocation?: string | null;
+      designerLogoUrl?: string | null;
+    };
 
 type Props = {
   context: EnquiryContext;
@@ -26,9 +33,12 @@ type Props = {
   loginHref: string;
   children: ReactNode;
   className?: string;
-  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'inverted' | 'neutral' | 'fancy';
+  variant?: ButtonVariantProps['variant'];
+  size?: ButtonVariantProps['size'];
   ariaLabel?: string;
 };
+
+const subscribeToHydration = () => () => undefined;
 
 /**
  * Login-gated enquiry CTA.
@@ -45,19 +55,25 @@ export function EnquiryCta({
   children,
   className,
   variant = 'default',
+  size,
   ariaLabel,
 }: Props) {
   const { data: session } = authClient.useSession();
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [alreadySentOpen, setAlreadySentOpen] = useState(false);
   const [checking, setChecking] = useState(false);
 
-  if (!session) {
+  if (!hydrated || !session) {
     return (
       <Link
         href={loginHref}
         aria-label={ariaLabel}
-        className={cn(buttonVariants({ variant }), className)}
+        className={cn(buttonVariants({ variant, size }), className)}
       >
         {children}
       </Link>
@@ -102,7 +118,7 @@ export function EnquiryCta({
         type="button"
         aria-label={ariaLabel}
         disabled={checking}
-        className={cn(buttonVariants({ variant }), className)}
+        className={cn(buttonVariants({ variant, size }), className)}
         onClick={handleClick}
       >
         {children}
@@ -119,11 +135,10 @@ export function EnquiryCta({
             <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
               <MessageSquare className="size-5 text-primary" />
             </div>
-            <p className="text-sm font-medium text-foreground">
-              Enquiry already sent
-            </p>
+            <p className="text-sm font-medium text-foreground">Enquiry already sent</p>
             <p className="text-xs text-muted-foreground">
-              You have already raised an enquiry with {context.designerName}. Check your enquiries to see the status.
+              You have already raised an enquiry with {context.designerName}. Check your enquiries
+              to see the status.
             </p>
             <Button asChild variant="emphasis" size="sm" className="mt-2">
               <Link href="/enquiries">View Your Enquiries</Link>

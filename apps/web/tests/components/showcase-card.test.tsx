@@ -24,6 +24,8 @@ const feedProject: FeedProject = {
 const designerProject: DesignerProjectCard = {
   ...feedProject,
   propertyType: '3 BHK · Apartment',
+  bhk: '3 BHK',
+  theme: 'Contemporary',
   completionYear: 2025,
   sizeSqft: 1200,
 };
@@ -68,7 +70,7 @@ describe('ShowcaseCard', () => {
       'width',
       '640',
     );
-    expect(screen.getByText('₹15-35L')).toBeInTheDocument();
+    expect(screen.getByText('₹15–35L')).toBeInTheDocument();
     expect(screen.getByText('Studio B')).toBeInTheDocument();
     expect(screen.getByText('2 BHK')).toBeInTheDocument();
     expect(screen.getByText('4.8')).toBeInTheDocument();
@@ -105,5 +107,35 @@ describe('PublicProjectCard', () => {
       'href',
       `/image/${designerProject.coverImageId}`,
     );
+  });
+
+  it('supports project-detail recommendation cards with sourced ratings', () => {
+    render(
+      <PublicProjectCard
+        project={designerProject}
+        studioName="Studio A"
+        presentation="recommendation"
+        destination="project"
+        showRating
+      />,
+    );
+
+    expect(screen.getByRole('link')).toHaveAttribute('href', `/projects/${designerProject.id}`);
+    expect(screen.getByText('4.5')).toBeInTheDocument();
+    expect(screen.getByText('2025')).toHaveClass('font-mono', 'text-2xs');
+    expect(screen.getByText('3 BHK · Contemporary')).toBeInTheDocument();
+    expect(screen.getByText('₹15–35L')).toBeInTheDocument();
+  });
+
+  it('does not display an unrated project as trusted', () => {
+    render(
+      <PublicProjectCard
+        project={{ ...designerProject, rating: 0, reviewCount: 0 }}
+        studioName="Studio A"
+        showRating
+      />,
+    );
+
+    expect(screen.queryByText('0.0')).toBeNull();
   });
 });

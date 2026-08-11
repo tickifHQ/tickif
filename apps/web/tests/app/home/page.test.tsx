@@ -231,7 +231,7 @@ describe('HomePage', () => {
     render(await HomePage());
 
     expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '₹15-35L' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '₹15–35L' })).toHaveAttribute(
       'href',
       '/?budgetBand=upscale',
     );
@@ -354,7 +354,7 @@ describe('HomePage', () => {
 
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
-    expect(within(screen.getByRole('article')).getByText('₹15-35L')).toBeInTheDocument();
+    expect(within(screen.getByRole('article')).getByText('₹15–35L')).toBeInTheDocument();
     expect(within(screen.getByRole('article')).getByText('3 BHK')).toBeInTheDocument();
   });
 
@@ -416,7 +416,7 @@ describe('HomePage', () => {
       }),
     );
 
-    expect(screen.getByRole('link', { name: '₹15-35L' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '₹15–35L' })).toHaveAttribute(
       'href',
       '/?q=warm+kitchen&city=mumbai&bhk=3-bhk&budgetBand=upscale',
     );
@@ -434,7 +434,7 @@ describe('HomePage', () => {
     render(await HomePage({ searchParams: Promise.resolve({ budgetBand: 'upscale' }) }));
 
     expect(screen.queryByRole('heading', { name: 'Try a filter' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '₹15-35L' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '₹15–35L' })).not.toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

@@ -157,6 +157,7 @@ export type ProjectFeedItemRecord = {
   coverDerivatives: ProjectImageRecord['derivatives'] | null;
   coverWidth: number | null;
   coverHeight: number | null;
+  coverThemeSlugs: string[] | null;
   // Only the designer-portfolio card projection reads these three; the home feed
   // selects them too so all three feed queries share one row shape.
   sizeSqft: number | null;
@@ -201,8 +202,11 @@ export type PublicProjectGalleryImageRecord = Pick<
 
 export type PublicProjectNarrativeRecord = Pick<
   typeof schema.review.$inferSelect,
-  'body' | 'rating' | 'publishedAt'
->;
+  'body' | 'rating' | 'publishedAt' | 'bookingId'
+> & {
+  authorName: string;
+  authorImage: string | null;
+};
 
 export type PublicProjectMotifCountRecord = {
   kind: ProjectMotifKind;
@@ -255,6 +259,7 @@ function recommendationBranch(params: {
       recommendation_cover.derivatives as "coverDerivatives",
       recommendation_cover.width as "coverWidth",
       recommendation_cover.height as "coverHeight",
+      recommendation_cover.theme_slugs as "coverThemeSlugs",
       ${schema.project.sizeSqft} as "sizeSqft",
       ${schema.project.completedMonth} as "completedMonth",
       ${schema.project.publishedAt} as "publishedAt",
@@ -316,6 +321,7 @@ function feedProjectColumns<TAlias extends string>(
     coverDerivatives: cover.derivatives,
     coverWidth: cover.width,
     coverHeight: cover.height,
+    coverThemeSlugs: cover.themeSlugs,
     sizeSqft: schema.project.sizeSqft,
     completedMonth: schema.project.completedMonth,
     publishedAt: schema.project.publishedAt,
@@ -1478,6 +1484,55 @@ export const projectsRepository = {
   // ---------------------------------------------------------------------------
 
   /**
+   * Published project by id with the same canonical designer projection used
+   * by the slug and image lookup paths.
+   */
+  async findPublicProjectById(id: string): Promise<PublicProjectReadRecord | null> {
+    const [row] = await db
+      .select(publicProjectReadColumns)
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(
+        and(
+          eq(schema.project.id, id),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      project: row.project,
+      designer: {
+        id: row.designerId,
+        status: row.designerStatus,
+        displayName: row.designerDisplayName,
+        orgSlug: row.designerOrgSlug,
+        avgRating: row.designerAvgRating,
+        reviewCount: row.designerReviewCount,
+        entityType: row.designerEntityType,
+        logoImageId: row.designerLogoImageId,
+        bio: row.designerBio,
+        firmType: row.designerFirmType,
+        foundedYear: row.designerFoundedYear,
+        yearsExperience: row.designerYearsExperience,
+      },
+    };
+  },
+
+  async countProjectSaves(projectId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.savedProject)
+      .where(eq(schema.savedProject.projectId, projectId));
+
+    return row?.count ?? 0;
+  },
+
+  /**
    * Published project by slug with joined designer + org for slug resolution.
    * Returns raw data — service handles URL signing and response composition.
    */
@@ -1595,9 +1650,13 @@ export const projectsRepository = {
       .select({
         body: schema.review.body,
         rating: schema.review.rating,
+        bookingId: schema.review.bookingId,
+        authorName: schema.user.name,
+        authorImage: schema.user.image,
         publishedAt: schema.review.publishedAt,
       })
       .from(schema.review)
+      .innerJoin(schema.user, eq(schema.review.authorUserId, schema.user.id))
       .where(
         and(
           eq(schema.review.projectId, projectId),
@@ -1715,7 +1774,7 @@ export const projectsRepository = {
         "group", "id", "slug", "title", "citySlug", "localitySlug",
         "budgetBandSlug", "scopeSlug", "bhkSlug", "propertySubtypeSlug",
         "studio", "rating", "reviewCount", "coverImageId", "coverStatus",
-        "coverDerivatives", "coverWidth", "coverHeight", "sizeSqft",
+        "coverDerivatives", "coverWidth", "coverHeight", "coverThemeSlugs", "sizeSqft",
         "completedMonth", "publishedAt"
       from (${sql.join(branches, sql` union all `)}) as grouped_recommendations
       order by "group", "publishedAt" desc nulls last, recommendation_created_at desc, "id" desc

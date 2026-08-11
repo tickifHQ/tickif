@@ -3,6 +3,9 @@ import { AppError } from '../../../src/lib/errors.js';
 
 vi.mock('../../../src/modules/reports/repository.js', () => ({
   reportsRepository: {
+    findReportableProject: vi.fn(),
+    isOrganizationMember: vi.fn(),
+    upsertProjectReport: vi.fn(),
     findProfileContext: vi.fn(),
     countProjectsByStatus: vi.fn(),
     countLeadsByStatus: vi.fn(),
@@ -153,5 +156,52 @@ describe('reportsService.getAnalytics', () => {
 
     await expect(reportsService.getAnalytics(input)).rejects.toBeInstanceOf(AppError);
     await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('reportsService.reportProject', () => {
+  const reportInput = {
+    userId: 'visitor_1',
+    projectId: '11111111-1111-4111-8111-111111111111',
+    report: { reason: 'misleading' as const, details: 'The images do not match the description.' },
+  };
+
+  beforeEach(() => {
+    vi.mocked(reportsRepository.findReportableProject).mockResolvedValue({
+      orgId: 'org_designer',
+      status: 'published',
+    });
+    vi.mocked(reportsRepository.isOrganizationMember).mockResolvedValue(false);
+    vi.mocked(reportsRepository.upsertProjectReport).mockResolvedValue(undefined);
+  });
+
+  it('records a validated report for a published project', async () => {
+    await expect(reportsService.reportProject(reportInput)).resolves.toEqual({
+      projectId: reportInput.projectId,
+      reported: true,
+    });
+    expect(reportsRepository.upsertProjectReport).toHaveBeenCalledWith({
+      reporterUserId: reportInput.userId,
+      projectId: reportInput.projectId,
+      reason: 'misleading',
+      details: reportInput.report.details,
+    });
+  });
+
+  it('does not expose unpublished projects through reporting', async () => {
+    vi.mocked(reportsRepository.findReportableProject).mockResolvedValue({
+      orgId: 'org_designer',
+      status: 'draft',
+    });
+
+    await expect(reportsService.reportProject(reportInput)).rejects.toMatchObject({ status: 404 });
+    expect(reportsRepository.upsertProjectReport).not.toHaveBeenCalled();
+  });
+
+  it('prevents organization members from reporting their own project', async () => {
+    vi.mocked(reportsRepository.isOrganizationMember).mockResolvedValue(true);
+
+    await expect(reportsService.reportProject(reportInput)).rejects.toMatchObject({ status: 403 });
+    expect(reportsRepository.upsertProjectReport).not.toHaveBeenCalled();
   });
 });

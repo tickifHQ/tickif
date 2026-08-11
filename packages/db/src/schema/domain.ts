@@ -18,7 +18,11 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { INTERACTION_EVENT_TYPE_VALUES, TAXONOMY_KIND_VALUES } from '@repo/contracts';
+import {
+  INTERACTION_EVENT_TYPE_VALUES,
+  PROJECT_REPORT_REASON_VALUES,
+  TAXONOMY_KIND_VALUES,
+} from '@repo/contracts';
 import { user, organization } from './auth.js';
 
 /**
@@ -44,6 +48,18 @@ export const interactionEventTypeEnum = pgEnum(
   'interaction_event_type',
   INTERACTION_EVENT_TYPE_VALUES,
 );
+
+export const projectReportReasonEnum = pgEnum(
+  'project_report_reason',
+  PROJECT_REPORT_REASON_VALUES,
+);
+
+export const projectReportStatusEnum = pgEnum('project_report_status', [
+  'open',
+  'reviewing',
+  'resolved',
+  'dismissed',
+]);
 
 export const moderationActionEnum = pgEnum('moderation_action', [
   'submit',
@@ -404,6 +420,28 @@ export const savedProject = pgTable(
   (t) => [
     primaryKey({ columns: [t.userId, t.projectId] }),
     index('saved_project_project_idx').on(t.projectId),
+  ],
+);
+
+export const projectReport = pgTable(
+  'project_report',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reporterUserId: text('reporter_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    reason: projectReportReasonEnum('reason').notNull(),
+    details: text('details'),
+    status: projectReportStatusEnum('status').default('open').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('project_report_reporter_project_uniq').on(t.reporterUserId, t.projectId),
+    index('project_report_project_status_created_idx').on(t.projectId, t.status, t.createdAt),
   ],
 );
 
