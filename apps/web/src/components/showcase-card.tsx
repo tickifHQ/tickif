@@ -9,8 +9,7 @@ const FALLBACK_HEIGHT = 600;
 export function ShowcaseCard({ project }: { project: FeedProject }) {
   const width = project.imageWidth ?? FALLBACK_WIDTH;
   const height = project.imageHeight ?? FALLBACK_HEIGHT;
-  const imageUrl =
-    project.coverImageUrl ?? `https://picsum.photos/seed/${project.slug}/${width}/${height}`;
+  const imageUrl = project.coverImageUrl;
   const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
 
@@ -19,13 +18,28 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
       href={href}
       className="group relative mb-4 block break-inside-avoid overflow-hidden rounded-xl bg-muted"
     >
-      <img
-        src={imageUrl}
-        alt={project.title}
-        loading="lazy"
-        className="w-full object-cover"
-        style={{ aspectRatio: `${width} / ${height}` }}
-      />
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={project.title}
+          loading="lazy"
+          className="w-full object-cover"
+          style={{ aspectRatio: `${width} / ${height}` }}
+        />
+      ) : (
+        <div
+          className="flex w-full items-center justify-center bg-muted"
+          style={{ aspectRatio: `${FALLBACK_WIDTH} / ${FALLBACK_HEIGHT}` }}
+        >
+          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+            <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {project.budget && (
         <span className="absolute bottom-3 left-3 rounded-full bg-background/95 px-2.5 py-1 font-mono text-[11px] font-medium text-foreground shadow-sm transition-opacity group-hover:opacity-0 sm:opacity-100">
@@ -36,26 +50,18 @@ export function ShowcaseCard({ project }: { project: FeedProject }) {
       <div className="absolute right-3 top-3 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
-          aria-label="Save"
+          aria-label="Share this project"
           className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-          onClick={(e) => e.preventDefault()}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3.5 1.5 6.5 4.5 3-3 4.5-4.5 6.5-4.5C22 5.5 23.5 9 21.5 12.5 19 16.65 12 21 12 21Z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          aria-label="Share"
-          className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-          onClick={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const url = `${window.location.origin}${href}`;
+            if (navigator.share) {
+              navigator.share({ title: project.title, url }).catch(() => {});
+            } else {
+              navigator.clipboard.writeText(url).catch(() => {});
+            }
+          }}
         >
           <svg
             viewBox="0 0 24 24"

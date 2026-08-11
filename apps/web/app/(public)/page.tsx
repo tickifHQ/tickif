@@ -1,28 +1,77 @@
 import type { FeedProject } from '@repo/contracts';
+import { feedProjectsResponseSchema } from '@repo/contracts';
+import type { TaxonomyTerm } from '@repo/contracts';
 import { HomeHero } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { HomeSearchBar } from '@/components/home-search-bar';
-import { FeedFilters } from '@/components/feed-filters';
-import { ProjectFeed } from '@/components/project-feed';
+import { DiscoveryFeedSection } from '@/components/discovery-feed-section';
+import type { FilterChip } from '@/components/feed-filters';
 import { getServerSession } from '@/lib/auth-guard';
-import { env } from '@/env';
+import { api } from '@/lib/api';
 
-/** Fetches the public feed; the landing page renders its empty state on any failure. */
-async function fetchFeedProjects(): Promise<FeedProject[]> {
+const FEED_PAGE_SIZE = 24;
+
+/** Fetches the public feed via the typed hc client. */
+async function fetchFeedProjects(): Promise<{ projects: FeedProject[]; hasMore: boolean }> {
   try {
-    const baseUrl = env.NEXT_PUBLIC_API_URL;
-    const res = await fetch(`${baseUrl}/api/projects/feed?limit=30`, {
-      cache: 'no-store',
+    const response = await api.api.projects.feed.$get({
+      query: { limit: String(FEED_PAGE_SIZE) },
     });
-    if (!res.ok) {
-      console.error('[HomePage] feed response not ok:', res.status);
-      return [];
+    if (!response.ok) {
+      console.error('[HomePage] feed response not ok:', response.status);
+      return { projects: [], hasMore: false };
     }
-    const data = await res.json();
-    return data.projects ?? [];
+    const payload = await response.json();
+    const parsed = feedProjectsResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      console.error('[HomePage] feed parse error:', parsed.error.message);
+      return { projects: [], hasMore: false };
+    }
+    return { projects: parsed.data.projects, hasMore: parsed.data.hasMore };
   } catch (err) {
     console.error('[HomePage] feed fetch error:', err);
-    return [];
+    return { projects: [], hasMore: false };
+  }
+}
+
+/** Load popular taxonomy terms for the filter chips. */
+async function fetchFilterChips(): Promise<{ filterChips: FilterChip[]; budgetChips: FilterChip[] }> {
+  try {
+    const [cityRes, bhkRes, budgetRes] = await Promise.all([
+      api.api.taxonomy.terms.$get({ query: { kind: 'city' } }),
+      api.api.taxonomy.terms.$get({ query: { kind: 'bhk' } }),
+      api.api.taxonomy.terms.$get({ query: { kind: 'budget_band' } }),
+    ]);
+
+    const filterChips: FilterChip[] = [];
+    const budgetChips: FilterChip[] = [];
+
+    if (cityRes.ok) {
+      const data = (await cityRes.json()) as { terms: TaxonomyTerm[] };
+      for (const term of data.terms.slice(0, 4)) {
+        filterChips.push({ slug: term.slug, label: term.label, kind: 'citySlug' });
+      }
+    }
+    if (bhkRes.ok) {
+      const data = (await bhkRes.json()) as { terms: TaxonomyTerm[] };
+      for (const term of data.terms.slice(0, 3)) {
+        filterChips.push({ slug: term.slug, label: term.label, kind: 'bhkSlug' });
+      }
+    }
+    if (budgetRes.ok) {
+      const data = (await budgetRes.json()) as { terms: TaxonomyTerm[] };
+      for (const term of data.terms) {
+        budgetChips.push({ slug: term.slug, label: term.label, kind: 'budgetBandSlug' });
+      }
+      // Add first 3 budget bands to the main filter chips too
+      for (const term of data.terms.slice(0, 3)) {
+        filterChips.push({ slug: term.slug, label: term.label, kind: 'budgetBandSlug' });
+      }
+    }
+
+    return { filterChips, budgetChips };
+  } catch {
+    return { filterChips: [], budgetChips: [] };
   }
 }
 
@@ -32,7 +81,11 @@ async function fetchFeedProjects(): Promise<FeedProject[]> {
  * - Logged in: prominent search bar straight into the filtered feed.
  */
 export default async function HomePage() {
-  const [session, projects] = await Promise.all([getServerSession(), fetchFeedProjects()]);
+  const [session, feed, taxonomy] = await Promise.all([
+    getServerSession(),
+    fetchFeedProjects(),
+    fetchFilterChips(),
+  ]);
 
   if (session) {
     return (
@@ -41,10 +94,12 @@ export default async function HomePage() {
           <h1 className="sr-only">Explore home projects</h1>
           <HomeSearchBar />
           <div className="mt-5">
-            <FeedFilters />
-          </div>
-          <div className="mt-4">
-            <ProjectFeed projects={projects} />
+            <DiscoveryFeedSection
+              initialProjects={feed.projects}
+              initialHasMore={feed.hasMore}
+              filterChips={taxonomy.filterChips}
+              budgetChips={taxonomy.budgetChips}
+            />
           </div>
         </section>
       </div>
@@ -67,20 +122,15 @@ export default async function HomePage() {
                 Hand-picked by our editors this week
               </p>
             </div>
-            <a
-              href="/"
-              className="shrink-0 pb-0.5 text-sm font-medium text-primary hover:underline"
-            >
-              See all projects →
-            </a>
           </div>
 
           <div className="mt-4">
-            <FeedFilters />
-          </div>
-
-          <div className="mt-3">
-            <ProjectFeed projects={projects} />
+            <DiscoveryFeedSection
+              initialProjects={feed.projects}
+              initialHasMore={feed.hasMore}
+              filterChips={taxonomy.filterChips}
+              budgetChips={taxonomy.budgetChips}
+            />
           </div>
         </section>
       </div>

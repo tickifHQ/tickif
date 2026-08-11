@@ -6,11 +6,9 @@ import { AccountMenu } from '@/components/account-menu';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 
 const navLinks = [
-  { href: '/', label: 'Explore' },
+  { href: '/search', label: 'Explore' },
   { href: '/designer/dashboard', label: 'Designers' },
-  { href: '/', label: 'Cost Calculator' },
   { href: '/enquiries', label: 'Your Enquiries' },
-  { href: '/', label: 'For you' },
 ];
 
 /** Public discovery header from the Figma home frame. Admin/designer chrome stays on the shared SiteNav. */

@@ -1,15 +1,5 @@
-import { Button } from '@repo/ui/components/button';
-import { ChevronRight, Search } from 'lucide-react';
-
-const quickStarts = [
-  'Scandinavian apartment',
-  'Traditional bedroom',
-  'Pooja room',
-  '3BHK under 15L',
-  'Walnut & cane',
-  'Industrial loft',
-  'Maximalist colour',
-];
+import { SearchCombobox } from '@/components/search-combobox';
+import { QuickStartChips } from '@/components/quick-start-chips';
 
 const collageImages = [
   '/images/home-hero/gallery-wall-living-room.jpg',
@@ -42,39 +32,9 @@ export function HomeHero() {
             homes between you and a designer who built one.
           </p>
 
-          <form className="w-full" role="search">
-            <div className="flex items-center gap-3 rounded-xl border border-home-search-border bg-home-search-background py-1 pr-1.5 pl-3.5 shadow-home-search">
-              <Search
-                className="size-4 shrink-0 text-home-search-foreground-disabled"
-                aria-hidden="true"
-              />
-              <input
-                type="search"
-                placeholder="Search by city, style, budget, room type…"
-                aria-label="Search homes"
-                className="h-9 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-home-search-foreground-disabled"
-              />
-              <Button type="submit" variant="fancy" size="fancy" className="shrink-0">
-                Explore
-                <ChevronRight className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-          </form>
+          <SearchCombobox variant="hero" />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-xs uppercase tracking-[0.04em] text-primary/70">
-              Start with
-            </span>
-            {quickStarts.map((label) => (
-              <button
-                key={label}
-                type="button"
-                className="rounded-full border border-surface-subtle-border bg-card/70 px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <QuickStartChips />
         </div>
 
         <div className="hidden w-full max-w-lg grid-cols-2 gap-2 opacity-90 lg:grid">

@@ -31,6 +31,9 @@ pnpm-debug.log*
 # kiro
 .kiro/
 
+# reference materials (local junction, not tracked)
+.reference/
+
 # misc
 coverage/
 *.local
