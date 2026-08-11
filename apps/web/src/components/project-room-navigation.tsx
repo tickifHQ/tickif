@@ -37,10 +37,10 @@ export function ProjectRoomNavigation({ rooms }: { rooms: ProjectRoomNavigationI
   return (
     <Carousel
       opts={{ align: 'start', containScroll: 'trimSnaps', loop: false }}
-      className="max-w-full"
+      className="w-fit max-w-full"
     >
-      <nav aria-label="Project rooms" className="flex items-center gap-2">
-        <div className="min-w-0 flex-1 rounded-lg bg-muted p-px">
+      <nav aria-label="Project rooms" className="flex w-fit max-w-full items-center gap-2">
+        <div className="w-fit min-w-0 max-w-full rounded-lg bg-muted p-px">
           <CarouselContent className="ml-0 gap-px">
             {rooms.map((room) => {
               const active = room.id === activeRoomId;
@@ -60,7 +60,7 @@ export function ProjectRoomNavigation({ rooms }: { rooms: ProjectRoomNavigationI
                     )}
                   >
                     <span>{room.name}</span>
-                    <span className="min-w-5 rounded-full border bg-muted px-1 py-0.5 text-center text-xs leading-none text-muted-foreground">
+                    <span className="min-w-5 rounded-full border bg-surface-subtle px-1 py-0.5 text-center text-xs leading-none text-muted-foreground">
                       {room.photoCount}
                     </span>
                   </a>

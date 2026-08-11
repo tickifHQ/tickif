@@ -33,12 +33,14 @@ describe('PublicProjectStory', () => {
     render(<PublicProjectStory project={project} />);
 
     const roomNavigation = screen.getByRole('navigation', { name: 'Project rooms' });
+    const roomCarousel = roomNavigation.closest('[data-slot="carousel"]');
     const livingRoomLink = within(roomNavigation).getByRole('link', { name: 'Living Room 1' });
     const kitchenLink = within(roomNavigation).getByRole('link', { name: 'Kitchen 1' });
     const scrollIntoView = vi
       .spyOn(HTMLElement.prototype, 'scrollIntoView')
       .mockImplementation(() => undefined);
 
+    expect(roomCarousel).toHaveClass('w-fit', 'max-w-full');
     expect(livingRoomLink).toHaveAttribute('aria-current', 'location');
     expect(livingRoomLink).toHaveAttribute(
       'href',
