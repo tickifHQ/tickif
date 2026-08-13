@@ -2,8 +2,6 @@ import {
   INTERACTION_EVENT_TYPE,
   type AnalyticsQuery,
   type AnalyticsResponse,
-  type CreateProjectReportInput,
-  type ProjectReportResponse,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -107,30 +105,6 @@ function leadMetrics(counts: AnalyticsLeadStatusCount[]): AnalyticsResponse['lea
 }
 
 export const reportsService = {
-  async reportProject(input: {
-    userId: string;
-    projectId: string;
-    report: CreateProjectReportInput;
-  }): Promise<ProjectReportResponse> {
-    const project = await reportsRepository.findReportableProject(input.projectId);
-    if (!project || project.status !== 'published') {
-      throw AppError.notFound('Project not found');
-    }
-
-    if (await reportsRepository.isOrganizationMember(input.userId, project.orgId)) {
-      throw AppError.forbidden('You cannot report your own organization project');
-    }
-
-    await reportsRepository.upsertProjectReport({
-      reporterUserId: input.userId,
-      projectId: input.projectId,
-      reason: input.report.reason,
-      details: input.report.details ?? null,
-    });
-
-    return { projectId: input.projectId, reported: true };
-  },
-
   async getAnalytics(input: AnalyticsInput): Promise<AnalyticsResponse> {
     if (!input.orgId) {
       throw AppError.unprocessable('No active organization selected');

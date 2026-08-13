@@ -15,14 +15,7 @@ import {
   CarouselPrevious,
 } from '@repo/ui/components/carousel';
 import { Separator } from '@repo/ui/components/separator';
-import {
-  BadgeCheck,
-  CalendarDays,
-  MessageSquare,
-  Quote,
-  Shield,
-  Star,
-} from 'lucide-react';
+import { BadgeCheck, CalendarDays, MessageSquare, Quote, Star } from 'lucide-react';
 import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectRoomNavigation } from '@/components/project-room-navigation';
@@ -194,19 +187,7 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
             </p>
             <p className="mt-1 flex items-center gap-1 text-base font-medium leading-relaxed">
               <span className="truncate">{designer.displayName}</span>
-              {designer.isVerified ? (
-                <BadgeCheck
-                  aria-label="Verified designer"
-                  className="size-4 shrink-0 fill-primary text-primary-foreground"
-                />
-              ) : null}
             </p>
-            {designer.isVerified ? (
-              <p className="mt-0.5 flex items-center gap-1 font-mono text-2xs uppercase tracking-wider">
-                <Shield aria-hidden className="size-2.5" />
-                KYC verified
-              </p>
-            ) : null}
           </div>
         </div>
 

@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   getSavedState: vi.fn(),
   saveProject: vi.fn(),
   unsaveProject: vi.fn(),
-  reportProject: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -23,11 +22,6 @@ vi.mock('@/lib/api', () => ({
         ':projectId': {
           $put: mocks.saveProject,
           $delete: mocks.unsaveProject,
-        },
-      },
-      reports: {
-        projects: {
-          ':id': { $post: mocks.reportProject },
         },
       },
     },
@@ -54,9 +48,6 @@ describe('ProjectActions', () => {
     mocks.unsaveProject.mockResolvedValue(
       response({ projectId: '11111111-1111-4111-8111-111111111111', saved: false }),
     );
-    mocks.reportProject.mockResolvedValue(
-      response({ projectId: '11111111-1111-4111-8111-111111111111', reported: true }),
-    );
   });
 
   it('routes signed-out visitors to login before saving', () => {
@@ -71,22 +62,18 @@ describe('ProjectActions', () => {
       'href',
       '/login?next=/projects/11111111-1111-4111-8111-111111111111',
     );
-    expect(screen.getByRole('link', { name: 'Sign in to report project' })).toHaveAttribute(
-      'href',
-      '/login?next=/projects/11111111-1111-4111-8111-111111111111',
-    );
     expect(mocks.getSavedState).not.toHaveBeenCalled();
   });
 
   it('loads and updates save state through the existing API', async () => {
     const projectId = '11111111-1111-4111-8111-111111111111';
     mocks.session = { user: { id: '22222222-2222-4222-8222-222222222222' } };
-    render(<ProjectActions projectId={projectId} loginHref="/login" saveCount={145} />);
+    render(<ProjectActions projectId={projectId} loginHref="/login" />);
 
     await waitFor(() =>
       expect(mocks.getSavedState).toHaveBeenCalledWith({ query: { projectIds: projectId } }),
     );
-    expect(screen.getByText('145')).toBeInTheDocument();
+    expect(screen.getByText('Save')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
 
     await waitFor(() => expect(mocks.saveProject).toHaveBeenCalledWith({ param: { projectId } }));
@@ -94,7 +81,7 @@ describe('ProjectActions', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.getByText('146')).toBeInTheDocument();
+    expect(screen.getByText('Saved')).toBeInTheDocument();
   });
 
   it('does not allow saving before the existing saved state has loaded', async () => {
@@ -131,29 +118,5 @@ describe('ProjectActions', () => {
     expect(writeText).toHaveBeenCalledWith(
       'http://localhost:3000/projects/11111111-1111-4111-8111-111111111111',
     );
-  });
-
-  it('submits a private project report through the reports API', async () => {
-    const projectId = '11111111-1111-4111-8111-111111111111';
-    mocks.session = { user: { id: '22222222-2222-4222-8222-222222222222' } };
-    render(<ProjectActions projectId={projectId} loginHref="/login" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Report project' }));
-    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'misleading' } });
-    fireEvent.change(screen.getByLabelText('Details'), {
-      target: { value: 'The images do not match the project description.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send report' }));
-
-    await waitFor(() =>
-      expect(mocks.reportProject).toHaveBeenCalledWith({
-        param: { id: projectId },
-        json: {
-          reason: 'misleading',
-          details: 'The images do not match the project description.',
-        },
-      }),
-    );
-    expect(await screen.findByRole('button', { name: 'Project reported' })).toBeDisabled();
   });
 });

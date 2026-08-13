@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { analyticsResponseSchema } from '@repo/contracts';
-import { db, eq, schema } from '@repo/db';
+import { db, schema } from '@repo/db';
 import { makeDesigner, makeLead, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
@@ -167,55 +167,5 @@ describe('GET /api/reports/analytics', () => {
     });
 
     expect(response.status).toBe(422);
-  });
-});
-
-describe('POST /api/reports/projects/:id', () => {
-  it('requires authentication', async () => {
-    const response = await app.request(
-      '/api/reports/projects/11111111-1111-4111-8111-111111111111',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ reason: 'spam' }),
-      },
-    );
-
-    expect(response.status).toBe(401);
-  });
-
-  it('records and idempotently updates a report for a published project', async () => {
-    const designer = await makeDesigner({ status: 'active' });
-    const project = await makeProject({ designerId: designer.id, status: 'published' });
-    const { cookie, userId } = await createRoleSession('+919800004011', 'visitor');
-
-    const first = await app.request(`/api/reports/projects/${project.id}`, {
-      method: 'POST',
-      headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'spam' }),
-    });
-    const second = await app.request(`/api/reports/projects/${project.id}`, {
-      method: 'POST',
-      headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        reason: 'misleading',
-        details: 'The project photos do not match the description.',
-      }),
-    });
-
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-    expect(await second.json()).toEqual({ projectId: project.id, reported: true });
-    const rows = await db
-      .select()
-      .from(schema.projectReport)
-      .where(eq(schema.projectReport.reporterUserId, userId));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      projectId: project.id,
-      reason: 'misleading',
-      details: 'The project photos do not match the description.',
-      status: 'open',
-    });
   });
 });

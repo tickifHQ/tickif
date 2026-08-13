@@ -471,7 +471,6 @@ export type DesignerSummary = z.infer<typeof designerSummarySchema>;
 
 export const publicProjectDesignerSchema = designerSummarySchema
   .extend({
-    isVerified: z.boolean(),
     bio: z.string().nullable(),
     firmType: z.string().nullable(),
     foundedYear: z.number().int().nullable(),
@@ -629,7 +628,6 @@ export const publicProjectDetailResponseSchema = projectDetailResponseSchema
     rooms: z.array(publicProjectRoomSchema),
     images: z.array(publicProjectGalleryImageSchema),
     coverImageUrl: z.url().nullable(),
-    saveCount: z.number().int().nonnegative(),
     designer: publicProjectDesignerSchema,
     narrative: publicProjectNarrativeSchema.nullable(),
     recurringMotifs: z.array(publicProjectMotifSchema),

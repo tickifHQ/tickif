@@ -5,15 +5,7 @@ import { Button } from '@repo/ui/components/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { Separator } from '@repo/ui/components/separator';
 import { cn } from '@repo/ui/lib/utils';
-import {
-  ArrowLeft,
-  BadgeCheck,
-  CalendarDays,
-  MessageSquare,
-  Shield,
-  Star,
-  UserRound,
-} from 'lucide-react';
+import { ArrowLeft, CalendarDays, MessageSquare, Star, UserRound } from 'lucide-react';
 import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectActions } from '@/components/project-actions';
@@ -133,19 +125,7 @@ function DesignerCard({ project }: { project: PublicProjectDetailResponse }) {
               </p>
               <CardTitle className="mt-1 flex items-center gap-1 text-base leading-relaxed">
                 <span className="truncate">{designer.displayName}</span>
-                {designer.isVerified ? (
-                  <BadgeCheck
-                    aria-label="Verified designer"
-                    className="size-4 shrink-0 fill-primary text-primary-foreground"
-                  />
-                ) : null}
               </CardTitle>
-              {designer.isVerified ? (
-                <p className="mt-0.5 flex items-center gap-1 font-mono text-2xs uppercase tracking-wider text-foreground">
-                  <Shield aria-hidden className="size-2.5" />
-                  KYC verified
-                </p>
-              ) : null}
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 px-5 pb-5 pt-5 text-xs font-medium leading-relaxed">
@@ -228,7 +208,7 @@ function DesignerCard({ project }: { project: PublicProjectDetailResponse }) {
         </CardFooter>
       </Card>
       <Separator />
-      <ProjectActions projectId={project.id} loginHref={loginHref} saveCount={project.saveCount} />
+      <ProjectActions projectId={project.id} loginHref={loginHref} />
     </div>
   );
 }

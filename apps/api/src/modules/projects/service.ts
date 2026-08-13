@@ -1190,8 +1190,6 @@ async function buildPublicProjectDetail(
     toRecommendationCards(sameBudgetDifferentStyleRows, labels, localityLabels),
     toRecommendationCards(nearbyRows, labels, localityLabels),
   ]);
-  const saveCount = await projectsRepository.countProjectSaves(project.id);
-
   let resolvedCoverUrl: string | null = null;
   if (project.coverImageId) {
     const coverImg = coverImages.get(project.coverImageId);
@@ -1232,7 +1230,6 @@ async function buildPublicProjectDetail(
     }),
     images: galleryImages,
     coverImageUrl: resolvedCoverUrl,
-    saveCount,
     designer: {
       id: designer.id,
       displayName: designer.displayName,
@@ -1241,7 +1238,6 @@ async function buildPublicProjectDetail(
       reviewCount: designer.reviewCount,
       entityType: designer.entityType,
       logoUrl,
-      isVerified: designer.status === 'active',
       bio: designer.bio,
       firmType: designer.firmType,
       foundedYear: designer.foundedYear,

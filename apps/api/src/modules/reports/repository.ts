@@ -1,5 +1,5 @@
 import { and, db, eq, gte, lte, schema, sql } from '@repo/db';
-import { INTERACTION_EVENT_TYPE, type ProjectReportReason } from '@repo/contracts';
+import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
   profileId: string;
@@ -26,53 +26,6 @@ export type AnalyticsViewDailyCount = AnalyticsDailyCount & {
 };
 
 export const reportsRepository = {
-  async findReportableProject(projectId: string): Promise<{
-    orgId: string;
-    status: (typeof schema.projectStatusEnum.enumValues)[number];
-  } | null> {
-    const [row] = await db
-      .select({
-        orgId: schema.designerProfile.orgId,
-        status: schema.project.status,
-      })
-      .from(schema.project)
-      .innerJoin(schema.designerProfile, eq(schema.designerProfile.id, schema.project.designerId))
-      .where(eq(schema.project.id, projectId))
-      .limit(1);
-
-    return row ?? null;
-  },
-
-  async isOrganizationMember(userId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: schema.member.id })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, orgId)))
-      .limit(1);
-
-    return row !== undefined;
-  },
-
-  async upsertProjectReport(input: {
-    reporterUserId: string;
-    projectId: string;
-    reason: ProjectReportReason;
-    details: string | null;
-  }): Promise<void> {
-    await db
-      .insert(schema.projectReport)
-      .values(input)
-      .onConflictDoUpdate({
-        target: [schema.projectReport.reporterUserId, schema.projectReport.projectId],
-        set: {
-          reason: input.reason,
-          details: input.details,
-          status: 'open',
-          updatedAt: new Date(),
-        },
-      });
-  },
-
   async findProfileContext(input: {
     userId: string;
     orgId: string;

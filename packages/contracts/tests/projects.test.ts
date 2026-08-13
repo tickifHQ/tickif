@@ -194,7 +194,6 @@ describe('publicImageDetailResponseSchema', () => {
         reviewCount: 12,
         entityType: 'company',
         logoUrl: null,
-        isVerified: true,
         bio: 'Residential interior design studio.',
         firmType: 'Interior design studio',
         foundedYear: 2018,
@@ -313,7 +312,6 @@ describe('publicProjectBySlugResponseSchema', () => {
         },
       ],
       coverImageUrl: 'https://images.example.com/cover.webp',
-      saveCount: 145,
       designer: {
         id: '44444444-4444-4444-8444-444444444444',
         displayName: 'Studio A',
@@ -322,7 +320,6 @@ describe('publicProjectBySlugResponseSchema', () => {
         reviewCount: 12,
         entityType: 'company',
         logoUrl: null,
-        isVerified: true,
         bio: 'Residential interior design studio.',
         firmType: 'Interior design studio',
         foundedYear: 2018,

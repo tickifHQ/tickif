@@ -98,7 +98,6 @@ export function makePublicProject(
       },
     ],
     coverImageUrl: 'https://images.example.com/living-room.jpg',
-    saveCount: 145,
     designer: {
       id: '55555555-5555-4555-8555-555555555555',
       displayName: 'Anika Spaces',
@@ -107,7 +106,6 @@ export function makePublicProject(
       reviewCount: 36,
       entityType: 'company',
       logoUrl: null,
-      isVerified: true,
       bio: null,
       firmType: 'Interior design firm',
       foundedYear: 2018,

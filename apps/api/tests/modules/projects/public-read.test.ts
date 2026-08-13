@@ -28,7 +28,6 @@ vi.mock('../../../src/modules/projects/repository.js', () => ({
     findTaxonomyLabels: vi.fn(),
     findLocalityLabels: vi.fn(),
     countPublishedByDesigner: vi.fn(),
-    countProjectSaves: vi.fn(),
     listDesignerFootprintCities: vi.fn(),
     findPublishedProjectNarrative: vi.fn(),
     listPublishedDesignerMotifCounts: vi.fn(),
@@ -50,7 +49,6 @@ beforeEach(() => {
   vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
   vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
   vi.mocked(projectsRepository.countPublishedByDesigner).mockResolvedValue(0);
-  vi.mocked(projectsRepository.countProjectSaves).mockResolvedValue(0);
   vi.mocked(projectsRepository.listDesignerFootprintCities).mockResolvedValue([]);
   vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue(null);
   vi.mocked(projectsRepository.listPublishedDesignerMotifCounts).mockResolvedValue([]);
@@ -229,7 +227,6 @@ describe('projectsService.getPublicBySlug', () => {
       new Map([['mumbai:bandra', 'Bandra']]),
     );
     vi.mocked(projectsRepository.countPublishedByDesigner).mockResolvedValue(24);
-    vi.mocked(projectsRepository.countProjectSaves).mockResolvedValue(145);
     vi.mocked(projectsRepository.listDesignerFootprintCities).mockResolvedValue([
       { slug: 'mumbai', label: 'Mumbai' },
     ]);
@@ -284,8 +281,6 @@ describe('projectsService.getPublicBySlug', () => {
     expect(result.designer.slug).toBe('studio-a');
     expect(result.designer.logoUrl).toContain('signed.example');
     expect(result.designer.projectCount).toBe(24);
-    expect(result.designer.isVerified).toBe(true);
-    expect(result.saveCount).toBe(145);
     expect(result.specifications.city).toEqual({ slug: 'mumbai', label: 'Mumbai' });
     expect(result.narrative).toMatchObject({
       rating: 5,

@@ -33,15 +33,15 @@ describe('PublicProjectOverview', () => {
     const projectCounts = screen.getAllByText('28 Projects');
     expect(projectCounts.length).toBeGreaterThan(0);
     for (const projectCount of projectCounts) {
-      expect(projectCount.closest('p')?.querySelector('[data-slot="tickif-brand-icon"]')).toHaveClass(
-        'text-muted-foreground',
-      );
+      expect(
+        projectCount.closest('p')?.querySelector('[data-slot="tickif-brand-icon"]'),
+      ).toHaveClass('text-muted-foreground');
     }
     expect(screen.getAllByText('published').length).toBeGreaterThan(0);
     expect(screen.getAllByText('4.8').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/36 reviews/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('KYC verified').length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText('Verified designer').length).toBeGreaterThan(0);
+    expect(screen.queryByText('KYC verified')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Verified designer')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View profile' })).toHaveAttribute(
       'href',
       '/d/anika-spaces',

@@ -1523,15 +1523,6 @@ export const projectsRepository = {
     };
   },
 
-  async countProjectSaves(projectId: string): Promise<number> {
-    const [row] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.savedProject)
-      .where(eq(schema.savedProject.projectId, projectId));
-
-    return row?.count ?? 0;
-  },
-
   /**
    * Published project by slug with joined designer + org for slug resolution.
    * Returns raw data — service handles URL signing and response composition.
