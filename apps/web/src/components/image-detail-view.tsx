@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { FeedProject, PublicProjectGalleryImage, PublicProjectDesigner, PublicProjectNarrative } from '@repo/contracts';
+import type { FeedProject, PublicProjectGalleryImage, PublicProjectDesigner, PublicProjectNarrative, PublicImageDetailProject } from '@repo/contracts';
 import {
-  BadgeCheck,
   Bookmark,
   ChevronLeft,
   ChevronRight,
@@ -19,14 +18,27 @@ import { EnquiryCta } from '@/components/enquiry-cta';
 import { env } from '@/env';
 
 interface ImageDetailViewProps {
-  project: FeedProject & { description?: string | null; specifications?: unknown };
+  /** The project data from the image-detail response (PublicImageDetailProject). */
+  project: PublicImageDetailProject;
   gallery: PublicProjectGalleryImage[];
   designer: PublicProjectDesigner;
   narrative: PublicProjectNarrative | null;
-  similarProjects: FeedProject[];
+  moreProjects: FeedProject[];
   activeImageId: string;
-  designerProfileId?: string | null;
+  designerProfileId: string;
   isAuthenticated?: boolean;
+}
+
+/**
+ * Returns true if the keyboard event target is an interactive element where
+ * arrow keys should NOT be intercepted (inputs, textareas, contenteditable).
+ */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return false;
 }
 
 export function ImageDetailView({
@@ -34,7 +46,7 @@ export function ImageDetailView({
   gallery,
   designer,
   narrative,
-  similarProjects,
+  moreProjects,
   activeImageId,
   designerProfileId,
   isAuthenticated = false,
@@ -43,10 +55,12 @@ export function ImageDetailView({
   const [selectedImageId, setSelectedImageId] = useState(activeImageId);
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkPending, startBookmarkTransition] = useTransition();
+  const savedStateVersion = useRef(0);
 
-  // Check saved state on mount for authenticated users
+  // Finding #5: Check saved state on mount with cancellation/ignore handling
   useEffect(() => {
     if (!isAuthenticated) return;
+    const version = ++savedStateVersion.current;
     async function checkSavedState() {
       try {
         const response = await fetch(
@@ -54,10 +68,9 @@ export function ImageDetailView({
           { credentials: 'include' },
         );
         if (!response.ok) return;
+        if (version !== savedStateVersion.current) return; // Stale response
         const data = await response.json();
-        if (data.savedProjectIds?.includes(project.id)) {
-          setBookmarked(true);
-        }
+        setBookmarked(data.savedProjectIds?.includes(project.id) ?? false);
       } catch {
         // Non-blocking
       }
@@ -82,7 +95,7 @@ export function ImageDetailView({
           }),
         });
       } catch {
-        // Fire-and-forget: analytics failure must not affect UI
+        // Fire-and-forget
       }
     }
     recordView();
@@ -112,16 +125,20 @@ export function ImageDetailView({
     router.push(`/image/${image.id}`, { scroll: false });
   }
 
-  // Keyboard navigation for gallery
+  // Finding #1: Keyboard navigation — scoped, with guards
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (gallery.length <= 1) return;
+      if (e.repeat) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (isEditableTarget(e.target)) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+      e.preventDefault();
       if (e.key === 'ArrowLeft') {
-        e.preventDefault();
         const prevIndex = (activeImageIndex - 1 + gallery.length) % gallery.length;
         selectImage(gallery[prevIndex]!);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
+      } else {
         const nextIndex = (activeImageIndex + 1) % gallery.length;
         selectImage(gallery[nextIndex]!);
       }
@@ -134,16 +151,18 @@ export function ImageDetailView({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Bookmark handler
+  // Finding #2: Bookmark handler — uses callbackURL (not next=)
   function handleBookmark() {
     if (!isAuthenticated) {
-      router.push(`/login?next=/image/${activeImageId}`);
+      router.push(`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`);
       return;
     }
 
+    // Invalidate any in-flight saved-state check
+    savedStateVersion.current++;
+
     startBookmarkTransition(async () => {
       const newState = !bookmarked;
-      // Optimistic update
       setBookmarked(newState);
       try {
         const response = await fetch(
@@ -154,11 +173,9 @@ export function ImageDetailView({
           },
         );
         if (!response.ok) {
-          // Revert on failure
           setBookmarked(!newState);
         }
       } catch {
-        // Revert on failure
         setBookmarked(!newState);
       }
     });
@@ -176,11 +193,11 @@ export function ImageDetailView({
     }
   }
 
-  // About section content
-  const aboutText =
-    (project as { description?: string | null }).description ||
-    narrative?.body ||
-    null;
+  // Finding #9: Use contract type directly — description is on PublicImageDetailProject
+  const aboutText = project.description || narrative?.body || null;
+
+  // Finding #8: Only show rating if designer has reviews
+  const hasRating = designer.reviewCount > 0 && Number(designer.avgRating) > 0;
 
   return (
     <div className="w-full py-8">
@@ -245,7 +262,7 @@ export function ImageDetailView({
                 ) : null}
               </div>
 
-              {/* Designer card */}
+              {/* Designer card — Finding #8: no fabricated badge/rating */}
               <div className="rounded-xl bg-muted/70 p-4">
                 <div className="flex items-center gap-3">
                   <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
@@ -256,23 +273,26 @@ export function ImageDetailView({
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className="relative inline-flex items-center text-sm font-semibold">
+                    <p className="text-sm font-semibold">
                       {designer.displayName}
-                      <BadgeCheck
-                        className="ml-1 size-4 shrink-0 fill-primary text-primary-foreground"
-                        aria-label="Verified"
-                      />
                     </p>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Star className="size-3 fill-primary text-primary" aria-hidden />
-                      <span className="font-medium">{Number(designer.avgRating).toFixed(1)}</span>
-                      <span>·</span>
-                      <span>{designer.reviewCount} reviews</span>
-                    </div>
+                    {hasRating ? (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Star className="size-3 fill-primary text-primary" aria-hidden />
+                        <span className="font-medium">{Number(designer.avgRating).toFixed(1)}</span>
+                        <span>·</span>
+                        <span>{designer.reviewCount} reviews</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {designer.projectCount} project{designer.projectCount !== 1 ? 's' : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">
+                  {/* Finding #2: loginHref uses callbackURL */}
                   <EnquiryCta
                     context={{
                       type: 'project',
@@ -280,21 +300,32 @@ export function ImageDetailView({
                       designerName: designer.displayName,
                       designerLocation: location,
                     }}
-                    designerProfileId={designerProfileId ?? ''}
-                    loginHref={`/login?next=/image/${activeImageId}`}
+                    designerProfileId={designerProfileId}
+                    loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
                     variant="inverted"
                     className="h-9 flex-[7]"
                   >
                     <MessageSquare aria-hidden />
                     Enquire
                   </EnquiryCta>
-                  <Link
-                    href={designer.slug ? `/d/${designer.slug}` : '#'}
-                    className="flex h-10 flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
-                  >
-                    <UserRound className="size-4" aria-hidden />
-                    View profile
-                  </Link>
+                  {/* Finding #6: don't render dead # link */}
+                  {designer.slug ? (
+                    <Link
+                      href={`/d/${designer.slug}`}
+                      className="flex h-10 flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent"
+                    >
+                      <UserRound className="size-4" aria-hidden />
+                      View profile
+                    </Link>
+                  ) : (
+                    <span
+                      className="flex h-10 flex-[3] items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border bg-muted px-4 text-sm font-medium text-muted-foreground opacity-50"
+                      aria-disabled="true"
+                    >
+                      <UserRound className="size-4" aria-hidden />
+                      View profile
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -347,22 +378,21 @@ export function ImageDetailView({
           </aside>
         </div>
 
-        {/* Gallery strip */}
+        {/* Finding #7: Gallery strip — use aria-current instead of incomplete tab pattern */}
         {gallery.length > 1 ? (
-          <div className="mt-6 flex gap-3 overflow-x-auto p-1 pb-2 scrollbar-none" role="tablist" aria-label="Project gallery">
+          <div className="mt-6 flex gap-3 overflow-x-auto p-1 pb-2 scrollbar-none" role="group" aria-label="Project gallery">
             {gallery.map((image, index) => (
               <button
                 key={image.id}
                 type="button"
-                role="tab"
-                aria-selected={index === activeImageIndex}
+                aria-current={index === activeImageIndex ? 'true' : undefined}
                 onClick={() => selectImage(image)}
                 className={`relative shrink-0 overflow-hidden rounded-2xl transition-all ${
                   index === activeImageIndex
                     ? 'ring-2 ring-primary ring-offset-2'
                     : 'opacity-80 hover:opacity-100'
                 }`}
-                aria-label={image.roomName ?? `Image ${index + 1}`}
+                aria-label={image.roomName ?? `Image ${index + 1} of ${gallery.length}`}
               >
                 <img
                   src={image.url}
@@ -381,12 +411,12 @@ export function ImageDetailView({
         ) : null}
       </div>
 
-      {/* Similar projects */}
-      {similarProjects.length > 0 ? (
+      {/* More like this (similar projects or recommendation fallback) */}
+      {moreProjects.length > 0 ? (
         <section className="mt-16 w-full px-5 sm:px-6">
           <h2 className="font-display text-2xl tracking-tight">More like this</h2>
           <div className="mt-3 columns-2 gap-4 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6">
-            {similarProjects.map((relatedProject) => (
+            {moreProjects.map((relatedProject) => (
               <ShowcaseCard key={relatedProject.id} project={relatedProject} />
             ))}
           </div>

@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
 import {
   publicImageDetailResponseSchema,
-  publicProjectBySlugResponseSchema,
   similarProjectsResponseSchema,
   type FeedProject,
   type PublicImageDetailResponse,
@@ -10,17 +9,6 @@ import { ImageDetailView } from '@/components/image-detail-view';
 import { api } from '@/lib/api';
 import { getServerSession } from '@/lib/auth-guard';
 import { env } from '@/env';
-
-async function fetchDesignerProfileId(slug: string): Promise<string | null> {
-  try {
-    const response = await api.api.projects.slug[':slug'].$get({ param: { slug } });
-    if (!response.ok) return null;
-    const parsed = publicProjectBySlugResponseSchema.safeParse(await response.json());
-    return parsed.success ? parsed.data.designer.id : null;
-  } catch {
-    return null;
-  }
-}
 
 async function fetchImageDetail(imageId: string): Promise<PublicImageDetailResponse | null> {
   const response = await api.api.projects.images[':imageId'].$get({
@@ -67,10 +55,21 @@ export default async function ImageDetailPage({ params }: { params: Promise<{ id
     notFound();
   }
 
-  const [similarProjects, designerProfileId] = await Promise.all([
-    fetchSimilarProjects(imageDetail.project.id),
-    fetchDesignerProfileId(imageDetail.project.slug),
-  ]);
+  // Use designer.id directly from the image-detail response (blocking #3 fix).
+  // No redundant by-slug fetch needed — both come from buildPublicProjectDetail().
+  const designerProfileId = imageDetail.designer.id;
+
+  // Similar projects with fallback to recommendations (blocking #4 fix).
+  // /api/discovery/similar requires exact match on all 4 nullable taxonomy slugs,
+  // so many projects return empty. Fall back to the already-fetched recommendations.
+  const similarProjects = await fetchSimilarProjects(imageDetail.project.id);
+  const moreProjects: FeedProject[] =
+    similarProjects.length > 0
+      ? similarProjects
+      : (imageDetail.recommendations.nearby.length > 0
+          ? imageDetail.recommendations.nearby
+          : imageDetail.recommendations.sameBudgetDifferentStyle
+        ).slice(0, 8);
 
   return (
     <ImageDetailView
@@ -78,7 +77,7 @@ export default async function ImageDetailPage({ params }: { params: Promise<{ id
       gallery={imageDetail.images}
       designer={imageDetail.designer}
       narrative={imageDetail.narrative}
-      similarProjects={similarProjects}
+      moreProjects={moreProjects}
       activeImageId={imageDetail.activeImageId}
       designerProfileId={designerProfileId}
       isAuthenticated={!!session}
