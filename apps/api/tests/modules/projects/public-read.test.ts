@@ -167,6 +167,7 @@ describe('projectsService.getPublicBySlug', () => {
         firmType: 'Interior design studio',
         foundedYear: 2018,
         yearsExperience: 8,
+        isKycVerified: true,
       },
     });
     vi.mocked(projectsRepository.listPublicRooms).mockResolvedValue([
@@ -299,6 +300,7 @@ describe('projectsService.getPublicBySlug', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 0,
+        isKycVerified: false,
       },
     });
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);
@@ -328,6 +330,7 @@ describe('projectsService.getPublicBySlug', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 5,
+        isKycVerified: false,
       },
     });
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
@@ -414,6 +417,7 @@ describe('projectsService.getPublicImageDetail', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 0,
+        isKycVerified: false,
       },
     });
 
@@ -441,6 +445,7 @@ describe('projectsService.getPublicImageDetail', () => {
         firmType: 'Interior design studio',
         foundedYear: 2018,
         yearsExperience: 8,
+        isKycVerified: true,
       },
     });
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(
@@ -581,6 +586,7 @@ describe('projectsService.getPublicImageDetail', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 0,
+        isKycVerified: false,
       },
     });
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([
@@ -645,6 +651,7 @@ describe('projectsService.getPublicImageDetail', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 0,
+        isKycVerified: false,
       },
     });
     vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());

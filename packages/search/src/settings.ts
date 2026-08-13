@@ -34,7 +34,12 @@ export const DESIGNER_QUERY_BY = [
 ] as const;
 
 export const PROJECT_DEFAULT_SORT = '_text_match:desc,publishedAt:desc';
-export const DESIGNER_DEFAULT_SORT = '_text_match:desc,projectCount:desc';
+export const DESIGNER_DEFAULT_SORT = '_text_match:desc,projectCount:desc,updatedAt:desc';
+
+/** Query-time expiry keeps verification ranking correct without an expiry scheduler. */
+export function designerDefaultSort(nowEpochMs: number = Date.now()): string {
+  return `_text_match:desc,_eval(isKycVerified:true && kycExpiresAt:>${nowEpochMs}):desc,updatedAt:desc`;
+}
 
 const PROJECT_COLLECTION_FIELDS = [
   { name: 'slug', type: 'string', index: false, optional: true },
@@ -80,6 +85,8 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'projectCount', type: 'int32', sort: true },
   { name: 'avgRating', type: 'float', sort: true },
   { name: 'reviewCount', type: 'int32', sort: true },
+  { name: 'isKycVerified', type: 'bool', sort: true },
+  { name: 'kycExpiresAt', type: 'int64', sort: true },
   { name: 'logoImageKey', type: 'string', index: false, optional: true },
   { name: 'updatedAt', type: 'int64', sort: true },
 ] satisfies CollectionFieldSchema[];

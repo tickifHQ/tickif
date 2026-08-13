@@ -114,6 +114,7 @@ const fakePortfolioResponse: PortfolioResponse = {
   },
   showTickifBadge: true,
   badges: ['verified'],
+  isKycVerified: true,
   portfolioUrl: null,
   publiclyVisible: true,
   missingRequiredFields: [],

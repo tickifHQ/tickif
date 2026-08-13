@@ -1,6 +1,7 @@
 import { db, schema, eq, and, sql } from '@repo/db';
 import { inArray } from 'drizzle-orm';
 import {
+  VERIFICATION_APPLICATION_STATUS,
   taxonomyKindSchema,
   type DesignerEntityType,
   type TaxonomyKind,
@@ -63,6 +64,24 @@ async function replaceFootprintByKindInTx(
 }
 
 export const profilesRepository = {
+  async isOrganizationKycVerified(orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.verificationApplication.id })
+      .from(schema.verificationApplication)
+      .where(
+        and(
+          eq(schema.verificationApplication.organizationId, orgId),
+          eq(
+            schema.verificationApplication.status,
+            VERIFICATION_APPLICATION_STATUS.VERIFIED,
+          ),
+          sql`${schema.verificationApplication.expiresAt} > now()`,
+        ),
+      )
+      .limit(1);
+    return !!row;
+  },
+
   /** Find the designer profile owned by the given organization. */
   async findByOrgId(orgId: string): Promise<DesignerProfileRecord | null> {
     const [row] = await db

@@ -122,7 +122,7 @@ export const publicPortfolioService = {
     const resolved = await portfolioRepository.findPublicBySlug(slug);
     if (!resolved) throw AppError.notFound('Portfolio not found');
 
-    const { profile, orgSlug, portfolio } = resolved;
+    const { profile, orgSlug, portfolio, isKycVerified } = resolved;
     if (profile.status !== 'active') throw AppError.notFound('Portfolio not found');
     // Absent row means "never configured", which keeps the column default (enabled).
     if (portfolio && !portfolio.publicLinkEnabled) throw AppError.notFound('Portfolio not found');
@@ -199,7 +199,8 @@ export const publicPortfolioService = {
       cities,
       logoUrl,
       accentColor: portfolio?.accentColor ?? DEFAULT_ACCENT_COLOR,
-      badges: sections.trustCredentials ? computeBadges(profile) : [],
+      badges: sections.trustCredentials ? computeBadges(profile, isKycVerified) : [],
+      isKycVerified,
       sections,
       stats: {
         tickif: tickifSettings.showOverallRating

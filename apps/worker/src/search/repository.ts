@@ -1,4 +1,5 @@
 import { and, asc, db, eq, isNotNull, schema, sql } from '@repo/db';
+import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type { DesignerSearchSource, ProjectSearchSource } from './mapper.js';
 
 const PAGE_LIMIT_MAX = 500;
@@ -132,9 +133,20 @@ export async function findDesignerSearchSource(
       reviewCount: schema.designerProfile.reviewCount,
       logoImageId: schema.designerProfile.logoImageId,
       updatedAt: schema.designerProfile.updatedAt,
+      isKycVerified: sql<boolean>`exists (
+        select 1 from ${schema.verificationApplication}
+        where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
+          and ${schema.verificationApplication.status} = ${VERIFICATION_APPLICATION_STATUS.VERIFIED}
+          and ${schema.verificationApplication.expiresAt} > now()
+      )`,
+      kycExpiresAt: schema.verificationApplication.expiresAt,
     })
     .from(schema.designerProfile)
     .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+    .leftJoin(
+      schema.verificationApplication,
+      eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
+    )
     .where(
       and(eq(schema.designerProfile.id, profileId), eq(schema.designerProfile.status, 'active')),
     )

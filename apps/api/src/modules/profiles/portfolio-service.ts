@@ -121,9 +121,12 @@ export async function presignProfileLogo(
   return presignDownload({ key: profile.logoImageId });
 }
 
-export function computeBadges(profile: DesignerProfileRecord): PortfolioBadge[] {
+export function computeBadges(
+  profile: DesignerProfileRecord,
+  isKycVerified = false,
+): PortfolioBadge[] {
   const badges: PortfolioBadge[] = [];
-  if (profile.status === 'active') badges.push('verified');
+  if (isKycVerified) badges.push('verified');
   const daysSinceCreation =
     (Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24);
   if (daysSinceCreation < BADGE_NEW_DAYS) badges.push('new');
@@ -202,16 +205,16 @@ async function buildPortfolioResponse(
   profile: DesignerProfileRecord,
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
-  const badges = computeBadges(profile);
-
   // Independent reads — one round-trip's worth of latency, not three.
-  const [logoUrl, googleRow, orgSlug] = await Promise.all([
+  const [logoUrl, googleRow, orgSlug, isKycVerified] = await Promise.all([
     presignProfileLogo(profile),
     // Lightweight Google connection snapshot so the settings page renders the
     // real connection state (badge + rating) without a second request.
     googleReviewsRepository.findByProfileId(profile.id),
     portfolioRepository.findOrgSlug(profile.orgId),
+    profilesRepository.isOrganizationKycVerified(profile.orgId),
   ]);
+  const badges = computeBadges(profile, isKycVerified);
 
   const googleConnection = googleRow ? readState(googleRow).summary : null;
   // Null only if the owning org vanished mid-request; the FK makes that a no-op case.
@@ -258,6 +261,7 @@ async function buildPortfolioResponse(
     },
     showTickifBadge: portfolio.showTickifBadge,
     badges,
+    isKycVerified,
     portfolioUrl,
     // `publiclyVisible` answers "does /d/{slug} serve a page right now?", so it
     // carries the designer's own switch as well as the completeness gate.

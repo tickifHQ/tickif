@@ -1,7 +1,10 @@
 import { ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
-import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
+import {
+  SELF_SERVICE_MODERATION_ACTIONS,
+  VERIFICATION_APPLICATION_STATUS,
+} from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -291,6 +294,7 @@ export type PublicProjectReadRecord = {
     firmType: string | null;
     foundedYear: number | null;
     yearsExperience: number;
+    isKycVerified: boolean;
   };
 };
 
@@ -337,6 +341,12 @@ const publicProjectReadColumns = {
   designerFirmType: schema.designerProfile.firmType,
   designerFoundedYear: schema.designerProfile.foundedYear,
   designerYearsExperience: schema.designerProfile.yearsExperience,
+  designerIsKycVerified: sql<boolean>`exists (
+    select 1 from ${schema.verificationApplication}
+    where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
+      and ${schema.verificationApplication.status} = ${VERIFICATION_APPLICATION_STATUS.VERIFIED}
+      and ${schema.verificationApplication.expiresAt} > now()
+  )`,
 };
 
 export type DuplicateProjectParams = {
@@ -1513,6 +1523,7 @@ export const projectsRepository = {
         firmType: row.designerFirmType,
         foundedYear: row.designerFoundedYear,
         yearsExperience: row.designerYearsExperience,
+        isKycVerified: row.designerIsKycVerified,
       },
     };
   },
@@ -1556,6 +1567,7 @@ export const projectsRepository = {
         firmType: row.designerFirmType,
         foundedYear: row.designerFoundedYear,
         yearsExperience: row.designerYearsExperience,
+        isKycVerified: row.designerIsKycVerified,
       },
     };
   },

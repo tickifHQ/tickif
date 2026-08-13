@@ -76,6 +76,7 @@ const portfolio: PortfolioResponse = {
   },
   showTickifBadge: true,
   badges: ['verified'],
+  isKycVerified: true,
   portfolioUrl: 'https://tickif.com/d/mahi-studio',
   publiclyVisible: true,
   missingRequiredFields: [],

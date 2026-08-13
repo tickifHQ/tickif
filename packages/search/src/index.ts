@@ -19,6 +19,7 @@ export {
 } from './bootstrap.js';
 export {
   DESIGNER_DEFAULT_SORT,
+  designerDefaultSort,
   DESIGNER_QUERY_BY,
   DESIGNER_SEARCH_SETTINGS,
   PROJECT_DEFAULT_SORT,

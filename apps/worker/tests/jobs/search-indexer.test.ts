@@ -78,6 +78,8 @@ const designerSource: DesignerSearchSource = {
     reviewCount: 2,
     logoImageId: null,
     updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+    isKycVerified: false,
+    kycExpiresAt: null,
   },
   footprint: [],
 };

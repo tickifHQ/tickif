@@ -12,7 +12,7 @@ import {
   PROJECT_QUERY_BY,
   DESIGNER_QUERY_BY,
   PROJECT_DEFAULT_SORT,
-  DESIGNER_DEFAULT_SORT,
+  designerDefaultSort,
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
@@ -188,7 +188,7 @@ export async function searchDesigners(
     q: params.q,
     query_by: params.query_by || DESIGNER_QUERY_BY.join(','),
     filter_by: params.filter_by,
-    sort_by: params.sort_by || DESIGNER_DEFAULT_SORT,
+    sort_by: params.sort_by || designerDefaultSort(),
     facet_by: params.facet_by || DESIGNER_FACET_FIELDS.join(','),
     include_fields: params.include_fields,
     page: params.page,

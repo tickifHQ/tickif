@@ -66,6 +66,8 @@ function makeDesignerDoc(overrides: Partial<DesignerSearchDocument> = {}): Desig
     projectCount: 25,
     avgRating: 4.5,
     reviewCount: 12,
+    isKycVerified: false,
+    kycExpiresAt: 0,
     logoImageKey: 'logos/studio-design.jpg',
     updatedAt: Date.now(),
     ...overrides,
@@ -441,6 +443,7 @@ describe('GET /api/search/designers', () => {
         projectCount: 50,
         avgRating: 4.8,
         reviewCount: 25,
+        isKycVerified: false,
         logoImageKey: 'logos/acme.png',
       });
       mockSearchDesigners([designer]);
@@ -477,6 +480,20 @@ describe('GET /api/search/designers', () => {
       const body = await json(res);
 
       expect(body.hits[0].logoUrl).toBeNull();
+    });
+
+    it('does not expose an expired search-projection verification flag', async () => {
+      mockSearchDesigners([
+        makeDesignerDoc({
+          isKycVerified: true,
+          kycExpiresAt: Date.now() - 1,
+        }),
+      ]);
+
+      const res = await get('/api/search/designers?q=test');
+      const body = await json(res);
+
+      expect(body.hits[0].isKycVerified).toBe(false);
     });
 
     it('returns facetDistribution in response', async () => {

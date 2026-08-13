@@ -36,6 +36,7 @@ vi.mock('../../../src/modules/profiles/repository.js', () => ({
   profilesRepository: {
     findByOrgId: vi.fn(),
     updateProfile: vi.fn(),
+    isOrganizationKycVerified: vi.fn(async () => true),
   },
 }));
 
@@ -404,7 +405,7 @@ describe('portfolioService.updatePortfolio', () => {
 describe('portfolioService.getPortfolio badges', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  /** Baseline profile that earns no threshold badges (only "verified"). */
+  /** Baseline profile that earns no threshold badges (only current KYC verification). */
   const baseline = () =>
     makeProfile({
       status: 'active',
@@ -422,9 +423,10 @@ describe('portfolioService.getPortfolio badges', () => {
     return result.badges;
   }
 
-  it('includes "verified" only for active profiles', async () => {
+  it('includes "verified" only for a current KYC approval', async () => {
     expect(await badgesFor(baseline())).toEqual(['verified']);
-    expect(await badgesFor({ ...baseline(), status: 'draft' })).toEqual([]);
+    vi.mocked(profilesRepository.isOrganizationKycVerified).mockResolvedValueOnce(false);
+    expect(await badgesFor(baseline())).toEqual([]);
   });
 
   it('includes "new" below the 90-day boundary but not at it', async () => {
@@ -816,6 +818,7 @@ describe('portfolioService.updatePortfolio — activation', () => {
     const { profile, portfolio } = makeDraftMissing('tagline');
     setupResolveProfile(profile);
     setupGetPortfolio(portfolio);
+    vi.mocked(profilesRepository.isOrganizationKycVerified).mockResolvedValueOnce(false);
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ tagline: 'Warm, functional homes' }),
     );
@@ -828,14 +831,15 @@ describe('portfolioService.updatePortfolio — activation', () => {
     expect(portfolioRepository.activateIfDraftInTx).toHaveBeenCalledWith({}, 'profile-1');
     expect(result.publiclyVisible).toBe(true);
     expect(result.missingRequiredFields).toEqual([]);
-    // Activation is what earns the badge, so the same response must carry it.
-    expect(result.badges).toContain('verified');
+    // Profile activation and identity verification are intentionally independent.
+    expect(result.badges).not.toContain('verified');
   });
 
   it('leaves a draft profile in draft while a required field is still blank', async () => {
     const { profile, portfolio } = makeDraftMissing('logo');
     setupResolveProfile(profile);
     setupGetPortfolio(portfolio);
+    vi.mocked(profilesRepository.isOrganizationKycVerified).mockResolvedValueOnce(false);
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
       makePortfolio({ tagline: 'Warm, functional homes' }),
     );

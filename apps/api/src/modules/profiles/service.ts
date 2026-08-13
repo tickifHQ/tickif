@@ -357,7 +357,10 @@ export const profilesService = {
     const profile = await profilesRepository.findById(profileId);
     if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
 
-    const footprint = await profilesRepository.getFootprint(profileId);
+    const [footprint, isKycVerified] = await Promise.all([
+      profilesRepository.getFootprint(profileId),
+      profilesRepository.isOrganizationKycVerified(profile.orgId),
+    ]);
 
     return {
       id: profile.id,
@@ -371,6 +374,7 @@ export const profilesService = {
       shareCount: profile.shareCount,
       avgRating: profile.avgRating,
       reviewCount: profile.reviewCount,
+      isKycVerified,
       footprint,
       createdAt: profile.createdAt.toISOString(),
     };
@@ -381,7 +385,10 @@ export const profilesService = {
     const profile = await profilesRepository.findByOrgSlug(orgSlug);
     if (!profile || profile.status !== 'active') throw AppError.notFound('Profile not found');
 
-    const footprint = await profilesRepository.getFootprint(profile.id);
+    const [footprint, isKycVerified] = await Promise.all([
+      profilesRepository.getFootprint(profile.id),
+      profilesRepository.isOrganizationKycVerified(profile.orgId),
+    ]);
 
     return {
       id: profile.id,
@@ -395,6 +402,7 @@ export const profilesService = {
       shareCount: profile.shareCount,
       avgRating: profile.avgRating,
       reviewCount: profile.reviewCount,
+      isKycVerified,
       footprint,
       createdAt: profile.createdAt.toISOString(),
     };

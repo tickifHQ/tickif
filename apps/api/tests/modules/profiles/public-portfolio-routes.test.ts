@@ -72,6 +72,7 @@ const fakePortfolio: PublicPortfolioResponse = {
   logoUrl: null,
   accentColor: '#FF8F73',
   badges: ['verified'],
+  isKycVerified: true,
   sections: {
     hero: true,
     trustCredentials: true,
