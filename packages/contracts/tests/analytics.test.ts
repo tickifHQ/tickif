@@ -31,6 +31,12 @@ describe('analytics contracts', () => {
         },
         leads: { total: 1, new: 1, contacted: 0, closed: 0, spam: 0 },
         engagement: { projectViews: 3, profileViews: 2 },
+        previousPeriod: {
+          projectViews: 2,
+          enquiries: 1,
+          viewToEnquiryRate: 50,
+          responseRate: 0,
+        },
         activity: [
           {
             date: '2026-08-07',
@@ -40,6 +46,18 @@ describe('analytics contracts', () => {
             profileViews: 2,
           },
         ],
+        topConvertingProjects: [
+          {
+            projectId: '11111111-1111-4111-8111-111111111111',
+            title: 'Warm apartment',
+            citySlug: 'chennai',
+            localitySlug: 'velachery',
+            views: 3,
+            enquiries: 1,
+            conversions: 1,
+          },
+        ],
+        acquisitionSources: [{ source: 'project-enquiry', enquiries: 1, conversions: 1 }],
         deferredMetrics: [],
       }).success,
     ).toBe(true);

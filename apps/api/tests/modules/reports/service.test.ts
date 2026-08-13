@@ -9,6 +9,8 @@ vi.mock('../../../src/modules/reports/repository.js', () => ({
     countProjectsCreatedByDay: vi.fn(),
     countLeadsReceivedByDay: vi.fn(),
     countViewsByDay: vi.fn(),
+    findTopConvertingProjects: vi.fn(),
+    countAcquisitionSources: vi.fn(),
   },
 }));
 
@@ -34,6 +36,8 @@ beforeEach(() => {
   vi.mocked(reportsRepository.countProjectsCreatedByDay).mockResolvedValue([]);
   vi.mocked(reportsRepository.countLeadsReceivedByDay).mockResolvedValue([]);
   vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([]);
+  vi.mocked(reportsRepository.findTopConvertingProjects).mockResolvedValue([]);
+  vi.mocked(reportsRepository.countAcquisitionSources).mockResolvedValue([]);
 });
 
 afterAll(() => {
@@ -47,11 +51,16 @@ describe('reportsService.getAnalytics', () => {
       { status: 'published', count: 3 },
       { status: 'changes_requested', count: 1 },
     ]);
-    vi.mocked(reportsRepository.countLeadsByStatus).mockResolvedValue([
-      { status: 'new', count: 4 },
-      { status: 'contacted', count: 2 },
-      { status: 'closed', count: 1 },
-    ]);
+    vi.mocked(reportsRepository.countLeadsByStatus)
+      .mockResolvedValueOnce([
+        { status: 'new', count: 4 },
+        { status: 'contacted', count: 2 },
+        { status: 'closed', count: 1 },
+      ])
+      .mockResolvedValueOnce([
+        { status: 'new', count: 2 },
+        { status: 'contacted', count: 1 },
+      ]);
     vi.mocked(reportsRepository.countProjectsCreatedByDay).mockResolvedValue([
       { date: '2026-08-02', count: 1 },
       { date: '2026-08-07', count: 2 },
@@ -59,9 +68,28 @@ describe('reportsService.getAnalytics', () => {
     vi.mocked(reportsRepository.countLeadsReceivedByDay).mockResolvedValue([
       { date: '2026-08-04', count: 3 },
     ]);
-    vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([
-      { type: 'project_view', date: '2026-08-04', count: 5 },
-      { type: 'profile_view', date: '2026-08-07', count: 2 },
+    vi.mocked(reportsRepository.countViewsByDay)
+      .mockResolvedValueOnce([
+        { type: 'project_view', date: '2026-08-04', count: 5 },
+        { type: 'profile_view', date: '2026-08-07', count: 2 },
+      ])
+      .mockResolvedValueOnce([
+        { type: 'project_view', date: '2026-07-28', count: 4 },
+        { type: 'profile_view', date: '2026-07-29', count: 1 },
+      ]);
+    vi.mocked(reportsRepository.findTopConvertingProjects).mockResolvedValue([
+      {
+        projectId: '22222222-2222-4222-8222-222222222222',
+        title: 'Warm apartment',
+        citySlug: 'chennai',
+        localitySlug: 'velachery',
+        views: 5,
+        enquiries: 2,
+        conversions: 1,
+      },
+    ]);
+    vi.mocked(reportsRepository.countAcquisitionSources).mockResolvedValue([
+      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
     ]);
 
     const result = await reportsService.getAnalytics(input);
@@ -88,6 +116,12 @@ describe('reportsService.getAnalytics', () => {
       spam: 0,
     });
     expect(result.engagement).toEqual({ projectViews: 5, profileViews: 2 });
+    expect(result.previousPeriod).toEqual({
+      projectViews: 4,
+      enquiries: 3,
+      viewToEnquiryRate: 75,
+      responseRate: (1 / 3) * 100,
+    });
     expect(result.activity).toHaveLength(7);
     expect(result.activity[0]).toEqual({
       date: '2026-08-01',
@@ -110,6 +144,12 @@ describe('reportsService.getAnalytics', () => {
       projectViews: 0,
       profileViews: 2,
     });
+    expect(result.topConvertingProjects).toEqual([
+      expect.objectContaining({ title: 'Warm apartment', conversions: 1 }),
+    ]);
+    expect(result.acquisitionSources).toEqual([
+      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
+    ]);
     expect(result.deferredMetrics).toEqual([]);
   });
 
@@ -123,7 +163,11 @@ describe('reportsService.getAnalytics', () => {
     expect(reportsRepository.countProjectsByStatus).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
     );
-    expect(reportsRepository.countLeadsByStatus).toHaveBeenCalledWith('org_1');
+    expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(1, {
+      orgId: 'org_1',
+      from: new Date('2026-08-01T00:00:00.000Z'),
+      to: new Date('2026-08-07T12:30:00.000Z'),
+    });
     expect(reportsRepository.countProjectsCreatedByDay).toHaveBeenCalledWith({
       profileId: '11111111-1111-4111-8111-111111111111',
       from: new Date('2026-08-01T00:00:00.000Z'),
@@ -134,8 +178,29 @@ describe('reportsService.getAnalytics', () => {
       from: new Date('2026-08-01T00:00:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
-    expect(reportsRepository.countViewsByDay).toHaveBeenCalledWith({
+    expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(1, {
       profileId: '11111111-1111-4111-8111-111111111111',
+      from: new Date('2026-08-01T00:00:00.000Z'),
+      to: new Date('2026-08-07T12:30:00.000Z'),
+    });
+    expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(2, {
+      orgId: 'org_1',
+      from: new Date('2026-07-25T00:00:00.000Z'),
+      to: new Date('2026-07-31T23:59:59.999Z'),
+    });
+    expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(2, {
+      profileId: '11111111-1111-4111-8111-111111111111',
+      from: new Date('2026-07-25T00:00:00.000Z'),
+      to: new Date('2026-07-31T23:59:59.999Z'),
+    });
+    expect(reportsRepository.findTopConvertingProjects).toHaveBeenCalledWith({
+      profileId: '11111111-1111-4111-8111-111111111111',
+      orgId: 'org_1',
+      from: new Date('2026-08-01T00:00:00.000Z'),
+      to: new Date('2026-08-07T12:30:00.000Z'),
+    });
+    expect(reportsRepository.countAcquisitionSources).toHaveBeenCalledWith({
+      orgId: 'org_1',
       from: new Date('2026-08-01T00:00:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });

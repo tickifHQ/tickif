@@ -104,6 +104,22 @@ function leadMetrics(counts: AnalyticsLeadStatusCount[]): AnalyticsResponse['lea
   };
 }
 
+function periodMetrics(input: {
+  leads: AnalyticsResponse['leads'];
+  engagement: AnalyticsResponse['engagement'];
+}): AnalyticsResponse['previousPeriod'] {
+  const responded = input.leads.contacted + input.leads.closed;
+  return {
+    projectViews: input.engagement.projectViews,
+    enquiries: input.leads.total,
+    viewToEnquiryRate:
+      input.engagement.projectViews === 0
+        ? 0
+        : (input.leads.total / input.engagement.projectViews) * 100,
+    responseRate: input.leads.total === 0 ? 0 : (responded / input.leads.total) * 100,
+  };
+}
+
 export const reportsService = {
   async getAnalytics(input: AnalyticsInput): Promise<AnalyticsResponse> {
     if (!input.orgId) {
@@ -120,14 +136,45 @@ export const reportsService = {
 
     const to = new Date();
     const from = startOfUtcDay(new Date(to.getTime() - (input.query.days - 1) * DAY_MS));
-    const [projectCounts, leadCounts, projectActivity, leadActivity, viewActivity] =
-      await Promise.all([
-        reportsRepository.countProjectsByStatus(profile.profileId),
-        reportsRepository.countLeadsByStatus(profile.orgId),
-        reportsRepository.countProjectsCreatedByDay({ profileId: profile.profileId, from, to }),
-        reportsRepository.countLeadsReceivedByDay({ orgId: profile.orgId, from, to }),
-        reportsRepository.countViewsByDay({ profileId: profile.profileId, from, to }),
-      ]);
+    const previousTo = new Date(from.getTime() - 1);
+    const previousFrom = startOfUtcDay(new Date(from.getTime() - input.query.days * DAY_MS));
+    const [
+      projectCounts,
+      leadCounts,
+      projectActivity,
+      leadActivity,
+      viewActivity,
+      topConvertingProjects,
+      acquisitionSources,
+      previousLeadCounts,
+      previousViewActivity,
+    ] = await Promise.all([
+      reportsRepository.countProjectsByStatus(profile.profileId),
+      reportsRepository.countLeadsByStatus({ orgId: profile.orgId, from, to }),
+      reportsRepository.countProjectsCreatedByDay({ profileId: profile.profileId, from, to }),
+      reportsRepository.countLeadsReceivedByDay({ orgId: profile.orgId, from, to }),
+      reportsRepository.countViewsByDay({ profileId: profile.profileId, from, to }),
+      reportsRepository.findTopConvertingProjects({
+        profileId: profile.profileId,
+        orgId: profile.orgId,
+        from,
+        to,
+      }),
+      reportsRepository.countAcquisitionSources({ orgId: profile.orgId, from, to }),
+      reportsRepository.countLeadsByStatus({
+        orgId: profile.orgId,
+        from: previousFrom,
+        to: previousTo,
+      }),
+      reportsRepository.countViewsByDay({
+        profileId: profile.profileId,
+        from: previousFrom,
+        to: previousTo,
+      }),
+    ]);
+
+    const leads = leadMetrics(leadCounts);
+    const engagement = engagementMetrics(viewActivity);
 
     return {
       window: {
@@ -136,8 +183,12 @@ export const reportsService = {
         to: to.toISOString(),
       },
       projects: projectMetrics(projectCounts),
-      leads: leadMetrics(leadCounts),
-      engagement: engagementMetrics(viewActivity),
+      leads,
+      engagement,
+      previousPeriod: periodMetrics({
+        leads: leadMetrics(previousLeadCounts),
+        engagement: engagementMetrics(previousViewActivity),
+      }),
       activity: activitySeries({
         days: input.query.days,
         from,
@@ -145,6 +196,8 @@ export const reportsService = {
         leads: leadActivity,
         views: viewActivity,
       }),
+      topConvertingProjects,
+      acquisitionSources,
       deferredMetrics: [],
     };
   },

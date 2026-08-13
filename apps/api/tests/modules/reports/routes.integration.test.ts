@@ -43,6 +43,7 @@ describe('GET /api/reports/analytics', () => {
     const { cookie, designer } = await makeDesignerSession('+919800004002');
     const today = new Date();
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const previousPeriod = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000);
     const outsideWindow = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000);
     const eventDay = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -67,17 +68,43 @@ describe('GET /api/reports/analytics', () => {
 
     await makeLead({
       organizationId: designer.orgId,
+      referredProjectId: ownProject.id,
+      source: 'project-enquiry',
       status: 'new',
       receivedAt: today,
     });
     await makeLead({
       organizationId: designer.orgId,
+      referredProjectId: ownProject.id,
+      source: 'project-enquiry',
       status: 'contacted',
       receivedAt: yesterday,
     });
     await makeLead({ status: 'new', receivedAt: today });
+    await makeLead({
+      organizationId: designer.orgId,
+      source: 'spam-only',
+      status: 'spam',
+      receivedAt: today,
+    });
+    await makeLead({
+      organizationId: designer.orgId,
+      referredProjectId: ownProject.id,
+      source: 'project-enquiry',
+      status: 'contacted',
+      receivedAt: previousPeriod,
+    });
 
     await db.insert(schema.interactionEvent).values([
+      {
+        type: 'project_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        projectId: ownProject.id,
+        designerProfileId: null,
+        eventDay: eventDay(previousPeriod),
+        createdAt: previousPeriod,
+      },
       {
         type: 'project_view',
         eventKey: randomUUID(),
@@ -144,18 +171,35 @@ describe('GET /api/reports/analytics', () => {
       changesRequested: 0,
     });
     expect(parsed.data.leads).toEqual({
-      total: 2,
+      total: 3,
       new: 1,
       contacted: 1,
       closed: 0,
-      spam: 0,
+      spam: 1,
     });
     expect(parsed.data.engagement).toEqual({ projectViews: 1, profileViews: 1 });
+    expect(parsed.data.previousPeriod).toEqual({
+      projectViews: 1,
+      enquiries: 1,
+      viewToEnquiryRate: 100,
+      responseRate: 100,
+    });
     expect(parsed.data.activity).toHaveLength(7);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.projectsCreated, 0)).toBe(1);
-    expect(parsed.data.activity.reduce((sum, point) => sum + point.leadsReceived, 0)).toBe(2);
+    expect(parsed.data.activity.reduce((sum, point) => sum + point.leadsReceived, 0)).toBe(3);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.projectViews, 0)).toBe(1);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.profileViews, 0)).toBe(1);
+    expect(parsed.data.topConvertingProjects).toEqual([
+      expect.objectContaining({
+        projectId: ownProject.id,
+        views: 1,
+        enquiries: 2,
+        conversions: 1,
+      }),
+    ]);
+    expect(parsed.data.acquisitionSources).toEqual([
+      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
+    ]);
     expect(parsed.data.deferredMetrics).toEqual([]);
   });
 
