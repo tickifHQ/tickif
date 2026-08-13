@@ -16,6 +16,7 @@ export const QUEUES = {
   sms: 'sms',
   googleReviews: 'google-reviews',
   searchIndex: 'search-index',
+  verificationEmail: 'verification-email',
 } as const;
 
 export const JOBS = {
@@ -30,6 +31,8 @@ export const JOBS = {
   indexDesigner: 'index-designer',
   deleteDesigner: 'delete-designer',
   reindexAll: 'reindex-all',
+  sendVerificationEmail: 'send-verification-email',
+  sweepVerificationNotifications: 'sweep-verification-notifications',
 } as const;
 
 export type MediaProcessJob = {
@@ -113,9 +116,21 @@ export type SearchIndexJob =
   | SearchDeleteDesignerJob
   | SearchReindexAllJob;
 
+export type VerificationEmailJob = {
+  kind: 'verification-email';
+  outboxId: string;
+};
+
+export type VerificationNotificationSweepJob = {
+  kind: 'verification-notification-sweep';
+};
+
+export type VerificationEmailQueueJob = VerificationEmailJob | VerificationNotificationSweepJob;
+
 /** Stable scheduler id so re-registering the repeatable sweep is idempotent. */
 export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
 export const BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER = 'booking-notifications-sweep';
+export const VERIFICATION_NOTIFICATIONS_SWEEP_SCHEDULER = 'verification-notifications-sweep';
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -132,6 +147,7 @@ let smsQueue: Queue<SmsQueueJob> | undefined;
 let mediaQueue: Queue<MediaProcessJob> | undefined;
 let googleReviewsQueue: Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
 let searchIndexQueue: Queue<SearchIndexJob> | undefined;
+let verificationEmailQueue: Queue<VerificationEmailQueueJob> | undefined;
 
 function getSmsQueue(): Queue<SmsQueueJob> {
   smsQueue ??= new Queue<SmsQueueJob>(QUEUES.sms, {
@@ -195,6 +211,14 @@ function getSearchIndexQueue(): Queue<SearchIndexJob> {
     defaultJobOptions,
   });
   return searchIndexQueue;
+}
+
+function getVerificationEmailQueue(): Queue<VerificationEmailQueueJob> {
+  verificationEmailQueue ??= new Queue<VerificationEmailQueueJob>(QUEUES.verificationEmail, {
+    connection,
+    defaultJobOptions,
+  });
+  return verificationEmailQueue;
 }
 
 /**
@@ -286,15 +310,35 @@ export async function enqueueSearchReindexAll(job: SearchReindexAllJob): Promise
   });
 }
 
+export async function enqueueVerificationEmail(job: VerificationEmailJob): Promise<void> {
+  await getVerificationEmailQueue().add(JOBS.sendVerificationEmail, job, {
+    jobId: `${JOBS.sendVerificationEmail}-${job.outboxId}`,
+    removeOnComplete: { age: 24 * 3600, count: 5000 },
+  });
+}
+
+export async function scheduleVerificationNotificationSweep(everyMs: number): Promise<void> {
+  await getVerificationEmailQueue().upsertJobScheduler(
+    VERIFICATION_NOTIFICATIONS_SWEEP_SCHEDULER,
+    { every: everyMs },
+    {
+      name: JOBS.sweepVerificationNotifications,
+      data: { kind: 'verification-notification-sweep' },
+    },
+  );
+}
+
 export async function closeQueues(): Promise<void> {
   await Promise.all([
     smsQueue?.close(),
     mediaQueue?.close(),
     googleReviewsQueue?.close(),
     searchIndexQueue?.close(),
+    verificationEmailQueue?.close(),
   ]);
   smsQueue = undefined;
   mediaQueue = undefined;
   googleReviewsQueue = undefined;
   searchIndexQueue = undefined;
+  verificationEmailQueue = undefined;
 }

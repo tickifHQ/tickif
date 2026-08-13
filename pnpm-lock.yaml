@@ -395,6 +395,9 @@ importers:
       '@babel/runtime':
         specifier: 'catalog:'
         version: 7.29.7
+      '@repo/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@repo/config':
         specifier: workspace:*
         version: link:../../packages/config

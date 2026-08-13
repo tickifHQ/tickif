@@ -17,9 +17,15 @@ type SendEmailParams = {
   to: string;
   subject: string;
   html: string;
+  idempotencyKey?: string;
 };
 
-export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  idempotencyKey,
+}: SendEmailParams): Promise<void> {
   if (!resend) {
     if (config.NODE_ENV === 'production') {
       throw new Error('[email] RESEND_API_KEY is required in production');
@@ -29,12 +35,15 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
     return;
   }
 
-  const result = await resend.emails.send({
-    from: emailFrom,
-    to,
-    subject,
-    html,
-  });
+  const result = await resend.emails.send(
+    {
+      from: emailFrom,
+      to,
+      subject,
+      html,
+    },
+    idempotencyKey ? { idempotencyKey } : undefined,
+  );
 
   if (result.error) {
     throw new Error(`[email] FAILED to send to ${to}: ${result.error.message}`);
