@@ -11,6 +11,7 @@ import { config } from '@repo/config';
 
 export const ORIGINALS_PREFIX = 'originals';
 export const DERIVATIVES_PREFIX = 'derivatives';
+export const VERIFICATION_DOCUMENTS_PREFIX = 'verification-documents';
 
 /** Thrown when an object exceeds the byte budget — a permanent failure, never retried. */
 export class ObjectTooLargeError extends Error {
@@ -68,6 +69,14 @@ export function buildDerivativeKey(
   format: string,
 ): string {
   return `${DERIVATIVES_PREFIX}/${projectId}/${imageId}/${variant}.${format}`;
+}
+
+/** Private, non-guessable KYC document key. The key is never returned by public APIs. */
+export function buildVerificationDocumentKey(
+  organizationId: string,
+  documentVersionId: string,
+): string {
+  return `${VERIFICATION_DOCUMENTS_PREFIX}/${organizationId}/${documentVersionId}`;
 }
 
 /** HEAD before download so an oversize object is rejected without buffering it into memory. */

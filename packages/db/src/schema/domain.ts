@@ -18,7 +18,17 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { INTERACTION_EVENT_TYPE_VALUES, TAXONOMY_KIND_VALUES } from '@repo/contracts';
+import {
+  INTERACTION_EVENT_TYPE_VALUES,
+  TAXONOMY_KIND_VALUES,
+  VERIFICATION_APPLICATION_STATUS,
+  VERIFICATION_APPLICATION_STATUS_VALUES,
+  VERIFICATION_DOCUMENT_STATUS,
+  VERIFICATION_DOCUMENT_STATUS_VALUES,
+  VERIFICATION_DOCUMENT_TYPE_VALUES,
+  VERIFICATION_NOTIFICATION_EVENT_VALUES,
+  VERIFICATION_REVIEW_ACTION_VALUES,
+} from '@repo/contracts';
 import { user, organization } from './auth.js';
 
 /**
@@ -92,6 +102,31 @@ export const reviewModerationActionEnum = pgEnum('review_moderation_action', [
   'resolve_publish',
   'remove',
 ]);
+
+export const verificationApplicationStatusEnum = pgEnum(
+  'verification_application_status',
+  VERIFICATION_APPLICATION_STATUS_VALUES,
+);
+
+export const verificationDocumentTypeEnum = pgEnum(
+  'verification_document_type',
+  VERIFICATION_DOCUMENT_TYPE_VALUES,
+);
+
+export const verificationDocumentStatusEnum = pgEnum(
+  'verification_document_status',
+  VERIFICATION_DOCUMENT_STATUS_VALUES,
+);
+
+export const verificationReviewActionEnum = pgEnum(
+  'verification_review_action',
+  VERIFICATION_REVIEW_ACTION_VALUES,
+);
+
+export const verificationNotificationEventEnum = pgEnum(
+  'verification_notification_event',
+  VERIFICATION_NOTIFICATION_EVENT_VALUES,
+);
 
 // Admin-managed taxonomy: 14 kinds covering geography, property, design, budget,
 // and per-room attribute axes (E-124).
@@ -811,6 +846,173 @@ export const bookingNotificationOutbox = pgTable(
     index('booking_notification_outbox_pending_idx')
       .on(t.createdAt, t.id)
       .where(sql`${t.enqueuedAt} IS NULL`),
+  ],
+);
+
+/** One organization-owned KYC application with a reviewable lifecycle. */
+export const verificationApplication = pgTable(
+  'verification_application',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    status: verificationApplicationStatusEnum('status')
+      .default(VERIFICATION_APPLICATION_STATUS.DRAFT)
+      .notNull(),
+    attempt: integer('attempt').default(1).notNull(),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    reviewedByUserId: text('reviewed_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('verification_application_attempt_check', sql`${t.attempt} >= 1`),
+    check(
+      'verification_application_lifecycle_check',
+      sql`
+        (${t.status} = 'draft' AND ${t.submittedAt} IS NULL AND ${t.reviewedAt} IS NULL
+          AND ${t.approvedAt} IS NULL AND ${t.expiresAt} IS NULL)
+        OR (${t.status} = 'pending' AND ${t.submittedAt} IS NOT NULL AND ${t.reviewedAt} IS NULL
+          AND ${t.approvedAt} IS NULL AND ${t.expiresAt} IS NULL)
+        OR (${t.status} = 'rejected' AND ${t.submittedAt} IS NOT NULL AND ${t.reviewedAt} IS NOT NULL
+          AND ${t.approvedAt} IS NULL AND ${t.expiresAt} IS NULL)
+        OR (${t.status} = 'verified' AND ${t.submittedAt} IS NOT NULL AND ${t.reviewedAt} IS NOT NULL
+          AND ${t.approvedAt} IS NOT NULL AND ${t.expiresAt} IS NOT NULL)
+      `,
+    ),
+    index('verification_application_pending_queue_idx')
+      .on(t.submittedAt, t.id)
+      .where(sql`${t.status} = 'pending'`),
+    index('verification_application_verified_expiry_idx')
+      .on(t.expiresAt, t.id)
+      .where(sql`${t.status} = 'verified'`),
+    index('verification_application_reviewer_idx').on(t.reviewedByUserId),
+  ],
+);
+
+/** Stable logical document slots; replacements create immutable versions below. */
+export const verificationDocumentSlot = pgTable(
+  'verification_document_slot',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => verificationApplication.id, { onDelete: 'cascade' }),
+    type: verificationDocumentTypeEnum('type').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('verification_document_slot_application_type_uniq').on(t.applicationId, t.type),
+  ],
+);
+
+/** Immutable document version metadata. R2 bytes stay private and are never public DTO fields. */
+export const verificationDocumentVersion = pgTable(
+  'verification_document_version',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => verificationDocumentSlot.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    objectKey: text('object_key').notNull().unique(),
+    contentType: text('content_type').notNull(),
+    contentLength: integer('content_length').notNull(),
+    status: verificationDocumentStatusEnum('status')
+      .default(VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD)
+      .notNull(),
+    uploadedByUserId: text('uploaded_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    committedAt: timestamp('committed_at', { withTimezone: true }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedByUserId: text('reviewed_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('verification_document_version_positive_check', sql`${t.version} >= 1`),
+    check('verification_document_content_length_check', sql`${t.contentLength} > 0`),
+    check(
+      'verification_document_commit_check',
+      sql`(${t.status} = 'pending_upload' AND ${t.committedAt} IS NULL)
+        OR (${t.status} <> 'pending_upload' AND ${t.committedAt} IS NOT NULL)`,
+    ),
+    uniqueIndex('verification_document_version_slot_version_uniq').on(t.slotId, t.version),
+    index('verification_document_version_uploader_idx').on(t.uploadedByUserId),
+    index('verification_document_version_reviewer_idx').on(t.reviewedByUserId),
+  ],
+);
+
+/** Append-only audit history for designer submissions and admin decisions. */
+export const verificationReviewEvent = pgTable(
+  'verification_review_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => verificationApplication.id, { onDelete: 'restrict' }),
+    attempt: integer('attempt').notNull(),
+    action: verificationReviewActionEnum('action').notNull(),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
+    fromStatus: verificationApplicationStatusEnum('from_status').notNull(),
+    toStatus: verificationApplicationStatusEnum('to_status').notNull(),
+    note: text('note'),
+    rejectedDocumentVersionIds: jsonb('rejected_document_version_ids')
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('verification_review_event_attempt_check', sql`${t.attempt} >= 1`),
+    index('verification_review_event_application_created_idx').on(
+      t.applicationId,
+      t.createdAt,
+      t.id,
+    ),
+    index('verification_review_event_actor_idx').on(t.actorUserId),
+  ],
+);
+
+/** Transactional email intent; the worker is responsible for durable delivery. */
+export const verificationNotificationOutbox = pgTable(
+  'verification_notification_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => verificationApplication.id, { onDelete: 'cascade' }),
+    attempt: integer('attempt').notNull(),
+    eventType: verificationNotificationEventEnum('event_type').notNull(),
+    recipientUserId: text('recipient_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    recipientEmail: text('recipient_email').notNull(),
+    note: text('note'),
+    enqueuedAt: timestamp('enqueued_at', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    check('verification_notification_attempt_check', sql`${t.attempt} >= 1`),
+    uniqueIndex('verification_notification_application_attempt_event_uniq').on(
+      t.applicationId,
+      t.attempt,
+      t.eventType,
+    ),
+    index('verification_notification_pending_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.enqueuedAt} IS NULL`),
+    index('verification_notification_recipient_idx').on(t.recipientUserId),
   ],
 );
 
