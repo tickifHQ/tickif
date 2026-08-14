@@ -77,6 +77,8 @@ export function Carousel({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) return;
+
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         scrollPrev();
@@ -127,7 +129,7 @@ export function Carousel({
         aria-roledescription="carousel"
         data-slot="carousel"
         className={cn('relative', className)}
-        onKeyDownCapture={handleKeyDown}
+        onKeyDown={handleKeyDown}
         {...props}
       >
         {children}

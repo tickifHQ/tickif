@@ -16,7 +16,7 @@ async function fetchProject(id: string): Promise<PublicProjectDetailResponse | n
     param: { id },
   });
 
-  if (response.status === 404) return null;
+  if ([400, 404, 422].includes(response.status)) return null;
   if (!response.ok) {
     throw new Error(`Could not load project ${id}.`);
   }
@@ -54,7 +54,6 @@ export async function generateMetadata({ params }: ProjectDetailPageProps): Prom
       title: project.title,
       description,
       url: canonicalUrl,
-      images: project.coverImageUrl ? [project.coverImageUrl] : [],
     },
   };
 }

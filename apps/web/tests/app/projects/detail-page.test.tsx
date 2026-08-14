@@ -56,6 +56,17 @@ describe('/projects/[id]', () => {
     ).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
+  it.each([400, 422])(
+    'returns not found for a malformed project id rejected with %s',
+    async (status) => {
+      (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(response({}, status));
+
+      await expect(
+        ProjectDetailPage({ params: Promise.resolve({ id: 'not-a-project-id' }) }),
+      ).rejects.toThrow('NEXT_NOT_FOUND');
+    },
+  );
+
   it('generates metadata for the canonical id-based URL', async () => {
     const project = makePublicProject();
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(response(project));
@@ -64,6 +75,6 @@ describe('/projects/[id]', () => {
 
     expect(metadata.title).toBe(`${project.title} | Tickif`);
     expect(metadata.alternates?.canonical).toBe(`http://localhost:3000/projects/${project.id}`);
-    expect(metadata.openGraph?.images).toEqual([project.coverImageUrl]);
+    expect(metadata.openGraph).not.toHaveProperty('images');
   });
 });

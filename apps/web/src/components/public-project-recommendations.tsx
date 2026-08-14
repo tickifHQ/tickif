@@ -102,6 +102,10 @@ export function PublicProjectRecommendations({
   const budget = specifications.budgetBand;
   const city = specifications.city;
   const locality = specifications.locality;
+  const otherDesignerProjectCount = Math.max(
+    recommendations.moreFromDesigner.length,
+    designer.projectCount - 1,
+  );
 
   return (
     <section aria-label="Related projects" className="mt-14 border-t pb-8 pt-9">
@@ -109,8 +113,8 @@ export function PublicProjectRecommendations({
         <RecommendationGroup
           headingId="more-from-designer-heading"
           title={`More from ${designer.displayName}`}
-          description={`${recommendations.moreFromDesigner.length} other ${
-            recommendations.moreFromDesigner.length === 1 ? 'home' : 'homes'
+          description={`${otherDesignerProjectCount} other ${
+            otherDesignerProjectCount === 1 ? 'home' : 'homes'
           } by this studio`}
           projects={recommendations.moreFromDesigner}
           actionHref={designer.slug ? `/d/${designer.slug}` : null}

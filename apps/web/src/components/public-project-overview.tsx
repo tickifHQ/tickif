@@ -50,7 +50,7 @@ function projectSpecifications(project: PublicProjectDetailResponse): Specificat
   const completed = formatCompletedMonth(project.completedMonth);
   const property = project.specifications.propertySubtype ?? project.specifications.propertyType;
   const propertyValue = project.buildingName ?? property?.label;
-  const locationValue = project.buildingName ?? place;
+  const locationValue = place;
 
   const specifications: Array<Specification | null> = [
     propertyValue
@@ -68,7 +68,6 @@ function projectSpecifications(project: PublicProjectDetailResponse): Specificat
           key: 'location',
           label: 'Location',
           value: locationValue,
-          secondaryValue: project.buildingName && place ? place : undefined,
           wide: true,
         }
       : null,

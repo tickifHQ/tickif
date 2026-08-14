@@ -86,10 +86,16 @@ function RoomSections({ project }: { project: PublicProjectDetailResponse }) {
       <div className="mt-12 flex flex-col gap-12">
         {rooms.map(({ room, images }) => {
           const finishes = uniqueFinishes(images);
-          const headingId = `project-room-${room.id}`;
+          const sectionId = `project-room-${room.id}`;
+          const headingId = `${sectionId}-heading`;
 
           return (
-            <section key={room.id} aria-labelledby={headingId} className="scroll-mt-6">
+            <section
+              key={room.id}
+              id={sectionId}
+              aria-labelledby={headingId}
+              className="scroll-mt-6"
+            >
               <header className="flex items-baseline justify-between gap-4">
                 <h2
                   id={headingId}
@@ -341,19 +347,22 @@ function NarrativeSection({ project }: { project: PublicProjectDetailResponse })
 
 function RecurringMotifsSection({ project }: { project: PublicProjectDetailResponse }) {
   if (project.recurringMotifs.length === 0) return null;
+  const designerPossessive = project.designer.displayName.endsWith('s')
+    ? `${project.designer.displayName}'`
+    : `${project.designer.displayName}'s`;
 
   return (
     <section aria-labelledby="recurring-motifs-heading" className="border-t pt-12">
       <div className="grid gap-8 lg:grid-cols-[22.5rem_minmax(0,1fr)] lg:gap-16">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            The DNA
+            Studio-wide DNA
           </p>
           <h2 id="recurring-motifs-heading" className="mt-1 text-4xl tracking-tight">
             Recurring <span className="font-light text-primary italic">notes</span>.
           </h2>
           <p className="mt-1 max-w-sm text-xs font-medium leading-relaxed text-muted-foreground">
-            Tap a material or texture to find other homes that share the same instinct.
+            {`Recurring themes across ${designerPossessive} published homes. Tap one to find other homes that share the same instinct.`}
           </p>
         </div>
 
@@ -371,11 +380,11 @@ function RecurringMotifsSection({ project }: { project: PublicProjectDetailRespo
                   href={href}
                   className="flex min-h-14 items-center gap-3 rounded-full border bg-background py-2 pl-2 pr-6 transition-colors hover:bg-muted"
                 >
-                  <span className="size-9 shrink-0 overflow-hidden rounded-full bg-muted">
-                    {image ? (
+                  {image ? (
+                    <span className="size-9 shrink-0 overflow-hidden rounded-full bg-muted">
                       <img src={image.url} alt="" className="size-full object-cover" />
-                    ) : null}
-                  </span>
+                    </span>
+                  ) : null}
                   <span className="pr-1">
                     <span className="block text-sm font-medium leading-relaxed">{motif.label}</span>
                     <span className="block text-2xs leading-relaxed text-muted-foreground">

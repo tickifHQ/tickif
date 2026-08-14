@@ -29,7 +29,7 @@ describe('PublicProjectRecommendations', () => {
     render(<PublicProjectRecommendations project={project} />);
 
     expect(screen.getByRole('heading', { name: 'More from Anika Spaces' })).toBeInTheDocument();
-    expect(screen.getByText('1 other home by this studio')).toBeInTheDocument();
+    expect(screen.getByText('27 other homes by this studio')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Full portfolio/ })).toHaveAttribute(
       'href',
       '/d/anika-spaces',

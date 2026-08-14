@@ -47,6 +47,9 @@ describe('PublicProjectStory', () => {
       '#project-room-22222222-2222-4222-8222-222222222222',
     );
     expect(kitchenLink).not.toHaveAttribute('aria-current');
+    const kitchenSection = document.querySelector(kitchenLink.getAttribute('href')!);
+    expect(kitchenSection).toHaveClass('scroll-mt-6');
+    expect(kitchenSection).toHaveAttribute('aria-labelledby', `project-room-${kitchenId}-heading`);
     fireEvent.click(kitchenLink);
 
     expect(kitchenLink).toHaveAttribute('aria-current', 'location');
@@ -103,5 +106,17 @@ describe('PublicProjectStory', () => {
       'href',
       '/?q=Teak',
     );
+    expect(within(motifs).getByText(/across Anika Spaces' published homes/i)).toBeInTheDocument();
+  });
+
+  it('does not render an empty motif thumbnail when this project has no matching image', () => {
+    const project = makePublicProject({
+      recurringMotifs: [{ kind: 'material', slug: 'brass', label: 'Brass', projectCount: 3 }],
+    });
+
+    render(<PublicProjectStory project={project} />);
+
+    const motifLink = screen.getByRole('link', { name: /Brass 3 homes/ });
+    expect(motifLink.querySelector('img')).toBeNull();
   });
 });

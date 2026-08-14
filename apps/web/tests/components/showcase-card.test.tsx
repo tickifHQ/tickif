@@ -121,10 +121,19 @@ describe('PublicProjectCard', () => {
     );
 
     expect(screen.getByRole('link')).toHaveAttribute('href', `/projects/${designerProject.id}`);
-    expect(screen.getByText('4.5')).toBeInTheDocument();
+    expect(screen.getByLabelText('Studio A studio rating 4.5 out of 5')).toHaveTextContent(
+      /Studio.*4\.5/,
+    );
     expect(screen.getByText('2025')).toHaveClass('font-mono', 'text-2xs');
     expect(screen.getByText('3 BHK · Contemporary')).toBeInTheDocument();
     expect(screen.getByText('₹15–35L')).toBeInTheDocument();
+  });
+
+  it('keeps the established portfolio year badge typography', () => {
+    render(<PublicProjectCard project={designerProject} studioName="Studio A" />);
+
+    expect(screen.getByText('2025')).toHaveClass('font-mono', 'text-xs', 'font-semibold');
+    expect(screen.getByText('2025')).not.toHaveClass('text-2xs');
   });
 
   it('does not display an unrated project as trusted', () => {

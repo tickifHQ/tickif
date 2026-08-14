@@ -95,4 +95,22 @@ describe('Carousel', () => {
     expect(screen.queryByRole('button', { name: 'Previous slide' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Next slide' })).toBeNull();
   });
+
+  it('does not intercept arrow keys from interactive descendants', () => {
+    render(
+      <Carousel aria-label="Project images">
+        <CarouselContent>
+          <CarouselItem>
+            <a href="/image/example">Open image</a>
+          </CarouselItem>
+        </CarouselContent>
+      </Carousel>,
+    );
+
+    const link = screen.getByRole('link', { name: 'Open image' });
+    const eventResult = fireEvent.keyDown(link, { key: 'ArrowRight' });
+
+    expect(eventResult).toBe(true);
+    expect(carouselMocks.scrollNext).not.toHaveBeenCalled();
+  });
 });

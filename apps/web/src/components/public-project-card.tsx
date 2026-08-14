@@ -58,9 +58,12 @@ export function PublicProjectCard({
             <Badge
               variant="inverse"
               shape="square"
-              size="compact"
+              size={presentation === 'recommendation' ? 'compact' : 'default'}
               textStyle="code"
-              className="absolute left-3 top-3"
+              className={cn(
+                'absolute left-3 top-3',
+                presentation === 'portfolio' && 'font-semibold',
+              )}
             >
               {project.completionYear}
             </Badge>
@@ -71,7 +74,9 @@ export function PublicProjectCard({
               shape="square"
               size="compact"
               className="absolute right-3 top-3"
+              aria-label={`${studioName} studio rating ${project.rating.toFixed(1)} out of 5`}
             >
+              <span>Studio</span>
               <Star aria-hidden data-icon="inline-start" fill="currentColor" />
               {project.rating.toFixed(1)}
             </Badge>

@@ -54,9 +54,13 @@ describe('PublicProjectOverview', () => {
     const specifications = screen.getByLabelText('Project specifications');
     expect(specifications).toHaveClass('border', 'border-border-strong');
     expect(specifications).not.toHaveClass('bg-border-strong', 'p-px');
-    expect(within(specifications).getByText('Mylapore, Chennai')).toHaveClass(
-      'text-foreground-disabled',
+    const locationLabel = within(specifications).getByText('Location');
+    const locationSpecification = locationLabel.closest('div');
+    expect(locationSpecification).not.toBeNull();
+    expect(within(locationSpecification!).getByText('Mylapore, Chennai')).toHaveClass(
+      'text-foreground',
     );
+    expect(within(locationSpecification!).queryByText('Casagrand First City')).toBeNull();
   });
 
   it('does not fabricate unavailable review verification claims', () => {

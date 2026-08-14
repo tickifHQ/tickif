@@ -224,13 +224,18 @@ export async function makeConsultationBooking(
         .limit(1)
     )[0]!.organizationId;
   const requesterId = overrides.requesterId ?? (await makeUser()).id;
+  const preferredSlots =
+    overrides.preferredSlots ??
+    (overrides.confirmedSlot
+      ? [overrides.confirmedSlot]
+      : [{ date: '2026-08-10', window: 'morning' as const }]);
   const [row] = await db
     .insert(schema.consultationBooking)
     .values({
       organizationId,
       designerProfileId,
       requesterId,
-      preferredSlots: [{ date: '2026-08-10', window: 'morning' }],
+      preferredSlots,
       ...overrides,
     })
     .returning();
@@ -249,8 +254,7 @@ export async function makeReview(overrides: Partial<typeof schema.review.$inferI
       authorUserId,
       rating: overrides.rating ?? 5,
       body:
-        overrides.body ??
-        'A thoughtful and detailed review of the completed design experience.',
+        overrides.body ?? 'A thoughtful and detailed review of the completed design experience.',
       ...overrides,
     })
     .returning();
