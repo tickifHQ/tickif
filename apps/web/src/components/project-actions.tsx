@@ -8,7 +8,15 @@ import { Bookmark, Check, Share2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 
-export function ProjectActions({ projectId, loginHref }: { projectId: string; loginHref: string }) {
+export function ProjectActions({
+  projectId,
+  loginHref,
+  canonicalUrl,
+}: {
+  projectId: string;
+  loginHref: string;
+  canonicalUrl: string;
+}) {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -69,10 +77,9 @@ export function ProjectActions({ projectId, loginHref }: { projectId: string; lo
   }
 
   async function shareProject() {
-    const url = window.location.href;
     if (navigator.share) {
       try {
-        await navigator.share({ title: document.title, url });
+        await navigator.share({ title: document.title, url: canonicalUrl });
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -80,7 +87,7 @@ export function ProjectActions({ projectId, loginHref }: { projectId: string; lo
     }
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(canonicalUrl);
       setShareStatus('copied');
       window.setTimeout(() => setShareStatus('idle'), 2000);
     } catch {

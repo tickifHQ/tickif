@@ -94,7 +94,13 @@ function projectSpecifications(project: PublicProjectDetailResponse): Specificat
   return specifications.filter((item): item is Specification => item !== null);
 }
 
-function DesignerCard({ project }: { project: PublicProjectDetailResponse }) {
+function DesignerCard({
+  project,
+  canonicalUrl,
+}: {
+  project: PublicProjectDetailResponse;
+  canonicalUrl: string;
+}) {
   const { designer } = project;
   const loginHref = `/login?next=/projects/${project.id}`;
   const profileHref = designer.slug ? `/d/${designer.slug}` : null;
@@ -207,12 +213,18 @@ function DesignerCard({ project }: { project: PublicProjectDetailResponse }) {
         </CardFooter>
       </Card>
       <Separator />
-      <ProjectActions projectId={project.id} loginHref={loginHref} />
+      <ProjectActions projectId={project.id} loginHref={loginHref} canonicalUrl={canonicalUrl} />
     </div>
   );
 }
 
-export function PublicProjectOverview({ project }: { project: PublicProjectDetailResponse }) {
+export function PublicProjectOverview({
+  project,
+  canonicalUrl,
+}: {
+  project: PublicProjectDetailResponse;
+  canonicalUrl: string;
+}) {
   const specifications = projectSpecifications(project);
   const location = [project.specifications.locality?.label, project.specifications.city?.label]
     .filter(Boolean)
@@ -305,7 +317,7 @@ export function PublicProjectOverview({ project }: { project: PublicProjectDetai
           </div>
 
           <aside aria-label={`${project.designer.displayName} project designer`}>
-            <DesignerCard project={project} />
+            <DesignerCard project={project} canonicalUrl={canonicalUrl} />
           </aside>
         </div>
 

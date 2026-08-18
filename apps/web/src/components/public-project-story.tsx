@@ -19,6 +19,7 @@ import { BadgeCheck, CalendarDays, MessageSquare, Quote, Star } from 'lucide-rea
 import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectRoomNavigation } from '@/components/project-room-navigation';
+import { ProtectedPublicImage } from '@/components/protected-public-image';
 import { feedPageHref } from '@/lib/feed-params';
 
 function initials(value: string): string {
@@ -117,10 +118,12 @@ function RoomSections({ project }: { project: PublicProjectDetailResponse }) {
                         aria-label={`Open ${room.name} image`}
                         className="group relative block h-106 w-72 overflow-hidden rounded-sm bg-muted sm:w-88"
                       >
-                        <img
+                        <ProtectedPublicImage
                           src={image.url}
                           alt={`${room.name} in ${project.title}`}
                           className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </Link>
                     </CarouselItem>
@@ -382,7 +385,13 @@ function RecurringMotifsSection({ project }: { project: PublicProjectDetailRespo
                 >
                   {image ? (
                     <span className="size-9 shrink-0 overflow-hidden rounded-full bg-muted">
-                      <img src={image.url} alt="" className="size-full object-cover" />
+                      <ProtectedPublicImage
+                        src={image.url}
+                        alt=""
+                        className="size-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     </span>
                   ) : null}
                   <span className="pr-1">

@@ -12,6 +12,7 @@ import {
 } from '@repo/ui/components/carousel';
 import type { CarouselApi } from '@repo/ui/components/carousel';
 import { Expand } from 'lucide-react';
+import { ProtectedPublicImage } from '@/components/protected-public-image';
 
 type HeroImage = Pick<PublicProjectGalleryImage, 'id' | 'roomName' | 'url'>;
 
@@ -75,13 +76,13 @@ export function ProjectHeroCarousel({
               aria-label={`Open ${image.roomName ?? projectTitle} image`}
               className="group/slide relative block aspect-[4/3] overflow-hidden rounded-xl bg-muted sm:aspect-[16/9] lg:aspect-[16/7]"
             >
-              <img
+              <ProtectedPublicImage
                 src={image.url}
                 alt={`${projectTitle}${image.roomName ? `, ${image.roomName}` : ''}`}
                 className="size-full select-none object-cover"
-                draggable={false}
                 fetchPriority={index === 0 ? 'high' : undefined}
-                onContextMenu={(event) => event.preventDefault()}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-foreground/5 via-transparent to-foreground/40" />
               {image.roomName ? (

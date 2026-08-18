@@ -40,17 +40,20 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('login-card')).toHaveAttribute('data-mode', 'designer');
   });
 
-  it.each(['admin', 'superadmin'])('redirects an authenticated %s to moderation on the server', async (role) => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role },
-      session: { id: 's1', token: 'token', expiresAt: new Date().toISOString() },
-    });
-    const { default: Page } = await import('../../../app/login/page');
+  it.each(['admin', 'superadmin'])(
+    'redirects an authenticated %s to moderation on the server',
+    async (role) => {
+      mock.getServerSession.mockResolvedValue({
+        user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role },
+        session: { id: 's1', token: 'token', expiresAt: new Date().toISOString() },
+      });
+      const { default: Page } = await import('../../../app/login/page');
 
-    await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
-      'NEXT_REDIRECT:/admin/moderation',
-    );
-  });
+      await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
+        'NEXT_REDIRECT:/moderation',
+      );
+    },
+  );
 
   it('continues an authenticated designer to designer onboarding on the server', async () => {
     mock.getServerSession.mockResolvedValue({
@@ -71,9 +74,7 @@ describe('LoginPage', () => {
     });
     const { default: Page } = await import('../../../app/login/page');
 
-    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
-      'NEXT_REDIRECT:/',
-    );
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT:/');
   });
 });
 

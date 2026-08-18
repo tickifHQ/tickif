@@ -32,6 +32,10 @@ async function fetchProject(id: string): Promise<PublicProjectDetailResponse | n
 
 const getProject = cache(fetchProject);
 
+function canonicalProjectUrl(projectId: string): string {
+  return new URL(`/projects/${projectId}`, env.NEXT_PUBLIC_WEB_URL).toString();
+}
+
 async function resolveProject(id: string): Promise<PublicProjectDetailResponse> {
   const project = await getProject(id);
   if (!project) notFound();
@@ -41,7 +45,7 @@ async function resolveProject(id: string): Promise<PublicProjectDetailResponse> 
 export async function generateMetadata({ params }: ProjectDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   const project = await resolveProject(id);
-  const canonicalUrl = new URL(`/projects/${project.id}`, env.NEXT_PUBLIC_WEB_URL).toString();
+  const canonicalUrl = canonicalProjectUrl(project.id);
   const description =
     project.description ?? `Explore ${project.title} by ${project.designer.displayName} on Tickif.`;
 
@@ -61,6 +65,7 @@ export async function generateMetadata({ params }: ProjectDetailPageProps): Prom
 export default async function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const { id } = await params;
   const project = await resolveProject(id);
+  const canonicalUrl = canonicalProjectUrl(project.id);
 
-  return <PublicProjectOverview project={project} />;
+  return <PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />;
 }

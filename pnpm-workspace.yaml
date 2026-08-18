@@ -7,7 +7,7 @@ packages:
 # package.json `pnpm` field (which newer pnpm silently ignores).
 overrides:
   esbuild: 0.28.1
-  hono: ^4.12.27
+  hono: ^4.12.34
   # Security patches for transitive advisories (pnpm audit, high severity).
   # brace-expansion DoS advisories through 5.0.8. One line for every copy —
   # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
@@ -15,7 +15,9 @@ overrides:
   # js-yaml CPU exhaustion in !!omap resolution: keep within the patched 4.x line.
   'js-yaml@>=4.0.0 <4.3.1': 4.3.1
   # nanoid generator loop advisories: patch each installed major independently.
-  'nanoid@>=3.0.0 <3.3.17': 3.3.17
+  # GHSA-2v37-7h3g-55p8 widened the affected 3.x range to <3.3.18, which left the
+  # previous `<3.3.17: 3.3.17` pin resolving to an affected version itself.
+  'nanoid@>=3.0.0 <3.3.18': 3.3.18
   'nanoid@>=4.0.0 <5.1.16': 5.1.16
   # fast-uri validation advisories (via shadcn>@modelcontextprotocol/sdk>ajv): stay on 3.x.
   'fast-uri@<3.1.5': 3.1.5
@@ -45,7 +47,7 @@ catalog:
   '@t3-oss/env-nextjs': ^0.13.8
 
   # Hono stack
-  hono: ^4.12.27
+  hono: ^4.12.34
   '@hono/node-server': ^2.0.5
   '@hono/zod-openapi': ^1.4.0
   '@scalar/hono-api-reference': ^0.10.20
@@ -78,7 +80,7 @@ catalog:
   react-dom: ^19.0.0
   '@types/react': ^19.2.17
   '@types/react-dom': ^19.0.0
-  '@radix-ui/react-slot': ^1.3.2
+  '@radix-ui/react-slot': ^1.3.3
   '@radix-ui/react-avatar': ^1.2.0
   '@radix-ui/react-checkbox': ^1.3.3
   '@radix-ui/react-dialog': ^1.1.15
@@ -108,4 +110,4 @@ catalog:
   '@testing-library/jest-dom': ^6.9.1
   happy-dom: ^20.10.6
   '@vitejs/plugin-react': ^6.0.2
-  '@playwright/test': ^1.60.0
+  '@playwright/test': ^1.62.1

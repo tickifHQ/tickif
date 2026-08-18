@@ -13,10 +13,12 @@ vi.mock('@/components/project-actions', () => ({
 
 const { PublicProjectOverview } = await import('../../src/components/public-project-overview');
 
+const canonicalUrl = 'https://tickif.com/projects/11111111-1111-4111-8111-111111111111';
+
 describe('PublicProjectOverview', () => {
   it('renders the sourced first-section fields and established public routes', () => {
     const project = makePublicProject();
-    render(<PublicProjectOverview project={project} />);
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
 
     expect(screen.getByRole('heading', { name: project.title })).toBeInTheDocument();
     expect(screen.getAllByText(/Mylapore/).length).toBeGreaterThan(0);
@@ -64,7 +66,7 @@ describe('PublicProjectOverview', () => {
   });
 
   it('does not fabricate unavailable review verification claims', () => {
-    render(<PublicProjectOverview project={makePublicProject()} />);
+    render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
 
     expect(screen.queryByText(/verified reviews/i)).not.toBeInTheDocument();
   });
@@ -80,7 +82,7 @@ describe('PublicProjectOverview', () => {
         yearsExperience: 0,
       },
     });
-    render(<PublicProjectOverview project={project} />);
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
 
     expect(screen.queryByRole('heading', { name: 'About this project' })).not.toBeInTheDocument();
     expect(screen.queryByText(/reviews/)).not.toBeInTheDocument();
@@ -88,7 +90,12 @@ describe('PublicProjectOverview', () => {
   });
 
   it('falls back to the property label when no building name is available', () => {
-    render(<PublicProjectOverview project={makePublicProject({ buildingName: null })} />);
+    render(
+      <PublicProjectOverview
+        project={makePublicProject({ buildingName: null })}
+        canonicalUrl={canonicalUrl}
+      />,
+    );
 
     const specifications = screen.getByLabelText('Project specifications');
     expect(within(specifications).getByText('Property')).toBeInTheDocument();

@@ -23,6 +23,12 @@ describe('ProjectHeroCarousel', () => {
     expect(screen.getByRole('button', { name: 'Previous project image' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next project image' })).toBeInTheDocument();
     expect(screen.getByText('Image 1 of 2')).toBeInTheDocument();
+
+    const images = screen.getAllByRole('img');
+    expect(images[0]).toHaveAttribute('loading', 'eager');
+    expect(images[0]).toHaveAttribute('decoding', 'async');
+    expect(images[1]).toHaveAttribute('loading', 'lazy');
+    expect(images[1]).toHaveAttribute('decoding', 'async');
   });
 
   it('renders a truthful unavailable state when the public contract has no images', () => {

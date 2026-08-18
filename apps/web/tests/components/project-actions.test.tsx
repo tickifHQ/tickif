@@ -55,6 +55,7 @@ describe('ProjectActions', () => {
       <ProjectActions
         projectId="11111111-1111-4111-8111-111111111111"
         loginHref="/login?next=/projects/11111111-1111-4111-8111-111111111111"
+        canonicalUrl="https://tickif.com/projects/11111111-1111-4111-8111-111111111111"
       />,
     );
 
@@ -68,7 +69,13 @@ describe('ProjectActions', () => {
   it('loads and updates save state through the existing API', async () => {
     const projectId = '11111111-1111-4111-8111-111111111111';
     mocks.session = { user: { id: '22222222-2222-4222-8222-222222222222' } };
-    render(<ProjectActions projectId={projectId} loginHref="/login" />);
+    render(
+      <ProjectActions
+        projectId={projectId}
+        loginHref="/login"
+        canonicalUrl={`https://tickif.com/projects/${projectId}`}
+      />,
+    );
 
     await waitFor(() =>
       expect(mocks.getSavedState).toHaveBeenCalledWith({ query: { projectIds: projectId } }),
@@ -93,7 +100,13 @@ describe('ProjectActions', () => {
     );
     mocks.session = { user: { id: '22222222-2222-4222-8222-222222222222' } };
 
-    render(<ProjectActions projectId="11111111-1111-4111-8111-111111111111" loginHref="/login" />);
+    render(
+      <ProjectActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        loginHref="/login"
+        canonicalUrl="https://tickif.com/projects/11111111-1111-4111-8111-111111111111"
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Loading saved project state' })).toBeDisabled();
     expect(mocks.saveProject).not.toHaveBeenCalled();
@@ -102,21 +115,52 @@ describe('ProjectActions', () => {
     expect(await screen.findByRole('button', { name: 'Save project' })).toBeEnabled();
   });
 
-  it('copies the canonical browser URL when native sharing is unavailable', async () => {
+  it('copies the canonical project URL without browser query parameters or fragments', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText },
     });
-    window.history.replaceState({}, '', '/projects/11111111-1111-4111-8111-111111111111');
-    render(<ProjectActions projectId="11111111-1111-4111-8111-111111111111" loginHref="/login" />);
+    window.history.replaceState(
+      {},
+      '',
+      '/projects/11111111-1111-4111-8111-111111111111?utm_source=test#project-room-example',
+    );
+    render(
+      <ProjectActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        loginHref="/login"
+        canonicalUrl="https://tickif.com/projects/11111111-1111-4111-8111-111111111111"
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Share project' }));
 
     expect(await screen.findByRole('button', { name: 'Project link copied' })).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith(
-      'http://localhost:3000/projects/11111111-1111-4111-8111-111111111111',
+      'https://tickif.com/projects/11111111-1111-4111-8111-111111111111',
+    );
+  });
+
+  it('passes the canonical project URL to native sharing', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+    render(
+      <ProjectActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        loginHref="/login"
+        canonicalUrl="https://tickif.com/projects/11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share project' }));
+
+    await waitFor(() =>
+      expect(share).toHaveBeenCalledWith({
+        title: document.title,
+        url: 'https://tickif.com/projects/11111111-1111-4111-8111-111111111111',
+      }),
     );
   });
 });

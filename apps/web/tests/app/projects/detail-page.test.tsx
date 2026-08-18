@@ -10,8 +10,16 @@ const mock = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ notFound: mock.notFound }));
 vi.mock('@/components/public-project-overview', () => ({
-  PublicProjectOverview: ({ project }: { project: { title: string } }) => (
-    <div data-testid="project-overview">{project.title}</div>
+  PublicProjectOverview: ({
+    project,
+    canonicalUrl,
+  }: {
+    project: { title: string };
+    canonicalUrl: string;
+  }) => (
+    <div data-testid="project-overview" data-canonical-url={canonicalUrl}>
+      {project.title}
+    </div>
   ),
 }));
 
@@ -40,6 +48,10 @@ describe('/projects/[id]', () => {
     render(await ProjectDetailPage({ params: Promise.resolve({ id: project.id }) }));
 
     expect(screen.getByTestId('project-overview')).toHaveTextContent(project.title);
+    expect(screen.getByTestId('project-overview')).toHaveAttribute(
+      'data-canonical-url',
+      `http://localhost:3000/projects/${project.id}`,
+    );
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining(`/api/projects/public/${project.id}`),
       expect.objectContaining({ credentials: 'include' }),

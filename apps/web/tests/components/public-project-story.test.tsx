@@ -78,6 +78,12 @@ describe('PublicProjectStory', () => {
     ).toHaveAttribute('href', `/image/${project.images[0]!.id}`);
     expect(within(roomGallery).getByText('Teak')).toBeInTheDocument();
     expect(within(roomGallery).getByText('Matte')).toBeInTheDocument();
+
+    const roomImage = within(roomGallery).getAllByRole('img')[0]!;
+    expect(roomImage).toHaveAttribute('loading', 'lazy');
+    expect(roomImage).toHaveAttribute('decoding', 'async');
+    expect(roomImage).toHaveAttribute('draggable', 'false');
+    expect(fireEvent.contextMenu(roomImage)).toBe(false);
   });
 
   it('renders the published homeowner narrative and its verified attribution', () => {
@@ -107,6 +113,13 @@ describe('PublicProjectStory', () => {
       '/?q=Teak',
     );
     expect(within(motifs).getByText(/across Anika Spaces' published homes/i)).toBeInTheDocument();
+
+    const motifImage = motifs.querySelector('img');
+    if (!motifImage) throw new Error('Expected a recurring motif thumbnail.');
+    expect(motifImage).toHaveAttribute('loading', 'lazy');
+    expect(motifImage).toHaveAttribute('decoding', 'async');
+    expect(motifImage).toHaveAttribute('draggable', 'false');
+    expect(fireEvent.contextMenu(motifImage)).toBe(false);
   });
 
   it('does not render an empty motif thumbnail when this project has no matching image', () => {
