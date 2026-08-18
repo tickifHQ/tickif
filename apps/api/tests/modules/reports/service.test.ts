@@ -8,6 +8,7 @@ vi.mock('../../../src/modules/reports/repository.js', () => ({
     countLeadsByStatus: vi.fn(),
     countProjectsCreatedByDay: vi.fn(),
     countLeadsReceivedByDay: vi.fn(),
+    countViewsByDay: vi.fn(),
   },
 }));
 
@@ -32,6 +33,7 @@ beforeEach(() => {
   vi.mocked(reportsRepository.countLeadsByStatus).mockResolvedValue([]);
   vi.mocked(reportsRepository.countProjectsCreatedByDay).mockResolvedValue([]);
   vi.mocked(reportsRepository.countLeadsReceivedByDay).mockResolvedValue([]);
+  vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([]);
 });
 
 afterAll(() => {
@@ -57,6 +59,10 @@ describe('reportsService.getAnalytics', () => {
     vi.mocked(reportsRepository.countLeadsReceivedByDay).mockResolvedValue([
       { date: '2026-08-04', count: 3 },
     ]);
+    vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([
+      { type: 'project_view', date: '2026-08-04', count: 5 },
+      { type: 'profile_view', date: '2026-08-07', count: 2 },
+    ]);
 
     const result = await reportsService.getAnalytics(input);
 
@@ -81,26 +87,30 @@ describe('reportsService.getAnalytics', () => {
       closed: 1,
       spam: 0,
     });
+    expect(result.engagement).toEqual({ projectViews: 5, profileViews: 2 });
     expect(result.activity).toHaveLength(7);
     expect(result.activity[0]).toEqual({
       date: '2026-08-01',
       projectsCreated: 0,
       leadsReceived: 0,
+      projectViews: 0,
+      profileViews: 0,
     });
     expect(result.activity[3]).toEqual({
       date: '2026-08-04',
       projectsCreated: 0,
       leadsReceived: 3,
+      projectViews: 5,
+      profileViews: 0,
     });
     expect(result.activity[6]).toEqual({
       date: '2026-08-07',
       projectsCreated: 2,
       leadsReceived: 0,
+      projectViews: 0,
+      profileViews: 2,
     });
-    expect(result.deferredMetrics.map((metric) => metric.key)).toEqual([
-      'profileViews',
-      'projectViews',
-    ]);
+    expect(result.deferredMetrics).toEqual([]);
   });
 
   it('scopes every aggregate to the resolved active organization profile', async () => {
@@ -121,6 +131,11 @@ describe('reportsService.getAnalytics', () => {
     });
     expect(reportsRepository.countLeadsReceivedByDay).toHaveBeenCalledWith({
       orgId: 'org_1',
+      from: new Date('2026-08-01T00:00:00.000Z'),
+      to: new Date('2026-08-07T12:30:00.000Z'),
+    });
+    expect(reportsRepository.countViewsByDay).toHaveBeenCalledWith({
+      profileId: '11111111-1111-4111-8111-111111111111',
       from: new Date('2026-08-01T00:00:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });

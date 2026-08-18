@@ -23,6 +23,10 @@ export type ProjectSearchDocument = {
   tags: string[];
   /** Stable public-derivative key. API responses mint URLs at read time. */
   coverImageKey: string | null;
+  /** Cover identity and rendered derivative dimensions for public card navigation/layout. */
+  coverImageId?: string | null;
+  coverImageWidth?: number | null;
+  coverImageHeight?: number | null;
   /** Unix epoch milliseconds, kept numeric for deterministic sorting. */
   publishedAt: number;
   /** Unix epoch milliseconds for featured sort. Null → never featured. */

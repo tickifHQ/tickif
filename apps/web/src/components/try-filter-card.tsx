@@ -1,22 +1,32 @@
-const budgets = ['₹3–5L', '₹5–10L', '₹10–20L', '₹20–50L', '₹50L+'];
+import Link from 'next/link';
+import { Lightbulb } from 'lucide-react';
+import { formatCompactBudgetLabel } from '../lib/format-budget-label';
 
-/** "Try a filter" budget-suggestion card slotted into the masonry feed (Figma grid CTA). */
-export function TryFilterCard() {
+export type FeedFilterSuggestion = {
+  href: string;
+  label: string;
+};
+
+/** Taxonomy-driven filter suggestions slotted into the masonry feed. */
+export function TryFilterCard({ suggestions }: { suggestions: FeedFilterSuggestion[] }) {
   return (
-    <div className="mb-4 break-inside-avoid rounded-xl bg-[#dbe5df]/60 px-[22px] py-[26px]">
-      <h3 className="text-lg font-medium leading-tight text-[#2d5a3d]">💡 Try a filter</h3>
-      <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-[#6a8975]/80">
+    <div className="mb-4 flex break-inside-avoid flex-col gap-[5px] rounded-xl bg-surface-subtle px-[22px] py-[26px]">
+      <h3 className="flex items-center gap-1.5 text-lg font-medium leading-[1.1] text-primary">
+        <Lightbulb aria-hidden className="size-4 shrink-0" />
+        Try a filter
+      </h3>
+      <p className="text-[11px] font-medium leading-[1.6] text-muted-foreground">
         These came up for explorers with your budget but a different style.
       </p>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {budgets.map((budget) => (
-          <button
-            key={budget}
-            type="button"
-            className="rounded-full border border-[#2d5a3d]/25 bg-[#fafafa] px-3.5 py-2 text-xs font-medium text-primary transition-colors hover:bg-white"
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.map((suggestion) => (
+          <Link
+            key={suggestion.href}
+            href={suggestion.href}
+            className="rounded-full border border-primary/25 bg-background px-[15px] py-[9px] text-xs font-medium leading-[1.1] text-primary transition-colors hover:bg-accent"
           >
-            {budget}
-          </button>
+            {formatCompactBudgetLabel(suggestion.label)}
+          </Link>
         ))}
       </div>
     </div>

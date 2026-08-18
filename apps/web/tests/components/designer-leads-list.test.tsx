@@ -55,6 +55,7 @@ const selectedLead: LeadDetailResponse = {
   ...leads.items[0]!,
   referredProjectId: '33333333-3333-4333-8333-333333333333',
   message: 'Needs a modular kitchen quote.',
+  notes: null,
   source: 'enquiry',
   createdAt: '2026-01-06T00:00:00.000Z',
   updatedAt: '2026-01-06T00:00:00.000Z',

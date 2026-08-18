@@ -29,6 +29,21 @@ const analyticsActivityPointSchema = z.object({
   date: z.iso.date(),
   projectsCreated: z.number().int().nonnegative(),
   leadsReceived: z.number().int().nonnegative(),
+  projectViews: z.number().int().nonnegative(),
+  profileViews: z.number().int().nonnegative(),
+});
+
+const engagementMetricsSchema = z.object({
+  projectViews: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('Daily unique project views within the requested analytics window'),
+  profileViews: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('Daily unique profile views within the requested analytics window'),
 });
 
 const deferredAnalyticsMetricSchema = z.object({
@@ -46,6 +61,7 @@ export const analyticsResponseSchema = z
     }),
     projects: projectMetricsSchema,
     leads: leadMetricsSchema,
+    engagement: engagementMetricsSchema,
     activity: z.array(analyticsActivityPointSchema),
     deferredMetrics: z.array(deferredAnalyticsMetricSchema),
   })
