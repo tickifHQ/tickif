@@ -19,6 +19,7 @@ type AnalyticsInput = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 function countStatus<T extends { status: string; count: number }>(counts: T[], status: string) {
   return counts.find((item) => item.status === status)?.count ?? 0;
@@ -28,12 +29,16 @@ function totalCounts(counts: Array<{ count: number }>) {
   return counts.reduce((sum, item) => sum + item.count, 0);
 }
 
-function utcDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+function istDateKey(date: Date) {
+  return new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-function startOfUtcDay(date: Date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+function startOfIstDay(date: Date) {
+  const dateInIst = new Date(date.getTime() + IST_OFFSET_MS);
+  return new Date(
+    Date.UTC(dateInIst.getUTCFullYear(), dateInIst.getUTCMonth(), dateInIst.getUTCDate()) -
+      IST_OFFSET_MS,
+  );
 }
 
 function activitySeries(input: {
@@ -57,7 +62,7 @@ function activitySeries(input: {
   );
 
   return Array.from({ length: input.days }, (_, index) => {
-    const date = utcDateKey(new Date(input.from.getTime() + index * DAY_MS));
+    const date = istDateKey(new Date(input.from.getTime() + index * DAY_MS));
     return {
       date,
       projectsCreated: projectsByDate.get(date) ?? 0,
@@ -135,9 +140,9 @@ export const reportsService = {
     }
 
     const to = new Date();
-    const from = startOfUtcDay(new Date(to.getTime() - (input.query.days - 1) * DAY_MS));
-    const previousTo = new Date(from.getTime() - 1);
-    const previousFrom = startOfUtcDay(new Date(from.getTime() - input.query.days * DAY_MS));
+    const from = startOfIstDay(new Date(to.getTime() - (input.query.days - 1) * DAY_MS));
+    const previousFrom = new Date(from.getTime() - input.query.days * DAY_MS);
+    const previousTo = new Date(to.getTime() - input.query.days * DAY_MS);
     const [
       projectCounts,
       leadCounts,

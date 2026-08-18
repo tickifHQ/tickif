@@ -1,4 +1,4 @@
-import { and, db, desc, eq, gte, lte, ne, schema, sql } from '@repo/db';
+import { and, db, desc, eq, gte, lte, schema, sql } from '@repo/db';
 import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
@@ -98,7 +98,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.project.createdAt}), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', ${schema.project.createdAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     return db
       .select({
         date: day,
@@ -121,7 +121,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.lead.receivedAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', ${schema.lead.receivedAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     return db
       .select({
         date: day,
@@ -144,7 +144,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsViewDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     const [profileViews, projectViews] = await Promise.all([
       db
         .select({
@@ -225,7 +225,7 @@ export const reportsRepository = {
       db
         .select({
           ...projectSelection,
-          enquiries: sql<number>`count(*) filter (where ${schema.lead.status} <> 'spam')::int`,
+          enquiries: sql<number>`count(*)::int`,
           conversions: sql<number>`count(*) filter (where ${schema.lead.status} in ('contacted', 'closed'))::int`,
         })
         .from(schema.project)
@@ -285,7 +285,6 @@ export const reportsRepository = {
       .where(
         and(
           eq(schema.lead.organizationId, input.orgId),
-          ne(schema.lead.status, 'spam'),
           gte(schema.lead.receivedAt, input.from),
           lte(schema.lead.receivedAt, input.to),
         ),

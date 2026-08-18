@@ -52,6 +52,14 @@ const projects: ListProjectsResponse = {
 };
 
 describe('DesignerProjectsList', () => {
+  it('does not show a sort indicator when project sorting is unavailable', () => {
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    const projectHeader = screen.getByRole('columnheader', { name: 'Project' });
+
+    expect(projectHeader.querySelector('svg')).not.toBeInTheDocument();
+  });
+
   it('renders project filters, rows, status badges, and edit links', () => {
     render(<DesignerProjectsList projects={projects} activeStatus="all" />);
 

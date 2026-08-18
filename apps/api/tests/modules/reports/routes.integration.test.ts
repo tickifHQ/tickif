@@ -69,28 +69,29 @@ describe('GET /api/reports/analytics', () => {
     await makeLead({
       organizationId: designer.orgId,
       referredProjectId: ownProject.id,
-      source: 'project-enquiry',
+      source: 'enquiry',
       status: 'new',
       receivedAt: today,
     });
     await makeLead({
       organizationId: designer.orgId,
       referredProjectId: ownProject.id,
-      source: 'project-enquiry',
+      source: 'enquiry',
       status: 'contacted',
       receivedAt: yesterday,
     });
     await makeLead({ status: 'new', receivedAt: today });
     await makeLead({
       organizationId: designer.orgId,
-      source: 'spam-only',
+      referredProjectId: ownProject.id,
+      source: 'consultation',
       status: 'spam',
       receivedAt: today,
     });
     await makeLead({
       organizationId: designer.orgId,
       referredProjectId: ownProject.id,
-      source: 'project-enquiry',
+      source: 'enquiry',
       status: 'contacted',
       receivedAt: previousPeriod,
     });
@@ -193,12 +194,13 @@ describe('GET /api/reports/analytics', () => {
       expect.objectContaining({
         projectId: ownProject.id,
         views: 1,
-        enquiries: 2,
+        enquiries: 3,
         conversions: 1,
       }),
     ]);
     expect(parsed.data.acquisitionSources).toEqual([
-      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
+      { source: 'enquiry', enquiries: 2, conversions: 1 },
+      { source: 'consultation', enquiries: 1, conversions: 0 },
     ]);
     expect(parsed.data.deferredMetrics).toEqual([]);
   });

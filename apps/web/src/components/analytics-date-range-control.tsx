@@ -24,7 +24,7 @@ function formatRange(from: string, to: string) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-    timeZone: 'UTC',
+    timeZone: 'Asia/Kolkata',
   });
   const fromDate = new Date(from);
   const toDate = new Date(to);
@@ -32,9 +32,14 @@ function formatRange(from: string, to: string) {
   const toParts = formatter.formatToParts(toDate);
   const fromDay = fromParts.find((part) => part.type === 'day')?.value ?? '';
   const fromMonth = fromParts.find((part) => part.type === 'month')?.value ?? '';
+  const fromYear = fromParts.find((part) => part.type === 'year')?.value ?? '';
   const toDay = toParts.find((part) => part.type === 'day')?.value ?? '';
   const toMonth = toParts.find((part) => part.type === 'month')?.value ?? '';
   const toYear = toParts.find((part) => part.type === 'year')?.value ?? '';
+
+  if (fromYear !== toYear) {
+    return `${fromDay} ${fromMonth} ${fromYear} - ${toDay} ${toMonth} ${toYear}`;
+  }
 
   return `${fromDay} ${fromMonth} - ${toDay} ${toMonth}, ${toYear}`;
 }

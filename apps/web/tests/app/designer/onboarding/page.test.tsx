@@ -97,6 +97,6 @@ describe('DesignerOnboardingPage', () => {
 
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/admin/moderation');
+    expect(mock.redirect).toHaveBeenCalledWith('/moderation');
   });
 });

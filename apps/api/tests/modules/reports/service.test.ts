@@ -89,14 +89,14 @@ describe('reportsService.getAnalytics', () => {
       },
     ]);
     vi.mocked(reportsRepository.countAcquisitionSources).mockResolvedValue([
-      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
+      { source: 'enquiry', enquiries: 2, conversions: 1 },
     ]);
 
     const result = await reportsService.getAnalytics(input);
 
     expect(result.window).toEqual({
       days: 7,
-      from: '2026-08-01T00:00:00.000Z',
+      from: '2026-07-31T18:30:00.000Z',
       to: '2026-08-07T12:30:00.000Z',
     });
     expect(result.projects).toEqual({
@@ -148,7 +148,7 @@ describe('reportsService.getAnalytics', () => {
       expect.objectContaining({ title: 'Warm apartment', conversions: 1 }),
     ]);
     expect(result.acquisitionSources).toEqual([
-      { source: 'project-enquiry', enquiries: 2, conversions: 1 },
+      { source: 'enquiry', enquiries: 2, conversions: 1 },
     ]);
     expect(result.deferredMetrics).toEqual([]);
   });
@@ -165,45 +165,53 @@ describe('reportsService.getAnalytics', () => {
     );
     expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(1, {
       orgId: 'org_1',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
     expect(reportsRepository.countProjectsCreatedByDay).toHaveBeenCalledWith({
       profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
     expect(reportsRepository.countLeadsReceivedByDay).toHaveBeenCalledWith({
       orgId: 'org_1',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
     expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(1, {
       profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
     expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(2, {
       orgId: 'org_1',
-      from: new Date('2026-07-25T00:00:00.000Z'),
-      to: new Date('2026-07-31T23:59:59.999Z'),
+      from: new Date('2026-07-24T18:30:00.000Z'),
+      to: new Date('2026-07-31T12:30:00.000Z'),
     });
     expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(2, {
       profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-07-25T00:00:00.000Z'),
-      to: new Date('2026-07-31T23:59:59.999Z'),
+      from: new Date('2026-07-24T18:30:00.000Z'),
+      to: new Date('2026-07-31T12:30:00.000Z'),
     });
     expect(reportsRepository.findTopConvertingProjects).toHaveBeenCalledWith({
       profileId: '11111111-1111-4111-8111-111111111111',
       orgId: 'org_1',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
     expect(reportsRepository.countAcquisitionSources).toHaveBeenCalledWith({
       orgId: 'org_1',
-      from: new Date('2026-08-01T00:00:00.000Z'),
+      from: new Date('2026-07-31T18:30:00.000Z'),
       to: new Date('2026-08-07T12:30:00.000Z'),
     });
+
+    const currentWindowMs =
+      new Date('2026-08-07T12:30:00.000Z').getTime() -
+      new Date('2026-07-31T18:30:00.000Z').getTime();
+    const previousWindowMs =
+      new Date('2026-07-31T12:30:00.000Z').getTime() -
+      new Date('2026-07-24T18:30:00.000Z').getTime();
+    expect(previousWindowMs).toBe(currentWindowMs);
   });
 
   it('rejects requests without an active organization before querying', async () => {

@@ -36,6 +36,20 @@ describe('AnalyticsDateRangeControl', () => {
     );
   });
 
+  it('includes both years when the window crosses a year boundary', () => {
+    render(
+      <AnalyticsDateRangeControl
+        days={90}
+        from="2026-11-15T18:30:00.000Z"
+        to="2027-02-13T15:00:00.000Z"
+      />,
+    );
+
+    expect(screen.getByLabelText('Selected analytics date range')).toHaveTextContent(
+      '16 Nov 2026 - 13 Feb 2027',
+    );
+  });
+
   it('updates the shareable query when another window is selected', async () => {
     render(
       <AnalyticsDateRangeControl

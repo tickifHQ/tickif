@@ -209,6 +209,7 @@ export async function makeLead(overrides: Partial<typeof schema.lead.$inferInser
 export async function makeConsultationBooking(
   overrides: Partial<typeof schema.consultationBooking.$inferInsert> = {},
 ) {
+  const { preferredSlots, ...bookingOverrides } = overrides;
   const designer = overrides.designerProfileId
     ? null
     : await makeDesigner({ status: 'active', phone: '+919800000099' });
@@ -224,14 +225,18 @@ export async function makeConsultationBooking(
         .limit(1)
     )[0]!.organizationId;
   const requesterId = overrides.requesterId ?? (await makeUser()).id;
+  const defaultPreferredSlot = bookingOverrides.confirmedSlot ?? {
+    date: '2099-01-01',
+    window: 'morning' as const,
+  };
   const [row] = await db
     .insert(schema.consultationBooking)
     .values({
       organizationId,
       designerProfileId,
       requesterId,
-      preferredSlots: [{ date: '2026-08-10', window: 'morning' }],
-      ...overrides,
+      preferredSlots: preferredSlots ?? [defaultPreferredSlot],
+      ...bookingOverrides,
     })
     .returning();
   return row!;
@@ -249,8 +254,7 @@ export async function makeReview(overrides: Partial<typeof schema.review.$inferI
       authorUserId,
       rating: overrides.rating ?? 5,
       body:
-        overrides.body ??
-        'A thoughtful and detailed review of the completed design experience.',
+        overrides.body ?? 'A thoughtful and detailed review of the completed design experience.',
       ...overrides,
     })
     .returning();

@@ -267,10 +267,8 @@ function EngagementBreakdown({ metrics }: { metrics: EngagementMetric[] }) {
 }
 
 const acquisitionSourceLabels: Record<string, string> = {
-  profile: 'Profile page',
-  'project-enquiry': 'Project enquiry',
-  referral: 'Referral',
-  website: 'Website',
+  enquiry: 'Enquiry',
+  consultation: 'Consultation',
 };
 
 function AcquisitionSources({ sources }: { sources: AnalyticsResponse['acquisitionSources'] }) {

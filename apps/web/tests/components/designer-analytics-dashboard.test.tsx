@@ -73,8 +73,8 @@ const analytics: AnalyticsResponse = {
     },
   ],
   acquisitionSources: [
-    { source: 'project-enquiry', enquiries: 3, conversions: 2 },
-    { source: 'referral', enquiries: 1, conversions: 0 },
+    { source: 'enquiry', enquiries: 3, conversions: 2 },
+    { source: 'consultation', enquiries: 1, conversions: 0 },
   ],
   deferredMetrics: [],
 };
@@ -109,8 +109,6 @@ describe('DesignerAnalyticsDashboard', () => {
       ?.closest('[data-slot="card"]');
     expect(projectViewsCard).toHaveTextContent('+20%');
     expect(projectViewsCard).toHaveTextContent('+2 compared to prior 7 days');
-    expect(screen.queryByText('Current')).not.toBeInTheDocument();
-    expect(screen.queryByText(/\bpp\b/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: /project views during the selected period/i }),
     ).toBeInTheDocument();
@@ -132,10 +130,33 @@ describe('DesignerAnalyticsDashboard', () => {
       'href',
       '/projects/11111111-1111-4111-8111-111111111111',
     );
-    expect(screen.getByText('Project enquiry')).toBeInTheDocument();
+    expect(screen.getByText('Enquiry')).toBeInTheDocument();
+    expect(screen.getByText('Consultation')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
     expect(screen.getByText('66.7%')).toBeInTheDocument();
-    expect(screen.queryByText('+9% over last period')).not.toBeInTheDocument();
+  });
+
+  it('shows a new trend when the prior period had no activity', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          previousPeriod: {
+            projectViews: 0,
+            enquiries: 0,
+            viewToEnquiryRate: 0,
+            responseRate: 0,
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    const projectViewsCard = screen
+      .getAllByText('Project views', { exact: true })[0]
+      ?.closest('[data-slot="card"]');
+    expect(projectViewsCard).toHaveTextContent('New');
+    expect(projectViewsCard).toHaveTextContent('No activity in the prior 7 days');
   });
 
   it('renders an intentional empty state when the window has no activity', () => {
@@ -162,6 +183,12 @@ describe('DesignerAnalyticsDashboard', () => {
           })),
           topConvertingProjects: [],
           acquisitionSources: [],
+          previousPeriod: {
+            projectViews: 0,
+            enquiries: 0,
+            viewToEnquiryRate: 0,
+            responseRate: 0,
+          },
         }}
       />,
     );
@@ -169,6 +196,7 @@ describe('DesignerAnalyticsDashboard', () => {
     expect(screen.getByText(/project views will appear here/i)).toBeInTheDocument();
     expect(screen.getByText(/project performance will appear here/i)).toBeInTheDocument();
     expect(screen.getByText(/acquisition sources will appear here/i)).toBeInTheDocument();
+    expect(screen.getAllByText('No activity in either 7-day period')).toHaveLength(4);
   });
 
   it('shows a retryable error state instead of fabricated zero metrics', () => {

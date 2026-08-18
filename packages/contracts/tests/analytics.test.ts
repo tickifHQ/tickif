@@ -57,7 +57,7 @@ describe('analytics contracts', () => {
             conversions: 1,
           },
         ],
-        acquisitionSources: [{ source: 'project-enquiry', enquiries: 1, conversions: 1 }],
+        acquisitionSources: [{ source: 'enquiry', enquiries: 1, conversions: 1 }],
         deferredMetrics: [],
       }).success,
     ).toBe(true);
