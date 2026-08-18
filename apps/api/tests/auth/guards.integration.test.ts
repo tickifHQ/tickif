@@ -5,13 +5,20 @@ import { getSession } from '@repo/auth';
 import { db, schema } from '@repo/db';
 import {
   withSession,
+  withFreshSession,
   requireAnyRole,
   requireRole,
   requireOwnership,
   type AuthVariables,
 } from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
-import { backdateSession, createRoleSession, mergeResponseCookies } from '../helpers/auth.js';
+import {
+  activateOrganization,
+  backdateSession,
+  createAuthedSession,
+  createRoleSession,
+  mergeResponseCookies,
+} from '../helpers/auth.js';
 import { seedProjectOwnedBy, seedOrgWithMember } from '../helpers/seed.js';
 
 /**
@@ -22,6 +29,16 @@ function sampleApp() {
   const app = new Hono<{ Variables: AuthVariables }>();
   app.onError(onError);
   app.use('*', withSession);
+  // Identity-only read: no authorization decision hangs off it, so the ≤5-min
+  // session cookie cache is fine here.
+  app.get('/session-role', (c) => c.json({ role: c.get('user')?.role ?? null }));
+  // Mirrors GET /api/projects/{id}: anonymous callers must still be served, so it
+  // cannot use requireAuth — but draft visibility is decided from the caller's live
+  // role/ban state, so it must not read those from the cookie cache either.
+  app.get('/draft-read', withFreshSession, (c) => {
+    const user = c.get('user');
+    return c.json({ role: user?.role ?? null, banned: !!user?.banned });
+  });
   app.get('/admin-area', requireAnyRole(['admin']), (c) => c.json({ ok: true }));
   app.get('/designer-area', requireRole('designer'), (c) => c.json({ ok: true }));
   app.get('/session-org', requireRole('designer'), (c) =>
@@ -81,6 +98,62 @@ describe('RBAC guards (integration, E-87)', () => {
     // no hierarchy: admin does not pass the designer-only gate; superadmin does
     expect((await get(app, '/designer-area', admin.cookie)).status).toBe(403);
     expect((await get(app, '/designer-area', superadmin.cookie)).status).toBe(200);
+  });
+
+  it('decides authorization on fresh state, cached only for identity-only reads', async () => {
+    const app = sampleApp();
+    // createAuthedSession keeps the warm session_data blob (createRoleSession strips it),
+    // so every request below carries a ≤5-min cached copy of the role/ban state.
+    const { cookie } = await createAuthedSession('+919800000062');
+    const session = await getSession(new Headers({ cookie }));
+    const userId = session!.user.id;
+
+    expect(await (await get(app, '/session-role', cookie)).json()).toEqual({ role: 'visitor' });
+    expect((await get(app, '/admin-area', cookie)).status).toBe(403);
+    expect(await (await get(app, '/draft-read', cookie)).json()).toEqual({
+      role: 'visitor',
+      banned: false,
+    });
+
+    await db.update(schema.user).set({ role: 'superadmin' }).where(eq(schema.user.id, userId));
+
+    // The identity-only read may serve the cached role …
+    expect(await (await get(app, '/session-role', cookie)).json()).toEqual({ role: 'visitor' });
+    // … but every route that authorizes off it sees the promotion, guarded or not.
+    expect((await get(app, '/admin-area', cookie)).status).toBe(200);
+    expect(await (await get(app, '/draft-read', cookie)).json()).toEqual({
+      role: 'superadmin',
+      banned: false,
+    });
+
+    // A demotion + ban bites immediately instead of surviving the cookie cache TTL —
+    // otherwise a demoted superadmin keeps reading every draft on the platform.
+    await db
+      .update(schema.user)
+      .set({ role: 'visitor', banned: true })
+      .where(eq(schema.user.id, userId));
+
+    expect((await get(app, '/admin-area', cookie)).status).toBe(403);
+    expect(await (await get(app, '/draft-read', cookie)).json()).toEqual({
+      role: 'visitor',
+      banned: true,
+    });
+  });
+
+  it('replaces the stale session_data cookie on the response instead of letting it live out its TTL', async () => {
+    const app = sampleApp();
+    const { cookie } = await createAuthedSession('+919800000064');
+    const session = await getSession(new Headers({ cookie }));
+    await db.update(schema.user).set({ role: 'admin' }).where(eq(schema.user.id, session!.user.id));
+
+    const response = await get(app, '/admin-area', cookie);
+    expect(response.status).toBe(200);
+
+    // The guard's fresh read re-issued the cache blob; a client that keeps it now reads
+    // the new role even from a cached, unguarded route.
+    const refreshed = mergeResponseCookies(cookie, response);
+    expect(refreshed).not.toBe(cookie);
+    expect(await (await get(app, '/session-role', refreshed)).json()).toEqual({ role: 'admin' });
   });
 
   it('ownership: owner 200, other designer 403, superadmin 200, unknown id 404', async () => {
@@ -160,6 +233,56 @@ describe('RBAC guards (integration, E-87)', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ activeOrganizationId: null });
+  });
+
+  /**
+   * E-184 regression: onboarding creates the studio and activates it server-side, but the
+   * client keeps the session_data blob it minted BEFORE onboarding. A protected route that
+   * reads `activeOrganizationId` from that blob works against the previous organization for
+   * up to the cache TTL — the designer lands in the wrong workspace right after signing up.
+   */
+  it('reads the organization activated during onboarding, not the pre-onboarding cached one (E-184)', async () => {
+    const app = sampleApp();
+    const { cookie } = await createAuthedSession('+919800000063');
+    const minted = await getSession(new Headers({ cookie }));
+    const userId = minted!.user.id;
+    await db.update(schema.user).set({ role: 'designer' }).where(eq(schema.user.id, userId));
+
+    // Pre-onboarding state: the designer was already invited into someone else's studio,
+    // and their warm cookie caches that as the active organization.
+    const invitedOrgId = await seedOrgWithMember(userId);
+    const staleCookie = await activateOrganization(cookie, invitedOrgId);
+    expect(
+      (await getSession(new Headers({ cookie: staleCookie })))?.session.activeOrganizationId,
+    ).toBe(invitedOrgId);
+
+    // Onboarding: their own studio is created and activated exactly as POST /api/profiles/me
+    // does — and the refreshed cookie is dropped, as it is whenever the browser is not the
+    // caller that completed onboarding (server component, another tab, a retried request).
+    const ownOrgId = `${invitedOrgId}-own-studio`;
+    await db.insert(schema.organization).values({
+      id: ownOrgId,
+      name: 'Own Studio',
+      slug: ownOrgId,
+      createdAt: new Date(),
+    });
+    await db.insert(schema.member).values({
+      id: `mem-own-${userId}`,
+      organizationId: ownOrgId,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await activateOrganization(staleCookie, ownOrgId);
+
+    // The cached blob still points at the old studio …
+    expect(
+      (await getSession(new Headers({ cookie: staleCookie })))?.session.activeOrganizationId,
+    ).toBe(invitedOrgId);
+    // … while the protected route must work against the newly onboarded one.
+    const response = await get(app, '/session-org', staleCookie);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ activeOrganizationId: ownOrgId });
   });
 
   it('denies a banned account on a live session', async () => {

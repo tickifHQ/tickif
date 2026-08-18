@@ -42,10 +42,19 @@ vi.mock('../../../src/modules/leads/routes.js', async () => {
   return { leadsRoutes: new OpenAPIHono() };
 });
 
-vi.mock('@repo/auth', () => ({
-  getSession: vi.fn(),
-  auth: { handler: vi.fn(() => new Response(null, { status: 404 })) },
-}));
+// The guards re-read the session past the cookie cache via getSessionWithHeaders —
+// delegate it to the same mock so the authed-session stub drives both reads.
+vi.mock('@repo/auth', () => {
+  const getSession = vi.fn();
+  return {
+    getSession,
+    getSessionWithHeaders: vi.fn(async (headers: Headers, opts?: unknown) => ({
+      session: await getSession(headers, opts),
+      headers: new Headers(),
+    })),
+    auth: { handler: vi.fn(() => new Response(null, { status: 404 })) },
+  };
+});
 
 vi.mock('@repo/config', () => ({
   config: {

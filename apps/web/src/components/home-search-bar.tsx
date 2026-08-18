@@ -1,39 +1,394 @@
-import { ArrowRight, Search } from 'lucide-react';
+'use client';
 
-/** Prominent search bar shown to authenticated users in place of the hero (Figma "HOME [Logged in]"). */
-export function HomeSearchBar() {
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ArrowRight, History, Search, X } from 'lucide-react';
+import {
+  recentSearchesSchema,
+  searchSuggestResponseSchema,
+  type SearchSuggestResponse,
+} from '@repo/contracts';
+import { Button } from '@repo/ui/components/button';
+import { api } from '@/lib/api';
+
+const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
+  projects: [],
+  designers: [],
+  processingTimeMs: 0,
+};
+const RECENT_SEARCHES_STORAGE_KEY = 'tickif.homeSearchRecents.v1';
+const MAX_RECENT_SEARCHES = 5;
+
+function readRecentSearches(): string[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed = recentSearchesSchema.safeParse(JSON.parse(stored));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentSearches(searches: string[]) {
+  try {
+    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(searches));
+  } catch {
+    // Search remains usable when storage is unavailable.
+  }
+}
+
+type HomeSearchBarProps = {
+  initialQuery?: string;
+  variant?: 'default' | 'hero';
+};
+
+/** Homepage search entry with blended project/designer suggestions after a 150 ms debounce. */
+export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSearchBarProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const listboxId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState(initialQuery);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SearchSuggestResponse>(EMPTY_SUGGESTIONS);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const trimmedQuery = query.trim();
+  const hasSuggestions = suggestions.projects.length + suggestions.designers.length > 0;
+  const showRecentSearches = isFocused && trimmedQuery.length === 0 && recentSearches.length > 0;
+  const showSearchSuggestions = isFocused && trimmedQuery.length > 0;
+  const showDropdown = showRecentSearches || showSearchSuggestions;
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    setRecentSearches(readRecentSearches());
+  }, []);
+
+  useEffect(() => {
+    if (!trimmedQuery) {
+      setSuggestions(EMPTY_SUGGESTIONS);
+      setIsLoading(false);
+      return;
+    }
+
+    setSuggestions(EMPTY_SUGGESTIONS);
+    setIsLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await api.api.search.suggest.$get(
+          { query: { q: trimmedQuery } },
+          { init: { signal: controller.signal } },
+        );
+        if (!response.ok) throw new Error('Suggestion request failed.');
+
+        const parsed = searchSuggestResponseSchema.safeParse(await response.json());
+        if (!parsed.success) throw new Error('Suggestion response was invalid.');
+        setSuggestions(parsed.data);
+      } catch {
+        if (!controller.signal.aborted) setSuggestions(EMPTY_SUGGESTIONS);
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    }, 150);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [trimmedQuery]);
+
+  function runSearch(value: string) {
+    const normalizedQuery = value.trim();
+    if (normalizedQuery) {
+      const nextRecentSearches = [
+        normalizedQuery,
+        ...recentSearches.filter(
+          (recent) => recent.toLocaleLowerCase() !== normalizedQuery.toLocaleLowerCase(),
+        ),
+      ].slice(0, MAX_RECENT_SEARCHES);
+      setRecentSearches(nextRecentSearches);
+      writeRecentSearches(nextRecentSearches);
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (normalizedQuery) params.set('q', normalizedQuery);
+    else params.delete('q');
+    params.delete('page');
+    router.push(params.size > 0 ? `/?${params.toString()}` : '/');
+    setIsFocused(false);
+  }
+
+  function submitSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    runSearch(query);
+  }
+
+  /**
+   * Roving focus over the dropdown entries. They are real buttons and links, so
+   * Tab already reaches them; Arrow keys make the list behave the way people
+   * expect an autocomplete to behave.
+   */
+  function moveSuggestionFocus(direction: 1 | -1) {
+    const items = Array.from(
+      dropdownRef.current?.querySelectorAll<HTMLElement>('[data-suggestion-item]') ?? [],
+    );
+    if (items.length === 0) return;
+
+    const activeIndex = items.findIndex((item) => item === document.activeElement);
+    const nextIndex =
+      activeIndex === -1
+        ? direction === 1
+          ? 0
+          : items.length - 1
+        : (activeIndex + direction + items.length) % items.length;
+
+    items[nextIndex]?.focus();
+  }
+
+  function handleDropdownKeys(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveSuggestionFocus(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveSuggestionFocus(-1);
+      return;
+    }
+    if (event.key === 'Escape') {
+      // Return focus first: the refocus fires the form's onFocus, so closing
+      // afterwards is what makes the dropdown stay shut.
+      inputRef.current?.focus();
+      setIsFocused(false);
+    }
+  }
+
+  const shellClassName =
+    variant === 'hero'
+      ? 'border-home-search-border bg-home-search-background shadow-home-search'
+      : 'border-border bg-background shadow-home-search';
+
   return (
-    <form role="search">
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-background py-1.5 pl-5 pr-1.5 shadow-home-search">
+    <form
+      role="search"
+      className="relative w-full"
+      onSubmit={submitSearch}
+      onFocus={() => setIsFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setIsFocused(false);
+      }}
+    >
+      <div
+        className={`flex items-center gap-3 rounded-xl border py-1.5 pl-4 pr-1.5 ${shellClassName}`}
+      >
         <Search className="size-4 shrink-0 text-primary" aria-hidden />
         <input
+          ref={inputRef}
           type="search"
+          name="q"
+          autoComplete="off"
+          value={query}
+          onChange={(event) => {
+            const nextQuery = event.target.value;
+            setQuery(nextQuery);
+            setSuggestions(EMPTY_SUGGESTIONS);
+            setIsLoading(nextQuery.trim().length > 0);
+            setIsFocused(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setIsFocused(false);
+              return;
+            }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              setIsFocused(true);
+              handleDropdownKeys(event);
+            }
+          }}
           placeholder="Search by city, style, budget, room type…"
           aria-label="Search homes"
-          className="h-9 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <button
+        {query.length > 0 ? (
+          <Button
             type="button"
-            className="rounded-md border border-border px-3.5 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 rounded-full p-0 text-primary shadow-none hover:bg-transparent hover:text-primary"
+            aria-label="Clear search"
+            onClick={() => {
+              setQuery('');
+              setSuggestions(EMPTY_SUGGESTIONS);
+              setIsLoading(false);
+            }}
           >
-            Projects
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-border px-3.5 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
-          >
-            Designers
-          </button>
-        </div>
-        <button
-          type="submit"
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-foreground px-3 text-sm font-medium text-background shadow-sm transition-colors hover:bg-foreground/90"
-        >
-          Explore
-          <ArrowRight className="size-4" aria-hidden />
-        </button>
+            <X className="size-3.5" aria-hidden />
+          </Button>
+        ) : null}
+        {variant === 'hero' ? (
+          <Button type="submit" variant="fancy" size="fancy" className="shrink-0">
+            Explore
+            <ArrowRight className="size-4" aria-hidden />
+          </Button>
+        ) : (
+          <Button type="submit" variant="emphasis" size="compact" className="shrink-0">
+            Explore
+            <ArrowRight className="size-4" aria-hidden />
+          </Button>
+        )}
       </div>
+
+      {showDropdown ? (
+        <div
+          id={listboxId}
+          ref={dropdownRef}
+          role="group"
+          aria-label={showRecentSearches ? 'Recent searches' : 'Search suggestions'}
+          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 overflow-hidden rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+          onMouseDown={(event) => event.preventDefault()}
+          onKeyDown={handleDropdownKeys}
+        >
+          {showRecentSearches ? (
+            <section aria-labelledby={`${listboxId}-recent`}>
+              <p
+                id={`${listboxId}-recent`}
+                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                Recent searches
+              </p>
+              {recentSearches.map((recentSearch) => (
+                <button
+                  key={recentSearch.toLocaleLowerCase()}
+                  type="button"
+                  data-suggestion-item
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent"
+                  onClick={() => {
+                    setQuery(recentSearch);
+                    runSearch(recentSearch);
+                  }}
+                >
+                  <History className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{recentSearch}</span>
+                </button>
+              ))}
+            </section>
+          ) : suggestions.projects.length > 0 ? (
+            <section aria-labelledby={`${listboxId}-projects`}>
+              <p
+                id={`${listboxId}-projects`}
+                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                Projects
+              </p>
+              {suggestions.projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  data-suggestion-item
+                  className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent focus-visible:bg-accent"
+                >
+                  {project.coverImageUrl ? (
+                    <img
+                      src={project.coverImageUrl}
+                      alt=""
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      draggable={false}
+                      className="size-10 rounded-md object-cover"
+                    />
+                  ) : (
+                    <span className="size-10 rounded-md bg-muted" aria-hidden />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{project.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[project.designerName, project.citySlug].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </section>
+          ) : null}
+
+          {!showRecentSearches && suggestions.designers.length > 0 ? (
+            <section aria-labelledby={`${listboxId}-designers`}>
+              <p
+                id={`${listboxId}-designers`}
+                className="mt-1 border-t border-border px-2 pb-1 pt-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                Designers
+              </p>
+              {suggestions.designers.map((designer) => {
+                const content = (
+                  <>
+                    {designer.logoUrl ? (
+                      <img
+                        src={designer.logoUrl}
+                        alt=""
+                        width={40}
+                        height={40}
+                        loading="lazy"
+                        draggable={false}
+                        className="size-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span
+                        className="grid size-10 place-items-center rounded-full bg-muted text-xs font-medium"
+                        aria-hidden
+                      >
+                        {designer.displayName.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {designer.displayName}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {designer.projectCount} projects
+                      </span>
+                    </span>
+                  </>
+                );
+
+                return designer.slug ? (
+                  <Link
+                    key={designer.id}
+                    href={`/d/${designer.slug}`}
+                    data-suggestion-item
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent focus-visible:bg-accent"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div key={designer.id} className="flex items-center gap-3 rounded-lg px-2 py-2">
+                    {content}
+                  </div>
+                );
+              })}
+            </section>
+          ) : null}
+
+          {!showRecentSearches && isLoading ? (
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">Searching…</p>
+          ) : !showRecentSearches && !hasSuggestions ? (
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              No suggestions found. Press Explore to search all projects.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </form>
   );
 }

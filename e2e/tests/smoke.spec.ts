@@ -10,7 +10,7 @@ test('home page renders', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'tickif' }).first()).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Search homes' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Trending projects' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Featured projects' })).toBeVisible();
 });
 
 test('api is healthy and protects the projects endpoint', async ({ request }) => {

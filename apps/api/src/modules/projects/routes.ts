@@ -34,7 +34,7 @@ import {
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireAuth, withFreshSession } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { projectsService } from './service.js';
@@ -114,11 +114,17 @@ const portfolioRoute = createRoute({
   },
 });
 
+// Optional auth: anonymous callers may read a published project, so this route
+// cannot use `requireAuth`. It still decides draft visibility from the caller's
+// ban/role (`assertAccess` in the service), so the session must not come from the
+// ≤5-min cookie cache — `withFreshSession` refreshes it without 401ing anonymous
+// readers.
 const getRoute = createRoute({
   method: 'get',
   path: '/{id}',
   tags: ['Projects'],
   summary: 'Get a project by id, including rooms',
+  middleware: [withFreshSession] as const,
   request: { params: projectIdParamSchema },
   responses: {
     200: {
@@ -521,7 +527,8 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       request: { params: publicImageDetailParamSchema },
       responses: {
         200: {
-          description: 'Published project context and gallery for the active image',
+          description:
+            'Display-ready published project, designer, gallery, active image, and recommendations',
           content: { 'application/json': { schema: publicImageDetailResponseSchema } },
         },
         404: errorJson('Image not found or not published'),
@@ -682,7 +689,8 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       request: { params: projectSlugParamSchema },
       responses: {
         200: {
-          description: 'Published project with rooms, gallery, and designer summary',
+          description:
+            'Published project read model with rooms, gallery, designer, and recommendations',
           content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
