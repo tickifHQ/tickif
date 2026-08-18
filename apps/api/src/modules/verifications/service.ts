@@ -92,9 +92,7 @@ function documentDto(document: VerificationDocumentRecord) {
   };
 }
 
-function historyDto(
-  history: Awaited<ReturnType<typeof verificationsRepository.listHistory>>,
-) {
+function historyDto(history: Awaited<ReturnType<typeof verificationsRepository.listHistory>>) {
   return history.map((event) => ({
     id: event.id,
     attempt: event.attempt,
@@ -344,7 +342,12 @@ export const verificationsService = {
     if (document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
       throw AppError.notFound('Verification document not found');
     }
-    return { downloadUrl: await presignDownload({ key: document.objectKey }) };
+    return {
+      downloadUrl: await presignDownload({
+        key: document.objectKey,
+        expiresIn: config.R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS,
+      }),
+    };
   },
 
   async approve(applicationId: string, reviewerId: string) {

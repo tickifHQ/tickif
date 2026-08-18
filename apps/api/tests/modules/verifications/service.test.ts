@@ -6,7 +6,12 @@ import {
   VERIFICATION_REVIEW_ACTION,
 } from '@repo/contracts';
 
-vi.mock('@repo/config', () => ({ config: { MEDIA_MAX_UPLOAD_BYTES: 15_000_000 } }));
+vi.mock('@repo/config', () => ({
+  config: {
+    MEDIA_MAX_UPLOAD_BYTES: 15_000_000,
+    R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS: 60,
+  },
+}));
 vi.mock('@repo/storage', () => ({
   buildVerificationDocumentKey: vi.fn(
     (organizationId: string, versionId: string) =>
@@ -55,6 +60,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
 const { verificationsService } = await import('../../../src/modules/verifications/service.js');
 const { verificationsRepository } =
   await import('../../../src/modules/verifications/repository.js');
+const { presignDownload } = await import('@repo/storage');
 
 const application = {
   id: '0d8e6a2c-1b3f-4c5a-9e2d-7f1a2b3c4d5e',
@@ -257,6 +263,22 @@ describe('verificationsService', () => {
 
     expect(result).not.toHaveProperty('key');
     expect(result.uploadUrl).toBe('https://storage.test/upload');
+  });
+
+  it('uses the dedicated short TTL for private verification document downloads', async () => {
+    vi.mocked(verificationsRepository.findAdminDetail).mockResolvedValue({
+      ...context,
+      organizationName: 'Studio One Private Limited',
+    });
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue(document);
+
+    await expect(
+      verificationsService.downloadDocument(application.id, document.id),
+    ).resolves.toEqual({ downloadUrl: 'https://storage.test/download' });
+    expect(presignDownload).toHaveBeenCalledWith({
+      key: document.objectKey,
+      expiresIn: 60,
+    });
   });
 
   it('requires a note when admin requests changes at the contract boundary', async () => {

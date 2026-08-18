@@ -1,15 +1,24 @@
-import { and, asc, db, eq, isNull, schema } from '@repo/db';
+import { and, asc, db, eq, isNull, lt, or, schema } from '@repo/db';
 
 export type VerificationNotificationRecord =
   typeof schema.verificationNotificationOutbox.$inferSelect;
 
 export async function findPendingVerificationNotifications(
   limit: number,
+  staleBefore: Date,
 ): Promise<VerificationNotificationRecord[]> {
   return db
     .select()
     .from(schema.verificationNotificationOutbox)
-    .where(isNull(schema.verificationNotificationOutbox.enqueuedAt))
+    .where(
+      and(
+        isNull(schema.verificationNotificationOutbox.sentAt),
+        or(
+          isNull(schema.verificationNotificationOutbox.enqueuedAt),
+          lt(schema.verificationNotificationOutbox.enqueuedAt, staleBefore),
+        ),
+      ),
+    )
     .orderBy(
       asc(schema.verificationNotificationOutbox.createdAt),
       asc(schema.verificationNotificationOutbox.id),
@@ -17,14 +26,17 @@ export async function findPendingVerificationNotifications(
     .limit(limit);
 }
 
-export async function markVerificationNotificationEnqueued(id: string): Promise<void> {
+export async function markVerificationNotificationEnqueued(
+  id: string,
+  enqueuedAt: Date = new Date(),
+): Promise<void> {
   await db
     .update(schema.verificationNotificationOutbox)
-    .set({ enqueuedAt: new Date() })
+    .set({ enqueuedAt })
     .where(
       and(
         eq(schema.verificationNotificationOutbox.id, id),
-        isNull(schema.verificationNotificationOutbox.enqueuedAt),
+        isNull(schema.verificationNotificationOutbox.sentAt),
       ),
     );
 }

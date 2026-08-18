@@ -10,6 +10,7 @@ import {
 } from '../verification-notifications/repository.js';
 
 const DISPATCH_BATCH_SIZE = 50;
+const STALE_CLAIM_MS = 5 * 60 * 1000;
 
 function escapeHtml(value: string): string {
   return value
@@ -24,7 +25,8 @@ export async function processVerificationNotificationSweep(): Promise<{
   enqueued: number;
   failed: number;
 }> {
-  const pending = await findPendingVerificationNotifications(DISPATCH_BATCH_SIZE);
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+  const pending = await findPendingVerificationNotifications(DISPATCH_BATCH_SIZE, staleBefore);
   let enqueued = 0;
   let failed = 0;
   for (const notification of pending) {

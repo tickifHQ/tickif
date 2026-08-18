@@ -314,6 +314,9 @@ export async function enqueueVerificationEmail(job: VerificationEmailJob): Promi
   await getVerificationEmailQueue().add(JOBS.sendVerificationEmail, job, {
     jobId: `${JOBS.sendVerificationEmail}-${job.outboxId}`,
     removeOnComplete: { age: 24 * 3600, count: 5000 },
+    // The durable outbox is the failure record. Removing a terminally failed
+    // queue job lets the stale-claim sweep re-add the same deterministic jobId.
+    removeOnFail: true,
   });
 }
 

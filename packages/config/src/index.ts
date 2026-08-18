@@ -137,6 +137,7 @@ const envSchema = z.object({
   R2_BUCKET: z.string().optional(),
   R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
   R2_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(3600),
+  R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(60),
 
   // Media upload limits (E-107). MAX_IMAGE_PIXELS is the decompression-bomb
   // budget — checked from header dims before any pixel decode.
@@ -169,10 +170,7 @@ const envSchema = z.object({
 
   // Email delivery via Resend (E-203). Optional in dev/test (logs to console),
   // but asserted below for production so auth emails cannot fail at first use.
-  RESEND_API_KEY: z.preprocess(
-    blankStringToUndefined,
-    z.string().trim().min(1).optional(),
-  ),
+  RESEND_API_KEY: z.preprocess(blankStringToUndefined, z.string().trim().min(1).optional()),
   EMAIL_FROM: emailFromSchema.default(DEFAULT_EMAIL_FROM),
 
   // Google Places API key for designer-portfolio Google review fetching.
@@ -313,9 +311,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
 }
 
 /** Validate Resend only in the auth process that sends transactional email. */
-export function assertProductionEmailConfig(
-  environment: NodeJS.ProcessEnv = process.env,
-): void {
+export function assertProductionEmailConfig(environment: NodeJS.ProcessEnv = process.env): void {
   if (environment.NODE_ENV !== 'production') return;
 
   const resendApiKey = blankStringToUndefined(environment.RESEND_API_KEY);
@@ -343,9 +339,7 @@ export function assertProductionEmailConfig(
 }
 
 /** Validate search credentials only in processes that actually use Typesense. */
-export function assertProductionSearchConfig(
-  environment: NodeJS.ProcessEnv = process.env,
-): void {
+export function assertProductionSearchConfig(environment: NodeJS.ProcessEnv = process.env): void {
   if (environment.NODE_ENV !== 'production') return;
   const parsed = productionSearchEnvSchema.safeParse(environment);
   if (parsed.success) return;

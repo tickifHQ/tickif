@@ -101,7 +101,7 @@ describe('verification repository lifecycle', () => {
     });
     expect(typeof submitted).not.toBe('string');
 
-    const expiresAt = new Date('2026-10-13T00:00:00.000Z');
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
     const reviewed = await verificationsRepository.review({
       applicationId: application.id,
       reviewerId: reviewer.id,
