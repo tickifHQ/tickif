@@ -77,34 +77,28 @@ const searchSuggestRoute = createRoute({
 // OpenAPIHono App + Route Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook });
+export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook })
+  .openapi(searchProjectsRoute, async (c) => {
+    const query = c.req.valid('query');
+    const result = await searchService.searchProjects(query);
 
-// GET /api/search - Project search
-searchRoutes.openapi(searchProjectsRoute, async (c) => {
-  const query = c.req.valid('query');
-  const result = await searchService.searchProjects(query);
+    c.header('Cache-Control', CACHE_HEADER);
 
-  c.header('Cache-Control', CACHE_HEADER);
+    return c.json(result, 200);
+  })
+  .openapi(searchDesignersRoute, async (c) => {
+    const query = c.req.valid('query');
+    const result = await searchService.searchDesigners(query);
 
-  return c.json(result, 200);
-});
+    c.header('Cache-Control', CACHE_HEADER);
 
-// GET /api/search/designers - Designer search
-searchRoutes.openapi(searchDesignersRoute, async (c) => {
-  const query = c.req.valid('query');
-  const result = await searchService.searchDesigners(query);
+    return c.json(result, 200);
+  })
+  .openapi(searchSuggestRoute, async (c) => {
+    const query = c.req.valid('query');
+    const result = await searchService.suggest(query);
 
-  c.header('Cache-Control', CACHE_HEADER);
+    c.header('Cache-Control', CACHE_HEADER);
 
-  return c.json(result, 200);
-});
-
-// GET /api/search/suggest - Blended suggest
-searchRoutes.openapi(searchSuggestRoute, async (c) => {
-  const query = c.req.valid('query');
-  const result = await searchService.suggest(query);
-
-  c.header('Cache-Control', CACHE_HEADER);
-
-  return c.json(result, 200);
-});
+    return c.json(result, 200);
+  });

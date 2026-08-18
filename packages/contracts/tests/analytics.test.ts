@@ -12,7 +12,7 @@ describe('analytics contracts', () => {
     expect(analyticsQuerySchema.safeParse({ days: '91' }).success).toBe(false);
   });
 
-  it('accepts real metrics while keeping event-backed metrics explicitly deferred', () => {
+  it('accepts real metrics including event-backed engagement', () => {
     expect(
       analyticsResponseSchema.safeParse({
         window: {
@@ -30,14 +30,17 @@ describe('analytics contracts', () => {
           changesRequested: 0,
         },
         leads: { total: 1, new: 1, contacted: 0, closed: 0, spam: 0 },
-        activity: [{ date: '2026-08-07', projectsCreated: 1, leadsReceived: 1 }],
-        deferredMetrics: [
+        engagement: { projectViews: 3, profileViews: 2 },
+        activity: [
           {
-            key: 'profileViews',
-            label: 'Profile views',
-            reason: 'Requires the Phase 3 interaction event pipeline.',
+            date: '2026-08-07',
+            projectsCreated: 1,
+            leadsReceived: 1,
+            projectViews: 3,
+            profileViews: 2,
           },
         ],
+        deferredMetrics: [],
       }).success,
     ).toBe(true);
   });

@@ -1,0 +1,3 @@
+CREATE INDEX "project_published_budget_recommendation_idx" ON "project" USING btree ("budget_band_slug","published_at" desc nulls last,"created_at" desc,"id" desc) WHERE "project"."status" = 'published';--> statement-breakpoint
+CREATE INDEX "project_published_designer_recommendation_idx" ON "project" USING btree ("designer_id","published_at" desc nulls last,"created_at" desc,"id" desc) WHERE "project"."status" = 'published';--> statement-breakpoint
+CREATE INDEX "project_published_city_recommendation_idx" ON "project" USING btree ("city_slug","published_at" desc nulls last,"created_at" desc,"id" desc) WHERE "project"."status" = 'published';

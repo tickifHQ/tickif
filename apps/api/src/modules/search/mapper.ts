@@ -8,16 +8,8 @@
  * - Handle null image keys by setting URL to null
  */
 import { presignDownload } from '@repo/storage';
-import type {
-  ProjectSearchDocument,
-  DesignerSearchDocument,
-} from '@repo/search';
-import type {
-  ProjectHit,
-  DesignerHit,
-  SuggestProject,
-  SuggestDesigner,
-} from '@repo/contracts';
+import type { ProjectSearchDocument, DesignerSearchDocument } from '@repo/search';
+import type { ProjectHit, DesignerHit, SuggestProject, SuggestDesigner } from '@repo/contracts';
 import type { RecentProject } from './repository.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,29 +20,27 @@ import type { RecentProject } from './repository.js';
  * Transform a ProjectSearchDocument from Typesense to a ProjectHit API response.
  * Presigns the coverImageKey to generate a coverImageUrl.
  */
-export async function mapProjectHit(
-  doc: ProjectSearchDocument,
-): Promise<ProjectHit> {
+export async function mapProjectHit(doc: ProjectSearchDocument): Promise<ProjectHit> {
   const coverImageUrl = doc.coverImageKey
     ? await presignDownload({ key: doc.coverImageKey })
     : null;
 
   return {
     id: doc.id,
-    slug: doc.slug,
+    slug: doc.slug ?? doc.id,
     title: doc.title,
-    description: doc.description,
+    description: doc.description ?? null,
     designerId: doc.designerId,
-    designerSlug: doc.designerSlug,
+    designerSlug: doc.designerSlug ?? null,
     designerName: doc.designerName,
-    citySlug: doc.citySlug,
-    localitySlug: doc.localitySlug,
-    propertyTypeSlug: doc.propertyTypeSlug,
-    propertySubtypeSlug: doc.propertySubtypeSlug,
-    scopeSlug: doc.scopeSlug,
-    bhkSlug: doc.bhkSlug,
-    budgetBandSlug: doc.budgetBandSlug,
-    sizeSqft: doc.sizeSqft,
+    citySlug: doc.citySlug ?? null,
+    localitySlug: doc.localitySlug ?? null,
+    propertyTypeSlug: doc.propertyTypeSlug ?? null,
+    propertySubtypeSlug: doc.propertySubtypeSlug ?? null,
+    scopeSlug: doc.scopeSlug ?? null,
+    bhkSlug: doc.bhkSlug ?? null,
+    budgetBandSlug: doc.budgetBandSlug ?? null,
+    sizeSqft: doc.sizeSqft ?? null,
     themes: doc.themes,
     materials: doc.materials,
     finishes: doc.finishes,
@@ -64,9 +54,7 @@ export async function mapProjectHit(
  * Transform a RecentProject from Postgres fallback to a ProjectHit API response.
  * Converts Date to Unix ms and presigns the coverImageKey.
  */
-export async function mapRecentProject(
-  project: RecentProject,
-): Promise<ProjectHit> {
+export async function mapRecentProject(project: RecentProject): Promise<ProjectHit> {
   const coverImageUrl = project.coverImageKey
     ? await presignDownload({ key: project.coverImageKey })
     : null;
@@ -100,19 +88,17 @@ export async function mapRecentProject(
  * Transform a ProjectSearchDocument to minimal SuggestProject response.
  * Only includes fields needed for autocomplete display.
  */
-export async function mapSuggestProject(
-  doc: ProjectSearchDocument,
-): Promise<SuggestProject> {
+export async function mapSuggestProject(doc: ProjectSearchDocument): Promise<SuggestProject> {
   const coverImageUrl = doc.coverImageKey
     ? await presignDownload({ key: doc.coverImageKey })
     : null;
 
   return {
     id: doc.id,
-    slug: doc.slug,
+    slug: doc.slug ?? doc.id,
     title: doc.title,
     designerName: doc.designerName,
-    citySlug: doc.citySlug,
+    citySlug: doc.citySlug ?? null,
     coverImageUrl,
   };
 }
@@ -125,18 +111,14 @@ export async function mapSuggestProject(
  * Transform a DesignerSearchDocument from Typesense to a DesignerHit API response.
  * Presigns the logoImageKey to generate a logoUrl.
  */
-export async function mapDesignerHit(
-  doc: DesignerSearchDocument,
-): Promise<DesignerHit> {
-  const logoUrl = doc.logoImageKey
-    ? await presignDownload({ key: doc.logoImageKey })
-    : null;
+export async function mapDesignerHit(doc: DesignerSearchDocument): Promise<DesignerHit> {
+  const logoUrl = doc.logoImageKey ? await presignDownload({ key: doc.logoImageKey }) : null;
 
   return {
     id: doc.id,
-    slug: doc.slug,
+    slug: doc.slug ?? null,
     displayName: doc.displayName,
-    bio: doc.bio,
+    bio: doc.bio ?? null,
     entityType: doc.entityType,
     citySlugs: doc.citySlugs,
     localitySlugs: doc.localitySlugs,
@@ -154,16 +136,12 @@ export async function mapDesignerHit(
  * Transform a DesignerSearchDocument to minimal SuggestDesigner response.
  * Only includes fields needed for autocomplete display.
  */
-export async function mapSuggestDesigner(
-  doc: DesignerSearchDocument,
-): Promise<SuggestDesigner> {
-  const logoUrl = doc.logoImageKey
-    ? await presignDownload({ key: doc.logoImageKey })
-    : null;
+export async function mapSuggestDesigner(doc: DesignerSearchDocument): Promise<SuggestDesigner> {
+  const logoUrl = doc.logoImageKey ? await presignDownload({ key: doc.logoImageKey }) : null;
 
   return {
     id: doc.id,
-    slug: doc.slug,
+    slug: doc.slug ?? null,
     displayName: doc.displayName,
     citySlugs: doc.citySlugs,
     logoUrl,

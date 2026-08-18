@@ -1,13 +1,15 @@
-import { ilike, inArray } from 'drizzle-orm';
+import { ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import { SELF_SERVICE_MODERATION_ACTIONS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
+  FeedProjectsQuery,
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
+  ProjectMotifKind,
   ProjectListSort,
   ProjectStatus,
   ReorderProjectRoomsInput,
@@ -15,6 +17,7 @@ import type {
   UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { projectFeedFilterClauses } from './feed-filters.repository.js';
 
 /**
  * Data-access for projects. This is the ONLY layer that imports Drizzle.
@@ -161,8 +164,140 @@ export type ProjectFeedItemRecord = {
   publishedAt: Date | null;
 };
 
+export type PublishedFeedFilters = Pick<
+  FeedProjectsQuery,
+  | 'citySlug'
+  | 'bhkSlug'
+  | 'propertyTypeSlug'
+  | 'scopeSlug'
+  | 'budgetBandSlug'
+  | 'roomSlugs'
+  | 'themes'
+>;
+
+export type PublicProjectRoomRecord = Pick<
+  ProjectRoomRecord,
+  'id' | 'name' | 'description' | 'sortOrder'
+> & {
+  roomTypeSlug: string | null;
+  roomTypeLabel: string | null;
+};
+
+export type PublicProjectGalleryImageRecord = Pick<
+  ProjectImageRecord,
+  | 'id'
+  | 'roomId'
+  | 'derivatives'
+  | 'width'
+  | 'height'
+  | 'sortOrder'
+  | 'themeSlugs'
+  | 'materialSlugs'
+  | 'finishSlugs'
+  | 'tagSlugs'
+> & {
+  roomName: string | null;
+};
+
+export type PublicProjectNarrativeRecord = Pick<
+  typeof schema.review.$inferSelect,
+  'body' | 'rating' | 'publishedAt'
+>;
+
+export type PublicProjectMotifCountRecord = {
+  kind: ProjectMotifKind;
+  slug: string;
+  projectCount: number;
+};
+
+export const PROJECT_RECOMMENDATION_GROUPS = [
+  'moreFromDesigner',
+  'sameBudgetDifferentStyle',
+  'nearby',
+] as const;
+export type ProjectRecommendationGroup = (typeof PROJECT_RECOMMENDATION_GROUPS)[number];
+export type ProjectRecommendationRecord = ProjectFeedItemRecord & {
+  group: ProjectRecommendationGroup;
+};
+
+/**
+ * Recommendation row exactly as `db.execute` returns it. Raw SQL bypasses Drizzle's
+ * column decoders, so `timestamp` columns arrive as strings and have to be mapped
+ * back before the row can be treated as a `ProjectRecommendationRecord`.
+ */
+type RawProjectRecommendationRow = Omit<ProjectRecommendationRecord, 'publishedAt'> & {
+  publishedAt: string | null;
+};
+
+function recommendationBranch(params: {
+  group: ProjectRecommendationGroup;
+  match: SQL;
+  excluded: SQL;
+  limit: number;
+}): SQL {
+  return sql`(
+    select
+      ${params.group}::text as "group",
+      ${schema.project.id} as "id",
+      ${schema.project.slug} as "slug",
+      ${schema.project.title} as "title",
+      ${schema.project.citySlug} as "citySlug",
+      ${schema.project.localitySlug} as "localitySlug",
+      ${schema.project.budgetBandSlug} as "budgetBandSlug",
+      ${schema.project.scopeSlug} as "scopeSlug",
+      ${schema.project.bhkSlug} as "bhkSlug",
+      ${schema.project.propertySubtypeSlug} as "propertySubtypeSlug",
+      ${schema.designerProfile.displayName} as "studio",
+      ${schema.designerProfile.avgRating} as "rating",
+      ${schema.designerProfile.reviewCount} as "reviewCount",
+      ${schema.project.coverImageId} as "coverImageId",
+      recommendation_cover.status as "coverStatus",
+      recommendation_cover.derivatives as "coverDerivatives",
+      recommendation_cover.width as "coverWidth",
+      recommendation_cover.height as "coverHeight",
+      ${schema.project.sizeSqft} as "sizeSqft",
+      ${schema.project.completedMonth} as "completedMonth",
+      ${schema.project.publishedAt} as "publishedAt",
+      ${schema.project.createdAt} as recommendation_created_at
+    from ${schema.project}
+    inner join ${schema.designerProfile}
+      on ${schema.project.designerId} = ${schema.designerProfile.id}
+    inner join ${schema.projectImage} as recommendation_cover
+      on ${schema.project.coverImageId} = recommendation_cover.id
+      and recommendation_cover.status = 'ready'
+    where ${schema.project.status} = 'published'
+      and ${schema.designerProfile.status} = 'active'
+      and ${params.match}
+      and ${params.excluded}
+    order by ${schema.project.publishedAt} desc nulls last,
+      ${schema.project.createdAt} desc,
+      ${schema.project.id} desc
+    limit ${params.limit}
+  )`;
+}
+
+export type PublicProjectReadRecord = {
+  project: ProjectRecord;
+  designer: {
+    id: string;
+    status: typeof schema.designerProfile.$inferSelect.status;
+    displayName: string;
+    orgSlug: string | null;
+    avgRating: string;
+    reviewCount: number;
+    entityType: typeof schema.designerProfile.$inferSelect.entityType;
+    logoImageId: string | null;
+    bio: string | null;
+    firmType: string | null;
+    foundedYear: number | null;
+    yearsExperience: number;
+  };
+};
+
 /** Columns every feed-shaped query selects. Keeps `ProjectFeedItemRecord` honest. */
-function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.projectImage, 'cover'>>) {
+function feedProjectColumns<TAlias extends string>(
+  cover: ReturnType<typeof alias<typeof schema.projectImage, TAlias>>,
+) {
   return {
     id: schema.project.id,
     slug: schema.project.slug,
@@ -186,6 +321,23 @@ function feedProjectColumns(cover: ReturnType<typeof alias<typeof schema.project
     publishedAt: schema.project.publishedAt,
   };
 }
+
+/** Shared joined projection for every public project-detail entry point. */
+const publicProjectReadColumns = {
+  project: schema.project,
+  designerId: schema.designerProfile.id,
+  designerStatus: schema.designerProfile.status,
+  designerDisplayName: schema.designerProfile.displayName,
+  designerOrgSlug: schema.organization.slug,
+  designerAvgRating: schema.designerProfile.avgRating,
+  designerReviewCount: schema.designerProfile.reviewCount,
+  designerEntityType: schema.designerProfile.entityType,
+  designerLogoImageId: schema.designerProfile.logoImageId,
+  designerBio: schema.designerProfile.bio,
+  designerFirmType: schema.designerProfile.firmType,
+  designerFoundedYear: schema.designerProfile.foundedYear,
+  designerYearsExperience: schema.designerProfile.yearsExperience,
+};
 
 export type DuplicateProjectParams = {
   source: ProjectRecord;
@@ -308,9 +460,7 @@ export const projectsRepository = {
       .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
   },
 
-  async listUnresolvedReviewComments(
-    projectIds: string[],
-  ): Promise<ProjectReviewCommentRecord[]> {
+  async listUnresolvedReviewComments(projectIds: string[]): Promise<ProjectReviewCommentRecord[]> {
     if (projectIds.length === 0) return [];
     return db
       .select()
@@ -347,6 +497,7 @@ export const projectsRepository = {
   async listPublishedFeed(params: {
     limit: number;
     offset: number;
+    filters?: PublishedFeedFilters;
   }): Promise<ProjectFeedItemRecord[]> {
     const cover = alias(schema.projectImage, 'cover');
 
@@ -359,7 +510,11 @@ export const projectsRepository = {
         // Only active designers: suspended studios 404 on their public profile, so their
         // projects must not surface here either. `id` is the stable tiebreaker for paging.
         .where(
-          and(eq(schema.project.status, 'published'), eq(schema.designerProfile.status, 'active')),
+          and(
+            eq(schema.project.status, 'published'),
+            eq(schema.designerProfile.status, 'active'),
+            ...projectFeedFilterClauses(params.filters),
+          ),
         )
         .orderBy(
           sql`${schema.project.publishedAt} desc nulls last`,
@@ -369,33 +524,6 @@ export const projectsRepository = {
         .limit(params.limit)
         .offset(params.offset)
     );
-  },
-
-  /**
-   * Public image detail starts from an image id, then resolves the published
-   * active-designer project that owns it. The feed-shaped projection lets the
-   * image page reuse the same public card metadata as discovery.
-   */
-  async findPublishedFeedProjectByImageId(imageId: string): Promise<ProjectFeedItemRecord | null> {
-    const cover = alias(schema.projectImage, 'cover');
-
-    const [row] = await db
-      .select(feedProjectColumns(cover))
-      .from(schema.projectImage)
-      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
-      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
-      .where(
-        and(
-          eq(schema.projectImage.id, imageId),
-          eq(schema.projectImage.status, 'ready'),
-          eq(schema.project.status, 'published'),
-          eq(schema.designerProfile.status, 'active'),
-        ),
-      )
-      .limit(1);
-
-    return row ?? null;
   },
 
   /**
@@ -1260,32 +1388,60 @@ export const projectsRepository = {
     });
   },
 
+  /** Public rooms with an active controlled room type when one is available. */
+  async listPublicRooms(projectId: string): Promise<PublicProjectRoomRecord[]> {
+    return db
+      .select({
+        id: schema.projectRoom.id,
+        name: schema.projectRoom.name,
+        description: schema.projectRoom.description,
+        sortOrder: schema.projectRoom.sortOrder,
+        roomTypeSlug: schema.taxonomy.slug,
+        roomTypeLabel: schema.taxonomy.label,
+      })
+      .from(schema.projectRoom)
+      .leftJoin(
+        schema.taxonomy,
+        and(
+          eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
+          eq(schema.taxonomy.kind, 'room'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .where(eq(schema.projectRoom.projectId, projectId))
+      .orderBy(
+        asc(schema.projectRoom.sortOrder),
+        asc(schema.projectRoom.createdAt),
+        asc(schema.projectRoom.id),
+      );
+  },
+
   /** Public gallery: all ready images for a published project, ordered by sortOrder. */
-  async listPublicGalleryImages(projectId: string): Promise<
-    Array<{
-      id: string;
-      derivatives: typeof schema.projectImage.$inferSelect.derivatives;
-      width: number | null;
-      height: number | null;
-      sortOrder: number;
-      roomName: string | null;
-    }>
-  > {
+  async listPublicGalleryImages(projectId: string): Promise<PublicProjectGalleryImageRecord[]> {
     return db
       .select({
         id: schema.projectImage.id,
+        roomId: schema.projectImage.roomId,
         derivatives: schema.projectImage.derivatives,
         width: schema.projectImage.width,
         height: schema.projectImage.height,
         sortOrder: schema.projectImage.sortOrder,
         roomName: schema.projectRoom.name,
+        themeSlugs: schema.projectImage.themeSlugs,
+        materialSlugs: schema.projectImage.materialSlugs,
+        finishSlugs: schema.projectImage.finishSlugs,
+        tagSlugs: schema.projectImage.tagSlugs,
       })
       .from(schema.projectImage)
       .leftJoin(schema.projectRoom, eq(schema.projectImage.roomId, schema.projectRoom.id))
       .where(
         and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
       )
-      .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
+      .orderBy(
+        asc(schema.projectImage.sortOrder),
+        asc(schema.projectImage.createdAt),
+        asc(schema.projectImage.id),
+      );
   },
 
   async findReferencedImageObjectKeys(keys: string[]): Promise<string[]> {
@@ -1325,29 +1481,9 @@ export const projectsRepository = {
    * Published project by slug with joined designer + org for slug resolution.
    * Returns raw data — service handles URL signing and response composition.
    */
-  async findPublicProjectBySlug(slug: string): Promise<{
-    project: ProjectRecord;
-    designer: {
-      id: string;
-      displayName: string;
-      orgSlug: string | null;
-      avgRating: string;
-      reviewCount: number;
-      entityType: string;
-      logoImageId: string | null;
-    };
-  } | null> {
+  async findPublicProjectBySlug(slug: string): Promise<PublicProjectReadRecord | null> {
     const [row] = await db
-      .select({
-        project: schema.project,
-        designerId: schema.designerProfile.id,
-        designerDisplayName: schema.designerProfile.displayName,
-        designerOrgSlug: schema.organization.slug,
-        designerAvgRating: schema.designerProfile.avgRating,
-        designerReviewCount: schema.designerProfile.reviewCount,
-        designerEntityType: schema.designerProfile.entityType,
-        designerLogoImageId: schema.designerProfile.logoImageId,
-      })
+      .select(publicProjectReadColumns)
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
@@ -1366,14 +1502,230 @@ export const projectsRepository = {
       project: row.project,
       designer: {
         id: row.designerId,
+        status: row.designerStatus,
         displayName: row.designerDisplayName,
         orgSlug: row.designerOrgSlug,
         avgRating: row.designerAvgRating,
         reviewCount: row.designerReviewCount,
         entityType: row.designerEntityType,
         logoImageId: row.designerLogoImageId,
+        bio: row.designerBio,
+        firmType: row.designerFirmType,
+        foundedYear: row.designerFoundedYear,
+        yearsExperience: row.designerYearsExperience,
       },
     };
+  },
+
+  /**
+   * Resolve the same canonical public project record from a ready image. Keeping
+   * the publication and active-designer filters in this query prevents an image
+   * identifier from becoming a side channel for private project data.
+   */
+  async findPublicProjectByImageId(imageId: string): Promise<PublicProjectReadRecord | null> {
+    const [row] = await db
+      .select(publicProjectReadColumns)
+      .from(schema.projectImage)
+      .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(
+        and(
+          eq(schema.projectImage.id, imageId),
+          eq(schema.projectImage.status, 'ready'),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      project: row.project,
+      designer: {
+        id: row.designerId,
+        status: row.designerStatus,
+        displayName: row.designerDisplayName,
+        orgSlug: row.designerOrgSlug,
+        avgRating: row.designerAvgRating,
+        reviewCount: row.designerReviewCount,
+        entityType: row.designerEntityType,
+        logoImageId: row.designerLogoImageId,
+        bio: row.designerBio,
+        firmType: row.designerFirmType,
+        foundedYear: row.designerFoundedYear,
+        yearsExperience: row.designerYearsExperience,
+      },
+    };
+  },
+
+  async countPublishedByDesigner(designerId: string): Promise<number> {
+    const [row] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.project)
+      .where(
+        and(eq(schema.project.designerId, designerId), eq(schema.project.status, 'published')),
+      );
+    return row?.value ?? 0;
+  },
+
+  async listDesignerFootprintCities(
+    designerId: string,
+  ): Promise<Array<{ slug: string; label: string }>> {
+    return db
+      .select({ slug: schema.taxonomy.slug, label: schema.taxonomy.label })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        and(
+          eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+          eq(schema.taxonomy.kind, 'city'),
+          eq(schema.taxonomy.isActive, true),
+        ),
+      )
+      .where(eq(schema.designerProfileFootprint.profileId, designerId))
+      .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label));
+  },
+
+  async findPublishedProjectNarrative(
+    projectId: string,
+  ): Promise<PublicProjectNarrativeRecord | null> {
+    const [row] = await db
+      .select({
+        body: schema.review.body,
+        rating: schema.review.rating,
+        publishedAt: schema.review.publishedAt,
+      })
+      .from(schema.review)
+      .where(
+        and(
+          eq(schema.review.projectId, projectId),
+          eq(schema.review.status, 'published'),
+          isNotNull(schema.review.body),
+        ),
+      )
+      .orderBy(
+        sql`${schema.review.publishedAt} desc nulls last`,
+        desc(schema.review.createdAt),
+        desc(schema.review.id),
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
+  async listPublishedDesignerMotifCounts(
+    designerId: string,
+  ): Promise<PublicProjectMotifCountRecord[]> {
+    const result = await db.execute<PublicProjectMotifCountRecord>(sql`
+      select
+        motif.kind,
+        motif.slug,
+        count(distinct motif.project_id)::int as "projectCount"
+      from (
+        select
+          public_image.project_id,
+          motif_values.kind,
+          motif_values.slug
+        from ${schema.projectImage} as public_image
+        inner join ${schema.project} as public_project
+          on public_project.id = public_image.project_id
+        cross join lateral (
+          select 'theme'::text as kind, jsonb_array_elements_text(public_image.theme_slugs) as slug
+          union all
+          select 'material'::text, jsonb_array_elements_text(public_image.material_slugs)
+          union all
+          select 'finish'::text, jsonb_array_elements_text(public_image.finish_slugs)
+          union all
+          select 'tag'::text, jsonb_array_elements_text(public_image.tag_slugs)
+        ) as motif_values
+        where public_project.designer_id = ${designerId}
+          and public_project.status = 'published'
+          and public_image.status = 'ready'
+      ) as motif
+      group by motif.kind, motif.slug
+      order by count(distinct motif.project_id) desc, motif.kind asc, motif.slug asc
+      limit 4
+    `);
+    return result.rows;
+  },
+
+  async listPublishedRecommendationCandidates(params: {
+    excludeProjectIds: string[];
+    limit: number;
+    designerId: string;
+    budgetBandSlug: string | null;
+    citySlug: string | null;
+    sourceThemeSlugs: string[];
+  }): Promise<ProjectRecommendationRecord[]> {
+    const excluded =
+      params.excludeProjectIds.length > 0
+        ? notInArray(schema.project.id, params.excludeProjectIds)
+        : sql`true`;
+    const branches: SQL[] = [
+      recommendationBranch({
+        group: 'moreFromDesigner',
+        match: sql`${schema.project.designerId} = ${params.designerId}`,
+        excluded,
+        limit: params.limit,
+      }),
+    ];
+
+    if (params.budgetBandSlug && params.sourceThemeSlugs.length > 0) {
+      branches.push(
+        recommendationBranch({
+          group: 'sameBudgetDifferentStyle',
+          match: sql`
+            ${schema.project.budgetBandSlug} = ${params.budgetBandSlug}
+            and exists (
+              select 1
+              from ${schema.projectImage} as styled_image
+              where styled_image.project_id = ${schema.project.id}
+                and styled_image.status = 'ready'
+                and jsonb_array_length(styled_image.theme_slugs) > 0
+            )
+            and not exists (
+              select 1
+              from ${schema.projectImage} as themed_image
+              cross join lateral jsonb_array_elements_text(themed_image.theme_slugs) as theme(slug)
+              where themed_image.project_id = ${schema.project.id}
+                and themed_image.status = 'ready'
+                and ${inArray(sql`theme.slug`, params.sourceThemeSlugs)}
+            )
+          `,
+          excluded,
+          limit: params.limit,
+        }),
+      );
+    }
+
+    if (params.citySlug) {
+      branches.push(
+        recommendationBranch({
+          group: 'nearby',
+          match: sql`${schema.project.citySlug} = ${params.citySlug}`,
+          excluded,
+          limit: params.limit,
+        }),
+      );
+    }
+
+    const result = await db.execute<RawProjectRecommendationRow>(sql`
+      select
+        "group", "id", "slug", "title", "citySlug", "localitySlug",
+        "budgetBandSlug", "scopeSlug", "bhkSlug", "propertySubtypeSlug",
+        "studio", "rating", "reviewCount", "coverImageId", "coverStatus",
+        "coverDerivatives", "coverWidth", "coverHeight", "sizeSqft",
+        "completedMonth", "publishedAt"
+      from (${sql.join(branches, sql` union all `)}) as grouped_recommendations
+      order by "group", "publishedAt" desc nulls last, recommendation_created_at desc, "id" desc
+    `);
+    // `db.execute` skips Drizzle's column decoders, and node-postgres is configured
+    // to hand timestamps back as raw strings, so rehydrate `publishedAt` with the
+    // column's own mapper (keeps the naive-UTC handling identical to the ORM path).
+    const toPublishedAt = (value: string | null): Date | null =>
+      value === null ? null : (schema.project.publishedAt.mapFromDriverValue(value) as Date);
+    return result.rows.map((row) => ({ ...row, publishedAt: toPublishedAt(row.publishedAt) }));
   },
 
   /**

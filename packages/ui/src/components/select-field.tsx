@@ -13,6 +13,7 @@ export type SelectFieldOption = {
 
 type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
   allowEmpty?: boolean;
+  error?: string;
   label: string;
   onValueChange: (value: string) => void;
   options: readonly SelectFieldOption[];
@@ -23,6 +24,7 @@ type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
 export function SelectField({
   allowEmpty = false,
   className,
+  error,
   label,
   onValueChange,
   options,
@@ -32,13 +34,17 @@ export function SelectField({
 }: SelectFieldProps) {
   const generatedId = useId();
   const selectId = props.id ?? generatedId;
+  const errorId = `${selectId}-error`;
 
   return (
     <div className={cn('space-y-1.5', className)}>
       <Label htmlFor={selectId} className="text-sm font-medium text-foreground">{label}</Label>
       <div className="relative">
         <select
+          {...props}
           id={selectId}
+          aria-invalid={error ? true : props['aria-invalid']}
+          aria-describedby={error ? errorId : props['aria-describedby']}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           className={cn(
@@ -46,7 +52,6 @@ export function SelectField({
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             !value && 'text-muted-foreground',
           )}
-          {...props}
         >
           {allowEmpty ? (
             <option value="">{placeholder}</option>
@@ -63,6 +68,11 @@ export function SelectField({
         </select>
         <ChevronsUpDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       </div>
+      {error ? (
+        <p id={errorId} className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

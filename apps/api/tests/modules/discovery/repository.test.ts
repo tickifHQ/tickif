@@ -17,6 +17,7 @@ const mockSearchClient = {
 };
 
 vi.mock('@repo/search', () => ({
+  PROJECT_QUERY_BY: ['title'],
   searchClient: vi.fn(() => mockSearchClient),
   searchCollectionName: vi.fn((name: string) => `${name}_alias`),
 }));
@@ -69,6 +70,8 @@ vi.mock('@repo/db', () => ({
       status: 'project.status',
       designerId: 'project.designerId',
       coverImageId: 'project.coverImageId',
+      publishedAt: 'project.publishedAt',
+      featuredAt: 'project.featuredAt',
     },
     designerProfile: {
       id: 'designerProfile.id',
@@ -86,11 +89,27 @@ vi.mock('@repo/db', () => ({
       id: 'projectImage.id',
       status: 'projectImage.status',
       derivatives: 'projectImage.derivatives',
+      projectId: 'projectImage.projectId',
+      themeSlugs: 'projectImage.themeSlugs',
+    },
+    projectRoom: {
+      id: 'projectRoom.id',
+      projectId: 'projectRoom.projectId',
+      roomTypeId: 'projectRoom.roomTypeId',
+    },
+    taxonomy: {
+      id: 'taxonomy.id',
+      kind: 'taxonomy.kind',
+      slug: 'taxonomy.slug',
     },
   },
   eq: vi.fn((a, b) => ({ type: 'eq', left: a, right: b })),
   and: vi.fn((...args) => ({ type: 'and', conditions: args })),
   inArray: vi.fn((col, values) => ({ type: 'inArray', column: col, values })),
+  exists: vi.fn((query) => ({ type: 'exists', query })),
+  or: vi.fn((...args) => ({ type: 'or', conditions: args })),
+  desc: vi.fn((column) => ({ type: 'desc', column })),
+  sql: vi.fn(),
 }));
 
 vi.mock('drizzle-orm/pg-core', () => ({
@@ -98,9 +117,7 @@ vi.mock('drizzle-orm/pg-core', () => ({
 }));
 
 // Import AFTER mocks are registered
-const { discoveryRepository } = await import(
-  '../../../src/modules/discovery/repository.js'
-);
+const { discoveryRepository } = await import('../../../src/modules/discovery/repository.js');
 const { searchClient, searchCollectionName } = await import('@repo/search');
 const { db, inArray } = await import('@repo/db');
 
@@ -168,6 +185,7 @@ describe('discoveryRepository.searchFeed', () => {
     mockSearch.mockResolvedValue(mockSearchResponse([mockHit({})], 1));
 
     await discoveryRepository.searchFeed({
+      q: 'calm home',
       filterBy: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
       sortBy: 'featuredAt:desc,publishedAt:desc',
       page: 2,
@@ -175,14 +193,33 @@ describe('discoveryRepository.searchFeed', () => {
     });
 
     expect(mockSearch).toHaveBeenCalledWith({
-      q: '*',
+      q: 'calm home',
+      query_by: 'title',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
-      sort_by: 'featuredAt:desc,publishedAt:desc',
+      sort_by: '_text_match:desc,featuredAt:desc,publishedAt:desc',
+      facet_by:
+        'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
+      max_facet_values: 250,
       page: 2,
       per_page: 12,
       include_fields:
-        'id,slug,title,designerSlug,designerName,citySlug,bhkSlug,coverImageKey,avgRating,reviewCount',
+        'id,slug,title,designerSlug,designerName,citySlug,localitySlug,bhkSlug,budgetBandSlug,themes,coverImageKey,coverImageId,coverImageWidth,coverImageHeight,avgRating,reviewCount',
     });
+  });
+
+  it('keeps the configured sort unchanged when there is no text query', async () => {
+    mockSearch.mockResolvedValue(mockSearchResponse([], 0));
+
+    await discoveryRepository.searchFeed({
+      filterBy: '',
+      sortBy: 'featuredAt:desc,publishedAt:desc',
+      page: 1,
+      perPage: 24,
+    });
+
+    expect(mockSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ sort_by: 'featuredAt:desc,publishedAt:desc' }),
+    );
   });
 
   it('omits filter_by when empty string provided', async () => {
@@ -300,8 +337,14 @@ describe('discoveryRepository.searchFeed', () => {
         'designerSlug',
         'designerName',
         'citySlug',
+        'localitySlug',
         'bhkSlug',
+        'budgetBandSlug',
+        'themes',
         'coverImageKey',
+        'coverImageId',
+        'coverImageWidth',
+        'coverImageHeight',
         'avgRating',
         'reviewCount',
       ];
@@ -331,13 +374,18 @@ describe('discoveryRepository.listFeedFallback', () => {
     slug: 'test-project',
     title: 'Test Project',
     citySlug: 'mumbai',
+    localitySlug: 'bandra',
     bhkSlug: '3-bhk',
+    budgetBandSlug: '40-60-lakh',
     designerName: 'Test Designer',
     designerSlug: 'designer-1',
     avgRating: '4.5',
     reviewCount: 10,
+    coverImageId: 'image-1',
     coverStatus: 'ready' as const,
-    coverDerivatives: [{ variant: 'small', format: 'webp', key: 'test.webp', width: 640, height: 480 }],
+    coverDerivatives: [
+      { variant: 'small', format: 'webp', key: 'test.webp', width: 640, height: 480 },
+    ],
   });
 
   it('returns expected shape { rows: FeedProjectRow[] }', async () => {
@@ -524,11 +572,14 @@ describe('discoveryRepository.listFeedFallback', () => {
           'slug',
           'title',
           'citySlug',
+          'localitySlug',
           'bhkSlug',
+          'budgetBandSlug',
           'designerName',
           'designerSlug',
           'avgRating',
           'reviewCount',
+          'coverImageId',
           'coverStatus',
           'coverDerivatives',
         ];
