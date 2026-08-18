@@ -12,7 +12,6 @@ import {
   TableRow,
 } from '@repo/ui/components/table';
 import {
-  ArrowDown,
   CheckCircle2,
   CircleAlert,
   CircleCheck,
@@ -242,12 +241,7 @@ export function DesignerProjectsList({
         <Table className="min-w-[62rem]">
           <TableHeader>
             <TableRow className="border-0 bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[22rem] rounded-l-lg">
-                <span className="inline-flex items-center gap-1">
-                  Project
-                  <ArrowDown className="size-4" />
-                </span>
-              </TableHead>
+              <TableHead className="w-[22rem] rounded-l-lg">Project</TableHead>
               <TableHead className="w-[12.5rem]">Type</TableHead>
               <TableHead className="w-[11rem]">Status</TableHead>
               <TableHead className="w-[11.5rem]">Uploaded on</TableHead>
