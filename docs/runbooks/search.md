@@ -64,6 +64,28 @@ Changes to immutable collection settings require a new versioned collection,
 reindexing, and an alias swap. Bootstrap reports this as a rebuild requirement
 instead of sending an unsupported collection update.
 
+### New fields need a backfill, not just a bootstrap
+
+`--apply-updates` adds a new **field** to the collection schema; it does not
+populate that field on documents already indexed. Until the owning documents are
+rewritten, a newly added field reads as absent, and a field whose _meaning_
+changed still holds the old value. Bootstrap cannot detect either case — the
+schema looks correct.
+
+So any release that adds or redefines a projected field is a two-step deploy:
+
+```bash
+pnpm --filter @repo/search bootstrap -- --apply-updates   # schema
+pnpm --filter @repo/worker search:reindex                 # documents
+```
+
+Until the rebuild finishes, readers must tolerate the old projection. The public
+discovery card is the current example: `coverImageId`, `coverImageWidth` and
+`coverImageHeight` are new, and `coverImageKey` moved from the `thumb` derivative
+to `small`. Stale documents therefore yield a card with a smaller cover and null
+dimensions — degraded but not broken, which is the bar a projected field should
+clear before it ships.
+
 ## Projection pipeline
 
 Search writes are asynchronous. PostgreSQL remains the source of truth:

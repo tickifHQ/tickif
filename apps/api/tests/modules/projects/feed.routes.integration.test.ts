@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
-import type { FeedProjectsResponse, PublicImageDetailResponse } from '@repo/contracts';
+import {
+  publicImageDetailResponseSchema,
+  type FeedProjectsResponse,
+  type PublicImageDetailResponse,
+} from '@repo/contracts';
 import { db, schema } from '@repo/db';
-import { makeDesigner, makeProject, makeProjectImage, makeTaxonomy } from '@repo/db/testing';
+import {
+  makeDesigner,
+  makeProject,
+  makeProjectImage,
+  makeProjectRoom,
+  makeTaxonomy,
+} from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 
 /** Designers only surface in the feed when active — factory defaults to draft. */
@@ -35,7 +45,10 @@ async function makePublishedProject(
   });
 }
 
-async function attachReadyCover(projectId: string) {
+async function attachReadyCover(
+  projectId: string,
+  overrides: Partial<typeof schema.projectImage.$inferInsert> = {},
+) {
   const cover = await makeProjectImage({
     projectId,
     status: 'ready',
@@ -50,6 +63,7 @@ async function attachReadyCover(projectId: string) {
         height: 240,
       },
     ],
+    ...overrides,
   });
   await db
     .update(schema.project)
@@ -113,6 +127,80 @@ describe('GET /api/projects/feed', () => {
     const { res, body } = await getFeed();
     expect(res.status).toBe(200);
     expect(body).toMatchObject({ projects: [], page: 1, limit: 12, hasMore: false });
+  });
+
+  it('filters by room using the real Postgres query', async () => {
+    const livingRoom = await makeTaxonomy({
+      kind: 'room',
+      slug: 'living-room',
+      label: 'Living Room',
+    });
+    const designer = await activeDesigner();
+    const matching = await makePublishedProject(designer.id, { title: 'Living Room Project' });
+    await makePublishedProject(designer.id, { title: 'Bedroom Project' });
+    await makeProjectRoom({ projectId: matching.id, roomTypeId: livingRoom.id });
+
+    const { res, body } = await getFeed('?roomSlugs=living-room');
+
+    expect(res.status).toBe(200);
+    expect(body.projects.map((project) => project.title)).toEqual(['Living Room Project']);
+  });
+
+  it('filters by ready-image theme using the real Postgres query', async () => {
+    const designer = await activeDesigner();
+    const matching = await makePublishedProject(designer.id, { title: 'Warm Project' });
+    const nonMatching = await makePublishedProject(designer.id, { title: 'Cool Project' });
+    await makeProjectImage({ projectId: matching.id, status: 'ready', themeSlugs: ['warm'] });
+    await makeProjectImage({
+      projectId: nonMatching.id,
+      status: 'ready',
+      themeSlugs: ['minimalist'],
+    });
+    await makeProjectImage({
+      projectId: nonMatching.id,
+      status: 'processing',
+      themeSlugs: ['warm'],
+    });
+
+    const { res, body } = await getFeed('?themes=warm');
+
+    expect(res.status).toBe(200);
+    expect(body.projects.map((project) => project.title)).toEqual(['Warm Project']);
+  });
+
+  it('combines different facets with AND semantics', async () => {
+    const designer = await activeDesigner();
+    await makePublishedProject(designer.id, {
+      title: 'Mumbai 2 BHK',
+      citySlug: 'mumbai',
+      bhkSlug: '2-bhk',
+    });
+    await makePublishedProject(designer.id, {
+      title: 'Mumbai 3 BHK',
+      citySlug: 'mumbai',
+      bhkSlug: '3-bhk',
+    });
+
+    const { res, body } = await getFeed('?citySlug=mumbai&bhkSlug=2-bhk');
+
+    expect(res.status).toBe(200);
+    expect(body.projects.map((project) => project.title)).toEqual(['Mumbai 2 BHK']);
+  });
+
+  it('returns an empty successful page for an unknown taxonomy slug', async () => {
+    const designer = await activeDesigner();
+    await makePublishedProject(designer.id, { title: 'Known Project' });
+
+    const { res, body } = await getFeed('?citySlug=unknown-city');
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ projects: [], hasMore: false });
+  });
+
+  it('rejects malformed taxonomy slugs at the public endpoint boundary', async () => {
+    const { res } = await getFeed('?citySlug=Mumbai!');
+
+    expect(res.status).toBe(422);
   });
 
   it('paginates and reports hasMore', async () => {
@@ -186,6 +274,113 @@ describe('GET /api/projects/feed', () => {
   });
 });
 
+/**
+ * Composition and visibility for the two correlated `EXISTS` filters — `roomSlugs` joins
+ * project_room → taxonomy, `themes` tests jsonb containment on ready images. Both are
+ * shared with the discovery feed via `projectFeedFilterClauses`, and neither is
+ * expressible against a mocked Drizzle builder, so they are pinned against the real DB.
+ */
+describe('GET /api/projects/feed — filter composition', () => {
+  const tagThemes = (projectId: string, themes: string[]) =>
+    makeProjectImage({ projectId, status: 'ready', themeSlugs: themes });
+
+  it('ORs multiple values inside one facet', async () => {
+    const designer = await activeDesigner();
+    const warm = await makePublishedProject(designer.id, { title: 'Warm' });
+    await tagThemes(warm.id, ['warm']);
+    const minimal = await makePublishedProject(designer.id, { title: 'Minimal' });
+    await tagThemes(minimal.id, ['minimal']);
+    const coastal = await makePublishedProject(designer.id, { title: 'Coastal' });
+    await tagThemes(coastal.id, ['coastal']);
+
+    const { body } = await getFeed('?themes=warm&themes=minimal');
+
+    expect(body.projects.map((p) => p.title).sort()).toEqual(['Minimal', 'Warm']);
+  });
+
+  it('ANDs one EXISTS facet against the other and against a column facet', async () => {
+    const designer = await activeDesigner();
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+    const both = await makePublishedProject(designer.id, {
+      title: 'Warm Kitchen',
+      bhkSlug: '2-bhk',
+    });
+    await tagThemes(both.id, ['warm']);
+    await makeProjectRoom({ projectId: both.id, roomTypeId: kitchen.id });
+
+    const themeOnly = await makePublishedProject(designer.id, { title: 'Warm No Kitchen' });
+    await tagThemes(themeOnly.id, ['warm']);
+
+    const roomOnly = await makePublishedProject(designer.id, { title: 'Kitchen Not Warm' });
+    await tagThemes(roomOnly.id, ['minimal']);
+    await makeProjectRoom({ projectId: roomOnly.id, roomTypeId: kitchen.id });
+
+    const paired = await getFeed('?themes=warm&roomSlugs=kitchen');
+    expect(paired.body.projects.map((p) => p.title)).toEqual(['Warm Kitchen']);
+
+    const narrowed = await getFeed('?themes=warm&roomSlugs=kitchen&bhkSlug=2-bhk');
+    expect(narrowed.body.projects.map((p) => p.title)).toEqual(['Warm Kitchen']);
+
+    const mismatched = await getFeed('?themes=warm&roomSlugs=kitchen&bhkSlug=4-bhk');
+    expect(mismatched.body.projects).toEqual([]);
+  });
+
+  it('never surfaces an unpublished project or a suspended designer through a filter', async () => {
+    const active = await activeDesigner({ displayName: 'Active Studio' });
+    const suspended = await makeDesigner({ status: 'suspended', displayName: 'Suspended Studio' });
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+
+    const visible = await makePublishedProject(active.id, { title: 'Visible' });
+    await tagThemes(visible.id, ['warm']);
+    await makeProjectRoom({ projectId: visible.id, roomTypeId: kitchen.id });
+
+    // Identically tagged, but a draft: the filter must not resurrect it.
+    const draft = await makeProject({
+      designerId: active.id,
+      status: 'draft',
+      title: 'Draft Warm',
+    });
+    await tagThemes(draft.id, ['warm']);
+    await makeProjectRoom({ projectId: draft.id, roomTypeId: kitchen.id });
+
+    // Identically tagged and published, but the studio is suspended.
+    const hidden = await makePublishedProject(suspended.id, { title: 'Suspended Warm' });
+    await tagThemes(hidden.id, ['warm']);
+    await makeProjectRoom({ projectId: hidden.id, roomTypeId: kitchen.id });
+
+    expect((await getFeed('?themes=warm')).body.projects.map((p) => p.title)).toEqual(['Visible']);
+    expect((await getFeed('?roomSlugs=kitchen')).body.projects.map((p) => p.title)).toEqual([
+      'Visible',
+    ]);
+  });
+
+  it('returns a matching project once even when several of its rooms or images match', async () => {
+    const designer = await activeDesigner();
+    const kitchen = await makeTaxonomy({ kind: 'room', slug: 'kitchen', label: 'Kitchen' });
+    const project = await makePublishedProject(designer.id, { title: 'Two Kitchens' });
+    await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 1' });
+    await makeProjectRoom({ projectId: project.id, roomTypeId: kitchen.id, name: 'Kitchen 2' });
+    await tagThemes(project.id, ['warm']);
+    await tagThemes(project.id, ['warm']);
+
+    expect((await getFeed('?roomSlugs=kitchen')).body.projects).toHaveLength(1);
+    expect((await getFeed('?themes=warm')).body.projects).toHaveLength(1);
+  });
+
+  it('resolves an unknown room or theme slug to an empty feed rather than an error', async () => {
+    const designer = await activeDesigner();
+    const project = await makePublishedProject(designer.id, { title: 'Warm' });
+    await tagThemes(project.id, ['warm']);
+
+    for (const query of ['?themes=no-such-theme', '?roomSlugs=no-such-room']) {
+      const { res, body } = await getFeed(query);
+      expect(res.status).toBe(200);
+      expect(body.projects).toEqual([]);
+    }
+  });
+});
+
 describe('GET /api/projects/images/:imageId', () => {
   it('serves a public image detail payload for a ready image in a published project', async () => {
     await seedFeedTaxonomy();
@@ -194,11 +389,16 @@ describe('GET /api/projects/images/:imageId', () => {
       avgRating: '4.80',
       reviewCount: 7,
     });
-    const project = await makePublishedProject(designer.id, { title: 'Public Image Project' });
-    const cover = await attachReadyCover(project.id);
+    const project = await makePublishedProject(designer.id, {
+      title: 'Public Image Project',
+      description: 'A truthful project description.',
+    });
+    const cover = await attachReadyCover(project.id, { sortOrder: 1 });
     const activeImage = await makeProjectImage({
       projectId: project.id,
       status: 'ready',
+      sortOrder: 0,
+      originalKey: `private/${project.id}/active-original.jpg`,
       width: 1200,
       height: 800,
       derivatives: [
@@ -216,15 +416,59 @@ describe('GET /api/projects/images/:imageId', () => {
     const body = (await res.json()) as PublicImageDetailResponse;
 
     expect(res.status).toBe(200);
+    expect(publicImageDetailResponseSchema.safeParse(body).success).toBe(true);
     expect(body.activeImageId).toBe(activeImage.id);
     expect(body.project).toMatchObject({
       id: project.id,
       coverImageId: cover.id,
       title: 'Public Image Project',
+      description: 'A truthful project description.',
       studio: 'Studio Public',
     });
-    expect(body.images.map((image) => image.id)).toEqual(
-      expect.arrayContaining([cover.id, activeImage.id]),
-    );
+    expect(body.activeImage).toMatchObject({
+      id: activeImage.id,
+      sortOrder: activeImage.sortOrder,
+    });
+    expect(body.designer).toMatchObject({
+      id: designer.id,
+      displayName: 'Studio Public',
+      reviewCount: 7,
+    });
+    expect(body.recommendations).toEqual({
+      moreFromDesigner: [],
+      sameBudgetDifferentStyle: [],
+      nearby: [],
+    });
+    expect(body.images.map((image) => image.id)).toEqual([activeImage.id, cover.id]);
+    const payload = JSON.stringify(body);
+    expect(payload).not.toContain(activeImage.originalKey);
+    expect(payload).not.toContain(cover.originalKey);
+  });
+
+  it('returns 404 for non-ready images, unpublished projects, and inactive designers', async () => {
+    const active = await activeDesigner();
+    const draftProject = await makeProject({ designerId: active.id, status: 'draft' });
+    const draftImage = await makeProjectImage({ projectId: draftProject.id, status: 'ready' });
+
+    const publishedProject = await makePublishedProject(active.id);
+    const processingImage = await makeProjectImage({
+      projectId: publishedProject.id,
+      status: 'processing',
+    });
+
+    const suspended = await makeDesigner({ status: 'suspended' });
+    const suspendedProject = await makePublishedProject(suspended.id);
+    const suspendedImage = await makeProjectImage({
+      projectId: suspendedProject.id,
+      status: 'ready',
+    });
+
+    for (const imageId of [draftImage.id, processingImage.id, suspendedImage.id]) {
+      const response = await app.request(`/api/projects/images/${imageId}`);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'not_found' },
+      });
+    }
   });
 });

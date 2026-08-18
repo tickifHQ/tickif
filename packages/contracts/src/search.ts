@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { designerEntityType } from './profiles';
 
 /**
  * Shared contracts for the `search` slice — the single source of truth for
@@ -20,6 +21,12 @@ import { z } from 'zod';
  */
 const facetValue = z.string().trim().min(1).max(80);
 const multiValueFacet = z.union([facetValue, z.array(facetValue).max(20)]);
+
+export const recentSearchesSchema = z
+  .array(z.string().trim().min(1).max(200))
+  .max(5)
+  .meta({ id: 'RecentSearches' });
+export type RecentSearches = z.infer<typeof recentSearchesSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Project Search
@@ -106,14 +113,15 @@ export type SearchProjectsResponse = z.infer<typeof searchProjectsResponseSchema
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const designerSortOption = z
-  .enum(['relevance', 'avgRating:desc', 'projectCount:desc', 'reviewCount:desc', 'yearsExperience:desc'])
+  .enum([
+    'relevance',
+    'avgRating:desc',
+    'projectCount:desc',
+    'reviewCount:desc',
+    'yearsExperience:desc',
+  ])
   .meta({ id: 'DesignerSortOption' });
 export type DesignerSortOption = z.infer<typeof designerSortOption>;
-
-export const designerEntityType = z
-  .enum(['individual', 'company'])
-  .meta({ id: 'DesignerEntityType' });
-export type DesignerEntityType = z.infer<typeof designerEntityType>;
 
 export const searchDesignersQuerySchema = z
   .object({

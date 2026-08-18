@@ -106,6 +106,7 @@ export async function findProjectSearchSource(
     designer: base.designer,
     cover: base.cover?.id
       ? {
+          id: base.cover.id,
           status: base.cover.status,
           derivatives: base.cover.derivatives,
         }

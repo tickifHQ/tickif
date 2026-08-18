@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { feedProjectSchema, type FeedProject } from './projects';
+import { projectSearchFallback } from './search';
 
 /**
  * Discovery feed contracts — single source of truth for the public discovery
@@ -6,17 +8,22 @@ import { z } from 'zod';
  * Plain zod, no framework deps.
  */
 
-// Helper for filter parameters that accept single string or array of strings
-const taxonomySlugOrArray = z.union([
-  z.string().trim().min(1).max(80),
-  z.array(z.string().trim().min(1).max(80)),
-]);
+const taxonomySlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use a taxonomy slug such as modern or 3-bhk');
+
+// Helper for filter parameters that accept a single slug or a bounded slug array.
+const taxonomySlugOrArray = z.union([taxonomySlug, z.array(taxonomySlug).max(20)]);
 
 export const discoveryFeedQuerySchema = z
   .object({
     sort: z.enum(['recent', 'featured']).default('recent'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(48).default(24),
+    q: z.string().trim().max(200).optional(),
     // Filter parameters
     citySlug: taxonomySlugOrArray.optional(),
     localitySlug: taxonomySlugOrArray.optional(),
@@ -25,6 +32,8 @@ export const discoveryFeedQuerySchema = z
     scopeSlug: taxonomySlugOrArray.optional(),
     bhkSlug: taxonomySlugOrArray.optional(),
     budgetBandSlug: taxonomySlugOrArray.optional(),
+    roomSlugs: taxonomySlugOrArray.optional(),
+    themes: taxonomySlugOrArray.optional(),
   })
   .refine((data) => data.page * data.limit <= 1000, {
     message: 'Maximum pagination window exceeded (page × limit must be ≤ 1000)',
@@ -34,22 +43,9 @@ export const discoveryFeedQuerySchema = z
 
 export type DiscoveryFeedQuery = z.infer<typeof discoveryFeedQuerySchema>;
 
-export const discoveryCardSchema = z
-  .object({
-    slug: z.string(),
-    title: z.string(),
-    coverImageUrl: z.string().url().nullable(),
-    coverImageWidth: z.number().int().nullable(),
-    coverImageHeight: z.number().int().nullable(),
-    designerName: z.string(),
-    designerSlug: z.string().nullable(),
-    city: z.string().nullable(),
-    bhk: z.string().nullable(),
-    ratingSnippet: z.string().nullable(),
-  })
-  .meta({ id: 'DiscoveryCard' });
-
-export type DiscoveryCard = z.infer<typeof discoveryCardSchema>;
+/** Discovery reuses the canonical public project card without a second shape. */
+export const discoveryCardSchema = feedProjectSchema;
+export type DiscoveryCard = FeedProject;
 
 export const discoveryFeedResponseSchema = z
   .object({
@@ -58,6 +54,9 @@ export const discoveryFeedResponseSchema = z
     limit: z.number().int(),
     hasMore: z.boolean(),
     source: z.enum(['search', 'db']),
+    facetDistribution: z.record(z.string(), z.record(z.string(), z.number())),
+    fallback: projectSearchFallback,
+    relaxedFilters: z.array(z.string()),
   })
   .meta({ id: 'DiscoveryFeedResponse' });
 

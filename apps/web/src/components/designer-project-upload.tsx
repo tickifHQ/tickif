@@ -42,6 +42,7 @@ import {
   type ProjectImageDto,
   type ProjectRoom,
   type TaxonomyTerm,
+  type TaxonomyKind,
   type UpdateProjectInput,
   type UpdateProjectRoomInput,
 } from '@repo/contracts';
@@ -1548,7 +1549,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     [completion, localChecklist],
   );
 
-  async function loadTerms(kind: string, parentId?: string) {
+  async function loadTerms(kind: TaxonomyKind, parentId?: string) {
     const response = await api.api.taxonomy.terms.$get({
       query: parentId ? { kind, parentId } : { kind },
     });

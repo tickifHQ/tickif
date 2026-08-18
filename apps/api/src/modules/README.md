@@ -19,6 +19,7 @@ A module is mounted in `../app.ts` with a single `.route('/api/<name>', <name>Ro
 - ✅ `projects` — fully implemented reference slice (route → service → repo → Drizzle).
 - ✅ `dashboard` — profile dashboard summary aggregate.
 - ✅ `leads` — owner-scoped lead inbox model and API.
+- ✅ `visitors` — authenticated visitor onboarding profile persistence.
 - ⬜ `designers`, `search`, `billing`, `reviews`, `bookings`,
   `reports` — folders reserved; built in later phases per the
   Tickif blueprint.

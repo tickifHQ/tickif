@@ -15,6 +15,7 @@ export {
   isNull,
   lt,
   lte,
+  gte,
   desc,
   asc,
   sql,

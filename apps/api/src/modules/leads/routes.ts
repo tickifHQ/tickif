@@ -2,6 +2,8 @@ import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   createLeadSchema,
   errorResponseSchema,
+  leadCountsQuerySchema,
+  leadCountsResponseSchema,
   leadDetailResponseSchema,
   leadIdParamSchema,
   listLeadsQuerySchema,
@@ -68,6 +70,25 @@ const getRoute = createRoute({
   },
 });
 
+const countsRoute = createRoute({
+  method: 'get',
+  path: '/counts',
+  tags: ['Leads'],
+  summary: 'Count leads by status for the caller organization',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { query: leadCountsQuerySchema },
+  responses: {
+    200: {
+      description: 'Organization-scoped lead counts',
+      content: { 'application/json': { schema: leadCountsResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot count these leads'),
+    422: errorJson('No active organization selected'),
+  },
+});
+
 const createRouteInternal = createRoute({
   method: 'post',
   path: '/',
@@ -95,7 +116,7 @@ const updateRoute = createRoute({
   method: 'patch',
   path: '/{id}',
   tags: ['Leads'],
-  summary: 'Update lead status',
+  summary: 'Update lead status or notes',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -121,6 +142,13 @@ export const leadsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
 })
   .openapi(listRoute, async (c) => {
     const result = await leadsService.list(
+      c.req.valid('query'),
+      caller(c.get('user'), c.get('session')),
+    );
+    return c.json(result, 200);
+  })
+  .openapi(countsRoute, async (c) => {
+    const result = await leadsService.counts(
       c.req.valid('query'),
       caller(c.get('user'), c.get('session')),
     );
