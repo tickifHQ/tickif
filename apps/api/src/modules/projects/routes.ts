@@ -20,6 +20,7 @@ import {
   projectDetailResponseSchema,
   publicImageDetailParamSchema,
   publicImageDetailResponseSchema,
+  publicProjectDetailResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
   projectIdParamSchema,
@@ -133,6 +134,22 @@ const getRoute = createRoute({
     },
     403: errorJson('Caller cannot read this draft'),
     404: errorJson('Not found'),
+  },
+});
+
+const publicProjectByIdRoute = createRoute({
+  method: 'get',
+  path: '/public/{id}',
+  tags: ['Projects'],
+  summary: 'Public project detail by id (published only)',
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description:
+        'Published project read model with rooms, gallery, designer, and recommendations',
+      content: { 'application/json': { schema: publicProjectDetailResponseSchema } },
+    },
+    404: errorJson('Project not found or not published'),
   },
 });
 
@@ -553,6 +570,12 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('query'),
       caller(c.get('user'), c.get('session')),
     );
+    return c.json(result, 200);
+  })
+  .openapi(publicProjectByIdRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.getPublicById(id);
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return c.json(result, 200);
   })
   .openapi(getRoute, async (c) => {

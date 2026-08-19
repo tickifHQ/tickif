@@ -26,6 +26,7 @@
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-disabled: var(--foreground-disabled);
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-subtle-border: var(--surface-subtle-border);
   --color-home-hero-gradient-from: var(--home-hero-gradient-from);
@@ -59,6 +60,7 @@
   --color-feature: var(--feature);
   --color-feature-lighter: var(--feature-lighter);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-button-neutral: var(--button-neutral);

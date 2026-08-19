@@ -14,6 +14,7 @@ vi.mock('@repo/storage', () => ({
 
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
+    findPublicProjectById: vi.fn(),
     findPublicProjectBySlug: vi.fn(),
     findPublicProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
@@ -106,6 +107,7 @@ function makeFeedRow(overrides: Partial<ProjectFeedItemRecord> = {}): ProjectFee
     ],
     coverWidth: 400,
     coverHeight: 300,
+    coverThemeSlugs: ['contemporary'],
     sizeSqft: 1200,
     completedMonth: '2025-03',
     publishedAt: new Date('2025-06-01'),
@@ -231,6 +233,9 @@ describe('projectsService.getPublicBySlug', () => {
     vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue({
       body: 'The team understood how we wanted the home to feel.',
       rating: 5,
+      bookingId: '44444444-4444-4444-8444-444444444444',
+      authorName: 'Priya K.',
+      authorImage: null,
       publishedAt: new Date('2025-07-02T00:00:00.000Z'),
     });
     vi.mocked(projectsRepository.listPublishedDesignerMotifCounts).mockResolvedValue([
@@ -277,7 +282,11 @@ describe('projectsService.getPublicBySlug', () => {
     expect(result.designer.logoUrl).toContain('signed.example');
     expect(result.designer.projectCount).toBe(24);
     expect(result.specifications.city).toEqual({ slug: 'mumbai', label: 'Mumbai' });
-    expect(result.narrative?.rating).toBe(5);
+    expect(result.narrative).toMatchObject({
+      rating: 5,
+      author: { name: 'Priya K.', avatarUrl: null },
+      verifiedConsultation: true,
+    });
     expect(result.recurringMotifs).toEqual([
       { kind: 'theme', slug: 'contemporary', label: 'Contemporary', projectCount: 4 },
     ]);
@@ -382,6 +391,49 @@ describe('projectsService.getPublicBySlug', () => {
       'budget',
     ]);
     expect(result.recommendations.nearby.map((project) => project.id)).toEqual(['nearby']);
+  });
+});
+
+describe('projectsService.getPublicById', () => {
+  it('builds the canonical public detail model for a published project id', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue({
+      project: makeProject(),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'company',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 5,
+      },
+    });
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
+
+    const result = await projectsService.getPublicById('project-1');
+
+    expect(projectsRepository.findPublicProjectById).toHaveBeenCalledWith('project-1');
+    expect(result).toMatchObject({
+      id: 'project-1',
+      title: 'Modern Apartment',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+      rooms: [],
+      images: [],
+    });
+  });
+
+  it('returns 404 when the public project id is unknown or ineligible', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -508,6 +560,9 @@ describe('projectsService.getPublicImageDetail', () => {
     vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue({
       body: 'The team understood how we wanted the completed home to feel.',
       rating: 5,
+      bookingId: null,
+      authorName: 'Priya K.',
+      authorImage: null,
       publishedAt: new Date('2025-07-02T00:00:00.000Z'),
     });
 
@@ -540,7 +595,11 @@ describe('projectsService.getPublicImageDetail', () => {
       projectCount: 24,
       footprintCities: [{ slug: 'mumbai', label: 'Mumbai' }],
     });
-    expect(result.narrative?.rating).toBe(5);
+    expect(result.narrative).toMatchObject({
+      rating: 5,
+      author: { name: 'Priya K.', avatarUrl: null },
+      verifiedConsultation: false,
+    });
     expect(result.recommendations).toEqual({
       moreFromDesigner: [],
       sameBudgetDifferentStyle: [],
@@ -752,6 +811,7 @@ describe('projectsService.designerProjects', () => {
       new Map([
         ['bhk:3-bhk', '3 BHK'],
         ['property_subtype:apartment', 'Apartment'],
+        ['theme:contemporary', 'Contemporary'],
       ]),
     );
     vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());
@@ -760,6 +820,8 @@ describe('projectsService.designerProjects', () => {
 
     expect(result.projects[0]).toMatchObject({
       propertyType: '3 BHK · Apartment',
+      bhk: '3 BHK',
+      theme: 'Contemporary',
       completionYear: 2024,
       sizeSqft: 2400,
     });

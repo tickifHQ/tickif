@@ -455,7 +455,7 @@ export const publicTaxonomyValueSchema = z
   .meta({ id: 'PublicTaxonomyValue' });
 export type PublicTaxonomyValue = z.infer<typeof publicTaxonomyValueSchema>;
 
-/** Designer summary card embedded in the public project-by-slug response. */
+/** Designer summary card embedded in the canonical public project detail response. */
 export const designerSummarySchema = z
   .object({
     id: z.uuid(),
@@ -527,6 +527,11 @@ export const publicProjectNarrativeSchema = z
   .object({
     body: z.string().min(1),
     rating: z.number().int().min(1).max(5),
+    author: z.object({
+      name: z.string(),
+      avatarUrl: z.string().url().nullable(),
+    }),
+    verifiedConsultation: z.boolean(),
     publishedAt: z.iso.datetime().nullable(),
   })
   .meta({ id: 'PublicProjectNarrative' });
@@ -570,6 +575,10 @@ export const designerProjectCardSchema = feedProjectSchema
   .extend({
     /** e.g. "4 BHK · Apartment" — composed from the bhk + property subtype labels. */
     propertyType: z.string().nullable(),
+    /** BHK label used independently in design-led recommendation cards. */
+    bhk: z.string().nullable(),
+    /** Primary design theme sourced from the project's cover image. */
+    theme: z.string().nullable(),
     /** Year the project was completed; falls back to the publish year. */
     completionYear: z.number().int().nullable(),
     sizeSqft: z.number().int().nullable(),
@@ -598,11 +607,11 @@ export const publicProjectRecommendationsSchema = z
 export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommendationsSchema>;
 
 /**
- * GET /api/projects/slug/{slug} — published-only, display-ready project detail.
- * Product-dependent engagement and trust claims are intentionally not part of
- * this contract until their source-of-truth workflows exist.
+ * Published-only, display-ready project detail shared by the public ID and
+ * slug lookup routes. Product-dependent engagement and trust claims are
+ * intentionally absent until their source-of-truth workflows exist.
  */
-export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
+export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .omit({
     designerId: true,
     coverImageId: true,
@@ -624,8 +633,12 @@ export const publicProjectBySlugResponseSchema = projectDetailResponseSchema
     recurringMotifs: z.array(publicProjectMotifSchema),
     recommendations: publicProjectRecommendationsSchema,
   })
-  .meta({ id: 'PublicProjectBySlug' });
-export type PublicProjectBySlugResponse = z.infer<typeof publicProjectBySlugResponseSchema>;
+  .meta({ id: 'PublicProjectDetail' });
+export type PublicProjectDetailResponse = z.infer<typeof publicProjectDetailResponseSchema>;
+
+/** Compatibility alias for existing slug-route consumers. */
+export const publicProjectBySlugResponseSchema = publicProjectDetailResponseSchema;
+export type PublicProjectBySlugResponse = PublicProjectDetailResponse;
 
 /**
  * Feed-compatible project context embedded in the public image-detail response.

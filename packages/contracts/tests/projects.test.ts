@@ -204,6 +204,8 @@ describe('publicImageDetailResponseSchema', () => {
       narrative: {
         body: 'The team understood how we wanted the home to feel.',
         rating: 5,
+        author: { name: 'Priya K.', avatarUrl: null },
+        verifiedConsultation: true,
         publishedAt: '2025-07-02T00:00:00.000Z',
       },
       recommendations: {
@@ -328,6 +330,8 @@ describe('publicProjectBySlugResponseSchema', () => {
       narrative: {
         body: 'The team understood how we wanted the home to feel.',
         rating: 5,
+        author: { name: 'Priya K.', avatarUrl: null },
+        verifiedConsultation: true,
         publishedAt: '2025-07-02T00:00:00.000Z',
       },
       recurringMotifs: [

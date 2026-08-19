@@ -1,6 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { DesignerProjectCard } from '@repo/contracts';
+import { Badge } from '@repo/ui/components/badge';
+import { cn } from '@repo/ui/lib/utils';
+import { Star } from 'lucide-react';
+import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 
 /**
  * Project summary used by public designer profiles.
@@ -11,14 +15,29 @@ import type { DesignerProjectCard } from '@repo/contracts';
 export function PublicProjectCard({
   project,
   studioName,
+  presentation = 'portfolio',
+  destination = 'image',
+  showRating = false,
 }: {
   project: DesignerProjectCard;
   studioName: string;
+  presentation?: 'portfolio' | 'recommendation';
+  destination?: 'image' | 'project';
+  showRating?: boolean;
 }) {
   const location = [project.locality, project.city]
     .filter((part): part is string => !!part)
     .join(', ');
-  const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
+  const href =
+    destination === 'image' && project.coverImageId
+      ? `/image/${project.coverImageId}`
+      : `/projects/${project.id}`;
+  const hasRating = showRating && project.reviewCount > 0 && project.rating > 0;
+  const metadata =
+    presentation === 'recommendation'
+      ? [project.bhk, project.theme].filter((value): value is string => Boolean(value)).join(' · ')
+      : project.propertyType;
+  const budget = project.budget ? formatCompactBudgetLabel(project.budget) : null;
 
   return (
     <article>
@@ -36,21 +55,60 @@ export function PublicProjectCard({
             />
           ) : null}
           {project.completionYear ? (
-            <span className="absolute top-3 left-3 rounded-sm bg-foreground/70 px-2 py-1 font-mono text-xs font-semibold tracking-wide text-background">
+            <Badge
+              variant="inverse"
+              shape="square"
+              size={presentation === 'recommendation' ? 'compact' : 'default'}
+              textStyle="code"
+              className={cn(
+                'absolute left-3 top-3',
+                presentation === 'portfolio' && 'font-semibold',
+              )}
+            >
               {project.completionYear}
-            </span>
+            </Badge>
+          ) : null}
+          {hasRating ? (
+            <Badge
+              variant="neutral"
+              shape="square"
+              size="compact"
+              className="absolute right-3 top-3"
+              aria-label={`${studioName} studio rating ${project.rating.toFixed(1)} out of 5`}
+            >
+              <span>Studio</span>
+              <Star aria-hidden data-icon="inline-start" fill="currentColor" />
+              {project.rating.toFixed(1)}
+            </Badge>
           ) : null}
         </div>
-        <div className="px-0.5 pt-2">
-          {project.propertyType ? (
-            <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-              {project.propertyType}
+        <div className={cn('px-0.5', presentation === 'recommendation' ? 'pt-4' : 'pt-2')}>
+          {metadata ? (
+            <p
+              className={cn(
+                'font-mono tracking-widest text-muted-foreground uppercase',
+                presentation === 'recommendation' ? 'text-2xs' : 'text-xs',
+              )}
+            >
+              {metadata}
             </p>
           ) : null}
-          <h3 className="mt-1 text-lg font-medium">{project.title}</h3>
-          <div className="mt-1 flex items-start justify-between gap-4 text-sm text-muted-foreground">
+          <h3
+            className={cn(
+              'text-lg font-medium',
+              presentation === 'recommendation' ? 'mt-1.5 leading-relaxed' : 'mt-1',
+            )}
+          >
+            {project.title}
+          </h3>
+          <div
+            className={cn(
+              'mt-1 flex items-start justify-between gap-4 text-sm text-muted-foreground',
+              presentation === 'recommendation' && 'font-medium leading-none',
+            )}
+          >
             {location ? <p>{location}</p> : <span />}
-            {project.budget ? <p className="shrink-0 text-right">{project.budget}</p> : null}
+            {budget ? <p className="shrink-0 text-right">{budget}</p> : null}
           </div>
         </div>
       </Link>
