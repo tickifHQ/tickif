@@ -3,10 +3,10 @@
  * NOT imported in production builds.
  */
 
-import type { BillingState, PlanTier, BillingLifecycleState } from './billing-types';
+import type { BillingState, PlanTier, BillingLifecycleState, OrgRole } from './billing-types';
 import { PLAN_TIER_PRICES } from './billing-types';
 
-export type OrgRole = 'owner' | 'billing_admin' | 'admin' | 'member' | 'viewer';
+export type { OrgRole } from './billing-types';
 
 export type DevBillingScenario = {
   label: string;

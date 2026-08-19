@@ -19,9 +19,8 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types';
+import type { BillingState, FrozenResource, PlanTier, OrgRole } from '@/lib/billing-types';
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
-import type { OrgRole } from '@/lib/billing-fixtures';
 import { CopyButton } from '@/components/copy-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 

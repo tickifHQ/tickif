@@ -77,3 +77,6 @@ export type BillingState = {
 
 /** Role-based access: only owner and billing_admin can view billing. */
 export type BillingAccessRole = 'owner' | 'billing_admin';
+
+/** Organization role for billing access control. */
+export type OrgRole = 'owner' | 'billing_admin' | 'admin' | 'member' | 'viewer';
