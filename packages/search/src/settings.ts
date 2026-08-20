@@ -85,8 +85,8 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'projectCount', type: 'int32', sort: true },
   { name: 'avgRating', type: 'float', sort: true },
   { name: 'reviewCount', type: 'int32', sort: true },
-  { name: 'isKycVerified', type: 'bool', sort: true },
-  { name: 'kycExpiresAt', type: 'int64', sort: true },
+  { name: 'isKycVerified', type: 'bool', sort: true, optional: true },
+  { name: 'kycExpiresAt', type: 'int64', sort: true, optional: true },
   { name: 'logoImageKey', type: 'string', index: false, optional: true },
   { name: 'updatedAt', type: 'int64', sort: true },
 ] satisfies CollectionFieldSchema[];

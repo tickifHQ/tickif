@@ -496,6 +496,19 @@ describe('GET /api/search/designers', () => {
       expect(body.hits[0].isKycVerified).toBe(false);
     });
 
+    it('defaults verification to false for a legacy search document without badge fields', async () => {
+      const legacyDesigner = makeDesignerDoc();
+      delete legacyDesigner.isKycVerified;
+      delete legacyDesigner.kycExpiresAt;
+      mockSearchDesigners([legacyDesigner]);
+
+      const res = await get('/api/search/designers?q=test');
+      const body = await json(res);
+
+      expect(res.status).toBe(200);
+      expect(body.hits[0].isKycVerified).toBe(false);
+    });
+
     it('returns facetDistribution in response', async () => {
       mockSearchDesigners([makeDesignerDoc()], {
         facetDistribution: {

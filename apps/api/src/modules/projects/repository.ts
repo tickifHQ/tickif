@@ -1529,6 +1529,7 @@ export const projectsRepository = {
         firmType: row.designerFirmType,
         foundedYear: row.designerFoundedYear,
         yearsExperience: row.designerYearsExperience,
+        isKycVerified: row.designerIsKycVerified,
       },
     };
   },

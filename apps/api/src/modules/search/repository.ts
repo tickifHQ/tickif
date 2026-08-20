@@ -12,6 +12,7 @@ import {
   PROJECT_QUERY_BY,
   DESIGNER_QUERY_BY,
   PROJECT_DEFAULT_SORT,
+  DESIGNER_DEFAULT_SORT,
   designerDefaultSort,
   type ProjectSearchDocument,
   type DesignerSearchDocument,
@@ -134,6 +135,14 @@ function extractFacetDistribution(
   return result;
 }
 
+function isMissingVerificationSortField(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes('Could not find a field named') &&
+    (error.message.includes('isKycVerified') || error.message.includes('kycExpiresAt'))
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository Methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,6 +192,7 @@ export async function searchDesigners(
 ): Promise<DesignerSearchResult> {
   const client = searchClient();
   const collectionName = searchCollectionName('designers');
+  const usesVerificationRanking = !params.sort_by;
 
   const searchParams = {
     q: params.q,
@@ -195,10 +205,17 @@ export async function searchDesigners(
     per_page: params.per_page,
   };
 
-  const result = await client
-    .collections<DesignerSearchDocument>(collectionName)
-    .documents()
-    .search(searchParams);
+  const documents = client.collections<DesignerSearchDocument>(collectionName).documents();
+  let result;
+  try {
+    result = await documents.search(searchParams);
+  } catch (error) {
+    if (!usesVerificationRanking || !isMissingVerificationSortField(error)) throw error;
+    result = await documents.search({
+      ...searchParams,
+      sort_by: DESIGNER_DEFAULT_SORT,
+    });
+  }
 
   return {
     hits: (result.hits ?? []).map(

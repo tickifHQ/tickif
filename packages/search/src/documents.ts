@@ -52,9 +52,10 @@ export type DesignerSearchDocument = {
   projectCount: number;
   avgRating: number;
   reviewCount: number;
-  isKycVerified: boolean;
+  /** Optional while existing Typesense documents are backfilled after schema rollout. */
+  isKycVerified?: boolean;
   /** Unix epoch milliseconds; 0 when the profile has never been approved. */
-  kycExpiresAt: number;
+  kycExpiresAt?: number;
   /** Stable media key. API responses mint URLs at read time. */
   logoImageKey: string | null;
   /** Unix epoch milliseconds, kept numeric for deterministic sorting. */

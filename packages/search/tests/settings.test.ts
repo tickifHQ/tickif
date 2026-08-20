@@ -70,8 +70,18 @@ describe('search collection configuration', () => {
     );
     expect(DESIGNER_SEARCH_SETTINGS.fields).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'isKycVerified', type: 'bool', sort: true }),
-        expect.objectContaining({ name: 'kycExpiresAt', type: 'int64', sort: true }),
+        expect.objectContaining({
+          name: 'isKycVerified',
+          type: 'bool',
+          sort: true,
+          optional: true,
+        }),
+        expect.objectContaining({
+          name: 'kycExpiresAt',
+          type: 'int64',
+          sort: true,
+          optional: true,
+        }),
       ]),
     );
   });

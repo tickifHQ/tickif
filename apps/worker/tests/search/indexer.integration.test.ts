@@ -7,10 +7,13 @@ import { closeQueues, QUEUES, type SearchIndexJob } from '@repo/queue';
 import {
   bootstrapSearch,
   deleteSearchCollection,
+  designerDefaultSort,
   getSearchCollectionTarget,
+  searchCollectionSchema,
   searchCollectionName,
   searchWriteClient,
   swapSearchCollectionAlias,
+  type DesignerSearchDocument,
   type ProjectSearchDocument,
 } from '@repo/search';
 import { processSearchIndex, reconcileProject } from '../../src/jobs/search-indexer.js';
@@ -19,7 +22,8 @@ import { dispatchSearchProjectionOutbox } from '../../src/search/outbox-dispatch
 import { rebuildSearchCollections } from '../../src/search/rebuild.js';
 
 const indexedIds = new Set<string>();
-let searchWorker: Worker<SearchIndexJob>;
+const temporaryCollections = new Set<string>();
+let searchWorker: Worker<SearchIndexJob> | undefined;
 
 async function eventually<T>(
   read: () => Promise<T>,
@@ -37,7 +41,7 @@ async function eventually<T>(
 }
 
 beforeAll(async () => {
-  await bootstrapSearch();
+  await bootstrapSearch({ applyUpdates: true });
   searchWorker = new Worker<SearchIndexJob>(QUEUES.searchIndex, processSearchIndex, {
     connection,
     concurrency: 1,
@@ -46,7 +50,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await searchWorker.close();
+  await searchWorker?.close();
   await closeQueues();
 });
 
@@ -63,9 +67,70 @@ afterEach(async () => {
     ),
   );
   indexedIds.clear();
+  await Promise.all(
+    [...temporaryCollections].map((collectionName) =>
+      deleteSearchCollection('designers', collectionName).catch((error) => {
+        if (!(error instanceof Errors.ObjectNotFound)) throw error;
+      }),
+    ),
+  );
+  temporaryCollections.clear();
 });
 
 describe('search indexer against Typesense', () => {
+  it('adds optional verification fields to a populated designer collection', async () => {
+    const collectionName = `${searchCollectionName('designers')}_vlegacy_${Date.now()}`;
+    temporaryCollections.add(collectionName);
+    const expectedSchema = searchCollectionSchema('designers', collectionName);
+    const verificationFieldNames = new Set(['isKycVerified', 'kycExpiresAt']);
+    const legacySchema = {
+      ...expectedSchema,
+      fields: expectedSchema.fields.filter((field) => !verificationFieldNames.has(field.name)),
+    };
+    const client = searchWriteClient();
+
+    await client.collections().create(legacySchema);
+    await client
+      .collections(collectionName)
+      .documents()
+      .create({
+        id: 'legacy-designer',
+        slug: 'legacy-studio',
+        displayName: 'Legacy Studio',
+        bio: null,
+        entityType: 'company',
+        citySlugs: ['mumbai'],
+        localitySlugs: [],
+        scopeSlugs: [],
+        themeSlugs: [],
+        yearsExperience: 5,
+        projectCount: 3,
+        avgRating: 0,
+        reviewCount: 0,
+        logoImageKey: null,
+        updatedAt: Date.now(),
+      });
+
+    const verificationFields = expectedSchema.fields.filter((field) =>
+      verificationFieldNames.has(field.name),
+    );
+    await expect(
+      client.collections(collectionName).update({ fields: verificationFields }),
+    ).resolves.toMatchObject({
+      fields: expect.arrayContaining([
+        expect.objectContaining({ name: 'isKycVerified', optional: true }),
+        expect.objectContaining({ name: 'kycExpiresAt', optional: true }),
+      ]),
+    });
+    await expect(
+      client.collections<DesignerSearchDocument>(collectionName).documents().search({
+        q: '*',
+        query_by: 'displayName',
+        sort_by: designerDefaultSort(),
+      }),
+    ).resolves.toMatchObject({ found: 1 });
+  });
+
   it('projects publish and unpublish outbox events through Redis within seconds', async () => {
     const designer = await makeDesigner({
       status: 'active',

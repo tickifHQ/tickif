@@ -414,6 +414,7 @@ describe('projectsService.getPublicById', () => {
         firmType: null,
         foundedYear: null,
         yearsExperience: 5,
+        isKycVerified: false,
       },
     });
     vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);

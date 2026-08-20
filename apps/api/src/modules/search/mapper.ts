@@ -128,7 +128,7 @@ export async function mapDesignerHit(doc: DesignerSearchDocument): Promise<Desig
     projectCount: doc.projectCount,
     avgRating: doc.avgRating,
     reviewCount: doc.reviewCount,
-    isKycVerified: doc.isKycVerified && doc.kycExpiresAt > Date.now(),
+    isKycVerified: doc.isKycVerified === true && (doc.kycExpiresAt ?? 0) > Date.now(),
     logoUrl,
   };
 }
