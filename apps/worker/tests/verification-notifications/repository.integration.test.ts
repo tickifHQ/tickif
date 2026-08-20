@@ -4,6 +4,7 @@ import { makeOrganization } from '@repo/db/testing';
 import { VERIFICATION_NOTIFICATION_EVENT } from '@repo/contracts';
 import {
   findPendingVerificationNotifications,
+  markExhaustedVerificationNotifications,
   markVerificationNotificationEnqueued,
 } from '../../src/verification-notifications/repository.js';
 
@@ -52,22 +53,54 @@ describe('verification notification outbox repository', () => {
           sentAt: new Date('2026-08-18T15:51:00.000Z'),
           createdAt: new Date('2026-08-18T15:43:00.000Z'),
         },
+        {
+          applicationId: application!.id,
+          attempt: 5,
+          eventType: VERIFICATION_NOTIFICATION_EVENT.APPROVED,
+          recipientEmail: 'last-attempt@example.com',
+          deliveryAttempts: 4,
+          enqueuedAt: new Date('2026-08-18T15:50:00.000Z'),
+          createdAt: new Date('2026-08-18T15:44:00.000Z'),
+        },
+        {
+          applicationId: application!.id,
+          attempt: 6,
+          eventType: VERIFICATION_NOTIFICATION_EVENT.APPROVED,
+          recipientEmail: 'exhausted@example.com',
+          deliveryAttempts: 5,
+          enqueuedAt: new Date('2026-08-18T15:50:00.000Z'),
+          createdAt: new Date('2026-08-18T15:45:00.000Z'),
+        },
       ])
       .returning();
 
-    const pending = await findPendingVerificationNotifications(50, staleBefore);
+    const exhausted = await markExhaustedVerificationNotifications(5, staleBefore, now);
+    const pending = await findPendingVerificationNotifications(50, staleBefore, 5);
 
+    expect(exhausted).toBe(1);
     expect(pending.map((row) => row.recipientEmail)).toEqual([
       'pending@example.com',
       'stale@example.com',
+      'last-attempt@example.com',
     ]);
 
     const stale = rows.find((row) => row.recipientEmail === 'stale@example.com')!;
     await markVerificationNotificationEnqueued(stale.id, now);
     const [refreshed] = await db
-      .select({ enqueuedAt: schema.verificationNotificationOutbox.enqueuedAt })
+      .select({
+        enqueuedAt: schema.verificationNotificationOutbox.enqueuedAt,
+        deliveryAttempts: schema.verificationNotificationOutbox.deliveryAttempts,
+      })
       .from(schema.verificationNotificationOutbox)
       .where(eq(schema.verificationNotificationOutbox.id, stale.id));
     expect(refreshed?.enqueuedAt).toEqual(now);
+    expect(refreshed?.deliveryAttempts).toBe(1);
+
+    const exhaustedRow = rows.find((row) => row.recipientEmail === 'exhausted@example.com')!;
+    const [failed] = await db
+      .select({ failedAt: schema.verificationNotificationOutbox.failedAt })
+      .from(schema.verificationNotificationOutbox)
+      .where(eq(schema.verificationNotificationOutbox.id, exhaustedRow.id));
+    expect(failed?.failedAt).toEqual(now);
   });
 });

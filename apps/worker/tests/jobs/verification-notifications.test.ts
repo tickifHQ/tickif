@@ -8,6 +8,7 @@ vi.mock('@repo/config', () => ({
 vi.mock('@repo/queue', () => ({ enqueueVerificationEmail: vi.fn(async () => undefined) }));
 vi.mock('../../src/verification-notifications/repository.js', () => ({
   findPendingVerificationNotifications: vi.fn(),
+  markExhaustedVerificationNotifications: vi.fn(async () => 0),
   markVerificationNotificationEnqueued: vi.fn(async () => undefined),
   findVerificationNotification: vi.fn(),
   markVerificationNotificationSent: vi.fn(async () => undefined),
@@ -29,6 +30,8 @@ const notification = {
   note: '<script>not html</script>',
   enqueuedAt: null,
   sentAt: null,
+  deliveryAttempts: 0,
+  failedAt: null,
   createdAt: new Date('2026-08-13T00:00:00.000Z'),
 };
 
@@ -47,9 +50,25 @@ describe('verification notifications', () => {
     await expect(processVerificationNotificationSweep()).resolves.toEqual({
       enqueued: 1,
       failed: 1,
+      exhausted: 0,
     });
     expect(repository.markVerificationNotificationEnqueued).toHaveBeenCalledTimes(1);
     expect(repository.markVerificationNotificationEnqueued).toHaveBeenCalledWith(notification.id);
+  });
+
+  it('marks stale rows that exhausted durable delivery attempts before dispatching', async () => {
+    vi.mocked(repository.markExhaustedVerificationNotifications).mockResolvedValue(2);
+    vi.mocked(repository.findPendingVerificationNotifications).mockResolvedValue([]);
+
+    await expect(processVerificationNotificationSweep()).resolves.toEqual({
+      enqueued: 0,
+      failed: 0,
+      exhausted: 2,
+    });
+    expect(repository.markExhaustedVerificationNotifications).toHaveBeenCalledWith(
+      5,
+      expect.any(Date),
+    );
   });
 
   it('sends a retry-safe changes-requested email and escapes the admin note', async () => {

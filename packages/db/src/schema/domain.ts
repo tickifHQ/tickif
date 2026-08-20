@@ -1000,10 +1000,13 @@ export const verificationNotificationOutbox = pgTable(
     note: text('note'),
     enqueuedAt: timestamp('enqueued_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
+    deliveryAttempts: integer('delivery_attempts').default(0).notNull(),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     check('verification_notification_attempt_check', sql`${t.attempt} >= 1`),
+    check('verification_notification_delivery_attempts_check', sql`${t.deliveryAttempts} >= 0`),
     uniqueIndex('verification_notification_application_attempt_event_uniq').on(
       t.applicationId,
       t.attempt,
@@ -1011,7 +1014,10 @@ export const verificationNotificationOutbox = pgTable(
     ),
     index('verification_notification_pending_idx')
       .on(t.createdAt, t.id)
-      .where(sql`${t.enqueuedAt} IS NULL`),
+      .where(sql`${t.sentAt} IS NULL AND ${t.failedAt} IS NULL AND ${t.enqueuedAt} IS NULL`),
+    index('verification_notification_stale_idx')
+      .on(t.enqueuedAt, t.createdAt, t.id)
+      .where(sql`${t.sentAt} IS NULL AND ${t.failedAt} IS NULL AND ${t.enqueuedAt} IS NOT NULL`),
     index('verification_notification_recipient_idx').on(t.recipientUserId),
   ],
 );

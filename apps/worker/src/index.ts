@@ -94,9 +94,9 @@ const verificationEmailWorker = new Worker<VerificationEmailQueueJob>(
   QUEUES.verificationEmail,
   async (job) => {
     if (job.name === JOBS.sweepVerificationNotifications) {
-      const { enqueued, failed } = await processVerificationNotificationSweep();
+      const { enqueued, failed, exhausted } = await processVerificationNotificationSweep();
       console.log(
-        `[worker] verification-notifications sweep: enqueued ${enqueued}, failed ${failed}`,
+        `[worker] verification-notifications sweep: enqueued ${enqueued}, failed ${failed}, exhausted ${exhausted}`,
       );
       return;
     }

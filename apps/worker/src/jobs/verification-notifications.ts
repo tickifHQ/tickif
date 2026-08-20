@@ -5,12 +5,14 @@ import { enqueueVerificationEmail } from '@repo/queue';
 import {
   findPendingVerificationNotifications,
   findVerificationNotification,
+  markExhaustedVerificationNotifications,
   markVerificationNotificationEnqueued,
   markVerificationNotificationSent,
 } from '../verification-notifications/repository.js';
 
 const DISPATCH_BATCH_SIZE = 50;
 const STALE_CLAIM_MS = 5 * 60 * 1000;
+const MAX_DELIVERY_ATTEMPTS = 5;
 
 function escapeHtml(value: string): string {
   return value
@@ -24,9 +26,18 @@ function escapeHtml(value: string): string {
 export async function processVerificationNotificationSweep(): Promise<{
   enqueued: number;
   failed: number;
+  exhausted: number;
 }> {
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
-  const pending = await findPendingVerificationNotifications(DISPATCH_BATCH_SIZE, staleBefore);
+  const exhausted = await markExhaustedVerificationNotifications(
+    MAX_DELIVERY_ATTEMPTS,
+    staleBefore,
+  );
+  const pending = await findPendingVerificationNotifications(
+    DISPATCH_BATCH_SIZE,
+    staleBefore,
+    MAX_DELIVERY_ATTEMPTS,
+  );
   let enqueued = 0;
   let failed = 0;
   for (const notification of pending) {
@@ -42,12 +53,12 @@ export async function processVerificationNotificationSweep(): Promise<{
       console.error(`[worker] verification notification ${notification.id} enqueue failed:`, error);
     }
   }
-  return { enqueued, failed };
+  return { enqueued, failed, exhausted };
 }
 
 export async function processVerificationEmail(outboxId: string): Promise<void> {
   const notification = await findVerificationNotification(outboxId);
-  if (!notification || notification.sentAt) return;
+  if (!notification || notification.sentAt || notification.failedAt) return;
 
   const changesRequested =
     notification.eventType === VERIFICATION_NOTIFICATION_EVENT.CHANGES_REQUESTED;

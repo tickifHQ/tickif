@@ -1,0 +1,6 @@
+DROP INDEX "verification_notification_pending_idx";--> statement-breakpoint
+ALTER TABLE "verification_notification_outbox" ADD COLUMN "delivery_attempts" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "verification_notification_outbox" ADD COLUMN "failed_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "verification_notification_stale_idx" ON "verification_notification_outbox" USING btree ("enqueued_at","created_at","id") WHERE "verification_notification_outbox"."sent_at" IS NULL AND "verification_notification_outbox"."failed_at" IS NULL AND "verification_notification_outbox"."enqueued_at" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "verification_notification_pending_idx" ON "verification_notification_outbox" USING btree ("created_at","id") WHERE "verification_notification_outbox"."sent_at" IS NULL AND "verification_notification_outbox"."failed_at" IS NULL AND "verification_notification_outbox"."enqueued_at" IS NULL;--> statement-breakpoint
+ALTER TABLE "verification_notification_outbox" ADD CONSTRAINT "verification_notification_delivery_attempts_check" CHECK ("verification_notification_outbox"."delivery_attempts" >= 0);

@@ -267,6 +267,13 @@
       "when": 1786639415394,
       "tag": "0037_furry_senator_kelly",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787207585345,
+      "tag": "0038_unusual_bullseye",
+      "breakpoints": true
     }
   ]
 }
