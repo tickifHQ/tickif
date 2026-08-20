@@ -73,4 +73,22 @@ describe('SelectField', () => {
     expect(select).toHaveAttribute('aria-invalid', 'true');
     expect(select).toHaveAttribute('aria-describedby', error.id);
   });
+
+  it('supports control-level styling without moving styles to the field wrapper', () => {
+    render(
+      <SelectField
+        className="field-wrapper"
+        selectClassName="h-8"
+        label="Role"
+        value="designer"
+        onValueChange={vi.fn()}
+        placeholder="Select role"
+        options={[{ label: 'Designer', value: 'designer' }]}
+      />,
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Role' });
+    expect(select).toHaveClass('h-8');
+    expect(select.parentElement?.parentElement).toHaveClass('field-wrapper');
+  });
 });

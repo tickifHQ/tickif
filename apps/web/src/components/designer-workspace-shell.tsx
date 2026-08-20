@@ -49,7 +49,7 @@ const studioItems: NavItem[] = [
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/portfolio', icon: LinkIcon },
   { label: 'Verification', icon: ShieldCheck, comingSoon: true },
-  { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
+  { label: 'Team & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
   { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
 ];

@@ -1,161 +1,93 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { OrganizationWorkspaceResponse } from '@repo/contracts';
+import { describe, expect, it } from 'vitest';
 import { DesignerTermsRoles } from '../../src/components/designer-terms-roles';
-
-const mocks = vi.hoisted(() => ({
-  refresh: vi.fn(),
-  inviteMember: vi.fn(),
-  updateMemberRole: vi.fn(),
-  cancelInvitation: vi.fn(),
-}));
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
-}));
-
-vi.mock('../../src/lib/auth-client', () => ({
-  authClient: {
-    organization: {
-      inviteMember: mocks.inviteMember,
-      updateMemberRole: mocks.updateMemberRole,
-      cancelInvitation: mocks.cancelInvitation,
-    },
-  },
-}));
-
-const ownerWorkspace: OrganizationWorkspaceResponse = {
-  organization: {
-    id: 'org-1',
-    name: 'Studio One',
-    slug: 'studio-one',
-    logo: null,
-  },
-  currentUserRole: 'owner',
-  canManage: true,
-  members: [
-    {
-      id: 'member-owner',
-      userId: 'user-owner',
-      name: 'Asha Rao',
-      email: 'asha@example.com',
-      image: null,
-      role: 'owner',
-      joinedAt: '2026-08-01T00:00:00.000Z',
-      isCurrentUser: true,
-    },
-    {
-      id: 'member-rohan',
-      userId: 'user-rohan',
-      name: 'Rohan Shah',
-      email: 'rohan@example.com',
-      image: null,
-      role: 'member',
-      joinedAt: '2026-08-02T00:00:00.000Z',
-      isCurrentUser: false,
-    },
-  ],
-  invitations: [
-    {
-      id: 'invitation-1',
-      email: 'new@example.com',
-      role: 'admin',
-      createdAt: '2026-08-03T00:00:00.000Z',
-      expiresAt: '2099-08-05T00:00:00.000Z',
-    },
-  ],
-};
+import { mockTeamWorkspace } from '../../src/components/designer-terms-roles-mock-data';
 
 describe('DesignerTermsRoles', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.inviteMember.mockResolvedValue({ data: {}, error: null });
-    mocks.updateMemberRole.mockResolvedValue({ data: {}, error: null });
-    mocks.cancelInvitation.mockResolvedValue({ data: {}, error: null });
+  it('renders the complete five-role team preview from the Figma design', () => {
+    render(<DesignerTermsRoles />);
+
+    expect(screen.getByRole('heading', { name: 'Team & roles' })).toBeInTheDocument();
+    expect(screen.getByText('5 of 10 seats used · Corporate plan')).toBeInTheDocument();
+    expect(screen.getByText('Anika Subramanian')).toBeInTheDocument();
+    expect(screen.getByText('Riya P.')).toBeInTheDocument();
+    expect(screen.getByText('Arjun M.')).toBeInTheDocument();
+    expect(screen.getByText('Kavya S.')).toBeInTheDocument();
+    expect(screen.getByText('Meera K.')).toBeInTheDocument();
+    expect(screen.getAllByText('Admin')).not.toHaveLength(0);
+    expect(screen.getAllByText('Designer')).not.toHaveLength(0);
+    expect(screen.getAllByText('Project manager')).not.toHaveLength(0);
+    expect(screen.getAllByText('Sales & CRM')).not.toHaveLength(0);
+    expect(screen.getAllByText('Accountant')).not.toHaveLength(0);
+    expect(screen.getByText('junior@livspace.in')).toBeInTheDocument();
+    expect(screen.getByText('copywriter@livspace.in')).toBeInTheDocument();
   });
 
-  it('renders live workspace members and invitation metrics', () => {
-    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
-
-    expect(screen.getByRole('heading', { name: 'Teams & Roles' })).toBeInTheDocument();
-    expect(screen.getByText('Studio One')).toBeInTheDocument();
-    expect(screen.getByText('Asha Rao')).toBeInTheDocument();
-    expect(screen.getByText('Rohan Shah')).toBeInTheDocument();
-    expect(screen.getByText('new@example.com')).toBeInTheDocument();
-    expect(screen.getByText('2', { selector: '[data-metric="members"]' })).toBeInTheDocument();
-    expect(screen.getByText('1', { selector: '[data-metric="invitations"]' })).toBeInTheDocument();
-  });
-
-  it('keeps a regular member in read-only mode', () => {
+  it('renders a valid empty progress state when no seats are configured', () => {
     render(
-      <DesignerTermsRoles
-        workspace={{
-          ...ownerWorkspace,
-          currentUserRole: 'member',
-          canManage: false,
-          invitations: [],
-        }}
-      />,
+      <DesignerTermsRoles initialWorkspace={{ ...mockTeamWorkspace, members: [], seatLimit: 0 }} />,
     );
 
-    expect(screen.getByText('Member access')).toBeInTheDocument();
-    expect(
-      screen.getByText('Member', { selector: '[data-metric="current-role"]' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Pending invitations')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /invite member/i })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /change rohan shah role/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('invites a member through Better Auth and refreshes the workspace', async () => {
-    const user = userEvent.setup();
-    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
-
-    await user.click(screen.getByRole('button', { name: /invite member/i }));
-    await user.type(screen.getByLabelText(/email address/i), 'teammate@example.com');
-    await user.click(screen.getByRole('button', { name: /send invitation/i }));
-
-    await waitFor(() => {
-      expect(mocks.inviteMember).toHaveBeenCalledWith({
-        email: 'teammate@example.com',
-        role: 'member',
-        organizationId: 'org-1',
-      });
-      expect(mocks.refresh).toHaveBeenCalled();
+    expect(screen.getByRole('progressbar', { name: 'Seats used' }).firstElementChild).toHaveStyle({
+      width: '0%',
     });
   });
 
-  it('updates a member role through Better Auth', async () => {
-    const user = userEvent.setup();
-    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+  it('uses the shared fancy button treatment for reminder actions', () => {
+    render(<DesignerTermsRoles />);
 
-    await user.click(screen.getByRole('button', { name: /change rohan shah role/i }));
-    await user.click(screen.getByRole('menuitem', { name: 'Admin' }));
-
-    await waitFor(() => {
-      expect(mocks.updateMemberRole).toHaveBeenCalledWith({
-        memberId: 'member-rohan',
-        role: 'admin',
-        organizationId: 'org-1',
-      });
-      expect(mocks.refresh).toHaveBeenCalled();
-    });
-  });
-
-  it('cancels a pending invitation through Better Auth', async () => {
-    const user = userEvent.setup();
-    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
-
-    await user.click(
-      screen.getByRole('button', { name: /cancel invitation for new@example.com/i }),
+    const remindButton = screen.getAllByRole('button', { name: 'Remind' })[0];
+    expect(remindButton).toHaveClass(
+      'bg-button-fancy',
+      'text-button-fancy-foreground',
+      'shadow-button-fancy',
     );
+  });
 
-    await waitFor(() => {
-      expect(mocks.cancelInvitation).toHaveBeenCalledWith({ invitationId: 'invitation-1' });
-      expect(mocks.refresh).toHaveBeenCalled();
-    });
+  it('adds a local preview invitation without calling a backend', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles />);
+
+    const email = screen.getByRole('textbox', { name: 'Work email' });
+    await user.clear(email);
+    await user.type(email, 'new.member@example.com');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Role' }), 'accountant');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByText('new.member@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Preview invitation added for new.member@example.com. No email was sent.',
+    );
+    expect(screen.getByText('3', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('prevents duplicate preview invitations', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles />);
+
+    const email = screen.getByRole('textbox', { name: 'Work email' });
+    await user.clear(email);
+    await user.type(email, 'junior@livspace.in');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getAllByText('junior@livspace.in')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'junior@livspace.in already belongs to this team or has a pending invite.',
+    );
+  });
+
+  it('revokes a pending invitation in local preview state', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles />);
+
+    const pendingSection = screen.getByRole('heading', { name: 'Pending invites' }).parentElement;
+    expect(pendingSection).not.toBeNull();
+    await user.click(within(pendingSection!).getAllByRole('button', { name: 'Revoke' })[0]!);
+
+    expect(screen.queryByText('junior@livspace.in')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Preview invitation for junior@livspace.in was revoked.',
+    );
   });
 });
