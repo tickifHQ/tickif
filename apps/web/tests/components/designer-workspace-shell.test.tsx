@@ -152,9 +152,9 @@ describe('DesignerWorkspaceShell', () => {
       'href',
       '/designer/portfolio',
     );
-    const teamsAndRolesLink = screen.getAllByRole('link', { name: /teams & roles/i })[0];
-    expect(teamsAndRolesLink).toHaveAttribute('href', '/designer/terms-roles');
-    expect(teamsAndRolesLink?.querySelector('svg')).toHaveClass('lucide-users-round');
+    const teamAndRolesLink = screen.getAllByRole('link', { name: /team & roles/i })[0];
+    expect(teamAndRolesLink).toHaveAttribute('href', '/designer/terms-roles');
+    expect(teamAndRolesLink?.querySelector('svg')).toHaveClass('lucide-users-round');
     expect(screen.getAllByRole('link', { name: /plan & billing/i })[0]).toHaveAttribute(
       'href',
       '/designer/plan-billing',
