@@ -4,5 +4,5 @@ const BUDGET_RANGE_PATTERN =
 /** Condenses a budget range to one currency prefix and one unit suffix. */
 export function formatCompactBudgetLabel(label: string): string {
   const range = BUDGET_RANGE_PATTERN.exec(label.trim());
-  return range ? `₹${range[1]}-${range[2]}L` : label;
+  return range ? `₹${range[1]}–${range[2]}L` : label;
 }

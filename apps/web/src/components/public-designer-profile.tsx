@@ -37,6 +37,7 @@ import {
 } from '@/components/brand-icons';
 import { TrustStrip, type TrustStripItem } from '@/components/trust-strip';
 import { PublicProjectGallery } from '@/components/public-project-gallery';
+import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
 import {
   formatRating,
   heroCaption,
@@ -218,9 +219,7 @@ type HeroStatTile = { value: string; label: string; detail: string };
 
 function HeroSection({ portfolio, view }: SectionProps) {
   const { stats } = portfolio;
-  const headlineRating = portfolio.sections.overallRating
-    ? headlineReviewAggregate(stats)
-    : null;
+  const headlineRating = portfolio.sections.overallRating ? headlineReviewAggregate(stats) : null;
 
   // Only stats the designer actually has data for — an empty tile reads as broken.
   const candidates: (HeroStatTile | null)[] = [
@@ -246,7 +245,11 @@ function HeroSection({ portfolio, view }: SectionProps) {
         }
       : null,
     stats.startingBudget
-      ? { value: stats.startingBudget, label: 'Typical budget', detail: 'Across published work' }
+      ? {
+          value: formatCompactBudgetLabel(stats.startingBudget),
+          label: 'Typical budget',
+          detail: 'Across published work',
+        }
       : null,
   ];
   const tiles = candidates.filter((tile): tile is HeroStatTile => tile !== null);
@@ -309,7 +312,12 @@ function HeroSection({ portfolio, view }: SectionProps) {
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <EnquiryCta
-              context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+              context={{
+                type: 'designer',
+                designerName: portfolio.displayName,
+                designerLocation: view.location,
+                designerLogoUrl: portfolio.logoUrl,
+              }}
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"
@@ -544,7 +552,12 @@ function StorySection({ portfolio, view }: SectionProps) {
                 </div>
 
                 <EnquiryCta
-                  context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+                  context={{
+                    type: 'designer',
+                    designerName: portfolio.displayName,
+                    designerLocation: view.location,
+                    designerLogoUrl: portfolio.logoUrl,
+                  }}
                   designerProfileId={portfolio.profileId}
                   loginHref={view.loginHref}
                   variant="emphasis"
@@ -670,14 +683,11 @@ function ReviewAggregateCard({
           <GoogleBrandIcon className="size-4" />
         )}
       </div>
-      <p className="relative text-7xl font-normal tracking-tight">
-        {formatRating(rating)}
-      </p>
+      <p className="relative text-7xl font-normal tracking-tight">{formatRating(rating)}</p>
       <div className="relative">
         <Rating rating={rating} />
         <p className="mt-2 text-sm text-surface-inverse-foreground">
-          Based on {reviewCount}{' '}
-          {source === 'tickif' ? 'verified reviews' : 'Google reviews'}
+          Based on {reviewCount} {source === 'tickif' ? 'verified reviews' : 'Google reviews'}
         </p>
       </div>
     </Card>
@@ -790,7 +800,9 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
   const facts = [
     portfolio.foundedYear ? { label: 'Established', value: String(portfolio.foundedYear) } : null,
     { label: 'Projects published', value: String(stats.projectCount) },
-    stats.startingBudget ? { label: 'Typical budget', value: stats.startingBudget } : null,
+    stats.startingBudget
+      ? { label: 'Typical budget', value: formatCompactBudgetLabel(stats.startingBudget) }
+      : null,
   ].filter((fact): fact is { label: string; value: string } => !!fact);
 
   return (
@@ -938,7 +950,12 @@ function ShareSection({ portfolio, view }: SectionProps) {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <EnquiryCta
-              context={{ type: 'designer', designerName: portfolio.displayName, designerLocation: view.location, designerLogoUrl: portfolio.logoUrl }}
+              context={{
+                type: 'designer',
+                designerName: portfolio.displayName,
+                designerLocation: view.location,
+                designerLogoUrl: portfolio.logoUrl,
+              }}
               designerProfileId={portfolio.profileId}
               loginHref={view.loginHref}
               variant="emphasis"

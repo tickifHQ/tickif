@@ -529,13 +529,27 @@ describe('GET /api/projects/slug/{slug}', () => {
     expect(body.images.some((item) => item.id === processingImage.id)).toBe(false);
     expect(JSON.stringify(body)).not.toContain('originals/private');
 
+    const idResponse = await app.request(`/api/projects/public/${project.id}`);
+    expect(idResponse.status).toBe(200);
+    expect(idResponse.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=300',
+    );
+    const idBody = (await idResponse.json()) as PublicProjectBySlugResponse;
+    expect(publicProjectBySlugResponseSchema.safeParse(idBody).success).toBe(true);
+    expect(idBody).toMatchObject({
+      id: project.id,
+      slug: project.slug,
+      rooms: [{ id: room.id, photoCount: 1 }],
+      images: [{ id: image.id, roomId: room.id }],
+      designer: { id: designer.id, displayName: 'Studio A' },
+    });
+    expect(JSON.stringify(idBody)).not.toContain('originals/private');
+
     await db
       .update(schema.taxonomy)
       .set({ isActive: false })
       .where(eq(schema.taxonomy.id, roomType.id));
-    const retiredRoomTypeResponse = await app.request(
-      '/api/projects/slug/sunlit-bandra-apartment',
-    );
+    const retiredRoomTypeResponse = await app.request('/api/projects/slug/sunlit-bandra-apartment');
     const retiredRoomTypeBody =
       (await retiredRoomTypeResponse.json()) as PublicProjectBySlugResponse;
     expect(retiredRoomTypeBody.rooms).toEqual([

@@ -41,8 +41,10 @@ const buttonVariants = cva(
   },
 );
 
+export type ButtonVariantProps = VariantProps<typeof buttonVariants>;
+
 type ButtonProps = ComponentProps<'button'> &
-  VariantProps<typeof buttonVariants> & {
+  ButtonVariantProps & {
     asChild?: boolean;
   };
 

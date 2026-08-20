@@ -254,8 +254,7 @@ export async function makeReview(overrides: Partial<typeof schema.review.$inferI
       authorUserId,
       rating: overrides.rating ?? 5,
       body:
-        overrides.body ??
-        'A thoughtful and detailed review of the completed design experience.',
+        overrides.body ?? 'A thoughtful and detailed review of the completed design experience.',
       ...overrides,
     })
     .returning();

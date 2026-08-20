@@ -18,4 +18,19 @@ describe('Badge', () => {
 
     expect(screen.getByRole('link', { name: 'Modern' })).toHaveAttribute('href', '/tags/modern');
   });
+
+  it('supports compact square badges for media overlays', () => {
+    render(
+      <Badge variant="neutral" shape="square" size="compact" textStyle="code">
+        4.9
+      </Badge>,
+    );
+
+    expect(screen.getByText('4.9')).toHaveClass(
+      'rounded-sm',
+      'bg-background',
+      'text-2xs',
+      'font-mono',
+    );
+  });
 });

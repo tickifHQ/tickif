@@ -28,6 +28,8 @@ export function makeProject(overrides: Partial<DesignerProjectCard> = {}): Desig
     imageWidth: 1600,
     imageHeight: 2000,
     propertyType: '4 BHK · Apartment',
+    bhk: '4 BHK',
+    theme: 'Contemporary',
     completionYear: 2024,
     sizeSqft: 2400,
     ...overrides,

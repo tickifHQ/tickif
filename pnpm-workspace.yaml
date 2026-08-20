@@ -13,14 +13,14 @@ overrides:
   # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
   brace-expansion: 5.0.9
   # js-yaml CPU exhaustion in !!omap resolution: keep within the patched 4.x line.
-  "js-yaml@>=4.0.0 <4.3.1": 4.3.1
+  'js-yaml@>=4.0.0 <4.3.1': 4.3.1
   # nanoid generator loop advisories: patch each installed major independently.
   # GHSA-2v37-7h3g-55p8 widened the affected 3.x range to <3.3.18, which left the
   # previous `<3.3.17: 3.3.17` pin resolving to an affected version itself.
-  "nanoid@>=3.0.0 <3.3.18": 3.3.18
-  "nanoid@>=4.0.0 <5.1.16": 5.1.16
+  'nanoid@>=3.0.0 <3.3.18': 3.3.18
+  'nanoid@>=4.0.0 <5.1.16': 5.1.16
   # fast-uri validation advisories (via shadcn>@modelcontextprotocol/sdk>ajv): stay on 3.x.
-  "fast-uri@<3.1.5": 3.1.5
+  'fast-uri@<3.1.5': 3.1.5
   # MCP HTTP/cache parsing and rate-limit address validation advisories.
   undici: 7.29.0
   ip-address: 10.3.1
@@ -66,8 +66,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.700.0
-  '@aws-sdk/s3-request-presigner': ^3.700.0
+  '@aws-sdk/client-s3': ^3.1101.0
+  '@aws-sdk/s3-request-presigner': ^3.1101.0
   sharp: ^0.35.3
 
   # Search
@@ -81,7 +81,7 @@ catalog:
   '@types/react': ^19.2.17
   '@types/react-dom': ^19.0.0
   '@radix-ui/react-slot': ^1.3.3
-  '@radix-ui/react-avatar': ^1.2.0
+  '@radix-ui/react-avatar': ^1.2.6
   '@radix-ui/react-checkbox': ^1.3.3
   '@radix-ui/react-dialog': ^1.1.15
   '@radix-ui/react-dropdown-menu': ^2.1.18
@@ -93,6 +93,7 @@ catalog:
   next-themes: ^0.4.6
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
+  embla-carousel-react: ^8.6.0
   lucide-react: ^1.24.0
   '@dicebear/core': ^10.3.0
   '@dicebear/styles': ^10.2.0
