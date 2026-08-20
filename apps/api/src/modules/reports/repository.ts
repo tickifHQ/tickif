@@ -98,7 +98,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.project.createdAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', (${schema.project.createdAt} at time zone 'UTC') at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     return db
       .select({
         date: day,

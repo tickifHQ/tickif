@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { analyticsResponseSchema } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import { makeDesigner, makeLead, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 async function makeDesignerSession(phoneNumber: string) {
   const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
@@ -40,9 +44,16 @@ describe('GET /api/reports/analytics', () => {
   });
 
   it('returns real metrics scoped to the active designer organization', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-20T06:30:00.000Z'));
     const { cookie, designer } = await makeDesignerSession('+919800004002');
     const today = new Date();
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const projectCreatedAt = new Date(yesterday);
+    projectCreatedAt.setUTCHours(20, 0, 0, 0);
+    const projectCreatedDayInIst = new Date(projectCreatedAt.getTime() + 5.5 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const previousPeriod = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000);
     const outsideWindow = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000);
     const eventDay = (date: Date) => date.toISOString().slice(0, 10);
@@ -51,7 +62,7 @@ describe('GET /api/reports/analytics', () => {
       designerId: designer.id,
       status: 'published',
       title: 'Published in window',
-      createdAt: yesterday,
+      createdAt: projectCreatedAt,
     });
     await makeProject({
       designerId: designer.id,
@@ -186,6 +197,9 @@ describe('GET /api/reports/analytics', () => {
       responseRate: 100,
     });
     expect(parsed.data.activity).toHaveLength(7);
+    expect(
+      parsed.data.activity.find((point) => point.date === projectCreatedDayInIst)?.projectsCreated,
+    ).toBe(1);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.projectsCreated, 0)).toBe(1);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.leadsReceived, 0)).toBe(3);
     expect(parsed.data.activity.reduce((sum, point) => sum + point.projectViews, 0)).toBe(1);

@@ -141,6 +141,8 @@ export const reportsService = {
 
     const to = new Date();
     const from = startOfIstDay(new Date(to.getTime() - (input.query.days - 1) * DAY_MS));
+    // Shift both bounds equally to preserve elapsed length. The gap before `from` is intentional:
+    // making these windows contiguous would compare a full prior window with a partial current day.
     const previousFrom = new Date(from.getTime() - input.query.days * DAY_MS);
     const previousTo = new Date(to.getTime() - input.query.days * DAY_MS);
     const [
