@@ -20,6 +20,8 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   INTERACTION_EVENT_TYPE_VALUES,
+  PLAN_TIER_VALUES,
+  SUBSCRIPTION_STATE_VALUES,
   TAXONOMY_KIND_VALUES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_APPLICATION_STATUS_VALUES,
@@ -1235,5 +1237,80 @@ export const googlePlaceCache = pgTable(
   (t) => [
     // Drives the worker sweep: "rows of status X not fetched since T".
     index('google_place_cache_status_fetched_idx').on(t.status, t.lastFetchedAt),
+  ],
+);
+
+// --- Subscription & Billing (E-114) ---
+
+/**
+ * Plan tier enum — order is the ranking contract.
+ * Corporate > Professional+ > Hobby.
+ * Postgres enum values must be appended, never reordered.
+ */
+export const planTierEnum = pgEnum('plan_tier', PLAN_TIER_VALUES);
+
+/**
+ * Subscription lifecycle state — separate from Razorpay's raw status.
+ * State machine: active → payment_failed → grace → locked → downgraded
+ * (can return to active from any lapsed state via the lifecycle worker).
+ */
+export const subscriptionStateEnum = pgEnum('subscription_state', SUBSCRIPTION_STATE_VALUES);
+
+/**
+ * One active subscription per organization (enforced by unique organizationId).
+ * Updated in-place as the subscription progresses through its lifecycle.
+ * Payment history is tracked in payment_transaction.
+ */
+export const subscription = pgTable(
+  'subscription',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: 'restrict' }),
+    planTier: planTierEnum('plan_tier').notNull(),
+    subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
+    razorpaySubscriptionId: text('razorpay_subscription_id'),
+    razorpayStatus: text('razorpay_status'),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    downgradedAt: timestamp('downgraded_at', { withTimezone: true }),
+    preLapseTier: planTierEnum('pre_lapse_tier'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('subscription_organization_idx').on(t.organizationId),
+    index('subscription_state_idx').on(t.subscriptionState),
+    index('subscription_razorpay_subscription_id_idx').on(t.razorpaySubscriptionId),
+  ],
+);
+
+/**
+ * Payment transaction audit log — one row per Razorpay payment event.
+ * razorpayPaymentId is unique for idempotency (prevents double-processing).
+ * Amount is stored in paise (integer): ₹2,999 = 299900.
+ */
+export const paymentTransaction = pgTable(
+  'payment_transaction',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => subscription.id, { onDelete: 'restrict' }),
+    razorpayPaymentId: text('razorpay_payment_id').notNull().unique(),
+    amount: integer('amount').notNull(),
+    currency: text('currency').notNull().default('INR'),
+    status: text('status').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('payment_transaction_subscription_idx').on(t.subscriptionId),
+    index('payment_transaction_status_idx').on(t.status),
   ],
 );
