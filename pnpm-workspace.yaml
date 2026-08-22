@@ -95,6 +95,8 @@ catalog:
   clsx: ^2.1.1
   embla-carousel-react: ^8.6.0
   lucide-react: ^1.24.0
+  react-is: ^19.2.8
+  recharts: ^3.10.1
   '@dicebear/core': ^10.3.0
   '@dicebear/styles': ^10.2.0
   libphonenumber-js: 1.13.9

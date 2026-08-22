@@ -1,188 +1,347 @@
 import Link from 'next/link';
-import type { AnalyticsResponse } from '@repo/contracts';
+import type { ReactNode } from 'react';
+import type { AnalyticsResponse, ProfileCompletionResponse } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
-import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import { cn } from '@repo/ui/lib/utils';
 import {
   ArrowRight,
-  BarChart3,
-  BriefcaseBusiness,
   CircleAlert,
+  Ellipsis,
   Eye,
-  FileUser,
-  FolderCheck,
-  RadioTower,
+  Minus,
+  Moon,
+  TrendingDown,
+  TrendingUp,
+  UserRound,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@repo/ui/components/dropdown-menu';
+import { AnalyticsDataTable } from '@/components/analytics-data-table';
+import { AnalyticsDateRangeControl } from '@/components/analytics-date-range-control';
+import {
+  EnquiryFunnelChart,
+  ProfileStrengthChart,
+  ProjectViewsChart,
+} from '@/components/designer-analytics-charts';
 
 type DesignerAnalyticsDashboardProps = {
   analytics: AnalyticsResponse | null;
   error?: string | null;
+  profileCompletion?: ProfileCompletionResponse | null;
 };
 
-type StatusRow = {
+type MetricCardProps = {
+  label: ReactNode;
+  value: string;
+  current: number;
+  previous: number;
+  days: number;
+  comparisonUnit?: 'count' | 'percentage-points';
+  icon: typeof Eye;
+};
+
+type EngagementMetric = {
   label: string;
-  count: number;
+  value: number;
 };
 
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(`${date}T00:00:00.000Z`));
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('en-IN').format(value);
+}
+
+function formatSigned(value: number, maximumFractionDigits = 0) {
+  const formatted = new Intl.NumberFormat('en-IN', { maximumFractionDigits }).format(
+    Math.abs(value),
+  );
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `-${formatted}`;
+  return formatted;
 }
 
 function MetricCard({
   label,
   value,
-  helper,
+  current,
+  previous,
+  days,
+  comparisonUnit = 'count',
   icon: Icon,
-}: {
-  label: string;
-  value: number;
-  helper: string;
-  icon: typeof BriefcaseBusiness;
-}) {
+}: MetricCardProps) {
+  const delta = current - previous;
+  const percentageChange = previous === 0 ? null : (delta / previous) * 100;
+  const TrendIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
+  const helper =
+    previous === 0
+      ? current === 0
+        ? `No activity in either ${days}-day period`
+        : `No activity in the prior ${days} days`
+      : `${formatSigned(delta, comparisonUnit === 'percentage-points' ? 1 : 0)} compared to prior ${days} days`;
+
   return (
-    <Card radius="2xl">
-      <div className="flex items-start justify-between gap-4 px-5 py-5">
-        <div>
-          <div className="text-sm font-medium text-muted-foreground">{label}</div>
-          <div className="mt-3 text-3xl font-semibold text-foreground">{value}</div>
-          <div className="mt-1 text-sm text-muted-foreground">{helper}</div>
+    <Card radius="lg" className="min-w-0 px-4 py-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-medium tracking-tight text-muted-foreground uppercase">
+          <Icon className="size-4 shrink-0" aria-hidden="true" />
+          <span className="flex min-w-0 items-center gap-1 truncate">{label}</span>
         </div>
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Icon className="size-5" />
+        <span
+          className={cn(
+            'flex shrink-0 items-center gap-1 text-xs',
+            delta > 0 && 'text-success',
+            delta < 0 && 'text-destructive',
+            delta === 0 && 'text-muted-foreground',
+          )}
+        >
+          <TrendIcon className="size-3" aria-hidden="true" />
+          {percentageChange === null
+            ? current === 0
+              ? '—'
+              : 'New'
+            : `${formatSigned(percentageChange)}%`}
         </span>
       </div>
+      <div className="mt-2 text-2xl leading-tight font-medium tracking-tight text-foreground">
+        {value}
+      </div>
+      <p className="mt-1 truncate text-xs text-muted-foreground">{helper}</p>
     </Card>
   );
 }
 
-function ActivityChart({ activity }: { activity: AnalyticsResponse['activity'] }) {
-  const peak = Math.max(
-    1,
-    ...activity.map((point) => Math.max(point.projectsCreated, point.leadsReceived)),
-  );
-  const hasActivity = activity.some(
-    (point) => point.projectsCreated > 0 || point.leadsReceived > 0,
-  );
-
-  if (!hasActivity) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 text-center">
-        <BarChart3 className="size-8 text-muted-foreground" />
-        <h3 className="mt-4 text-base font-semibold text-foreground">No activity in this window</h3>
-        <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          New projects and homeowner enquiries will appear here as activity starts coming in.
-        </p>
-      </div>
-    );
-  }
-
-  const middle = activity[Math.floor(activity.length / 2)];
-  const first = activity[0];
-  const last = activity.at(-1);
-
+function AnalyticsControls({ analytics }: { analytics: AnalyticsResponse }) {
   return (
-    <div
-      role="img"
-      aria-label="Daily projects created and leads received"
-      className="rounded-xl border border-border bg-muted/10 px-4 pt-5 pb-3"
-    >
-      <div className="flex h-52 items-end gap-1" aria-hidden="true">
-        {activity.map((point) => (
-          <div
-            key={point.date}
-            title={`${formatDate(point.date)}: ${point.projectsCreated} projects, ${point.leadsReceived} leads`}
-            className="flex h-full min-w-0 flex-1 items-end justify-center gap-px"
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <AnalyticsDateRangeControl {...analytics.window} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            aria-label="More analytics options"
           >
-            <span
-              className="w-1/2 max-w-2 rounded-t-sm bg-chart-1"
-              style={{
-                height: `${(point.projectsCreated / peak) * 100}%`,
-                minHeight: point.projectsCreated > 0 ? '0.25rem' : undefined,
-              }}
-            />
-            <span
-              className="w-1/2 max-w-2 rounded-t-sm bg-chart-3"
-              style={{
-                height: `${(point.leadsReceived / peak) * 100}%`,
-                minHeight: point.leadsReceived > 0 ? '0.25rem' : undefined,
-              }}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex justify-between text-xs text-muted-foreground" aria-hidden="true">
-        <span>{first ? formatDate(first.date) : null}</span>
-        <span>{middle ? formatDate(middle.date) : null}</span>
-        <span>{last ? formatDate(last.date) : null}</span>
-      </div>
-      <ul className="sr-only">
-        {activity.map((point) => (
-          <li key={point.date}>
-            {formatDate(point.date)}: {point.projectsCreated} projects created and{' '}
-            {point.leadsReceived} leads received
-          </li>
-        ))}
-      </ul>
+            <Ellipsis className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuGroup>
+            <DropdownMenuItem asChild>
+              <Link href="/designer/projects">View projects</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/designer/leads">View enquiries</Link>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
-function StatusBreakdown({
-  title,
-  total,
-  rows,
+function formatSlug(value: string) {
+  return value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function TopConvertingProjects({
+  projects,
 }: {
-  title: string;
-  total: number;
-  rows: StatusRow[];
+  projects: AnalyticsResponse['topConvertingProjects'];
 }) {
   return (
-    <Card radius="2xl">
-      <div className="px-5 py-5">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <Badge variant="secondary">{total} total</Badge>
-        </div>
-        <div className="mt-5 space-y-4">
-          {rows.map((row) => {
-            const percentage = total === 0 ? 0 : Math.round((row.count / total) * 100);
-            return (
-              <div key={row.label}>
-                <div className="flex items-center justify-between gap-4 text-sm">
-                  <span className="text-muted-foreground">{row.label}</span>
-                  <span className="font-medium text-foreground">{row.count}</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <Card radius="lg" className="h-full px-4 py-5">
+      <h2 className="font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Top converting projects
+      </h2>
+      <div className="mt-3">
+        <AnalyticsDataTable>
+          <colgroup>
+            <col />
+            <col className="w-16" />
+            <col className="w-20" />
+            <col className="w-24" />
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Project</TableHead>
+              <TableHead className="text-right">Views</TableHead>
+              <TableHead className="text-right">Enquiries</TableHead>
+              <TableHead className="text-right">Conversions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {projects.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="h-52 px-6 text-center text-xs leading-5 text-muted-foreground"
+                >
+                  Project performance will appear here after projects receive views and enquiries.
+                </TableCell>
+              </TableRow>
+            ) : (
+              projects.map((project) => {
+                const location = [project.localitySlug, project.citySlug]
+                  .filter((value): value is string => Boolean(value))
+                  .map(formatSlug)
+                  .join(', ');
+
+                return (
+                  <TableRow key={project.projectId}>
+                    <TableCell>
+                      <div className="min-w-0 space-y-0.5">
+                        <Link
+                          href={`/projects/${project.projectId}`}
+                          className="block truncate text-sm leading-tight font-medium text-foreground hover:underline"
+                        >
+                          {project.title}
+                        </Link>
+                        {location ? (
+                          <span className="block truncate text-xs leading-relaxed text-muted-foreground">
+                            {location}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-xs leading-5 font-medium text-muted-foreground">
+                      {formatNumber(project.views)}
+                    </TableCell>
+                    <TableCell className="text-right text-xs leading-5 font-medium text-muted-foreground">
+                      {formatNumber(project.enquiries)}
+                    </TableCell>
+                    <TableCell className="text-right text-xs leading-5 font-medium text-success">
+                      {formatNumber(project.conversions)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </AnalyticsDataTable>
       </div>
     </Card>
   );
 }
 
-export function DesignerAnalyticsDashboard({ analytics, error }: DesignerAnalyticsDashboardProps) {
+function EngagementBreakdown({ metrics }: { metrics: EngagementMetric[] }) {
+  const maximum = Math.max(...metrics.map((metric) => metric.value), 1);
+
+  return (
+    <Card radius="lg" className="px-4 py-5">
+      <h2 className="font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Engagement breakdown
+      </h2>
+      <div className="mt-4 space-y-3">
+        {metrics.map((metric) => (
+          <div
+            key={metric.label}
+            className="grid grid-cols-[8rem_minmax(0,1fr)_3rem] items-center gap-3"
+          >
+            <span className="text-xs text-muted-foreground">{metric.label}</span>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{
+                  width: `${Math.max((metric.value / maximum) * 100, metric.value > 0 ? 3 : 0)}%`,
+                }}
+              />
+            </div>
+            <span className="text-right text-sm font-medium text-foreground">
+              {formatNumber(metric.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+const acquisitionSourceLabels: Record<string, string> = {
+  enquiry: 'Enquiry',
+  consultation: 'Consultation',
+};
+
+function AcquisitionSources({ sources }: { sources: AnalyticsResponse['acquisitionSources'] }) {
+  const totalEnquiries = sources.reduce((total, source) => total + source.enquiries, 0);
+
+  return (
+    <Card radius="lg" className="px-4 py-5">
+      <h2 className="font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        How they found you
+      </h2>
+      <div className="mt-3">
+        <AnalyticsDataTable>
+          <colgroup>
+            <col />
+            <col className="w-24" />
+            <col className="w-24" />
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Source</TableHead>
+              <TableHead className="text-right">Enquiry share</TableHead>
+              <TableHead className="text-right">Conversion</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sources.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={3}
+                  className="h-32 px-6 text-center text-xs leading-5 text-muted-foreground"
+                >
+                  Acquisition sources will appear here after enquiries arrive.
+                </TableCell>
+              </TableRow>
+            ) : (
+              sources.map((source) => {
+                const enquiryShare =
+                  totalEnquiries === 0 ? 0 : (source.enquiries / totalEnquiries) * 100;
+                const conversionRate =
+                  source.enquiries === 0 ? 0 : (source.conversions / source.enquiries) * 100;
+
+                return (
+                  <TableRow key={source.source}>
+                    <TableCell className="truncate text-sm text-foreground">
+                      {acquisitionSourceLabels[source.source] ?? formatSlug(source.source)}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground">
+                      {enquiryShare.toFixed(0)}%
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium text-success">
+                      {conversionRate.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </AnalyticsDataTable>
+      </div>
+    </Card>
+  );
+}
+
+export function DesignerAnalyticsDashboard({
+  analytics,
+  error,
+  profileCompletion = null,
+}: DesignerAnalyticsDashboardProps) {
   if (!analytics) {
     return (
-      <div className="p-6 md:p-8 xl:p-10">
-        <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
-          Analytics
-        </Badge>
-        <h1 className="mt-5 text-3xl font-semibold text-foreground md:text-4xl">
-          Understand portfolio performance
-        </h1>
-        <Alert variant="destructive" className="mt-8 max-w-3xl">
+      <div className="p-6">
+        <h1 className="text-2xl font-medium text-foreground">Analytics</h1>
+        <Alert variant="destructive" className="mt-6 max-w-3xl">
           <CircleAlert />
           <AlertTitle>Could not load analytics</AlertTitle>
           <AlertDescription>
@@ -196,161 +355,108 @@ export function DesignerAnalyticsDashboard({ analytics, error }: DesignerAnalyti
     );
   }
 
-  const projectStatuses: StatusRow[] = [
-    { label: 'Published', count: analytics.projects.published },
-    { label: 'In review', count: analytics.projects.inReview },
-    { label: 'Submitted', count: analytics.projects.submitted },
-    { label: 'Draft', count: analytics.projects.draft },
-    { label: 'Changes requested', count: analytics.projects.changesRequested },
-    { label: 'Rejected', count: analytics.projects.rejected },
-  ];
-  const leadStatuses: StatusRow[] = [
-    { label: 'New', count: analytics.leads.new },
-    { label: 'Contacted', count: analytics.leads.contacted },
-    { label: 'Closed', count: analytics.leads.closed },
-    { label: 'Spam', count: analytics.leads.spam },
-  ];
-  const engagementMetrics = [
-    { label: 'Profile views', value: analytics.engagement.profileViews },
+  const respondedLeads = analytics.leads.contacted + analytics.leads.closed;
+  const responseRate =
+    analytics.leads.total === 0 ? 0 : (respondedLeads / analytics.leads.total) * 100;
+  const enquiryRate =
+    analytics.engagement.projectViews === 0
+      ? 0
+      : (analytics.leads.total / analytics.engagement.projectViews) * 100;
+  const engagementMetrics: EngagementMetric[] = [
     { label: 'Project views', value: analytics.engagement.projectViews },
+    { label: 'Profile views', value: analytics.engagement.profileViews },
+    { label: 'Enquiries', value: analytics.leads.total },
+    { label: 'Responded', value: respondedLeads },
   ];
 
   return (
-    <div className="p-6 md:p-8 xl:p-10">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-        <div className="max-w-3xl">
-          <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+    <div className="p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-2xl leading-tight font-medium tracking-tight text-foreground">
             Analytics
-          </Badge>
-          <div className="mt-5 flex items-start gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <BarChart3 className="size-6" />
-            </span>
-            <div>
-              <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
-                Understand portfolio performance
-              </h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
-                Track your project publishing and homeowner enquiry activity from real workspace
-                data.
-              </p>
-            </div>
-          </div>
+          </h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            How homeowners are discovering and engaging with your studio.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <Link href="/designer/leads">
-              View leads <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/designer/projects">
-              View projects <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
+        <AnalyticsControls analytics={analytics} />
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Total projects"
-          value={analytics.projects.total}
-          helper="All project statuses"
-          icon={BriefcaseBusiness}
+          label="Project views"
+          value={formatNumber(analytics.engagement.projectViews)}
+          current={analytics.engagement.projectViews}
+          previous={analytics.previousPeriod.projectViews}
+          days={analytics.window.days}
+          icon={Eye}
         />
         <MetricCard
-          label="Published projects"
-          value={analytics.projects.published}
-          helper="Live in your portfolio"
-          icon={FolderCheck}
+          label="Enquiries received"
+          value={formatNumber(analytics.leads.total)}
+          current={analytics.leads.total}
+          previous={analytics.previousPeriod.enquiries}
+          days={analytics.window.days}
+          icon={UserRound}
         />
         <MetricCard
-          label="Total leads"
-          value={analytics.leads.total}
-          helper="All homeowner enquiries"
-          icon={FileUser}
+          label={
+            <>
+              <span>View</span>
+              <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
+              <span>Enquiry rate</span>
+            </>
+          }
+          value={`${enquiryRate.toFixed(1)}%`}
+          current={enquiryRate}
+          previous={analytics.previousPeriod.viewToEnquiryRate}
+          days={analytics.window.days}
+          comparisonUnit="percentage-points"
+          icon={UserRound}
         />
         <MetricCard
-          label="New leads"
-          value={analytics.leads.new}
-          helper="Waiting for a response"
-          icon={RadioTower}
+          label="Response rate"
+          value={`${Math.round(responseRate)}%`}
+          current={responseRate}
+          previous={analytics.previousPeriod.responseRate}
+          days={analytics.window.days}
+          comparisonUnit="percentage-points"
+          icon={UserRound}
         />
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-6">
-          <Card radius="2xl">
-            <div className="px-6 py-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">Workspace activity</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Projects created and leads received over the last {analytics.window.days} days.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-chart-1" /> Projects
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="size-2 rounded-full bg-chart-3" /> Leads
-                  </span>
-                </div>
-              </div>
-              <div className="mt-6">
-                <ActivityChart activity={analytics.activity} />
-              </div>
-            </div>
-          </Card>
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <Card radius="lg" className="min-h-80 px-4 py-5">
+          <ProjectViewsChart
+            activity={analytics.activity}
+            projectViews={analytics.engagement.projectViews}
+          />
+        </Card>
+        <TopConvertingProjects projects={analytics.topConvertingProjects} />
+      </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <StatusBreakdown
-              title="Project status"
-              total={analytics.projects.total}
-              rows={projectStatuses}
-            />
-            <StatusBreakdown
-              title="Lead funnel"
-              total={analytics.leads.total}
-              rows={leadStatuses}
-            />
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.82fr)]">
+        <Card radius="lg" className="px-4 py-4">
+          <div className="flex items-center gap-2 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            <Moon className="size-4 text-success" aria-hidden="true" />
+            Insight
           </div>
-        </div>
+          <p className="mt-2 text-lg leading-relaxed font-medium text-muted-foreground">
+            Keep new enquiries moving by reviewing and responding from your lead inbox.
+          </p>
+          <div className="mt-4 border-t border-border pt-4">
+            <EnquiryFunnelChart leads={analytics.leads} />
+          </div>
+        </Card>
+        <Card radius="lg" className="px-4 py-5">
+          <ProfileStrengthChart profileCompletion={profileCompletion} />
+        </Card>
+      </div>
 
-        <aside>
-          <Card radius="2xl">
-            <div className="px-5 py-5">
-              <div className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Eye className="size-4" />
-                </span>
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">Engagement metrics</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Daily unique signed-in views, excluding members of your organization.
-                  </p>
-                </div>
-              </div>
-              <Badge variant="outline" className="mt-4">
-                Last {analytics.window.days} days
-              </Badge>
-              <div className="mt-5 space-y-4">
-                {engagementMetrics.map((metric) => (
-                  <div
-                    key={metric.label}
-                    className="border-t border-border pt-4 first:border-t-0 first:pt-0"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-foreground">{metric.label}</span>
-                      <span className="text-lg font-semibold text-foreground">{metric.value}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </aside>
+      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,1fr)]">
+        <EngagementBreakdown metrics={engagementMetrics} />
+        <AcquisitionSources sources={analytics.acquisitionSources} />
       </div>
     </div>
   );

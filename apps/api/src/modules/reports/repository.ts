@@ -1,4 +1,4 @@
-import { and, db, eq, gte, lte, schema, sql } from '@repo/db';
+import { and, db, desc, eq, gte, lte, schema, sql } from '@repo/db';
 import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
@@ -23,6 +23,22 @@ export type AnalyticsDailyCount = {
 
 export type AnalyticsViewDailyCount = AnalyticsDailyCount & {
   type: (typeof schema.interactionEventTypeEnum.enumValues)[number];
+};
+
+export type AnalyticsTopProject = {
+  projectId: string;
+  title: string;
+  citySlug: string | null;
+  localitySlug: string | null;
+  views: number;
+  enquiries: number;
+  conversions: number;
+};
+
+export type AnalyticsAcquisitionSource = {
+  source: string;
+  enquiries: number;
+  conversions: number;
 };
 
 export const reportsRepository = {
@@ -56,14 +72,24 @@ export const reportsRepository = {
       .groupBy(schema.project.status);
   },
 
-  async countLeadsByStatus(orgId: string): Promise<AnalyticsLeadStatusCount[]> {
+  async countLeadsByStatus(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<AnalyticsLeadStatusCount[]> {
     return db
       .select({
         status: schema.lead.status,
         count: sql<number>`count(*)::int`,
       })
       .from(schema.lead)
-      .where(eq(schema.lead.organizationId, orgId))
+      .where(
+        and(
+          eq(schema.lead.organizationId, input.orgId),
+          gte(schema.lead.receivedAt, input.from),
+          lte(schema.lead.receivedAt, input.to),
+        ),
+      )
       .groupBy(schema.lead.status);
   },
 
@@ -72,7 +98,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.project.createdAt}), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', (${schema.project.createdAt} at time zone 'UTC') at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     return db
       .select({
         date: day,
@@ -95,7 +121,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.lead.receivedAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', ${schema.lead.receivedAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     return db
       .select({
         date: day,
@@ -118,7 +144,7 @@ export const reportsRepository = {
     from: Date;
     to: Date;
   }): Promise<AnalyticsViewDailyCount[]> {
-    const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+    const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     const [profileViews, projectViews] = await Promise.all([
       db
         .select({
@@ -157,5 +183,114 @@ export const reportsRepository = {
         .orderBy(day),
     ]);
     return [...profileViews, ...projectViews];
+  },
+
+  async findTopConvertingProjects(input: {
+    profileId: string;
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<AnalyticsTopProject[]> {
+    const projectSelection = {
+      projectId: schema.project.id,
+      title: schema.project.title,
+      citySlug: schema.project.citySlug,
+      localitySlug: schema.project.localitySlug,
+    };
+    const [viewRows, leadRows] = await Promise.all([
+      db
+        .select({
+          ...projectSelection,
+          views: sql<number>`count(${schema.interactionEvent.id})::int`,
+        })
+        .from(schema.project)
+        .innerJoin(
+          schema.interactionEvent,
+          eq(schema.interactionEvent.projectId, schema.project.id),
+        )
+        .where(
+          and(
+            eq(schema.project.designerId, input.profileId),
+            eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
+            gte(schema.interactionEvent.createdAt, input.from),
+            lte(schema.interactionEvent.createdAt, input.to),
+          ),
+        )
+        .groupBy(
+          schema.project.id,
+          schema.project.title,
+          schema.project.citySlug,
+          schema.project.localitySlug,
+        ),
+      db
+        .select({
+          ...projectSelection,
+          enquiries: sql<number>`count(*)::int`,
+          conversions: sql<number>`count(*) filter (where ${schema.lead.status} in ('contacted', 'closed'))::int`,
+        })
+        .from(schema.project)
+        .innerJoin(schema.lead, eq(schema.lead.referredProjectId, schema.project.id))
+        .where(
+          and(
+            eq(schema.project.designerId, input.profileId),
+            eq(schema.lead.organizationId, input.orgId),
+            gte(schema.lead.receivedAt, input.from),
+            lte(schema.lead.receivedAt, input.to),
+          ),
+        )
+        .groupBy(
+          schema.project.id,
+          schema.project.title,
+          schema.project.citySlug,
+          schema.project.localitySlug,
+        ),
+    ]);
+    const projects = new Map<string, AnalyticsTopProject>();
+
+    for (const project of viewRows) {
+      projects.set(project.projectId, { ...project, enquiries: 0, conversions: 0 });
+    }
+    for (const project of leadRows) {
+      const existing = projects.get(project.projectId);
+      projects.set(project.projectId, {
+        ...project,
+        views: existing?.views ?? 0,
+      });
+    }
+
+    return [...projects.values()]
+      .filter((project) => project.views > 0 || project.enquiries > 0)
+      .sort(
+        (left, right) =>
+          right.conversions - left.conversions ||
+          right.enquiries - left.enquiries ||
+          right.views - left.views ||
+          left.title.localeCompare(right.title),
+      )
+      .slice(0, 4);
+  },
+
+  async countAcquisitionSources(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<AnalyticsAcquisitionSource[]> {
+    return db
+      .select({
+        source: schema.lead.source,
+        enquiries: sql<number>`count(*)::int`,
+        conversions: sql<number>`count(*) filter (where ${schema.lead.status} in ('contacted', 'closed'))::int`,
+      })
+      .from(schema.lead)
+      .where(
+        and(
+          eq(schema.lead.organizationId, input.orgId),
+          gte(schema.lead.receivedAt, input.from),
+          lte(schema.lead.receivedAt, input.to),
+        ),
+      )
+      .groupBy(schema.lead.source)
+      .orderBy(desc(sql`count(*)`))
+      .limit(4);
   },
 };

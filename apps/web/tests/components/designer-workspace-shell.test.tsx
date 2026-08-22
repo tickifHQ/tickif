@@ -165,7 +165,7 @@ describe('DesignerWorkspaceShell', () => {
     ['/designer/dashboard', 'Overview', 'lucide-layout-dashboard', 'lucide-house'],
     ['/designer/projects', 'Projects', 'lucide-layers', 'lucide-folder-kanban'],
     ['/designer/portfolio', 'Portfolio', 'lucide-link', 'lucide-link-2'],
-    ['/designer/analytics', 'Analytics', 'lucide-chart-column-big', 'lucide-chart-line'],
+    ['/designer/analytics', 'Analytics', 'lucide-chart-line', 'lucide-chart-column-big'],
     ['/designer/plan-billing', 'Plan & billing', 'lucide-credit-card', 'lucide-hand-coins'],
     ['/designer/profile', 'Profile & settings', 'lucide-settings', 'lucide-circle-user-round'],
   ])(
