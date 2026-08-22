@@ -11,7 +11,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/compon
 import { Skeleton } from '@repo/ui/components/skeleton';
 import {
   CalendarDays,
-  ChartColumnBig,
+  ChartLine,
   CreditCard,
   ExternalLink,
   FileUser,
@@ -41,7 +41,7 @@ const studioItems: NavItem[] = [
   { label: 'Leads', href: '/designer/leads', icon: FileUser },
   { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
   { label: 'Reviews', href: '/designer/reviews', icon: Star },
-  { label: 'Analytics', href: '/designer/analytics', icon: ChartColumnBig },
+  { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 
 const growItems: NavItem[] = [

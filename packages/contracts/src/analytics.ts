@@ -46,6 +46,29 @@ const engagementMetricsSchema = z.object({
     .describe('Daily unique profile views within the requested analytics window'),
 });
 
+const analyticsPeriodMetricsSchema = z.object({
+  projectViews: z.number().int().nonnegative(),
+  enquiries: z.number().int().nonnegative(),
+  viewToEnquiryRate: z.number().nonnegative(),
+  responseRate: z.number().nonnegative(),
+});
+
+const topConvertingProjectSchema = z.object({
+  projectId: z.uuid(),
+  title: z.string(),
+  citySlug: z.string().nullable(),
+  localitySlug: z.string().nullable(),
+  views: z.number().int().nonnegative(),
+  enquiries: z.number().int().nonnegative(),
+  conversions: z.number().int().nonnegative(),
+});
+
+const acquisitionSourceSchema = z.object({
+  source: z.string(),
+  enquiries: z.number().int().nonnegative(),
+  conversions: z.number().int().nonnegative(),
+});
+
 const deferredAnalyticsMetricSchema = z.object({
   key: z.enum(['profileViews', 'projectViews']),
   label: z.string(),
@@ -62,7 +85,10 @@ export const analyticsResponseSchema = z
     projects: projectMetricsSchema,
     leads: leadMetricsSchema,
     engagement: engagementMetricsSchema,
+    previousPeriod: analyticsPeriodMetricsSchema,
     activity: z.array(analyticsActivityPointSchema),
+    topConvertingProjects: z.array(topConvertingProjectSchema).max(4),
+    acquisitionSources: z.array(acquisitionSourceSchema).max(4),
     deferredMetrics: z.array(deferredAnalyticsMetricSchema),
   })
   .meta({ id: 'AnalyticsResponse' });

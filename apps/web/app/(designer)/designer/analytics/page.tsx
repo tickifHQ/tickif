@@ -1,14 +1,28 @@
 import { headers } from 'next/headers';
-import { analyticsResponseSchema } from '@repo/contracts';
+import { analyticsQuerySchema, analyticsResponseSchema } from '@repo/contracts';
 import { DesignerAnalyticsDashboard } from '@/components/designer-analytics-dashboard';
 import { api } from '@/lib/api';
 import { requireAuth } from '@/lib/auth-guard';
+import { getProfileCompletion } from '@/lib/designer-profile';
 
 export const metadata = {
   title: 'Analytics · Tickif',
 };
 
-async function getAnalytics() {
+type DesignerAnalyticsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseAnalyticsDays(searchParams: Record<string, string | string[] | undefined>) {
+  const parsed = analyticsQuerySchema.safeParse({ days: firstParam(searchParams.days) });
+  return parsed.success ? parsed.data.days : analyticsQuerySchema.parse({}).days;
+}
+
+async function getAnalytics(days: number) {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get('cookie');
   if (!cookie) {
@@ -17,7 +31,7 @@ async function getAnalytics() {
 
   try {
     const response = await api.api.reports.analytics.$get(
-      { query: { days: 30 } },
+      { query: { days } },
       { headers: { cookie } },
     );
     if (!response.ok) {
@@ -35,11 +49,16 @@ async function getAnalytics() {
   }
 }
 
-export default async function DesignerAnalyticsPage() {
+export default async function DesignerAnalyticsPage({ searchParams }: DesignerAnalyticsPageProps) {
   await requireAuth({ requiredRole: 'designer' });
-  const result = await getAnalytics();
+  const days = parseAnalyticsDays(await searchParams);
+  const [result, completion] = await Promise.all([getAnalytics(days), getProfileCompletion()]);
 
   return (
-    <DesignerAnalyticsDashboard analytics={result.data} error={result.ok ? null : result.message} />
+    <DesignerAnalyticsDashboard
+      analytics={result.data}
+      error={result.ok ? null : result.message}
+      profileCompletion={completion.data}
+    />
   );
 }
