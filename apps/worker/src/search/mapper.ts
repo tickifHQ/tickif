@@ -65,6 +65,8 @@ export type DesignerSearchSource = {
     reviewCount: number;
     logoImageId: string | null;
     updatedAt: Date;
+    isKycVerified: boolean;
+    kycExpiresAt: Date | null;
   };
   footprint: Array<{
     kind: string;
@@ -152,6 +154,8 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     projectCount: source.profile.projectCount,
     avgRating: Number(source.profile.avgRating),
     reviewCount: source.profile.reviewCount,
+    isKycVerified: source.profile.isKycVerified,
+    kycExpiresAt: source.profile.kycExpiresAt?.getTime() ?? 0,
     logoImageKey: source.profile.logoImageId,
     updatedAt: source.profile.updatedAt.getTime(),
   };

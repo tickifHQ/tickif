@@ -183,6 +183,7 @@ export const profilePublicResponseSchema = profileBaseSchema
     staffCount: true,
     testimonialBannerEnabled: true,
   })
+  .extend({ isKycVerified: z.boolean() })
   .meta({ id: 'ProfilePublic' });
 export type ProfilePublicResponse = z.infer<typeof profilePublicResponseSchema>;
 
@@ -404,6 +405,7 @@ export const portfolioResponseSchema = z
     reviewSettings: portfolioReviewSettingsSchema,
     showTickifBadge: z.boolean(),
     badges: z.array(portfolioBadgeSchema),
+    isKycVerified: z.boolean(),
     portfolioUrl: z.string().nullable(),
     /**
      * Whether the public page is live. False while required hero fields are
@@ -702,6 +704,7 @@ export const publicPortfolioResponseSchema = z
     logoUrl: z.string().url().nullable(),
     accentColor: z.string(),
     badges: z.array(portfolioBadgeSchema),
+    isKycVerified: z.boolean(),
     sections: publicPortfolioSectionsSchema,
     stats: publicPortfolioStatsSchema,
     reviewVisibility: publicPortfolioReviewVisibilitySchema,

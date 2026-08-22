@@ -1238,6 +1238,7 @@ async function buildPublicProjectDetail(
       reviewCount: designer.reviewCount,
       entityType: designer.entityType,
       logoUrl,
+      isKycVerified: designer.isKycVerified,
       bio: designer.bio,
       firmType: designer.firmType,
       foundedYear: designer.foundedYear,

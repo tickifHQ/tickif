@@ -157,6 +157,7 @@ export const designerHitSchema = z
     projectCount: z.number(),
     avgRating: z.number(),
     reviewCount: z.number(),
+    isKycVerified: z.boolean(),
     logoUrl: z.string().nullable(),
   })
   .meta({ id: 'DesignerHit' });

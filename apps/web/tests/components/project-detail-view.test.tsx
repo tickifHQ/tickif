@@ -52,6 +52,7 @@ const designer: PublicProjectDesigner = {
   reviewCount: 10,
   entityType: 'company',
   logoUrl: null,
+  isKycVerified: false,
   bio: 'Award-winning studio',
   firmType: null,
   foundedYear: 2015,

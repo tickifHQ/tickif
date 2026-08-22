@@ -1,7 +1,19 @@
 import { z } from 'zod';
 
+export const ORGANIZATION_MEMBER_ROLE = {
+  OWNER: 'owner',
+  ADMIN: 'admin',
+  MEMBER: 'member',
+} as const;
+
+export const ORGANIZATION_MEMBER_ROLE_VALUES = [
+  ORGANIZATION_MEMBER_ROLE.OWNER,
+  ORGANIZATION_MEMBER_ROLE.ADMIN,
+  ORGANIZATION_MEMBER_ROLE.MEMBER,
+] as const;
+
 export const organizationMemberRoleSchema = z
-  .enum(['owner', 'admin', 'member'])
+  .enum(ORGANIZATION_MEMBER_ROLE_VALUES)
   .meta({ id: 'OrganizationMemberRole' });
 export type OrganizationMemberRole = z.infer<typeof organizationMemberRoleSchema>;
 

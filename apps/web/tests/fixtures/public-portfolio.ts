@@ -67,6 +67,7 @@ export function makePublicPortfolio(
     logoUrl: null,
     accentColor: '#FF8F73',
     badges: ['verified', 'established'],
+    isKycVerified: true,
     sections: {
       hero: true,
       trustCredentials: true,

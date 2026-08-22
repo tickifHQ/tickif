@@ -164,11 +164,13 @@ function resolveTo(
   profile = makeProfile(),
   portfolio: PortfolioRecord | null = makePortfolio(),
   orgSlug = 'test-studio-a1b2c3',
+  isKycVerified = true,
 ) {
   vi.mocked(portfolioRepository.findPublicBySlug).mockResolvedValue({
     profile,
     orgSlug,
     portfolio,
+    isKycVerified,
   });
 }
 
@@ -305,8 +307,9 @@ describe('publicPortfolioService.getBySlug — projection', () => {
   it('surfaces the earned badges when credentials are shown', async () => {
     const result = await publicPortfolioService.getBySlug('test-studio');
 
-    // Active profile + 6 years experience → verified + established, nothing else.
+    // Current KYC approval + 6 years experience → verified + established, nothing else.
     expect(result.badges).toEqual(['verified', 'established']);
+    expect(result.isKycVerified).toBe(true);
   });
 
   it('exposes city footprint labels but not the street address', async () => {

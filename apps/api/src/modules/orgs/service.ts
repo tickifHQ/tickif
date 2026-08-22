@@ -1,25 +1,36 @@
-import type { OrganizationMemberRole, OrganizationWorkspaceResponse } from '@repo/contracts';
+import {
+  ORGANIZATION_MEMBER_ROLE,
+  organizationMemberRoleSchema,
+  type OrganizationMemberRole,
+  type OrganizationWorkspaceResponse,
+} from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { orgsRepository } from './repository.js';
 
-const WRITE_ROLES = new Set(['owner', 'admin']);
+const WRITE_ROLES = new Set<OrganizationMemberRole>([
+  ORGANIZATION_MEMBER_ROLE.OWNER,
+  ORGANIZATION_MEMBER_ROLE.ADMIN,
+]);
 
 function hasWriteRole(role: string | null): boolean {
   if (!role) return false;
-  return role.split(',').some((candidate) => WRITE_ROLES.has(candidate.trim()));
+  return role.split(',').some((candidate) => {
+    const parsed = organizationMemberRoleSchema.safeParse(candidate.trim());
+    return parsed.success && WRITE_ROLES.has(parsed.data);
+  });
 }
 
 function normalizeRole(role: string | null): OrganizationMemberRole {
   const roles = new Set((role ?? '').split(',').map((candidate) => candidate.trim()));
-  if (roles.has('owner')) return 'owner';
-  if (roles.has('admin')) return 'admin';
-  return 'member';
+  if (roles.has(ORGANIZATION_MEMBER_ROLE.OWNER)) return ORGANIZATION_MEMBER_ROLE.OWNER;
+  if (roles.has(ORGANIZATION_MEMBER_ROLE.ADMIN)) return ORGANIZATION_MEMBER_ROLE.ADMIN;
+  return ORGANIZATION_MEMBER_ROLE.MEMBER;
 }
 
 const roleOrder: Record<OrganizationMemberRole, number> = {
-  owner: 0,
-  admin: 1,
-  member: 2,
+  [ORGANIZATION_MEMBER_ROLE.OWNER]: 0,
+  [ORGANIZATION_MEMBER_ROLE.ADMIN]: 1,
+  [ORGANIZATION_MEMBER_ROLE.MEMBER]: 2,
 };
 
 export const orgsService = {

@@ -106,6 +106,7 @@ export function makePublicProject(
       reviewCount: 36,
       entityType: 'company',
       logoUrl: null,
+      isKycVerified: false,
       bio: null,
       firmType: 'Interior design firm',
       foundedYear: 2018,

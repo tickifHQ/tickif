@@ -148,6 +148,8 @@ describe('search projection mapper', () => {
         reviewCount: 16,
         logoImageId: 'originals/logos/designer-1/logo',
         updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+        isKycVerified: false,
+        kycExpiresAt: null,
       },
       footprint: [
         { kind: 'city', slug: 'mumbai' },
@@ -171,6 +173,8 @@ describe('search projection mapper', () => {
       projectCount: 12,
       avgRating: 4.75,
       reviewCount: 16,
+      isKycVerified: false,
+      kycExpiresAt: 0,
       logoImageKey: 'originals/logos/designer-1/logo',
       updatedAt: new Date('2026-07-02T00:00:00.000Z').getTime(),
     });

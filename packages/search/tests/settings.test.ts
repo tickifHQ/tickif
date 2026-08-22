@@ -7,6 +7,7 @@ import {
 } from '../src/client.js';
 import {
   DESIGNER_SEARCH_SETTINGS,
+  designerDefaultSort,
   PROJECT_DEFAULT_SORT,
   PROJECT_SEARCH_SETTINGS,
 } from '../src/settings.js';
@@ -59,6 +60,28 @@ describe('search collection configuration', () => {
         expect.objectContaining({ name: 'entityType', facet: true }),
         expect.objectContaining({ name: 'citySlugs', facet: true }),
         expect.objectContaining({ name: 'themeSlugs', facet: true }),
+      ]),
+    );
+  });
+
+  it('boosts only verification approvals that are current at query time', () => {
+    expect(designerDefaultSort(1_786_000_000_000)).toBe(
+      '_text_match:desc,_eval(isKycVerified:true && kycExpiresAt:>1786000000000):desc,updatedAt:desc',
+    );
+    expect(DESIGNER_SEARCH_SETTINGS.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'isKycVerified',
+          type: 'bool',
+          sort: true,
+          optional: true,
+        }),
+        expect.objectContaining({
+          name: 'kycExpiresAt',
+          type: 'int64',
+          sort: true,
+          optional: true,
+        }),
       ]),
     );
   });

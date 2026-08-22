@@ -8,6 +8,7 @@ import {
   closeQueues,
   scheduleBookingNotificationSweep,
   scheduleGoogleReviewsSweep,
+  scheduleVerificationNotificationSweep,
 } from '@repo/queue';
 import { searchWriteClient } from '@repo/search';
 import {
@@ -19,6 +20,7 @@ import {
   type GoogleReviewsRefreshJob,
   type GoogleReviewsSweepJob,
   type SearchIndexJob,
+  type VerificationEmailQueueJob,
 } from './connection.js';
 import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
@@ -32,6 +34,10 @@ import {
 import { processSearchIndex } from './jobs/search-indexer.js';
 import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
 import { probeSearchReadiness } from './search/readiness.js';
+import {
+  processVerificationEmail,
+  processVerificationNotificationSweep,
+} from './jobs/verification-notifications.js';
 
 /**
  * Worker process. Each queue gets a Worker; handlers live under ./jobs.
@@ -82,6 +88,26 @@ const smsWorker = new Worker<SmsQueueJob>(
 );
 void scheduleBookingNotificationSweep(30_000).catch((err) =>
   console.error('[worker] failed to register booking-notifications sweep:', err),
+);
+
+const verificationEmailWorker = new Worker<VerificationEmailQueueJob>(
+  QUEUES.verificationEmail,
+  async (job) => {
+    if (job.name === JOBS.sweepVerificationNotifications) {
+      const { enqueued, failed, exhausted } = await processVerificationNotificationSweep();
+      console.log(
+        `[worker] verification-notifications sweep: enqueued ${enqueued}, failed ${failed}, exhausted ${exhausted}`,
+      );
+      return;
+    }
+    if (job.data.kind === 'verification-email') {
+      await processVerificationEmail(job.data.outboxId);
+    }
+  },
+  { connection, concurrency: 4 },
+);
+void scheduleVerificationNotificationSweep(30_000).catch((err) =>
+  console.error('[worker] failed to register verification-notifications sweep:', err),
 );
 
 const searchIndexWorker = new Worker<SearchIndexJob>(QUEUES.searchIndex, processSearchIndex, {
@@ -140,6 +166,12 @@ searchIndexWorker.on('failed', (job, err) =>
     err,
   ),
 );
+verificationEmailWorker.on('completed', (job) =>
+  console.log(`[worker] verification-email completed job ${job.id}`),
+);
+verificationEmailWorker.on('failed', (job, err) =>
+  console.error(`[worker] verification-email failed job ${job?.id}:`, err),
+);
 
 let draining = false;
 let searchReady = false;
@@ -194,7 +226,7 @@ const health = createServer((req, res) => {
 health.listen(config.WORKER_HEALTH_PORT);
 
 console.log(
-  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}", "${QUEUES.searchIndex}"; health on :${config.WORKER_HEALTH_PORT}`,
+  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}", "${QUEUES.searchIndex}", "${QUEUES.verificationEmail}"; health on :${config.WORKER_HEALTH_PORT}`,
 );
 
 async function shutdown(signal: string): Promise<void> {
@@ -210,6 +242,7 @@ async function shutdown(signal: string): Promise<void> {
       mediaWorker.close(),
       smsWorker.close(),
       searchIndexWorker.close(),
+      verificationEmailWorker.close(),
       googleReviewsWorker?.close(),
     ]);
     await closeQueues();

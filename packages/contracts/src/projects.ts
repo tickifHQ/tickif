@@ -465,6 +465,7 @@ export const designerSummarySchema = z
     reviewCount: z.number().int(),
     entityType: z.enum(['individual', 'company']),
     logoUrl: z.string().url().nullable(),
+    isKycVerified: z.boolean(),
   })
   .meta({ id: 'DesignerSummary' });
 export type DesignerSummary = z.infer<typeof designerSummarySchema>;

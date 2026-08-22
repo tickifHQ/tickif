@@ -18,9 +18,7 @@ describe('Typesense environment configuration', () => {
   });
 
   it('requires explicit host and separate admin and search keys at the search boundary', () => {
-    expect(() => assertProductionSearchConfig(productionEnvironment)).toThrow(
-      'TYPESENSE_HOST',
-    );
+    expect(() => assertProductionSearchConfig(productionEnvironment)).toThrow('TYPESENSE_HOST');
 
     expect(() =>
       assertProductionSearchConfig({
@@ -60,6 +58,7 @@ describe('Typesense environment configuration', () => {
     expect(parsed.TYPESENSE_API_KEY).toBe('tickif-local-typesense-key');
     expect(parsed.TYPESENSE_SEARCH_API_KEY).toBe('tickif-local-typesense-key');
     expect(parsed.SEARCH_WORKER_CONCURRENCY).toBe(4);
+    expect(parsed.R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS).toBe(60);
     expect(() =>
       assertProductionSearchConfig({
         NODE_ENV: 'development',

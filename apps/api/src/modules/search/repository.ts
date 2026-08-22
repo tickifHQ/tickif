@@ -13,6 +13,7 @@ import {
   DESIGNER_QUERY_BY,
   PROJECT_DEFAULT_SORT,
   DESIGNER_DEFAULT_SORT,
+  designerDefaultSort,
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
@@ -134,6 +135,27 @@ function extractFacetDistribution(
   return result;
 }
 
+/**
+ * A field missing from inside `_eval(...)` does NOT surface as the named "Could not find a
+ * field" error. Typesense 30.2 answers `400 Error parsing eval expression in sort_by clause.`,
+ * which names neither field — verified against the running 30.2 image with both verification
+ * fields absent and with only `kycExpiresAt` absent. The named 404 form only appears for a bare
+ * `sort_by=isKycVerified:desc`, which this path never emits; it is kept as a belt-and-braces
+ * match in case a future version reports the eval case that way.
+ *
+ * Matching the generic parse error is safe: the retry is already gated on the verification
+ * ranking path and falls back to the static default sort, so the worst case is unranked-but-
+ * correct results instead of a 500 on the primary discovery endpoint.
+ */
+function isMissingVerificationSortField(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.message.includes('Error parsing eval expression')) return true;
+  return (
+    error.message.includes('Could not find a field named') &&
+    (error.message.includes('isKycVerified') || error.message.includes('kycExpiresAt'))
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository Methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,22 +205,30 @@ export async function searchDesigners(
 ): Promise<DesignerSearchResult> {
   const client = searchClient();
   const collectionName = searchCollectionName('designers');
+  const usesVerificationRanking = !params.sort_by;
 
   const searchParams = {
     q: params.q,
     query_by: params.query_by || DESIGNER_QUERY_BY.join(','),
     filter_by: params.filter_by,
-    sort_by: params.sort_by || DESIGNER_DEFAULT_SORT,
+    sort_by: params.sort_by || designerDefaultSort(),
     facet_by: params.facet_by || DESIGNER_FACET_FIELDS.join(','),
     include_fields: params.include_fields,
     page: params.page,
     per_page: params.per_page,
   };
 
-  const result = await client
-    .collections<DesignerSearchDocument>(collectionName)
-    .documents()
-    .search(searchParams);
+  const documents = client.collections<DesignerSearchDocument>(collectionName).documents();
+  let result;
+  try {
+    result = await documents.search(searchParams);
+  } catch (error) {
+    if (!usesVerificationRanking || !isMissingVerificationSortField(error)) throw error;
+    result = await documents.search({
+      ...searchParams,
+      sort_by: DESIGNER_DEFAULT_SORT,
+    });
+  }
 
   return {
     hits: (result.hits ?? []).map(

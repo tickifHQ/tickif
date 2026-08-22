@@ -1,4 +1,5 @@
 import { db, schema, eq, and, or, sql } from '@repo/db';
+import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type { DesignerProfileRecord } from './repository.js';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
@@ -15,6 +16,7 @@ export type PublicPortfolioRecord = {
   orgSlug: string;
   /** Null when the designer has never opened the portfolio settings page. */
   portfolio: PortfolioRecord | null;
+  isKycVerified: boolean;
 };
 
 /**
@@ -162,6 +164,12 @@ export const portfolioRepository = {
         profile: schema.designerProfile,
         orgSlug: schema.organization.slug,
         portfolio: schema.designerPortfolio,
+        isKycVerified: sql<boolean>`exists (
+          select 1 from ${schema.verificationApplication}
+          where ${schema.verificationApplication.organizationId} = ${schema.designerProfile.orgId}
+            and ${schema.verificationApplication.status} = ${VERIFICATION_APPLICATION_STATUS.VERIFIED}
+            and ${schema.verificationApplication.expiresAt} > now()
+        )`,
       })
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
@@ -179,7 +187,12 @@ export const portfolioRepository = {
       .orderBy(sql`case when ${schema.designerPortfolio.portfolioSlug} = ${slug} then 0 else 1 end`)
       .limit(1);
     if (!row) return null;
-    return { profile: row.profile, orgSlug: row.orgSlug, portfolio: row.portfolio };
+    return {
+      profile: row.profile,
+      orgSlug: row.orgSlug,
+      portfolio: row.portfolio,
+      isKycVerified: row.isKycVerified,
+    };
   },
 
   /** Title of a published project owned by this designer, for the featured quote. */
