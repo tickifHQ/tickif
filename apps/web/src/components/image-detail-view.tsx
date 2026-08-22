@@ -29,6 +29,28 @@ interface ImageDetailViewProps {
   isAuthenticated?: boolean;
 }
 
+const ANONYMOUS_ID_STORAGE_KEY = 'tickif.anonymousId';
+
+/**
+ * Reads (or lazily creates) the stable pseudonymous visitor id behind
+ * `interaction_event.anonymous_id`. It has to survive page loads: minting a
+ * fresh uuid per view would make `count(distinct anonymous_id)` degenerate to
+ * `count(*)`, and the table is append-only so that is not backfillable.
+ */
+function getAnonymousId(): string {
+  try {
+    const existing = window.localStorage.getItem(ANONYMOUS_ID_STORAGE_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    window.localStorage.setItem(ANONYMOUS_ID_STORAGE_KEY, created);
+    return created;
+  } catch {
+    // Storage unavailable (private mode / blocked cookies) — fall back to a
+    // throwaway id rather than dropping the view record.
+    return crypto.randomUUID();
+  }
+}
+
 /**
  * Returns true if the keyboard event target is an interactive element where
  * arrow keys should NOT be intercepted (inputs, textareas, contenteditable).
@@ -68,8 +90,10 @@ export function ImageDetailView({
           { credentials: 'include' },
         );
         if (!response.ok) return;
-        if (version !== savedStateVersion.current) return; // Stale response
         const data = await response.json();
+        // Re-check after every await: a bookmark click during the body read
+        // must still win over this response.
+        if (version !== savedStateVersion.current) return; // Stale response
         setBookmarked(data.savedProjectIds?.includes(project.id) ?? false);
       } catch {
         // Non-blocking
@@ -91,7 +115,7 @@ export function ImageDetailView({
             type: 'project_view',
             projectId: project.id,
             eventKey: crypto.randomUUID(),
-            anonymousId: crypto.randomUUID(),
+            anonymousId: getAnonymousId(),
           }),
         });
       } catch {
@@ -181,15 +205,23 @@ export function ImageDetailView({
     });
   }
 
-  // Share handler
-  function handleShare(e: React.MouseEvent) {
+  // Share handler — both APIs are undefined outside a secure context (e.g.
+  // testing on a phone against http://192.168.x.x), so feature-detect each one
+  // and keep the whole thing inside async/try so nothing throws synchronously.
+  async function handleShare(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     const url = `${window.location.origin}/image/${selectedImageId}`;
-    if (navigator.share) {
-      navigator.share({ title: project.title, url }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(url).catch(() => {});
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: project.title, url });
+        return;
+      }
+      if (typeof navigator.clipboard?.writeText === 'function') {
+        await navigator.clipboard.writeText(url);
+      }
+    } catch {
+      // Share sheet dismissed (AbortError) or clipboard permission denied.
     }
   }
 
@@ -229,7 +261,7 @@ export function ImageDetailView({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-muted">
-                  <svg viewBox="0 0 24 24" className="size-12 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                  <svg data-testid="image-placeholder" viewBox="0 0 24 24" className="size-12 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <circle cx="9" cy="9" r="1.5" />
                     <path d="m21 15-5-5L5 21" />

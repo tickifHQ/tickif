@@ -87,6 +87,22 @@ const gallery: PublicProjectGalleryImage[] = [
     finishes: [],
     tags: [],
   },
+  // A third image is required so ArrowLeft and ArrowRight resolve to different
+  // targets — with only two, both directions land on index 1 and the
+  // wrap-around arithmetic is untestable.
+  {
+    id: '55555555-5555-4555-8555-555555555555',
+    url: 'https://images.example.com/bedroom.jpg',
+    width: 800,
+    height: 600,
+    roomId: null,
+    roomName: 'Bedroom',
+    sortOrder: 2,
+    themes: [],
+    materials: [],
+    finishes: [],
+    tags: [],
+  },
 ];
 
 function renderComponent(overrides: Partial<Parameters<typeof ImageDetailView>[0]> = {}) {
@@ -117,6 +133,10 @@ describe('ImageDetailView', () => {
   });
 
   afterEach(() => {
+    // Drop any navigator.share / navigator.clipboard stubs installed by the
+    // share tests so they cannot leak into later cases.
+    Reflect.deleteProperty(navigator, 'share');
+    Reflect.deleteProperty(navigator, 'clipboard');
     vi.restoreAllMocks();
   });
 
@@ -142,7 +162,25 @@ describe('ImageDetailView', () => {
 
   it('shows placeholder when no image URL is available', () => {
     renderComponent({ gallery: [], activeImageId: 'nonexistent' });
-    expect(screen.getAllByText('Sunlit Bandra Apartment').length).toBeGreaterThan(0);
+
+    // Assert the placeholder branch itself, not just the title (which the hero
+    // overlay and breadcrumb render either way).
+    expect(screen.getByTestId('image-placeholder')).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('falls back to the project cover image when the gallery is empty', () => {
+    renderComponent({
+      gallery: [],
+      activeImageId: 'nonexistent',
+      project: { ...project, coverImageUrl: 'https://images.example.com/cover.jpg' },
+    });
+
+    expect(screen.queryByTestId('image-placeholder')).not.toBeInTheDocument();
+    expect(document.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://images.example.com/cover.jpg',
+    );
   });
 
   it('links to the full project route', () => {
@@ -216,18 +254,35 @@ describe('ImageDetailView', () => {
 
   // --- Finding #1: Keyboard navigation ---
 
-  it('navigates gallery with ArrowRight key', () => {
-    renderComponent();
+  it('navigates gallery forward with ArrowRight key', () => {
+    renderComponent({ activeImageId: gallery[1]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[1]!.id}`, { scroll: false });
+    expect(push).toHaveBeenCalledWith(`/image/${gallery[2]!.id}`, { scroll: false });
   });
 
-  it('navigates gallery with ArrowLeft key (wraps around)', () => {
-    renderComponent();
+  it('navigates gallery backward with ArrowLeft key', () => {
+    renderComponent({ activeImageId: gallery[1]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowLeft' });
-    expect(push).toHaveBeenCalledWith(`/image/${gallery[1]!.id}`, { scroll: false });
+    expect(push).toHaveBeenCalledWith(`/image/${gallery[0]!.id}`, { scroll: false });
+  });
+
+  it('wraps to the last image when ArrowLeft is pressed on the first', () => {
+    renderComponent({ activeImageId: gallery[0]!.id });
+
+    fireEvent.keyDown(document, { key: 'ArrowLeft' });
+    expect(push).toHaveBeenCalledWith(
+      `/image/${gallery[gallery.length - 1]!.id}`,
+      { scroll: false },
+    );
+  });
+
+  it('wraps to the first image when ArrowRight is pressed on the last', () => {
+    renderComponent({ activeImageId: gallery[gallery.length - 1]!.id });
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(push).toHaveBeenCalledWith(`/image/${gallery[0]!.id}`, { scroll: false });
   });
 
   it('does NOT navigate when arrow key is inside an input', () => {
@@ -311,6 +366,97 @@ describe('ImageDetailView', () => {
     await waitFor(() => {
       expect(bookmarkBtn).toHaveAttribute('aria-pressed', 'false');
     });
+  });
+
+  // --- Share ---
+
+  function stubNavigator(props: Record<string, unknown>) {
+    for (const [key, value] of Object.entries(props)) {
+      Object.defineProperty(navigator, key, { value, configurable: true, writable: true });
+    }
+  }
+
+  it('prefers the Web Share API when it is available', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubNavigator({ share, clipboard: { writeText } });
+
+    renderComponent();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /share/i }));
+    });
+
+    expect(share).toHaveBeenCalledWith({
+      title: project.title,
+      url: `${window.location.origin}/image/${gallery[0]!.id}`,
+    });
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the clipboard when Web Share is unavailable', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    stubNavigator({ share: undefined, clipboard: { writeText } });
+
+    renderComponent();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /share/i }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith(
+      `${window.location.origin}/image/${gallery[0]!.id}`,
+    );
+  });
+
+  it('does not raise when neither share nor clipboard exists (insecure context)', async () => {
+    // Over plain http both APIs are undefined. The old code dereferenced
+    // navigator.clipboard.writeText, which React surfaces as an unhandled
+    // error rather than a synchronous throw out of fireEvent.
+    stubNavigator({ share: undefined, clipboard: undefined });
+    const onError = vi.fn();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    window.addEventListener('error', onError);
+
+    try {
+      renderComponent();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /share/i }));
+      });
+
+      expect(onError).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('error', onError);
+      consoleError.mockRestore();
+    }
+  });
+
+  // --- View tracking identity ---
+
+  it('reuses a persisted anonymousId across page views but a fresh eventKey', async () => {
+    window.localStorage.clear();
+    const viewBodies: Array<Record<string, unknown>> = [];
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/api/interactions/views')) {
+        viewBodies.push(JSON.parse(String(init?.body)));
+        return { ok: true, json: async () => ({ recorded: true }) };
+      }
+      return { ok: true, json: async () => ({ savedProjectIds: [] }) };
+    });
+
+    await act(async () => {
+      renderComponent({ isAuthenticated: true });
+    });
+    await act(async () => {
+      renderComponent({ isAuthenticated: true });
+    });
+
+    expect(viewBodies).toHaveLength(2);
+    expect(viewBodies[0]!.anonymousId).toBe(viewBodies[1]!.anonymousId);
+    expect(viewBodies[0]!.eventKey).not.toBe(viewBodies[1]!.eventKey);
   });
 
   // --- Finding #7: Gallery accessibility ---
