@@ -135,8 +135,21 @@ function extractFacetDistribution(
   return result;
 }
 
+/**
+ * A field missing from inside `_eval(...)` does NOT surface as the named "Could not find a
+ * field" error. Typesense 30.2 answers `400 Error parsing eval expression in sort_by clause.`,
+ * which names neither field — verified against the running 30.2 image with both verification
+ * fields absent and with only `kycExpiresAt` absent. The named 404 form only appears for a bare
+ * `sort_by=isKycVerified:desc`, which this path never emits; it is kept as a belt-and-braces
+ * match in case a future version reports the eval case that way.
+ *
+ * Matching the generic parse error is safe: the retry is already gated on the verification
+ * ranking path and falls back to the static default sort, so the worst case is unranked-but-
+ * correct results instead of a 500 on the primary discovery endpoint.
+ */
 function isMissingVerificationSortField(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
+  if (error.message.includes('Error parsing eval expression')) return true;
   return (
     error.message.includes('Could not find a field named') &&
     (error.message.includes('isKycVerified') || error.message.includes('kycExpiresAt'))

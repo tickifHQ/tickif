@@ -111,6 +111,18 @@ describe('search indexer against Typesense', () => {
         updatedAt: Date.now(),
       });
 
+    // Pins the error the API-side rollout fallback matches on
+    // (`isMissingVerificationSortField` in apps/api/src/modules/search/repository.ts). Typesense
+    // reports a missing `_eval` field as a generic parse failure that names no field, so this is
+    // the only place the real string is checked against a real server.
+    await expect(
+      client.collections<DesignerSearchDocument>(collectionName).documents().search({
+        q: '*',
+        query_by: 'displayName',
+        sort_by: designerDefaultSort(),
+      }),
+    ).rejects.toThrow(/Error parsing eval expression/);
+
     const verificationFields = expectedSchema.fields.filter((field) =>
       verificationFieldNames.has(field.name),
     );
