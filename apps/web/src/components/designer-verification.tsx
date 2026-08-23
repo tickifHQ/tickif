@@ -557,17 +557,24 @@ function Requirement({ children, complete = false }: { children: ReactNode; comp
 
 function VerificationBenefits({
   businessDocumentPresent,
+  publishedProjectCount,
   personalIdentityVerified,
+  requiredProjectCount,
   projectsVerified,
 }: {
   businessDocumentPresent: boolean;
+  publishedProjectCount: number;
   personalIdentityVerified: boolean;
+  requiredProjectCount: number;
   projectsVerified: boolean;
 }) {
   const requirements = [
     { complete: personalIdentityVerified, label: 'Identity (Phone, Account owner)' },
     { complete: businessDocumentPresent, label: 'Proof of Entity registration' },
-    { complete: projectsVerified, label: 'Projects (3/3)' },
+    {
+      complete: projectsVerified,
+      label: `Projects (${publishedProjectCount}/${requiredProjectCount})`,
+    },
   ];
 
   return (
@@ -1372,7 +1379,9 @@ export function DesignerVerification({
 
         <VerificationBenefits
           businessDocumentPresent={businessDocumentPresent}
+          publishedProjectCount={approvedProjects}
           personalIdentityVerified={personalIdentityVerified}
+          requiredProjectCount={requiredProjects}
           projectsVerified={projectsVerified}
         />
       </div>

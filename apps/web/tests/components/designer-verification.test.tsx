@@ -257,6 +257,29 @@ describe('DesignerVerification', () => {
     ).not.toBeNull();
   });
 
+  it('shows backend-derived project progress in required information', () => {
+    const initialState = draftState();
+
+    render(
+      <DesignerVerification
+        initialState={{
+          ...initialState,
+          eligibility: {
+            ...initialState.eligibility,
+            publishedProjects: {
+              met: false,
+              label: 'Published projects',
+              current: 1,
+              required: 3,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Projects (1/3)')).toBeInTheDocument();
+  });
+
   it('confirms removal of an uploaded business document and restores the upload control', async () => {
     const user = userEvent.setup();
     const initialState = draftState();
