@@ -234,7 +234,6 @@ export const designerProfile = pgTable(
     shareCount: integer('share_count').default(0).notNull(),
     avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
     reviewCount: integer('review_count').default(0).notNull(),
-    // Corporate display fields (gated by entitlement at read time)
     websiteUrl: text('website_url'),
     googleBusinessUrl: text('google_business_url'),
     testimonialBannerEnabled: boolean('testimonial_banner_enabled').default(false).notNull(),
@@ -1271,7 +1270,7 @@ export const subscription = pgTable(
       .references(() => organization.id, { onDelete: 'restrict' }),
     planTier: planTierEnum('plan_tier').notNull(),
     subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
-    razorpaySubscriptionId: text('razorpay_subscription_id'),
+    razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
     razorpayStatus: text('razorpay_status'),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
@@ -1284,7 +1283,55 @@ export const subscription = pgTable(
   (t) => [
     index('subscription_organization_idx').on(t.organizationId),
     index('subscription_state_idx').on(t.subscriptionState),
-    index('subscription_razorpay_subscription_id_idx').on(t.razorpaySubscriptionId),
+    // Lifecycle data integrity: each state requires its corresponding timestamps
+    // and downstream lapse states require pre_lapse_tier for restoration.
+    check(
+      'subscription_lifecycle_check',
+      sql`
+        (
+          ${t.subscriptionState} = 'active'
+          AND ${t.graceStartedAt} IS NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'payment_failed'
+          AND ${t.graceStartedAt} IS NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'grace'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NOT NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'locked'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NOT NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NOT NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'downgraded'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NOT NULL
+          AND ${t.downgradedAt} IS NOT NULL
+          AND ${t.preLapseTier} IS NOT NULL
+        )
+      `,
+    ),
+    // Timestamp ordering: grace → locked → downgraded must be chronological
+    check(
+      'subscription_timestamp_order_check',
+      sql`
+        (${t.lockedAt} IS NULL OR ${t.graceStartedAt} IS NULL OR ${t.lockedAt} >= ${t.graceStartedAt})
+        AND (${t.downgradedAt} IS NULL OR ${t.lockedAt} IS NULL OR ${t.downgradedAt} >= ${t.lockedAt})
+      `,
+    ),
   ],
 );
 
@@ -1312,5 +1359,6 @@ export const paymentTransaction = pgTable(
   (t) => [
     index('payment_transaction_subscription_idx').on(t.subscriptionId),
     index('payment_transaction_status_idx').on(t.status),
+    check('payment_transaction_amount_positive', sql`${t.amount} > 0`),
   ],
 );

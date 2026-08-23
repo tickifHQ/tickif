@@ -261,6 +261,39 @@ export async function makeReview(overrides: Partial<typeof schema.review.$inferI
   return row!;
 }
 
+export async function makeSubscription(
+  overrides: Partial<typeof schema.subscription.$inferInsert> = {},
+) {
+  const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const [row] = await db
+    .insert(schema.subscription)
+    .values({
+      organizationId,
+      planTier: overrides.planTier ?? 'hobby',
+      subscriptionState: overrides.subscriptionState ?? 'active',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
+export async function makePaymentTransaction(
+  overrides: Partial<typeof schema.paymentTransaction.$inferInsert> = {},
+) {
+  const subscriptionId = overrides.subscriptionId ?? (await makeSubscription()).id;
+  const [row] = await db
+    .insert(schema.paymentTransaction)
+    .values({
+      subscriptionId,
+      razorpayPaymentId: overrides.razorpayPaymentId ?? `pay_${uid('txn')}`,
+      amount: overrides.amount ?? 299900,
+      status: overrides.status ?? 'captured',
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 // --- seed helpers (test-only) -------------------------------------------------
 
 export { seedTaxonomy } from './seeds/taxonomy.js';
