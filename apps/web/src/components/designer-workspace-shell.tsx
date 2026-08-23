@@ -22,6 +22,7 @@ import {
   MessageSquareMore,
   Plus,
   Settings,
+  Shield,
   ShieldCheck,
   Star,
   UsersRound,
@@ -32,6 +33,7 @@ type NavItem = {
   label: string;
   href?: string;
   icon: ComponentType<{ className?: string }>;
+  headerIcon?: ComponentType<{ className?: string }>;
   comingSoon?: boolean;
 };
 
@@ -46,7 +48,12 @@ const studioItems: NavItem[] = [
 
 const growItems: NavItem[] = [
   { label: 'Portfolio', href: '/designer/portfolio', icon: LinkIcon },
-  { label: 'Verification', icon: ShieldCheck, comingSoon: true },
+  {
+    label: 'Verification',
+    href: '/designer/verification',
+    icon: ShieldCheck,
+    headerIcon: Shield,
+  },
   { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard },
   { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
@@ -131,7 +138,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
   );
 
   if (navigationItem?.href) {
-    const Icon = navigationItem.icon;
+    const Icon = navigationItem.headerIcon ?? navigationItem.icon;
 
     return (
       <div className="hidden items-center gap-2 text-sm leading-5 font-medium text-foreground sm:inline-flex">

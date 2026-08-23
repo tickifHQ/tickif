@@ -39,6 +39,16 @@ export const countries: Country[] = allCountries
 
 const countryByIsoCode = new Map(countries.map((country) => [country.isoCode, country]));
 const MAX_E164_DIGITS = 15;
+const INDIA_MOBILE_DIGITS = 10;
+
+function maxNationalPhoneDigits(country: Country): number {
+  if (country.isoCode === 'IN') return INDIA_MOBILE_DIGITS;
+  return MAX_E164_DIGITS - country.code.replace(/\D/g, '').length;
+}
+
+function limitNationalPhoneDigits(country: Country, phone: string): string {
+  return phone.slice(0, maxNationalPhoneDigits(country));
+}
 
 export function normalizePhoneInput(
   value: string,
@@ -56,7 +66,10 @@ export function normalizePhoneInput(
       : undefined;
 
     if (international?.isPossible() && detectedCountry) {
-      return { country: detectedCountry, phone: international.nationalNumber };
+      return {
+        country: detectedCountry,
+        phone: limitNationalPhoneDigits(detectedCountry, international.nationalNumber),
+      };
     }
   }
 
@@ -68,22 +81,28 @@ export function normalizePhoneInput(
     digits.startsWith(selectedDialDigits) &&
     digits.length > local.nationalNumber.length
   ) {
-    return { country: selectedCountry, phone: local.nationalNumber };
+    return {
+      country: selectedCountry,
+      phone: limitNationalPhoneDigits(selectedCountry, local.nationalNumber),
+    };
   }
 
   if (!local?.isPossible() && digits.startsWith(selectedDialDigits)) {
     const international = parsePhoneNumber(`+${digits}`);
     if (international?.isPossible() && international.countryCallingCode === selectedDialDigits) {
+      const detectedCountry =
+        countryByIsoCode.get(international.country ?? selectedCountry.isoCode) ?? selectedCountry;
       return {
-        country:
-          countryByIsoCode.get(international.country ?? selectedCountry.isoCode) ?? selectedCountry,
-        phone: international.nationalNumber,
+        country: detectedCountry,
+        phone: limitNationalPhoneDigits(detectedCountry, international.nationalNumber),
       };
     }
   }
 
-  const maxNationalDigits = MAX_E164_DIGITS - selectedDialDigits.length;
-  return { country: selectedCountry, phone: digits.slice(0, maxNationalDigits) };
+  return {
+    country: selectedCountry,
+    phone: limitNationalPhoneDigits(selectedCountry, digits),
+  };
 }
 
 export function toE164PhoneNumber(country: Country, phone: string): string | null {
@@ -114,6 +133,7 @@ type PhoneNumberInputProps = {
   phone: string;
   placeholder?: string;
   selectedCountry: Country;
+  showDialCode?: boolean;
   wrapperClassName?: string;
 };
 
@@ -131,6 +151,7 @@ export function PhoneNumberInput({
   phone,
   placeholder = '9876543210',
   selectedCountry,
+  showDialCode = true,
   wrapperClassName,
 }: PhoneNumberInputProps) {
   const [countrySearch, setCountrySearch] = useState('');
@@ -153,6 +174,11 @@ export function PhoneNumberInput({
     onPhoneChange(normalized.phone);
   }
 
+  function handleCountryChange(country: Country) {
+    onSelectedCountryChange(country);
+    onPhoneChange(limitNationalPhoneDigits(country, phone));
+  }
+
   return (
     <div className={cn('flex', wrapperClassName)}>
       <DropdownMenu
@@ -171,7 +197,7 @@ export function PhoneNumberInput({
             aria-label={`Country code, ${selectedCountry.name} ${selectedCountry.code}`}
           >
             <span className="text-base leading-none">{selectedCountry.flag}</span>
-            {selectedCountry.code}
+            {showDialCode ? selectedCountry.code : null}
             <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
@@ -207,7 +233,7 @@ export function PhoneNumberInput({
             filteredCountries.map((country) => (
               <DropdownMenuItem
                 key={`${country.code}-${country.name}`}
-                onSelect={() => onSelectedCountryChange(country)}
+                onSelect={() => handleCountryChange(country)}
                 className="gap-2"
               >
                 <span className="text-base leading-none">{country.flag}</span>
@@ -229,6 +255,7 @@ export function PhoneNumberInput({
         aria-describedby={ariaDescribedBy}
         type="tel"
         inputMode="numeric"
+        maxLength={maxNationalPhoneDigits(selectedCountry)}
         placeholder={placeholder}
         value={phone}
         onChange={handlePhoneChange}

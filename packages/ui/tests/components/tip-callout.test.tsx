@@ -30,4 +30,21 @@ describe('TipCallout', () => {
 
     expect(container.firstElementChild).toHaveClass('flex', 'gap-1', 'mt-4');
   });
+
+  it('renders the compact information treatment with semantic blue tokens', () => {
+    const { container } = render(<TipCallout variant="info">Review guidance</TipCallout>);
+
+    expect(container.querySelector('[data-slot="tip-callout-indicator"]')).toHaveClass('bg-info');
+    expect(container.querySelector('[data-slot="tip-callout-content"]')).toHaveClass(
+      'rounded-l-sm',
+      'rounded-r-lg',
+      'border-info/40',
+      'bg-info/10',
+      'px-3',
+      'py-1.5',
+    );
+    expect(container.querySelector('svg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tip')).not.toBeInTheDocument();
+    expect(screen.getByText('Review guidance')).toHaveClass('font-normal', 'text-info');
+  });
 });

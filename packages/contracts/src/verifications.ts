@@ -67,6 +67,7 @@ export const VERIFICATION_DOCUMENT_STATUS = {
   UPLOADED: 'uploaded',
   VERIFIED: 'verified',
   REJECTED: 'rejected',
+  REMOVED: 'removed',
 } as const;
 
 export const VERIFICATION_DOCUMENT_STATUS_VALUES = [
@@ -74,6 +75,7 @@ export const VERIFICATION_DOCUMENT_STATUS_VALUES = [
   VERIFICATION_DOCUMENT_STATUS.UPLOADED,
   VERIFICATION_DOCUMENT_STATUS.VERIFIED,
   VERIFICATION_DOCUMENT_STATUS.REJECTED,
+  VERIFICATION_DOCUMENT_STATUS.REMOVED,
 ] as const;
 
 export const verificationDocumentStatusSchema = z
@@ -111,9 +113,9 @@ export const VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES = [
   'image/png',
 ] as const;
 
-export const verificationDocumentContentTypeSchema = z.enum(
-  VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES,
-).meta({ id: 'VerificationDocumentContentType' });
+export const verificationDocumentContentTypeSchema = z
+  .enum(VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES)
+  .meta({ id: 'VerificationDocumentContentType' });
 
 export const verificationDocumentUploadSchema = z
   .object({
@@ -171,6 +173,12 @@ export const verificationStateResponseSchema = z
     applicationId: z.uuid(),
     status: verificationEffectiveStatusSchema,
     attempt: z.number().int().positive(),
+    identity: z.object({
+      ownerName: z.string(),
+      ownerPhone: z.string().nullable(),
+      canEdit: z.boolean(),
+    }),
+    permissions: z.object({ canManage: z.boolean() }),
     eligibility: z.object({
       eligible: z.boolean(),
       phoneVerified: eligibilityCriterionSchema,

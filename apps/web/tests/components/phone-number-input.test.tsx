@@ -32,4 +32,15 @@ describe('phone number normalization', () => {
       phone: '9876543210',
     });
   });
+
+  it('limits Indian mobile input to ten national digits', () => {
+    expect(normalizePhoneInput('9876543210123', country('India'))).toEqual({
+      country: country('India'),
+      phone: '9876543210',
+    });
+    expect(normalizePhoneInput('+91 9876543210123', country('India'))).toEqual({
+      country: country('India'),
+      phone: '9876543210',
+    });
+  });
 });

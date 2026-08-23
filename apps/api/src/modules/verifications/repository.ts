@@ -26,6 +26,7 @@ export type VerificationContextRecord = {
   application: VerificationApplicationRecord;
   designerProfileId: string;
   designerName: string;
+  ownerUserId: string;
   ownerName: string;
   ownerEmail: string;
   ownerPhone: string | null;
@@ -112,6 +113,7 @@ async function contextForApplication(
     application,
     designerProfileId: profile.id,
     designerName: profile.displayName,
+    ownerUserId: owner.id,
     ownerName: owner.name,
     ownerEmail: owner.email,
     ownerPhone: owner.phone,
@@ -348,6 +350,116 @@ export const verificationsRepository = {
     });
   },
 
+  async cancelPendingDocument(
+    versionId: string,
+    organizationId: string,
+  ): Promise<VerificationDocumentRecord | VerificationMutationFailure> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          version: schema.verificationDocumentVersion,
+          type: schema.verificationDocumentSlot.type,
+        })
+        .from(schema.verificationDocumentVersion)
+        .innerJoin(
+          schema.verificationDocumentSlot,
+          eq(schema.verificationDocumentVersion.slotId, schema.verificationDocumentSlot.id),
+        )
+        .innerJoin(
+          schema.verificationApplication,
+          eq(schema.verificationDocumentSlot.applicationId, schema.verificationApplication.id),
+        )
+        .where(
+          and(
+            eq(schema.verificationDocumentVersion.id, versionId),
+            eq(schema.verificationApplication.organizationId, organizationId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      if (!row) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
+      if (row.version.status !== VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
+        return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
+      }
+      await tx
+        .delete(schema.verificationDocumentVersion)
+        .where(eq(schema.verificationDocumentVersion.id, versionId));
+      return { ...row.version, type: row.type };
+    });
+  },
+
+  async removeCommittedDocument(
+    versionId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<VerificationDocumentRecord | VerificationMutationFailure> {
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          version: schema.verificationDocumentVersion,
+          type: schema.verificationDocumentSlot.type,
+          application: schema.verificationApplication,
+        })
+        .from(schema.verificationDocumentVersion)
+        .innerJoin(
+          schema.verificationDocumentSlot,
+          eq(schema.verificationDocumentVersion.slotId, schema.verificationDocumentSlot.id),
+        )
+        .innerJoin(
+          schema.verificationApplication,
+          eq(schema.verificationDocumentSlot.applicationId, schema.verificationApplication.id),
+        )
+        .where(
+          and(
+            eq(schema.verificationDocumentVersion.id, versionId),
+            eq(schema.verificationApplication.organizationId, organizationId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      if (!row) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
+
+      const editable =
+        row.application.status === VERIFICATION_APPLICATION_STATUS.DRAFT ||
+        row.application.status === VERIFICATION_APPLICATION_STATUS.REJECTED ||
+        (row.application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
+          !!row.application.expiresAt &&
+          row.application.expiresAt <= new Date());
+      if (
+        !editable ||
+        row.version.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD ||
+        row.version.status === VERIFICATION_DOCUMENT_STATUS.REMOVED
+      ) {
+        return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
+      }
+
+      const [newer] = await tx
+        .select({ id: schema.verificationDocumentVersion.id })
+        .from(schema.verificationDocumentVersion)
+        .where(
+          and(
+            eq(schema.verificationDocumentVersion.slotId, row.version.slotId),
+            sql`${schema.verificationDocumentVersion.version} > ${row.version.version}`,
+          ),
+        )
+        .limit(1);
+      if (newer) return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
+
+      const removedAt = new Date();
+      const [removed] = await tx
+        .update(schema.verificationDocumentVersion)
+        .set({
+          status: VERIFICATION_DOCUMENT_STATUS.REMOVED,
+          removedAt,
+          removedByUserId: userId,
+        })
+        .where(eq(schema.verificationDocumentVersion.id, versionId))
+        .returning();
+      if (!removed) throw new Error('Verification document removal failed');
+      return { ...removed, type: row.type };
+    });
+  },
+
   async submit(input: {
     applicationId: string;
     userId: string;
@@ -581,6 +693,7 @@ export const verificationsRepository = {
     if (!owner) return null;
     return {
       ...row,
+      ownerUserId: owner.id,
       ownerName: owner.name,
       ownerEmail: owner.email,
       ownerPhone: owner.phone,

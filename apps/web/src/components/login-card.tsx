@@ -4,10 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Asterisk,
-  BadgeCheck,
   Bookmark,
   Calendar,
-  ChevronRight,
   House,
   Mail,
   MessageSquare,
@@ -26,6 +24,7 @@ import { Label } from '@repo/ui/components/label';
 import { Separator } from '@repo/ui/components/separator';
 import { Tabs, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { OtpInput } from '@/components/otp-input';
+import { OtpVerificationPanel } from '@/components/otp-verification-panel';
 import { GoogleBrandIcon } from '@/components/brand-icons';
 import {
   countries,
@@ -111,7 +110,12 @@ const trustAvatars = [
   { initials: 'SN', className: 'bg-[#5d4a6b]' },
 ] as const;
 
-export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, onClose }: LoginCardProps) {
+export function LoginCard({
+  initialMode = 'browsing',
+  callbackPath,
+  onSuccess,
+  onClose,
+}: LoginCardProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>('phone');
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]!);
@@ -653,90 +657,22 @@ export function LoginCard({ initialMode = 'browsing', callbackPath, onSuccess, o
 
   function renderOtpStep() {
     return (
-      <div data-testid="phone-otp-verification" className="flex flex-col">
-        <div
-          data-slot="verification-header"
-          className="flex items-center gap-2 border-b border-border bg-muted/30 p-3"
-        >
-          <h3 className="min-w-0 flex-1 text-base font-medium leading-relaxed text-foreground">
-            Enter verification code
-          </h3>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7 text-muted-foreground"
-            onClick={handleCancelOtp}
-            aria-label="Close verification"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-
-        <div className="flex flex-col gap-6 p-6">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex size-24 items-center justify-center rounded-full bg-gradient-to-b from-muted to-transparent p-4">
-              <div className="flex size-16 items-center justify-center rounded-full border border-border bg-background shadow-xs">
-                <BadgeCheck className="size-8 text-muted-foreground" aria-hidden="true" />
-              </div>
-            </div>
-            <p className="text-center text-base leading-6 text-muted-foreground">
-              We’ve sent a code to
-              <span className="font-medium text-foreground">
-                {' '}
-                {selectedCountry.code} {phone}
-              </span>
-            </p>
-          </div>
-
-          <OtpInput
-            value={code}
-            onChange={(value) => {
-              setCode(value);
-              setError('');
-            }}
-            onComplete={handleVerify}
-            disabled={loading}
-            variant="verification"
-          />
-
-          {error && <p className="text-center text-sm text-destructive">{error}</p>}
-
-          <div className="flex items-center justify-center gap-1 text-sm leading-relaxed">
-            <span className="text-muted-foreground">Didn’t get the code?</span>
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={cooldown > 0 || loading}
-              className="font-medium text-primary underline-offset-2 hover:underline disabled:no-underline disabled:opacity-50"
-            >
-              {cooldown > 0 ? `Resend in ${formatTimer(cooldown)}` : 'Resend'}
-            </button>
-          </div>
-        </div>
-
-        <div
-          data-slot="verification-footer"
-          className="flex items-center justify-end gap-3 border-t border-border bg-muted/30 p-3"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-muted-foreground"
-            onClick={handleCancelOtp}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleVerify}
-            disabled={loading || code.some((digit) => !digit)}
-          >
-            {loading ? 'Verifying…' : 'Continue'}
-            <ChevronRight className="size-5" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+      <OtpVerificationPanel
+        code={code}
+        sentTo={`${selectedCountry.code} ${phone}`}
+        onCodeChange={(value) => {
+          setCode(value);
+          setError('');
+        }}
+        onVerify={handleVerify}
+        onResend={handleResend}
+        onCancel={handleCancelOtp}
+        loading={loading}
+        resendDisabled={cooldown > 0}
+        resendLabel={cooldown > 0 ? `Resend in ${formatTimer(cooldown)}` : 'Resend'}
+        verifyLabel="Continue"
+        error={error}
+      />
     );
   }
 
