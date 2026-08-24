@@ -3,7 +3,7 @@
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { ArrowRight, Check, ChevronLeft } from 'lucide-react';
-import { PLAN_MAP, formatCurrency, type PlanTier } from '@/lib/plan-config';
+import { PLAN_MAP, formatCurrency, getUpgradeGains, type PlanTier } from '@/lib/plan-config';
 
 interface UpgradeConfirmationStepProps {
   currentTier: PlanTier;
@@ -20,9 +20,7 @@ export function UpgradeConfirmationStep({
 }: UpgradeConfirmationStepProps) {
   const current = PLAN_MAP[currentTier];
   const target = PLAN_MAP[targetTier];
-
-  // Features user gains (in target but not in current)
-  const gains = target.features.filter((f) => !current.features.includes(f));
+  const gains = getUpgradeGains(currentTier, targetTier);
 
   return (
     <div>
@@ -64,7 +62,7 @@ export function UpgradeConfirmationStep({
       {/* What you'll get */}
       {gains.length > 0 && (
         <div className="mt-6">
-          <p className="text-sm font-semibold text-foreground">What you&rsquo;ll get:</p>
+          <p className="text-sm font-semibold text-foreground">New features included:</p>
           <ul className="mt-3 space-y-2">
             {gains.map((feature) => (
               <li key={feature} className="flex items-center gap-2 text-sm text-foreground">
@@ -72,23 +70,16 @@ export function UpgradeConfirmationStep({
                 {feature}
               </li>
             ))}
-            <li className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Check className="size-4 shrink-0 text-primary" />
-              And more premium features
-            </li>
           </ul>
         </div>
       )}
 
-      {/* Total */}
+      {/* Estimated total */}
       <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-        <span className="text-sm font-medium text-foreground">Total</span>
+        <span className="text-sm font-medium text-foreground">Estimated Monthly</span>
         <div className="text-right">
-          <span className="text-lg font-bold text-foreground">
-            {formatCurrency(target.price)}
-          </span>
+          <span className="text-lg font-bold text-foreground">{formatCurrency(target.price)}</span>
           <span className="text-sm text-muted-foreground"> / month</span>
-          <p className="text-xs text-muted-foreground">Billed monthly</p>
         </div>
       </div>
 

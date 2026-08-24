@@ -2,8 +2,8 @@
 
 import { Button } from '@repo/ui/components/button';
 import { Separator } from '@repo/ui/components/separator';
-import { ChevronLeft, CreditCard, Lock, Shield } from 'lucide-react';
-import { PLAN_MAP, MOCK_TAX_RATE, MOCK_PAYMENT_METHOD, formatCurrency, type PlanTier } from '@/lib/plan-config';
+import { ArrowRight, ChevronLeft, Shield } from 'lucide-react';
+import { PLAN_MAP, ESTIMATED_TAX_RATE, formatCurrency, type PlanTier } from '@/lib/plan-config';
 
 interface ReviewPayStepProps {
   targetTier: PlanTier;
@@ -11,10 +11,20 @@ interface ReviewPayStepProps {
   onBack: () => void;
 }
 
+/**
+ * Review & Pay step — order summary before checkout handoff.
+ *
+ * This step shows a preview of the subscription cost. Tax and total are
+ * estimated for display only. When E-239 provides real billing totals,
+ * these should be replaced with server-provided values.
+ *
+ * The "Proceed to Checkout" button is the integration boundary for E-116
+ * (Razorpay SDK). Currently triggers the mock processing flow.
+ */
 export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps) {
   const plan = PLAN_MAP[targetTier];
-  const tax = plan.price * MOCK_TAX_RATE;
-  const total = plan.price + tax;
+  const estimatedTax = plan.price * ESTIMATED_TAX_RATE;
+  const estimatedTotal = plan.price + estimatedTax;
 
   return (
     <div>
@@ -28,9 +38,9 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
       </button>
 
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Review & Pay</h2>
+        <h2 className="text-xl font-semibold text-foreground">Review Order</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Review your order details and complete payment.
+          Review your subscription details before proceeding to payment.
         </p>
       </div>
 
@@ -51,16 +61,17 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
             <span className="font-medium text-foreground">{formatCurrency(plan.price)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Tax (18%)</span>
-            <span className="font-medium text-foreground">{formatCurrency(tax)}</span>
+            <span className="text-muted-foreground">Estimated Tax</span>
+            <span className="font-medium text-foreground">{formatCurrency(estimatedTax)}</span>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-foreground">Total</span>
+            <span className="text-base font-semibold text-foreground">Estimated Total</span>
             <div className="text-right">
-              <span className="text-lg font-bold text-foreground">{formatCurrency(total)}</span>
+              <span className="text-lg font-bold text-foreground">
+                {formatCurrency(estimatedTotal)}
+              </span>
               <span className="text-sm text-muted-foreground"> / month</span>
-              <p className="text-xs text-muted-foreground">Billed monthly</p>
             </div>
           </div>
         </div>
@@ -68,34 +79,15 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
 
       <Separator className="my-5" />
 
-      {/* Payment Method (mock) */}
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">Payment Method</h3>
-        <div className="mt-3 flex items-center justify-between rounded-lg border border-border px-4 py-3">
-          <div className="flex items-center gap-3">
-            <CreditCard className="size-5 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">
-              {MOCK_PAYMENT_METHOD.brand} •••• {MOCK_PAYMENT_METHOD.last4}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
-          >
-            Change
-          </button>
-        </div>
-      </div>
-
-      {/* Pay button */}
-      <Button className="mt-6 w-full" size="lg" onClick={onPay}>
-        <Lock className="size-4" />
-        Pay {formatCurrency(total)}
+      {/* Checkout handoff */}
+      <Button className="w-full" size="lg" onClick={onPay}>
+        Proceed to Checkout
+        <ArrowRight className="size-4" />
       </Button>
 
       <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Shield className="size-3.5" />
-        Secure payment powered by Razorpay. You can cancel or change your plan anytime.
+        Payment is securely processed by Razorpay. You can cancel anytime.
       </div>
     </div>
   );

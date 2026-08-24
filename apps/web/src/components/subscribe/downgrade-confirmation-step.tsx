@@ -4,7 +4,7 @@ import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { ArrowRight, ChevronLeft, Info, X } from 'lucide-react';
-import { PLAN_MAP, formatCurrency, type PlanTier } from '@/lib/plan-config';
+import { PLAN_MAP, formatCurrency, getDowngradeLosses, type PlanTier } from '@/lib/plan-config';
 
 interface DowngradeConfirmationStepProps {
   currentTier: PlanTier;
@@ -13,6 +13,15 @@ interface DowngradeConfirmationStepProps {
   onBack: () => void;
 }
 
+/**
+ * Downgrade confirmation step.
+ *
+ * Shows all features lost when moving from current to target tier.
+ * Losses are derived from the feature list difference (not a manual list).
+ *
+ * For paid → Hobby: this is effectively a subscription cancellation.
+ * The confirm action is an integration boundary (E-116 backend handles the actual state change).
+ */
 export function DowngradeConfirmationStep({
   currentTier,
   targetTier,
@@ -21,9 +30,8 @@ export function DowngradeConfirmationStep({
 }: DowngradeConfirmationStepProps) {
   const current = PLAN_MAP[currentTier];
   const target = PLAN_MAP[targetTier];
-
-  // Features the user loses
-  const losses = current.exclusiveFeatures;
+  const losses = getDowngradeLosses(currentTier, targetTier);
+  const isCancellation = targetTier === 'hobby';
 
   return (
     <div>
@@ -37,9 +45,13 @@ export function DowngradeConfirmationStep({
       </button>
 
       <div className="text-center">
-        <h2 className="text-xl font-semibold text-foreground">Confirm Downgrade</h2>
+        <h2 className="text-xl font-semibold text-foreground">
+          {isCancellation ? 'Cancel Subscription' : 'Confirm Downgrade'}
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          You are downgrading from {current.label} to {target.label}
+          {isCancellation
+            ? `You are cancelling your ${current.label} subscription`
+            : `You are downgrading from ${current.label} to ${target.label}`}
         </p>
       </div>
 
@@ -65,7 +77,9 @@ export function DowngradeConfirmationStep({
       {/* What you'll lose */}
       {losses.length > 0 && (
         <div className="mt-6">
-          <p className="text-sm font-semibold text-destructive">You will lose access to:</p>
+          <p className="text-sm font-semibold text-destructive">
+            Features no longer available on {target.label}:
+          </p>
           <ul className="mt-3 space-y-2">
             {losses.map((feature) => (
               <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -77,16 +91,17 @@ export function DowngradeConfirmationStep({
         </div>
       )}
 
-      {/* Preservation notice */}
+      {/* Frozen resources notice */}
       <Alert variant="info" className="mt-5">
         <Info />
         <AlertDescription>
-          These resources will be preserved and restored if you upgrade again later.
+          Your data and resources will be preserved. If you upgrade again later, frozen resources
+          will be restored.
         </AlertDescription>
       </Alert>
 
       <Button variant="destructive" className="mt-5 w-full" onClick={onConfirm}>
-        Confirm Downgrade
+        {isCancellation ? 'Cancel Subscription' : 'Confirm Downgrade'}
       </Button>
     </div>
   );
