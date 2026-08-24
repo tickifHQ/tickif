@@ -75,7 +75,7 @@ describe('verification repository lifecycle', () => {
   });
 
   it('atomically records approval, notification intent, and search projection work', async () => {
-    const { owner, profile, application } = await setupApplication();
+    const { owner, organization, profile, application } = await setupApplication();
     const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
     await Promise.all([
       makeProject({ designerId: profile.id, status: 'published' }),
@@ -93,7 +93,7 @@ describe('verification repository lifecycle', () => {
     });
     expect(typeof reserved).not.toBe('string');
     if (typeof reserved === 'string') return;
-    await verificationsRepository.commitDocument(reserved.id);
+    await verificationsRepository.commitDocument(reserved.id, organization.id);
     const submitted = await verificationsRepository.submit({
       applicationId: application.id,
       userId: owner.id,
@@ -147,7 +147,7 @@ describe('verification repository lifecycle', () => {
   });
 
   it('persists rejection notes and supports immutable document replacement on resubmission', async () => {
-    const { owner, profile, application } = await setupApplication();
+    const { owner, organization, profile, application } = await setupApplication();
     const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
     await Promise.all([
       makeProject({ designerId: profile.id, status: 'published' }),
@@ -165,7 +165,7 @@ describe('verification repository lifecycle', () => {
     });
     expect(typeof first).not.toBe('string');
     if (typeof first === 'string') return;
-    await verificationsRepository.commitDocument(first.id);
+    await verificationsRepository.commitDocument(first.id, organization.id);
     await verificationsRepository.submit({
       applicationId: application.id,
       userId: owner.id,
@@ -212,7 +212,7 @@ describe('verification repository lifecycle', () => {
     expect(typeof replacement).not.toBe('string');
     if (typeof replacement === 'string') return;
     expect(replacement.version).toBe(2);
-    await verificationsRepository.commitDocument(replacement.id);
+    await verificationsRepository.commitDocument(replacement.id, organization.id);
     await expect(
       verificationsRepository.submit({
         applicationId: application.id,

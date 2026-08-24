@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
+  PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
-  VERIFICATION_DOCUMENT_TYPE,
   VERIFICATION_EFFECTIVE_STATUS,
   VERIFICATION_REVIEW_ACTION,
   verificationDocumentContentTypeSchema,
@@ -24,6 +24,7 @@ import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
 import {
   hasBusinessDocument,
+  isApplicationEditable,
   VERIFICATION_MUTATION_RESULT,
   verificationsRepository,
   type AdminVerificationRecord,
@@ -33,6 +34,9 @@ import {
 } from './repository.js';
 
 const MIN_PUBLISHED_PROJECTS = 3;
+const personalIdentityDocumentTypes = new Set<VerificationDocumentRecord['type']>(
+  PERSONAL_VERIFICATION_DOCUMENT_TYPES,
+);
 
 export type VerificationCaller = {
   userId: string;
@@ -71,9 +75,19 @@ function latestDocuments(documents: VerificationDocumentRecord[]): VerificationD
 }
 
 function isPersonalIdentityDocument(type: VerificationDocumentRecord['type']): boolean {
-  return (
-    type === VERIFICATION_DOCUMENT_TYPE.PERSONAL_PAN || type === VERIFICATION_DOCUMENT_TYPE.AADHAAR
-  );
+  return personalIdentityDocumentTypes.has(type);
+}
+
+async function assertPersonalIdentityOwner(
+  caller: VerificationCaller,
+  organizationId: string,
+  type: VerificationDocumentRecord['type'],
+): Promise<void> {
+  if (!isPersonalIdentityDocument(type)) return;
+  const context = await verificationsRepository.findContextByOrganization(organizationId);
+  if (!context || context.ownerUserId !== caller.userId) {
+    throw AppError.forbidden('Only the organization owner can manage personal identity');
+  }
 }
 
 function effectiveStatus(application: VerificationApplicationRecord) {
@@ -161,6 +175,7 @@ async function stateForContext(
   return {
     applicationId: context.application.id,
     status: effectiveStatus(context.application),
+    applicationEditable: isApplicationEditable(context.application),
     attempt: context.application.attempt,
     identity: {
       ownerName: context.ownerName,
@@ -244,12 +259,7 @@ export const verificationsService = {
 
   async createUpload(caller: VerificationCaller, input: VerificationDocumentUploadInput) {
     const organizationId = await assertWriter(caller);
-    if (isPersonalIdentityDocument(input.type)) {
-      const context = await verificationsRepository.findContextByOrganization(organizationId);
-      if (!context || context.ownerUserId !== caller.userId) {
-        throw AppError.forbidden('Only the organization owner can upload personal identity');
-      }
-    }
+    await assertPersonalIdentityOwner(caller, organizationId, input.type);
     if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw AppError.unprocessable(
         `Document must be ${config.MEDIA_MAX_UPLOAD_BYTES} bytes or smaller`,
@@ -281,7 +291,11 @@ export const verificationsService = {
         }),
       };
     } catch (error) {
-      await verificationsRepository.cancelPendingDocument(documentVersionId, organizationId);
+      await verificationsRepository
+        .cancelPendingDocument(documentVersionId, organizationId)
+        .catch((rollbackError: unknown) => {
+          console.error('Failed to roll back verification upload reservation', rollbackError);
+        });
       throw error;
     }
   },
@@ -296,12 +310,7 @@ export const verificationsService = {
       organizationId,
     );
     if (!document) throw AppError.notFound('Verification document not found');
-    if (isPersonalIdentityDocument(document.type)) {
-      const context = await verificationsRepository.findContextByOrganization(organizationId);
-      if (!context || context.ownerUserId !== caller.userId) {
-        throw AppError.forbidden('Only the organization owner can remove personal identity');
-      }
-    }
+    await assertPersonalIdentityOwner(caller, organizationId, document.type);
 
     if (document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
       if (document.uploadedByUserId !== caller.userId) {
@@ -317,7 +326,7 @@ export const verificationsService = {
       if (typeof cancelled === 'string') {
         throw AppError.conflict('Verification document state changed');
       }
-      await Promise.allSettled([deleteObject(cancelled.objectKey)]);
+      await deleteObject(cancelled.objectKey).catch(() => undefined);
       return this.getState(caller);
     }
 
@@ -332,7 +341,8 @@ export const verificationsService = {
     if (typeof removed === 'string') {
       throw AppError.conflict('Verification document state changed');
     }
-    await Promise.allSettled([deleteObject(removed.objectKey)]);
+    // Committed objects are retained with their removed audit record. A future
+    // retention job can purge them after the required review window.
     return this.getState(caller);
   },
 
@@ -346,13 +356,14 @@ export const verificationsService = {
       organizationId,
     );
     if (!document) throw AppError.notFound('Verification document not found');
+    await assertPersonalIdentityOwner(caller, organizationId, document.type);
     if (document.status !== VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
       throw AppError.conflict('Verification document was already committed');
     }
     if (!(await objectExists(document.objectKey))) {
       throw AppError.unprocessable('Upload the document before committing it');
     }
-    const committed = await verificationsRepository.commitDocument(versionId);
+    const committed = await verificationsRepository.commitDocument(versionId, organizationId);
     if (typeof committed === 'string') {
       throw AppError.conflict('Verification document state changed');
     }
@@ -363,15 +374,7 @@ export const verificationsService = {
     const organizationId = await assertWriter(caller);
     const context = await verificationsRepository.findContextByOrganization(organizationId);
     if (!context) throw AppError.notFound('Verification application not found');
-    if (
-      context.application.status !== VERIFICATION_APPLICATION_STATUS.DRAFT &&
-      context.application.status !== VERIFICATION_APPLICATION_STATUS.REJECTED &&
-      !(
-        context.application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
-        context.application.expiresAt &&
-        context.application.expiresAt <= new Date()
-      )
-    ) {
+    if (!isApplicationEditable(context.application)) {
       throw AppError.invalidTransition('Verification is already pending or approved');
     }
     const documents = latestDocuments(

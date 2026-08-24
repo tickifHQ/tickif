@@ -42,6 +42,14 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
         ['uploaded', 'verified'].includes(document.status),
     ),
   ),
+  isApplicationEditable: vi.fn(
+    (application: { status: string; expiresAt: Date | null }) =>
+      application.status === 'draft' ||
+      application.status === 'rejected' ||
+      (application.status === 'verified' &&
+        application.expiresAt !== null &&
+        application.expiresAt <= new Date()),
+  ),
   verificationsRepository: {
     getOrCreateForOrganization: vi.fn(),
     findContextByOrganization: vi.fn(),
@@ -51,7 +59,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     reserveDocumentVersion: vi.fn(),
     findDocumentForOrganization: vi.fn(),
     commitDocument: vi.fn(),
-    cancelPendingDocument: vi.fn(),
+    cancelPendingDocument: vi.fn(async () => 'state_changed'),
     removeCommittedDocument: vi.fn(),
     submit: vi.fn(),
     listPending: vi.fn(),
@@ -132,6 +140,7 @@ describe('verificationsService', () => {
     const result = await verificationsService.getState(caller);
 
     expect(result.status).toBe(VERIFICATION_APPLICATION_STATUS.DRAFT);
+    expect(result.applicationEditable).toBe(true);
     expect(result.identity).toEqual({
       ownerName: 'Aditya Garud',
       ownerPhone: '+919999999999',
@@ -388,6 +397,28 @@ describe('verificationsService', () => {
     );
   });
 
+  it('preserves the original presign error when reservation rollback also fails', async () => {
+    vi.mocked(verificationsRepository.reserveDocumentVersion).mockResolvedValue(document);
+    vi.mocked(presignUpload).mockRejectedValueOnce(new Error('storage unavailable'));
+    vi.mocked(verificationsRepository.cancelPendingDocument).mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      verificationsService.createUpload(caller, {
+        type: 'gst_registration_certificate',
+        contentType: 'application/pdf',
+        size: 1000,
+      }),
+    ).rejects.toThrow('storage unavailable');
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to roll back verification upload reservation',
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
+  });
+
   it('cancels only the original uploader pending reservation', async () => {
     const pendingDocument = {
       ...document,
@@ -405,6 +436,26 @@ describe('verificationsService', () => {
       'org-1',
     );
     expect(deleteObject).toHaveBeenCalledWith(pendingDocument.objectKey);
+  });
+
+  it('commits a tenant-scoped upload and returns the refreshed state', async () => {
+    const pendingDocument = {
+      ...document,
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+      committedAt: null,
+    };
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue(
+      pendingDocument,
+    );
+    vi.mocked(verificationsRepository.commitDocument).mockResolvedValue(document);
+
+    const result = await verificationsService.commitUpload(caller, pendingDocument.id);
+
+    expect(verificationsRepository.commitDocument).toHaveBeenCalledWith(
+      pendingDocument.id,
+      'org-1',
+    );
+    expect(result.applicationId).toBe(application.id);
   });
 
   it('does not cancel another uploader pending reservation', async () => {
@@ -446,7 +497,7 @@ describe('verificationsService', () => {
       'org-1',
       caller.userId,
     );
-    expect(deleteObject).toHaveBeenCalledWith(currentDocument.objectKey);
+    expect(deleteObject).not.toHaveBeenCalled();
     expect(state.documents).toEqual([]);
     expect(state.eligibility.businessDocumentPresent.met).toBe(false);
   });
@@ -466,6 +517,23 @@ describe('verificationsService', () => {
     });
     expect(verificationsRepository.removeCommittedDocument).not.toHaveBeenCalled();
     expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('restricts committing a personal identity document to the organization owner', async () => {
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue({
+      ...document,
+      type: 'personal_pan',
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+    });
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      ownerUserId: 'owner-2',
+    });
+
+    await expect(verificationsService.commitUpload(caller, document.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(verificationsRepository.commitDocument).not.toHaveBeenCalled();
   });
 
   it('uses the dedicated short TTL for private verification document downloads', async () => {

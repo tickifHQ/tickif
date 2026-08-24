@@ -42,21 +42,21 @@ export async function uploadVerificationDocument(
       body: file,
     });
     if (!storageResponse.ok) throw new Error('Could not upload the document.');
-
-    const commitResponse = await api.api.verifications.documents[':versionId'].commit.$post({
-      param: { versionId: reservation.documentVersionId },
-    });
-    return await handleApiResponse(
-      commitResponse,
-      verificationStateResponseSchema,
-      'Could not finish the document upload.',
-    );
   } catch (error) {
     await api.api.verifications.documents[':versionId']
       .$delete({ param: { versionId: reservation.documentVersionId } })
       .catch(() => undefined);
     throw error;
   }
+
+  const commitResponse = await api.api.verifications.documents[':versionId'].commit.$post({
+    param: { versionId: reservation.documentVersionId },
+  });
+  return handleApiResponse(
+    commitResponse,
+    verificationStateResponseSchema,
+    'Could not finish the document upload.',
+  );
 }
 
 export async function removeVerificationDocument(

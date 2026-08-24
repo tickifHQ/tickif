@@ -33,6 +33,9 @@
   --home-search-shadow: 0 16px 48px 0 rgba(45, 90, 61, 0.15), 0 0 0 0 #f0faf3;
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
+  --verification-hero-background: linear-gradient(103.5deg, #1a1b1e 0%, #2e2d2a 100%);
+  --verification-hero-foreground: oklch(1 0 0);
+  --verification-hero-glow: #626262;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.21 0.006 286);
   --popover: oklch(1 0 0);
@@ -77,8 +80,6 @@
     linear-gradient(180deg, oklch(1 0 0 / 0.16) 0%, oklch(1 0 0 / 0) 100%),
     linear-gradient(90deg, var(--button-fancy) 0%, var(--button-fancy) 100%);
   --button-fancy-shadow: 0 0 0 1px #242628, 0 1px 2px oklch(0.235 0.003 248 / 0.48);
-  --verification-hero-background: linear-gradient(104deg, #1a1b1e 0%, #2e2d2a 100%);
-  --verification-hero-glow: #626262;
 
   --chart-1: oklch(0.616 0.116 170);
   --chart-2: oklch(0.508 0.105 166);
@@ -102,6 +103,9 @@
   --home-search-shadow: 0 16px 48px 0 oklch(0 0 0 / 0.25);
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
+  --verification-hero-background: linear-gradient(103.5deg, #1a1b1e 0%, #2e2d2a 100%);
+  --verification-hero-foreground: oklch(1 0 0);
+  --verification-hero-glow: #626262;
   --card: oklch(0.23 0.012 280);
   --card-foreground: oklch(0.985 0.001 286);
   --popover: oklch(0.23 0.012 280);
@@ -142,8 +146,6 @@
     linear-gradient(180deg, oklch(1 0 0 / 0.16) 0%, oklch(1 0 0 / 0) 100%),
     linear-gradient(90deg, var(--button-fancy) 0%, var(--button-fancy) 100%);
   --button-fancy-shadow: 0 0 0 1px #242628, 0 1px 2px oklch(0.235 0.003 248 / 0.48);
-  --verification-hero-background: linear-gradient(104deg, #1a1b1e 0%, #2e2d2a 100%);
-  --verification-hero-glow: #626262;
 
   --chart-1: oklch(0.72 0.13 168);
   --chart-2: oklch(0.65 0.12 162);

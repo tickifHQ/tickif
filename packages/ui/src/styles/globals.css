@@ -36,6 +36,8 @@
   --color-home-search-foreground-disabled: var(--home-search-foreground-disabled);
   --color-surface-inverse: var(--surface-inverse);
   --color-surface-inverse-foreground: var(--surface-inverse-foreground);
+  --color-verification-hero-foreground: var(--verification-hero-foreground);
+  --color-verification-hero-glow: var(--verification-hero-glow);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -78,6 +80,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
+  --background-image-verification-hero: var(--verification-hero-background);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

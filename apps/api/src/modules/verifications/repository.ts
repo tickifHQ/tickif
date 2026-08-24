@@ -38,6 +38,19 @@ export type AdminVerificationRecord = VerificationContextRecord & {
   organizationName: string;
 };
 
+export function isApplicationEditable(
+  application: Pick<VerificationApplicationRecord, 'status' | 'expiresAt'>,
+  now = new Date(),
+): boolean {
+  return (
+    application.status === VERIFICATION_APPLICATION_STATUS.DRAFT ||
+    application.status === VERIFICATION_APPLICATION_STATUS.REJECTED ||
+    (application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
+      application.expiresAt !== null &&
+      application.expiresAt <= now)
+  );
+}
+
 export const VERIFICATION_MUTATION_RESULT = {
   NOT_FOUND: 'not_found',
   STATE_CHANGED: 'state_changed',
@@ -224,15 +237,7 @@ export const verificationsRepository = {
         .for('update')
         .limit(1);
       if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
-      if (
-        application.status !== VERIFICATION_APPLICATION_STATUS.DRAFT &&
-        application.status !== VERIFICATION_APPLICATION_STATUS.REJECTED &&
-        !(
-          application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
-          application.expiresAt &&
-          application.expiresAt <= new Date()
-        )
-      ) {
+      if (!isApplicationEditable(application)) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
 
@@ -311,33 +316,39 @@ export const verificationsRepository = {
 
   async commitDocument(
     versionId: string,
+    organizationId: string,
   ): Promise<VerificationDocumentVersionRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select()
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.organizationId, organizationId))
+        .for('update')
+        .limit(1);
+      if (!application) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
+
       const [row] = await tx
         .select({
           version: schema.verificationDocumentVersion,
-          application: schema.verificationApplication,
         })
         .from(schema.verificationDocumentVersion)
         .innerJoin(
           schema.verificationDocumentSlot,
           eq(schema.verificationDocumentVersion.slotId, schema.verificationDocumentSlot.id),
         )
-        .innerJoin(
-          schema.verificationApplication,
-          eq(schema.verificationDocumentSlot.applicationId, schema.verificationApplication.id),
+        .where(
+          and(
+            eq(schema.verificationDocumentVersion.id, versionId),
+            eq(schema.verificationDocumentSlot.applicationId, application.id),
+          ),
         )
-        .where(eq(schema.verificationDocumentVersion.id, versionId))
         .for('update')
         .limit(1);
       if (!row) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
-      const editable =
-        row.application.status === VERIFICATION_APPLICATION_STATUS.DRAFT ||
-        row.application.status === VERIFICATION_APPLICATION_STATUS.REJECTED ||
-        (row.application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
-          !!row.application.expiresAt &&
-          row.application.expiresAt <= new Date());
-      if (!editable || row.version.status !== VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
+      if (
+        !isApplicationEditable(application) ||
+        row.version.status !== VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD
+      ) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
       const [updated] = await tx
@@ -355,6 +366,14 @@ export const verificationsRepository = {
     organizationId: string,
   ): Promise<VerificationDocumentRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select({ id: schema.verificationApplication.id })
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.organizationId, organizationId))
+        .for('update')
+        .limit(1);
+      if (!application) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
+
       const [row] = await tx
         .select({
           version: schema.verificationDocumentVersion,
@@ -365,14 +384,10 @@ export const verificationsRepository = {
           schema.verificationDocumentSlot,
           eq(schema.verificationDocumentVersion.slotId, schema.verificationDocumentSlot.id),
         )
-        .innerJoin(
-          schema.verificationApplication,
-          eq(schema.verificationDocumentSlot.applicationId, schema.verificationApplication.id),
-        )
         .where(
           and(
             eq(schema.verificationDocumentVersion.id, versionId),
-            eq(schema.verificationApplication.organizationId, organizationId),
+            eq(schema.verificationDocumentSlot.applicationId, application.id),
           ),
         )
         .for('update')
@@ -394,39 +409,36 @@ export const verificationsRepository = {
     userId: string,
   ): Promise<VerificationDocumentRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select()
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.organizationId, organizationId))
+        .for('update')
+        .limit(1);
+      if (!application) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
+
       const [row] = await tx
         .select({
           version: schema.verificationDocumentVersion,
           type: schema.verificationDocumentSlot.type,
-          application: schema.verificationApplication,
         })
         .from(schema.verificationDocumentVersion)
         .innerJoin(
           schema.verificationDocumentSlot,
           eq(schema.verificationDocumentVersion.slotId, schema.verificationDocumentSlot.id),
         )
-        .innerJoin(
-          schema.verificationApplication,
-          eq(schema.verificationDocumentSlot.applicationId, schema.verificationApplication.id),
-        )
         .where(
           and(
             eq(schema.verificationDocumentVersion.id, versionId),
-            eq(schema.verificationApplication.organizationId, organizationId),
+            eq(schema.verificationDocumentSlot.applicationId, application.id),
           ),
         )
         .for('update')
         .limit(1);
       if (!row) return VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND;
 
-      const editable =
-        row.application.status === VERIFICATION_APPLICATION_STATUS.DRAFT ||
-        row.application.status === VERIFICATION_APPLICATION_STATUS.REJECTED ||
-        (row.application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
-          !!row.application.expiresAt &&
-          row.application.expiresAt <= new Date());
       if (
-        !editable ||
+        !isApplicationEditable(application) ||
         row.version.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD ||
         row.version.status === VERIFICATION_DOCUMENT_STATUS.REMOVED
       ) {

@@ -2,7 +2,12 @@
 
 import { useRef, useState } from 'react';
 import { countries as allCountries } from 'country-codes-flags-phone-codes';
-import parsePhoneNumber, { isSupportedCountry, type CountryCode } from 'libphonenumber-js/max';
+import parsePhoneNumber, {
+  getExampleNumber,
+  isSupportedCountry,
+  type CountryCode,
+} from 'libphonenumber-js/max';
+import mobilePhoneExamples from 'libphonenumber-js/examples.mobile.json';
 import { ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,11 +44,23 @@ export const countries: Country[] = allCountries
 
 const countryByIsoCode = new Map(countries.map((country) => [country.isoCode, country]));
 const MAX_E164_DIGITS = 15;
-const INDIA_MOBILE_DIGITS = 10;
+
+const maxNationalDigitsByCountry = new Map(
+  countries.map((country) => {
+    const dialCodeLength = country.code.replace(/\D/g, '').length;
+    // OTP verification requires a mobile number, so derive the cap from the
+    // library's mobile numbering-plan data rather than the general E.164 limit.
+    const example = getExampleNumber(country.isoCode, mobilePhoneExamples);
+    const maximum = example?.nationalNumber.length ?? MAX_E164_DIGITS - dialCodeLength;
+    return [country.isoCode, Math.min(maximum, MAX_E164_DIGITS - dialCodeLength)] as const;
+  }),
+);
 
 function maxNationalPhoneDigits(country: Country): number {
-  if (country.isoCode === 'IN') return INDIA_MOBILE_DIGITS;
-  return MAX_E164_DIGITS - country.code.replace(/\D/g, '').length;
+  return (
+    maxNationalDigitsByCountry.get(country.isoCode) ??
+    MAX_E164_DIGITS - country.code.replace(/\D/g, '').length
+  );
 }
 
 function limitNationalPhoneDigits(country: Country, phone: string): string {

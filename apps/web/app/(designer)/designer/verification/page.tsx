@@ -24,13 +24,11 @@ export default async function DesignerVerificationPage() {
   try {
     const state = await fetchVerificationState({ cookie });
     return <DesignerVerification initialState={state} />;
-  } catch (error) {
+  } catch {
     return (
       <DesignerVerification
         initialState={null}
-        initialLoadError={
-          error instanceof Error ? error.message : 'Could not load verification details.'
-        }
+        initialLoadError="Could not load verification details."
       />
     );
   }

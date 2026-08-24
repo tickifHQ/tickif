@@ -57,6 +57,11 @@ export const BUSINESS_VERIFICATION_DOCUMENT_TYPES = [
   VERIFICATION_DOCUMENT_TYPE.CERTIFICATE_OF_INCORPORATION,
 ] as const;
 
+export const PERSONAL_VERIFICATION_DOCUMENT_TYPES = [
+  VERIFICATION_DOCUMENT_TYPE.PERSONAL_PAN,
+  VERIFICATION_DOCUMENT_TYPE.AADHAAR,
+] as const;
+
 export const verificationDocumentTypeSchema = z
   .enum(VERIFICATION_DOCUMENT_TYPE_VALUES)
   .meta({ id: 'VerificationDocumentType' });
@@ -172,6 +177,7 @@ export const verificationStateResponseSchema = z
   .object({
     applicationId: z.uuid(),
     status: verificationEffectiveStatusSchema,
+    applicationEditable: z.boolean(),
     attempt: z.number().int().positive(),
     identity: z.object({
       ownerName: z.string(),

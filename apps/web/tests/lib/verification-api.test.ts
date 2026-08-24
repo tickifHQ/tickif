@@ -36,6 +36,7 @@ vi.mock('@/lib/api', () => ({
 const state: VerificationStateResponse = {
   applicationId: '11111111-1111-4111-8111-111111111111',
   status: 'draft',
+  applicationEditable: true,
   attempt: 1,
   identity: {
     ownerName: 'Anika Sharma',
@@ -135,7 +136,7 @@ describe('verification-api', () => {
     });
   });
 
-  it('cleans up a reservation when committing the upload fails', async () => {
+  it('does not delete storage after the commit request has started', async () => {
     mock.uploadPost.mockResolvedValue(
       jsonResponse({
         documentVersionId: '22222222-2222-4222-8222-222222222222',
@@ -151,9 +152,7 @@ describe('verification-api', () => {
         new File(['document'], 'registration.pdf', { type: 'application/pdf' }),
       ),
     ).rejects.toThrow();
-    expect(mock.cancelDelete).toHaveBeenCalledWith({
-      param: { versionId: '22222222-2222-4222-8222-222222222222' },
-    });
+    expect(mock.cancelDelete).not.toHaveBeenCalled();
   });
 
   it('submits the server-authoritative application', async () => {

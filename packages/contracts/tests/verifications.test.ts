@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+  PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_DOCUMENT_TYPE,
   rejectVerificationSchema,
   verificationDocumentUploadSchema,
@@ -14,6 +15,13 @@ describe('verification contracts', () => {
     expect(BUSINESS_VERIFICATION_DOCUMENT_TYPES).not.toContain(
       VERIFICATION_DOCUMENT_TYPE.AADHAAR as never,
     );
+  });
+
+  it('keeps personal identity document types shared across clients and services', () => {
+    expect(PERSONAL_VERIFICATION_DOCUMENT_TYPES).toEqual([
+      VERIFICATION_DOCUMENT_TYPE.PERSONAL_PAN,
+      VERIFICATION_DOCUMENT_TYPE.AADHAAR,
+    ]);
   });
 
   it('accepts only private-document MIME types supported by v1', () => {

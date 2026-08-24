@@ -34,6 +34,7 @@ vi.mock('@/lib/auth-client', () => ({
 const verifiedState: VerificationStateResponse = {
   applicationId: '11111111-1111-4111-8111-111111111111',
   status: 'verified',
+  applicationEditable: false,
   attempt: 1,
   identity: {
     ownerName: 'Anika Sharma',
@@ -72,6 +73,7 @@ function draftState(overrides: Partial<VerificationStateResponse> = {}): Verific
   return {
     ...verifiedState,
     status: 'draft',
+    applicationEditable: true,
     submittedAt: null,
     reviewedAt: null,
     approvedAt: null,
@@ -87,6 +89,7 @@ function pendingState(
   return {
     ...draftState(),
     status: 'pending',
+    applicationEditable: false,
     submittedAt: '2026-08-23T11:45:57.863Z',
     ...overrides,
   };
@@ -99,6 +102,7 @@ function rejectedState(
   return {
     ...initialState,
     status: 'rejected',
+    applicationEditable: true,
     submittedAt: '2026-08-20T10:05:00.000Z',
     reviewedAt: '2026-08-21T10:05:00.000Z',
     latestNote: 'Please upload a clearer certificate.',
@@ -207,7 +211,7 @@ describe('DesignerVerification', () => {
     const { container, rerender } = render(<DesignerVerification initialState={initialState} />);
 
     expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeEnabled();
-    expect(container.querySelector('#business-document')).toBeInTheDocument();
+    expect(container.querySelector('#business-document')).not.toBeInTheDocument();
 
     rerender(<DesignerVerification initialState={pendingState()} />);
 
@@ -255,6 +259,32 @@ describe('DesignerVerification', () => {
         .getByText('Proof of Entity registration')
         .parentElement?.querySelector('.text-success'),
     ).not.toBeNull();
+  });
+
+  it('renders every current business document and prevents another upload', () => {
+    const secondDocument = {
+      ...verifiedState.documents[0]!,
+      id: '44444444-4444-4444-8444-444444444444',
+      type: 'business_pan' as const,
+      status: 'uploaded' as const,
+      size: 48_128,
+    };
+    const { container } = render(
+      <DesignerVerification
+        initialState={draftState({
+          documents: [{ ...verifiedState.documents[0]!, status: 'uploaded' }, secondDocument],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('MSME certificate')).toBeInTheDocument();
+    expect(screen.getByText('PAN Card')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove MSME certificate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove PAN Card' })).toBeInTheDocument();
+    expect(container.querySelector('#business-document')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'Select document type' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows backend-derived project progress in required information', () => {
@@ -307,6 +337,31 @@ describe('DesignerVerification', () => {
     expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeDisabled();
   });
 
+  it('shows a failed document removal inside the confirmation dialog', async () => {
+    const user = userEvent.setup();
+    mock.removeDocument.mockRejectedValue(new Error('Could not remove the document.'));
+    render(<DesignerVerification initialState={draftState()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove MSME certificate' }));
+    await user.click(screen.getByRole('button', { name: 'Remove document' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Could not remove the document.');
+  });
+
+  it('uses privacy-safe copy when a member cannot read the owner phone', () => {
+    render(
+      <DesignerVerification
+        initialState={draftState({
+          identity: { ...verifiedState.identity, ownerPhone: null, canEdit: false },
+          permissions: { canManage: false },
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Verified by the account owner')).toBeInTheDocument();
+    expect(screen.queryByText('Account owner phone · OTP verified')).not.toBeInTheDocument();
+  });
+
   it('shows the authoritative project count and disables submission when incomplete', () => {
     const initialState = draftState({
       eligibility: {
@@ -351,7 +406,7 @@ describe('DesignerVerification', () => {
     await waitFor(() =>
       expect(mock.uploadDocument).toHaveBeenCalledWith('msme_udyam_registration', file),
     );
-    expect(await screen.findAllByText('MSME certificate')).toHaveLength(2);
+    expect(await screen.findByText('MSME certificate')).toBeInTheDocument();
   });
 
   it('keeps personal identity uploads owner-only while allowing business management', () => {
@@ -362,6 +417,7 @@ describe('DesignerVerification', () => {
         ...verifiedState.eligibility,
         eligible: false,
         phoneVerified: { met: false, label: 'Phone verified' },
+        businessDocumentPresent: { met: false, label: 'Business document present' },
       },
       documents: [],
     });
@@ -564,13 +620,24 @@ describe('DesignerVerification', () => {
       await screen.findByText('Verification eligibility requirements changed.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resubmit for verification' })).toBeEnabled();
-    expect(container.querySelector('#business-document')).toBeInTheDocument();
+    expect(container.querySelector('#business-document')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submitted' })).not.toBeInTheDocument();
   });
 
   it('selects a supported business document type', async () => {
     const user = userEvent.setup();
-    render(<DesignerVerification initialState={draftState()} />);
+    render(
+      <DesignerVerification
+        initialState={draftState({
+          eligibility: {
+            ...verifiedState.eligibility,
+            eligible: false,
+            businessDocumentPresent: { met: false, label: 'Business document present' },
+          },
+          documents: [],
+        })}
+      />,
+    );
 
     const trigger = screen.getByRole('combobox', { name: 'Select document type' });
     await user.click(trigger);
