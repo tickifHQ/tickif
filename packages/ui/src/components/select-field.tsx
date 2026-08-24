@@ -18,7 +18,6 @@ type SelectFieldProps = Omit<ComponentProps<'select'>, 'onChange'> & {
   onValueChange: (value: string) => void;
   options: readonly SelectFieldOption[];
   placeholder: string;
-  selectClassName?: string;
   value: string;
 };
 
@@ -30,7 +29,6 @@ export function SelectField({
   onValueChange,
   options,
   placeholder,
-  selectClassName,
   value,
   ...props
 }: SelectFieldProps) {
@@ -55,7 +53,6 @@ export function SelectField({
             'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 text-sm shadow-xs transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             !value && 'text-muted-foreground',
-            selectClassName,
           )}
         >
           {allowEmpty ? (
