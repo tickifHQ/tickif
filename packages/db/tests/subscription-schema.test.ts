@@ -35,11 +35,11 @@ describe('subscription schema', () => {
       expect(orgColumn?.isUnique).toBe(true);
     });
 
-    it('references organization with ON DELETE RESTRICT', () => {
+    it('references organization with ON DELETE CASCADE', () => {
       const orgFk = config.foreignKeys.find((fk) =>
         fk.reference().columns.some((col) => col.name === 'organization_id'),
       );
-      expect(orgFk?.onDelete).toBe('restrict');
+      expect(orgFk?.onDelete).toBe('cascade');
     });
 
     it('makes razorpay_subscription_id unique (nullable for Hobby)', () => {
@@ -73,14 +73,16 @@ describe('subscription schema', () => {
       ).toBe(true);
     });
 
-    it('indexes organization_id and subscription_state for lookups', () => {
+    it('indexes lifecycle sweep queries with partial composite indexes', () => {
       const indexNames = config.indexes.map((idx) => idx.config.name);
-      expect(indexNames).toContain('subscription_organization_idx');
-      expect(indexNames).toContain('subscription_state_idx');
+      expect(indexNames).toContain('subscription_grace_sweep_idx');
+      expect(indexNames).toContain('subscription_locked_sweep_idx');
     });
 
-    it('does not have a redundant index on razorpay_subscription_id (unique provides it)', () => {
+    it('does not have redundant single-column indexes (unique constraints provide them)', () => {
       const indexNames = config.indexes.map((idx) => idx.config.name);
+      expect(indexNames).not.toContain('subscription_organization_idx');
+      expect(indexNames).not.toContain('subscription_state_idx');
       expect(indexNames).not.toContain('subscription_razorpay_subscription_id_idx');
     });
 
@@ -110,7 +112,7 @@ describe('subscription schema', () => {
 
     it('active state requires no lapse timestamps and no pre_lapse_tier', () => {
       // subscription_lifecycle_check: active AND grace_started_at IS NULL
-      //   AND locked_at IS NULL AND downgraded_at IS NULL
+      //   AND locked_at IS NULL AND downgraded_at IS NULL AND pre_lapse_tier IS NULL
       const checkNames = config.checks.map((chk) => chk.name);
       expect(checkNames).toContain('subscription_lifecycle_check');
     });
@@ -118,6 +120,7 @@ describe('subscription schema', () => {
     it('payment_failed requires all lapse fields NULL (pre-lapse transitional state)', () => {
       // subscription_lifecycle_check: payment_failed AND grace_started_at IS NULL
       //   AND locked_at IS NULL AND downgraded_at IS NULL AND pre_lapse_tier IS NULL
+      // Identical to active — ensures reactivation must fully reset before re-entering lapse
       const checkNames = config.checks.map((chk) => chk.name);
       expect(checkNames).toContain('subscription_lifecycle_check');
     });
@@ -165,19 +168,19 @@ describe('payment transaction schema', () => {
     expect(col?.notNull).toBe(true);
   });
 
-  it('references subscription with ON DELETE RESTRICT', () => {
+  it('references subscription with ON DELETE CASCADE', () => {
     const subFk = config.foreignKeys.find((fk) =>
       fk.reference().columns.some((col) => col.name === 'subscription_id'),
     );
-    expect(subFk?.onDelete).toBe('restrict');
+    expect(subFk?.onDelete).toBe('cascade');
   });
 
-  it('stores amount as integer (paise) with positive value constraint', () => {
+  it('stores amount as integer (paise) with non-negative constraint', () => {
     const col = config.columns.find((col) => col.name === 'amount');
     expect(col?.columnType).toBe('PgInteger');
     expect(col?.notNull).toBe(true);
     const checkNames = config.checks.map((chk) => chk.name);
-    expect(checkNames).toContain('payment_transaction_amount_positive');
+    expect(checkNames).toContain('payment_transaction_amount_nonnegative');
   });
 
   it('uses text for status (external system value, not a local enum)', () => {

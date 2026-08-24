@@ -1259,6 +1259,12 @@ export const subscriptionStateEnum = pgEnum('subscription_state', SUBSCRIPTION_S
  * One active subscription per organization (enforced by unique organizationId).
  * Updated in-place as the subscription progresses through its lifecycle.
  * Payment history is tracked in payment_transaction.
+ *
+ * Voluntary cancellation (user downgrades to Hobby) is represented as:
+ *   subscriptionState = 'active', planTier = 'hobby'
+ * The 'downgraded' state is reserved exclusively for the involuntary lapse terminal
+ * stage (payment_failed → grace → locked → downgraded). It preserves pre_lapse_tier
+ * for restoration if the org reactivates.
  */
 export const subscription = pgTable(
   'subscription',
@@ -1267,7 +1273,7 @@ export const subscription = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .unique()
-      .references(() => organization.id, { onDelete: 'restrict' }),
+      .references(() => organization.id, { onDelete: 'cascade' }),
     planTier: planTierEnum('plan_tier').notNull(),
     subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
     razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
@@ -1278,11 +1284,21 @@ export const subscription = pgTable(
     downgradedAt: timestamp('downgraded_at', { withTimezone: true }),
     preLapseTier: planTierEnum('pre_lapse_tier'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (t) => [
-    index('subscription_organization_idx').on(t.organizationId),
-    index('subscription_state_idx').on(t.subscriptionState),
+    // Sweep indexes for the lifecycle worker (E-239):
+    // Find grace-period subscriptions past their window
+    index('subscription_grace_sweep_idx')
+      .on(t.subscriptionState, t.graceStartedAt)
+      .where(sql`${t.subscriptionState} = 'grace'`),
+    // Find locked subscriptions past their window
+    index('subscription_locked_sweep_idx')
+      .on(t.subscriptionState, t.lockedAt)
+      .where(sql`${t.subscriptionState} = 'locked'`),
     // Lifecycle data integrity: each state requires its corresponding timestamps
     // and downstream lapse states require pre_lapse_tier for restoration.
     check(
@@ -1293,6 +1309,7 @@ export const subscription = pgTable(
           AND ${t.graceStartedAt} IS NULL
           AND ${t.lockedAt} IS NULL
           AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NULL
         )
         OR (
           ${t.subscriptionState} = 'payment_failed'
@@ -1346,7 +1363,7 @@ export const paymentTransaction = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     subscriptionId: uuid('subscription_id')
       .notNull()
-      .references(() => subscription.id, { onDelete: 'restrict' }),
+      .references(() => subscription.id, { onDelete: 'cascade' }),
     razorpayPaymentId: text('razorpay_payment_id').notNull().unique(),
     amount: integer('amount').notNull(),
     currency: text('currency').notNull().default('INR'),
@@ -1354,11 +1371,14 @@ export const paymentTransaction = pgTable(
     payload: jsonb('payload').$type<Record<string, unknown>>(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (t) => [
     index('payment_transaction_subscription_idx').on(t.subscriptionId),
     index('payment_transaction_status_idx').on(t.status),
-    check('payment_transaction_amount_positive', sql`${t.amount} > 0`),
+    check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],
 );

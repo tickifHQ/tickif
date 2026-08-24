@@ -1,5 +1,5 @@
 {
-  "id": "ec42b580-0942-4b00-8ae1-51faf508132f",
+  "id": "01d03a55-e096-474c-ab06-055e63077548",
   "prevId": "084d5a27-088a-4f3b-a866-33fafee01051",
   "version": "7",
   "dialect": "postgresql",
@@ -2694,7 +2694,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -2710,9 +2710,9 @@
       },
       "policies": {},
       "checkConstraints": {
-        "payment_transaction_amount_positive": {
-          "name": "payment_transaction_amount_positive",
-          "value": "\"payment_transaction\".\"amount\" > 0"
+        "payment_transaction_amount_nonnegative": {
+          "name": "payment_transaction_amount_nonnegative",
+          "value": "\"payment_transaction\".\"amount\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -4617,32 +4617,46 @@
         }
       },
       "indexes": {
-        "subscription_organization_idx": {
-          "name": "subscription_organization_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "subscription_state_idx": {
-          "name": "subscription_state_idx",
+        "subscription_grace_sweep_idx": {
+          "name": "subscription_grace_sweep_idx",
           "columns": [
             {
               "expression": "subscription_state",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
+            },
+            {
+              "expression": "grace_started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
             }
           ],
           "isUnique": false,
+          "where": "\"subscription\".\"subscription_state\" = 'grace'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subscription_locked_sweep_idx": {
+          "name": "subscription_locked_sweep_idx",
+          "columns": [
+            {
+              "expression": "subscription_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"subscription\".\"subscription_state\" = 'locked'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4659,7 +4673,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -4684,7 +4698,7 @@
       "checkConstraints": {
         "subscription_lifecycle_check": {
           "name": "subscription_lifecycle_check",
-          "value": "\n        (\n          \"subscription\".\"subscription_state\" = 'active'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'payment_failed'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'grace'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'locked'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'downgraded'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n      "
+          "value": "\n        (\n          \"subscription\".\"subscription_state\" = 'active'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'payment_failed'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'grace'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'locked'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'downgraded'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n      "
         },
         "subscription_timestamp_order_check": {
           "name": "subscription_timestamp_order_check",

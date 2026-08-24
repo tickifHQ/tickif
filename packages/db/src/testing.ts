@@ -265,12 +265,48 @@ export async function makeSubscription(
   overrides: Partial<typeof schema.subscription.$inferInsert> = {},
 ) {
   const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const state = overrides.subscriptionState ?? 'active';
+
+  // Derive required lifecycle fields from the requested state using relative offsets.
+  const now = new Date();
+  const graceDelta = 5 * 24 * 60 * 60 * 1000; // 5 days ago
+  const lockDelta = 2 * 24 * 60 * 60 * 1000; // 2 days ago
+
+  const stateDefaults: Partial<typeof schema.subscription.$inferInsert> = (() => {
+    switch (state) {
+      case 'active':
+      case 'payment_failed':
+        return {};
+      case 'grace':
+        return {
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+        };
+      case 'locked':
+        return {
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
+          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+        };
+      case 'downgraded':
+        return {
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
+          downgradedAt: overrides.downgradedAt ?? now,
+          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+        };
+      default:
+        return {};
+    }
+  })();
+
   const [row] = await db
     .insert(schema.subscription)
     .values({
       organizationId,
       planTier: overrides.planTier ?? 'hobby',
-      subscriptionState: overrides.subscriptionState ?? 'active',
+      subscriptionState: state,
+      ...stateDefaults,
       ...overrides,
     })
     .returning();
