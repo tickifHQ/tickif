@@ -15,52 +15,55 @@ export type PlanTier = 'hobby' | 'professional_plus' | 'corporate';
 export type PlanDefinition = {
   tier: PlanTier;
   label: string;
+  /** Explicit tier rank. Higher = more features. Used for upgrade/downgrade logic. */
+  rank: number;
   price: number; // monthly INR (display only)
-  features: string[];
+  /**
+   * Base features unique to this tier (not inherited from lower tiers).
+   * The full feature set for a tier is the union of its own baseFeatures
+   * plus all baseFeatures from lower-ranked tiers.
+   */
+  baseFeatures: string[];
 };
 
+/**
+ * Plan definitions ordered by rank.
+ * Each tier's full entitlement set = its baseFeatures + all lower tiers' baseFeatures.
+ */
 export const PLANS: PlanDefinition[] = [
   {
     tier: 'hobby',
     label: 'Hobby',
+    rank: 0,
     price: 0,
-    features: ['1 Seat', '1 Studio', 'Unlimited Projects', 'Full Enquiry Visibility'],
+    baseFeatures: ['1 Seat', '1 Studio', 'Unlimited Projects', 'Full Enquiry Visibility'],
   },
   {
     tier: 'professional_plus',
     label: 'Professional+',
+    rank: 1,
     price: 2999,
-    features: [
-      '1 Seat',
-      'Unlimited Projects',
-      'Full Enquiry Visibility',
-      'Verified Badge',
-      'Discovery Priority',
-      'Priority Support',
-    ],
+    baseFeatures: ['Verified Badge', 'Discovery Priority', 'Priority Support'],
   },
   {
     tier: 'corporate',
     label: 'Corporate',
+    rank: 2,
     price: 7999,
-    features: [
+    baseFeatures: [
       'Unlimited Members',
       'Unlimited Branches',
       'Branch Dashboards',
       'Full RBAC',
       'Prime Directory Placement',
-      'Verified Badge',
-      'Discovery Priority',
-      'Priority Support',
     ],
   },
 ];
 
-export const PLAN_MAP: Record<PlanTier, PlanDefinition> = {
-  hobby: PLANS[0]!,
-  professional_plus: PLANS[1]!,
-  corporate: PLANS[2]!,
-};
+/** Lookup by tier key. Never relies on array position. */
+export const PLAN_MAP: Record<PlanTier, PlanDefinition> = Object.fromEntries(
+  PLANS.map((p) => [p.tier, p]),
+) as Record<PlanTier, PlanDefinition>;
 
 /** Estimated tax rate for display/preview only. Not a billing calculation. */
 export const ESTIMATED_TAX_RATE = 0.18;
@@ -74,38 +77,44 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function getPlanIndex(tier: PlanTier): number {
-  return PLANS.findIndex((p) => p.tier === tier);
+/**
+ * Get the cumulative feature set for a tier.
+ * Includes its own baseFeatures plus all lower-ranked tiers' baseFeatures.
+ */
+export function getCumulativeFeatures(tier: PlanTier): string[] {
+  const plan = PLAN_MAP[tier];
+  const lowerTiers = PLANS.filter((p) => p.rank < plan.rank);
+  const inherited = lowerTiers.flatMap((p) => p.baseFeatures);
+  return [...inherited, ...plan.baseFeatures];
 }
 
-/** Whether target is a higher tier than current. Returns false for unknown/invalid tiers. */
+/** Whether target is a higher tier than current. Uses explicit rank, not array position. */
 export function isUpgrade(current: PlanTier, target: PlanTier): boolean {
-  const currentIdx = getPlanIndex(current);
-  const targetIdx = getPlanIndex(target);
-  if (currentIdx === -1 || targetIdx === -1) return false;
-  return targetIdx > currentIdx;
+  if (!isValidTier(current) || !isValidTier(target)) return false;
+  return PLAN_MAP[target].rank > PLAN_MAP[current].rank;
 }
 
-/** Whether the given tier is a known valid plan tier. */
+/** Whether the given tier is a known valid plan tier (safe against prototype keys). */
 export function isValidTier(tier: string): tier is PlanTier {
-  return tier in PLAN_MAP;
+  return Object.hasOwn(PLAN_MAP, tier);
 }
 
 /**
  * Features lost when moving from current to target plan.
- * Derived from the feature list difference — not a separate manual list.
+ * Derived from the cumulative feature sets of both tiers.
  */
 export function getDowngradeLosses(currentTier: PlanTier, targetTier: PlanTier): string[] {
-  const current = PLAN_MAP[currentTier];
-  const target = PLAN_MAP[targetTier];
-  return current.features.filter((f) => !target.features.includes(f));
+  const currentFeatures = getCumulativeFeatures(currentTier);
+  const targetFeatures = getCumulativeFeatures(targetTier);
+  return currentFeatures.filter((f) => !targetFeatures.includes(f));
 }
 
 /**
  * Features gained when moving from current to target plan.
+ * Derived from the cumulative feature sets of both tiers.
  */
 export function getUpgradeGains(currentTier: PlanTier, targetTier: PlanTier): string[] {
-  const current = PLAN_MAP[currentTier];
-  const target = PLAN_MAP[targetTier];
-  return target.features.filter((f) => !current.features.includes(f));
+  const currentFeatures = getCumulativeFeatures(currentTier);
+  const targetFeatures = getCumulativeFeatures(targetTier);
+  return targetFeatures.filter((f) => !currentFeatures.includes(f));
 }

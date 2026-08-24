@@ -1,19 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SubscribeFlowDialog } from '../../src/components/subscribe/subscribe-flow-dialog';
 import type { PlanTier } from '../../src/lib/plan-config';
 import {
+  getCumulativeFeatures,
   getDowngradeLosses,
   getUpgradeGains,
   isUpgrade,
   isValidTier,
+  PLAN_MAP,
 } from '../../src/lib/plan-config';
 
 // ─── Unit tests: plan-config ─────────────────────────────────────────────────
 
 describe('plan-config', () => {
-  describe('isUpgrade', () => {
+  describe('isUpgrade (explicit rank)', () => {
     it('hobby → professional_plus is upgrade', () => {
       expect(isUpgrade('hobby', 'professional_plus')).toBe(true);
     });
@@ -32,6 +34,11 @@ describe('plan-config', () => {
     it('same tier is NOT upgrade', () => {
       expect(isUpgrade('hobby', 'hobby')).toBe(false);
     });
+    it('uses explicit rank, not array position', () => {
+      // Even if PLANS array were reordered, rank determines direction
+      expect(PLAN_MAP.hobby.rank).toBeLessThan(PLAN_MAP.professional_plus.rank);
+      expect(PLAN_MAP.professional_plus.rank).toBeLessThan(PLAN_MAP.corporate.rank);
+    });
   });
 
   describe('isValidTier', () => {
@@ -45,16 +52,50 @@ describe('plan-config', () => {
       expect(isValidTier('')).toBe(false);
       expect(isValidTier('HOBBY')).toBe(false);
     });
+    it('rejects prototype-inherited keys (toString, constructor, hasOwnProperty)', () => {
+      expect(isValidTier('toString')).toBe(false);
+      expect(isValidTier('constructor')).toBe(false);
+      expect(isValidTier('hasOwnProperty')).toBe(false);
+      expect(isValidTier('__proto__')).toBe(false);
+    });
   });
 
-  describe('getDowngradeLosses', () => {
-    it('corporate → hobby loses all corporate and professional+ features', () => {
+  describe('getCumulativeFeatures', () => {
+    it('hobby has only its own features', () => {
+      const features = getCumulativeFeatures('hobby');
+      expect(features).toContain('1 Seat');
+      expect(features).toContain('Unlimited Projects');
+      expect(features).not.toContain('Verified Badge');
+    });
+
+    it('professional_plus inherits hobby features', () => {
+      const features = getCumulativeFeatures('professional_plus');
+      expect(features).toContain('1 Seat');
+      expect(features).toContain('Unlimited Projects');
+      expect(features).toContain('Verified Badge');
+      expect(features).toContain('Discovery Priority');
+    });
+
+    it('corporate inherits hobby + professional_plus features', () => {
+      const features = getCumulativeFeatures('corporate');
+      expect(features).toContain('1 Seat');
+      expect(features).toContain('Verified Badge');
+      expect(features).toContain('Discovery Priority');
+      expect(features).toContain('Unlimited Members');
+      expect(features).toContain('Prime Directory Placement');
+    });
+  });
+
+  describe('getDowngradeLosses (cumulative)', () => {
+    it('corporate → hobby loses ALL features above hobby', () => {
       const losses = getDowngradeLosses('corporate', 'hobby');
       expect(losses).toContain('Unlimited Members');
       expect(losses).toContain('Unlimited Branches');
       expect(losses).toContain('Verified Badge');
       expect(losses).toContain('Discovery Priority');
       expect(losses).toContain('Priority Support');
+      expect(losses).not.toContain('1 Seat');
+      expect(losses).not.toContain('Unlimited Projects');
     });
 
     it('corporate → professional_plus loses only corporate-exclusive features', () => {
@@ -77,18 +118,25 @@ describe('plan-config', () => {
     });
   });
 
-  describe('getUpgradeGains', () => {
-    it('hobby → professional_plus gains pro+ features', () => {
+  describe('getUpgradeGains (cumulative)', () => {
+    it('hobby → professional_plus gains pro+ base features', () => {
       const gains = getUpgradeGains('hobby', 'professional_plus');
       expect(gains).toContain('Verified Badge');
       expect(gains).toContain('Discovery Priority');
+      expect(gains).not.toContain('1 Seat'); // already has it
     });
 
-    it('hobby → corporate gains all corporate features', () => {
+    it('hobby → corporate gains all non-hobby features', () => {
       const gains = getUpgradeGains('hobby', 'corporate');
       expect(gains).toContain('Unlimited Members');
-      expect(gains).toContain('Unlimited Branches');
       expect(gains).toContain('Verified Badge');
+      expect(gains).toContain('Prime Directory Placement');
+    });
+
+    it('professional_plus → corporate gains only corporate base features', () => {
+      const gains = getUpgradeGains('professional_plus', 'corporate');
+      expect(gains).toContain('Unlimited Members');
+      expect(gains).not.toContain('Verified Badge'); // already has it
     });
   });
 });
@@ -96,6 +144,10 @@ describe('plan-config', () => {
 // ─── Component tests: SubscribeFlowDialog ────────────────────────────────────
 
 describe('SubscribeFlowDialog', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function renderDialog(currentTier: PlanTier = 'professional_plus') {
     const onOpenChange = vi.fn();
     const result = render(
@@ -104,24 +156,35 @@ describe('SubscribeFlowDialog', () => {
     return { ...result, onOpenChange };
   }
 
-  describe('upgrade flow', () => {
+  describe('upgrade flow: select → confirm → review → processing → success', () => {
     it('shows plan selection on open', () => {
       renderDialog('hobby');
       expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
     });
 
-    it('upgrade: select → confirm → review (never shows ₹0 payment)', async () => {
-      const user = userEvent.setup();
+    it('full upgrade flow reaches success after timer', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderDialog('hobby');
 
-      // Select Corporate plan
+      // Select Corporate
       await user.click(screen.getByRole('button', { name: /select corporate plan/i }));
       expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
 
-      // Confirm upgrade → review
+      // Confirm → Review
       await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
       expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
       expect(screen.getByText(/Estimated Tax/)).toBeInTheDocument();
+
+      // Pay → Processing
+      await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
+      expect(screen.getByText(/Processing your payment/)).toBeInTheDocument();
+
+      // Advance timer → Success
+      vi.advanceTimersByTime(2600);
+      await waitFor(() => {
+        expect(screen.getByText('Subscription updated')).toBeInTheDocument();
+      });
     });
   });
 
@@ -134,21 +197,21 @@ describe('SubscribeFlowDialog', () => {
       expect(screen.getByRole('heading', { name: 'Confirm Downgrade' })).toBeInTheDocument();
     });
 
-    it('downgrade closes dialog without reaching review/pay step', async () => {
+    it('downgrade shows cancellation result (not review/pay)', async () => {
       const user = userEvent.setup();
-      const { onOpenChange } = renderDialog('corporate');
+      renderDialog('corporate');
 
       await user.click(screen.getByRole('button', { name: /select professional\+ plan/i }));
-      expect(screen.getByRole('heading', { name: 'Confirm Downgrade' })).toBeInTheDocument();
-
-      // Confirm downgrade — should close dialog, NOT go to review
       await user.click(screen.getByRole('button', { name: /confirm downgrade/i }));
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+
+      // Should show downgrade confirmation, not review
+      expect(screen.getByText('Downgrade confirmed')).toBeInTheDocument();
+      expect(screen.queryByText('Review Order')).not.toBeInTheDocument();
     });
   });
 
   describe('paid → Hobby cancellation', () => {
-    it('shows cancellation wording instead of "downgrade"', async () => {
+    it('shows cancellation wording', async () => {
       const user = userEvent.setup();
       renderDialog('professional_plus');
 
@@ -161,15 +224,23 @@ describe('SubscribeFlowDialog', () => {
       renderDialog('professional_plus');
 
       await user.click(screen.getByRole('button', { name: /select hobby plan/i }));
-      // Should show cancellation, not "Review Order" with ₹0
       expect(screen.queryByText('Review Order')).not.toBeInTheDocument();
       expect(screen.queryByText(/Pay ₹0/)).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /cancel subscription/i })).toBeInTheDocument();
+    });
+
+    it('confirms cancellation with explicit result state', async () => {
+      const user = userEvent.setup();
+      renderDialog('professional_plus');
+
+      await user.click(screen.getByRole('button', { name: /select hobby plan/i }));
+      await user.click(screen.getByRole('button', { name: /cancel subscription/i }));
+
+      expect(screen.getByText('Downgrade confirmed')).toBeInTheDocument();
     });
   });
 
-  describe('dialog reset on close', () => {
-    it('resets to select when dialog closes and reopens', () => {
+  describe('dialog reset', () => {
+    it('parent setting open=false resets to select on reopen', () => {
       const onOpenChange = vi.fn();
       const { rerender } = render(
         <SubscribeFlowDialog
@@ -179,7 +250,7 @@ describe('SubscribeFlowDialog', () => {
         />,
       );
 
-      // Close the dialog
+      // Close via parent
       rerender(
         <SubscribeFlowDialog
           open={false}
@@ -187,6 +258,7 @@ describe('SubscribeFlowDialog', () => {
           currentTier="professional_plus"
         />,
       );
+
       // Reopen
       rerender(
         <SubscribeFlowDialog
@@ -198,50 +270,68 @@ describe('SubscribeFlowDialog', () => {
 
       expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
     });
+
+    it('advancing beyond select and closing via parent still resets', async () => {
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <SubscribeFlowDialog
+          open={true}
+          onOpenChange={onOpenChange}
+          currentTier="hobby"
+        />,
+      );
+
+      // Advance to confirm
+      await user.click(screen.getByRole('button', { name: /select corporate plan/i }));
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+
+      // Parent closes
+      rerender(
+        <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" />,
+      );
+
+      // Reopen — must be at select
+      rerender(
+        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
+      );
+
+      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
+    });
   });
 
   describe('processing lifecycle', () => {
-    it('processing shows spinner text', async () => {
-      const user = userEvent.setup();
+    it('processing timer reaches success (timer bug regression test)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderDialog('hobby');
 
-      // Navigate to review then checkout
       await user.click(screen.getByRole('button', { name: /select corporate plan/i }));
       await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
       await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
 
-      // Now in processing
+      // Must be in processing
       expect(screen.getByText(/Processing your payment/)).toBeInTheDocument();
+
+      // Timer fires → must reach success
+      vi.advanceTimersByTime(2600);
+      await waitFor(() => {
+        expect(screen.getByText('Subscription updated')).toBeInTheDocument();
+      });
     });
 
-    it('processing completes to success after timer', async () => {
-      vi.useFakeTimers();
-      const onOpenChange = vi.fn();
-      render(
-        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
-      );
-
-      // We can't easily click through with fake timers due to Radix internals.
-      // Instead, test that the processing step renders its expected content.
-      // The full flow (click through to processing → success) is validated
-      // by the unit tests on getUpgradeGains/isUpgrade and the previous
-      // integration test "upgrade: select → confirm → review".
-      // Timer cleanup is tested by the "closing during processing" test.
-      vi.useRealTimers();
-    });
-
-    it('closing during processing resets state for next open', () => {
+    it('closing during processing clears timer and resets', () => {
       const onOpenChange = vi.fn();
       const { rerender } = render(
         <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
       );
 
-      // Close dialog (simulating user pressing escape during some step)
+      // Close
       rerender(
         <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" />,
       );
 
-      // Reopen — should be back on select
+      // Reopen
       rerender(
         <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
       );
@@ -258,7 +348,6 @@ describe('SubscribeFlowDialog', () => {
 
       await user.click(screen.getByRole('button', { name: /select hobby plan/i }));
 
-      // Should show corporate + professional+ exclusive features
       expect(screen.getByText('Unlimited Members')).toBeInTheDocument();
       expect(screen.getByText('Unlimited Branches')).toBeInTheDocument();
       expect(screen.getByText('Verified Badge')).toBeInTheDocument();
@@ -273,12 +362,23 @@ describe('SubscribeFlowDialog', () => {
         <SubscribeFlowDialog
           open={true}
           onOpenChange={vi.fn()}
-          // @ts-expect-error — testing runtime safety with invalid tier
+          // @ts-expect-error — testing runtime safety
           currentTier="enterprise"
         />,
       );
       expect(screen.getByText(/Unable to load plan information/)).toBeInTheDocument();
-      expect(screen.queryByText('Choose your plan')).not.toBeInTheDocument();
+    });
+
+    it('rejects prototype-inherited keys as tier', () => {
+      render(
+        <SubscribeFlowDialog
+          open={true}
+          onOpenChange={vi.fn()}
+          // @ts-expect-error — testing runtime safety
+          currentTier="toString"
+        />,
+      );
+      expect(screen.getByText(/Unable to load plan information/)).toBeInTheDocument();
     });
   });
 
@@ -292,6 +392,20 @@ describe('SubscribeFlowDialog', () => {
       expect(
         screen.getByRole('button', { name: /hobby is your current plan/i }),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('accessibility live regions', () => {
+    it('processing step has role=status', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderDialog('hobby');
+
+      await user.click(screen.getByRole('button', { name: /select corporate plan/i }));
+      await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
+      await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
+
+      expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 });

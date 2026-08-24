@@ -6,27 +6,43 @@ import { PLAN_MAP, type PlanTier } from '@/lib/plan-config';
 
 interface SuccessStepProps {
   targetTier: PlanTier;
+  kind: 'upgrade' | 'downgrade';
   onDone: () => void;
 }
 
 /**
- * Success step — shown after the checkout/processing flow completes.
+ * Success/confirmation step.
  *
- * When E-116 integrates real Razorpay payments, the copy here should reflect
- * whether the payment was confirmed vs still pending webhook confirmation.
+ * For upgrades: shown after the mock processing timer completes.
+ * For downgrades: shown immediately as a plan-change acknowledgment.
+ *
+ * When E-116 provides real Razorpay/cancellation APIs, the copy here should
+ * reflect whether the action was confirmed vs still pending backend processing.
  */
-export function SuccessStep({ targetTier, onDone }: SuccessStepProps) {
+export function SuccessStep({ targetTier, kind, onDone }: SuccessStepProps) {
   const plan = PLAN_MAP[targetTier];
 
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
       <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
         <CheckCircle2 className="size-8 text-primary" />
       </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">Subscription updated</h2>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        {kind === 'upgrade' ? 'Subscription updated' : 'Downgrade confirmed'}
+      </h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your <strong>{plan.label}</strong> plan is now active. You can manage your subscription
-        from the Plan & Billing page.
+        {kind === 'upgrade' ? (
+          <>
+            Your <strong>{plan.label}</strong> plan is now active. You can manage your subscription
+            from the Plan & Billing page.
+          </>
+        ) : (
+          <>
+            You have chosen to move to the <strong>{plan.label}</strong> plan. Once billing
+            integration is active, this change will take effect at the end of your current billing
+            period.
+          </>
+        )}
       </p>
       <Button className="mt-6" onClick={onDone}>
         Done

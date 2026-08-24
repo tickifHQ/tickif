@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 
 export function ProcessingStep() {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
       <div className="relative flex size-20 items-center justify-center">
         <div className="absolute inset-0 animate-spin rounded-full border-4 border-muted border-t-primary" />
         <Loader2 className="size-8 animate-spin text-primary" />

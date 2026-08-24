@@ -3,7 +3,7 @@
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { Check, Crown, Building2, Sparkles } from 'lucide-react';
-import { PLANS, type PlanTier } from '@/lib/plan-config';
+import { PLANS, formatCurrency, getCumulativeFeatures, type PlanTier } from '@/lib/plan-config';
 
 interface PlanSelectionStepProps {
   currentTier: PlanTier;
@@ -30,6 +30,7 @@ export function PlanSelectionStep({ currentTier, onSelectPlan }: PlanSelectionSt
         {PLANS.map((plan) => {
           const isCurrent = plan.tier === currentTier;
           const Icon = PLAN_ICONS[plan.tier];
+          const features = getCumulativeFeatures(plan.tier);
 
           return (
             <Card
@@ -47,7 +48,7 @@ export function PlanSelectionStep({ currentTier, onSelectPlan }: PlanSelectionSt
 
                 <div className="mt-3">
                   <span className="text-3xl font-bold text-foreground">
-                    {plan.price === 0 ? '₹0' : `₹${plan.price.toLocaleString('en-IN')}`}
+                    {formatCurrency(plan.price)}
                   </span>
                   <span className="text-sm text-muted-foreground"> / month</span>
                 </div>
@@ -56,7 +57,7 @@ export function PlanSelectionStep({ currentTier, onSelectPlan }: PlanSelectionSt
                 )}
 
                 <ul className="mt-4 flex-1 space-y-2">
-                  {plan.features.map((feature) => (
+                  {features.map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-sm text-foreground">
                       <Check className="size-4 shrink-0 text-primary" />
                       {feature}
