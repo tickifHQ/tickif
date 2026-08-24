@@ -1,10 +1,8 @@
-import Link from 'next/link';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import {
   ArrowRight,
-  ArrowUpRight,
   Building2,
   Check,
   CreditCard,
@@ -19,14 +17,13 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
-import type { BillingState, FrozenResource, PlanTier, OrgRole } from '@/lib/billing-types';
+import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types';
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
-import { CopyButton } from '@/components/copy-button';
+import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
-  role: OrgRole;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,6 +63,11 @@ function lifecycleCta(state: BillingState): { label: string; href: string } | nu
   }
 }
 
+/** Whether the subscription is in an impaired lifecycle state. */
+function isImpaired(lifecycle: BillingState['lifecycle']): boolean {
+  return lifecycle === 'locked' || lifecycle === 'downgraded';
+}
+
 // ─── Current Plan Card ───────────────────────────────────────────────────────
 
 function CurrentPlanCard({ billing }: { billing: BillingState }) {
@@ -84,9 +86,6 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
             <p className="text-sm font-bold text-muted-foreground">Current Plan</p>
             <div className="mt-1 flex items-center gap-2">
               <h2 className="text-2xl font-bold text-foreground">{tierLabel}</h2>
-              {billing.lifecycle === 'active' && billing.tier !== 'hobby' && (
-                <Badge variant="default">Popular</Badge>
-              )}
               {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
                 <Badge variant="secondary">Free</Badge>
               )}
@@ -107,12 +106,18 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
               <span className="font-semibold">
                 ₹{price.toLocaleString('en-IN')} / month
               </span>
-              {billing.usage.seats.limit && (
+              {billing.usage.seats.limit != null && (
                 <>
                   <span className="mx-2">·</span>
                   <span className="font-semibold">
                     {billing.usage.seats.current} seat{billing.usage.seats.current !== 1 ? 's' : ''}
                   </span>
+                </>
+              )}
+              {billing.usage.seats.limit === null && (
+                <>
+                  <span className="mx-2">·</span>
+                  <span className="font-semibold">Unlimited seats</span>
                 </>
               )}
             </p>
@@ -129,7 +134,13 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
             {billing.subscriptionId && (
               <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                 Subscription ID: <span className="font-mono">{billing.subscriptionId}</span>
-                <CopyButton value={billing.subscriptionId ?? ''} />
+                <CopyLinkButton
+                  value={billing.subscriptionId}
+                  variant="ghost"
+                  size="icon"
+                  label=""
+                  icon="copy"
+                />
               </p>
             )}
           </div>
@@ -177,7 +188,7 @@ function UsageMetricCard({
             )}
             <div className="mt-1">
               <span className="text-2xl font-semibold text-foreground">{current}</span>
-              {limit !== null && (
+              {limit != null && (
                 <span className="text-base text-muted-foreground"> / {limit}</span>
               )}
               {limit === null && (
@@ -189,7 +200,7 @@ function UsageMetricCard({
         <p className="mt-3 text-xs text-muted-foreground">
           {current} active {unit}
         </p>
-        {percentage !== null && (
+        {percentage != null && (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
@@ -203,36 +214,34 @@ function UsageMetricCard({
 }
 
 function UsageSummary({ billing }: { billing: BillingState }) {
-  const hasBranches = billing.tier === 'corporate' && billing.usage.branches;
-
   return (
     <Card radius="2xl">
       <div className="p-6">
         <h2 className="text-lg font-semibold text-foreground">Usage Summary</h2>
-        <div className={`mt-4 grid gap-4 ${hasBranches ? 'sm:grid-cols-2' : 'sm:grid-cols-1 max-w-sm'}`}>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <UsageMetricCard
             label={billing.usage.seats.label}
             current={billing.usage.seats.current}
             limit={billing.usage.seats.limit}
             unit={billing.usage.seats.unit}
           />
-          {hasBranches && billing.usage.branches && (
-            <UsageMetricCard
-              label={billing.usage.branches.label}
-              current={billing.usage.branches.current}
-              limit={billing.usage.branches.limit}
-              unit={billing.usage.branches.unit}
-            />
-          )}
+          <UsageMetricCard
+            label={billing.usage.branches.label}
+            current={billing.usage.branches.current}
+            limit={billing.usage.branches.limit}
+            unit={billing.usage.branches.unit}
+          />
         </div>
         {billing.tier === 'professional_plus' && (
           <p className="mt-4 text-xs text-muted-foreground">
-            Professional+ includes 1 seat. For additional team members and branches, upgrade to Corporate.
+            Professional+ includes 1 seat. For additional team members and branches, upgrade to
+            Corporate.
           </p>
         )}
         {billing.tier === 'hobby' && (
           <p className="mt-4 text-xs text-muted-foreground">
-            Hobby includes 1 seat and 1 studio. Upgrade to Professional+ for verified badge and discovery priority.
+            Hobby includes 1 seat and 1 studio. Upgrade to Professional+ for verified badge and
+            discovery priority.
           </p>
         )}
       </div>
@@ -244,6 +253,8 @@ function UsageSummary({ billing }: { billing: BillingState }) {
 
 function BillingSummary({ billing }: { billing: BillingState }) {
   if (!billing.billing) return null;
+  if (isImpaired(billing.lifecycle)) return null;
+
   const info = billing.billing;
 
   return (
@@ -260,7 +271,7 @@ function BillingSummary({ billing }: { billing: BillingState }) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Billing Cycle</p>
-              <p className="mt-0.5 text-sm font-medium text-foreground capitalize">
+              <p className="mt-0.5 text-sm font-medium capitalize text-foreground">
                 {info.billingCycle ?? '—'}
               </p>
             </div>
@@ -286,7 +297,7 @@ function BillingSummary({ billing }: { billing: BillingState }) {
             </div>
             {info.tax > 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Tax (18%)</span>
+                <span className="text-muted-foreground">Tax</span>
                 <span className="font-medium text-foreground">{formatCurrency(info.tax)}</span>
               </div>
             )}
@@ -294,11 +305,6 @@ function BillingSummary({ billing }: { billing: BillingState }) {
               <span className="font-semibold text-foreground">Total</span>
               <span className="font-semibold text-foreground">{formatCurrency(info.total)}</span>
             </div>
-            <Button asChild variant="link" size="sm" className="mt-2 px-0">
-              <Link href="/designer/plan-billing/invoices">
-                View Invoices <ArrowUpRight className="size-3.5" />
-              </Link>
-            </Button>
           </div>
         </div>
       </div>
@@ -308,14 +314,21 @@ function BillingSummary({ billing }: { billing: BillingState }) {
 
 // ─── Upgrade Card (sidebar) ──────────────────────────────────────────────────
 
-function UpgradeCard({ currentTier }: { currentTier: PlanTier }) {
-  if (currentTier === 'corporate') return null;
+function UpgradeCard({ billing }: { billing: BillingState }) {
+  if (billing.tier === 'corporate') return null;
+  // Don't show upgrade offers when subscription is in an impaired state —
+  // the CTA should be "reactivate" not "upgrade".
+  if (isImpaired(billing.lifecycle)) return null;
 
-  // Hobby sees two upgrade cards: Professional+ and Corporate
-  // Professional+ sees one: Corporate
-  const cards: { tier: PlanTier; label: string; price: number; description: string; benefits: string[] }[] = [];
+  const cards: {
+    tier: PlanTier;
+    label: string;
+    price: number;
+    description: string;
+    benefits: string[];
+  }[] = [];
 
-  if (currentTier === 'hobby') {
+  if (billing.tier === 'hobby') {
     cards.push({
       tier: 'professional_plus',
       label: 'Professional+',
@@ -332,7 +345,8 @@ function UpgradeCard({ currentTier }: { currentTier: PlanTier }) {
       tier: 'corporate',
       label: 'Corporate',
       price: PLAN_TIER_PRICES.corporate,
-      description: 'Unlock unlimited team collaboration, branches, and advanced organization features.',
+      description:
+        'Unlock unlimited team collaboration, branches, and advanced organization features.',
       benefits: [
         'Unlimited team members',
         'Unlimited branches',
@@ -345,7 +359,8 @@ function UpgradeCard({ currentTier }: { currentTier: PlanTier }) {
       tier: 'corporate',
       label: 'Corporate',
       price: PLAN_TIER_PRICES.corporate,
-      description: 'Unlock unlimited team collaboration, branches, and advanced organization features.',
+      description:
+        'Unlock unlimited team collaboration, branches, and advanced organization features.',
       benefits: [
         'Unlimited team members',
         'Unlimited branches',
@@ -379,9 +394,6 @@ function UpgradeCard({ currentTier }: { currentTier: PlanTier }) {
               Upgrade Now
               <ArrowRight className="size-4" />
             </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              Learn more →
-            </p>
           </div>
         </Card>
       ))}
@@ -418,7 +430,9 @@ function FrozenResourcesCard({ resources }: { resources: FrozenResource[] }) {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-foreground">{resource.quantity}</span>
                 {resource.recoverable && (
-                  <Badge variant="success" className="text-[10px]">Recoverable</Badge>
+                  <Badge variant="success" className="text-[10px]">
+                    Recoverable
+                  </Badge>
                 )}
               </div>
             </div>
@@ -479,6 +493,8 @@ type PlanFeature = {
   icon: typeof Users;
   title: string;
   description: string;
+  /** Features that are suspended in impaired lifecycle states. */
+  suspendedWhenImpaired?: boolean;
 };
 
 const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
@@ -491,22 +507,61 @@ const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
   professional_plus: [
     { icon: Users, title: '1 Seat', description: 'Single team member' },
     { icon: Sparkles, title: 'Unlimited Projects', description: 'Publish your full portfolio' },
-    { icon: ShieldCheck, title: 'Verified Badge', description: 'Trusted business signal' },
-    { icon: Search, title: 'Discovery Priority', description: 'Higher search ranking' },
+    { icon: Eye, title: 'Full Enquiry Visibility', description: 'See all homeowner details' },
+    {
+      icon: ShieldCheck,
+      title: 'Verified Badge',
+      description: 'Trusted business signal',
+      suspendedWhenImpaired: true,
+    },
+    {
+      icon: Search,
+      title: 'Discovery Priority',
+      description: 'Higher search ranking',
+      suspendedWhenImpaired: true,
+    },
     { icon: Receipt, title: 'Priority Support', description: 'Faster response times' },
   ],
   corporate: [
     { icon: Users, title: 'Unlimited Members', description: 'Full team collaboration' },
-    { icon: Building2, title: 'Unlimited Branches', description: 'Multi-location management' },
-    { icon: Sparkles, title: 'Branch Dashboards', description: 'Per-branch analytics' },
-    { icon: ShieldCheck, title: 'Full RBAC', description: 'Granular role permissions' },
-    { icon: Crown, title: 'Prime Badging', description: 'Top listing placement' },
+    {
+      icon: Building2,
+      title: 'Unlimited Branches',
+      description: 'Multi-location management',
+      suspendedWhenImpaired: true,
+    },
+    {
+      icon: Sparkles,
+      title: 'Branch Dashboards',
+      description: 'Per-branch analytics',
+      suspendedWhenImpaired: true,
+    },
+    {
+      icon: ShieldCheck,
+      title: 'Full RBAC',
+      description: 'Granular role permissions',
+      suspendedWhenImpaired: true,
+    },
+    {
+      icon: Crown,
+      title: 'Prime Badging',
+      description: 'Top listing placement',
+      suspendedWhenImpaired: true,
+    },
   ],
 };
 
-function PlanIncludesCard({ tier }: { tier: PlanTier }) {
+function PlanIncludesCard({
+  tier,
+  lifecycle,
+}: {
+  tier: PlanTier;
+  lifecycle: BillingState['lifecycle'];
+}) {
   const features = PLAN_FEATURES[tier];
-  const nextTier = tier === 'hobby' ? 'Professional+' : tier === 'professional_plus' ? 'Corporate' : null;
+  const impaired = isImpaired(lifecycle);
+  const nextTier =
+    tier === 'hobby' ? 'Professional+' : tier === 'professional_plus' ? 'Corporate' : null;
 
   return (
     <Card radius="2xl">
@@ -515,23 +570,40 @@ function PlanIncludesCard({ tier }: { tier: PlanTier }) {
         <div className="mt-5 grid gap-6 sm:grid-cols-3 lg:grid-cols-5">
           {features.map((feature) => {
             const Icon = feature.icon;
+            const suspended = impaired && feature.suspendedWhenImpaired;
             return (
-              <div key={feature.title} className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <div
+                key={feature.title}
+                className={`flex items-start gap-3 ${suspended ? 'opacity-50' : ''}`}
+              >
+                <span
+                  className={`flex size-9 shrink-0 items-center justify-center rounded-full ${
+                    suspended ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
+                  }`}
+                >
                   <Icon className="size-4" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{feature.title}</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {feature.title}
+                    {suspended && (
+                      <Badge variant="outline" className="ml-1.5 text-[9px]">
+                        Suspended
+                      </Badge>
+                    )}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">{feature.description}</p>
                 </div>
               </div>
             );
           })}
         </div>
-        {nextTier && (
+        {nextTier && !impaired && (
           <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
             <p className="text-sm font-medium text-foreground">
-              {tier === 'hobby' ? 'Want verified status and priority ranking?' : 'Need more team members or branches?'}
+              {tier === 'hobby'
+                ? 'Want verified status and priority ranking?'
+                : 'Need more team members or branches?'}
             </p>
             <Button variant="outline" size="sm">
               Upgrade to {nextTier}
@@ -566,9 +638,7 @@ function HelpCard() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function DesignerPlanBilling({ billing, role }: DesignerPlanBillingProps) {
-  // Determine if the payment-due sidebar card should show:
-  // Only in grace or payment_failed lifecycle for paid plans.
+export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
   const showPaymentDueCard =
     billing.tier !== 'hobby' &&
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
@@ -576,26 +646,22 @@ export function DesignerPlanBilling({ billing, role }: DesignerPlanBillingProps)
   return (
     <div className="p-6 md:p-8 xl:p-10">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-            Plan & Billing
-          </h1>
-          <p className="mt-2 text-base text-muted-foreground">
-            Manage your subscription, billing details and usage.
-          </p>
-        </div>
-        {role === 'billing_admin' && (
-          <Badge variant="outline" className="shrink-0">Billing Admin</Badge>
-        )}
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+          Plan & Billing
+        </h1>
+        <p className="mt-2 text-base text-muted-foreground">
+          Manage your subscription, billing details and usage.
+        </p>
       </div>
 
       {/* Status Banner — only for non-active lifecycle */}
-      {billing.lifecycle !== 'active' && (
+      {billing.lifecycle !== 'active' && billing.lifecycle !== 'downgraded' && (
         <div className="mt-6">
           <BillingStatusBanner
             lifecycle={billing.lifecycle}
             graceDaysRemaining={billing.graceDaysRemaining}
+            lockedDaysRemaining={billing.lockedDaysRemaining}
           />
         </div>
       )}
@@ -614,23 +680,24 @@ export function DesignerPlanBilling({ billing, role }: DesignerPlanBillingProps)
             <FrozenResourcesCard resources={billing.frozenResources} />
           )}
 
-          {billing.billing && <BillingSummary billing={billing} />}
+          <BillingSummary billing={billing} />
 
-          <PlanIncludesCard tier={billing.tier} />
+          <PlanIncludesCard tier={billing.tier} lifecycle={billing.lifecycle} />
         </div>
 
         {/* Sidebar */}
         <aside className="space-y-4">
-          {/* Payment Due card — only when lifecycle demands it */}
           {showPaymentDueCard && billing.billing && (
-            <Card radius="2xl" className="border-amber-300 bg-amber-50">
+            <Card radius="2xl" className="border-warning bg-warning/10">
               <div className="p-5">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-8 items-center justify-center rounded-full bg-amber-100">
-                    <CreditCard className="size-4 text-amber-500" />
+                  <span className="flex size-8 items-center justify-center rounded-full bg-warning/20">
+                    <CreditCard className="size-4 text-warning-foreground" />
                   </span>
-                  <h2 className="text-base font-bold text-amber-600">
-                    {billing.lifecycle === 'payment_failed' ? 'Payment Failed' : 'Payment Due Soon'}
+                  <h2 className="text-base font-bold text-warning-foreground">
+                    {billing.lifecycle === 'payment_failed'
+                      ? 'Payment Failed'
+                      : 'Payment Due Soon'}
                   </h2>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
@@ -640,14 +707,20 @@ export function DesignerPlanBilling({ billing, role }: DesignerPlanBillingProps)
                   </span>{' '}
                   is due on {formatDate(billing.billing.nextBillingDate)}.
                 </p>
-                <Button variant="outline" size="sm" className="mt-4 w-full border-amber-300 text-amber-600 hover:bg-amber-100">
-                  {billing.lifecycle === 'payment_failed' ? 'Update Payment Method' : 'Make Payment'}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
+                >
+                  {billing.lifecycle === 'payment_failed'
+                    ? 'Update Payment Method'
+                    : 'Make Payment'}
                 </Button>
               </div>
             </Card>
           )}
 
-          <UpgradeCard currentTier={billing.tier} />
+          <UpgradeCard billing={billing} />
           <HelpCard />
         </aside>
       </div>

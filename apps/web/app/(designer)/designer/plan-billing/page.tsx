@@ -1,20 +1,57 @@
+import { headers } from 'next/headers';
+import { organizationWorkspaceResponseSchema, type OrganizationMemberRole } from '@repo/contracts';
 import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 import { BillingDevSwitcher } from '@/components/billing-dev-switcher';
+import { BillingAccessDenied } from '@/components/billing-access-denied';
 import { getBillingState } from '@/lib/billing-data';
+import { api } from '@/lib/api';
+import { requireAuth } from '@/lib/auth-guard';
 
 export const metadata = {
   title: 'Plan & billing · Tickif',
 };
 
-export default async function DesignerPlanBillingPage() {
-  const billing = await getBillingState();
+async function getCurrentOrgRole(): Promise<OrganizationMemberRole | null> {
+  const reqHeaders = await headers();
+  const cookie = reqHeaders.get('cookie');
+  if (!cookie) return null;
 
-  // Development-only: render interactive billing context switcher.
-  // In production, the page renders the billing state directly from the API.
-  if (process.env.NODE_ENV !== 'production') {
-    return <BillingDevSwitcher initialBilling={billing} />;
+  try {
+    const response = await api.api.orgs.current.$get({}, { headers: { cookie } });
+    if (!response.ok) return null;
+    const parsed = organizationWorkspaceResponseSchema.safeParse(await response.json());
+    if (!parsed.success) return null;
+    return parsed.data.currentUserRole;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Billing access: only org owners can view Plan & Billing.
+ * billing_admin role does not exist end-to-end yet (E-240).
+ * Until then, fail closed: owner-only.
+ */
+function hasBillingAccess(role: OrganizationMemberRole | null): boolean {
+  return role === 'owner';
+}
+
+export default async function DesignerPlanBillingPage() {
+  await requireAuth({ requiredRole: 'designer' });
+
+  const [billing, orgRole] = await Promise.all([getBillingState(), getCurrentOrgRole()]);
+
+  // Authorization gate: fail closed.
+  if (!hasBillingAccess(orgRole)) {
+    return <BillingAccessDenied />;
   }
 
-  // TODO(E-239): Resolve org role from session/billing API.
-  return <DesignerPlanBilling billing={billing} role="owner" />;
+  return (
+    <>
+      <DesignerPlanBilling billing={billing} />
+      {process.env.NODE_ENV !== 'production' && (
+        <BillingDevSwitcher initialBilling={billing} />
+      )}
+    </>
+  );
 }

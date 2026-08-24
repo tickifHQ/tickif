@@ -2,9 +2,9 @@
  * Billing lifecycle types for E-179.
  *
  * These types define the frontend data contract for the Plan & Billing page.
- * When the billing API (E-71, E-114, E-119, E-239) is implemented, replace
- * the temporary adapter in billing-data.ts with real API calls — the component
- * layer remains unchanged.
+ * When the billing API (E-119/E-239) is implemented, replace the temporary
+ * adapter in billing-data.ts with real API calls — the component layer
+ * remains unchanged.
  */
 
 export type BillingLifecycleState =
@@ -58,12 +58,13 @@ export type BillingState = {
   subscriptionId: string | null;
   usage: {
     seats: UsageMetric;
-    /** Branches: only relevant for Corporate tier. */
-    branches?: UsageMetric;
+    branches: UsageMetric;
   };
   billing: BillingInfo | null;
-  /** Grace period: days remaining before lock. */
+  /** Grace period: days remaining before lock. null if not in grace. */
   graceDaysRemaining: number | null;
+  /** Locked period: days remaining before downgrade. null if not locked. */
+  lockedDaysRemaining: number | null;
   /** Payment failed: date of last failed attempt. */
   lastPaymentFailedDate: string | null;
   /** Downgraded: frozen resources that are recoverable. */
@@ -74,9 +75,3 @@ export type BillingState = {
     available: string[];
   } | null;
 };
-
-/** Role-based access: only owner and billing_admin can view billing. */
-export type BillingAccessRole = 'owner' | 'billing_admin';
-
-/** Organization role for billing access control. */
-export type OrgRole = 'owner' | 'billing_admin' | 'admin' | 'member' | 'viewer';

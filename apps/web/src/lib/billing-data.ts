@@ -1,7 +1,7 @@
 /**
  * Billing data adapter for E-179.
  *
- * Temporary: returns typed mock data until the billing API (E-71/E-114/E-119/E-239)
+ * Temporary: returns typed mock data until the billing API (E-119/E-239)
  * is implemented. Replace getBillingState() with a real API call when available.
  * The component layer uses only the BillingState type and is unaffected by this swap.
  */
@@ -10,7 +10,7 @@ import type { BillingState } from './billing-types';
 
 /**
  * Fetch billing state for the active organization.
- * TODO(E-239): Replace with real API call to /api/billing/state
+ * TODO(E-239): Replace with real API call to GET /api/billing/subscription
  */
 export async function getBillingState(): Promise<BillingState> {
   return {
@@ -20,6 +20,7 @@ export async function getBillingState(): Promise<BillingState> {
     subscriptionId: 'sub_TICKIF_demo',
     usage: {
       seats: { label: 'Team Seats', current: 1, limit: 1, unit: 'seats' },
+      branches: { label: 'Branches', current: 1, limit: 1, unit: 'branches' },
     },
     billing: {
       nextBillingDate: '2026-12-12',
@@ -31,6 +32,7 @@ export async function getBillingState(): Promise<BillingState> {
       paymentMethodBrand: 'Visa',
     },
     graceDaysRemaining: null,
+    lockedDaysRemaining: null,
     lastPaymentFailedDate: null,
     frozenResources: [],
     lockedAccess: null,

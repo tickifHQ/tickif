@@ -7,17 +7,19 @@ import type { BillingLifecycleState } from '@/lib/billing-types';
 interface BillingStatusBannerProps {
   lifecycle: BillingLifecycleState;
   graceDaysRemaining?: number | null;
+  lockedDaysRemaining?: number | null;
   /** When true, renders a compact inline variant for the dashboard shell. */
   compact?: boolean;
 }
 
 /**
  * Reusable billing status banner — renders in the Plan & Billing page
- * and in the Designer Dashboard shell for grace/locked states.
+ * and optionally in the Designer Dashboard shell for grace/locked states.
  */
 export function BillingStatusBanner({
   lifecycle,
   graceDaysRemaining,
+  lockedDaysRemaining,
   compact = false,
 }: BillingStatusBannerProps) {
   if (lifecycle === 'active' || lifecycle === 'downgraded') return null;
@@ -43,15 +45,21 @@ export function BillingStatusBanner({
   }
 
   if (lifecycle === 'grace') {
-    const days = graceDaysRemaining ?? 7;
     return (
       <Alert variant="warning">
         <AlertTriangle />
-        <AlertTitle>Payment due soon</AlertTitle>
+        <AlertTitle>Payment due</AlertTitle>
         <AlertDescription>
           <p>
-            Your payment is overdue. You have {days} day{days !== 1 ? 's' : ''} remaining before
-            your account is locked. Full access continues during this period.
+            Your payment is overdue.
+            {graceDaysRemaining != null && (
+              <>
+                {' '}
+                You have {graceDaysRemaining} day{graceDaysRemaining !== 1 ? 's' : ''} remaining
+                before your account is locked.
+              </>
+            )}{' '}
+            Full access continues during this period.
           </p>
           {!compact && (
             <Button asChild variant="outline" size="sm" className="mt-3">
@@ -70,8 +78,15 @@ export function BillingStatusBanner({
         <AlertTitle>Locked – reactivate to restore full access</AlertTitle>
         <AlertDescription>
           <p>
-            Your subscription has been suspended due to non-payment. Reactivate to restore access
-            to all workspace features.
+            Your subscription has been suspended due to non-payment.
+            {lockedDaysRemaining != null && (
+              <>
+                {' '}
+                You have {lockedDaysRemaining} day{lockedDaysRemaining !== 1 ? 's' : ''} to
+                reactivate before your account is downgraded.
+              </>
+            )}{' '}
+            Reactivate to restore access to all workspace features.
           </p>
           {!compact && (
             <Button asChild variant="outline" size="sm" className="mt-3">

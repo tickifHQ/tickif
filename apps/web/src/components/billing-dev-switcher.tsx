@@ -4,40 +4,45 @@ import { useState } from 'react';
 import { ChevronDown, FlaskConical } from 'lucide-react';
 import type { BillingState } from '@/lib/billing-types';
 import type { BillingLifecycleState, PlanTier } from '@/lib/billing-types';
-import {
-  DEV_SCENARIOS,
-  DEV_LIFECYCLES,
-  hasBillingAccess,
-  buildBillingState,
-  type OrgRole,
-} from '@/lib/billing-fixtures';
+import { DEV_SCENARIOS, buildBillingState } from '@/lib/billing-fixtures';
 import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 
 /**
  * Development-only billing context switcher.
  *
- * Renders the Plan & Billing page with an interactive control to switch between
- * all billing scenarios (tier × role × lifecycle). Stripped from production
- * builds because the page.tsx only renders this when NODE_ENV !== 'production'.
+ * Renders as an additive floating panel that lets developers preview different
+ * billing scenarios. When a scenario is selected, it renders a second copy of
+ * DesignerPlanBilling below the real page output with the overridden state.
+ *
+ * The production page always renders above this — the switcher never replaces it.
  */
 export function BillingDevSwitcher({ initialBilling }: { initialBilling: BillingState }) {
   const [tier, setTier] = useState<PlanTier>(initialBilling.tier);
-  const [role, setRole] = useState<OrgRole>('owner');
   const [lifecycle, setLifecycle] = useState<BillingLifecycleState>(initialBilling.lifecycle);
+  const [previewActive, setPreviewActive] = useState(false);
   const [open, setOpen] = useState(false);
 
   const billing = buildBillingState(tier, lifecycle);
-  const hasAccess = hasBillingAccess(role);
 
   function applyScenario(scenario: (typeof DEV_SCENARIOS)[number]) {
     setTier(scenario.tier);
-    setRole(scenario.role);
     setLifecycle(scenario.lifecycle);
+    setPreviewActive(true);
   }
 
   return (
-    <div>
-      {/* Dev switcher control — fixed bottom-right */}
+    <>
+      {/* Dev preview — renders below the real page when active */}
+      {previewActive && (
+        <div className="border-t-4 border-dashed border-primary/30">
+          <div className="bg-primary/5 px-6 py-2 text-xs font-medium text-primary">
+            Dev Preview: {tier} × {lifecycle}
+          </div>
+          <DesignerPlanBilling billing={billing} />
+        </div>
+      )}
+
+      {/* Floating switcher control */}
       <div className="fixed bottom-4 right-4 z-50">
         <button
           type="button"
@@ -53,7 +58,7 @@ export function BillingDevSwitcher({ initialBilling }: { initialBilling: Billing
           <div className="absolute bottom-full right-0 mb-2 w-72 rounded-xl border border-border bg-background p-4 shadow-xl">
             <p className="text-xs font-bold text-foreground">Billing Dev Switcher</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              Development only — not visible in production
+              Development only — preview billing scenarios below the real page
             </p>
 
             {/* Scenario presets */}
@@ -68,7 +73,7 @@ export function BillingDevSwitcher({ initialBilling }: { initialBilling: Billing
                     type="button"
                     onClick={() => applyScenario(scenario)}
                     className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
-                      tier === scenario.tier && role === scenario.role
+                      previewActive && tier === scenario.tier && lifecycle === scenario.lifecycle
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border text-muted-foreground hover:bg-accent'
                     }`}
@@ -79,71 +84,19 @@ export function BillingDevSwitcher({ initialBilling }: { initialBilling: Billing
               </div>
             </div>
 
-            {/* Lifecycle override */}
-            <div className="mt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Lifecycle State
-              </p>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {DEV_LIFECYCLES.map((lc) => (
-                  <button
-                    key={lc.value}
-                    type="button"
-                    onClick={() => setLifecycle(lc.value)}
-                    className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
-                      lifecycle === lc.value
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:bg-accent'
-                    }`}
-                  >
-                    {lc.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Current state display */}
-            <div className="mt-3 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-[10px]">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tier</span>
-                <span className="font-medium text-foreground">{tier}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Role</span>
-                <span className="font-medium text-foreground">{role}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Lifecycle</span>
-                <span className="font-medium text-foreground">{lifecycle}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Has billing access</span>
-                <span className={`font-medium ${hasAccess ? 'text-primary' : 'text-destructive'}`}>
-                  {hasAccess ? 'Yes' : 'No'}
-                </span>
-              </div>
-            </div>
+            {/* Close preview */}
+            {previewActive && (
+              <button
+                type="button"
+                onClick={() => setPreviewActive(false)}
+                className="mt-3 w-full rounded-md border border-border px-2 py-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent"
+              >
+                Close Preview
+              </button>
+            )}
           </div>
         )}
       </div>
-
-      {/* Page content — access-gated */}
-      {hasAccess ? (
-        <DesignerPlanBilling billing={billing} role={role} />
-      ) : (
-        <div className="flex flex-col items-center justify-center px-6 py-32 text-center">
-          <div className="flex size-16 items-center justify-center rounded-full bg-muted">
-            <FlaskConical className="size-7 text-muted-foreground" />
-          </div>
-          <h1 className="mt-5 text-xl font-semibold text-foreground">
-            Billing access restricted
-          </h1>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Only the organization <strong>Owner</strong> and <strong>Billing Admin</strong> can view
-            Plan & Billing. Your current role ({role}) does not have access.
-          </p>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
