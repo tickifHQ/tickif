@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
 
 vi.mock('@/components/enquiry-cta', () => ({
-  EnquiryCta: ({ children }: { children: ReactNode }) => <button>{children}</button>,
+  EnquiryCta: ({ children, loginHref }: { children: ReactNode; loginHref: string }) => (
+    <button data-login-href={loginHref}>{children}</button>
+  ),
 }));
 
 const { PublicProjectStory } = await import('../../src/components/public-project-story');
@@ -94,6 +96,15 @@ describe('PublicProjectStory', () => {
     expect(within(narrative).getByText(project.narrative!.body)).toBeInTheDocument();
     expect(within(narrative).getByText('Priya K., 3 BHK in Mylapore')).toBeInTheDocument();
     expect(within(narrative).getByLabelText('Verified consultation')).toBeInTheDocument();
+  });
+
+  it('returns signed-out enquiries to the project after login', () => {
+    render(<PublicProjectStory project={makePublicProject()} />);
+
+    expect(screen.getByRole('button', { name: 'Enquire' })).toHaveAttribute(
+      'data-login-href',
+      '/login?callbackURL=%2Fprojects%2F11111111-1111-4111-8111-111111111111',
+    );
   });
 
   it('renders an honest narrative empty state when no review is published', () => {

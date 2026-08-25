@@ -23,7 +23,7 @@ const props = {
     designerName: 'Studio North',
   },
   designerProfileId: '11111111-1111-4111-8111-111111111111',
-  loginHref: '/login?next=/projects/22222222-2222-4222-8222-222222222222',
+  loginHref: '/login?callbackURL=%2Fprojects%2F22222222-2222-4222-8222-222222222222',
   ariaLabel: 'Enquire with Studio North',
 };
 

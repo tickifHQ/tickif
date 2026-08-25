@@ -9,6 +9,7 @@ type LoginPageProps = {
   searchParams: Promise<{
     callbackURL?: string | string[];
     mode?: string | string[];
+    next?: string | string[];
   }>;
 };
 
@@ -27,7 +28,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   ]);
   const mode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const initialMode = mode === 'designer' ? 'designer' : 'browsing';
-  const callbackPath = safeCallbackPath(params.callbackURL);
+  const callbackPath = safeCallbackPath(params.callbackURL) ?? safeCallbackPath(params.next);
+
+  if (session && callbackPath) {
+    redirect(callbackPath);
+  }
 
   if (rolePassesCheck(session?.user.role ?? null, PLATFORM_ROLE.ADMIN)) {
     redirect(ADMIN_MODERATION_PATH);

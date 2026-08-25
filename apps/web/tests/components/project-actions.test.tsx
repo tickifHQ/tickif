@@ -54,14 +54,14 @@ describe('ProjectActions', () => {
     render(
       <ProjectActions
         projectId="11111111-1111-4111-8111-111111111111"
-        loginHref="/login?next=/projects/11111111-1111-4111-8111-111111111111"
+        loginHref="/login?callbackURL=%2Fprojects%2F11111111-1111-4111-8111-111111111111"
         canonicalUrl="https://tickif.com/projects/11111111-1111-4111-8111-111111111111"
       />,
     );
 
     expect(screen.getByRole('link', { name: 'Sign in to save project' })).toHaveAttribute(
       'href',
-      '/login?next=/projects/11111111-1111-4111-8111-111111111111',
+      '/login?callbackURL=%2Fprojects%2F11111111-1111-4111-8111-111111111111',
     );
     expect(mocks.getSavedState).not.toHaveBeenCalled();
   });
