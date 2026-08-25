@@ -49,3 +49,32 @@ export const subscriptionStateSchema = z
   .enum(SUBSCRIPTION_STATE_VALUES)
   .meta({ id: 'SubscriptionState' });
 export type SubscriptionState = z.infer<typeof subscriptionStateSchema>;
+
+/**
+ * Razorpay webhook event types relevant to subscription billing.
+ *
+ * These map to Razorpay's event names as delivered in the webhook payload's
+ * `event` field. Only subscription-related events are handled by E-117.
+ */
+export const RAZORPAY_EVENT = {
+  SUBSCRIPTION_ACTIVATED: 'subscription.activated',
+  SUBSCRIPTION_CHARGED: 'subscription.charged',
+  PAYMENT_FAILED: 'payment.failed',
+  SUBSCRIPTION_PENDING: 'subscription.pending',
+  SUBSCRIPTION_HALTED: 'subscription.halted',
+  SUBSCRIPTION_CANCELLED: 'subscription.cancelled',
+} as const;
+
+export const RAZORPAY_EVENT_VALUES = [
+  RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+  RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
+  RAZORPAY_EVENT.PAYMENT_FAILED,
+  RAZORPAY_EVENT.SUBSCRIPTION_PENDING,
+  RAZORPAY_EVENT.SUBSCRIPTION_HALTED,
+  RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+] as const;
+
+export const razorpayEventSchema = z
+  .enum(RAZORPAY_EVENT_VALUES)
+  .meta({ id: 'RazorpayEvent' });
+export type RazorpayEvent = z.infer<typeof razorpayEventSchema>;
