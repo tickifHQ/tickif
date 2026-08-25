@@ -102,7 +102,7 @@ function DesignerCard({
   canonicalUrl: string;
 }) {
   const { designer } = project;
-  const loginHref = `/login?next=/projects/${project.id}`;
+  const loginHref = `/login?callbackURL=${encodeURIComponent(`/projects/${project.id}`)}`;
   const profileHref = designer.slug ? `/d/${designer.slug}` : null;
   const rating = Number.parseFloat(designer.avgRating);
   const showRating = Number.isFinite(rating) && designer.reviewCount > 0;

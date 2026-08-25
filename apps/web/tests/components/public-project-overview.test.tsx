@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
 
 vi.mock('@/components/enquiry-cta', () => ({
-  EnquiryCta: ({ children }: { children: ReactNode }) => <button>{children}</button>,
+  EnquiryCta: ({ children, loginHref }: { children: ReactNode; loginHref: string }) => (
+    <button data-login-href={loginHref}>{children}</button>
+  ),
 }));
 
 vi.mock('@/components/project-actions', () => ({
@@ -48,6 +50,12 @@ describe('PublicProjectOverview', () => {
       'href',
       '/d/anika-spaces',
     );
+    for (const enquireButton of screen.getAllByRole('button', { name: 'Enquire' })) {
+      expect(enquireButton).toHaveAttribute(
+        'data-login-href',
+        '/login?callbackURL=%2Fprojects%2F11111111-1111-4111-8111-111111111111',
+      );
+    }
     expect(screen.getAllByRole('link', { name: 'Open Living Room image' })[0]).toHaveAttribute(
       'href',
       `/image/${project.images[0]!.id}`,

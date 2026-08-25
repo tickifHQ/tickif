@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicPath } from '../proxy';
+import { NextRequest } from 'next/server';
+import { isPublicPath, proxy } from '../proxy';
 
 describe('isPublicPath', () => {
   it('allows public designer profile routes', () => {
@@ -29,5 +30,15 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/dashboard')).toBe(false);
     expect(isPublicPath('/moderation')).toBe(false);
     expect(isPublicPath('/onboarding')).toBe(false);
+  });
+
+  it('preserves the protected path and query when redirecting to login', () => {
+    const response = proxy(new NextRequest('http://localhost:3000/enquiries?status=open&page=2'));
+    const location = response.headers.get('location');
+
+    expect(response.status).toBe(307);
+    if (!location) throw new Error('Expected proxy to provide a login redirect location.');
+    expect(new URL(location).pathname).toBe('/login');
+    expect(new URL(location).searchParams.get('callbackURL')).toBe('/enquiries?status=open&page=2');
   });
 });
