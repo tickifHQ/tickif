@@ -9,7 +9,7 @@ export const metadata = {
 export default async function EnquiriesPage() {
   const session = await getServerSession();
   if (!session) {
-    redirect('/login?next=/enquiries');
+    redirect('/login?callbackURL=%2Fenquiries');
   }
 
   return <EnquiriesPageClient />;

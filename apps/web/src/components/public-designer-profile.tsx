@@ -1037,7 +1037,7 @@ export function PublicDesignerProfile({ portfolio }: { portfolio: PublicPortfoli
     heroCaption: heroCaption(hero),
     publicProfileHref: portfolio.canonicalUrl,
     publicProfileLabel: `${canonical.host}${canonical.pathname}`,
-    loginHref: `/login?next=${encodeURIComponent(canonical.pathname)}`,
+    loginHref: `/login?callbackURL=${encodeURIComponent(canonical.pathname)}`,
   };
 
   const props: SectionProps = { portfolio, view };

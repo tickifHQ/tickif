@@ -239,7 +239,7 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
           }}
           designerProfileId={designer.id}
           referredProjectId={project.id}
-          loginHref={`/login?next=/projects/${project.id}`}
+          loginHref={`/login?callbackURL=${encodeURIComponent(`/projects/${project.id}`)}`}
           variant="inverted"
           size="compact"
           className="mt-5 w-full"

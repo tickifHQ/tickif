@@ -54,7 +54,7 @@ describe('PublicDesignerProfile — preservation (sections render regardless of 
     { name: 'Verified on Tickif' }, // credentials
     { name: /Selected projects/i }, // gallery
     { name: /their words/i }, // story / testimonial
-    { name: "What it\u2019s like to work with us." }, // reviews
+    { name: 'What it\u2019s like to work with us.' }, // reviews
     { name: 'Anika Spaces', level: 2 as const }, // studio details
     { name: /A portfolio worth sharing/i }, // share block
     { name: "Let's build something you can't imagine living without." }, // CTA
@@ -142,16 +142,10 @@ describe('PublicDesignerProfile', () => {
   });
 
   it('explains the empty state instead of an empty rail when there are no reviews', () => {
-    render(
-      <PublicDesignerProfile
-        portfolio={makePublicPortfolio({ reviews: [] })}
-      />,
-    );
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews: [] })} />);
 
     expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('No reviews are available for Anika Spaces yet.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('No reviews are available for Anika Spaces yet.')).toBeInTheDocument();
   });
 
   it('keeps Google ratings visible when Tickif has no published reviews', () => {
@@ -193,9 +187,7 @@ describe('PublicDesignerProfile', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews })} />);
 
     expect(
-      within(screen.getByTestId('review-marquee-primary')).getByLabelText(
-        'Verified consultation',
-      ),
+      within(screen.getByTestId('review-marquee-primary')).getByLabelText('Verified consultation'),
     ).toBeInTheDocument();
     expect(screen.queryByText('“”')).not.toBeInTheDocument();
   });
@@ -341,14 +333,16 @@ describe('PublicDesignerProfile', () => {
 
     expect(screen.getByRole('link', { name: 'Start a conversation' })).toHaveAttribute(
       'href',
-      '/login?next=%2Fd%2Fanika-spaces',
+      '/login?callbackURL=%2Fd%2Fanika-spaces',
     );
     screen
       .getAllByRole('link', { name: 'Enquire' })
-      .forEach((link) => expect(link).toHaveAttribute('href', '/login?next=%2Fd%2Fanika-spaces'));
+      .forEach((link) =>
+        expect(link).toHaveAttribute('href', '/login?callbackURL=%2Fd%2Fanika-spaces'),
+      );
     expect(screen.getByRole('link', { name: 'Get free consultation' })).toHaveAttribute(
       'href',
-      '/login?next=%2Fd%2Fanika-spaces',
+      '/login?callbackURL=%2Fd%2Fanika-spaces',
     );
   });
 
