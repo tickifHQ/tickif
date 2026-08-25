@@ -279,21 +279,24 @@ export async function makeSubscription(
         return {};
       case 'grace':
         return {
+          planTier: overrides.planTier ?? 'professional_plus',
           graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
-          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
         };
       case 'locked':
         return {
+          planTier: overrides.planTier ?? 'professional_plus',
           graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
           lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
-          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
         };
       case 'downgraded':
         return {
+          planTier: overrides.planTier ?? 'hobby',
           graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
           lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
           downgradedAt: overrides.downgradedAt ?? now,
-          preLapseTier: overrides.preLapseTier ?? overrides.planTier ?? 'professional_plus',
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
         };
       default:
         return {};
@@ -324,6 +327,7 @@ export async function makePaymentTransaction(
       razorpayPaymentId: overrides.razorpayPaymentId ?? `pay_${uid('txn')}`,
       amount: overrides.amount ?? 299900,
       status: overrides.status ?? 'captured',
+      payload: overrides.payload ?? { event: 'payment.captured', synthetic: true },
       ...overrides,
     })
     .returning();

@@ -1324,6 +1324,8 @@ export const subscription = pgTable(
           AND ${t.lockedAt} IS NULL
           AND ${t.downgradedAt} IS NULL
           AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = ${t.preLapseTier}
         )
         OR (
           ${t.subscriptionState} = 'locked'
@@ -1331,6 +1333,8 @@ export const subscription = pgTable(
           AND ${t.lockedAt} IS NOT NULL
           AND ${t.downgradedAt} IS NULL
           AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = ${t.preLapseTier}
         )
         OR (
           ${t.subscriptionState} = 'downgraded'
@@ -1338,6 +1342,8 @@ export const subscription = pgTable(
           AND ${t.lockedAt} IS NOT NULL
           AND ${t.downgradedAt} IS NOT NULL
           AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = 'hobby'
         )
       `,
     ),
@@ -1353,8 +1359,19 @@ export const subscription = pgTable(
 );
 
 /**
- * Payment transaction audit log — one row per Razorpay payment event.
- * razorpayPaymentId is unique for idempotency (prevents double-processing).
+ * Payment transaction audit log — one row per Razorpay **payment** event.
+ *
+ * Scope: This table stores only events that carry a `payment` entity
+ * (e.g. payment.authorized, payment.captured, payment.failed). The
+ * `razorpay_payment_id` column is NOT NULL UNIQUE and serves as the
+ * idempotency key for deduplication.
+ *
+ * Non-payment webhook events (subscription.activated, subscription.halted,
+ * subscription.cancelled, subscription.pending) do NOT contain a payment
+ * entity and therefore do NOT belong here. Those events are handled by
+ * E-117's webhook-event audit/idempotency table, which uses the Razorpay
+ * event ID as its idempotency key instead.
+ *
  * Amount is stored in paise (integer): ₹2,999 = 299900.
  */
 export const paymentTransaction = pgTable(
@@ -1368,7 +1385,7 @@ export const paymentTransaction = pgTable(
     amount: integer('amount').notNull(),
     currency: text('currency').notNull().default('INR'),
     status: text('status').notNull(),
-    payload: jsonb('payload').$type<Record<string, unknown>>(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })

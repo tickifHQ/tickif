@@ -1,5 +1,5 @@
 {
-  "id": "01d03a55-e096-474c-ab06-055e63077548",
+  "id": "ba0a067d-63bf-4aa0-9315-6105841f38e8",
   "prevId": "084d5a27-088a-4f3b-a866-33fafee01051",
   "version": "7",
   "dialect": "postgresql",
@@ -2628,7 +2628,7 @@
           "name": "payload",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "processed_at": {
           "name": "processed_at",
@@ -4698,7 +4698,7 @@
       "checkConstraints": {
         "subscription_lifecycle_check": {
           "name": "subscription_lifecycle_check",
-          "value": "\n        (\n          \"subscription\".\"subscription_state\" = 'active'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'payment_failed'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'grace'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'locked'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'downgraded'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n        )\n      "
+          "value": "\n        (\n          \"subscription\".\"subscription_state\" = 'active'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'payment_failed'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'grace'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = \"subscription\".\"pre_lapse_tier\"\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'locked'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = \"subscription\".\"pre_lapse_tier\"\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'downgraded'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = 'hobby'\n        )\n      "
         },
         "subscription_timestamp_order_check": {
           "name": "subscription_timestamp_order_check",

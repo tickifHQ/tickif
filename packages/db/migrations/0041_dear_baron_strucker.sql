@@ -7,7 +7,7 @@ CREATE TABLE "payment_transaction" (
 	"amount" integer NOT NULL,
 	"currency" text DEFAULT 'INR' NOT NULL,
 	"status" text NOT NULL,
-	"payload" jsonb,
+	"payload" jsonb NOT NULL,
 	"processed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -52,6 +52,8 @@ CREATE TABLE "subscription" (
           AND "subscription"."locked_at" IS NULL
           AND "subscription"."downgraded_at" IS NULL
           AND "subscription"."pre_lapse_tier" IS NOT NULL
+          AND "subscription"."pre_lapse_tier" <> 'hobby'
+          AND "subscription"."plan_tier" = "subscription"."pre_lapse_tier"
         )
         OR (
           "subscription"."subscription_state" = 'locked'
@@ -59,6 +61,8 @@ CREATE TABLE "subscription" (
           AND "subscription"."locked_at" IS NOT NULL
           AND "subscription"."downgraded_at" IS NULL
           AND "subscription"."pre_lapse_tier" IS NOT NULL
+          AND "subscription"."pre_lapse_tier" <> 'hobby'
+          AND "subscription"."plan_tier" = "subscription"."pre_lapse_tier"
         )
         OR (
           "subscription"."subscription_state" = 'downgraded'
@@ -66,6 +70,8 @@ CREATE TABLE "subscription" (
           AND "subscription"."locked_at" IS NOT NULL
           AND "subscription"."downgraded_at" IS NOT NULL
           AND "subscription"."pre_lapse_tier" IS NOT NULL
+          AND "subscription"."pre_lapse_tier" <> 'hobby'
+          AND "subscription"."plan_tier" = 'hobby'
         )
       ),
 	CONSTRAINT "subscription_timestamp_order_check" CHECK (

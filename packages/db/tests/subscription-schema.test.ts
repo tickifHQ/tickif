@@ -125,26 +125,30 @@ describe('subscription schema', () => {
       expect(checkNames).toContain('subscription_lifecycle_check');
     });
 
-    it('grace state requires grace_started_at and pre_lapse_tier for restoration', () => {
+    it('grace state requires grace_started_at, pre_lapse_tier (paid), and plan_tier = pre_lapse_tier', () => {
       // subscription_lifecycle_check: grace AND grace_started_at IS NOT NULL
-      //   AND pre_lapse_tier IS NOT NULL
+      //   AND pre_lapse_tier IS NOT NULL AND pre_lapse_tier <> 'hobby'
+      //   AND plan_tier = pre_lapse_tier
       const preLapseTier = config.columns.find((col) => col.name === 'pre_lapse_tier');
       const graceStartedAt = config.columns.find((col) => col.name === 'grace_started_at');
       expect(preLapseTier).toBeDefined();
       expect(graceStartedAt).toBeDefined();
     });
 
-    it('locked state requires grace_started_at, locked_at, and pre_lapse_tier for restoration', () => {
+    it('locked state requires grace_started_at, locked_at, pre_lapse_tier (paid), and plan_tier = pre_lapse_tier', () => {
       // subscription_lifecycle_check: locked AND grace_started_at IS NOT NULL
       //   AND locked_at IS NOT NULL AND pre_lapse_tier IS NOT NULL
+      //   AND pre_lapse_tier <> 'hobby' AND plan_tier = pre_lapse_tier
       const lockedAt = config.columns.find((col) => col.name === 'locked_at');
       expect(lockedAt).toBeDefined();
       expect(lockedAt?.notNull).toBe(false);
     });
 
-    it('downgraded state requires grace_started_at, locked_at, downgraded_at, and pre_lapse_tier', () => {
+    it('downgraded state requires all lapse timestamps, pre_lapse_tier (paid), and plan_tier = hobby', () => {
       // subscription_lifecycle_check: downgraded AND grace_started_at IS NOT NULL
-      //   AND locked_at IS NOT NULL AND downgraded_at IS NOT NULL AND pre_lapse_tier IS NOT NULL
+      //   AND locked_at IS NOT NULL AND downgraded_at IS NOT NULL
+      //   AND pre_lapse_tier IS NOT NULL AND pre_lapse_tier <> 'hobby'
+      //   AND plan_tier = 'hobby'
       const downgradedAt = config.columns.find((col) => col.name === 'downgraded_at');
       expect(downgradedAt).toBeDefined();
       expect(downgradedAt?.notNull).toBe(false);
@@ -189,10 +193,10 @@ describe('payment transaction schema', () => {
     expect(col?.notNull).toBe(true);
   });
 
-  it('stores raw Razorpay payload as nullable JSONB', () => {
+  it('stores raw Razorpay payload as non-nullable JSONB (spec requires persistence)', () => {
     const col = config.columns.find((col) => col.name === 'payload');
     expect(col?.columnType).toBe('PgJsonb');
-    expect(col?.notNull).toBe(false);
+    expect(col?.notNull).toBe(true);
   });
 
   it('indexes subscription_id foreign key for lookups', () => {
