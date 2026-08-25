@@ -10,6 +10,7 @@ import {
   type SubscriptionState,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { invalidateEntitlementCache } from '../../lib/redis.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -91,22 +92,38 @@ export async function processWebhookEvent(
     return { outcome: 'ignored', reason: `Subscription ${razorpaySubscriptionId} not found locally` };
   }
 
+  let result: WebhookResult;
+
   switch (event) {
     case RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED:
-      return handleActivated(subscription, payload);
+      result = await handleActivated(subscription, payload);
+      break;
     case RAZORPAY_EVENT.SUBSCRIPTION_CHARGED:
-      return handleCharged(subscription, payload);
+      result = await handleCharged(subscription, payload);
+      break;
     case RAZORPAY_EVENT.PAYMENT_FAILED:
-      return handlePaymentFailed(subscription, payload);
+      result = await handlePaymentFailed(subscription, payload);
+      break;
     case RAZORPAY_EVENT.SUBSCRIPTION_HALTED:
-      return handleHalted(subscription, payload);
+      result = await handleHalted(subscription, payload);
+      break;
     case RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED:
-      return handleCancelled(subscription, payload);
+      result = await handleCancelled(subscription, payload);
+      break;
     case RAZORPAY_EVENT.SUBSCRIPTION_PENDING:
-      return handlePending(subscription, payload);
+      result = await handlePending(subscription, payload);
+      break;
     default:
       return { outcome: 'ignored', reason: `Unhandled event: ${event}` };
   }
+
+  // Invalidate entitlement cache after any successful state/tier change.
+  // This ensures the next entitlement read reflects the webhook-driven update.
+  if (result.outcome === 'processed') {
+    await invalidateEntitlementCache(subscription.organizationId);
+  }
+
+  return result;
 }
 
 // ─── Event Handlers ──────────────────────────────────────────────────────────

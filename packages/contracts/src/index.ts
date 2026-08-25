@@ -19,3 +19,4 @@ export * from './saved-projects';
 export * from './visitors';
 export * from './verifications';
 export * from './billing';
+export * from './entitlements';
