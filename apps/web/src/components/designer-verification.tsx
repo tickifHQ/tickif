@@ -55,6 +55,7 @@ import {
   type Country,
 } from '@/components/phone-number-input';
 import { authClient } from '@/lib/auth-client';
+import { UserFacingError, userFacingErrorMessage } from '@/lib/user-facing-error';
 import {
   fetchVerificationState,
   removeVerificationDocument,
@@ -227,7 +228,7 @@ export function DesignerVerification({
     try {
       await operation();
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Something went wrong.');
+      setError(userFacingErrorMessage(actionError, 'Something went wrong. Please try again.'));
     } finally {
       setBusyAction(null);
     }
@@ -237,9 +238,9 @@ export function DesignerVerification({
     void runAction('otp-send', async () => {
       const normalizedPhone = toE164PhoneNumber(selectedCountry, phone);
       if (!normalizedPhone)
-        throw new Error(`Enter a valid phone number for ${selectedCountry.name}.`);
+        throw new UserFacingError(`Enter a valid phone number for ${selectedCountry.name}.`);
       const result = await authClient.phoneNumber.sendOtp({ phoneNumber: normalizedPhone });
-      if (result.error) throw new Error(result.error.message || 'Could not send OTP.');
+      if (result.error) throw new UserFacingError(result.error.message || 'Could not send OTP.');
       setOtp(['', '', '', '', '', '']);
       setOtpSent(true);
     });
@@ -249,15 +250,16 @@ export function DesignerVerification({
     void runAction('otp-verify', async () => {
       const normalizedPhone = toE164PhoneNumber(selectedCountry, phone);
       if (!normalizedPhone)
-        throw new Error(`Enter a valid phone number for ${selectedCountry.name}.`);
+        throw new UserFacingError(`Enter a valid phone number for ${selectedCountry.name}.`);
       const code = otp.join('');
-      if (code.length !== 6) throw new Error('Enter the full 6-digit OTP.');
+      if (code.length !== 6) throw new UserFacingError('Enter the full 6-digit OTP.');
       const result = await authClient.phoneNumber.verify({
         phoneNumber: normalizedPhone,
         code,
         updatePhoneNumber: true,
       });
-      if (result.error) throw new Error(result.error.message || 'Invalid or expired OTP.');
+      if (result.error)
+        throw new UserFacingError(result.error.message || 'Invalid or expired OTP.');
       const nextState = await refreshState();
       setIsEditingIdentityDetails(!hasCompletedPersonalIdentity(nextState));
       setOtpSent(false);
@@ -275,10 +277,11 @@ export function DesignerVerification({
     void runAction('identity-save', async () => {
       const name = ownerName.trim();
       if (name.length < 2 || name.length > 100) {
-        throw new Error('Enter the account owner’s full legal name.');
+        throw new UserFacingError('Enter the account owner’s full legal name.');
       }
       const result = await authClient.updateUser({ name });
-      if (result.error) throw new Error(result.error.message || 'Could not save the owner name.');
+      if (result.error)
+        throw new UserFacingError(result.error.message || 'Could not save the owner name.');
       const nextState = await refreshState();
       setIsEditingIdentityDetails(!hasCompletedPersonalIdentity(nextState));
     });

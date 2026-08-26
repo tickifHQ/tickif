@@ -7,6 +7,7 @@ import {
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
+import { UserFacingError } from '@/lib/user-facing-error';
 
 const LOAD_ERROR = 'Could not load verification details.';
 
@@ -23,7 +24,7 @@ export async function uploadVerificationDocument(
 ): Promise<VerificationStateResponse> {
   const contentType = verificationDocumentContentTypeSchema.safeParse(file.type);
   if (!contentType.success) {
-    throw new Error('Upload a PDF, JPEG, or PNG file.');
+    throw new UserFacingError('Upload a PDF, JPEG, or PNG file.');
   }
 
   const presignResponse = await api.api.verifications.documents['upload-url'].$post({
@@ -41,12 +42,12 @@ export async function uploadVerificationDocument(
       headers: { 'Content-Type': contentType.data },
       body: file,
     });
-    if (!storageResponse.ok) throw new Error('Could not upload the document.');
-  } catch (error) {
+    if (!storageResponse.ok) throw new UserFacingError('Could not upload the document.');
+  } catch {
     await api.api.verifications.documents[':versionId']
       .$delete({ param: { versionId: reservation.documentVersionId } })
       .catch(() => undefined);
-    throw error;
+    throw new UserFacingError('Could not upload the document.');
   }
 
   const commitResponse = await api.api.verifications.documents[':versionId'].commit.$post({

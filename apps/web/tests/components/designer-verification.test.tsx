@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VerificationStateResponse } from '@repo/contracts';
 import { DesignerVerification } from '../../src/components/designer-verification';
+import { UserFacingError } from '../../src/lib/user-facing-error';
 
 const mock = vi.hoisted(() => ({
   fetchState: vi.fn(),
@@ -206,6 +207,17 @@ describe('DesignerVerification', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not expose raw infrastructure errors from verification actions', async () => {
+    const user = userEvent.setup();
+    mock.submit.mockRejectedValue(new Error('fetch failed: ECONNREFUSED 127.0.0.1:3001'));
+    render(<DesignerVerification initialState={draftState()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Submit for verification' }));
+
+    expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/ECONNREFUSED/)).not.toBeInTheDocument();
+  });
+
   it('applies a refreshed pending state after history restoration and locks the application', () => {
     const initialState = draftState();
     const { container, rerender } = render(<DesignerVerification initialState={initialState} />);
@@ -339,7 +351,7 @@ describe('DesignerVerification', () => {
 
   it('shows a failed document removal inside the confirmation dialog', async () => {
     const user = userEvent.setup();
-    mock.removeDocument.mockRejectedValue(new Error('Could not remove the document.'));
+    mock.removeDocument.mockRejectedValue(new UserFacingError('Could not remove the document.'));
     render(<DesignerVerification initialState={draftState()} />);
 
     await user.click(screen.getByRole('button', { name: 'Remove MSME certificate' }));
@@ -580,7 +592,7 @@ describe('DesignerVerification', () => {
   });
 
   it('keeps the disabled submit action when the replacement upload fails', async () => {
-    mock.uploadDocument.mockRejectedValue(new Error('Replacement upload failed.'));
+    mock.uploadDocument.mockRejectedValue(new UserFacingError('Replacement upload failed.'));
     const { container } = render(<DesignerVerification initialState={rejectedState()} />);
     const file = new File(['replacement'], 'clear-certificate.pdf', {
       type: 'application/pdf',
@@ -611,7 +623,9 @@ describe('DesignerVerification', () => {
         },
       ],
     });
-    mock.submit.mockRejectedValue(new Error('Verification eligibility requirements changed.'));
+    mock.submit.mockRejectedValue(
+      new UserFacingError('Verification eligibility requirements changed.'),
+    );
     const { container } = render(<DesignerVerification initialState={replacementState} />);
 
     await user.click(screen.getByRole('button', { name: 'Resubmit for verification' }));

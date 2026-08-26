@@ -122,7 +122,7 @@ const removeDocumentRoute = createRoute({
     403: errorJson('Organization owner or admin access required'),
     404: errorJson('Document not found'),
     409: errorJson('Document state changed'),
-    422: errorJson('Verification state could not be loaded'),
+    422: errorJson('Active organization, onboarding, or verification state could not be resolved'),
   },
 });
 

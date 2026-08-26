@@ -227,6 +227,9 @@ export const verificationsRepository = {
     userId: string;
   }): Promise<VerificationDocumentVersionRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      // Every document mutation takes the application lock before any slot or
+      // version lock so concurrent upload, commit, cancel, and remove paths use
+      // one consistent lock order.
       const [application] = await tx
         .select({
           status: schema.verificationApplication.status,

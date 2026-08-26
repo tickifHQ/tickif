@@ -1,4 +1,5 @@
 import type { ZodType } from 'zod';
+import { UserFacingError } from '@/lib/user-facing-error';
 
 function formatPath(path: unknown): string | null {
   if (typeof path === 'string') return path;
@@ -50,15 +51,15 @@ export async function handleApiResponse<T>(
   fallback: string,
   invalidPayloadMessage = fallback,
 ): Promise<T> {
-  if (!response.ok) throw new Error(await readApiErrorMessage(response, fallback));
+  if (!response.ok) throw new UserFacingError(await readApiErrorMessage(response, fallback));
 
   let body: unknown;
   try {
     body = await response.json();
   } catch {
-    throw new Error(invalidPayloadMessage);
+    throw new UserFacingError(invalidPayloadMessage);
   }
   const parsed = schema.safeParse(body);
-  if (!parsed.success) throw new Error(invalidPayloadMessage);
+  if (!parsed.success) throw new UserFacingError(invalidPayloadMessage);
   return parsed.data;
 }
