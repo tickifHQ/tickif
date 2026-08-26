@@ -74,6 +74,7 @@ describe('plan-config', () => {
       expect(features).toContain('Unlimited Projects');
       expect(features).toContain('Verified Badge');
       expect(features).toContain('Discovery Priority');
+      expect(features).not.toContain('Priority Support');
     });
 
     it('corporate inherits hobby + professional_plus features', () => {
@@ -93,7 +94,7 @@ describe('plan-config', () => {
       expect(losses).toContain('Unlimited Branches');
       expect(losses).toContain('Verified Badge');
       expect(losses).toContain('Discovery Priority');
-      expect(losses).toContain('Priority Support');
+      expect(losses).not.toContain('Priority Support');
       expect(losses).not.toContain('1 Seat');
       expect(losses).not.toContain('Unlimited Projects');
     });
@@ -110,7 +111,7 @@ describe('plan-config', () => {
       const losses = getDowngradeLosses('professional_plus', 'hobby');
       expect(losses).toContain('Verified Badge');
       expect(losses).toContain('Discovery Priority');
-      expect(losses).toContain('Priority Support');
+      expect(losses).not.toContain('Priority Support');
     });
 
     it('hobby → hobby has no losses', () => {
@@ -148,10 +149,18 @@ describe('SubscribeFlowDialog', () => {
     vi.useRealTimers();
   });
 
-  function renderDialog(currentTier: PlanTier = 'professional_plus') {
+  function renderDialog(
+    currentTier: PlanTier = 'professional_plus',
+    extras: { lifecycle?: 'active' | 'locked' | 'downgraded' | 'grace' | 'payment_failed' } = {},
+  ) {
     const onOpenChange = vi.fn();
     const result = render(
-      <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier={currentTier} />,
+      <SubscribeFlowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        currentTier={currentTier}
+        lifecycle={extras.lifecycle ?? 'active'}
+      />,
     );
     return { ...result, onOpenChange };
   }
@@ -247,6 +256,7 @@ describe('SubscribeFlowDialog', () => {
           open={true}
           onOpenChange={onOpenChange}
           currentTier="professional_plus"
+          lifecycle="active"
         />,
       );
 
@@ -256,6 +266,7 @@ describe('SubscribeFlowDialog', () => {
           open={false}
           onOpenChange={onOpenChange}
           currentTier="professional_plus"
+          lifecycle="active"
         />,
       );
 
@@ -265,6 +276,7 @@ describe('SubscribeFlowDialog', () => {
           open={true}
           onOpenChange={onOpenChange}
           currentTier="professional_plus"
+          lifecycle="active"
         />,
       );
 
@@ -279,6 +291,7 @@ describe('SubscribeFlowDialog', () => {
           open={true}
           onOpenChange={onOpenChange}
           currentTier="hobby"
+          lifecycle="active"
         />,
       );
 
@@ -288,12 +301,12 @@ describe('SubscribeFlowDialog', () => {
 
       // Parent closes
       rerender(
-        <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" />,
+        <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" lifecycle="active" />,
       );
 
       // Reopen — must be at select
       rerender(
-        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
+        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" lifecycle="active" />,
       );
 
       expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
@@ -323,17 +336,17 @@ describe('SubscribeFlowDialog', () => {
     it('closing during processing clears timer and resets', () => {
       const onOpenChange = vi.fn();
       const { rerender } = render(
-        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
+        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" lifecycle="active" />,
       );
 
       // Close
       rerender(
-        <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" />,
+        <SubscribeFlowDialog open={false} onOpenChange={onOpenChange} currentTier="hobby" lifecycle="active" />,
       );
 
       // Reopen
       rerender(
-        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" />,
+        <SubscribeFlowDialog open={true} onOpenChange={onOpenChange} currentTier="hobby" lifecycle="active" />,
       );
 
       expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
@@ -352,7 +365,7 @@ describe('SubscribeFlowDialog', () => {
       expect(screen.getByText('Unlimited Branches')).toBeInTheDocument();
       expect(screen.getByText('Verified Badge')).toBeInTheDocument();
       expect(screen.getByText('Discovery Priority')).toBeInTheDocument();
-      expect(screen.getByText('Priority Support')).toBeInTheDocument();
+      expect(screen.queryByText('Priority Support')).not.toBeInTheDocument();
     });
   });
 
@@ -364,6 +377,7 @@ describe('SubscribeFlowDialog', () => {
           onOpenChange={vi.fn()}
           // @ts-expect-error — testing runtime safety
           currentTier="enterprise"
+          lifecycle="active"
         />,
       );
       expect(screen.getByText(/Unable to load plan information/)).toBeInTheDocument();
@@ -376,6 +390,7 @@ describe('SubscribeFlowDialog', () => {
           onOpenChange={vi.fn()}
           // @ts-expect-error — testing runtime safety
           currentTier="toString"
+          lifecycle="active"
         />,
       );
       expect(screen.getByText(/Unable to load plan information/)).toBeInTheDocument();
@@ -406,6 +421,37 @@ describe('SubscribeFlowDialog', () => {
       await user.click(screen.getByRole('button', { name: /proceed to checkout/i }));
 
       expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+  });
+
+  describe('lifecycle awareness', () => {
+    it('locked org does not see the plan picker', () => {
+      renderDialog('professional_plus', { lifecycle: 'locked' });
+      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /select corporate plan/i })).not.toBeInTheDocument();
+    });
+
+    it('grace skips the picker and reviews the current plan', () => {
+      renderDialog('professional_plus', { lifecycle: 'grace' });
+      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
+      expect(screen.getByText('Professional+')).toBeInTheDocument();
+    });
+
+    it('downgraded restore starts at confirm-upgrade for pre-lapse tier', () => {
+      render(
+        <SubscribeFlowDialog
+          open={true}
+          onOpenChange={vi.fn()}
+          currentTier="hobby"
+          lifecycle="downgraded"
+          restoreTier="corporate"
+        />,
+      );
+      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+      expect(screen.getByText(/upgrading from Hobby to Corporate/i)).toBeInTheDocument();
     });
   });
 });

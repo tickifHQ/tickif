@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { BillingState } from '../../src/lib/billing-types';
 import { DesignerPlanBilling } from '../../src/components/designer-plan-billing';
 import { BillingStatusBanner } from '../../src/components/billing-status-banner';
@@ -78,6 +79,13 @@ describe('DesignerPlanBilling', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByText('Billing Summary')).toBeInTheDocument();
     });
+
+    it('opens the subscribe dialog from Upgrade Now', async () => {
+      const user = userEvent.setup();
+      render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
+      await user.click(screen.getAllByRole('button', { name: 'Upgrade Now' })[0]!);
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+    });
   });
 
   describe('locked state', () => {
@@ -117,9 +125,14 @@ describe('DesignerPlanBilling', () => {
       expect(screen.queryByText('Upgrade Now')).not.toBeInTheDocument();
     });
 
-    it('shows reactivate CTA disabled pending billing integration', () => {
+    it('opens reactivation flow from the locked CTA', async () => {
+      const user = userEvent.setup();
       render(<DesignerPlanBilling billing={lockedBilling} />);
-      expect(screen.getByRole('button', { name: 'Reactivate Subscription' })).toBeDisabled();
+      const cta = screen.getByRole('button', { name: 'Reactivate Subscription' });
+      expect(cta).toBeEnabled();
+      await user.click(cta);
+      expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
     });
   });
 
@@ -160,6 +173,14 @@ describe('DesignerPlanBilling', () => {
     it('hides billing summary when downgraded', () => {
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       expect(screen.queryByText('Billing Summary')).not.toBeInTheDocument();
+    });
+
+    it('opens restore upgrade from Upgrade to Restore', async () => {
+      const user = userEvent.setup();
+      render(<DesignerPlanBilling billing={downgradedBilling} />);
+      await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+      expect(screen.getByText(/upgrading from Hobby to Corporate/i)).toBeInTheDocument();
     });
   });
 

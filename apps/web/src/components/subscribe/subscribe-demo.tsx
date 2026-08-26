@@ -47,6 +47,7 @@ export function SubscribeDemo() {
         open={open}
         onOpenChange={setOpen}
         currentTier={currentTier}
+        lifecycle="active"
       />
     </div>
   );

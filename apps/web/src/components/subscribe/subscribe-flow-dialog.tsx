@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@repo/ui/components/dialog';
+import type { SubscriptionState } from '@repo/contracts';
 import type { PlanTier } from '@/lib/plan-config';
 import { isUpgrade, isValidTier } from '@/lib/plan-config';
 import { PlanSelectionStep } from './plan-selection-step';
@@ -14,19 +15,69 @@ import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
 import { ReviewPayStep } from './review-pay-step';
 import { ProcessingStep } from './processing-step';
 import { SuccessStep } from './success-step';
+import { ReactivateStep } from './reactivate-step';
 
 type FlowStep =
   | { step: 'select' }
+  | { step: 'reactivate'; targetTier: PlanTier }
   | { step: 'confirm-upgrade'; targetTier: PlanTier }
   | { step: 'confirm-downgrade'; targetTier: PlanTier }
   | { step: 'review'; targetTier: PlanTier }
   | { step: 'processing'; targetTier: PlanTier }
   | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' };
 
-interface SubscribeFlowDialogProps {
+export interface SubscribeFlowDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentTier: PlanTier;
+  /** Required: the picker must not assume `active`. */
+  lifecycle: SubscriptionState;
+  /** Paid tier frozen at lapse. Used when `lifecycle === 'downgraded'`. */
+  restoreTier?: PlanTier | null;
+  /** Skip the picker and start at confirm-upgrade for this paid tier. */
+  initialTargetTier?: PlanTier | null;
+}
+
+function initialFlowStep({
+  lifecycle,
+  currentTier,
+  restoreTier,
+  initialTargetTier,
+}: {
+  lifecycle: SubscriptionState;
+  currentTier: PlanTier;
+  restoreTier?: PlanTier | null;
+  initialTargetTier?: PlanTier | null;
+}): FlowStep {
+  if (lifecycle === 'locked' && isValidTier(currentTier)) {
+    return { step: 'reactivate', targetTier: currentTier };
+  }
+
+  if (
+    (lifecycle === 'grace' || lifecycle === 'payment_failed') &&
+    isValidTier(currentTier)
+  ) {
+    return { step: 'review', targetTier: currentTier };
+  }
+
+  if (lifecycle === 'downgraded') {
+    const restore =
+      restoreTier && restoreTier !== 'hobby' && isValidTier(restoreTier) ? restoreTier : null;
+    if (restore) {
+      return { step: 'confirm-upgrade', targetTier: restore };
+    }
+    return { step: 'select' };
+  }
+
+  if (
+    initialTargetTier &&
+    isValidTier(initialTargetTier) &&
+    isUpgrade(currentTier, initialTargetTier)
+  ) {
+    return { step: 'confirm-upgrade', targetTier: initialTargetTier };
+  }
+
+  return { step: 'select' };
 }
 
 /**
@@ -36,6 +87,8 @@ interface SubscribeFlowDialogProps {
  * - Upgrade:    select → confirm-upgrade → review → processing → success
  * - Downgrade:  select → confirm-downgrade → success (cancellation boundary)
  * - Paid → Hobby: treated as cancellation, NEVER enters review/pay
+ * - Locked:     reactivate → review → processing → success (no plan picker)
+ * - Grace / payment_failed: review current plan (no picker)
  *
  * Processing: timer-based mock. When E-116 integrates Razorpay, the processing
  * step will hand off to the Razorpay SDK and receive a callback.
@@ -44,11 +97,20 @@ export function SubscribeFlowDialog({
   open,
   onOpenChange,
   currentTier,
+  lifecycle,
+  restoreTier = null,
+  initialTargetTier = null,
 }: SubscribeFlowDialogProps) {
-  const [flowStep, setFlowStep] = useState<FlowStep>({ step: 'select' });
+  const [flowStep, setFlowStep] = useState<FlowStep>(() =>
+    open
+      ? initialFlowStep({ lifecycle, currentTier, restoreTier, initialTargetTier })
+      : { step: 'select' },
+  );
   const processingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openSnapshotRef = useRef({ lifecycle, currentTier, restoreTier, initialTargetTier });
+  openSnapshotRef.current = { lifecycle, currentTier, restoreTier, initialTargetTier };
 
-  // Reset flow state when the dialog is closed — whether by user interaction
+  // Reset / initialize when `open` changes — whether by user interaction
   // (onOpenChange) or by the parent setting open={false} directly.
   useEffect(() => {
     if (!open) {
@@ -57,7 +119,9 @@ export function SubscribeFlowDialog({
         processingTimerRef.current = null;
       }
       setFlowStep({ step: 'select' });
+      return;
     }
+    setFlowStep(initialFlowStep(openSnapshotRef.current));
   }, [open]);
 
   // Cleanup timer on unmount only
@@ -95,6 +159,7 @@ export function SubscribeFlowDialog({
   }
 
   function handleSelectPlan(targetTier: PlanTier) {
+    if (lifecycle !== 'active' && lifecycle !== 'downgraded') return;
     if (targetTier === currentTier) return;
     if (isUpgrade(currentTier, targetTier)) {
       setFlowStep({ step: 'confirm-upgrade', targetTier });
@@ -132,7 +197,13 @@ export function SubscribeFlowDialog({
       setFlowStep({ step: 'select' });
     } else if (flowStep.step === 'review') {
       const { targetTier } = flowStep;
-      setFlowStep({ step: 'confirm-upgrade', targetTier });
+      if (lifecycle === 'locked') {
+        setFlowStep({ step: 'reactivate', targetTier });
+      } else if (lifecycle === 'grace' || lifecycle === 'payment_failed') {
+        handleOpenChange(false);
+      } else {
+        setFlowStep({ step: 'confirm-upgrade', targetTier });
+      }
     }
   }
 
@@ -151,6 +222,12 @@ export function SubscribeFlowDialog({
 
         {flowStep.step === 'select' && (
           <PlanSelectionStep currentTier={currentTier} onSelectPlan={handleSelectPlan} />
+        )}
+        {flowStep.step === 'reactivate' && (
+          <ReactivateStep
+            currentTier={currentTier}
+            onConfirm={() => handleUpgradeConfirm(flowStep.targetTier)}
+          />
         )}
         {flowStep.step === 'confirm-upgrade' && (
           <UpgradeConfirmationStep

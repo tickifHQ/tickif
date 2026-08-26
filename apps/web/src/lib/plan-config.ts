@@ -1,16 +1,17 @@
 /**
- * E-120 plan configuration — local frontend definitions.
+ * E-120 plan catalog — display ranks, prices, and cumulative features.
  *
- * These plan definitions power the Subscribe / Upgrade UI flow.
- * When E-114's shared billing contract (@repo/contracts) is available via rebase,
- * replace PlanTier and PLANS with the canonical backend-driven definitions.
+ * Tier ids come from `@repo/contracts` (`PlanTier`). Keep `baseFeatures` aligned
+ * with spec §1.1/§1.2: the paid wedge is verification badge, ranking priority,
+ * and Corporate-only seats/branches/analytics/placement.
  *
- * Prices are in whole INR (rupees) for display purposes.
- * The backend (E-114) stores amounts in paise — conversion happens at the
- * API boundary when E-239 provides real billing totals.
+ * Prices are in whole INR (rupees) for display. The backend stores amounts in
+ * paise — conversion happens at the API boundary when E-239 provides totals.
  */
 
-export type PlanTier = 'hobby' | 'professional_plus' | 'corporate';
+import type { PlanTier } from '@repo/contracts';
+
+export type { PlanTier };
 
 export type PlanDefinition = {
   tier: PlanTier;
@@ -43,7 +44,7 @@ export const PLANS: PlanDefinition[] = [
     label: 'Professional+',
     rank: 1,
     price: 2999,
-    baseFeatures: ['Verified Badge', 'Discovery Priority', 'Priority Support'],
+    baseFeatures: ['Verified Badge', 'Discovery Priority'],
   },
   {
     tier: 'corporate',
