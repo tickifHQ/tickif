@@ -12,10 +12,8 @@ export const metadata = {
 const BillingDevSwitcher =
   process.env.NODE_ENV === 'production'
     ? () => null
-    : dynamic(
-        () =>
-          import('@/components/billing-dev-switcher').then((mod) => mod.BillingDevSwitcher),
-        { ssr: false },
+    : dynamic(() =>
+        import('@/components/billing-dev-switcher').then((mod) => mod.BillingDevSwitcher),
       );
 
 export default async function DesignerPlanBillingPage() {
