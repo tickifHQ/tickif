@@ -1,6 +1,6 @@
 {
-  "id": "31d81020-85f8-418d-a939-cbb022e2432a",
-  "prevId": "75f6294a-38d4-4cfd-baab-944fbd4e40c8",
+  "id": "34ede045-2791-435d-9bee-df9aa61a8b20",
+  "prevId": "f55575d9-9c9f-450b-a799-f5024b71d50b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2582,6 +2582,141 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.payment_transaction": {
+      "name": "payment_transaction",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "razorpay_payment_id": {
+          "name": "razorpay_payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'INR'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "payment_transaction_subscription_idx": {
+          "name": "payment_transaction_subscription_idx",
+          "columns": [
+            {
+              "expression": "subscription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "payment_transaction_status_idx": {
+          "name": "payment_transaction_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "payment_transaction_subscription_id_subscription_id_fk": {
+          "name": "payment_transaction_subscription_id_subscription_id_fk",
+          "tableFrom": "payment_transaction",
+          "tableTo": "subscription",
+          "columnsFrom": [
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "payment_transaction_razorpay_payment_id_unique": {
+          "name": "payment_transaction_razorpay_payment_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "razorpay_payment_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "payment_transaction_amount_nonnegative": {
+          "name": "payment_transaction_amount_nonnegative",
+          "value": "\"payment_transaction\".\"amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.project": {
       "name": "project",
       "schema": "",
@@ -4391,6 +4526,187 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.subscription": {
+      "name": "subscription",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan_tier": {
+          "name": "plan_tier",
+          "type": "plan_tier",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subscription_state": {
+          "name": "subscription_state",
+          "type": "subscription_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "razorpay_subscription_id": {
+          "name": "razorpay_subscription_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "razorpay_status": {
+          "name": "razorpay_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_period_end": {
+          "name": "current_period_end",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grace_started_at": {
+          "name": "grace_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locked_at": {
+          "name": "locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "downgraded_at": {
+          "name": "downgraded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pre_lapse_tier": {
+          "name": "pre_lapse_tier",
+          "type": "plan_tier",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "subscription_grace_sweep_idx": {
+          "name": "subscription_grace_sweep_idx",
+          "columns": [
+            {
+              "expression": "subscription_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "grace_started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"subscription\".\"subscription_state\" = 'grace'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subscription_locked_sweep_idx": {
+          "name": "subscription_locked_sweep_idx",
+          "columns": [
+            {
+              "expression": "subscription_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "locked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"subscription\".\"subscription_state\" = 'locked'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "subscription_organization_id_organization_id_fk": {
+          "name": "subscription_organization_id_organization_id_fk",
+          "tableFrom": "subscription",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "subscription_organization_id_unique": {
+          "name": "subscription_organization_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id"
+          ]
+        },
+        "subscription_razorpay_subscription_id_unique": {
+          "name": "subscription_razorpay_subscription_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "razorpay_subscription_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "subscription_lifecycle_check": {
+          "name": "subscription_lifecycle_check",
+          "value": "\n        (\n          \"subscription\".\"subscription_state\" = 'active'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'payment_failed'\n          AND \"subscription\".\"grace_started_at\" IS NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NULL\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'grace'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = \"subscription\".\"pre_lapse_tier\"\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'locked'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = \"subscription\".\"pre_lapse_tier\"\n        )\n        OR (\n          \"subscription\".\"subscription_state\" = 'downgraded'\n          AND \"subscription\".\"grace_started_at\" IS NOT NULL\n          AND \"subscription\".\"locked_at\" IS NOT NULL\n          AND \"subscription\".\"downgraded_at\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" IS NOT NULL\n          AND \"subscription\".\"pre_lapse_tier\" <> 'hobby'\n          AND \"subscription\".\"plan_tier\" = 'hobby'\n        )\n      "
+        },
+        "subscription_timestamp_order_check": {
+          "name": "subscription_timestamp_order_check",
+          "value": "\n        (\"subscription\".\"locked_at\" IS NULL OR \"subscription\".\"grace_started_at\" IS NULL OR \"subscription\".\"locked_at\" >= \"subscription\".\"grace_started_at\")\n        AND (\"subscription\".\"downgraded_at\" IS NULL OR \"subscription\".\"locked_at\" IS NULL OR \"subscription\".\"downgraded_at\" >= \"subscription\".\"locked_at\")\n      "
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.taxonomy": {
       "name": "taxonomy",
       "schema": "",
@@ -5756,6 +6072,15 @@
         "metadata_corrected"
       ]
     },
+    "public.plan_tier": {
+      "name": "plan_tier",
+      "schema": "public",
+      "values": [
+        "hobby",
+        "professional_plus",
+        "corporate"
+      ]
+    },
     "public.profile_status": {
       "name": "profile_status",
       "schema": "public",
@@ -5816,6 +6141,17 @@
         "rejected",
         "disputed",
         "removed"
+      ]
+    },
+    "public.subscription_state": {
+      "name": "subscription_state",
+      "schema": "public",
+      "values": [
+        "active",
+        "payment_failed",
+        "grace",
+        "locked",
+        "downgraded"
       ]
     },
     "public.taxonomy_kind": {

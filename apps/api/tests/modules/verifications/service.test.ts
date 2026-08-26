@@ -403,20 +403,22 @@ describe('verificationsService', () => {
     vi.mocked(verificationsRepository.cancelPendingDocument).mockRejectedValueOnce(
       new Error('database unavailable'),
     );
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {
+      throw new Error('logging unavailable');
+    });
 
-    await expect(
-      verificationsService.createUpload(caller, {
-        type: 'gst_registration_certificate',
-        contentType: 'application/pdf',
-        size: 1000,
-      }),
-    ).rejects.toThrow('storage unavailable');
-    expect(consoleError).toHaveBeenCalledWith(
-      'Failed to roll back verification upload reservation',
-      expect.any(Error),
-    );
-    consoleError.mockRestore();
+    try {
+      await expect(
+        verificationsService.createUpload(caller, {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        }),
+      ).rejects.toThrow('storage unavailable');
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('cancels only the original uploader pending reservation', async () => {

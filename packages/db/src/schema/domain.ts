@@ -20,6 +20,8 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   INTERACTION_EVENT_TYPE_VALUES,
+  PLAN_TIER_VALUES,
+  SUBSCRIPTION_STATE_VALUES,
   TAXONOMY_KIND_VALUES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_APPLICATION_STATUS_VALUES,
@@ -232,7 +234,6 @@ export const designerProfile = pgTable(
     shareCount: integer('share_count').default(0).notNull(),
     avgRating: numeric('avg_rating', { precision: 3, scale: 2 }).default('0').notNull(),
     reviewCount: integer('review_count').default(0).notNull(),
-    // Corporate display fields (gated by entitlement at read time)
     websiteUrl: text('website_url'),
     googleBusinessUrl: text('google_business_url'),
     testimonialBannerEnabled: boolean('testimonial_banner_enabled').default(false).notNull(),
@@ -1245,5 +1246,166 @@ export const googlePlaceCache = pgTable(
   (t) => [
     // Drives the worker sweep: "rows of status X not fetched since T".
     index('google_place_cache_status_fetched_idx').on(t.status, t.lastFetchedAt),
+  ],
+);
+
+// --- Subscription & Billing (E-114) ---
+
+/**
+ * Plan tier enum — order is the ranking contract.
+ * Corporate > Professional+ > Hobby.
+ * Postgres enum values must be appended, never reordered.
+ */
+export const planTierEnum = pgEnum('plan_tier', PLAN_TIER_VALUES);
+
+/**
+ * Subscription lifecycle state — separate from Razorpay's raw status.
+ * State machine: active → payment_failed → grace → locked → downgraded
+ * (can return to active from any lapsed state via the lifecycle worker).
+ */
+export const subscriptionStateEnum = pgEnum('subscription_state', SUBSCRIPTION_STATE_VALUES);
+
+/**
+ * One active subscription per organization (enforced by unique organizationId).
+ * Updated in-place as the subscription progresses through its lifecycle.
+ * Payment history is tracked in payment_transaction.
+ *
+ * Voluntary cancellation (user downgrades to Hobby) is represented as:
+ *   subscriptionState = 'active', planTier = 'hobby'
+ * The 'downgraded' state is reserved exclusively for the involuntary lapse terminal
+ * stage (payment_failed → grace → locked → downgraded). It preserves pre_lapse_tier
+ * for restoration if the org reactivates.
+ */
+export const subscription = pgTable(
+  'subscription',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    planTier: planTierEnum('plan_tier').notNull(),
+    subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
+    razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
+    razorpayStatus: text('razorpay_status'),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    downgradedAt: timestamp('downgraded_at', { withTimezone: true }),
+    preLapseTier: planTierEnum('pre_lapse_tier'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    // Sweep indexes for the lifecycle worker (E-239):
+    // Find grace-period subscriptions past their window
+    index('subscription_grace_sweep_idx')
+      .on(t.subscriptionState, t.graceStartedAt)
+      .where(sql`${t.subscriptionState} = 'grace'`),
+    // Find locked subscriptions past their window
+    index('subscription_locked_sweep_idx')
+      .on(t.subscriptionState, t.lockedAt)
+      .where(sql`${t.subscriptionState} = 'locked'`),
+    // Lifecycle data integrity: each state requires its corresponding timestamps
+    // and downstream lapse states require pre_lapse_tier for restoration.
+    check(
+      'subscription_lifecycle_check',
+      sql`
+        (
+          ${t.subscriptionState} = 'active'
+          AND ${t.graceStartedAt} IS NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'payment_failed'
+          AND ${t.graceStartedAt} IS NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NULL
+        )
+        OR (
+          ${t.subscriptionState} = 'grace'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = ${t.preLapseTier}
+        )
+        OR (
+          ${t.subscriptionState} = 'locked'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NOT NULL
+          AND ${t.downgradedAt} IS NULL
+          AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = ${t.preLapseTier}
+        )
+        OR (
+          ${t.subscriptionState} = 'downgraded'
+          AND ${t.graceStartedAt} IS NOT NULL
+          AND ${t.lockedAt} IS NOT NULL
+          AND ${t.downgradedAt} IS NOT NULL
+          AND ${t.preLapseTier} IS NOT NULL
+          AND ${t.preLapseTier} <> 'hobby'
+          AND ${t.planTier} = 'hobby'
+        )
+      `,
+    ),
+    // Timestamp ordering: grace → locked → downgraded must be chronological
+    check(
+      'subscription_timestamp_order_check',
+      sql`
+        (${t.lockedAt} IS NULL OR ${t.graceStartedAt} IS NULL OR ${t.lockedAt} >= ${t.graceStartedAt})
+        AND (${t.downgradedAt} IS NULL OR ${t.lockedAt} IS NULL OR ${t.downgradedAt} >= ${t.lockedAt})
+      `,
+    ),
+  ],
+);
+
+/**
+ * Payment transaction audit log — one row per Razorpay **payment** event.
+ *
+ * Scope: This table stores only events that carry a `payment` entity
+ * (e.g. payment.authorized, payment.captured, payment.failed). The
+ * `razorpay_payment_id` column is NOT NULL UNIQUE and serves as the
+ * idempotency key for deduplication.
+ *
+ * Non-payment webhook events (subscription.activated, subscription.halted,
+ * subscription.cancelled, subscription.pending) do NOT contain a payment
+ * entity and therefore do NOT belong here. Those events are handled by
+ * E-117's webhook-event audit/idempotency table, which uses the Razorpay
+ * event ID as its idempotency key instead.
+ *
+ * Amount is stored in paise (integer): ₹2,999 = 299900.
+ */
+export const paymentTransaction = pgTable(
+  'payment_transaction',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    subscriptionId: uuid('subscription_id')
+      .notNull()
+      .references(() => subscription.id, { onDelete: 'cascade' }),
+    razorpayPaymentId: text('razorpay_payment_id').notNull().unique(),
+    amount: integer('amount').notNull(),
+    currency: text('currency').notNull().default('INR'),
+    status: text('status').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index('payment_transaction_subscription_idx').on(t.subscriptionId),
+    index('payment_transaction_status_idx').on(t.status),
+    check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],
 );

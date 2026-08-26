@@ -35,6 +35,8 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   headerIcon?: ComponentType<{ className?: string }>;
   comingSoon?: boolean;
+  /** Hide from designers who are not the org owner (billing is owner-only until E-240). */
+  ownerOnly?: boolean;
 };
 
 const studioItems: NavItem[] = [
@@ -55,7 +57,7 @@ const growItems: NavItem[] = [
     headerIcon: Shield,
   },
   { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
-  { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard },
+  { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
   { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
 ];
 
@@ -94,6 +96,10 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
       {item.comingSoon ? <span className="sr-only">Coming soon</span> : null}
     </span>
   );
+}
+
+function visibleItems(items: NavItem[], isOwner: boolean): NavItem[] {
+  return items.filter((item) => !item.ownerOnly || isOwner);
 }
 
 function SidebarSection({
@@ -158,6 +164,7 @@ function SidebarContent({
   pathname,
   isWorkspaceRefreshing,
   onSwitchSuccess,
+  isOwner,
 }: {
   activeOrganizationId: string;
   studioName: string;
@@ -165,6 +172,7 @@ function SidebarContent({
   pathname: string;
   isWorkspaceRefreshing: boolean;
   onSwitchSuccess: (organizationId: string) => void;
+  isOwner: boolean;
 }) {
   return (
     <>
@@ -181,7 +189,11 @@ function SidebarContent({
       <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 py-5">
         <div className="space-y-6">
           <SidebarSection title="Studio" items={studioItems} pathname={pathname} />
-          <SidebarSection title="Grow" items={growItems} pathname={pathname} />
+          <SidebarSection
+            title="Grow"
+            items={visibleItems(growItems, isOwner)}
+            pathname={pathname}
+          />
         </div>
 
         <div className="space-y-3">
@@ -242,11 +254,13 @@ export function DesignerWorkspaceShell({
   activeOrganizationId,
   studioName,
   studioLocation,
+  isOwner,
   children,
 }: {
   activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
+  isOwner: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -284,6 +298,7 @@ export function DesignerWorkspaceShell({
             pathname={pathname}
             isWorkspaceRefreshing={isWorkspaceRefreshing}
             onSwitchSuccess={handleSwitchSuccess}
+            isOwner={isOwner}
           />
         </aside>
 
@@ -312,6 +327,7 @@ export function DesignerWorkspaceShell({
               pathname={pathname}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={handleSwitchSuccess}
+              isOwner={isOwner}
             />
           </DialogContent>
         </Dialog>

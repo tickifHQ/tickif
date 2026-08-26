@@ -293,9 +293,7 @@ export const verificationsService = {
     } catch (error) {
       await verificationsRepository
         .cancelPendingDocument(documentVersionId, organizationId)
-        .catch((rollbackError: unknown) => {
-          console.error('Failed to roll back verification upload reservation', rollbackError);
-        });
+        .catch(() => undefined);
       throw error;
     }
   },

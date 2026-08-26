@@ -261,6 +261,79 @@ export async function makeReview(overrides: Partial<typeof schema.review.$inferI
   return row!;
 }
 
+export async function makeSubscription(
+  overrides: Partial<typeof schema.subscription.$inferInsert> = {},
+) {
+  const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const state = overrides.subscriptionState ?? 'active';
+
+  // Derive required lifecycle fields from the requested state using relative offsets.
+  const now = new Date();
+  const graceDelta = 5 * 24 * 60 * 60 * 1000; // 5 days ago
+  const lockDelta = 2 * 24 * 60 * 60 * 1000; // 2 days ago
+
+  const stateDefaults: Partial<typeof schema.subscription.$inferInsert> = (() => {
+    switch (state) {
+      case 'active':
+      case 'payment_failed':
+        return {};
+      case 'grace':
+        return {
+          planTier: overrides.planTier ?? 'professional_plus',
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
+        };
+      case 'locked':
+        return {
+          planTier: overrides.planTier ?? 'professional_plus',
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
+        };
+      case 'downgraded':
+        return {
+          planTier: overrides.planTier ?? 'hobby',
+          graceStartedAt: overrides.graceStartedAt ?? new Date(now.getTime() - graceDelta),
+          lockedAt: overrides.lockedAt ?? new Date(now.getTime() - lockDelta),
+          downgradedAt: overrides.downgradedAt ?? now,
+          preLapseTier: overrides.preLapseTier ?? 'professional_plus',
+        };
+      default:
+        return {};
+    }
+  })();
+
+  const [row] = await db
+    .insert(schema.subscription)
+    .values({
+      organizationId,
+      planTier: overrides.planTier ?? 'hobby',
+      subscriptionState: state,
+      ...stateDefaults,
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
+export async function makePaymentTransaction(
+  overrides: Partial<typeof schema.paymentTransaction.$inferInsert> = {},
+) {
+  const subscriptionId = overrides.subscriptionId ?? (await makeSubscription()).id;
+  const [row] = await db
+    .insert(schema.paymentTransaction)
+    .values({
+      subscriptionId,
+      razorpayPaymentId: overrides.razorpayPaymentId ?? `pay_${uid('txn')}`,
+      amount: overrides.amount ?? 299900,
+      status: overrides.status ?? 'captured',
+      payload: overrides.payload ?? { event: 'payment.captured', synthetic: true },
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 // --- seed helpers (test-only) -------------------------------------------------
 
 export { seedTaxonomy } from './seeds/taxonomy.js';
