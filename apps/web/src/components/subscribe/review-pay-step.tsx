@@ -3,25 +3,29 @@
 import { Button } from '@repo/ui/components/button';
 import { Separator } from '@repo/ui/components/separator';
 import { ArrowRight, ChevronLeft, Shield } from 'lucide-react';
-import { PLAN_MAP, ESTIMATED_TAX_RATE, formatCurrency, type PlanTier } from '@/lib/plan-config';
+import type { PlanTier } from '@repo/contracts';
+import { PLAN_MAP, ESTIMATED_TAX_RATE, formatCurrency } from '@/lib/plan-config';
 
 interface ReviewPayStepProps {
   targetTier: PlanTier;
   onPay: () => void;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 /**
- * Review & Pay step — order summary before checkout handoff.
+ * Review & Pay step — order summary before Razorpay checkout handoff.
  *
- * This step shows a preview of the subscription cost. Tax and total are
- * estimated for display only. When E-239 provides real billing totals,
- * these should be replaced with server-provided values.
+ * Shows estimated cost breakdown. Tax is estimated for display only.
+ * The "Proceed to Checkout" button triggers the real POST /api/billing/subscribe
+ * call, which returns a Razorpay shortUrl for redirect.
  *
- * The "Proceed to Checkout" button is the integration boundary for E-116
- * (Razorpay SDK). Currently triggers the mock processing flow.
+ * Restored from PR #392, adapted:
+ * - "Proceed to Checkout" now triggers real API (not mock timer)
+ * - Loading state while API call is in flight
+ * - E-117 webhook is authoritative for activation
  */
-export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps) {
+export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPayStepProps) {
   const plan = PLAN_MAP[targetTier];
   const estimatedTax = plan.price * ESTIMATED_TAX_RATE;
   const estimatedTotal = plan.price + estimatedTax;
@@ -31,7 +35,8 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        disabled={isLoading}
+        className="mb-4 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
       >
         <ChevronLeft className="size-4" />
         Back
@@ -61,7 +66,7 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
             <span className="font-medium text-foreground">{formatCurrency(plan.price)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Estimated Tax</span>
+            <span className="text-muted-foreground">Estimated Tax (GST)</span>
             <span className="font-medium text-foreground">{formatCurrency(estimatedTax)}</span>
           </div>
           <Separator />
@@ -71,7 +76,7 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
               <span className="text-lg font-bold text-foreground">
                 {formatCurrency(estimatedTotal)}
               </span>
-              <span className="text-sm text-muted-foreground"> / month</span>
+              <span className="text-sm text-muted-foreground"> /month</span>
             </div>
           </div>
         </div>
@@ -80,9 +85,9 @@ export function ReviewPayStep({ targetTier, onPay, onBack }: ReviewPayStepProps)
       <Separator className="my-5" />
 
       {/* Checkout handoff */}
-      <Button className="w-full" size="lg" onClick={onPay}>
-        Proceed to Checkout
-        <ArrowRight className="size-4" />
+      <Button className="w-full" size="lg" onClick={onPay} disabled={isLoading}>
+        {isLoading ? 'Setting up checkout...' : 'Proceed to Checkout'}
+        {!isLoading && <ArrowRight className="size-4" />}
       </Button>
 
       <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
