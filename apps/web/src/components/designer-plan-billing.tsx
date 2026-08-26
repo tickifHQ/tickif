@@ -1,3 +1,6 @@
+'use client';
+
+import { useCallback, useState } from 'react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -21,6 +24,7 @@ import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
+import { SubscribeFlowDialog } from '@/components/subscribe/subscribe-flow-dialog';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -55,18 +59,18 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-function lifecycleCta(state: BillingState): { label: string } | null {
+function lifecycleCta(state: BillingState): { label: string; kind: 'subscribe' | 'payment' } | null {
   switch (state.lifecycle) {
     case 'active':
-      return { label: 'Manage Subscription' };
+      return { label: 'Manage Subscription', kind: 'subscribe' };
     case 'payment_failed':
-      return { label: 'Update Payment Method' };
+      return { label: 'Update Payment Method', kind: 'payment' };
     case 'grace':
-      return { label: 'Make Payment' };
+      return { label: 'Make Payment', kind: 'payment' };
     case 'locked':
-      return { label: 'Reactivate Subscription' };
+      return { label: 'Reactivate Subscription', kind: 'subscribe' };
     case 'downgraded':
-      return { label: 'Upgrade to Restore' };
+      return { label: 'Upgrade to Restore', kind: 'subscribe' };
     default:
       return null;
   }
@@ -79,7 +83,13 @@ function isImpaired(lifecycle: BillingState['lifecycle']): boolean {
 
 // ─── Current Plan Card ───────────────────────────────────────────────────────
 
-function CurrentPlanCard({ billing }: { billing: BillingState }) {
+function CurrentPlanCard({
+  billing,
+  onSubscribe,
+}: {
+  billing: BillingState;
+  onSubscribe: (targetTier?: PlanTier) => void;
+}) {
   const tierLabel = PLAN_TIER_LABELS[billing.tier];
   const cta = lifecycleCta(billing);
   const price = billing.billing?.planAmount ?? PLAN_TIER_PRICES[billing.tier];
@@ -163,8 +173,9 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
           <Button
             variant="outline"
             className="shrink-0"
-            disabled
-            title={BILLING_CTA_PENDING}
+            disabled={cta.kind === 'payment'}
+            title={cta.kind === 'payment' ? BILLING_CTA_PENDING : undefined}
+            onClick={cta.kind === 'subscribe' ? () => onSubscribe() : undefined}
           >
             {cta.label}
           </Button>
@@ -339,11 +350,17 @@ function BillingSummary({ billing }: { billing: BillingState }) {
 
 // ─── Upgrade Card (sidebar) ──────────────────────────────────────────────────
 
-function UpgradeCard({ billing }: { billing: BillingState }) {
+function UpgradeCard({
+  billing,
+  onSubscribe,
+}: {
+  billing: BillingState;
+  onSubscribe: (targetTier?: PlanTier) => void;
+}) {
   if (billing.tier === 'corporate') return null;
-  // Don't show upgrade offers when subscription is in an impaired state —
-  // the CTA should be "reactivate" not "upgrade".
-  if (isImpaired(billing.lifecycle)) return null;
+  // Upgrade offers only while active. Locked/downgraded use restore CTAs;
+  // grace/payment_failed must pay the current plan, not switch.
+  if (billing.lifecycle !== 'active') return null;
 
   const cards: {
     tier: PlanTier;
@@ -413,7 +430,7 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
                 </li>
               ))}
             </ul>
-            <Button className="mt-5 w-full" disabled title={BILLING_CTA_PENDING}>
+            <Button className="mt-5 w-full" onClick={() => onSubscribe(card.tier)}>
               Upgrade Now
               <ArrowRight className="size-4" />
             </Button>
@@ -426,7 +443,13 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
 
 // ─── Frozen Resources (Downgraded) ───────────────────────────────────────────
 
-function FrozenResourcesCard({ resources }: { resources: FrozenResource[] }) {
+function FrozenResourcesCard({
+  resources,
+  onSubscribe,
+}: {
+  resources: FrozenResource[];
+  onSubscribe: (targetTier?: PlanTier) => void;
+}) {
   if (resources.length === 0) return null;
 
   return (
@@ -461,7 +484,7 @@ function FrozenResourcesCard({ resources }: { resources: FrozenResource[] }) {
             </div>
           ))}
         </div>
-        <Button className="mt-5 w-full" disabled title={BILLING_CTA_PENDING}>
+        <Button className="mt-5 w-full" onClick={() => onSubscribe()}>
           Upgrade to Restore
           <ArrowRight className="size-4" />
         </Button>
@@ -591,14 +614,16 @@ const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
 function PlanIncludesCard({
   tier,
   lifecycle,
+  onSubscribe,
 }: {
   tier: PlanTier;
   lifecycle: BillingState['lifecycle'];
+  onSubscribe: (targetTier?: PlanTier) => void;
 }) {
   const features = PLAN_FEATURES[tier];
   const impaired = isImpaired(lifecycle);
-  const nextTier =
-    tier === 'hobby' ? 'Professional+' : tier === 'professional_plus' ? 'Corporate' : null;
+  const nextTier: PlanTier | null =
+    tier === 'hobby' ? 'professional_plus' : tier === 'professional_plus' ? 'corporate' : null;
 
   return (
     <Card radius="2xl">
@@ -635,15 +660,15 @@ function PlanIncludesCard({
             );
           })}
         </div>
-        {nextTier && !impaired && (
+        {nextTier && lifecycle === 'active' && (
           <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
             <p className="text-sm font-medium text-foreground">
               {tier === 'hobby'
                 ? 'Want verified status and priority ranking?'
                 : 'Need more team members or branches?'}
             </p>
-            <Button variant="outline" size="sm" disabled title={BILLING_CTA_PENDING}>
-              Upgrade to {nextTier}
+            <Button variant="outline" size="sm" onClick={() => onSubscribe(nextTier)}>
+              Upgrade to {PLAN_TIER_LABELS[nextTier]}
             </Button>
           </div>
         )}
@@ -676,6 +701,19 @@ function HelpCard() {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [targetTier, setTargetTier] = useState<PlanTier | null>(null);
+
+  const openSubscribe = useCallback((tier?: PlanTier) => {
+    setTargetTier(tier ?? null);
+    setSubscribeOpen(true);
+  }, []);
+
+  const handleSubscribeOpenChange = useCallback((next: boolean) => {
+    setSubscribeOpen(next);
+    if (!next) setTargetTier(null);
+  }, []);
+
   const showPaymentDueCard =
     billing.tier !== 'hobby' &&
     (billing.lifecycle === 'grace' || billing.lifecycle === 'payment_failed');
@@ -706,7 +744,7 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
       {/* Main content */}
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-6">
-          <CurrentPlanCard billing={billing} />
+          <CurrentPlanCard billing={billing} onSubscribe={openSubscribe} />
           <UsageSummary billing={billing} />
 
           {billing.lifecycle === 'locked' && billing.lockedAccess && (
@@ -714,12 +752,19 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
           )}
 
           {billing.lifecycle === 'downgraded' && billing.frozenResources.length > 0 && (
-            <FrozenResourcesCard resources={billing.frozenResources} />
+            <FrozenResourcesCard
+              resources={billing.frozenResources}
+              onSubscribe={openSubscribe}
+            />
           )}
 
           <BillingSummary billing={billing} />
 
-          <PlanIncludesCard tier={billing.tier} lifecycle={billing.lifecycle} />
+          <PlanIncludesCard
+            tier={billing.tier}
+            lifecycle={billing.lifecycle}
+            onSubscribe={openSubscribe}
+          />
         </div>
 
         {/* Sidebar */}
@@ -761,10 +806,19 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
             </Card>
           )}
 
-          <UpgradeCard billing={billing} />
+          <UpgradeCard billing={billing} onSubscribe={openSubscribe} />
           <HelpCard />
         </aside>
       </div>
+
+      <SubscribeFlowDialog
+        open={subscribeOpen}
+        onOpenChange={handleSubscribeOpenChange}
+        currentTier={billing.tier}
+        lifecycle={billing.lifecycle}
+        restoreTier={billing.preLapseTier}
+        initialTargetTier={targetTier}
+      />
     </div>
   );
 }
