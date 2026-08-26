@@ -76,7 +76,7 @@ const checkRoute = createRoute({
   method: 'get',
   path: '/check',
   tags: ['Enquiries'],
-  summary: 'Check if an open enquiry exists for a designer',
+  summary: 'Check whether the caller can enquire with a designer',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { query: checkEnquiryQuerySchema },
@@ -87,6 +87,7 @@ const checkRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Account suspended'),
+    404: errorJson('Designer profile not found'),
   },
 });
 
@@ -94,24 +95,15 @@ export const enquiriesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
   .openapi(createEnquiryRoute, async (c) => {
-    const result = await enquiriesService.create(
-      c.req.valid('json'),
-      caller(c.get('user')),
-    );
+    const result = await enquiriesService.create(c.req.valid('json'), caller(c.get('user')));
     return c.json(result, 201);
   })
   .openapi(listMineRoute, async (c) => {
-    const result = await enquiriesService.listMine(
-      c.req.valid('query'),
-      caller(c.get('user')),
-    );
+    const result = await enquiriesService.listMine(c.req.valid('query'), caller(c.get('user')));
     return c.json(result, 200);
   })
   .openapi(checkRoute, async (c) => {
-    const result = await enquiriesService.check(
-      c.req.valid('query'),
-      caller(c.get('user')),
-    );
+    const result = await enquiriesService.check(c.req.valid('query'), caller(c.get('user')));
     return c.json(result, 200);
   });
 

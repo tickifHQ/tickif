@@ -7,7 +7,6 @@ import type {
   ListEnquiriesQuery,
   ListEnquiriesResponse,
 } from '@repo/contracts';
-import { db, eq, schema } from '@repo/db';
 import { AppError } from '../../lib/errors.js';
 import { enquiriesRepository, type EnquiryViewRecord } from './repository.js';
 
@@ -49,76 +48,39 @@ function assertActiveCaller(caller: EnquiryCaller): void {
 }
 
 export const enquiriesService = {
-  async create(
-    input: CreateEnquiryInput,
-    caller: EnquiryCaller,
-  ): Promise<EnquiryResponse> {
+  async create(input: CreateEnquiryInput, caller: EnquiryCaller): Promise<EnquiryResponse> {
     assertActiveCaller(caller);
 
     if (!caller.phoneNumber) {
       throw AppError.unprocessable('A verified phone number is required to send an enquiry');
     }
 
-    // Check designer exists and is active
-    const [designer] = await db
-      .select({
-        id: schema.designerProfile.id,
-        organizationId: schema.designerProfile.orgId,
-      })
-      .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.id, input.designerProfileId))
-      .limit(1);
-
-    if (!designer) {
-      throw AppError.notFound('Designer profile not found');
-    }
-
-    // Check for existing open enquiry
-    const existing = await enquiriesRepository.findOpenByRequesterAndDesigner(
-      caller.userId,
-      input.designerProfileId,
-    );
-    if (existing) {
-      throw AppError.conflict('You already have an open enquiry with this designer');
-    }
-
-    // Create lead for the designer's inbox
-    const [leadRow] = await db
-      .insert(schema.lead)
-      .values({
-        organizationId: designer.organizationId,
-        referredProjectId: input.referredProjectId ?? null,
-        name: caller.name,
-        contactNumber: caller.phoneNumber,
-        budgetBandSlug: input.budget,
-        message: `[${input.subject}] ${input.description}`,
-        source: 'enquiry',
-      })
-      .returning({ id: schema.lead.id });
-
-    if (!leadRow) throw new Error('lead insert returned no row');
-
-    // Create the enquiry record
-    const enquiry = await enquiriesRepository.create({
+    const result = await enquiriesRepository.createWithLead({
       requesterId: caller.userId,
       designerProfileId: input.designerProfileId,
-      organizationId: designer.organizationId,
       referredProjectId: input.referredProjectId,
       subject: input.subject,
       description: input.description,
       templateUsed: input.templateUsed,
       budget: input.budget,
       timeline: input.timeline,
-      leadId: leadRow.id,
+      requesterName: caller.name,
+      requesterPhoneNumber: caller.phoneNumber,
     });
 
-    return toResponse(enquiry);
+    if (result.kind === 'designer_not_found') {
+      throw AppError.notFound('Designer profile not found');
+    }
+    if (result.kind === 'own_studio') {
+      throw AppError.unprocessable('You cannot send an enquiry to your own studio');
+    }
+    if (result.kind === 'existing_enquiry') {
+      throw AppError.conflict('You already have an open enquiry with this designer');
+    }
+    return toResponse(result.enquiry);
   },
 
-  async listMine(
-    query: ListEnquiriesQuery,
-    caller: EnquiryCaller,
-  ): Promise<ListEnquiriesResponse> {
+  async listMine(query: ListEnquiriesQuery, caller: EnquiryCaller): Promise<ListEnquiriesResponse> {
     assertActiveCaller(caller);
 
     const { items, total } = await enquiriesRepository.list({
@@ -137,11 +99,24 @@ export const enquiriesService = {
     };
   },
 
-  async check(
-    query: CheckEnquiryQuery,
-    caller: EnquiryCaller,
-  ): Promise<CheckEnquiryResponse> {
+  async check(query: CheckEnquiryQuery, caller: EnquiryCaller): Promise<CheckEnquiryResponse> {
     assertActiveCaller(caller);
+
+    const eligibility = await enquiriesRepository.findDesignerEligibility(
+      query.designerProfileId,
+      caller.userId,
+    );
+    if (!eligibility) {
+      throw AppError.notFound('Designer profile not found');
+    }
+    if (eligibility.isOwnStudio) {
+      return {
+        canEnquire: false,
+        unavailableReason: 'own_studio',
+        exists: false,
+        enquiryId: null,
+      };
+    }
 
     const existing = await enquiriesRepository.findOpenByRequesterAndDesigner(
       caller.userId,
@@ -149,6 +124,8 @@ export const enquiriesService = {
     );
 
     return {
+      canEnquire: existing === null,
+      unavailableReason: existing ? 'existing_enquiry' : null,
       exists: existing !== null,
       enquiryId: existing?.id ?? null,
     };

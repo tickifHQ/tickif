@@ -1,7 +1,38 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
+
+const mocks = vi.hoisted(() => ({
+  session: null as {
+    user: { id: string; email: string; phoneNumber: string | null };
+  } | null,
+  checkEnquiry: vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      canEnquire: true,
+      unavailableReason: null,
+      exists: false,
+      enquiryId: null,
+    }),
+  })),
+}));
+
+vi.mock('@/lib/auth-client', () => ({
+  authClient: {
+    useSession: () => ({ data: mocks.session, isPending: false }),
+  },
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    api: {
+      enquiries: {
+        check: { $get: mocks.checkEnquiry },
+      },
+    },
+  },
+}));
 
 /**
  * Bug Condition Exploration Test
@@ -86,6 +117,10 @@ describe('PublicDesignerProfile — preservation (sections render regardless of 
 });
 
 describe('PublicDesignerProfile', () => {
+  afterEach(() => {
+    mocks.session = null;
+  });
+
   it('renders every section from the API payload', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
@@ -328,7 +363,7 @@ describe('PublicDesignerProfile', () => {
     expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/anika-spaces');
   });
 
-  it('routes service-dependent actions through login gating', () => {
+  it('routes signed-out enquiry actions through login with a profile return path', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
     expect(screen.getByRole('link', { name: 'Start a conversation' })).toHaveAttribute(
@@ -344,6 +379,25 @@ describe('PublicDesignerProfile', () => {
       'href',
       '/login?callbackURL=%2Fd%2Fanika-spaces',
     );
+    expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
+  });
+
+  it('renders enquiry actions as in-page controls for a signed-in visitor', () => {
+    mocks.session = {
+      user: {
+        id: 'visitor-1',
+        email: 'homeowner@example.com',
+        phoneNumber: '+919876543210',
+      },
+    };
+
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getByRole('button', { name: 'Start a conversation' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Start a conversation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Get free consultation' })).not.toBeInTheDocument();
   });
 
   it('renders the API-supplied project page in the gallery', () => {
