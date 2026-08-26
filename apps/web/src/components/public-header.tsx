@@ -4,14 +4,7 @@ import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
 import { TickifBrandLogo } from '@/components/tickif-brand-logo';
-
-const navLinks = [
-  { href: '/', label: 'Explore' },
-  { href: '/designer/dashboard', label: 'Designers' },
-  { href: '/', label: 'Cost Calculator' },
-  { href: '/enquiries', label: 'Your Enquiries' },
-  { href: '/', label: 'For you' },
-];
+import { PublicNavigation } from '@/components/public-navigation';
 
 /** Public discovery header from the Figma home frame. Admin/designer chrome stays on the shared SiteNav. */
 export function PublicHeader({
@@ -30,17 +23,7 @@ export function PublicHeader({
           <Link href="/" className="inline-flex items-center rounded-lg p-2">
             <TickifBrandLogo />
           </Link>
-          <nav className="hidden items-center gap-1 md:flex">
-            {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <PublicNavigation />
         </div>
 
         <div className="flex items-center gap-2.5">
