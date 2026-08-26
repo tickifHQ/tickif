@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import { PublicHeader } from '../../src/components/public-header';
 
 let pathname = '/';
@@ -13,22 +13,29 @@ vi.mock('@/components/account-menu', () => ({
 }));
 
 describe('PublicHeader', () => {
-  it('does not render current or unavailable navigation items as links', () => {
+  beforeEach(() => {
     pathname = '/';
+  });
+
+  it('does not render current or unavailable navigation items as links', () => {
     render(<PublicHeader />);
 
-    expect(screen.getByText('Explore').closest('a')).toBeNull();
-    expect(screen.getByText('Explore')).toHaveAttribute('aria-current', 'page');
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+
+    expect(within(nav).getByText('Explore').closest('a')).toBeNull();
+    expect(within(nav).getByText('Explore')).toHaveAttribute('aria-current', 'page');
 
     for (const label of ['Designers', 'Cost Calculator', 'For you']) {
-      const item = screen.getByText(label);
+      const item = within(nav).getByText(label);
 
       expect(item.closest('a')).toBeNull();
-      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).not.toHaveAttribute('aria-disabled');
       expect(item).not.toHaveAttribute('tabindex');
+      expect(item).toHaveAccessibleName(`${label}, coming soon`);
+      expect(item).toHaveAttribute('title', 'Coming soon');
     }
 
-    expect(screen.getByRole('link', { name: 'Your Enquiries' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Your Enquiries' })).toHaveAttribute(
       'href',
       '/enquiries',
     );
@@ -36,6 +43,15 @@ describe('PublicHeader', () => {
 
   it('links back to Explore without linking to the current enquiries page', () => {
     pathname = '/enquiries';
+    render(<PublicHeader />);
+
+    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/');
+    expect(screen.getByText('Your Enquiries').closest('a')).toBeNull();
+    expect(screen.getByText('Your Enquiries')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('treats nested enquiry routes as the current Your Enquiries item', () => {
+    pathname = '/enquiries/abc';
     render(<PublicHeader />);
 
     expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/');
