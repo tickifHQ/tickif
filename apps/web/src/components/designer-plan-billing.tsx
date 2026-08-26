@@ -37,27 +37,36 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+const BILLING_CTA_PENDING = 'Coming soon — billing integration pending';
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(dateStr));
+  try {
+    const parsed = dateStr.includes('T') ? new Date(dateStr) : new Date(`${dateStr}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return new Intl.DateTimeFormat('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    }).format(parsed);
+  } catch {
+    return '—';
+  }
 }
 
-function lifecycleCta(state: BillingState): { label: string; href: string } | null {
+function lifecycleCta(state: BillingState): { label: string } | null {
   switch (state.lifecycle) {
     case 'active':
-      return { label: 'Manage Subscription', href: '#manage' };
+      return { label: 'Manage Subscription' };
     case 'payment_failed':
-      return { label: 'Update Payment Method', href: '#payment' };
+      return { label: 'Update Payment Method' };
     case 'grace':
-      return { label: 'Make Payment', href: '#payment' };
+      return { label: 'Make Payment' };
     case 'locked':
-      return { label: 'Reactivate Subscription', href: '#reactivate' };
+      return { label: 'Reactivate Subscription' };
     case 'downgraded':
-      return { label: 'Upgrade to Restore', href: '#upgrade' };
+      return { label: 'Upgrade to Restore' };
     default:
       return null;
   }
@@ -94,6 +103,11 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
               )}
               {billing.lifecycle === 'downgraded' && (
                 <Badge variant="warning">Downgraded</Badge>
+              )}
+              {billing.lifecycle === 'downgraded' && billing.preLapseTier && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  from {PLAN_TIER_LABELS[billing.preLapseTier]}
+                </span>
               )}
               {billing.lifecycle === 'grace' && (
                 <Badge variant="warning">Payment Due</Badge>
@@ -138,7 +152,7 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
                   value={billing.subscriptionId}
                   variant="ghost"
                   size="icon"
-                  label=""
+                  label="Copy subscription ID"
                   icon="copy"
                 />
               </p>
@@ -146,7 +160,12 @@ function CurrentPlanCard({ billing }: { billing: BillingState }) {
           </div>
         </div>
         {cta && (
-          <Button variant="outline" className="shrink-0">
+          <Button
+            variant="outline"
+            className="shrink-0"
+            disabled
+            title={BILLING_CTA_PENDING}
+          >
             {cta.label}
           </Button>
         )}
@@ -163,12 +182,14 @@ function UsageMetricCard({
   limit,
   unit,
   frozen,
+  icon: Icon,
 }: {
   label: string;
   current: number;
   limit: number | null;
   unit: string;
   frozen?: boolean;
+  icon: typeof Users;
 }) {
   const percentage = limit ? Math.min((current / limit) * 100, 100) : null;
 
@@ -177,7 +198,7 @@ function UsageMetricCard({
       <div className="px-5 py-5">
         <div className="flex items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Users className="size-5" />
+            <Icon className="size-5" />
           </span>
           <div>
             <span className="text-sm font-bold text-foreground">{label}</span>
@@ -224,12 +245,16 @@ function UsageSummary({ billing }: { billing: BillingState }) {
             current={billing.usage.seats.current}
             limit={billing.usage.seats.limit}
             unit={billing.usage.seats.unit}
+            icon={Users}
+            frozen={billing.lifecycle === 'downgraded'}
           />
           <UsageMetricCard
             label={billing.usage.branches.label}
             current={billing.usage.branches.current}
             limit={billing.usage.branches.limit}
             unit={billing.usage.branches.unit}
+            icon={Building2}
+            frozen={billing.lifecycle === 'downgraded'}
           />
         </div>
         {billing.tier === 'professional_plus' && (
@@ -286,7 +311,7 @@ function BillingSummary({ billing }: { billing: BillingState }) {
                 </div>
               </div>
             )}
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled title={BILLING_CTA_PENDING}>
               Update Payment Method
             </Button>
           </div>
@@ -337,8 +362,6 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
       benefits: [
         'Verified-business badge',
         'Search & discovery ranking priority',
-        'Priority support',
-        'Advanced analytics',
       ],
     });
     cards.push({
@@ -351,7 +374,8 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
         'Unlimited team members',
         'Unlimited branches',
         'Branch dashboards & analytics',
-        'Full RBAC & collaboration',
+        'Full 5-role RBAC',
+        'Top-of-directory placement',
       ],
     });
   } else {
@@ -365,9 +389,8 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
         'Unlimited team members',
         'Unlimited branches',
         'Branch dashboards & analytics',
-        'Full RBAC & collaboration',
-        'Top listing placement',
-        'Prime badging',
+        'Full 5-role RBAC',
+        'Top-of-directory placement',
       ],
     });
   }
@@ -390,7 +413,7 @@ function UpgradeCard({ billing }: { billing: BillingState }) {
                 </li>
               ))}
             </ul>
-            <Button className="mt-5 w-full">
+            <Button className="mt-5 w-full" disabled title={BILLING_CTA_PENDING}>
               Upgrade Now
               <ArrowRight className="size-4" />
             </Button>
@@ -438,7 +461,7 @@ function FrozenResourcesCard({ resources }: { resources: FrozenResource[] }) {
             </div>
           ))}
         </div>
-        <Button className="mt-5 w-full">
+        <Button className="mt-5 w-full" disabled title={BILLING_CTA_PENDING}>
           Upgrade to Restore
           <ArrowRight className="size-4" />
         </Button>
@@ -499,13 +522,31 @@ type PlanFeature = {
 
 const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
   hobby: [
-    { icon: Users, title: '1 User', description: 'Single studio operator' },
+    { icon: Users, title: '1 Seat', description: 'Single studio operator' },
     { icon: Sparkles, title: 'Unlimited Projects', description: 'Publish your full portfolio' },
     { icon: Eye, title: 'Full Enquiry Visibility', description: 'See all homeowner details' },
     { icon: Globe, title: '1 Studio', description: 'Your public portfolio page' },
   ],
   professional_plus: [
-    { icon: Users, title: '1 Seat', description: 'Single team member' },
+    { icon: Users, title: '1 Seat', description: 'Single team member, by design' },
+    { icon: Sparkles, title: 'Unlimited Projects', description: 'Publish your full portfolio' },
+    { icon: Eye, title: 'Full Enquiry Visibility', description: 'See all homeowner details' },
+    { icon: Globe, title: '1 Studio', description: 'Your public portfolio page' },
+    {
+      icon: ShieldCheck,
+      title: 'Verified Badge',
+      description: 'Trusted business signal',
+      suspendedWhenImpaired: true,
+    },
+    {
+      icon: Search,
+      title: 'Discovery Priority',
+      description: 'Higher search ranking',
+      suspendedWhenImpaired: true,
+    },
+  ],
+  corporate: [
+    { icon: Users, title: 'Unlimited Members', description: 'Full team collaboration' },
     { icon: Sparkles, title: 'Unlimited Projects', description: 'Publish your full portfolio' },
     { icon: Eye, title: 'Full Enquiry Visibility', description: 'See all homeowner details' },
     {
@@ -520,10 +561,6 @@ const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
       description: 'Higher search ranking',
       suspendedWhenImpaired: true,
     },
-    { icon: Receipt, title: 'Priority Support', description: 'Faster response times' },
-  ],
-  corporate: [
-    { icon: Users, title: 'Unlimited Members', description: 'Full team collaboration' },
     {
       icon: Building2,
       title: 'Unlimited Branches',
@@ -539,13 +576,13 @@ const PLAN_FEATURES: Record<PlanTier, PlanFeature[]> = {
     {
       icon: ShieldCheck,
       title: 'Full RBAC',
-      description: 'Granular role permissions',
+      description: 'Five-role matrix, Corporate-gated',
       suspendedWhenImpaired: true,
     },
     {
       icon: Crown,
-      title: 'Prime Badging',
-      description: 'Top listing placement',
+      title: 'Prime Directory Placement',
+      description: 'Top-of-directory listing',
       suspendedWhenImpaired: true,
     },
   ],
@@ -605,7 +642,7 @@ function PlanIncludesCard({
                 ? 'Want verified status and priority ranking?'
                 : 'Need more team members or branches?'}
             </p>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled title={BILLING_CTA_PENDING}>
               Upgrade to {nextTier}
             </Button>
           </div>
@@ -705,12 +742,16 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
                   <span className="font-semibold text-foreground">
                     {formatCurrency(billing.billing.total)}
                   </span>{' '}
-                  is due on {formatDate(billing.billing.nextBillingDate)}.
+                  {billing.lastPaymentFailedDate
+                    ? `failed on ${formatDate(billing.lastPaymentFailedDate)}.`
+                    : `is due on ${formatDate(billing.billing.nextBillingDate)}.`}
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
                   className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
+                  disabled
+                  title={BILLING_CTA_PENDING}
                 >
                   {billing.lifecycle === 'payment_failed'
                     ? 'Update Payment Method'

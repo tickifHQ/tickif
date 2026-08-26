@@ -11,14 +11,15 @@ function makeBilling(overrides: Partial<BillingState> = {}): BillingState {
   return {
     lifecycle: 'active',
     tier: 'professional_plus',
-    renewalDate: '2026-12-12',
+    preLapseTier: null,
+    renewalDate: '2099-12-12',
     subscriptionId: 'sub_TEST_123',
     usage: {
       seats: { label: 'Team Seats', current: 1, limit: 1, unit: 'seats' },
       branches: { label: 'Branches', current: 1, limit: 1, unit: 'branches' },
     },
     billing: {
-      nextBillingDate: '2026-12-12',
+      nextBillingDate: '2099-12-12',
       billingCycle: 'monthly',
       planAmount: 2999,
       tax: 539.82,
@@ -116,9 +117,9 @@ describe('DesignerPlanBilling', () => {
       expect(screen.queryByText('Upgrade Now')).not.toBeInTheDocument();
     });
 
-    it('shows reactivate CTA', () => {
+    it('shows reactivate CTA disabled pending billing integration', () => {
       render(<DesignerPlanBilling billing={lockedBilling} />);
-      expect(screen.getByText('Reactivate Subscription')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reactivate Subscription' })).toBeDisabled();
     });
   });
 
@@ -132,24 +133,32 @@ describe('DesignerPlanBilling', () => {
   });
 
   describe('downgraded state', () => {
+    const downgradedBilling = makeBilling({
+      lifecycle: 'downgraded',
+      tier: 'hobby',
+      preLapseTier: 'corporate',
+      billing: null,
+      frozenResources: [
+        { label: 'Additional Seats', quantity: 4, recoverable: true },
+        { label: 'Branches', quantity: 3, recoverable: true },
+      ],
+    });
+
+    it('shows Hobby as the current plan with the pre-lapse tier', () => {
+      render(<DesignerPlanBilling billing={downgradedBilling} />);
+      expect(screen.getByText('Hobby')).toBeInTheDocument();
+      expect(screen.getByText(/from Corporate/)).toBeInTheDocument();
+    });
+
     it('shows frozen resources as recoverable', () => {
-      render(
-        <DesignerPlanBilling
-          billing={makeBilling({
-            lifecycle: 'downgraded',
-            frozenResources: [
-              { label: 'Additional Seats', quantity: 4, recoverable: true },
-              { label: 'Branches', quantity: 3, recoverable: true },
-            ],
-          })}
-        />,
-      );
+      render(<DesignerPlanBilling billing={downgradedBilling} />);
       expect(screen.getByText('Frozen Resources')).toBeInTheDocument();
       expect(screen.getAllByText('Recoverable').length).toBe(2);
+      expect(screen.getAllByText('Frozen').length).toBeGreaterThan(0);
     });
 
     it('hides billing summary when downgraded', () => {
-      render(<DesignerPlanBilling billing={makeBilling({ lifecycle: 'downgraded' })} />);
+      render(<DesignerPlanBilling billing={downgradedBilling} />);
       expect(screen.queryByText('Billing Summary')).not.toBeInTheDocument();
     });
   });
@@ -200,6 +209,12 @@ describe('BillingStatusBanner', () => {
   it('does not fabricate locked countdown when null', () => {
     render(<BillingStatusBanner lifecycle="locked" lockedDaysRemaining={null} />);
     expect(screen.queryByText(/days to/)).not.toBeInTheDocument();
+  });
+
+  it('shows expired copy when remaining days are 0 or negative', () => {
+    render(<BillingStatusBanner lifecycle="grace" graceDaysRemaining={0} />);
+    expect(screen.getByText(/grace period has expired/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 days remaining/)).not.toBeInTheDocument();
   });
 
   it('shows payment failed message', () => {

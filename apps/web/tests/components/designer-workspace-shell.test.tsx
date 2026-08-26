@@ -47,6 +47,7 @@ describe('DesignerWorkspaceShell', () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -64,6 +65,7 @@ describe('DesignerWorkspaceShell', () => {
 
     rerender(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-2"
         studioName="Studio Two"
         studioLocation="Pune"
@@ -82,6 +84,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -101,6 +104,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -120,6 +124,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -175,6 +180,7 @@ describe('DesignerWorkspaceShell', () => {
 
       render(
         <DesignerWorkspaceShell
+          isOwner
           activeOrganizationId="org-1"
           studioName="Antika Interiors"
           studioLocation="Chennai"
@@ -195,6 +201,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -213,6 +220,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -232,6 +240,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -250,6 +259,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -281,6 +291,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -304,6 +315,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -324,6 +336,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
+        isOwner
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -347,5 +360,25 @@ describe('DesignerWorkspaceShell', () => {
     expect(main).toHaveClass('overflow-y-auto');
     expect(section).toHaveClass('flex-1');
     expect(section).toHaveClass('overflow-hidden');
+  });
+
+  it('hides Plan & billing from non-owners in desktop and mobile nav', async () => {
+    mock.pathname = '/designer/dashboard';
+    const user = userEvent.setup();
+    render(
+      <DesignerWorkspaceShell
+        isOwner={false}
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.queryByRole('link', { name: /plan & billing/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    expect(screen.queryByRole('link', { name: /plan & billing/i })).not.toBeInTheDocument();
   });
 });

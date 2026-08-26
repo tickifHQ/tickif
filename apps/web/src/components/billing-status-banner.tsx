@@ -8,19 +8,26 @@ interface BillingStatusBannerProps {
   lifecycle: BillingLifecycleState;
   graceDaysRemaining?: number | null;
   lockedDaysRemaining?: number | null;
-  /** When true, renders a compact inline variant for the dashboard shell. */
-  compact?: boolean;
+}
+
+function daysRemainingCopy(days: number, unit: 'grace' | 'locked'): string {
+  if (days <= 0) {
+    return unit === 'grace' ? ' The grace period has expired.' : ' The locked window has expired.';
+  }
+  const dayWord = days === 1 ? 'day' : 'days';
+  return unit === 'grace'
+    ? ` You have ${days} ${dayWord} remaining before your account is locked.`
+    : ` You have ${days} ${dayWord} to reactivate before your account is downgraded.`;
 }
 
 /**
- * Reusable billing status banner — renders in the Plan & Billing page
- * and optionally in the Designer Dashboard shell for grace/locked states.
+ * Billing status banner for the Plan & Billing detail page.
+ * Persistent dashboard-shell placement is a follow-up once E-239 provides a real read.
  */
 export function BillingStatusBanner({
   lifecycle,
   graceDaysRemaining,
   lockedDaysRemaining,
-  compact = false,
 }: BillingStatusBannerProps) {
   if (lifecycle === 'active' || lifecycle === 'downgraded') return null;
 
@@ -34,11 +41,9 @@ export function BillingStatusBanner({
             Your last payment could not be processed. Update your payment method to avoid service
             interruption.
           </p>
-          {!compact && (
-            <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/designer/plan-billing">Update payment method</Link>
-            </Button>
-          )}
+          <Button asChild variant="outline" size="sm" className="mt-3">
+            <Link href="/designer/plan-billing">Update payment method</Link>
+          </Button>
         </AlertDescription>
       </Alert>
     );
@@ -52,20 +57,12 @@ export function BillingStatusBanner({
         <AlertDescription>
           <p>
             Your payment is overdue.
-            {graceDaysRemaining != null && (
-              <>
-                {' '}
-                You have {graceDaysRemaining} day{graceDaysRemaining !== 1 ? 's' : ''} remaining
-                before your account is locked.
-              </>
-            )}{' '}
-            Full access continues during this period.
+            {graceDaysRemaining != null ? daysRemainingCopy(graceDaysRemaining, 'grace') : null} Full
+            access continues during this period.
           </p>
-          {!compact && (
-            <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/designer/plan-billing">Make payment</Link>
-            </Button>
-          )}
+          <Button asChild variant="outline" size="sm" className="mt-3">
+            <Link href="/designer/plan-billing">Make payment</Link>
+          </Button>
         </AlertDescription>
       </Alert>
     );
@@ -79,20 +76,14 @@ export function BillingStatusBanner({
         <AlertDescription>
           <p>
             Your subscription has been suspended due to non-payment.
-            {lockedDaysRemaining != null && (
-              <>
-                {' '}
-                You have {lockedDaysRemaining} day{lockedDaysRemaining !== 1 ? 's' : ''} to
-                reactivate before your account is downgraded.
-              </>
-            )}{' '}
+            {lockedDaysRemaining != null
+              ? daysRemainingCopy(lockedDaysRemaining, 'locked')
+              : null}{' '}
             Reactivate to restore access to all workspace features.
           </p>
-          {!compact && (
-            <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/designer/plan-billing">Reactivate subscription</Link>
-            </Button>
-          )}
+          <Button asChild variant="outline" size="sm" className="mt-3">
+            <Link href="/designer/plan-billing">Reactivate subscription</Link>
+          </Button>
         </AlertDescription>
       </Alert>
     );

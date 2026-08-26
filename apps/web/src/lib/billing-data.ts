@@ -4,9 +4,13 @@
  * Temporary: returns typed mock data until the billing API (E-119/E-239)
  * is implemented. Replace getBillingState() with a real API call when available.
  * The component layer uses only the BillingState type and is unaffected by this swap.
+ *
+ * Amounts below are display rupees. `payment_transaction.amount` is paise
+ * (×100). Convert at the API boundary — do not persist these floats.
  */
 
 import type { BillingState } from './billing-types';
+import { isoDateOffsetDays } from './billing-types';
 
 /**
  * Fetch billing state for the active organization.
@@ -16,14 +20,15 @@ export async function getBillingState(): Promise<BillingState> {
   return {
     lifecycle: 'active',
     tier: 'professional_plus',
-    renewalDate: '2026-12-12',
+    preLapseTier: null,
+    renewalDate: isoDateOffsetDays(30),
     subscriptionId: 'sub_TICKIF_demo',
     usage: {
       seats: { label: 'Team Seats', current: 1, limit: 1, unit: 'seats' },
       branches: { label: 'Branches', current: 1, limit: 1, unit: 'branches' },
     },
     billing: {
-      nextBillingDate: '2026-12-12',
+      nextBillingDate: isoDateOffsetDays(30),
       billingCycle: 'monthly',
       planAmount: 2999,
       tax: 539.82,

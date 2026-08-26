@@ -19,14 +19,18 @@ import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 export function BillingDevSwitcher({ initialBilling }: { initialBilling: BillingState }) {
   const [tier, setTier] = useState<PlanTier>(initialBilling.tier);
   const [lifecycle, setLifecycle] = useState<BillingLifecycleState>(initialBilling.lifecycle);
+  const [preLapseTier, setPreLapseTier] = useState<PlanTier | null>(
+    initialBilling.preLapseTier,
+  );
   const [previewActive, setPreviewActive] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const billing = buildBillingState(tier, lifecycle);
+  const billing = buildBillingState(tier, lifecycle, preLapseTier);
 
   function applyScenario(scenario: (typeof DEV_SCENARIOS)[number]) {
     setTier(scenario.tier);
     setLifecycle(scenario.lifecycle);
+    setPreLapseTier(scenario.preLapseTier ?? null);
     setPreviewActive(true);
   }
 
