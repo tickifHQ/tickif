@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
 
@@ -11,6 +11,7 @@ const mock = vi.hoisted(() => ({
   taxonomyGet: vi.fn(),
   projectGet: vi.fn(),
   listImagesGet: vi.fn(),
+  deleteRoom: vi.fn(),
   deleteImage: vi.fn(),
 }));
 
@@ -35,6 +36,11 @@ vi.mock('@/lib/api', () => ({
               $delete: mock.deleteImage,
             },
           },
+          rooms: {
+            ':roomId': {
+              $delete: mock.deleteRoom,
+            },
+          },
         },
       },
     },
@@ -48,6 +54,7 @@ describe('DesignerProjectUpload', () => {
     mock.router.replace.mockReset();
 
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:project-image-preview');
 
     const taxonomyByKind = {
       city: [
@@ -249,6 +256,11 @@ describe('DesignerProjectUpload', () => {
         },
       ),
     );
+    mock.deleteRoom.mockResolvedValue(
+      new Response(null, {
+        status: 204,
+      }),
+    );
   });
 
   function selectWithOption(container: HTMLElement, optionLabel: string) {
@@ -260,13 +272,19 @@ describe('DesignerProjectUpload', () => {
     return select;
   }
 
-  it('keeps a deleted image removed when the follow-up refresh fails', async () => {
+  it('requires confirmation before deleting an image and keeps it removed when refresh fails', async () => {
     const user = userEvent.setup();
 
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
 
     await screen.findByText('Living Room');
     await user.click(screen.getByRole('button', { name: /remove image 1/i }));
+
+    expect(mock.deleteImage).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Delete this image?' })).toBeInTheDocument();
+    expect(screen.getByText(/this action cannot be undone/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete image' }));
 
     await waitFor(() => {
       expect(mock.deleteImage).toHaveBeenCalledWith({
@@ -283,6 +301,91 @@ describe('DesignerProjectUpload', () => {
     expect(
       screen.getByText(/image removed, but we could not refresh the latest processing status/i),
     ).toBeInTheDocument();
+  });
+
+  it('accepts image files dropped on the upload zone', async () => {
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    const dropCopy = await screen.findByText(/drag and drop files here or click to upload/i);
+    const dropZone = dropCopy.closest('label');
+    if (!dropZone) throw new Error('Upload drop zone was not rendered');
+
+    const file = new File(['image'], 'living-room.jpg', { type: 'image/jpeg' });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledWith(file);
+    });
+  });
+
+  it('requires confirmation before deleting a room', async () => {
+    const response = await mock.projectGet();
+    const project = (await response.json()) as Record<string, unknown> & {
+      rooms: Array<Record<string, unknown>>;
+    };
+    const firstRoom = project.rooms[0]!;
+    mock.projectGet.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...project,
+          rooms: [
+            firstRoom,
+            ...['Kitchen', 'Master Bedroom', 'Bathroom'].map((name, index) => ({
+              ...firstRoom,
+              id: `33333333-3333-4333-8333-33333333333${index + 4}`,
+              name,
+              sortOrder: index + 1,
+            })),
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Living Room' }));
+
+    expect(mock.deleteRoom).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Delete Living Room?' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete room' }));
+
+    await waitFor(() => {
+      expect(mock.deleteRoom).toHaveBeenCalledWith({
+        param: {
+          id: '11111111-1111-4111-8111-111111111111',
+          roomId: '33333333-3333-4333-8333-333333333333',
+        },
+      });
+    });
+  });
+
+  it('shows room deletion only for optional rooms', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload />);
+
+    await user.click(await screen.findByRole('button', { name: /step 4 project images/i }));
+    await user.click(await screen.findByRole('button', { name: /add new room type/i }));
+    await user.type(screen.getByPlaceholderText('Search room types'), 'Balcony');
+    await user.click(screen.getByRole('button', { name: 'Balcony' }));
+
+    expect(screen.queryByRole('button', { name: 'Delete Kitchen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Master Bedroom' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Bathroom' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Balcony' })).toBeInTheDocument();
+  });
+
+  it('does not offer a custom room action that cannot succeed', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    await user.click(await screen.findByRole('button', { name: /add new room type/i }));
+    await user.type(screen.getByPlaceholderText('Search room types'), 'Observatory');
+
+    expect(screen.getByText(/no matching taxonomy-backed room type found/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /create new room type/i })).not.toBeInTheDocument();
   });
 
   it('opens ready images with the high-quality viewer URL', async () => {

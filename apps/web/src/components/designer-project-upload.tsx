@@ -55,6 +55,8 @@ import {
   DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
@@ -150,6 +152,10 @@ type ViewerImage = {
   src: string;
   alt: string;
 };
+
+type PendingDeletion =
+  | { kind: 'room'; room: RoomDraft }
+  | { kind: 'image'; room: RoomDraft; imageId: string; fileName: string };
 
 type SectionId = 'classification' | 'timeline' | 'metadata' | 'images';
 
@@ -1024,6 +1030,7 @@ type RoomCardProps = {
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onDropFiles: (files: File[]) => void;
   onSetCover: (imageId: string) => void;
   onOpenImage: (image: ProjectImagePreview, statusLabel: string) => void;
   onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
@@ -1045,6 +1052,7 @@ function RoomCard({
   onAddTag,
   onRemoveTag,
   onUpload,
+  onDropFiles,
   onSetCover,
   onOpenImage,
   onMoveImage,
@@ -1114,6 +1122,15 @@ function RoomCard({
             </div>
 
             <label
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (!room.uploading) event.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (room.uploading) return;
+                onDropFiles(Array.from(event.dataTransfer.files));
+              }}
               className={cn(
                 'block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors',
                 room.uploading
@@ -1334,6 +1351,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [aboutProject, setAboutProject] = useState('');
   const [projectType, setProjectType] = useState('apartment');
@@ -1430,10 +1449,22 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       })),
     [propertySubtypeLabelBySlug, selectedProjectTypeBehavior],
   );
-  const defaultRoomCount = useMemo(
-    () => buildDefaultRooms(projectType, bhkSlug).length,
-    [bhkSlug, projectType],
-  );
+  const requiredDefaultRoomIds = useMemo(() => {
+    const unmatchedDefaults = [...buildDefaultRooms(projectType, bhkSlug)];
+    const requiredRoomIds = new Set<string>();
+
+    for (const room of rooms) {
+      const defaultIndex = unmatchedDefaults.findIndex(
+        (template) => roomSlugsMatch(room.roomSlug, template.slug) || room.title === template.title,
+      );
+      if (defaultIndex === -1) continue;
+
+      requiredRoomIds.add(room.clientId);
+      unmatchedDefaults.splice(defaultIndex, 1);
+    }
+
+    return requiredRoomIds;
+  }, [bhkSlug, projectType, rooms]);
   const selectedProjectSubtypeLabel = useMemo(
     () => detailSubtypeOptions.find((option) => option.value === projectSubtype)?.label ?? '',
     [detailSubtypeOptions, projectSubtype],
@@ -2058,30 +2089,38 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     }
   }
 
-  async function handleDeleteRoom(room: RoomDraft) {
+  async function handleDeleteRoom(room: RoomDraft): Promise<boolean> {
     if (!room.id || !projectId) {
       removeRoom(room.clientId);
-      return;
+      return true;
     }
 
     setError('');
     setNotice('');
 
-    const response = await api.api.projects[':id'].rooms[':roomId'].$delete({
-      param: { id: projectId, roomId: room.id },
-    });
+    try {
+      const response = await api.api.projects[':id'].rooms[':roomId'].$delete({
+        param: { id: projectId, roomId: room.id },
+      });
 
-    if (!response.ok) {
-      const payload = await response.json();
-      setError(extractApiMessage(payload, `Could not delete ${room.title}.`));
-      return;
+      if (!response.ok) {
+        const payload = await response.json();
+        setError(extractApiMessage(payload, `Could not delete ${room.title}.`));
+        return false;
+      }
+
+      removeRoom(room.clientId);
+      setNotice(`${room.title} removed from the draft.`);
+      return true;
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error ? deleteError.message : `Could not delete ${room.title}.`,
+      );
+      return false;
     }
-
-    removeRoom(room.clientId);
-    setNotice(`${room.title} removed from the draft.`);
   }
 
-  async function handleDeleteImage(room: RoomDraft, imageId: string) {
+  async function handleDeleteImage(room: RoomDraft, imageId: string): Promise<boolean> {
     setError('');
     setNotice('');
 
@@ -2089,13 +2128,13 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
     if (imageId.startsWith('local-preview-')) {
       removeImageFromRoom(room.clientId, imageId);
-      return;
+      return true;
     }
 
     const currentProjectId = projectId;
     if (!currentProjectId) {
       removeImageFromRoom(room.clientId, imageId);
-      return;
+      return true;
     }
 
     const removedImage = room.images.find((image) => image.id === imageId);
@@ -2117,6 +2156,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         currentProjectId,
         'Image removed, but we could not refresh the latest processing status. Refresh the page in a moment.',
       );
+      return true;
     } catch (deleteError) {
       if (removedImage) {
         updateRoom(room.clientId, (current) => ({
@@ -2127,6 +2167,23 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         }));
       }
       setError(deleteError instanceof Error ? deleteError.message : 'Could not remove this image.');
+      return false;
+    }
+  }
+
+  async function confirmDeletion() {
+    if (!pendingDeletion || deleting) return;
+
+    setDeleting(true);
+    try {
+      const deleted =
+        pendingDeletion.kind === 'room'
+          ? await handleDeleteRoom(pendingDeletion.room)
+          : await handleDeleteImage(pendingDeletion.room, pendingDeletion.imageId);
+
+      if (deleted) setPendingDeletion(null);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -2497,14 +2554,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     }
   }
 
-  async function handleUpload(room: RoomDraft, event: ChangeEvent<HTMLInputElement>) {
-    if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
-      event.target.value = '';
-      return;
-    }
-
+  function handleUpload(room: RoomDraft, event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
+    void handleUploadFiles(room, files);
+  }
+
+  async function handleUploadFiles(room: RoomDraft, files: File[]) {
+    if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
+      return;
+    }
 
     if (files.length === 0) return;
 
@@ -2754,19 +2813,6 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       return left.title.localeCompare(right.title);
     });
   }, [availableRoomTemplates, normalizedRoomSearchQuery, roomAddOptions]);
-  const exactRoomSearchMatch = useMemo(
-    () =>
-      availableRoomTemplates.find((template) => {
-        const normalizedTitle = normalizeRoomSearchValue(template.title);
-        const normalizedSlug = template.slug.replaceAll('-', ' ').toLowerCase();
-        return (
-          normalizedTitle === normalizedRoomSearchQuery ||
-          normalizedSlug === normalizedRoomSearchQuery
-        );
-      }) ?? null,
-    [availableRoomTemplates, normalizedRoomSearchQuery],
-  );
-
   function closeRoomSearch() {
     setRoomSearchOpen(false);
     setRoomSearchQuery('');
@@ -2778,17 +2824,6 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     setNotice(`${template.title} added to this project.`);
     setError('');
     closeRoomSearch();
-  }
-
-  function handleCreateRoomType() {
-    if (!normalizedRoomSearchQuery) return;
-
-    if (exactRoomSearchMatch) {
-      handleRoomSearchSelect(exactRoomSearchMatch);
-      return;
-    }
-
-    setError('Custom room types are not taxonomy-backed yet. Pick one of the room types above.');
   }
 
   return (
@@ -3089,7 +3124,10 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                       expanded: !current.expanded,
                     }))
                   }
-                  onDelete={() => void handleDeleteRoom(room)}
+                  onDelete={() => {
+                    setError('');
+                    setPendingDeletion({ kind: 'room', room });
+                  }}
                   onDescriptionChange={(value) =>
                     updateRoom(room.clientId, (current) => ({ ...current, description: value }))
                   }
@@ -3115,15 +3153,26 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                       tags: current.tags.filter((item) => item !== tag),
                     }))
                   }
-                  onUpload={(event) => void handleUpload(room, event)}
+                  onUpload={(event) => handleUpload(room, event)}
+                  onDropFiles={(files) => void handleUploadFiles(room, files)}
                   onSetCover={handleSetCover}
                   onOpenImage={openImageViewer}
                   onMoveImage={(imageId, direction) =>
                     void handleMoveImage(room, imageId, direction)
                   }
-                  onRemoveImage={(imageId) => void handleDeleteImage(room, imageId)}
+                  onRemoveImage={(imageId) => {
+                    const image = room.images.find((candidate) => candidate.id === imageId);
+                    if (!image) return;
+                    setError('');
+                    setPendingDeletion({
+                      kind: 'image',
+                      room,
+                      imageId,
+                      fileName: image.fileName,
+                    });
+                  }}
                   coverImageId={coverImageId}
-                  allowDelete={rooms.length > defaultRoomCount}
+                  allowDelete={!requiredDefaultRoomIds.has(room.clientId)}
                 />
               ))}
 
@@ -3311,26 +3360,52 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={handleCreateRoomType}
-              disabled={!normalizedRoomSearchQuery}
-              className={cn(
-                'mt-2 flex h-[38px] w-full items-center gap-2 rounded-md px-2 text-left transition-colors',
-                normalizedRoomSearchQuery
-                  ? 'bg-muted/80 text-foreground hover:bg-muted'
-                  : 'bg-muted/40 text-muted-foreground/70',
-              )}
-            >
-              <Plus className="size-4" />
-              <span className={typography.navText}>
-                {normalizedRoomSearchQuery
-                  ? `Create new room type “${roomSearchQuery.trim()}”`
-                  : 'Create new room type'}
-              </span>
-            </button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingDeletion !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDeletion(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDeletion?.kind === 'room'
+                ? `Delete ${pendingDeletion.room.title}?`
+                : 'Delete this image?'}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingDeletion?.kind === 'room'
+                ? 'This removes the room and all of its uploaded images from the draft. This action cannot be undone.'
+                : `This removes “${pendingDeletion?.fileName ?? 'this image'}” from the draft. This action cannot be undone.`}
+            </DialogDescription>
+          </DialogHeader>
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setPendingDeletion(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void confirmDeletion()}
+            >
+              {deleting
+                ? 'Deleting…'
+                : pendingDeletion?.kind === 'room'
+                  ? 'Delete room'
+                  : 'Delete image'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
