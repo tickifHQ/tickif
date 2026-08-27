@@ -85,6 +85,8 @@ export type ListEnquiriesResponse = z.infer<typeof listEnquiriesResponseSchema>;
 
 export const checkEnquiryResponseSchema = z
   .object({
+    canEnquire: z.boolean(),
+    unavailableReason: z.enum(['own_studio', 'existing_enquiry']).nullable(),
     exists: z.boolean(),
     enquiryId: z.uuid().nullable(),
   })
