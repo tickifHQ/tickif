@@ -71,7 +71,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
     isMember: vi.fn(),
-    isWriter: vi.fn(),
+    hasCapability: vi.fn(),
   },
 }));
 
@@ -177,7 +177,7 @@ beforeEach(() => {
   vi.mocked(projectsRepository.listReviewComments).mockResolvedValue([]);
   vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
-  vi.mocked(orgsService.isWriter).mockResolvedValue(true);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
 });
 
 describe('projectsService.list', () => {
@@ -401,7 +401,7 @@ describe('projectsService.create', () => {
         { ...caller, userRole: 'visitor', activeOrgId: null },
       ),
     ).rejects.toMatchObject({ status: 403 });
-    expect(orgsService.isWriter).not.toHaveBeenCalled();
+    expect(orgsService.hasCapability).not.toHaveBeenCalled();
   });
 
   it('uses the base slug when free', async () => {
@@ -579,7 +579,11 @@ describe('projectsService.create', () => {
 
     await projectsService.create({ title: 'Active Org Project' }, caller);
 
-    expect(orgsService.isWriter).toHaveBeenCalledWith(caller.userId, 'org_1');
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'write_projects',
+    );
     expect(projectsRepository.findDesignerByOrgId).toHaveBeenCalledWith('org_1');
     await expect(
       projectsService.create({ title: 'No Org Project' }, { ...caller, activeOrgId: null }),
@@ -592,6 +596,7 @@ describe('projectsService.update', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'changes_requested',
       ownerUserId: caller.userId,
     });
@@ -615,6 +620,7 @@ describe('projectsService.update', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -632,6 +638,7 @@ describe('projectsService.reorderRooms', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -652,6 +659,7 @@ describe('projectsService.linkImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -669,6 +677,7 @@ describe('projectsService.deleteImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -688,6 +697,7 @@ describe('projectsService.deleteImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -713,6 +723,7 @@ describe('projectsService.getCompleteness', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -758,6 +769,7 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: complete.id,
       designerId: complete.designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });
@@ -791,6 +803,7 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: requestedChanges.id,
       designerId: requestedChanges.designerId,
+      organizationId: 'org_1',
       status: 'changes_requested',
       ownerUserId: caller.userId,
     });
@@ -831,6 +844,7 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: rejected.id,
       designerId: rejected.designerId,
+      organizationId: 'org_1',
       status: 'rejected',
       ownerUserId: caller.userId,
     });
@@ -868,6 +882,7 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: complete.id,
       designerId: complete.designerId,
+      organizationId: 'org_1',
       status: 'draft',
       ownerUserId: caller.userId,
     });

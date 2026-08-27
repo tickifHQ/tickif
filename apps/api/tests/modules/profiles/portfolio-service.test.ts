@@ -42,7 +42,7 @@ vi.mock('../../../src/modules/profiles/repository.js', () => ({
 
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
-    isWriter: vi.fn(),
+    hasCapability: vi.fn(),
   },
 }));
 
@@ -146,7 +146,7 @@ const caller = { userId: 'user-1', activeOrgId: 'org-1' };
 
 /** Setup happy-path mocks so resolveProfile + getPortfolio work. */
 function setupResolveProfile(profile = makeProfile()) {
-  vi.mocked(orgsService.isWriter).mockResolvedValue(true);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
   vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profile);
   return profile;
 }

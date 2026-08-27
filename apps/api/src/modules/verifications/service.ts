@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  ORGANIZATION_CAPABILITY,
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
@@ -58,7 +59,13 @@ async function assertMember(caller: VerificationCaller): Promise<string> {
 
 async function assertWriter(caller: VerificationCaller): Promise<string> {
   const organizationId = requireActiveOrganization(caller);
-  if (!(await orgsService.isWriter(caller.userId, organizationId))) {
+  if (
+    !(await orgsService.hasCapability(
+      caller.userId,
+      organizationId,
+      ORGANIZATION_CAPABILITY.MANAGE_VERIFICATION,
+    ))
+  ) {
     throw AppError.forbidden('Organization owner or admin access required');
   }
   return organizationId;
