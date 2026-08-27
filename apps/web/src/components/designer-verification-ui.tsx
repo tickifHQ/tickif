@@ -422,7 +422,10 @@ export function FileUploadArea({
         accept="application/pdf,image/jpeg,image/png"
         className="sr-only"
         disabled={disabled}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => acceptFile(event.target.files?.[0])}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => {
+          acceptFile(event.target.files?.[0]);
+          event.target.value = '';
+        }}
       />
       <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
         <CloudUpload className="size-4" aria-hidden="true" />

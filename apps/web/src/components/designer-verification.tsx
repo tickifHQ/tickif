@@ -8,10 +8,11 @@ import {
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
   VERIFICATION_DOCUMENT_TYPE,
+  VERIFICATION_EFFECTIVE_STATUS,
   type VerificationDocumentType,
   type VerificationStateResponse,
 } from '@repo/contracts';
-import { Alert, AlertDescription } from '@repo/ui/components/alert';
+import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import {
   Dialog,
@@ -25,7 +26,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
-import { CircleAlert, PencilLine, Phone, UserRound } from 'lucide-react';
+import { CircleAlert, Clock3, PencilLine, Phone, UserRound } from 'lucide-react';
 import {
   DetailHeading,
   DocumentTypeSelect,
@@ -69,6 +70,18 @@ const businessDocumentTypes = new Set<VerificationDocumentType>(
 const supportingDocumentTypes = new Set<VerificationDocumentType>(
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
 );
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
+const expiryDateFormatter = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+function formatOtpCooldown(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
 
 type BusyAction =
   | 'business-upload'
@@ -111,6 +124,7 @@ export function DesignerVerification({
   const ownerNameInputRef = useRef<HTMLInputElement>(null);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpSent, setOtpSent] = useState(false);
+  const [otpResendCooldown, setOtpResendCooldown] = useState(0);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [pendingBusinessUpload, setPendingBusinessUpload] = useState<UploadDisplay | null>(null);
   const [pendingSupportingUpload, setPendingSupportingUpload] = useState<UploadDisplay | null>(
@@ -129,6 +143,7 @@ export function DesignerVerification({
     setDocumentPendingRemoval(null);
     setOtpSent(false);
     setOtp(['', '', '', '', '', '']);
+    setOtpResendCooldown(0);
 
     if (!initialState) return;
 
@@ -139,6 +154,14 @@ export function DesignerVerification({
     setIsEditingPhone(!initialState.eligibility.phoneVerified.met);
     setIsEditingIdentityDetails(!hasCompletedPersonalIdentity(initialState));
   }, [initialLoadError, initialState]);
+
+  useEffect(() => {
+    if (otpResendCooldown <= 0) return;
+    const timeout = window.setTimeout(() => {
+      setOtpResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timeout);
+  }, [otpResendCooldown]);
 
   if (!verificationState) {
     return (
@@ -167,7 +190,7 @@ export function DesignerVerification({
 
   const state = verificationState;
   const personalIdentityVerified = hasCompletedPersonalIdentity(state);
-  const approvedProjects = Math.min(
+  const publishedProjects = Math.min(
     state.eligibility.publishedProjects.required,
     Math.max(0, state.eligibility.publishedProjects.current),
   );
@@ -196,6 +219,7 @@ export function DesignerVerification({
   const businessDocumentPresent = state.eligibility.businessDocumentPresent.met;
   const applicationPending = state.status === VERIFICATION_APPLICATION_STATUS.PENDING;
   const applicationVerified = state.status === VERIFICATION_APPLICATION_STATUS.VERIFIED;
+  const applicationExpired = state.status === VERIFICATION_EFFECTIVE_STATUS.EXPIRED;
   const needsRejectedBusinessDocument =
     state.status === VERIFICATION_APPLICATION_STATUS.REJECTED && !businessDocumentPresent;
   const applicationEditable = state.applicationEditable;
@@ -211,6 +235,7 @@ export function DesignerVerification({
       ? 'Verified by the account owner'
       : 'Account owner phone';
   const phoneNumberIsValid = toE164PhoneNumber(selectedCountry, phone) !== null;
+  const expiredAt = state.expiresAt ? expiryDateFormatter.format(new Date(state.expiresAt)) : null;
 
   async function refreshState() {
     const nextState = await fetchVerificationState();
@@ -235,6 +260,7 @@ export function DesignerVerification({
   }
 
   function handleSendOtp() {
+    if (otpResendCooldown > 0) return;
     void runAction('otp-send', async () => {
       const normalizedPhone = toE164PhoneNumber(selectedCountry, phone);
       if (!normalizedPhone)
@@ -243,6 +269,7 @@ export function DesignerVerification({
       if (result.error) throw new UserFacingError(result.error.message || 'Could not send OTP.');
       setOtp(['', '', '', '', '', '']);
       setOtpSent(true);
+      setOtpResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
     });
   }
 
@@ -263,6 +290,7 @@ export function DesignerVerification({
       const nextState = await refreshState();
       setIsEditingIdentityDetails(!hasCompletedPersonalIdentity(nextState));
       setOtpSent(false);
+      setOtpResendCooldown(0);
       setIsEditingPhone(false);
     });
   }
@@ -332,6 +360,17 @@ export function DesignerVerification({
           unnecessary paperwork.
         </p>
       </header>
+
+      {applicationExpired ? (
+        <Alert variant="warning" className="mb-4">
+          <Clock3 aria-hidden="true" />
+          <AlertTitle>Verification expired</AlertTitle>
+          <AlertDescription>
+            Your verification expired{expiredAt ? ` on ${expiredAt}` : ''}. Review your details and
+            resubmit to restore your verified badge.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2.55fr)_minmax(17rem,1fr)]">
         <div className="space-y-4">
@@ -405,13 +444,17 @@ export function DesignerVerification({
                           size="compact"
                           className="w-full sm:w-32"
                           onClick={handleSendOtp}
-                          disabled={busyAction !== null || !phoneNumberIsValid}
+                          disabled={
+                            busyAction !== null || !phoneNumberIsValid || otpResendCooldown > 0
+                          }
                         >
                           {busyAction === 'otp-send'
                             ? 'Sending…'
-                            : otpSent
-                              ? 'Resend OTP'
-                              : 'Get OTP'}
+                            : otpResendCooldown > 0
+                              ? `Resend in ${formatOtpCooldown(otpResendCooldown)}`
+                              : otpSent
+                                ? 'Resend OTP'
+                                : 'Get OTP'}
                         </Button>
                       </div>
                     </div>
@@ -635,7 +678,7 @@ export function DesignerVerification({
           </VerificationSection>
 
           <VerificationSection
-            title="3 approved projects on Homefolio"
+            title={`${requiredProjects} published projects on Tickif`}
             description="Your actual work is the strongest proof you're a real designer. Projects you've already uploaded count automatically."
             status={projectsVerified ? <VerifiedStatusBadge /> : null}
           >
@@ -643,30 +686,29 @@ export function DesignerVerification({
               <div className="flex flex-wrap items-center gap-3">
                 <div
                   className="flex gap-1.5"
-                  aria-label={`${approvedProjects} of ${requiredProjects} projects approved`}
+                  aria-label={`${publishedProjects} of ${requiredProjects} projects published`}
                 >
                   {Array.from({ length: requiredProjects }, (_, index) => (
                     <span
                       key={index}
                       className={cn(
                         'h-2 w-9 rounded-full',
-                        index < approvedProjects ? 'bg-success' : 'bg-muted',
+                        index < publishedProjects ? 'bg-success' : 'bg-muted',
                       )}
                     />
                   ))}
                 </div>
                 <span className="font-mono text-[13px] font-medium uppercase">
-                  {approvedProjects} / {requiredProjects} approved
+                  {publishedProjects} / {requiredProjects} published
                 </span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 {projectsVerified ? (
-                  `You have ${requiredProjects} approved live projects.`
+                  `You have ${requiredProjects} published projects.`
                 ) : (
                   <>
-                    You have {approvedProjects} approved live projects. Upload{' '}
-                    {requiredProjects - approvedProjects} more and get it approved to complete this
-                    step.{' '}
+                    You have {publishedProjects} published projects. Publish{' '}
+                    {requiredProjects - publishedProjects} more to complete this step.{' '}
                     <Link
                       href="/designer/projects/upload"
                       className="font-medium text-primary underline underline-offset-2"
@@ -683,13 +725,13 @@ export function DesignerVerification({
             <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
               <ul className="space-y-1.5">
                 <Requirement complete={personalIdentityVerified}>
-                  Identity confirmed at signup
+                  Identity and phone confirmed
                 </Requirement>
                 <Requirement complete={businessDocumentPresent}>
                   Upload one business document
                 </Requirement>
                 <Requirement complete={projectsVerified}>
-                  {requiredProjects} approved projects (you have {approvedProjects})
+                  {requiredProjects} published projects (you have {publishedProjects})
                 </Requirement>
               </ul>
               {applicationPending ? (
@@ -729,8 +771,9 @@ export function DesignerVerification({
                   >
                     {busyAction === 'submit'
                       ? 'Submitting…'
-                      : state.status === VERIFICATION_APPLICATION_STATUS.REJECTED &&
-                          !needsRejectedBusinessDocument
+                      : applicationExpired ||
+                          (state.status === VERIFICATION_APPLICATION_STATUS.REJECTED &&
+                            !needsRejectedBusinessDocument)
                         ? 'Resubmit for verification'
                         : 'Submit for verification'}
                   </Button>
@@ -748,7 +791,7 @@ export function DesignerVerification({
 
         <VerificationBenefits
           businessDocumentPresent={businessDocumentPresent}
-          publishedProjectCount={approvedProjects}
+          publishedProjectCount={publishedProjects}
           personalIdentityVerified={personalIdentityVerified}
           requiredProjectCount={requiredProjects}
           projectsVerified={projectsVerified}
@@ -780,7 +823,10 @@ export function DesignerVerification({
             onResend={handleSendOtp}
             onCancel={handleCancelOtp}
             loading={busyAction !== null}
-            resendDisabled={busyAction !== null}
+            resendDisabled={busyAction !== null || otpResendCooldown > 0}
+            resendLabel={
+              otpResendCooldown > 0 ? `Resend in ${formatOtpCooldown(otpResendCooldown)}` : 'Resend'
+            }
             verifyLabel="Verify"
             error={error}
           />

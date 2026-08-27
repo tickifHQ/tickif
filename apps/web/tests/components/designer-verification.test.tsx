@@ -117,6 +117,18 @@ function rejectedState(
   };
 }
 
+function expiredState(
+  overrides: Partial<VerificationStateResponse> = {},
+): VerificationStateResponse {
+  return {
+    ...verifiedState,
+    status: 'expired',
+    applicationEditable: true,
+    expiresAt: '2026-08-21T10:05:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('DesignerVerification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,8 +146,9 @@ describe('DesignerVerification', () => {
     expect(screen.getAllByText('Verified')).toHaveLength(3);
     expect(screen.getByText('94 KB of 94 KB')).toBeInTheDocument();
     expect(screen.getByText('MSME certificate')).toBeInTheDocument();
-    expect(screen.getByText('3 / 3 approved')).toBeInTheDocument();
-    expect(screen.getByText('You have 3 approved live projects.')).toBeInTheDocument();
+    expect(screen.getByText('3 published projects on Tickif')).toBeInTheDocument();
+    expect(screen.getByText('3 / 3 published')).toBeInTheDocument();
+    expect(screen.getByText('You have 3 published projects.')).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Submit for verification' }),
     ).not.toBeInTheDocument();
@@ -202,6 +215,17 @@ describe('DesignerVerification', () => {
       screen.getByText(/Once you submit, the admin team reviews within 2–5 business days\./),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submitted' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Submit for verification' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders an expired application as a renewal flow', () => {
+    render(<DesignerVerification initialState={expiredState()} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Verification expired');
+    expect(screen.getByRole('alert')).toHaveTextContent('21 Aug 2026');
+    expect(screen.getByRole('button', { name: 'Resubmit for verification' })).toBeEnabled();
     expect(
       screen.queryByRole('button', { name: 'Submit for verification' }),
     ).not.toBeInTheDocument();
@@ -389,12 +413,12 @@ describe('DesignerVerification', () => {
     });
     render(<DesignerVerification initialState={initialState} />);
 
-    expect(screen.getByText('2 / 3 approved')).toBeInTheDocument();
-    expect(screen.getByText(/upload 1 more/i)).toBeInTheDocument();
+    expect(screen.getByText('2 / 3 published')).toBeInTheDocument();
+    expect(screen.getByText(/publish 1 more/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeDisabled();
     expect(
       screen
-        .getByText('3 approved projects (you have 2)')
+        .getByText('3 published projects (you have 2)')
         .closest('li')
         ?.querySelector('.lucide-x'),
     ).not.toBeNull();
@@ -478,6 +502,27 @@ describe('DesignerVerification', () => {
       }),
     );
     expect(mock.fetchState).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents resending an OTP during the cooldown', async () => {
+    const user = userEvent.setup();
+    const initialState = draftState({
+      identity: { ...verifiedState.identity, ownerPhone: null },
+      eligibility: {
+        ...verifiedState.eligibility,
+        eligible: false,
+        phoneVerified: { met: false, label: 'Phone verified' },
+      },
+    });
+    render(<DesignerVerification initialState={initialState} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Phone number' }), '9843211210');
+    await user.click(screen.getByRole('button', { name: 'Get OTP' }));
+
+    const resendButton = await screen.findByRole('button', { name: 'Resend in 0:30' });
+    expect(resendButton).toBeDisabled();
+    await user.click(resendButton);
+    expect(mock.sendOtp).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the persisted verified phone in the summary until the replacement OTP succeeds', async () => {
@@ -591,16 +636,17 @@ describe('DesignerVerification', () => {
     expect(screen.queryByText('Please upload a clearer certificate.')).not.toBeInTheDocument();
   });
 
-  it('keeps the disabled submit action when the replacement upload fails', async () => {
+  it('allows retrying the same file after a replacement upload fails', async () => {
+    const user = userEvent.setup();
     mock.uploadDocument.mockRejectedValue(new UserFacingError('Replacement upload failed.'));
     const { container } = render(<DesignerVerification initialState={rejectedState()} />);
     const file = new File(['replacement'], 'clear-certificate.pdf', {
       type: 'application/pdf',
     });
 
-    fireEvent.change(container.querySelector('#business-document')!, {
-      target: { files: [file] },
-    });
+    const input = container.querySelector<HTMLInputElement>('#business-document')!;
+
+    await user.upload(input, file);
 
     expect(await screen.findByText('Replacement upload failed.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeDisabled();
@@ -608,6 +654,10 @@ describe('DesignerVerification', () => {
       screen.queryByRole('button', { name: 'Resubmit for verification' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Resubmit')).toBeInTheDocument();
+
+    await user.upload(input, file);
+
+    await waitFor(() => expect(mock.uploadDocument).toHaveBeenCalledTimes(2));
   });
 
   it('keeps the replacement editable when server eligibility changes during resubmission', async () => {
