@@ -1,11 +1,18 @@
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
-import { ac, roles } from './permissions.js';
+import { ac, orgAc, orgRoles, roles } from './permissions.js';
+import {
+  organizationMembershipLimit,
+  requireActiveOrganizationMember,
+  requireOrganizationRbac,
+  validateOrganizationRoleChange,
+} from './organization-policy.js';
 import { sendEmail } from './email.js';
 
 assertProductionEmailConfig();
@@ -156,6 +163,19 @@ export const auth = betterAuth({
       // destructive deletion outside that workflow.
       allowUserToCreateOrganization: false,
       disableOrganizationDeletion: true,
+      ac: orgAc,
+      roles: orgRoles,
+      creatorRole: 'owner',
+      membershipLimit: async (_user, organization) => organizationMembershipLimit(organization.id),
+      schema: {
+        member: {
+          additionalFields: {
+            frozen: { type: 'boolean', required: false, defaultValue: false, input: false },
+            frozenAt: { type: 'date', required: false, input: false },
+            freezeRank: { type: 'number', required: false, input: false },
+          },
+        },
+      },
       sendInvitationEmail: async ({ id, email, organization, inviter }) => {
         const invitationUrl = new URL(
           `/invitations/${encodeURIComponent(id)}`,
@@ -174,6 +194,33 @@ export const auth = betterAuth({
         });
       },
       organizationHooks: {
+        beforeCreateInvitation: async ({ invitation, inviter }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+          await requireActiveOrganizationMember(inviter.id, invitation.organizationId);
+          const role = await validateOrganizationRoleChange({
+            organizationId: invitation.organizationId,
+            newRole: invitation.role,
+          });
+          if (role === 'owner') {
+            throw new APIError('BAD_REQUEST', {
+              code: 'OWNER_INVITATION_NOT_ALLOWED',
+              message: 'Ownership must be transferred through an accepted transfer request',
+            });
+          }
+        },
+        beforeUpdateMemberRole: async ({ member, newRole, user }) => {
+          await requireActiveOrganizationMember(user.id, member.organizationId);
+          const role = await validateOrganizationRoleChange({
+            organizationId: member.organizationId,
+            newRole,
+          });
+          if (role === 'owner' || member.role === 'owner') {
+            throw new APIError('BAD_REQUEST', {
+              code: 'OWNER_TRANSFER_REQUIRED',
+              message: 'Ownership changes require an accepted transfer request',
+            });
+          }
+        },
         afterAcceptInvitation: async ({ user }) => {
           await db
             .update(schema.user)
@@ -220,6 +267,8 @@ export const auth = betterAuth({
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
 export type { PlatformRole } from './permissions.js';
+export { organizationCapabilitiesForRole } from './permissions.js';
+export { organizationMembershipLimit } from './organization-policy.js';
 
 /**
  * Resolve the current better-auth session (user + session) from request headers, keeping

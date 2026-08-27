@@ -11,6 +11,10 @@
     "./email": {
       "types": "./src/email.ts",
       "default": "./src/email.ts"
+    },
+    "./permissions": {
+      "types": "./src/permissions.ts",
+      "default": "./src/permissions.ts"
     }
   },
   "scripts": {
