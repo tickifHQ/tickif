@@ -1,5 +1,20 @@
-import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
-import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES, type AccountStatus } from '@repo/contracts';
+import { sql } from 'drizzle-orm';
+import {
+  pgTable,
+  pgEnum,
+  text,
+  timestamp,
+  boolean,
+  index,
+  integer,
+  check,
+} from 'drizzle-orm/pg-core';
+import {
+  PLATFORM_ROLE,
+  PLATFORM_ROLE_VALUES,
+  type AccountStatus,
+  type OrganizationMemberRole,
+} from '@repo/contracts';
 
 /**
  * better-auth tables (the committed source of truth).
@@ -133,12 +148,24 @@ export const member = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    role: text('role').default('member').notNull(),
+    role: text('role').$type<OrganizationMemberRole>().default('member').notNull(),
+    frozen: boolean('frozen').default(false).notNull(),
+    frozenAt: timestamp('frozen_at'),
+    freezeRank: integer('freeze_rank'),
     createdAt: timestamp('created_at').notNull(),
   },
   (t) => [
     index('member_organizationId_idx').on(t.organizationId),
     index('member_userId_idx').on(t.userId),
+    index('member_organizationId_frozen_idx').on(t.organizationId, t.frozen),
+    check(
+      'member_role_check',
+      sql`${t.role} in ('owner', 'admin', 'billing_admin', 'member', 'viewer')`,
+    ),
+    check(
+      'member_freeze_state_check',
+      sql`(${t.frozen} = false and ${t.frozenAt} is null and ${t.freezeRank} is null) or (${t.frozen} = true and ${t.frozenAt} is not null and ${t.freezeRank} > 0)`,
+    ),
   ],
 );
 

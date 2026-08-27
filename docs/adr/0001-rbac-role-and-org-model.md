@@ -1,8 +1,8 @@
 # ADR 0001 — RBAC role model and company org/team
 
 Status: Accepted
-Date: 2026-06-09
-Context: E-86 (Epic 3 · RBAC & Access Control)
+Date: 2026-06-09, amended 2026-08-27
+Context: E-86 and E-240 (Epic 3 · RBAC & Access Control)
 
 ## Context
 
@@ -16,12 +16,12 @@ without hand-rolling tables.
 
 1. **Two orthogonal role systems.**
    - **Platform role** lives on `user.role` and is global: `visitor | designer | admin
-     | superadmin`. It answers "what can this account do on the platform".
-   - **Org role** lives on `member.role` (organization plugin: `owner | admin | member`)
-     and is scoped to one company org. It answers "what can this account do inside this
-     company".
-   They compose independently: e.g. a platform-`designer` who creates their company is
-   org-`owner` of that org. Neither derives from the other.
+| superadmin`. It answers "what can this account do on the platform".
+   - **Org role** lives on `member.role` (organization plugin: `owner | admin |
+  billing_admin | member | viewer`) and is scoped to one company org. It answers
+     "what can this account do inside this company".
+     They compose independently: e.g. a platform-`designer` who creates their company is
+     org-`owner` of that org. Neither derives from the other.
 
 2. **`user.role` is a Postgres `pgEnum`** (`user_role`), default `visitor`, not null.
    Authorization is security-critical and the role set is closed, so we want
@@ -30,24 +30,28 @@ without hand-rolling tables.
    generated" refinement (same posture as `user.status` in E-80). The `admin` plugin is
    configured with `defaultRole: 'visitor'` so better-auth only ever writes values inside
    the enum.
-   The same security argument applies to `member.role`, but it deliberately stays plain
-   `text`: the organization plugin owns that column, supports custom org roles, and
-   comma-joins multi-role arrays into the single string — a DB enum would fight the
-   plugin's storage format. Org-role integrity is instead enforced at the application
-   layer by the E-87 access-control guards.
+   `member.role` deliberately stays plain `text` because the organization plugin owns
+   that column. E-240 closes the org role set to five single-role values through static
+   better-auth access-control definitions, request validation, and a database CHECK.
+   Its migration collapses any legacy comma-joined values before adding the CHECK.
 
 3. **`adminRoles` and the fine-grained permission framework are deferred to E-87.** We do
    NOT set `adminRoles` here: better-auth validates every `adminRoles` entry against the
    roles defined via `createAccessControl`, so naming `superadmin` before those role
-   definitions exist throws at startup. E-86 establishes only the role *model* + default;
+   definitions exist throws at startup. E-86 establishes only the role _model_ + default;
    E-87 adds the `createAccessControl` statements, the `requireRole`/`requireOwnership`/
    org-membership guards, and at that point sets `adminRoles: ['admin', 'superadmin']`.
 
-4. **Company = organization, team = its members**, using the organization plugin as-is
-   (default `owner`/`admin`/`member`). We do NOT enable better-auth sub-`teams`: the
-   Corporate "multi-admin" requirement is satisfied by multiple `admin` members, and
-   nested teams are YAGNI for v0. An individual designer is either orgless or a
-   single-member org.
+4. **Company = organization, team = its members.** We do NOT enable better-auth
+   sub-`teams`: the Corporate "multi-admin" requirement is satisfied by multiple
+   organization members, and nested teams are YAGNI for v0. Below Corporate the
+   organization remains Owner-only and role assignment and invitations return a tier
+   error. Corporate activates the fixed five-role capability matrix.
+
+5. **Downgrades preserve memberships.** `member.frozen`, `frozen_at`, and `freeze_rank`
+   hold resource-level freeze state. Frozen memberships remain stored but have no
+   authorization capabilities and do not consume an active seat. Restore uses the
+   target tier's capacity and proceeds in freeze-rank order.
 
 ## Consequences
 
@@ -58,9 +62,12 @@ without hand-rolling tables.
   not "fix" the committed enum back to text.
 - Adding a future platform role means editing the `user_role` enum (a migration) and the
   `admin` plugin config together.
+- Adding or changing an organization role means updating the shared contract,
+  better-auth access-control map, database CHECK, migration, and the readable 5 × 12
+  policy test together. Dynamic organization roles remain disabled.
 - Installing the `admin` plugin mounts the `/admin/*` endpoints immediately. As of E-87
   the four roles are defined via `createAccessControl` and `adminRoles: ['admin',
-  'superadmin']` is set, so both privileged roles pass the admin checks. `set-role`
+'superadmin']` is set, so both privileged roles pass the admin checks. `set-role`
   still performs no role-value validation upstream (it even comma-joins array input) —
   the `user_role` enum remains the write backstop, pinned by
   `set-role.integration.test.ts` (an out-of-enum value surfaces as a DB error, not a
