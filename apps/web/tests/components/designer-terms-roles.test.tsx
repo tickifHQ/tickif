@@ -84,10 +84,12 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
       id: 'invitation-1',
       email: 'new@example.com',
       role: 'admin',
+      state: 'pending',
       createdAt: '2026-08-03T00:00:00.000Z',
       expiresAt: '2099-08-05T00:00:00.000Z',
     },
   ],
+  ownershipTransfer: null,
 };
 
 describe('DesignerTermsRoles', () => {

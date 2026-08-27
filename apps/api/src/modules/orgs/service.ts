@@ -2,6 +2,7 @@ import {
   ORGANIZATION_MEMBER_ROLE,
   ORGANIZATION_ACCESS_SCOPE,
   ORGANIZATION_CAPABILITY,
+  ORGANIZATION_INVITATION_STATE,
   rbacEnabled,
   seatLimit,
   organizationMemberRoleSchema,
@@ -9,10 +10,18 @@ import {
   type OrganizationCapability,
   type OrganizationCapabilities,
   type OrganizationWorkspaceResponse,
+  type OrganizationInvitationState,
+  type OwnershipTransferResponse,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
+import { sendEmail } from '@repo/auth/email';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
-import { orgsRepository } from './repository.js';
+import {
+  orgsRepository,
+  OWNERSHIP_TRANSFER_RESULT,
+  type OwnershipTransferRecord,
+} from './repository.js';
 
 const WRITE_ROLES = new Set<OrganizationMemberRole>([
   ORGANIZATION_MEMBER_ROLE.OWNER,
@@ -28,6 +37,69 @@ function hasWriteRole(role: string | null, frozen = false): boolean {
 function normalizeRole(role: string | null): OrganizationMemberRole {
   const parsed = organizationMemberRoleSchema.safeParse(role);
   return parsed.success ? parsed.data : ORGANIZATION_MEMBER_ROLE.MEMBER;
+}
+
+function invitationState(status: string): OrganizationInvitationState {
+  switch (status) {
+    case 'pending':
+      return ORGANIZATION_INVITATION_STATE.PENDING;
+    case 'accepted':
+      return ORGANIZATION_INVITATION_STATE.ACTIVE;
+    case 'rejected':
+      return ORGANIZATION_INVITATION_STATE.DECLINED;
+    case 'expired':
+      return ORGANIZATION_INVITATION_STATE.EXPIRED;
+    default:
+      return ORGANIZATION_INVITATION_STATE.REVOKED;
+  }
+}
+
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const candidate = error as { code?: unknown; constraint?: unknown; cause?: unknown };
+  if (candidate.code === '23505' && candidate.constraint === constraint) return true;
+  return isUniqueViolation(candidate.cause, constraint);
+}
+
+async function transferResponse(
+  request: OwnershipTransferRecord,
+): Promise<OwnershipTransferResponse | null> {
+  const [initiator, target] = await Promise.all([
+    orgsRepository.findUser(request.initiatorUserId),
+    orgsRepository.findMemberById(request.organizationId, request.targetMemberId),
+  ]);
+  if (!initiator || !target || target.userId !== request.targetUserId) return null;
+  return {
+    id: request.id,
+    organizationId: request.organizationId,
+    status: request.status,
+    initiator: {
+      userId: initiator.id,
+      name: initiator.name,
+      email: initiator.email,
+    },
+    target: {
+      memberId: target.id,
+      userId: target.userId,
+      name: target.name,
+      email: target.email,
+      role: normalizeRole(target.role),
+    },
+    expiresAt: request.expiresAt.toISOString(),
+    createdAt: request.createdAt.toISOString(),
+    resolvedAt: request.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+async function requireCorporateOrganization(organizationId: string): Promise<void> {
+  const plan = await orgsRepository.findOrganizationPlan(organizationId);
+  if (!rbacEnabled(plan.tier, plan.state)) {
+    throw new AppError(
+      'ORGANIZATION_RBAC_REQUIRES_CORPORATE',
+      'Upgrade to Corporate to manage organization membership',
+      402,
+    );
+  }
 }
 
 const roleOrder: Record<OrganizationMemberRole, number> = {
@@ -136,11 +208,18 @@ export const orgsService = {
       frozen: false,
     });
     const canManage = capabilities.manageMembers;
-    const [memberRecords, invitationRecords, seatUsage] = await Promise.all([
+    const [memberRecords, invitationRecords, seatUsage, pendingTransfer] = await Promise.all([
       orgsRepository.listMembers(input.activeOrgId),
-      canManage ? orgsRepository.listPendingInvitations(input.activeOrgId) : Promise.resolve([]),
+      canManage ? orgsRepository.listInvitations(input.activeOrgId) : Promise.resolve([]),
       orgsRepository.countActiveMembers(input.activeOrgId),
+      orgsRepository.findPendingOwnershipTransfer(input.activeOrgId),
     ]);
+    const visibleTransfer =
+      pendingTransfer &&
+      (pendingTransfer.initiatorUserId === input.userId ||
+        pendingTransfer.targetUserId === input.userId)
+        ? await transferResponse(pendingTransfer)
+        : null;
 
     const members = memberRecords
       .map((member) => ({
@@ -174,9 +253,141 @@ export const orgsService = {
         id: invitation.id,
         email: invitation.email,
         role: normalizeRole(invitation.role),
+        state: invitationState(invitation.status),
         createdAt: invitation.createdAt.toISOString(),
         expiresAt: invitation.expiresAt.toISOString(),
       })),
+      ownershipTransfer: visibleTransfer,
     };
+  },
+
+  async createOwnershipTransfer(input: {
+    userId: string;
+    organizationId: string;
+    targetMemberId: string;
+    now?: Date;
+  }): Promise<OwnershipTransferResponse> {
+    await requireCorporateOrganization(input.organizationId);
+    if (
+      !(await orgsService.hasCapability(
+        input.userId,
+        input.organizationId,
+        ORGANIZATION_CAPABILITY.TRANSFER_OWNERSHIP,
+      ))
+    ) {
+      throw AppError.forbidden('Only the active organization Owner can transfer ownership');
+    }
+    const target = await orgsRepository.findMemberById(
+      input.organizationId,
+      input.targetMemberId,
+    );
+    if (
+      !target ||
+      target.frozen ||
+      target.role !== ORGANIZATION_MEMBER_ROLE.ADMIN &&
+      target.role !== ORGANIZATION_MEMBER_ROLE.MEMBER
+    ) {
+      throw AppError.unprocessable('Ownership can only be transferred to an active Admin or Member');
+    }
+    if (target.userId === input.userId) {
+      throw AppError.unprocessable('Choose another organization member');
+    }
+
+    const now = input.now ?? new Date();
+    let request: OwnershipTransferRecord;
+    try {
+      request = await orgsRepository.createOwnershipTransfer({
+        organizationId: input.organizationId,
+        initiatorUserId: input.userId,
+        targetUserId: target.userId,
+        targetMemberId: target.id,
+        expiresAt: new Date(
+          now.getTime() + config.OWNERSHIP_TRANSFER_EXPIRY_SECONDS * 1_000,
+        ),
+        now,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, 'ownership_transfer_pending_organization_uniq')) {
+        throw AppError.conflict('An ownership transfer is already pending');
+      }
+      throw error;
+    }
+    const response = await transferResponse(request);
+    if (!response) throw AppError.conflict('Ownership transfer target changed');
+    const transferUrl = new URL('/designer/terms-roles', config.PUBLIC_WEB_URL).toString();
+    await sendEmail({
+      to: target.email,
+      subject: 'Tickif ownership transfer request',
+      idempotencyKey: `ownership-transfer-requested-${request.id}`,
+      html: `<p>You have been nominated as Owner of your Tickif organization.</p><p><a href="${transferUrl}">Review transfer</a></p>`,
+    });
+    return response;
+  },
+
+  async resolveOwnershipTransfer(input: {
+    id: string;
+    userId: string;
+    action: 'accept' | 'decline' | 'cancel';
+    now?: Date;
+  }): Promise<OwnershipTransferResponse> {
+    const existing = await orgsRepository.findOwnershipTransfer(input.id);
+    if (!existing) throw AppError.notFound('Ownership transfer not found');
+    await requireCorporateOrganization(existing.organizationId);
+    const result = await orgsRepository.resolveOwnershipTransfer({
+      id: input.id,
+      actorUserId: input.userId,
+      action: input.action,
+      now: input.now ?? new Date(),
+    });
+    if (result === OWNERSHIP_TRANSFER_RESULT.NOT_FOUND) {
+      throw AppError.notFound('Ownership transfer not found');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.FORBIDDEN) throw AppError.forbidden();
+    if (result === OWNERSHIP_TRANSFER_RESULT.NOT_PENDING) {
+      throw AppError.conflict('Ownership transfer is no longer pending');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.OWNER_STATE_CHANGED) {
+      throw AppError.conflict('Organization ownership changed');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.INVALID_TARGET) {
+      throw AppError.conflict('Transfer target is no longer an eligible member');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.EXPIRED) {
+      throw AppError.conflict('Ownership transfer expired');
+    }
+
+    const response = await transferResponse(result);
+    if (!response) throw AppError.conflict('Ownership transfer membership changed');
+    if (input.action === 'accept') {
+      const [previousOwner, newOwner] = await Promise.all([
+        orgsRepository.findUser(result.initiatorUserId),
+        orgsRepository.findUser(result.targetUserId),
+      ]);
+      if (previousOwner && newOwner) {
+        await Promise.all([
+          sendEmail({
+            to: previousOwner.email,
+            subject: 'Tickif ownership transfer completed',
+            idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
+            html: `<p>${newOwner.name} is now the organization Owner. Your role is now Admin.</p>`,
+          }),
+          sendEmail({
+            to: newOwner.email,
+            subject: 'You are now the Tickif organization Owner',
+            idempotencyKey: `ownership-transfer-completed-target-${result.id}`,
+            html: '<p>The ownership transfer is complete.</p>',
+          }),
+        ]);
+      }
+    }
+    return response;
+  },
+
+  async sweepExpirations(now: Date): Promise<{ invitations: number; transfers: number }> {
+    const [invitations, transfers] = await Promise.all([
+      orgsRepository.expireInvitations(now),
+      orgsRepository.expireOwnershipTransfers(now),
+    ]);
+    return { invitations: invitations.length, transfers: transfers.length };
   },
 };
