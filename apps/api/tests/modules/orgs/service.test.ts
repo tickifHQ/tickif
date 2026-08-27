@@ -7,11 +7,12 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     findMembershipRole: vi.fn(),
     findWorkspaceMembership: vi.fn(),
     listMembers: vi.fn(),
-    listPendingInvitations: vi.fn(),
+    listInvitations: vi.fn(),
     findOrganizationPlan: vi.fn(),
     countActiveMembers: vi.fn(),
     freezeMembersToLimit: vi.fn(),
     restoreMembersToLimit: vi.fn(),
+    findPendingOwnershipTransfer: vi.fn(),
   },
 }));
 
@@ -21,6 +22,7 @@ const { orgsRepository } = await import('../../../src/modules/orgs/repository.js
 describe('orgsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(orgsRepository.findPendingOwnershipTransfer).mockResolvedValue(null);
   });
 
   it('delegates membership and unambiguous legacy-session lookup to the repository', async () => {
@@ -121,11 +123,12 @@ describe('orgsService', () => {
         createdAt: new Date('2026-08-04T00:00:00.000Z'),
       },
     ]);
-    vi.mocked(orgsRepository.listPendingInvitations).mockResolvedValue([
+    vi.mocked(orgsRepository.listInvitations).mockResolvedValue([
       {
         id: 'invitation-1',
         email: 'new@example.com',
         role: 'admin',
+        status: 'pending',
         createdAt: new Date('2026-08-05T00:00:00.000Z'),
         expiresAt: new Date('2026-08-07T00:00:00.000Z'),
       },
@@ -187,10 +190,12 @@ describe('orgsService', () => {
           id: 'invitation-1',
           email: 'new@example.com',
           role: 'admin',
+          state: 'pending',
           createdAt: '2026-08-05T00:00:00.000Z',
           expiresAt: '2026-08-07T00:00:00.000Z',
         },
       ],
+      ownershipTransfer: null,
     });
   });
 
@@ -210,6 +215,6 @@ describe('orgsService', () => {
     await expect(
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
     ).resolves.toMatchObject({ currentUserRole: 'member', canManage: false, invitations: [] });
-    expect(orgsRepository.listPendingInvitations).not.toHaveBeenCalled();
+    expect(orgsRepository.listInvitations).not.toHaveBeenCalled();
   });
 });

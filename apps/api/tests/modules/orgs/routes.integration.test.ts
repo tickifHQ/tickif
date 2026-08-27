@@ -50,7 +50,7 @@ describe('GET /api/orgs/current', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns active organization members and pending invitations to an owner', async () => {
+  it('returns active organization members and invitation lifecycle states to an owner', async () => {
     const organization = await makeOrganization({
       name: 'Studio One',
       slug: 'studio-one',
@@ -87,7 +87,7 @@ describe('GET /api/orgs/current', () => {
         organizationId: organization.id,
         email: 'expired@example.com',
         role: 'member',
-        status: 'pending',
+        status: 'expired',
         inviterId: owner.userId,
         createdAt: new Date('2026-07-01T00:00:00.000Z'),
         expiresAt: new Date('2026-07-02T00:00:00.000Z'),
@@ -104,7 +104,12 @@ describe('GET /api/orgs/current', () => {
     expect(body.members).toHaveLength(2);
     expect(body.members[0]).toMatchObject({ userId: owner.userId, role: 'owner' });
     expect(body.invitations).toEqual([
-      expect.objectContaining({ id: 'invitation-pending', email: 'new@example.com' }),
+      expect.objectContaining({
+        id: 'invitation-pending',
+        email: 'new@example.com',
+        state: 'pending',
+      }),
+      expect.objectContaining({ id: 'invitation-expired', state: 'expired' }),
     ]);
   });
 
