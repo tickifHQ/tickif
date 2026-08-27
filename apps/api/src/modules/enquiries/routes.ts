@@ -47,7 +47,7 @@ const createEnquiryRoute = createRoute({
       content: { 'application/json': { schema: enquiryResponseSchema } },
     },
     401: errorJson('Unauthorized'),
-    403: errorJson('Account suspended'),
+    403: errorJson('Account suspended or enquiry targets the caller’s own studio'),
     404: errorJson('Designer profile not found'),
     409: errorJson('Open enquiry already exists'),
     422: errorJson('Invalid enquiry'),

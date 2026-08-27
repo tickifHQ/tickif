@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -53,7 +54,12 @@ type AvailabilityState =
   | { status: 'error' }
   | { status: 'ready'; result: CheckEnquiryResponse };
 
-const EnquiryAvailabilityContext = createContext<AvailabilityState | null>(null);
+type EnquiryAvailabilityContextValue = {
+  state: AvailabilityState;
+  markSubmitted: (enquiryId: string) => void;
+};
+
+const EnquiryAvailabilityContext = createContext<EnquiryAvailabilityContextValue | null>(null);
 
 export function EnquiryAvailabilityProvider({
   designerProfileId,
@@ -112,8 +118,27 @@ export function EnquiryAvailabilityProvider({
       : { status: 'checking' }
     : null;
 
+  const markSubmitted = useCallback(
+    (enquiryId: string) => {
+      if (!requestKey) return;
+      setResolved({
+        key: requestKey,
+        state: {
+          status: 'ready',
+          result: {
+            canEnquire: false,
+            unavailableReason: 'existing_enquiry',
+            exists: true,
+            enquiryId,
+          },
+        },
+      });
+    },
+    [requestKey],
+  );
+
   return (
-    <EnquiryAvailabilityContext.Provider value={value}>
+    <EnquiryAvailabilityContext.Provider value={value ? { state: value, markSubmitted } : null}>
       {children}
     </EnquiryAvailabilityContext.Provider>
   );
@@ -138,7 +163,8 @@ export function EnquiryCta({
   ariaLabel,
 }: Props) {
   const { data: session } = authClient.useSession();
-  const sharedAvailability = useContext(EnquiryAvailabilityContext);
+  const sharedAvailabilityContext = useContext(EnquiryAvailabilityContext);
+  const sharedAvailability = sharedAvailabilityContext?.state;
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -160,9 +186,6 @@ export function EnquiryCta({
       </Link>
     );
   }
-
-  const phoneNumber = session.user.phoneNumber ?? null;
-  const email = session.user.email ?? null;
 
   async function handleClick() {
     if (!designerProfileId) {
@@ -254,8 +277,7 @@ export function EnquiryCta({
         context={context}
         designerProfileId={designerProfileId}
         referredProjectId={referredProjectId}
-        phoneNumber={phoneNumber}
-        email={email}
+        onSuccess={(enquiry) => sharedAvailabilityContext?.markSubmitted(enquiry.id)}
       />
     </>
   );

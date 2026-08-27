@@ -45,7 +45,62 @@ describe('enquiry ownership protection', () => {
       }),
     });
 
-    expect(createResponse.status).toBe(422);
+    expect(createResponse.status).toBe(403);
+    expect(await createResponse.json()).toMatchObject({
+      error: { message: 'You cannot send an enquiry to your own studio' },
+    });
+
+    const [enquiryCount] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.enquiry)
+      .where(
+        and(
+          eq(schema.enquiry.requesterId, userId),
+          eq(schema.enquiry.designerProfileId, designer.id),
+        ),
+      );
+    const [leadCount] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.lead)
+      .where(eq(schema.lead.organizationId, designer.orgId));
+
+    expect(enquiryCount?.value).toBe(0);
+    expect(leadCount?.value).toBe(0);
+  });
+
+  it('rejects the profile owner without relying on an organization member row', async () => {
+    const { cookie, userId } = await createRoleSession('+919800004304', 'designer');
+    const designer = await makeDesigner({
+      userId,
+      status: 'active',
+      displayName: 'Creator Studio',
+    });
+
+    const checkResponse = await app.request(
+      `/api/enquiries/check?designerProfileId=${designer.id}`,
+      { headers: { cookie } },
+    );
+
+    expect(checkResponse.status).toBe(200);
+    expect(await checkResponse.json()).toEqual({
+      canEnquire: false,
+      unavailableReason: 'own_studio',
+      exists: false,
+      enquiryId: null,
+    });
+
+    const createResponse = await app.request('/api/enquiries', {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        designerProfileId: designer.id,
+        subject: 'Self enquiry',
+        description: 'The profile owner must not create an enquiry for their own studio.',
+        budget: 'premium',
+      }),
+    });
+
+    expect(createResponse.status).toBe(403);
     expect(await createResponse.json()).toMatchObject({
       error: { message: 'You cannot send an enquiry to your own studio' },
     });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import type { EnquiryResponse } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import {
   Dialog,
@@ -19,8 +20,19 @@ import { api } from '@/lib/api';
 // ---------------------------------------------------------------------------
 
 type EnquiryContext =
-  | { type: 'project'; projectName: string; designerName: string; designerLocation?: string | null; designerLogoUrl?: string | null }
-  | { type: 'designer'; designerName: string; designerLocation?: string | null; designerLogoUrl?: string | null };
+  | {
+      type: 'project';
+      projectName: string;
+      designerName: string;
+      designerLocation?: string | null;
+      designerLogoUrl?: string | null;
+    }
+  | {
+      type: 'designer';
+      designerName: string;
+      designerLocation?: string | null;
+      designerLogoUrl?: string | null;
+    };
 
 type Props = {
   open: boolean;
@@ -28,10 +40,8 @@ type Props = {
   context: EnquiryContext;
   designerProfileId: string;
   referredProjectId?: string | null;
-  /** Verified phone number to display read-only. */
-  phoneNumber?: string | null;
-  /** Email to display read-only. */
-  email?: string | null;
+  /** Notifies the caller after the enquiry has been persisted. */
+  onSuccess?: (enquiry: EnquiryResponse) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -39,11 +49,31 @@ type Props = {
 // ---------------------------------------------------------------------------
 
 const TEMPLATE_CHIPS = [
-  { label: 'Request quotation', template: 'Hi, I would like to request a quotation for my project. Could you share your pricing and availability?' },
-  { label: 'Book consultation', template: 'Hi, I would like to book a consultation to discuss my requirements. Please let me know your available slots.' },
-  { label: 'Timeline enquiry', template: 'Hi, I would like to understand the typical timeline for a project like mine. Could you share more details?' },
-  { label: 'Design ideas', template: 'Hi, I am looking for design ideas and inspiration for my space. I would love to discuss possibilities with you.' },
-  { label: 'Material enquiry', template: 'Hi, I have some questions about materials and finishes you typically work with. Could we discuss?' },
+  {
+    label: 'Request quotation',
+    template:
+      'Hi, I would like to request a quotation for my project. Could you share your pricing and availability?',
+  },
+  {
+    label: 'Book consultation',
+    template:
+      'Hi, I would like to book a consultation to discuss my requirements. Please let me know your available slots.',
+  },
+  {
+    label: 'Timeline enquiry',
+    template:
+      'Hi, I would like to understand the typical timeline for a project like mine. Could you share more details?',
+  },
+  {
+    label: 'Design ideas',
+    template:
+      'Hi, I am looking for design ideas and inspiration for my space. I would love to discuss possibilities with you.',
+  },
+  {
+    label: 'Material enquiry',
+    template:
+      'Hi, I have some questions about materials and finishes you typically work with. Could we discuss?',
+  },
   { label: 'General question', template: '' },
 ] as const;
 
@@ -89,8 +119,7 @@ export function EnquiryDialog({
   context,
   designerProfileId,
   referredProjectId,
-  phoneNumber,
-  email,
+  onSuccess,
 }: Props) {
   const [subject] = useState(defaultSubject(context));
   const [description, setDescription] = useState('');
@@ -115,7 +144,7 @@ export function EnquiryDialog({
     onOpenChange(next);
   }
 
-  function handleChipSelect(chip: typeof TEMPLATE_CHIPS[number]) {
+  function handleChipSelect(chip: (typeof TEMPLATE_CHIPS)[number]) {
     setActiveChip(chip.label);
     if (chip.template) {
       setDescription(chip.template);
@@ -158,6 +187,8 @@ export function EnquiryDialog({
           return;
         }
 
+        const enquiry = await response.json();
+        onSuccess?.(enquiry);
         setSuccess(true);
       } catch {
         setError('Something went wrong. Please check your connection and try again.');
@@ -192,13 +223,20 @@ export function EnquiryDialog({
               />
             ) : (
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {context.designerName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                {context.designerName
+                  .split(' ')
+                  .map((w) => w[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{context.designerName}</p>
               {context.designerLocation && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{context.designerLocation}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {context.designerLocation}
+                </p>
               )}
             </div>
           </div>
@@ -337,11 +375,7 @@ export function EnquiryDialog({
             <Button variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              variant="emphasis"
-              disabled={!isValid || isPending}
-              onClick={handleSubmit}
-            >
+            <Button variant="emphasis" disabled={!isValid || isPending} onClick={handleSubmit}>
               {isPending ? 'Sending...' : 'Send Enquiry'}
             </Button>
           </DialogFooter>

@@ -52,6 +52,13 @@ describe('EnquiryCta', () => {
         enquiryId: null,
       }),
     });
+    mocks.createEnquiry.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: '33333333-3333-4333-8333-333333333333',
+      }),
+    });
   });
 
   afterEach(() => {
@@ -168,5 +175,43 @@ describe('EnquiryCta', () => {
     });
     expect(enquire).toHaveAttribute('title', 'You cannot enquire with your own studio');
     expect(mocks.checkEnquiry).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates every shared CTA after an enquiry is submitted', async () => {
+    mocks.session = {
+      user: {
+        id: 'visitor-1',
+        email: 'homeowner@example.com',
+        phoneNumber: '+919876543210',
+      },
+    };
+
+    render(
+      <EnquiryAvailabilityProvider designerProfileId={props.designerProfileId}>
+        <EnquiryCta {...props}>Enquire</EnquiryCta>
+        <EnquiryCta {...props} ariaLabel="Start a conversation">
+          Start a conversation
+        </EnquiryCta>
+      </EnquiryAvailabilityProvider>,
+    );
+
+    const enquire = await screen.findByRole('button', {
+      name: 'Enquire with Studio North',
+    });
+    await waitFor(() => expect(enquire).toBeEnabled());
+    fireEvent.click(enquire);
+
+    fireEvent.change(await screen.findByLabelText(/Description/), {
+      target: { value: 'I would like to discuss a renovation.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send Enquiry' }));
+
+    expect(await screen.findByText('Enquiry sent successfully!')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Enquiry already sent' })).toBeInTheDocument();
+    expect(mocks.checkEnquiry).toHaveBeenCalledTimes(1);
+    expect(mocks.createEnquiry).toHaveBeenCalledTimes(1);
   });
 });

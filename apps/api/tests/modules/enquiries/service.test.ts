@@ -78,7 +78,7 @@ describe('enquiriesService.create', () => {
         caller,
       ),
     ).rejects.toMatchObject({
-      status: 422,
+      status: 403,
       message: 'You cannot send an enquiry to your own studio',
     });
     expect(enquiriesRepository.createWithLead).toHaveBeenCalledOnce();

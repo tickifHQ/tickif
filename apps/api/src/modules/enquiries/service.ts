@@ -72,7 +72,7 @@ export const enquiriesService = {
       throw AppError.notFound('Designer profile not found');
     }
     if (result.kind === 'own_studio') {
-      throw AppError.unprocessable('You cannot send an enquiry to your own studio');
+      throw AppError.forbidden('You cannot send an enquiry to your own studio');
     }
     if (result.kind === 'existing_enquiry') {
       throw AppError.conflict('You already have an open enquiry with this designer');
