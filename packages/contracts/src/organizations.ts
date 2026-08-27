@@ -94,6 +94,80 @@ export const organizationCapabilitiesSchema = z
   .meta({ id: 'OrganizationCapabilities' });
 export type OrganizationCapabilities = z.infer<typeof organizationCapabilitiesSchema>;
 
+export const ORGANIZATION_INVITATION_STATE = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  DECLINED: 'declined',
+  EXPIRED: 'expired',
+  REVOKED: 'revoked',
+} as const;
+
+export const ORGANIZATION_INVITATION_STATE_VALUES = [
+  ORGANIZATION_INVITATION_STATE.PENDING,
+  ORGANIZATION_INVITATION_STATE.ACTIVE,
+  ORGANIZATION_INVITATION_STATE.DECLINED,
+  ORGANIZATION_INVITATION_STATE.EXPIRED,
+  ORGANIZATION_INVITATION_STATE.REVOKED,
+] as const;
+
+export const organizationInvitationStateSchema = z
+  .enum(ORGANIZATION_INVITATION_STATE_VALUES)
+  .meta({ id: 'OrganizationInvitationState' });
+export type OrganizationInvitationState = z.infer<typeof organizationInvitationStateSchema>;
+
+export const OWNERSHIP_TRANSFER_STATUS = {
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  DECLINED: 'declined',
+  CANCELLED: 'cancelled',
+  EXPIRED: 'expired',
+} as const;
+
+export const OWNERSHIP_TRANSFER_STATUS_VALUES = [
+  OWNERSHIP_TRANSFER_STATUS.PENDING,
+  OWNERSHIP_TRANSFER_STATUS.ACCEPTED,
+  OWNERSHIP_TRANSFER_STATUS.DECLINED,
+  OWNERSHIP_TRANSFER_STATUS.CANCELLED,
+  OWNERSHIP_TRANSFER_STATUS.EXPIRED,
+] as const;
+
+export const ownershipTransferStatusSchema = z
+  .enum(OWNERSHIP_TRANSFER_STATUS_VALUES)
+  .meta({ id: 'OwnershipTransferStatus' });
+export type OwnershipTransferStatus = z.infer<typeof ownershipTransferStatusSchema>;
+
+export const createOwnershipTransferSchema = z
+  .object({ targetMemberId: z.string().min(1) })
+  .strict()
+  .meta({ id: 'CreateOwnershipTransfer' });
+export type CreateOwnershipTransfer = z.infer<typeof createOwnershipTransferSchema>;
+
+export const ownershipTransferResponseSchema = z
+  .object({
+    id: z.uuid(),
+    organizationId: z.string().min(1),
+    status: ownershipTransferStatusSchema,
+    initiator: z.object({
+      userId: z.string().min(1),
+      name: z.string().min(1),
+      email: z.email(),
+    }),
+    target: z.object({
+      memberId: z.string().min(1),
+      userId: z.string().min(1),
+      name: z.string().min(1),
+      email: z.email(),
+      role: organizationMemberRoleSchema,
+    }),
+    expiresAt: z.string().datetime(),
+    createdAt: z.string().datetime(),
+    resolvedAt: z.string().datetime().nullable(),
+  })
+  .meta({ id: 'OwnershipTransferResponse' });
+export type OwnershipTransferResponse = z.infer<typeof ownershipTransferResponseSchema>;
+
+export const ownershipTransferIdParamSchema = z.object({ id: z.uuid() });
+
 export const organizationMemberSchema = z
   .object({
     id: z.string().min(1),
@@ -116,6 +190,7 @@ export const organizationInvitationSchema = z
     id: z.string().min(1),
     email: z.email(),
     role: organizationMemberRoleSchema,
+    state: organizationInvitationStateSchema,
     createdAt: z.string().datetime(),
     expiresAt: z.string().datetime(),
   })
@@ -138,6 +213,7 @@ export const organizationWorkspaceResponseSchema = z
     capabilities: organizationCapabilitiesSchema,
     members: z.array(organizationMemberSchema),
     invitations: z.array(organizationInvitationSchema),
+    ownershipTransfer: ownershipTransferResponseSchema.nullable(),
   })
   .meta({ id: 'OrganizationWorkspaceResponse' });
 export type OrganizationWorkspaceResponse = z.infer<typeof organizationWorkspaceResponseSchema>;

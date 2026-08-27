@@ -60,10 +60,12 @@ describe('organization contracts', () => {
             id: 'invitation-1',
             email: 'team@example.com',
             role: 'member',
+            state: 'pending',
             createdAt: '2026-08-05T00:00:00.000Z',
             expiresAt: '2026-08-07T00:00:00.000Z',
           },
         ],
+        ownershipTransfer: null,
       }).success,
     ).toBe(true);
   });
