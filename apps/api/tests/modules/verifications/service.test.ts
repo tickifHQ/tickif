@@ -24,7 +24,7 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
     isMember: vi.fn(async () => true),
-    isWriter: vi.fn(async () => true),
+    hasCapability: vi.fn(async () => true),
   },
 }));
 vi.mock('../../../src/modules/verifications/repository.js', () => ({

@@ -45,6 +45,7 @@ export type ProjectImageDeletionRecord = Pick<
 export type ProjectOwnership = {
   projectId: string;
   designerId: string;
+  organizationId: string;
   status: ProjectStatus;
   ownerUserId: string | null;
 };
@@ -1117,6 +1118,7 @@ export const projectsRepository = {
       .select({
         projectId: schema.project.id,
         designerId: schema.project.designerId,
+        organizationId: schema.designerProfile.orgId,
         status: schema.project.status,
         ownerUserId: schema.designerProfile.userId,
       })
