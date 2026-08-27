@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth';
-import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
@@ -45,6 +45,14 @@ const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
   '/organization/update-member-role',
 ]);
 
+const LIFECYCLE_ORGANIZATION_MUTATIONS = new Set([
+  '/organization/leave',
+  '/organization/remove-member',
+  '/organization/accept-invitation',
+  '/organization/reject-invitation',
+  '/organization/cancel-invitation',
+]);
+
 function bodyString(body: unknown, key: string): string | undefined {
   if (!body || typeof body !== 'object') return undefined;
   const value = Reflect.get(body, key);
@@ -56,12 +64,11 @@ async function protectedMutationOrganizationId(
   body: unknown,
   activeOrganizationId: string | null | undefined,
 ): Promise<string | undefined> {
-  if (path !== '/organization/cancel-invitation') {
+  const invitationId = bodyString(body, 'invitationId');
+  if (!invitationId) {
     return bodyString(body, 'organizationId') ?? activeOrganizationId ?? undefined;
   }
 
-  const invitationId = bodyString(body, 'invitationId');
-  if (!invitationId) return undefined;
   const [invitation] = await db
     .select({ organizationId: schema.invitation.organizationId })
     .from(schema.invitation)
@@ -94,10 +101,12 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      if (!ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path)) return;
+      const requiresActiveMembership = ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path);
+      const isLifecycleMutation = LIFECYCLE_ORGANIZATION_MUTATIONS.has(ctx.path);
+      if (!requiresActiveMembership && !isLifecycleMutation) return;
 
-      const session = await getSessionFromCtx(ctx);
-      if (!session) return;
+      const session = await getAuthoritativeSessionFromCtx(ctx);
+      if (!session) throw new APIError('UNAUTHORIZED');
       const organizationId = await protectedMutationOrganizationId(
         ctx.path,
         ctx.body,
@@ -105,7 +114,43 @@ export const auth = betterAuth({
       );
       if (!organizationId) return;
 
-      await requireActiveOrganizationMember(session.user.id, organizationId);
+      if (isLifecycleMutation) await requireOrganizationRbac(organizationId);
+      const actorRole =
+        requiresActiveMembership || ctx.path === '/organization/leave'
+          ? await requireActiveOrganizationMember(session.user.id, organizationId)
+          : undefined;
+      if (ctx.path === '/organization/leave') {
+        if (actorRole === 'owner') {
+          throw new APIError('BAD_REQUEST', {
+            code: 'SOLE_OWNER_CANNOT_LEAVE',
+            message: 'Transfer ownership or delete the organization before leaving',
+          });
+        }
+        await db.transaction(async (tx) => {
+          const cancelledAt = new Date();
+          const cancelled = await tx
+            .update(schema.ownershipTransferRequest)
+            .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
+            .where(
+              and(
+                eq(schema.ownershipTransferRequest.organizationId, organizationId),
+                eq(schema.ownershipTransferRequest.status, 'pending'),
+                eq(schema.ownershipTransferRequest.targetUserId, session.user.id),
+              ),
+            )
+            .returning({ id: schema.ownershipTransferRequest.id });
+          if (cancelled.length > 0) {
+            await tx.insert(schema.ownershipTransferAuditEvent).values(
+              cancelled.map(({ id }) => ({
+                transferId: id,
+                status: 'cancelled' as const,
+                actorUserId: session.user.id,
+                createdAt: cancelledAt,
+              })),
+            );
+          }
+        });
+      }
     }),
   },
 
@@ -216,6 +261,8 @@ export const auth = betterAuth({
       ac: orgAc,
       roles: orgRoles,
       creatorRole: 'owner',
+      invitationExpiresIn: 7 * 24 * 60 * 60,
+      cancelPendingInvitationsOnReInvite: true,
       membershipLimit: async (_user, organization) => organizationMembershipLimit(organization.id),
       schema: {
         member: {
@@ -238,7 +285,7 @@ export const auth = betterAuth({
             <h2>Join ${escapeHtml(organization.name)} on Tickif</h2>
             <p>${escapeHtml(inviter.user.name)} invited you to join their studio workspace.</p>
             <p><a href="${invitationUrl.toString()}">Accept invitation</a></p>
-            <p>This invitation expires in 48 hours.</p>
+            <p>This invitation expires in 7 days.</p>
             <p>Tickif</p>
           `,
         });
@@ -269,6 +316,59 @@ export const auth = betterAuth({
               message: 'Ownership changes require an accepted transfer request',
             });
           }
+        },
+        beforeRemoveMember: async ({ member, user }) => {
+          await requireOrganizationRbac(member.organizationId);
+          await db.transaction(async (tx) => {
+            const cancelledAt = new Date();
+            const cancelled = await tx
+              .update(schema.ownershipTransferRequest)
+              .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
+              .where(
+                and(
+                  eq(schema.ownershipTransferRequest.organizationId, member.organizationId),
+                  eq(schema.ownershipTransferRequest.status, 'pending'),
+                  or(
+                    eq(schema.ownershipTransferRequest.targetUserId, member.userId),
+                    eq(schema.ownershipTransferRequest.initiatorUserId, member.userId),
+                  ),
+                ),
+              )
+              .returning({ id: schema.ownershipTransferRequest.id });
+            if (cancelled.length > 0) {
+              await tx.insert(schema.ownershipTransferAuditEvent).values(
+                cancelled.map(({ id }) => ({
+                  transferId: id,
+                  status: 'cancelled' as const,
+                  actorUserId: user.id,
+                  createdAt: cancelledAt,
+                })),
+              );
+            }
+          });
+        },
+        beforeAcceptInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+        },
+        beforeRejectInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+        },
+        beforeCancelInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+        },
+        afterRejectInvitation: async ({ invitation, organization }) => {
+          const [inviter] = await db
+            .select({ email: schema.user.email, name: schema.user.name })
+            .from(schema.user)
+            .where(eq(schema.user.id, invitation.inviterId))
+            .limit(1);
+          if (!inviter) return;
+          await sendEmail({
+            to: inviter.email,
+            subject: `Invitation to ${organization.name} declined`,
+            idempotencyKey: `organization-invitation-declined-${invitation.id}`,
+            html: `<p>${escapeHtml(invitation.email)} declined the invitation to ${escapeHtml(organization.name)}.</p>`,
+          });
         },
         afterAcceptInvitation: async ({ user }) => {
           await db

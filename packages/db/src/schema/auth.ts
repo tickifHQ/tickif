@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   index,
+  uniqueIndex,
   integer,
   check,
 } from 'drizzle-orm/pg-core';
@@ -158,6 +159,9 @@ export const member = pgTable(
     index('member_organizationId_idx').on(t.organizationId),
     index('member_userId_idx').on(t.userId),
     index('member_organizationId_frozen_idx').on(t.organizationId, t.frozen),
+    uniqueIndex('member_one_owner_per_organization_uniq')
+      .on(t.organizationId)
+      .where(sql`${t.role} = 'owner'`),
     check(
       'member_role_check',
       sql`${t.role} in ('owner', 'admin', 'billing_admin', 'member', 'viewer')`,
@@ -189,5 +193,8 @@ export const invitation = pgTable(
     index('invitation_organizationId_idx').on(t.organizationId),
     index('invitation_inviterId_idx').on(t.inviterId),
     index('invitation_email_idx').on(t.email),
+    uniqueIndex('invitation_pending_organization_email_uniq')
+      .on(t.organizationId, sql`lower(${t.email})`)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );
