@@ -3,7 +3,8 @@
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { ArrowRight, Check, ChevronLeft } from 'lucide-react';
-import { PLAN_MAP, formatCurrency, getUpgradeGains, type PlanTier } from '@/lib/plan-config';
+import type { PlanTier } from '@repo/contracts';
+import { PLAN_MAP, formatCurrency, getUpgradeGains } from '@/lib/plan-config';
 
 interface UpgradeConfirmationStepProps {
   currentTier: PlanTier;
@@ -12,6 +13,10 @@ interface UpgradeConfirmationStepProps {
   onBack: () => void;
 }
 
+/**
+ * Upgrade confirmation step — shows plan comparison and gained features.
+ * Restored from PR #392, adapted for E-119 lifecycle + @repo/contracts.
+ */
 export function UpgradeConfirmationStep({
   currentTier,
   targetTier,
@@ -46,7 +51,7 @@ export function UpgradeConfirmationStep({
           <p className="text-xs text-muted-foreground">Current Plan</p>
           <p className="mt-1 text-base font-bold text-foreground">{current.label}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {formatCurrency(current.price)} / month
+            {formatCurrency(current.price)}/month
           </p>
         </Card>
         <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
@@ -54,12 +59,12 @@ export function UpgradeConfirmationStep({
           <p className="text-xs text-muted-foreground">New Plan</p>
           <p className="mt-1 text-base font-bold text-foreground">{target.label}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {formatCurrency(target.price)} / month
+            {formatCurrency(target.price)}/month
           </p>
         </Card>
       </div>
 
-      {/* What you'll get */}
+      {/* Gained features */}
       {gains.length > 0 && (
         <div className="mt-6">
           <p className="text-sm font-semibold text-foreground">New features included:</p>
@@ -74,17 +79,17 @@ export function UpgradeConfirmationStep({
         </div>
       )}
 
-      {/* Estimated total */}
+      {/* Estimated cost */}
       <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
         <span className="text-sm font-medium text-foreground">Estimated Monthly</span>
         <div className="text-right">
           <span className="text-lg font-bold text-foreground">{formatCurrency(target.price)}</span>
-          <span className="text-sm text-muted-foreground"> / month</span>
+          <span className="text-sm text-muted-foreground"> /month</span>
         </div>
       </div>
 
       <Button className="mt-5 w-full" onClick={onConfirm}>
-        Proceed to Checkout
+        Proceed to Payment Review
         <ArrowRight className="size-4" />
       </Button>
     </div>
