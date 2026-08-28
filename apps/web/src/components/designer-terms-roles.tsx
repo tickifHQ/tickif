@@ -1,251 +1,315 @@
 'use client';
 
-import { useState, useTransition, type FormEvent } from 'react';
+import { useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
+  OrganizationInvitation,
   OrganizationMember,
   OrganizationMemberRole,
   OrganizationWorkspaceResponse,
 } from '@repo/contracts';
+import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@repo/ui/components/dialog';
+import { Card } from '@repo/ui/components/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
-import { ChevronDown, Loader2, Mail, ShieldCheck, UserPlus, UsersRound, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Loader2, MoreVertical, Send, Undo } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
-const assignableRoles: Array<{ value: Exclude<OrganizationMemberRole, 'owner'>; label: string }> = [
+type AssignableRole = Exclude<OrganizationMemberRole, 'owner'>;
+type Feedback = { tone: 'success' | 'error'; message: string };
+
+const roleLabels: Record<OrganizationMemberRole, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  member: 'Member',
+};
+
+const roleDescriptions: Record<OrganizationMemberRole, string> = {
+  owner: 'Full control of this studio, including its team and settings.',
+  admin: 'Can manage the studio team and day-to-day workspace access.',
+  member: 'Can access the studio workspace without team-management controls.',
+};
+
+const roleBadgeStyles: Record<OrganizationMemberRole, string> = {
+  owner: 'bg-secondary text-secondary-foreground',
+  admin: 'bg-info/10 text-info',
+  member: 'bg-success-lighter text-success',
+};
+
+const avatarStyles = [
+  'bg-success text-success-foreground',
+  'bg-info text-info-foreground',
+  'bg-feature text-feature-lighter',
+] as const;
+
+const assignableRoles = [
   { value: 'member', label: 'Member' },
   { value: 'admin', label: 'Admin' },
-];
+] satisfies ReadonlyArray<{ value: AssignableRole; label: string }>;
 
 function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'TM'
+  );
 }
 
-function roleLabel(role: OrganizationMemberRole) {
-  return role.charAt(0).toUpperCase() + role.slice(1);
+function initialsFromEmail(email: string) {
+  return (
+    email
+      .split('@')[0]
+      ?.replace(/[^a-z0-9]/gi, '')
+      .slice(0, 2)
+      .toUpperCase() || 'TM'
+  );
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   }).format(new Date(value));
 }
 
+function daysUntil(value: string) {
+  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
+}
+
 function RoleBadge({ role }: { role: OrganizationMemberRole }) {
   return (
-    <Badge variant={role === 'owner' ? 'default' : role === 'admin' ? 'info' : 'outline'}>
-      {roleLabel(role)}
+    <Badge
+      shape="square"
+      className={`border-transparent px-2.5 py-1 text-xs leading-relaxed ${roleBadgeStyles[role]}`}
+    >
+      {roleLabels[role]}
     </Badge>
   );
 }
 
-function Metric({
-  label,
-  value,
-  helper,
-  metric,
-}: {
-  label: string;
-  value: number | string;
-  helper: string;
-  metric: string;
-}) {
+function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse }) {
+  const now = Date.now();
+  const expiringSoon = workspace.invitations.filter((invitation) => {
+    const expiresAt = new Date(invitation.expiresAt).getTime();
+    return expiresAt > now && expiresAt - now <= 2 * 86_400_000;
+  }).length;
+
   return (
-    <div className="rounded-lg border border-border bg-card px-5 py-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p data-metric={metric} className="mt-2 text-2xl font-semibold text-foreground">
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+    <div className="grid gap-3.5 sm:grid-cols-3">
+      <Card className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
+        <p data-metric="members" className="text-2xl leading-tight text-card-foreground">
+          {workspace.members.length}
+        </p>
+        <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
+          Active members
+        </p>
+        <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
+          Members with studio access
+        </p>
+      </Card>
+
+      <Card className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
+        <p data-metric="invitations" className="text-2xl leading-tight text-card-foreground">
+          {workspace.invitations.length}
+        </p>
+        <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
+          Pending invites
+        </p>
+        {expiringSoon > 0 ? (
+          <div className="mt-auto flex w-fit items-center gap-1 rounded-md bg-warning/10 px-2 py-1.5 text-xs font-medium text-warning">
+            <AlertCircle className="size-3.5" aria-hidden="true" />
+            {expiringSoon} expiring soon
+          </div>
+        ) : null}
+      </Card>
+
+      <Card variant="muted" className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
+        <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
+          Your access
+        </p>
+        <RoleBadge role={workspace.currentUserRole} />
+        <p className="mt-auto max-w-56 text-xs leading-relaxed text-muted-foreground">
+          {roleDescriptions[workspace.currentUserRole]}
+        </p>
+      </Card>
     </div>
   );
 }
 
-function MemberRoleAction({
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl bg-muted/30 p-1">
+      <h2 className="px-2 py-1.5 text-sm font-medium leading-relaxed text-muted-foreground">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function MemberActions({
   member,
-  organizationId,
-  disabled,
+  isPending,
+  onChangeRole,
 }: {
   member: OrganizationMember;
-  organizationId: string;
-  disabled: boolean;
+  isPending: boolean;
+  onChangeRole: (role: AssignableRole) => void;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function updateRole(role: Exclude<OrganizationMemberRole, 'owner'>) {
-    if (role === member.role) return;
-    setError(null);
-    startTransition(async () => {
-      try {
-        const result = await authClient.organization.updateMemberRole({
-          memberId: member.id,
-          role,
-          organizationId,
-        });
-        if (result.error) {
-          setError('Could not update this role.');
-          return;
-        }
-        router.refresh();
-      } catch {
-        setError('Could not update this role.');
-      }
-    });
-  }
-
   return (
-    <div className="flex flex-col items-start gap-1">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled || isPending}
-            aria-label={`Change ${member.name} role`}
-          >
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            {roleLabel(member.role)}
-            <ChevronDown className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          disabled={isPending}
+          aria-label={`Manage ${member.name}`}
+        >
+          {isPending ? <Loader2 className="size-4 animate-spin" /> : <MoreVertical />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel>Change role</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={member.role}
+          onValueChange={(value) => onChangeRole(value as AssignableRole)}
+        >
           {assignableRoles.map((role) => (
-            <DropdownMenuItem
-              key={role.value}
-              disabled={role.value === member.role}
-              onSelect={() => updateRole(role.value)}
-            >
+            <DropdownMenuRadioItem key={role.value} value={role.value}>
               {role.label}
-            </DropdownMenuItem>
+            </DropdownMenuRadioItem>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {error ? (
-        <span role="status" className="text-xs text-destructive">
-          {error}
-        </span>
-      ) : null}
-    </div>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function InviteMemberDialog({ organizationId }: { organizationId: string }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Exclude<OrganizationMemberRole, 'owner'>>('member');
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      try {
-        const result = await authClient.organization.inviteMember({
-          email: email.trim(),
-          role,
-          organizationId,
-        });
-        if (result.error) {
-          setError(result.error.message || 'Could not send the invitation.');
-          return;
-        }
-        setOpen(false);
-        setEmail('');
-        setRole('member');
-        router.refresh();
-      } catch {
-        setError('Could not send the invitation.');
-      }
-    });
-  }
-
+function MembersList({
+  members,
+  canManage,
+  isPending,
+  onChangeRole,
+}: {
+  members: OrganizationMember[];
+  canManage: boolean;
+  isPending: boolean;
+  onChangeRole: (member: OrganizationMember, role: AssignableRole) => void;
+}) {
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button">
-          <UserPlus className="size-4" />
-          Invite member
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite a studio member</DialogTitle>
-          <DialogDescription>
-            Send an invitation and choose the access they should receive.
-          </DialogDescription>
-        </DialogHeader>
-        <form className="space-y-4" onSubmit={submit}>
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-email">Email address</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              value={email}
-              required
-              autoComplete="email"
-              placeholder="teammate@studio.com"
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </div>
-          <SelectField
-            label="Role"
-            value={role}
-            placeholder="Select a role"
-            options={assignableRoles}
-            onValueChange={(value) => setRole(value as Exclude<OrganizationMemberRole, 'owner'>)}
-          />
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
+    <Card className="divide-y overflow-hidden shadow-xs">
+      {members.map((member, index) => (
+        <div key={member.id} className="flex min-h-18 items-center gap-3 px-3 py-4 sm:px-5">
+          <Avatar aria-hidden="true">
+            <AvatarImage src={member.image ?? undefined} alt="" />
+            <AvatarFallback className={avatarStyles[index % avatarStyles.length]}>
+              {initials(member.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
+              {member.isCurrentUser ? (
+                <Badge
+                  shape="square"
+                  className="border-transparent bg-info/10 px-2 py-1 text-xs leading-none text-info uppercase"
+                >
+                  You
+                </Badge>
+              ) : null}
+            </div>
+            <p className="truncate text-xs text-muted-foreground">
+              {member.email} · Joined {formatDate(member.joinedAt)}
             </p>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <RoleBadge role={member.role} />
+            {canManage && !member.isCurrentUser && member.role !== 'owner' ? (
+              <MemberActions
+                member={member}
+                isPending={isPending}
+                onChangeRole={(role) => onChangeRole(member, role)}
+              />
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+function PendingInvites({
+  invitations,
+  isPending,
+  onRevoke,
+}: {
+  invitations: OrganizationInvitation[];
+  isPending: boolean;
+  onRevoke: (invitation: OrganizationInvitation) => void;
+}) {
+  return (
+    <Card className="divide-y overflow-hidden shadow-xs">
+      {invitations.map((invitation) => {
+        const expiresInDays = daysUntil(invitation.expiresAt);
+        return (
+          <div
+            key={invitation.id}
+            className="flex flex-col gap-3 px-3 py-4 sm:px-5 lg:flex-row lg:items-center"
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Avatar aria-hidden="true">
+                <AvatarFallback>{initialsFromEmail(invitation.email)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Invited as{' '}
+                  <span className="font-medium text-foreground/80">
+                    {roleLabels[invitation.role]}
+                  </span>{' '}
+                  · {formatDate(invitation.createdAt)}
+                </p>
+              </div>
+            </div>
+            <p
+              className={`flex items-center gap-1 text-xs font-medium ${expiresInDays <= 2 ? 'text-destructive' : 'text-muted-foreground'}`}
+            >
+              <Clock3 className="size-4" aria-hidden="true" />
+              {expiresInDays === 0 ? 'Expired' : `Expires in ${expiresInDays} days`}
+            </p>
+            <Button
+              type="button"
+              variant="neutral"
+              size="compact"
+              disabled={isPending}
+              aria-label={`Revoke invitation for ${invitation.email}`}
+              onClick={() => onRevoke(invitation)}
+            >
+              {isPending ? <Loader2 className="animate-spin" /> : <Undo />}
+              Revoke
             </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Mail className="size-4" />
-              )}
-              Send invitation
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </div>
+        );
+      })}
+    </Card>
   );
 }
 
@@ -257,208 +321,214 @@ export function DesignerTermsRoles({
   error?: string;
 }) {
   const router = useRouter();
+  const emailId = useId();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<AssignableRole>('member');
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [actionError, setActionError] = useState<string | null>(null);
 
   if (!workspace) {
     return (
-      <div className="space-y-6 p-5">
-        <div>
-          <p className="text-sm font-medium text-primary">Designer workspace</p>
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">Teams & Roles</h1>
-        </div>
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
-        >
-          {error ?? 'Could not load your studio team.'}
+      <div className="px-5 py-10 sm:px-8 lg:py-12">
+        <div className="mx-auto max-w-4xl space-y-4">
+          <h1 className="text-2xl font-medium leading-tight text-foreground">Team & Roles</h1>
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription>{error ?? 'Could not load your studio team.'}</AlertDescription>
+          </Alert>
         </div>
       </div>
     );
   }
 
-  const adminCount = workspace.members.filter(
-    (member) => member.role === 'owner' || member.role === 'admin',
-  ).length;
+  const activeWorkspace = workspace;
 
-  function cancelInvitation(invitationId: string) {
-    setActionError(null);
+  function submitInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return;
+
+    const duplicate = [...activeWorkspace.members, ...activeWorkspace.invitations].some(
+      (person) => person.email.toLowerCase() === normalizedEmail,
+    );
+    if (duplicate) {
+      setFeedback({
+        tone: 'error',
+        message: `${normalizedEmail} is already a member or has a pending invitation.`,
+      });
+      return;
+    }
+
+    setFeedback(null);
     startTransition(async () => {
       try {
-        const result = await authClient.organization.cancelInvitation({ invitationId });
+        const result = await authClient.organization.inviteMember({
+          email: normalizedEmail,
+          role,
+          organizationId: activeWorkspace.organization.id,
+        });
         if (result.error) {
-          setActionError('Could not cancel the invitation.');
+          setFeedback({
+            tone: 'error',
+            message: result.error.message || 'Could not send the invitation.',
+          });
           return;
         }
+        setEmail('');
+        setRole('member');
+        setFeedback({ tone: 'success', message: `Invitation sent to ${normalizedEmail}.` });
         router.refresh();
       } catch {
-        setActionError('Could not cancel the invitation.');
+        setFeedback({ tone: 'error', message: 'Could not send the invitation.' });
+      }
+    });
+  }
+
+  function updateRole(member: OrganizationMember, nextRole: AssignableRole) {
+    if (nextRole === member.role) return;
+    setFeedback(null);
+    startTransition(async () => {
+      try {
+        const result = await authClient.organization.updateMemberRole({
+          memberId: member.id,
+          role: nextRole,
+          organizationId: activeWorkspace.organization.id,
+        });
+        if (result.error) {
+          setFeedback({
+            tone: 'error',
+            message: result.error.message || 'Could not update this role.',
+          });
+          return;
+        }
+        setFeedback({
+          tone: 'success',
+          message: `${member.name}'s role changed to ${roleLabels[nextRole]}.`,
+        });
+        router.refresh();
+      } catch {
+        setFeedback({ tone: 'error', message: 'Could not update this role.' });
+      }
+    });
+  }
+
+  function revokeInvitation(invitation: OrganizationInvitation) {
+    setFeedback(null);
+    startTransition(async () => {
+      try {
+        const result = await authClient.organization.cancelInvitation({
+          invitationId: invitation.id,
+        });
+        if (result.error) {
+          setFeedback({
+            tone: 'error',
+            message: result.error.message || 'Could not revoke the invitation.',
+          });
+          return;
+        }
+        setFeedback({
+          tone: 'success',
+          message: `Invitation for ${invitation.email} was revoked.`,
+        });
+        router.refresh();
+      } catch {
+        setFeedback({ tone: 'error', message: 'Could not revoke the invitation.' });
       }
     });
   }
 
   return (
-    <div className="space-y-6 p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-primary">Designer workspace</p>
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">Teams & Roles</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Manage access for{' '}
+    <div className="px-5 py-10 sm:px-8 lg:py-12">
+      <div className="mx-auto max-w-4xl space-y-4">
+        <header className="space-y-1.5">
+          <h1 className="text-2xl font-medium leading-tight text-foreground">Team & Roles</h1>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Your studio&apos;s people, access levels, and pending invites for{' '}
             <span className="font-medium text-foreground">{workspace.organization.name}</span>.
           </p>
-        </div>
+        </header>
+
+        <SummaryCards workspace={workspace} />
+
         {workspace.canManage ? (
-          <InviteMemberDialog organizationId={workspace.organization.id} />
-        ) : (
-          <Badge variant="outline">Member access</Badge>
-        )}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Metric
-          label="Team members"
-          value={workspace.members.length}
-          helper="Active access"
-          metric="members"
-        />
-        <Metric label="Admins" value={adminCount} helper="Owners and admins" metric="admins" />
-        {workspace.canManage ? (
-          <Metric
-            label="Pending invitations"
-            value={workspace.invitations.length}
-            helper="Awaiting response"
-            metric="invitations"
-          />
-        ) : (
-          <Metric
-            label="Your role"
-            value={roleLabel(workspace.currentUserRole)}
-            helper="Read-only access"
-            metric="current-role"
-          />
-        )}
-      </div>
-
-      {error ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
-        >
-          {error}
-        </div>
-      ) : null}
-      {actionError ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
-        >
-          {actionError}
-        </div>
-      ) : null}
-
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <UsersRound className="size-5 text-muted-foreground" />
-          <div>
-            <h2 className="font-semibold text-foreground">Studio members</h2>
-            <p className="text-sm text-muted-foreground">People with access to this workspace</p>
-          </div>
-        </div>
-        <div className="divide-y divide-border">
-          {workspace.members.map((member) => {
-            const roleLocked = member.role === 'owner';
-            return (
-              <div
-                key={member.id}
-                className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center"
-              >
-                <Avatar className="size-10">
-                  {member.image ? <AvatarImage src={member.image} alt="" /> : null}
-                  <AvatarFallback className="bg-primary font-semibold text-primary-foreground">
-                    {initials(member.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
-                    {member.isCurrentUser ? <Badge variant="secondary">You</Badge> : null}
-                  </div>
-                  <p className="truncate text-sm text-muted-foreground">{member.email}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Joined {formatDate(member.joinedAt)}
-                  </p>
-                </div>
-                {workspace.canManage && !roleLocked ? (
-                  <MemberRoleAction
-                    member={member}
-                    organizationId={workspace.organization.id}
-                    disabled={isPending}
-                  />
-                ) : (
-                  <RoleBadge role={member.role} />
-                )}
+          <SectionCard title="Invite a teammate">
+            <form
+              className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_minmax(12rem,1fr)_auto] sm:items-end"
+              onSubmit={submitInvitation}
+            >
+              <div className="space-y-1">
+                <Label htmlFor={emailId} className="text-sm font-medium text-muted-foreground">
+                  Work email
+                </Label>
+                <Input
+                  id={emailId}
+                  type="email"
+                  autoComplete="email"
+                  placeholder="teammate@studio.com"
+                  required
+                  className="h-8 px-2 text-sm"
+                  value={email}
+                  disabled={isPending}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <SelectField
+                label="Role"
+                value={role}
+                placeholder="Select a role"
+                options={assignableRoles}
+                className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+                disabled={isPending}
+                onValueChange={(value) => setRole(value as AssignableRole)}
+              />
+              <Button type="submit" size="compact" disabled={isPending}>
+                {isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                Send invite
+              </Button>
+            </form>
+          </SectionCard>
+        ) : null}
 
-      {workspace.canManage ? (
-        <section className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <ShieldCheck className="size-5 text-muted-foreground" />
-            <div>
-              <h2 className="font-semibold text-foreground">Pending invitations</h2>
-              <p className="text-sm text-muted-foreground">Invitations waiting to be accepted</p>
-            </div>
-          </div>
-          {workspace.invitations.length ? (
-            <div className="divide-y divide-border">
-              {workspace.invitations.map((invitation) => (
-                <div
-                  key={invitation.id}
-                  className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {invitation.email}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Sent {formatDate(invitation.createdAt)} / Expires{' '}
-                      {formatDate(invitation.expiresAt)}
-                    </p>
-                  </div>
-                  <RoleBadge role={invitation.role} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Cancel invitation for ${invitation.email}`}
-                    title="Cancel invitation"
-                    disabled={isPending}
-                    onClick={() => cancelInvitation(invitation.id)}
-                  >
-                    {isPending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <X className="size-4" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="px-5 py-10 text-center">
-              <Mail className="mx-auto size-5 text-muted-foreground" />
-              <p className="mt-2 text-sm font-medium text-foreground">No pending invitations</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                New invitations will appear here.
-              </p>
-            </div>
-          )}
-        </section>
-      ) : null}
+        {feedback ? (
+          <Alert
+            variant={feedback.tone === 'error' ? 'destructive' : 'success'}
+            role={feedback.tone === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+          >
+            {feedback.tone === 'error' ? (
+              <AlertCircle aria-hidden="true" />
+            ) : (
+              <CheckCircle2 aria-hidden="true" />
+            )}
+            <AlertDescription>{feedback.message}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <SectionCard title="Members">
+          <MembersList
+            members={workspace.members}
+            canManage={workspace.canManage}
+            isPending={isPending}
+            onChangeRole={updateRole}
+          />
+        </SectionCard>
+
+        {workspace.canManage ? (
+          <SectionCard title="Pending invites">
+            {workspace.invitations.length ? (
+              <PendingInvites
+                invitations={workspace.invitations}
+                isPending={isPending}
+                onRevoke={revokeInvitation}
+              />
+            ) : (
+              <Card className="px-5 py-8 text-center text-sm text-muted-foreground shadow-xs">
+                No pending invitations.
+              </Card>
+            )}
+          </SectionCard>
+        ) : null}
+      </div>
     </div>
   );
 }

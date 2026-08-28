@@ -38,7 +38,9 @@ export function SelectField({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={selectId} className="text-sm font-medium text-foreground">{label}</Label>
+      <Label htmlFor={selectId} className="text-sm font-medium text-foreground">
+        {label}
+      </Label>
       <div className="relative">
         <select
           {...props}

@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { requireAuth } from '@/lib/auth-guard';
 
 export const metadata = {
-  title: 'Teams & Roles · Tickif',
+  title: 'Team & Roles · Tickif',
 };
 
 async function getOrganizationWorkspace() {
@@ -20,10 +20,12 @@ async function getOrganizationWorkspace() {
     if (!response.ok) {
       return { data: null, error: 'Could not load your studio team.' };
     }
+
     const parsed = organizationWorkspaceResponseSchema.safeParse(await response.json());
     if (!parsed.success) {
       return { data: null, error: 'Could not load your studio team.' };
     }
+
     return { data: parsed.data };
   } catch {
     return { data: null, error: 'Could not load your studio team.' };

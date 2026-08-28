@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { OrganizationWorkspaceResponse } from '@repo/contracts';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesignerTermsRoles } from '../../src/components/designer-terms-roles';
 
 const mocks = vi.hoisted(() => ({
@@ -75,19 +75,28 @@ describe('DesignerTermsRoles', () => {
     mocks.cancelInvitation.mockResolvedValue({ data: {}, error: null });
   });
 
-  it('renders live workspace members and invitation metrics', () => {
+  it('renders the new layout from the live organization workspace', () => {
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
-    expect(screen.getByRole('heading', { name: 'Teams & Roles' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Team & Roles' })).toBeInTheDocument();
     expect(screen.getByText('Studio One')).toBeInTheDocument();
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getByText('Rohan Shah')).toBeInTheDocument();
     expect(screen.getByText('new@example.com')).toBeInTheDocument();
     expect(screen.getByText('2', { selector: '[data-metric="members"]' })).toBeInTheDocument();
-    expect(screen.getByText('1', { selector: '[data-metric="invitations"]' })).toBeInTheDocument();
+    expect(screen.queryByText('0 expiring soon')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('teammate@studio.com')).toHaveValue('');
+    expect(
+      screen.getByText('Full control of this studio, including its team and settings.'),
+    ).toBeInTheDocument();
+
+    const membersSection = screen.getByRole('heading', { name: 'Members' }).parentElement;
+    expect(membersSection).not.toBeNull();
+    expect(within(membersSection!).getAllByText('Owner')).toHaveLength(1);
+    expect(within(membersSection!).getAllByText('Member')).toHaveLength(1);
   });
 
-  it('keeps a regular member in read-only mode', () => {
+  it('uses role-specific access copy and keeps regular members read-only', () => {
     render(
       <DesignerTermsRoles
         workspace={{
@@ -99,41 +108,54 @@ describe('DesignerTermsRoles', () => {
       />,
     );
 
-    expect(screen.getByText('Member access')).toBeInTheDocument();
     expect(
-      screen.getByText('Member', { selector: '[data-metric="current-role"]' }),
+      screen.getByText('Can access the studio workspace without team-management controls.'),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Pending invitations')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /invite member/i })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /change rohan shah role/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /manage rohan shah/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Pending invites' })).not.toBeInTheDocument();
   });
 
-  it('invites a member through Better Auth and refreshes the workspace', async () => {
+  it('invites a member through Better Auth and shows visible success feedback', async () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
-    await user.click(screen.getByRole('button', { name: /invite member/i }));
-    await user.type(screen.getByLabelText(/email address/i), 'teammate@example.com');
-    await user.click(screen.getByRole('button', { name: /send invitation/i }));
+    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'teammate@example.com');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Role' }), 'admin');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
 
     await waitFor(() => {
       expect(mocks.inviteMember).toHaveBeenCalledWith({
         email: 'teammate@example.com',
-        role: 'member',
+        role: 'admin',
         organizationId: 'org-1',
       });
-      expect(mocks.refresh).toHaveBeenCalled();
     });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Invitation sent to teammate@example.com.',
+    );
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
-  it('updates a member role through Better Auth', async () => {
+  it('shows duplicate invitations as a visible error without calling the backend', async () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
-    await user.click(screen.getByRole('button', { name: /change rohan shah role/i }));
-    await user.click(screen.getByRole('menuitem', { name: 'Admin' }));
+    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'new@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'new@example.com is already a member or has a pending invitation.',
+    );
+    expect(mocks.inviteMember).not.toHaveBeenCalled();
+  });
+
+  it('updates another member role through Better Auth', async () => {
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+
+    await user.click(screen.getByRole('button', { name: 'Manage Rohan Shah' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Admin' }));
 
     await waitFor(() => {
       expect(mocks.updateMemberRole).toHaveBeenCalledWith({
@@ -141,21 +163,50 @@ describe('DesignerTermsRoles', () => {
         role: 'admin',
         organizationId: 'org-1',
       });
-      expect(mocks.refresh).toHaveBeenCalled();
     });
+    expect(screen.getByRole('status')).toHaveTextContent("Rohan Shah's role changed to Admin.");
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
-  it('cancels a pending invitation through Better Auth', async () => {
+  it('does not offer role or removal actions for the current user', () => {
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+
+    expect(screen.queryByRole('button', { name: 'Manage Asha Rao' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove member')).not.toBeInTheDocument();
+  });
+
+  it('revokes a pending invitation through Better Auth', async () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);
 
-    await user.click(
-      screen.getByRole('button', { name: /cancel invitation for new@example.com/i }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Revoke invitation for new@example.com' }));
 
     await waitFor(() => {
       expect(mocks.cancelInvitation).toHaveBeenCalledWith({ invitationId: 'invitation-1' });
-      expect(mocks.refresh).toHaveBeenCalled();
     });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Invitation for new@example.com was revoked.',
+    );
+    expect(mocks.refresh).toHaveBeenCalled();
+  });
+
+  it('shows backend mutation errors visibly', async () => {
+    mocks.inviteMember.mockResolvedValue({
+      data: null,
+      error: { message: 'This invitation is not allowed.' },
+    });
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'blocked@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This invitation is not allowed.');
+  });
+
+  it('renders a visible load error when the workspace is unavailable', () => {
+    render(<DesignerTermsRoles workspace={null} error="Could not load your studio team." />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load your studio team.');
   });
 });

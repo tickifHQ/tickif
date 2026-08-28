@@ -56,7 +56,7 @@ const growItems: NavItem[] = [
     icon: ShieldCheck,
     headerIcon: Shield,
   },
-  { label: 'Teams & Roles', href: '/designer/terms-roles', icon: UsersRound },
+  { label: 'Team & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
   { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
 ];
