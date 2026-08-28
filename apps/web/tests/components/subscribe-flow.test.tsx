@@ -200,6 +200,7 @@ vi.mock('@repo/ui/components/dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
+vi.mock('@/lib/api', () => ({ api: {} }));
 vi.mock('lucide-react', () => ({
   Check: () => <span data-testid="icon-check" />,
   Crown: () => <span data-testid="icon-crown" />,
@@ -221,6 +222,7 @@ import { PlanSelection } from '../../src/components/subscribe/plan-selection';
 import { UpgradeConfirmationStep } from '../../src/components/subscribe/upgrade-confirmation-step';
 import { DowngradeConfirmationStep } from '../../src/components/subscribe/downgrade-confirmation-step';
 import { ReviewPayStep } from '../../src/components/subscribe/review-pay-step';
+import { SuccessStep } from '../../src/components/subscribe/checkout-flow';
 
 describe('E-120: PlanCard', () => {
   it('Hobby card never shows "Free"', () => {
@@ -358,6 +360,14 @@ describe('E-120: DowngradeConfirmationStep', () => {
       />,
     );
     expect(screen.queryByText('Free')).not.toBeInTheDocument();
+  });
+});
+
+describe('E-120: paid-to-paid SuccessStep', () => {
+  it('says the plan change takes effect at period end, not immediately', () => {
+    render(<SuccessStep targetTier="corporate" kind="upgrade" onDone={vi.fn()} />);
+    expect(screen.getByText(/end of your current/i)).toBeInTheDocument();
+    expect(screen.queryByText(/now active/i)).not.toBeInTheDocument();
   });
 });
 

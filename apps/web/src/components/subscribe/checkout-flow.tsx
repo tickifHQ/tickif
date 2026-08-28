@@ -350,7 +350,7 @@ function PendingStep() {
   );
 }
 
-function SuccessStep({
+export function SuccessStep({
   targetTier,
   kind,
   onDone,
@@ -367,20 +367,11 @@ function SuccessStep({
         <CheckCircle2 className="size-8 text-primary" />
       </div>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
-        {kind === 'upgrade' ? 'Subscription updated' : 'Plan change confirmed'}
+        {kind === 'upgrade' ? 'Plan change scheduled' : 'Plan change confirmed'}
       </h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        {kind === 'upgrade' ? (
-          <>
-            Your <strong>{plan.label}</strong> plan is now active. You can manage your subscription
-            from the Plan &amp; Billing page.
-          </>
-        ) : (
-          <>
-            Your plan will change to <strong>{plan.label}</strong> at the end of your current
-            billing period. Your data and resources remain preserved.
-          </>
-        )}
+        Your plan will change to <strong>{plan.label}</strong> at the end of your current
+        billing period. Your data and resources remain preserved.
       </p>
       <Button className="mt-6" onClick={onDone}>
         Done
