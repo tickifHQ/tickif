@@ -38,6 +38,8 @@ function makeChargedPayload(overrides: {
   amount?: number;
   currentEnd?: number;
   status?: string;
+  planId?: string;
+  notes?: Record<string, string>;
 }) {
   return {
     event: RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
@@ -47,6 +49,8 @@ function makeChargedPayload(overrides: {
           id: overrides.subscriptionId,
           status: overrides.status ?? 'active',
           current_end: overrides.currentEnd ?? Math.floor(Date.now() / 1000) + 30 * 86400,
+          ...(overrides.planId ? { plan_id: overrides.planId } : {}),
+          ...(overrides.notes ? { notes: overrides.notes } : {}),
         },
       },
       payment: {
@@ -335,6 +339,80 @@ describe('E-117: webhook event processing', () => {
         .from(schema.subscription)
         .where(eq(schema.subscription.id, sub.id));
       expect(updated!.currentPeriodEnd).not.toBeNull();
+      expect(updated!.planTier).toBe('professional_plus');
+    });
+
+    it('applies scheduled paid-to-paid plan change from plan_id on cycle-end charge', async () => {
+      const sub = await makeSubscription({
+        planTier: 'professional_plus',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_charged_plan_change',
+      });
+
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_charged_plan_change',
+        paymentId: 'pay_plan_change_corporate',
+        amount: 799900,
+        planId: 'plan_test_corporate',
+        notes: { tier: 'professional_plus' },
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+      expect(result.outcome).toBe('processed');
+
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated!.planTier).toBe('corporate');
+      expect(updated!.subscriptionState).toBe('active');
+    });
+
+    it('does not apply stale notes.tier when plan_id is absent on a same-plan renewal', async () => {
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_charged_stale_notes',
+      });
+
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_charged_stale_notes',
+        paymentId: 'pay_stale_notes',
+        amount: 799900,
+        notes: { tier: 'professional_plus' },
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+      expect(result.outcome).toBe('processed');
+
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated!.planTier).toBe('corporate');
+    });
+
+    it('infers scheduled plan change from payment amount when plan_id is missing', async () => {
+      const sub = await makeSubscription({
+        planTier: 'professional_plus',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_charged_amount_tier',
+      });
+
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_charged_amount_tier',
+        paymentId: 'pay_amount_tier',
+        amount: 799900,
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+      expect(result.outcome).toBe('processed');
+
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated!.planTier).toBe('corporate');
     });
 
     it('reactivates from grace — restores preLapseTier and clears lapse fields', async () => {
@@ -443,7 +521,7 @@ describe('E-117: webhook event processing', () => {
       const payload = makeChargedPayload({
         subscriptionId: 'sub_payload_test',
         paymentId: 'pay_payload_1',
-        amount: 799900,
+        amount: 299900,
       });
 
       await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);

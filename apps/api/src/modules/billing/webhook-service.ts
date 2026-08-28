@@ -174,9 +174,13 @@ async function handleActivated(
 /**
  * subscription.charged — successful recurring payment.
  *
- * Two scenarios:
- * 1. Normal renewal (already active) — record payment, extend period
- * 2. Reactivation from grace/locked — restore pre-lapse tier, clear lapse fields
+ * Three scenarios:
+ * 1. Normal renewal (already active, same plan) — record payment, extend period
+ * 2. Scheduled paid↔paid plan change — Razorpay does not send subscription.activated
+ *    for an already-active sub; the charge that starts the new cycle is the signal.
+ *    Apply plan_id (authoritative) or payment amount; never notes.tier (stale after
+ *    change-plan PATCH).
+ * 3. Reactivation from grace/locked — restore pre-lapse tier, then apply (1)/(2)
  *
  * Idempotency: payment_transaction.razorpay_payment_id UNIQUE via ON CONFLICT DO NOTHING.
  */
@@ -242,13 +246,20 @@ async function handleCharged(
       updates.preLapseTier = null;
     }
 
+    // Do not use notes.tier — change-plan updates plan_id, not notes.
+    const chargedTier = inferTierFromPlanId(payload) ?? inferTierFromPlan(payload);
+    const currentTier = (updates.planTier ?? subscription.planTier) as PlanTier;
+    if (chargedTier && chargedTier !== currentTier) {
+      updates.planTier = chargedTier;
+    }
+
     await tx
       .update(schema.subscription)
       .set(updates)
       .where(eq(schema.subscription.id, subscription.id));
 
-    // Queue reindex if tier was restored (reactivation changes the visible tier)
-    if (isReactivation && subscription.preLapseTier) {
+    const nextTier = (updates.planTier ?? subscription.planTier) as PlanTier;
+    if (nextTier !== subscription.planTier) {
       await queueDesignerReindex(tx, subscription.organizationId);
     }
 
