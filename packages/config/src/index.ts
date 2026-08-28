@@ -181,6 +181,15 @@ const envSchema = z.object({
   // How stale a cached place row may get before the worker sweep re-fetches it.
   // Kept well inside Google's 30-day content-caching ToS window.
   GOOGLE_PLACES_REFRESH_DAYS: z.coerce.number().int().min(1).max(29).default(7),
+
+  // Razorpay billing (E-115). Optional in dev/test — the subscribe service
+  // asserts their presence at call time rather than at boot.
+  // Key prefix determines mode: rzp_test_* = Test Mode, rzp_live_* = Live.
+  RAZORPAY_KEY_ID: z.string().min(1).optional(),
+  RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+  RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: z.string().min(1).optional(),
+  RAZORPAY_PLAN_ID_CORPORATE: z.string().min(1).optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
 });
 
 /**
