@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import {
   type PlanTier,
@@ -77,11 +77,9 @@ export const entitlementService = {
     const tier = subscription.planTier as PlanTier;
     const state = subscription.subscriptionState as SubscriptionState;
 
-    // TODO: resolve isVerified from organization's verification status
-    // For now, default to false. E-119 spec says:
-    //   canDisplayVerifiedBadge = isVerified() && tier >= professional_plus && state NOT IN {locked, downgraded}
-    // The isVerified check will be wired when the verification module exposes it.
-    const isVerified = false;
+    // Resolve isVerified from the org's verification application.
+    // An org is verified when their application status is 'verified' and not expired.
+    const isVerified = await checkOrgVerified(caller.activeOrgId);
 
     const response: SubscriptionResponse = {
       tier,
@@ -112,19 +110,34 @@ async function countSeats(organizationId: string): Promise<number> {
   return result?.count ?? 0;
 }
 
-/** Count projects (branches) for the organization's designer profile. */
+/** Count branches (designer profiles) for the organization. */
 async function countBranches(organizationId: string): Promise<number> {
-  const [profile] = await db
-    .select({ id: schema.designerProfile.id })
-    .from(schema.designerProfile)
-    .where(eq(schema.designerProfile.orgId, organizationId))
-    .limit(1);
-
-  if (!profile) return 0;
-
+  // A "branch" is a designer profile / studio under the organization.
+  // Currently 1:1 (unique constraint on orgId), but future E-244 may allow multiple.
+  // This intentionally counts profiles, NOT projects — projects are unlimited.
   const [result] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(schema.project)
-    .where(eq(schema.project.designerId, profile.id));
+    .from(schema.designerProfile)
+    .where(eq(schema.designerProfile.orgId, organizationId));
   return result?.count ?? 0;
+}
+
+
+/**
+ * Check whether the organization has a verified (and non-expired) verification application.
+ * Returns true only when status = 'verified' AND expiresAt is in the future.
+ */
+async function checkOrgVerified(organizationId: string): Promise<boolean> {
+  const [app] = await db
+    .select({ status: schema.verificationApplication.status })
+    .from(schema.verificationApplication)
+    .where(
+      and(
+        eq(schema.verificationApplication.organizationId, organizationId),
+        eq(schema.verificationApplication.status, 'verified'),
+        sql`${schema.verificationApplication.expiresAt} > NOW()`,
+      ),
+    )
+    .limit(1);
+  return !!app;
 }
