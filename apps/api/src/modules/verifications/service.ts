@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
   VERIFICATION_EFFECTIVE_STATUS,
@@ -14,6 +15,7 @@ import {
 import { config } from '@repo/config';
 import {
   buildVerificationDocumentKey,
+  deleteObject,
   objectExists,
   presignDownload,
   presignUpload,
@@ -22,6 +24,7 @@ import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
 import {
   hasBusinessDocument,
+  isApplicationEditable,
   VERIFICATION_MUTATION_RESULT,
   verificationsRepository,
   type AdminVerificationRecord,
@@ -31,6 +34,9 @@ import {
 } from './repository.js';
 
 const MIN_PUBLISHED_PROJECTS = 3;
+const personalIdentityDocumentTypes = new Set<VerificationDocumentRecord['type']>(
+  PERSONAL_VERIFICATION_DOCUMENT_TYPES,
+);
 
 export type VerificationCaller = {
   userId: string;
@@ -63,7 +69,25 @@ function latestDocuments(documents: VerificationDocumentRecord[]): VerificationD
   for (const document of documents) {
     if (!latest.has(document.type)) latest.set(document.type, document);
   }
-  return [...latest.values()];
+  return [...latest.values()].filter(
+    (document) => document.status !== VERIFICATION_DOCUMENT_STATUS.REMOVED,
+  );
+}
+
+function isPersonalIdentityDocument(type: VerificationDocumentRecord['type']): boolean {
+  return personalIdentityDocumentTypes.has(type);
+}
+
+async function assertPersonalIdentityOwner(
+  caller: VerificationCaller,
+  organizationId: string,
+  type: VerificationDocumentRecord['type'],
+): Promise<void> {
+  if (!isPersonalIdentityDocument(type)) return;
+  const context = await verificationsRepository.findContextByOrganization(organizationId);
+  if (!context || context.ownerUserId !== caller.userId) {
+    throw AppError.forbidden('Only the organization owner can manage personal identity');
+  }
 }
 
 function effectiveStatus(application: VerificationApplicationRecord) {
@@ -136,6 +160,8 @@ function eligibility(
 
 async function stateForContext(
   context: VerificationContextRecord,
+  callerUserId: string,
+  canManage: boolean,
 ): Promise<VerificationStateResponse> {
   const [allDocuments, history] = await Promise.all([
     verificationsRepository.listDocuments(context.application.id),
@@ -145,10 +171,18 @@ async function stateForContext(
   const latestRejection = [...history]
     .reverse()
     .find((event) => event.action === VERIFICATION_REVIEW_ACTION.REJECTED);
+  const canEditIdentity = context.ownerUserId === callerUserId;
   return {
     applicationId: context.application.id,
     status: effectiveStatus(context.application),
+    applicationEditable: isApplicationEditable(context.application),
     attempt: context.application.attempt,
+    identity: {
+      ownerName: context.ownerName,
+      ownerPhone: canEditIdentity ? context.ownerPhone : null,
+      canEdit: canEditIdentity,
+    },
+    permissions: { canManage },
     eligibility: eligibility(context, documents),
     documents: documents.map(documentDto),
     history: historyDto(history),
@@ -215,13 +249,17 @@ export const verificationsService = {
   async getState(caller: VerificationCaller): Promise<VerificationStateResponse> {
     const organizationId = await assertMember(caller);
     await verificationsRepository.getOrCreateForOrganization(organizationId);
-    const context = await verificationsRepository.findContextByOrganization(organizationId);
+    const [context, canManage] = await Promise.all([
+      verificationsRepository.findContextByOrganization(organizationId),
+      orgsService.isWriter(caller.userId, organizationId),
+    ]);
     if (!context) throw AppError.unprocessable('Complete designer onboarding before verification');
-    return stateForContext(context);
+    return stateForContext(context, caller.userId, canManage);
   },
 
   async createUpload(caller: VerificationCaller, input: VerificationDocumentUploadInput) {
     const organizationId = await assertWriter(caller);
+    await assertPersonalIdentityOwner(caller, organizationId, input.type);
     if (input.size > config.MEDIA_MAX_UPLOAD_BYTES) {
       throw AppError.unprocessable(
         `Document must be ${config.MEDIA_MAX_UPLOAD_BYTES} bytes or smaller`,
@@ -243,14 +281,67 @@ export const verificationsService = {
       throw AppError.invalidTransition('Documents cannot be changed while verification is pending');
     }
     if (typeof reserved === 'string') throw AppError.notFound('Verification application not found');
-    return {
-      documentVersionId,
-      uploadUrl: await presignUpload({
-        key,
-        contentType: input.contentType,
-        contentLength: input.size,
-      }),
-    };
+    try {
+      return {
+        documentVersionId,
+        uploadUrl: await presignUpload({
+          key,
+          contentType: input.contentType,
+          contentLength: input.size,
+        }),
+      };
+    } catch (error) {
+      await verificationsRepository
+        .cancelPendingDocument(documentVersionId, organizationId)
+        .catch(() => undefined);
+      throw error;
+    }
+  },
+
+  async removeDocument(
+    caller: VerificationCaller,
+    versionId: string,
+  ): Promise<VerificationStateResponse> {
+    const organizationId = await assertWriter(caller);
+    const document = await verificationsRepository.findDocumentForOrganization(
+      versionId,
+      organizationId,
+    );
+    if (!document) throw AppError.notFound('Verification document not found');
+    await assertPersonalIdentityOwner(caller, organizationId, document.type);
+
+    if (document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
+      if (document.uploadedByUserId !== caller.userId) {
+        throw AppError.forbidden('Only the uploader can cancel this document upload');
+      }
+      const cancelled = await verificationsRepository.cancelPendingDocument(
+        versionId,
+        organizationId,
+      );
+      if (cancelled === VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND) {
+        throw AppError.notFound('Verification document not found');
+      }
+      if (typeof cancelled === 'string') {
+        throw AppError.conflict('Verification document state changed');
+      }
+      await deleteObject(cancelled.objectKey).catch(() => undefined);
+      return this.getState(caller);
+    }
+
+    const removed = await verificationsRepository.removeCommittedDocument(
+      versionId,
+      organizationId,
+      caller.userId,
+    );
+    if (removed === VERIFICATION_MUTATION_RESULT.DOCUMENT_NOT_FOUND) {
+      throw AppError.notFound('Verification document not found');
+    }
+    if (typeof removed === 'string') {
+      throw AppError.conflict('Verification document state changed');
+    }
+    // Committed objects are retained with their removed audit record. A future
+    // retention job can purge them after the required review window.
+    return this.getState(caller);
   },
 
   async commitUpload(
@@ -263,13 +354,14 @@ export const verificationsService = {
       organizationId,
     );
     if (!document) throw AppError.notFound('Verification document not found');
+    await assertPersonalIdentityOwner(caller, organizationId, document.type);
     if (document.status !== VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
       throw AppError.conflict('Verification document was already committed');
     }
     if (!(await objectExists(document.objectKey))) {
       throw AppError.unprocessable('Upload the document before committing it');
     }
-    const committed = await verificationsRepository.commitDocument(versionId);
+    const committed = await verificationsRepository.commitDocument(versionId, organizationId);
     if (typeof committed === 'string') {
       throw AppError.conflict('Verification document state changed');
     }
@@ -280,15 +372,7 @@ export const verificationsService = {
     const organizationId = await assertWriter(caller);
     const context = await verificationsRepository.findContextByOrganization(organizationId);
     if (!context) throw AppError.notFound('Verification application not found');
-    if (
-      context.application.status !== VERIFICATION_APPLICATION_STATUS.DRAFT &&
-      context.application.status !== VERIFICATION_APPLICATION_STATUS.REJECTED &&
-      !(
-        context.application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
-        context.application.expiresAt &&
-        context.application.expiresAt <= new Date()
-      )
-    ) {
+    if (!isApplicationEditable(context.application)) {
       throw AppError.invalidTransition('Verification is already pending or approved');
     }
     const documents = latestDocuments(
@@ -339,7 +423,10 @@ export const verificationsService = {
       context.application.organizationId,
     );
     if (!document) throw AppError.notFound('Verification document not found');
-    if (document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD) {
+    if (
+      document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD ||
+      document.status === VERIFICATION_DOCUMENT_STATUS.REMOVED
+    ) {
       throw AppError.notFound('Verification document not found');
     }
     return {

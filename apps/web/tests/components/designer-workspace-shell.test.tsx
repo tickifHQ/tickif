@@ -235,8 +235,8 @@ describe('DesignerWorkspaceShell', () => {
     );
   });
 
-  it('keeps the unimplemented Verification item non-interactive', () => {
-    mock.pathname = '/designer/dashboard';
+  it('routes Verification to the designer verification page', () => {
+    mock.pathname = '/designer/verification';
 
     render(
       <DesignerWorkspaceShell
@@ -249,9 +249,10 @@ describe('DesignerWorkspaceShell', () => {
       </DesignerWorkspaceShell>,
     );
 
-    const item = screen.getAllByText('Verification')[0]?.closest('[aria-disabled="true"]');
-    expect(item).toBeInTheDocument();
-    expect(item?.closest('a')).toBeNull();
+    const verificationLink = screen.getAllByRole('link', { name: /verification/i })[0];
+    expect(verificationLink).toHaveAttribute('href', '/designer/verification');
+    expect(verificationLink?.querySelector('svg')).toHaveClass('lucide-shield-check');
+    expect(screen.getByRole('banner').querySelector('.lucide-shield')).toBeInTheDocument();
   });
 
   it('places the organization switcher below Explore Tickif without moving the header account menu', () => {

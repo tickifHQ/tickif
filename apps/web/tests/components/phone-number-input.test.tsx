@@ -32,4 +32,22 @@ describe('phone number normalization', () => {
       phone: '9876543210',
     });
   });
+
+  it('limits Indian mobile input to ten national digits', () => {
+    expect(normalizePhoneInput('9876543210123', country('India'))).toEqual({
+      country: country('India'),
+      phone: '9876543210',
+    });
+    expect(normalizePhoneInput('+91 9876543210123', country('India'))).toEqual({
+      country: country('India'),
+      phone: '9876543210',
+    });
+  });
+
+  it('uses each country numbering plan instead of only the E.164 ceiling', () => {
+    expect(normalizePhoneInput('2025550123456', country('United States'))).toEqual({
+      country: country('United States'),
+      phone: '2025550123',
+    });
+  });
 });

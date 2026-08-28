@@ -57,6 +57,11 @@ export const BUSINESS_VERIFICATION_DOCUMENT_TYPES = [
   VERIFICATION_DOCUMENT_TYPE.CERTIFICATE_OF_INCORPORATION,
 ] as const;
 
+export const PERSONAL_VERIFICATION_DOCUMENT_TYPES = [
+  VERIFICATION_DOCUMENT_TYPE.PERSONAL_PAN,
+  VERIFICATION_DOCUMENT_TYPE.AADHAAR,
+] as const;
+
 export const verificationDocumentTypeSchema = z
   .enum(VERIFICATION_DOCUMENT_TYPE_VALUES)
   .meta({ id: 'VerificationDocumentType' });
@@ -67,6 +72,7 @@ export const VERIFICATION_DOCUMENT_STATUS = {
   UPLOADED: 'uploaded',
   VERIFIED: 'verified',
   REJECTED: 'rejected',
+  REMOVED: 'removed',
 } as const;
 
 export const VERIFICATION_DOCUMENT_STATUS_VALUES = [
@@ -74,6 +80,7 @@ export const VERIFICATION_DOCUMENT_STATUS_VALUES = [
   VERIFICATION_DOCUMENT_STATUS.UPLOADED,
   VERIFICATION_DOCUMENT_STATUS.VERIFIED,
   VERIFICATION_DOCUMENT_STATUS.REJECTED,
+  VERIFICATION_DOCUMENT_STATUS.REMOVED,
 ] as const;
 
 export const verificationDocumentStatusSchema = z
@@ -111,9 +118,9 @@ export const VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES = [
   'image/png',
 ] as const;
 
-export const verificationDocumentContentTypeSchema = z.enum(
-  VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES,
-).meta({ id: 'VerificationDocumentContentType' });
+export const verificationDocumentContentTypeSchema = z
+  .enum(VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES)
+  .meta({ id: 'VerificationDocumentContentType' });
 
 export const verificationDocumentUploadSchema = z
   .object({
@@ -170,7 +177,14 @@ export const verificationStateResponseSchema = z
   .object({
     applicationId: z.uuid(),
     status: verificationEffectiveStatusSchema,
+    applicationEditable: z.boolean(),
     attempt: z.number().int().positive(),
+    identity: z.object({
+      ownerName: z.string(),
+      ownerPhone: z.string().nullable(),
+      canEdit: z.boolean(),
+    }),
+    permissions: z.object({ canManage: z.boolean() }),
     eligibility: z.object({
       eligible: z.boolean(),
       phoneVerified: eligibilityCriterionSchema,
