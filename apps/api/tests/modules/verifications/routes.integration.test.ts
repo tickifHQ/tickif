@@ -14,13 +14,14 @@ vi.mock('@repo/queue', async (original) => ({
 }));
 vi.mock('@repo/storage', async (original) => ({
   ...(await original<typeof storageModule>()),
+  deleteObject: vi.fn(async () => undefined),
   objectExists: vi.fn(async () => true),
 }));
 
 const client = testClient(app);
 
-async function designerWorkspace() {
-  const session = await createRoleSession('+919800000071', 'designer');
+async function designerWorkspace(phoneNumber = '+919800000071') {
+  const session = await createRoleSession(phoneNumber, 'designer');
   const organization = await makeOrganization();
   await db.insert(schema.member).values({
     id: `member-${session.userId}`,
@@ -38,7 +39,7 @@ async function designerWorkspace() {
     .update(schema.user)
     .set({
       name: 'Legal Owner',
-      phoneNumber: '+919800000071',
+      phoneNumber,
       phoneNumberVerified: true,
     })
     .where(eq(schema.user.id, session.userId));
@@ -55,6 +56,43 @@ describe('verification route authorization', () => {
     expect(response.status).toBe(401);
   });
 
+  it('requires authentication to remove a document', async () => {
+    const response = await client.api.verifications.documents[':versionId'].$delete({
+      param: { versionId: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(response.status).toBe(401);
+  });
+
+  it('does not let another organization remove a private document', async () => {
+    const owner = await designerWorkspace('+919800000073');
+    const otherDesigner = await designerWorkspace('+919800000074');
+    const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers: { cookie: owner.cookie } },
+    );
+    expect(uploadResponse.status).toBe(201);
+    if (uploadResponse.status !== 201) throw new Error('expected 201');
+    const upload = await uploadResponse.json();
+
+    const response = await client.api.verifications.documents[':versionId'].$delete(
+      { param: { versionId: upload.documentVersionId } },
+      { headers: { cookie: otherDesigner.cookie } },
+    );
+
+    expect(response.status).toBe(404);
+    const [stored] = await db
+      .select()
+      .from(schema.verificationDocumentVersion)
+      .where(eq(schema.verificationDocumentVersion.id, upload.documentVersionId));
+    expect(stored?.status).toBe('pending_upload');
+  });
+
   it('returns server-derived state only for the active designer organization', async () => {
     const { cookie, organization } = await designerWorkspace();
     const response = await client.api.verifications.$get({}, { headers: { cookie } });
@@ -68,6 +106,12 @@ describe('verification route authorization', () => {
       .where(eq(schema.verificationApplication.organizationId, organization.id));
     expect(body.applicationId).toBe(stored?.id);
     expect(body.status).toBe('draft');
+    expect(body.identity).toMatchObject({
+      ownerName: 'Legal Owner',
+      ownerPhone: '+919800000071',
+      canEdit: true,
+    });
+    expect(body.permissions).toEqual({ canManage: true });
   });
 
   it('rejects a designer from the admin queue', async () => {
@@ -140,5 +184,205 @@ describe('verification route authorization', () => {
       status: 'pending',
       eligibility: { eligible: true },
     });
+  });
+
+  it('requires a replacement document before resubmitting a rejected application', async () => {
+    const { cookie, organization, profile } = await designerWorkspace();
+    await Promise.all([
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+    ]);
+    const headers = { cookie };
+    const firstUploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers },
+    );
+    expect(firstUploadResponse.status).toBe(201);
+    if (firstUploadResponse.status !== 201) throw new Error('expected 201');
+    const firstUpload = await firstUploadResponse.json();
+    const firstCommitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+      { param: { versionId: firstUpload.documentVersionId } },
+      { headers },
+    );
+    expect(firstCommitResponse.status).toBe(200);
+
+    const reviewedAt = new Date('2026-08-23T12:00:00.000Z');
+    await db
+      .update(schema.verificationDocumentVersion)
+      .set({ status: 'rejected', reviewedAt })
+      .where(eq(schema.verificationDocumentVersion.id, firstUpload.documentVersionId));
+    await db
+      .update(schema.verificationApplication)
+      .set({
+        status: 'rejected',
+        submittedAt: new Date('2026-08-22T12:00:00.000Z'),
+        reviewedAt,
+      })
+      .where(eq(schema.verificationApplication.organizationId, organization.id));
+
+    const blockedResponse = await client.api.verifications.submit.$post({}, { headers });
+    expect(blockedResponse.status).toBe(422);
+
+    const replacementUploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 2000,
+        },
+      },
+      { headers },
+    );
+    expect(replacementUploadResponse.status).toBe(201);
+    if (replacementUploadResponse.status !== 201) throw new Error('expected 201');
+    const replacementUpload = await replacementUploadResponse.json();
+    const replacementCommitResponse = await client.api.verifications.documents[
+      ':versionId'
+    ].commit.$post({ param: { versionId: replacementUpload.documentVersionId } }, { headers });
+    expect(replacementCommitResponse.status).toBe(200);
+    if (replacementCommitResponse.status !== 200) throw new Error('expected 200');
+    await expect(replacementCommitResponse.json()).resolves.toMatchObject({
+      status: 'rejected',
+      eligibility: {
+        eligible: true,
+        businessDocumentPresent: { met: true },
+      },
+      documents: [
+        {
+          id: replacementUpload.documentVersionId,
+          status: 'uploaded',
+          version: 2,
+        },
+      ],
+    });
+
+    const resubmitResponse = await client.api.verifications.submit.$post({}, { headers });
+    expect(resubmitResponse.status).toBe(200);
+    if (resubmitResponse.status !== 200) throw new Error('expected 200');
+    await expect(resubmitResponse.json()).resolves.toMatchObject({
+      status: 'pending',
+      attempt: 2,
+      latestNote: null,
+    });
+  });
+
+  it('cancels an uncommitted upload reservation', async () => {
+    const { cookie } = await designerWorkspace();
+    const headers = { cookie };
+    const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers },
+    );
+    expect(uploadResponse.status).toBe(201);
+    if (uploadResponse.status !== 201) throw new Error('expected 201');
+    const upload = await uploadResponse.json();
+
+    const response = await client.api.verifications.documents[':versionId'].$delete(
+      { param: { versionId: upload.documentVersionId } },
+      { headers },
+    );
+
+    expect(response.status).toBe(200);
+    const [stored] = await db
+      .select()
+      .from(schema.verificationDocumentVersion)
+      .where(eq(schema.verificationDocumentVersion.id, upload.documentVersionId));
+    expect(stored).toBeUndefined();
+  });
+
+  it('removes a committed document without deleting its audit record', async () => {
+    const { cookie } = await designerWorkspace();
+    const headers = { cookie };
+    const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers },
+    );
+    expect(uploadResponse.status).toBe(201);
+    if (uploadResponse.status !== 201) throw new Error('expected 201');
+    const upload = await uploadResponse.json();
+    const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+      { param: { versionId: upload.documentVersionId } },
+      { headers },
+    );
+    expect(commitResponse.status).toBe(200);
+
+    const response = await client.api.verifications.documents[':versionId'].$delete(
+      { param: { versionId: upload.documentVersionId } },
+      { headers },
+    );
+
+    expect(response.status).toBe(200);
+    if (response.status !== 200) throw new Error('expected 200');
+    await expect(response.json()).resolves.toMatchObject({
+      documents: [],
+      eligibility: { businessDocumentPresent: { met: false } },
+    });
+    const [stored] = await db
+      .select()
+      .from(schema.verificationDocumentVersion)
+      .where(eq(schema.verificationDocumentVersion.id, upload.documentVersionId));
+    expect(stored).toMatchObject({
+      status: 'removed',
+      removedByUserId: expect.any(String),
+      removedAt: expect.any(Date),
+    });
+  });
+
+  it('does not remove documents while the application is under review', async () => {
+    const { cookie, organization } = await designerWorkspace();
+    const headers = { cookie };
+    const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers },
+    );
+    expect(uploadResponse.status).toBe(201);
+    if (uploadResponse.status !== 201) throw new Error('expected 201');
+    const upload = await uploadResponse.json();
+    const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+      { param: { versionId: upload.documentVersionId } },
+      { headers },
+    );
+    expect(commitResponse.status).toBe(200);
+    await db
+      .update(schema.verificationApplication)
+      .set({ status: 'pending', submittedAt: new Date() })
+      .where(eq(schema.verificationApplication.organizationId, organization.id));
+
+    const response = await client.api.verifications.documents[':versionId'].$delete(
+      { param: { versionId: upload.documentVersionId } },
+      { headers },
+    );
+
+    expect(response.status).toBe(409);
+    const [stored] = await db
+      .select()
+      .from(schema.verificationDocumentVersion)
+      .where(eq(schema.verificationDocumentVersion.id, upload.documentVersionId));
+    expect(stored).toMatchObject({ status: 'uploaded', removedAt: null });
   });
 });

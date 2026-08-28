@@ -105,6 +105,27 @@ const commitRoute = createRoute({
   },
 });
 
+const removeDocumentRoute = createRoute({
+  method: 'delete',
+  path: '/documents/{versionId}',
+  tags: ['Verification'],
+  summary: 'Cancel or remove a private verification document',
+  security: [{ cookieAuth: [] }],
+  middleware: designerMiddleware,
+  request: { params: verificationDocumentVersionParamSchema },
+  responses: {
+    200: {
+      description: 'Updated verification state',
+      content: { 'application/json': { schema: verificationStateResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Organization owner or admin access required'),
+    404: errorJson('Document not found'),
+    409: errorJson('Document state changed'),
+    422: errorJson('Active organization, onboarding, or verification state could not be resolved'),
+  },
+});
+
 const submitRoute = createRoute({
   method: 'post',
   path: '/submit',
@@ -137,6 +158,12 @@ export const verificationsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>
   .openapi(commitRoute, async (c) =>
     c.json(
       await verificationsService.commitUpload(designerCaller(c), c.req.valid('param').versionId),
+      200,
+    ),
+  )
+  .openapi(removeDocumentRoute, async (c) =>
+    c.json(
+      await verificationsService.removeDocument(designerCaller(c), c.req.valid('param').versionId),
       200,
     ),
   )

@@ -33,6 +33,9 @@
   --home-search-shadow: 0 16px 48px 0 rgba(45, 90, 61, 0.15), 0 0 0 0 #f0faf3;
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
+  --verification-hero-background: linear-gradient(103.5deg, #1a1b1e 0%, #2e2d2a 100%);
+  --verification-hero-foreground: oklch(1 0 0);
+  --verification-hero-glow: #626262;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.21 0.006 286);
   --popover: oklch(1 0 0);
@@ -100,6 +103,9 @@
   --home-search-shadow: 0 16px 48px 0 oklch(0 0 0 / 0.25);
   --surface-inverse: #0f1a16;
   --surface-inverse-foreground: oklch(0.985 0 0);
+  --verification-hero-background: linear-gradient(103.5deg, #1a1b1e 0%, #2e2d2a 100%);
+  --verification-hero-foreground: oklch(1 0 0);
+  --verification-hero-glow: #626262;
   --card: oklch(0.23 0.012 280);
   --card-foreground: oklch(0.985 0.001 286);
   --popover: oklch(0.23 0.012 280);

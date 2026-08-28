@@ -18,6 +18,7 @@ vi.mock('@repo/storage', () => ({
       `verification-documents/${organizationId}/${versionId}`,
   ),
   objectExists: vi.fn(async () => true),
+  deleteObject: vi.fn(async () => undefined),
   presignDownload: vi.fn(async () => 'https://storage.test/download'),
   presignUpload: vi.fn(async () => 'https://storage.test/upload'),
 }));
@@ -41,6 +42,14 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
         ['uploaded', 'verified'].includes(document.status),
     ),
   ),
+  isApplicationEditable: vi.fn(
+    (application: { status: string; expiresAt: Date | null }) =>
+      application.status === 'draft' ||
+      application.status === 'rejected' ||
+      (application.status === 'verified' &&
+        application.expiresAt !== null &&
+        application.expiresAt <= new Date()),
+  ),
   verificationsRepository: {
     getOrCreateForOrganization: vi.fn(),
     findContextByOrganization: vi.fn(),
@@ -50,6 +59,8 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     reserveDocumentVersion: vi.fn(),
     findDocumentForOrganization: vi.fn(),
     commitDocument: vi.fn(),
+    cancelPendingDocument: vi.fn(async () => 'state_changed'),
+    removeCommittedDocument: vi.fn(),
     submit: vi.fn(),
     listPending: vi.fn(),
     findAdminDetail: vi.fn(),
@@ -60,7 +71,8 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
 const { verificationsService } = await import('../../../src/modules/verifications/service.js');
 const { verificationsRepository } =
   await import('../../../src/modules/verifications/repository.js');
-const { presignDownload } = await import('@repo/storage');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
+const { deleteObject, presignDownload, presignUpload } = await import('@repo/storage');
 
 const application = {
   id: '0d8e6a2c-1b3f-4c5a-9e2d-7f1a2b3c4d5e',
@@ -80,6 +92,7 @@ const context = {
   application,
   designerProfileId: '8bc0e9bb-9abb-4551-9579-c29d6d51acbe',
   designerName: 'Studio One',
+  ownerUserId: 'user-1',
   ownerName: 'Aditya Garud',
   ownerEmail: 'aditya@example.com',
   ownerPhone: '+919999999999',
@@ -100,6 +113,8 @@ const document = {
   committedAt: new Date('2026-08-01T00:00:00.000Z'),
   reviewedAt: null,
   reviewedByUserId: null,
+  removedAt: null,
+  removedByUserId: null,
   createdAt: new Date('2026-08-01T00:00:00.000Z'),
 };
 
@@ -110,6 +125,8 @@ describe('verificationsService', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-13T00:00:00.000Z'));
     vi.clearAllMocks();
+    vi.mocked(orgsService.isMember).mockResolvedValue(true);
+    vi.mocked(orgsService.isWriter).mockResolvedValue(true);
     vi.mocked(verificationsRepository.getOrCreateForOrganization).mockResolvedValue(application);
     vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue(context);
     vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([document]);
@@ -123,9 +140,25 @@ describe('verificationsService', () => {
     const result = await verificationsService.getState(caller);
 
     expect(result.status).toBe(VERIFICATION_APPLICATION_STATUS.DRAFT);
+    expect(result.applicationEditable).toBe(true);
+    expect(result.identity).toEqual({
+      ownerName: 'Aditya Garud',
+      ownerPhone: '+919999999999',
+      canEdit: true,
+    });
+    expect(result.permissions).toEqual({ canManage: true });
     expect(result.eligibility.eligible).toBe(true);
     expect(result.eligibility.publishedProjects).toMatchObject({ current: 3, required: 3 });
     expect(result.documents).toHaveLength(1);
+  });
+
+  it('does not expose the owner phone or identity edits to another organization member', async () => {
+    vi.mocked(orgsService.isWriter).mockResolvedValue(false);
+
+    const result = await verificationsService.getState({ ...caller, userId: 'member-2' });
+
+    expect(result.identity).toMatchObject({ ownerPhone: null, canEdit: false });
+    expect(result.permissions).toEqual({ canManage: false });
   });
 
   it('returns designer-safe review history and the latest changes-requested note', async () => {
@@ -191,6 +224,72 @@ describe('verificationsService', () => {
     await expect(verificationsService.submit(caller)).rejects.toMatchObject({
       code: 'validation_error',
       status: 422,
+    });
+    expect(verificationsRepository.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects resubmission while the latest business document is still rejected', async () => {
+    const rejectedApplication = {
+      ...application,
+      status: VERIFICATION_APPLICATION_STATUS.REJECTED,
+      submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+      reviewedAt: new Date('2026-08-02T00:00:00.000Z'),
+    };
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: rejectedApplication,
+    });
+    vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([
+      { ...document, status: VERIFICATION_DOCUMENT_STATUS.REJECTED },
+    ]);
+
+    await expect(verificationsService.getState(caller)).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.REJECTED,
+      eligibility: {
+        eligible: false,
+        businessDocumentPresent: { met: false },
+      },
+    });
+    await expect(verificationsService.submit(caller)).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
+    });
+    expect(verificationsRepository.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects resubmission while any document upload is incomplete', async () => {
+    const rejectedApplication = {
+      ...application,
+      status: VERIFICATION_APPLICATION_STATUS.REJECTED,
+      submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+      reviewedAt: new Date('2026-08-02T00:00:00.000Z'),
+    };
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: rejectedApplication,
+    });
+    vi.mocked(verificationsRepository.hasIncompleteDocument).mockResolvedValue(true);
+
+    await expect(verificationsService.submit(caller)).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
+    });
+    expect(verificationsRepository.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects repeated submission while verification is already pending', async () => {
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: {
+        ...application,
+        status: VERIFICATION_APPLICATION_STATUS.PENDING,
+        submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+      },
+    });
+
+    await expect(verificationsService.submit(caller)).rejects.toMatchObject({
+      code: 'invalid_transition',
+      status: 409,
     });
     expect(verificationsRepository.submit).not.toHaveBeenCalled();
   });
@@ -263,6 +362,180 @@ describe('verificationsService', () => {
 
     expect(result).not.toHaveProperty('key');
     expect(result.uploadUrl).toBe('https://storage.test/upload');
+  });
+
+  it('restricts personal identity uploads to the organization owner', async () => {
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      ownerUserId: 'owner-2',
+    });
+
+    await expect(
+      verificationsService.createUpload(caller, {
+        type: 'personal_pan',
+        contentType: 'application/pdf',
+        size: 1000,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(verificationsRepository.reserveDocumentVersion).not.toHaveBeenCalled();
+  });
+
+  it('removes the reservation when upload URL creation fails', async () => {
+    vi.mocked(verificationsRepository.reserveDocumentVersion).mockResolvedValue(document);
+    vi.mocked(presignUpload).mockRejectedValueOnce(new Error('storage unavailable'));
+
+    await expect(
+      verificationsService.createUpload(caller, {
+        type: 'gst_registration_certificate',
+        contentType: 'application/pdf',
+        size: 1000,
+      }),
+    ).rejects.toThrow('storage unavailable');
+    expect(verificationsRepository.cancelPendingDocument).toHaveBeenCalledWith(
+      expect.any(String),
+      'org-1',
+    );
+  });
+
+  it('preserves the original presign error when reservation rollback also fails', async () => {
+    vi.mocked(verificationsRepository.reserveDocumentVersion).mockResolvedValue(document);
+    vi.mocked(presignUpload).mockRejectedValueOnce(new Error('storage unavailable'));
+    vi.mocked(verificationsRepository.cancelPendingDocument).mockRejectedValueOnce(
+      new Error('database unavailable'),
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {
+      throw new Error('logging unavailable');
+    });
+
+    try {
+      await expect(
+        verificationsService.createUpload(caller, {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        }),
+      ).rejects.toThrow('storage unavailable');
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('cancels only the original uploader pending reservation', async () => {
+    const pendingDocument = {
+      ...document,
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+    };
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue(
+      pendingDocument,
+    );
+    vi.mocked(verificationsRepository.cancelPendingDocument).mockResolvedValue(pendingDocument);
+
+    await verificationsService.removeDocument(caller, pendingDocument.id);
+
+    expect(verificationsRepository.cancelPendingDocument).toHaveBeenCalledWith(
+      pendingDocument.id,
+      'org-1',
+    );
+    expect(deleteObject).toHaveBeenCalledWith(pendingDocument.objectKey);
+  });
+
+  it('commits a tenant-scoped upload and returns the refreshed state', async () => {
+    const pendingDocument = {
+      ...document,
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+      committedAt: null,
+    };
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue(
+      pendingDocument,
+    );
+    vi.mocked(verificationsRepository.commitDocument).mockResolvedValue(document);
+
+    const result = await verificationsService.commitUpload(caller, pendingDocument.id);
+
+    expect(verificationsRepository.commitDocument).toHaveBeenCalledWith(
+      pendingDocument.id,
+      'org-1',
+    );
+    expect(result.applicationId).toBe(application.id);
+  });
+
+  it('does not cancel another uploader pending reservation', async () => {
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue({
+      ...document,
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+      uploadedByUserId: 'user-2',
+    });
+
+    await expect(verificationsService.removeDocument(caller, document.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(verificationsRepository.cancelPendingDocument).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('removes a committed document while preserving its version record', async () => {
+    const currentDocument = {
+      ...document,
+      id: '41cf6b87-80c0-4b47-82af-9c35f115bc7a',
+      version: 2,
+    };
+    const removedDocument = {
+      ...currentDocument,
+      status: VERIFICATION_DOCUMENT_STATUS.REMOVED,
+      removedAt: new Date('2026-08-13T00:00:00.000Z'),
+      removedByUserId: caller.userId,
+    };
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue(
+      currentDocument,
+    );
+    vi.mocked(verificationsRepository.removeCommittedDocument).mockResolvedValue(removedDocument);
+    vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([removedDocument, document]);
+
+    const state = await verificationsService.removeDocument(caller, currentDocument.id);
+
+    expect(verificationsRepository.removeCommittedDocument).toHaveBeenCalledWith(
+      currentDocument.id,
+      'org-1',
+      caller.userId,
+    );
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(state.documents).toEqual([]);
+    expect(state.eligibility.businessDocumentPresent.met).toBe(false);
+  });
+
+  it('restricts removal of a personal identity document to the organization owner', async () => {
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue({
+      ...document,
+      type: 'personal_pan',
+    });
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      ownerUserId: 'owner-2',
+    });
+
+    await expect(verificationsService.removeDocument(caller, document.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(verificationsRepository.removeCommittedDocument).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('restricts committing a personal identity document to the organization owner', async () => {
+    vi.mocked(verificationsRepository.findDocumentForOrganization).mockResolvedValue({
+      ...document,
+      type: 'personal_pan',
+      status: VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
+    });
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      ownerUserId: 'owner-2',
+    });
+
+    await expect(verificationsService.commitUpload(caller, document.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(verificationsRepository.commitDocument).not.toHaveBeenCalled();
   });
 
   it('uses the dedicated short TTL for private verification document downloads', async () => {

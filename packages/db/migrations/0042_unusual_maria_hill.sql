@@ -1,0 +1,1 @@
+ALTER TYPE "public"."verification_document_status" ADD VALUE 'removed';

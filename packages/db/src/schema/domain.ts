@@ -937,6 +937,10 @@ export const verificationDocumentVersion = pgTable(
     reviewedByUserId: text('reviewed_by_user_id').references(() => user.id, {
       onDelete: 'set null',
     }),
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedByUserId: text('removed_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -947,9 +951,15 @@ export const verificationDocumentVersion = pgTable(
       sql`(${t.status} = 'pending_upload' AND ${t.committedAt} IS NULL)
         OR (${t.status} <> 'pending_upload' AND ${t.committedAt} IS NOT NULL)`,
     ),
+    check(
+      'verification_document_removal_check',
+      sql`(${t.status}::text = 'removed' AND ${t.removedAt} IS NOT NULL)
+        OR (${t.status}::text <> 'removed' AND ${t.removedAt} IS NULL)`,
+    ),
     uniqueIndex('verification_document_version_slot_version_uniq').on(t.slotId, t.version),
     index('verification_document_version_uploader_idx').on(t.uploadedByUserId),
     index('verification_document_version_reviewer_idx').on(t.reviewedByUserId),
+    index('verification_document_version_remover_idx').on(t.removedByUserId),
   ],
 );
 

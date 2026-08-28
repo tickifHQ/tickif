@@ -8,7 +8,13 @@ export function TooltipProvider({
   delayDuration = 0,
   ...props
 }: ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />;
+  return (
+    <TooltipPrimitive.Provider
+      data-slot="tooltip-provider"
+      delayDuration={delayDuration}
+      {...props}
+    />
+  );
 }
 
 export function Tooltip(props: ComponentProps<typeof TooltipPrimitive.Root>) {
@@ -25,10 +31,11 @@ export function TooltipTrigger(props: ComponentProps<typeof TooltipPrimitive.Tri
 
 export function TooltipContent({
   className,
+  hideArrow = false,
   sideOffset = 4,
   children,
   ...props
-}: ComponentProps<typeof TooltipPrimitive.Content>) {
+}: ComponentProps<typeof TooltipPrimitive.Content> & { hideArrow?: boolean }) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -43,7 +50,12 @@ export function TooltipContent({
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] fill-foreground" />
+        {hideArrow ? null : (
+          <TooltipPrimitive.Arrow
+            data-slot="tooltip-arrow"
+            className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs fill-foreground"
+          />
+        )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );
