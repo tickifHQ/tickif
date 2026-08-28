@@ -1,9 +1,7 @@
 import Image from 'next/image';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import {
   BadgeCheck,
-  Bookmark,
   CalendarDays,
   Check,
   Globe,
@@ -22,12 +20,10 @@ import type {
   PublicPortfolioStats,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
-import { buttonVariants } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
-import { cn } from '@repo/ui/lib/utils';
 import { CopyLinkButton } from '@/components/copy-link-button';
-import { EnquiryCta } from '@/components/enquiry-cta';
+import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -95,26 +91,6 @@ function headlineReviewAggregate(stats: PublicPortfolioStats) {
     return { source: 'google' as const, ...stats.google };
   }
   return null;
-}
-
-function LoginGatedAction({
-  children,
-  className,
-  variant = 'default',
-  ariaLabel,
-  href,
-}: {
-  children: ReactNode;
-  className?: string;
-  variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost';
-  ariaLabel?: string;
-  href: string;
-}) {
-  return (
-    <Link href={href} aria-label={ariaLabel} className={cn(buttonVariants({ variant }), className)}>
-      {children}
-    </Link>
-  );
 }
 
 function SectionEyebrow({ children }: { children: ReactNode }) {
@@ -198,16 +174,23 @@ function StudioBar({ portfolio, view }: SectionProps) {
               className="hidden h-9 rounded-full px-4 sm:inline-flex"
             />
           ) : null}
-          <LoginGatedAction
+          <EnquiryCta
+            context={{
+              type: 'designer',
+              designerName: portfolio.displayName,
+              designerLocation: view.location,
+              designerLogoUrl: portfolio.logoUrl,
+            }}
+            designerProfileId={portfolio.profileId}
+            loginHref={view.loginHref}
             variant="emphasis"
             ariaLabel="Start a conversation"
             className="h-9 rounded-full px-4"
-            href={view.loginHref}
           >
             <MessageCircle className="size-4" />
             <span className="hidden sm:inline">Start a conversation</span>
             <span className="sm:hidden">Start</span>
-          </LoginGatedAction>
+          </EnquiryCta>
         </div>
       </div>
     </div>
@@ -326,15 +309,6 @@ function HeroSection({ portfolio, view }: SectionProps) {
               <MessageSquare className="size-4" />
               Enquire
             </EnquiryCta>
-            <LoginGatedAction
-              variant="outline"
-              className="text-primary"
-              href={view.loginHref}
-              ariaLabel="Save profile"
-            >
-              <Bookmark className="size-4 fill-current" />
-              Save
-            </LoginGatedAction>
           </div>
         </div>
       </div>
@@ -998,22 +972,21 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
           always free.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3">
-          <LoginGatedAction
+          <EnquiryCta
+            context={{
+              type: 'designer',
+              designerName: portfolio.displayName,
+              designerLocation: view.location,
+              designerLogoUrl: portfolio.logoUrl,
+            }}
+            designerProfileId={portfolio.profileId}
+            loginHref={view.loginHref}
             className="h-12 rounded-full bg-surface-inverse-foreground px-7 text-surface-inverse hover:bg-surface-inverse-foreground/90"
-            href={view.loginHref}
+            ariaLabel="Get free consultation"
           >
             <MessageSquare className="size-5" />
             Get free consultation
-          </LoginGatedAction>
-          <LoginGatedAction
-            variant="outline"
-            className="h-12 rounded-full border-surface-inverse-foreground bg-transparent px-7 text-surface-inverse-foreground hover:bg-surface-inverse-foreground/10 hover:text-surface-inverse-foreground"
-            href={view.loginHref}
-            ariaLabel="Save profile"
-          >
-            <Bookmark className="size-5" />
-            Save
-          </LoginGatedAction>
+          </EnquiryCta>
         </div>
         <p className="mt-7 font-mono text-xs tracking-wider text-surface-inverse-foreground/55 uppercase">
           No commitment · No middlemen · No sales calls
@@ -1043,22 +1016,24 @@ export function PublicDesignerProfile({ portfolio }: { portfolio: PublicPortfoli
   const props: SectionProps = { portfolio, view };
 
   return (
-    <main
-      className="min-h-screen overflow-x-hidden bg-background text-foreground"
-      style={{ '--primary': portfolio.accentColor } as React.CSSProperties}
-    >
-      <TrustStrip items={profileTrustItems} />
-      <StudioBar {...props} />
-      {portfolio.sections.hero ? <HeroSection {...props} /> : null}
-      {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
-        <CredentialsSection {...props} />
-      ) : null}
-      <PortfolioSection {...props} />
-      {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
-      {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
-      <StudioDetailsSection {...props} />
-      {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
-      <ConsultationSection {...props} />
-    </main>
+    <EnquiryAvailabilityProvider designerProfileId={portfolio.profileId}>
+      <main
+        className="min-h-screen overflow-x-hidden bg-background text-foreground"
+        style={{ '--primary': portfolio.accentColor } as React.CSSProperties}
+      >
+        <TrustStrip items={profileTrustItems} />
+        <StudioBar {...props} />
+        {portfolio.sections.hero ? <HeroSection {...props} /> : null}
+        {portfolio.sections.trustCredentials && portfolio.badges.length > 0 ? (
+          <CredentialsSection {...props} />
+        ) : null}
+        <PortfolioSection {...props} />
+        {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
+        {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
+        <StudioDetailsSection {...props} />
+        {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
+        <ConsultationSection {...props} />
+      </main>
+    </EnquiryAvailabilityProvider>
   );
 }

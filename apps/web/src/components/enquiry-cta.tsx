@@ -1,7 +1,16 @@
 'use client';
 
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import Link from 'next/link';
+import type { CheckEnquiryResponse } from '@repo/contracts';
 import { cn } from '@repo/ui/lib/utils';
 import { Button, buttonVariants } from '@repo/ui/components/button';
 import type { ButtonVariantProps } from '@repo/ui/components/button';
@@ -40,6 +49,101 @@ type Props = {
 
 const subscribeToHydration = () => () => undefined;
 
+type AvailabilityState =
+  | { status: 'checking' }
+  | { status: 'error' }
+  | { status: 'ready'; result: CheckEnquiryResponse };
+
+type EnquiryAvailabilityContextValue = {
+  state: AvailabilityState;
+  markSubmitted: (enquiryId: string) => void;
+};
+
+const EnquiryAvailabilityContext = createContext<EnquiryAvailabilityContextValue | null>(null);
+
+export function EnquiryAvailabilityProvider({
+  designerProfileId,
+  children,
+}: {
+  designerProfileId: string;
+  children: ReactNode;
+}) {
+  const { data: session } = authClient.useSession();
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+  const requestKey = hydrated && session ? `${session.user.id}:${designerProfileId}` : null;
+  const [resolved, setResolved] = useState<{
+    key: string;
+    state: Exclude<AvailabilityState, { status: 'checking' }>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!requestKey) return;
+    const key = requestKey;
+    let active = true;
+
+    async function checkAvailability() {
+      try {
+        const response = await api.api.enquiries.check.$get({
+          query: { designerProfileId },
+        });
+        if (!response.ok) {
+          if (!active) return;
+          setResolved({ key, state: { status: 'error' } });
+          return;
+        }
+        const result = await response.json();
+        if (!active) return;
+        setResolved({
+          key,
+          state: { status: 'ready', result },
+        });
+      } catch {
+        if (active) setResolved({ key, state: { status: 'error' } });
+      }
+    }
+
+    void checkAvailability();
+    return () => {
+      active = false;
+    };
+  }, [designerProfileId, requestKey]);
+
+  const value: AvailabilityState | null = requestKey
+    ? resolved?.key === requestKey
+      ? resolved.state
+      : { status: 'checking' }
+    : null;
+
+  const markSubmitted = useCallback(
+    (enquiryId: string) => {
+      if (!requestKey) return;
+      setResolved({
+        key: requestKey,
+        state: {
+          status: 'ready',
+          result: {
+            canEnquire: false,
+            unavailableReason: 'existing_enquiry',
+            exists: true,
+            enquiryId,
+          },
+        },
+      });
+    },
+    [requestKey],
+  );
+
+  return (
+    <EnquiryAvailabilityContext.Provider value={value ? { state: value, markSubmitted } : null}>
+      {children}
+    </EnquiryAvailabilityContext.Provider>
+  );
+}
+
 /**
  * Login-gated enquiry CTA.
  *
@@ -59,6 +163,8 @@ export function EnquiryCta({
   ariaLabel,
 }: Props) {
   const { data: session } = authClient.useSession();
+  const sharedAvailabilityContext = useContext(EnquiryAvailabilityContext);
+  const sharedAvailability = sharedAvailabilityContext?.state;
   const hydrated = useSyncExternalStore(
     subscribeToHydration,
     () => true,
@@ -67,6 +173,7 @@ export function EnquiryCta({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [alreadySentOpen, setAlreadySentOpen] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [selfUnavailable, setSelfUnavailable] = useState(false);
 
   if (!hydrated || !session) {
     return (
@@ -80,12 +187,19 @@ export function EnquiryCta({
     );
   }
 
-  const phoneNumber = session.user.phoneNumber ?? null;
-  const email = session.user.email ?? null;
-
   async function handleClick() {
     if (!designerProfileId) {
       setDialogOpen(true);
+      return;
+    }
+
+    if (sharedAvailability?.status === 'ready') {
+      if (sharedAvailability.result.unavailableReason === 'own_studio') return;
+      if (sharedAvailability.result.exists) {
+        setAlreadySentOpen(true);
+      } else if (sharedAvailability.result.canEnquire) {
+        setDialogOpen(true);
+      }
       return;
     }
 
@@ -96,9 +210,11 @@ export function EnquiryCta({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.exists) {
+        if (data.unavailableReason === 'own_studio') {
+          setSelfUnavailable(true);
+        } else if (data.exists) {
           setAlreadySentOpen(true);
-        } else {
+        } else if (data.canEnquire) {
           setDialogOpen(true);
         }
       } else {
@@ -112,12 +228,19 @@ export function EnquiryCta({
     }
   }
 
+  const ownStudio =
+    selfUnavailable ||
+    (sharedAvailability?.status === 'ready' &&
+      sharedAvailability.result.unavailableReason === 'own_studio');
+  const availabilityChecking = sharedAvailability?.status === 'checking';
+
   return (
     <>
       <button
         type="button"
         aria-label={ariaLabel}
-        disabled={checking}
+        disabled={checking || availabilityChecking || ownStudio}
+        title={ownStudio ? 'You cannot enquire with your own studio' : undefined}
         className={cn(buttonVariants({ variant, size }), className)}
         onClick={handleClick}
       >
@@ -154,8 +277,7 @@ export function EnquiryCta({
         context={context}
         designerProfileId={designerProfileId}
         referredProjectId={referredProjectId}
-        phoneNumber={phoneNumber}
-        email={email}
+        onSuccess={(enquiry) => sharedAvailabilityContext?.markSubmitted(enquiry.id)}
       />
     </>
   );

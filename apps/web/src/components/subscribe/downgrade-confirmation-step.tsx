@@ -2,9 +2,9 @@
 
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
-import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { ArrowRight, ChevronLeft, Info, X } from 'lucide-react';
-import { PLAN_MAP, formatCurrency, getDowngradeLosses, type PlanTier } from '@/lib/plan-config';
+import type { PlanTier } from '@repo/contracts';
+import { PLAN_MAP, formatCurrency, getDowngradeLosses } from '@/lib/plan-config';
 
 interface DowngradeConfirmationStepProps {
   currentTier: PlanTier;
@@ -14,13 +14,15 @@ interface DowngradeConfirmationStepProps {
 }
 
 /**
- * Downgrade confirmation step.
+ * Downgrade/cancellation confirmation step.
  *
- * Shows all features lost when moving from current to target tier.
- * Losses are derived from the feature list difference (not a manual list).
- *
+ * Shows features lost when moving to a lower tier.
  * For paid → Hobby: this is effectively a subscription cancellation.
- * The confirm action is an integration boundary (E-116 backend handles the actual state change).
+ *
+ * Restored from PR #392, adapted:
+ * - No "Free" wording (shows ₹0/month for Hobby)
+ * - Uses @repo/contracts PlanTier
+ * - "Data preserved" notice retained
  */
 export function DowngradeConfirmationStep({
   currentTier,
@@ -61,7 +63,7 @@ export function DowngradeConfirmationStep({
           <p className="text-xs text-muted-foreground">Current Plan</p>
           <p className="mt-1 text-base font-bold text-foreground">{current.label}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {formatCurrency(current.price)} / month
+            {formatCurrency(current.price)}/month
           </p>
         </Card>
         <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
@@ -69,12 +71,12 @@ export function DowngradeConfirmationStep({
           <p className="text-xs text-muted-foreground">New Plan</p>
           <p className="mt-1 text-base font-bold text-foreground">{target.label}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {target.price === 0 ? 'Free' : `${formatCurrency(target.price)} / month`}
+            {formatCurrency(target.price)}/month
           </p>
         </Card>
       </div>
 
-      {/* What you'll lose */}
+      {/* Features lost */}
       {losses.length > 0 && (
         <div className="mt-6">
           <p className="text-sm font-semibold text-destructive">
@@ -91,14 +93,14 @@ export function DowngradeConfirmationStep({
         </div>
       )}
 
-      {/* Frozen resources notice */}
-      <Alert variant="info" className="mt-5">
-        <Info />
-        <AlertDescription>
+      {/* Data preserved notice */}
+      <div className="mt-5 flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3">
+        <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
           Your data and resources will be preserved. If you upgrade again later, frozen resources
           will be restored.
-        </AlertDescription>
-      </Alert>
+        </p>
+      </div>
 
       <Button variant="destructive" className="mt-5 w-full" onClick={onConfirm}>
         {isCancellation ? 'Cancel Subscription' : 'Confirm Downgrade'}
