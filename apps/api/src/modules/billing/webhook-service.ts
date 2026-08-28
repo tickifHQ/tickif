@@ -247,7 +247,12 @@ async function handleCharged(
     }
 
     // Do not use notes.tier — change-plan updates plan_id, not notes.
-    const chargedTier = inferTierFromPlanId(payload) ?? inferTierFromPlan(payload);
+    // Amount fallback is only for already-active cycle-end charges. On
+    // reactivation, restore preLapseTier unless plan_id explicitly differs
+    // (a missing/default payment amount must not clobber the restored tier).
+    const chargedTier = isReactivation
+      ? inferTierFromPlanId(payload)
+      : (inferTierFromPlanId(payload) ?? inferTierFromPlan(payload));
     const currentTier = (updates.planTier ?? subscription.planTier) as PlanTier;
     if (chargedTier && chargedTier !== currentTier) {
       updates.planTier = chargedTier;

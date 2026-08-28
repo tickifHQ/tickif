@@ -426,6 +426,8 @@ describe('E-117: webhook event processing', () => {
       const payload = makeChargedPayload({
         subscriptionId: 'sub_grace_reactivate',
         paymentId: 'pay_reactivate_grace',
+        amount: 799900,
+        planId: 'plan_test_corporate',
       });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
@@ -441,6 +443,31 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.preLapseTier).toBeNull();
     });
 
+    it('reactivation does not apply a mismatched payment amount when plan_id is absent', async () => {
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        preLapseTier: 'corporate',
+        subscriptionState: 'grace',
+        razorpaySubscriptionId: 'sub_grace_amount_mismatch',
+      });
+
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_grace_amount_mismatch',
+        paymentId: 'pay_reactivate_amount_mismatch',
+        amount: 299900,
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+      expect(result.outcome).toBe('processed');
+
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated!.subscriptionState).toBe('active');
+      expect(updated!.planTier).toBe('corporate');
+    });
+
     it('reactivates from locked — restores preLapseTier and clears all lapse fields', async () => {
       const sub = await makeSubscription({
         planTier: 'corporate',
@@ -452,6 +479,8 @@ describe('E-117: webhook event processing', () => {
       const payload = makeChargedPayload({
         subscriptionId: 'sub_locked_reactivate',
         paymentId: 'pay_reactivate_locked',
+        amount: 799900,
+        planId: 'plan_test_corporate',
       });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
