@@ -5,6 +5,7 @@ import { AppError } from '../../lib/errors.js';
 import {
   createSubscription,
   updateSubscription,
+  cancelSubscription,
   hasPaidPlan,
   resolveRazorpayPlanId,
 } from './razorpay-client.js';
@@ -193,19 +194,67 @@ export const subscribeService = {
       throw AppError.unprocessable('Already on the target plan');
     }
 
-    // Update Razorpay subscription plan
+    // Update Razorpay subscription plan — deferred to cycle end.
+    // The local planTier is NOT updated here. E-117 webhook will confirm the
+    // actual plan change and update planTier at that time.
     const updated = await updateSubscription({
       subscriptionId: subscription.razorpaySubscriptionId,
       planId: razorpayPlanId,
+      scheduleChangeAt: 'cycle_end',
     });
 
-    // Persist tier change locally
+    // Only update razorpayStatus (informational) — do NOT change planTier.
+    // The tier change happens when E-117 receives subscription.charged on the new plan.
     await db
       .update(schema.subscription)
       .set({
-        planTier: params.targetTier,
         razorpayStatus: updated.status,
       })
+      .where(eq(schema.subscription.id, subscription.id));
+
+    return { razorpaySubscriptionId: subscription.razorpaySubscriptionId };
+  },
+
+  /**
+   * Cancel a paid subscription — transitions to Hobby at cycle end.
+   *
+   * Calls Razorpay's cancel API with cancel_at_cycle_end=true.
+   * The local planTier is NOT changed here — E-117 will process the
+   * subscription.cancelled webhook and transition to active+hobby.
+   *
+   * Only org owners can cancel.
+   */
+  async cancelSubscription(
+    caller: Caller,
+  ): Promise<{ razorpaySubscriptionId: string }> {
+    assertBillingConfigured();
+    await assertOrgOwner(caller);
+
+    const [subscription] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, caller.activeOrgId!))
+      .limit(1);
+
+    if (!subscription?.razorpaySubscriptionId) {
+      throw AppError.notFound('No active Razorpay subscription found for this organization');
+    }
+
+    if (subscription.planTier === 'hobby') {
+      throw AppError.unprocessable('Already on the Hobby plan');
+    }
+
+    // Cancel at cycle end — subscription stays active until the period ends.
+    // Razorpay sends subscription.cancelled webhook when the period expires.
+    const cancelled = await cancelSubscription({
+      subscriptionId: subscription.razorpaySubscriptionId,
+      cancelAtCycleEnd: true,
+    });
+
+    // Update razorpayStatus only — planTier stays until E-117 confirms cancellation.
+    await db
+      .update(schema.subscription)
+      .set({ razorpayStatus: cancelled.status })
       .where(eq(schema.subscription.id, subscription.id));
 
     return { razorpaySubscriptionId: subscription.razorpaySubscriptionId };

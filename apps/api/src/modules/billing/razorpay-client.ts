@@ -194,6 +194,8 @@ export async function createSubscription(params: {
 export async function updateSubscription(params: {
   subscriptionId: string;
   planId: string;
+  /** When the plan change takes effect. 'cycle_end' defers to the next billing cycle. */
+  scheduleChangeAt?: 'now' | 'cycle_end';
 }): Promise<RazorpaySubscription> {
   const { keyId, keySecret } = getCredentials();
   const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}`, {
@@ -201,6 +203,7 @@ export async function updateSubscription(params: {
     headers: authHeaders(keyId, keySecret),
     body: JSON.stringify({
       plan_id: params.planId,
+      schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
     }),
   });
 
@@ -208,6 +211,35 @@ export async function updateSubscription(params: {
     const error = (await response.json()) as RazorpayError;
     throw AppError.badGateway(
       `Razorpay updateSubscription failed: ${error.error?.description ?? response.statusText}`,
+      { razorpayCode: error.error?.code, source: 'razorpay' },
+    );
+  }
+
+  return (await response.json()) as RazorpaySubscription;
+}
+
+/**
+ * Cancel a Razorpay subscription at the end of the current billing cycle.
+ * The subscription remains active until the period ends; Razorpay then sends
+ * subscription.cancelled via webhook, which E-117 processes.
+ */
+export async function cancelSubscription(params: {
+  subscriptionId: string;
+  cancelAtCycleEnd?: boolean;
+}): Promise<RazorpaySubscription> {
+  const { keyId, keySecret } = getCredentials();
+  const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}/cancel`, {
+    method: 'POST',
+    headers: authHeaders(keyId, keySecret),
+    body: JSON.stringify({
+      cancel_at_cycle_end: params.cancelAtCycleEnd ?? true,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = (await response.json()) as RazorpayError;
+    throw AppError.badGateway(
+      `Razorpay cancelSubscription failed: ${error.error?.description ?? response.statusText}`,
       { razorpayCode: error.error?.code, source: 'razorpay' },
     );
   }

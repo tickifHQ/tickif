@@ -82,6 +82,35 @@ const changePlanRoute = createRoute({
   },
 });
 
+const cancelRoute = createRoute({
+  method: 'post',
+  path: '/cancel',
+  tags: ['Billing'],
+  summary: 'Cancel the current paid subscription (downgrade to Hobby at cycle end)',
+  description:
+    'Cancels the Razorpay subscription at the end of the current billing cycle. ' +
+    'The org stays on the current plan until the period ends. ' +
+    'E-117 webhook processes the actual state change.',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Cancellation scheduled',
+      content: {
+        'application/json': {
+          schema: z.object({
+            razorpaySubscriptionId: z.string(),
+          }),
+        },
+      },
+    },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Caller is not the organization owner' },
+    404: { description: 'No active subscription found' },
+    422: { description: 'Already on Hobby' },
+  },
+});
+
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
@@ -106,6 +135,17 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
       { targetTier },
     );
+
+    return c.json(result, 200);
+  })
+  .openapi(cancelRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+
+    const result = await subscribeService.cancelSubscription({
+      userId: user!.id,
+      activeOrgId: session!.activeOrganizationId ?? null,
+    });
 
     return c.json(result, 200);
   });
