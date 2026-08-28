@@ -108,17 +108,34 @@ export function CheckoutFlow({
   }
 
   async function handleDowngradeConfirm(targetTier: PlanTier) {
-    // Downgrade/cancellation note:
-    // - Paid → paid downgrade (e.g., Corporate → Professional+): uses changePlan API
-    // - Paid → Hobby: No cancellation endpoint exists in E-115/E-116.
-    //   Cancellation is processed via Razorpay dashboard / E-117 webhook.
-    //   Show acknowledgment, not false completion.
     if (targetTier === 'hobby') {
-      // Cancellation to Hobby — cannot be completed via frontend API.
-      // Show success message explaining the change will take effect at period end.
-      setFlowStep({ step: 'success', targetTier, kind: 'downgrade' });
+      // Paid → Hobby cancellation: call the real cancel endpoint.
+      // E-115 cancels at cycle end via Razorpay; E-117 confirms via webhook.
+      setIsApiLoading(true);
+      setFlowStep({ step: 'processing' });
+      try {
+        const response = await api.api.billing.cancel.$post({});
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          const message =
+            (error as { error?: { message?: string } })?.error?.message ??
+            `Cancellation failed (${response.status})`;
+          setFlowStep({ step: 'error', message });
+        } else {
+          // Cancellation scheduled — subscription stays active until period ends.
+          setFlowStep({ step: 'success', targetTier, kind: 'downgrade' });
+        }
+      } catch (err) {
+        setFlowStep({
+          step: 'error',
+          message: err instanceof Error ? err.message : 'An unexpected error occurred',
+        });
+      } finally {
+        setIsApiLoading(false);
+      }
     } else {
-      // Paid → paid downgrade — use change-plan endpoint
+      // Paid → paid downgrade (e.g., Corporate → Professional+)
       setIsApiLoading(true);
       setFlowStep({ step: 'processing' });
       try {
@@ -150,33 +167,54 @@ export function CheckoutFlow({
     setFlowStep({ step: 'processing' });
 
     try {
-      const response = await api.api.billing.subscribe.$post({
-        json: { targetTier },
-      });
+      // Hobby → paid: create a new Razorpay subscription via /subscribe.
+      // Paid → paid: change the existing subscription via /change-plan.
+      const isNewSubscription = currentTier === 'hobby';
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-        const message =
-          (error as { error?: { message?: string } })?.error?.message ??
-          `Subscription failed (${response.status})`;
-        setFlowStep({ step: 'error', message });
-        setIsApiLoading(false);
-        return;
-      }
+      if (isNewSubscription) {
+        const response = await api.api.billing.subscribe.$post({
+          json: { targetTier },
+        });
 
-      const data = await response.json();
-      const { shortUrl } = data as { razorpaySubscriptionId: string; shortUrl: string | null };
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          const message =
+            (error as { error?: { message?: string } })?.error?.message ??
+            `Subscription failed (${response.status})`;
+          setFlowStep({ step: 'error', message });
+          setIsApiLoading(false);
+          return;
+        }
 
-      if (shortUrl) {
-        // Show pending state, then redirect to Razorpay
-        setFlowStep({ step: 'pending', targetTier });
-        // Small delay so user sees the pending message before redirect
-        setTimeout(() => {
-          window.location.href = shortUrl;
-        }, 500);
+        const data = await response.json();
+        const { shortUrl } = data as { razorpaySubscriptionId: string; shortUrl: string | null };
+
+        if (shortUrl) {
+          setFlowStep({ step: 'pending', targetTier });
+          setTimeout(() => {
+            window.location.href = shortUrl;
+          }, 500);
+        } else {
+          setFlowStep({ step: 'pending', targetTier });
+        }
       } else {
-        // Subscription created without checkout URL — show pending
-        setFlowStep({ step: 'pending', targetTier });
+        // Paid → paid upgrade (e.g., Professional+ → Corporate)
+        const response = await api.api.billing['change-plan'].$post({
+          json: { targetTier },
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => null);
+          const message =
+            (error as { error?: { message?: string } })?.error?.message ??
+            `Plan change failed (${response.status})`;
+          setFlowStep({ step: 'error', message });
+          setIsApiLoading(false);
+          return;
+        }
+
+        // Change-plan is deferred to cycle end — show success acknowledgment.
+        setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
       }
     } catch (err) {
       setFlowStep({

@@ -64,7 +64,7 @@ export const PLAN_MAP: Record<PlanTier, PlanDefinition> = Object.fromEntries(
   PLANS.map((p) => [p.tier, p]),
 ) as Record<PlanTier, PlanDefinition>;
 
-/** Estimated tax rate for display/preview only. Not a billing calculation. */
+/** Estimated tax rate — kept for backward compatibility but no longer shown in the review step. */
 export const ESTIMATED_TAX_RATE = 0.18;
 
 export function formatCurrency(amount: number): string {

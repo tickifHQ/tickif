@@ -4,7 +4,7 @@ import { Button } from '@repo/ui/components/button';
 import { Separator } from '@repo/ui/components/separator';
 import { ArrowRight, ChevronLeft, Shield } from 'lucide-react';
 import type { PlanTier } from '@repo/contracts';
-import { PLAN_MAP, ESTIMATED_TAX_RATE, formatCurrency } from '@/lib/plan-config';
+import { PLAN_MAP, formatCurrency } from '@/lib/plan-config';
 
 interface ReviewPayStepProps {
   targetTier: PlanTier;
@@ -14,21 +14,14 @@ interface ReviewPayStepProps {
 }
 
 /**
- * Review & Pay step — order summary before Razorpay checkout handoff.
+ * Review & Pay step — order summary before checkout handoff.
  *
- * Shows estimated cost breakdown. Tax is estimated for display only.
- * The "Proceed to Checkout" button triggers the real POST /api/billing/subscribe
- * call, which returns a Razorpay shortUrl for redirect.
- *
- * Restored from PR #392, adapted:
- * - "Proceed to Checkout" now triggers real API (not mock timer)
- * - Loading state while API call is in flight
- * - E-117 webhook is authoritative for activation
+ * Shows the plan amount as charged by Razorpay. Tax (GST) is included in the
+ * Razorpay plan price — we do NOT add a separate tax estimate because the
+ * plan amounts (₹2,999 / ₹7,999) are what Razorpay charges directly.
  */
 export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPayStepProps) {
   const plan = PLAN_MAP[targetTier];
-  const estimatedTax = plan.price * ESTIMATED_TAX_RATE;
-  const estimatedTotal = plan.price + estimatedTax;
 
   return (
     <div>
@@ -61,20 +54,12 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
             <span className="text-muted-foreground">Billing Cycle</span>
             <span className="font-medium text-foreground">Monthly</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Plan Amount</span>
-            <span className="font-medium text-foreground">{formatCurrency(plan.price)}</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Estimated Tax (GST)</span>
-            <span className="font-medium text-foreground">{formatCurrency(estimatedTax)}</span>
-          </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-foreground">Estimated Total</span>
+            <span className="text-base font-semibold text-foreground">Amount</span>
             <div className="text-right">
               <span className="text-lg font-bold text-foreground">
-                {formatCurrency(estimatedTotal)}
+                {formatCurrency(plan.price)}
               </span>
               <span className="text-sm text-muted-foreground"> /month</span>
             </div>

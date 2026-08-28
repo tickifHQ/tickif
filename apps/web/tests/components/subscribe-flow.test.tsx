@@ -12,7 +12,6 @@ import {
   isUpgrade,
   isDowngrade,
   isValidTier,
-  ESTIMATED_TAX_RATE,
 } from '../../src/lib/plan-config';
 
 // ─── Plan Config Unit Tests ──────────────────────────────────────────────────
@@ -363,11 +362,14 @@ describe('E-120: DowngradeConfirmationStep', () => {
 });
 
 describe('E-120: ReviewPayStep', () => {
-  it('shows order summary with plan and estimated total', () => {
+  it('shows order summary with plan amount (no separate GST)', () => {
     render(<ReviewPayStep targetTier="professional_plus" onPay={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText('Professional+')).toBeInTheDocument();
     expect(screen.getByText('Monthly')).toBeInTheDocument();
-    expect(screen.getByText(/Estimated Total/i)).toBeInTheDocument();
+    expect(screen.getByText('Amount')).toBeInTheDocument();
+    // No separate tax line — Razorpay charges plan price directly
+    expect(screen.queryByText(/GST/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Estimated Tax/i)).not.toBeInTheDocument();
   });
 
   it('shows Razorpay security notice', () => {
