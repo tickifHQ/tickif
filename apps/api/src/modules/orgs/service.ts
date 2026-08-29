@@ -14,7 +14,7 @@ import {
   type OwnershipTransferResponse,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
-import { sendEmail } from '@repo/auth/email';
+import { escapeHtml, sendEmail } from '@repo/auth/email';
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -64,6 +64,7 @@ function isUniqueViolation(error: unknown, constraint: string): boolean {
 async function transferResponse(
   request: OwnershipTransferRecord,
 ): Promise<OwnershipTransferResponse | null> {
+  if (!request.initiatorUserId || !request.targetUserId) return null;
   const [initiator, target] = await Promise.all([
     orgsRepository.findUser(request.initiatorUserId),
     orgsRepository.findMemberById(request.organizationId, request.targetMemberId),
@@ -365,7 +366,7 @@ export const orgsService = {
 
     const response = await transferResponse(result);
     if (!response) throw AppError.conflict('Ownership transfer membership changed');
-    if (input.action === 'accept') {
+    if (input.action === 'accept' && result.initiatorUserId && result.targetUserId) {
       const [previousOwner, newOwner] = await Promise.all([
         orgsRepository.findUser(result.initiatorUserId),
         orgsRepository.findUser(result.targetUserId),
@@ -376,7 +377,7 @@ export const orgsService = {
             to: previousOwner.email,
             subject: 'Tickif ownership transfer completed',
             idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
-            html: `<p>${newOwner.name} is now the organization Owner. Your role is now Admin.</p>`,
+            html: `<p>${escapeHtml(newOwner.name)} is now the organization Owner. Your role is now Admin.</p>`,
           }),
           sendEmail({
             to: newOwner.email,

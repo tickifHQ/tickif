@@ -9,6 +9,7 @@ async function makeMemberSession(input: {
   organizationId: string;
   phone: string;
   role: 'owner' | 'admin' | 'member';
+  frozen?: boolean;
 }) {
   const session = await createRoleSession(input.phone, 'designer');
   const [user] = await db
@@ -22,6 +23,9 @@ async function makeMemberSession(input: {
       organizationId: input.organizationId,
       userId: session.userId,
       role: input.role,
+      frozen: input.frozen ?? false,
+      frozenAt: input.frozen ? new Date('2026-08-20T00:00:00.000Z') : null,
+      freezeRank: input.frozen ? 1 : null,
       createdAt: new Date(),
     })
     .returning();
@@ -202,7 +206,7 @@ describe('organization leave and removal lifecycle', () => {
     expect(memberships).toEqual([{ userId: owner.userId }]);
   });
 
-  it('Corporate-gates direct leave mutations with a tier error', async () => {
+  it('lets members leave below Corporate', async () => {
     const organization = await makeOrganization({ slug: 'hobby-leave-studio' });
     await makeMemberSession({
       organizationId: organization.id,
@@ -223,7 +227,42 @@ describe('organization leave and removal lifecycle', () => {
       organizationId: organization.id,
     });
 
-    expect(response.status).toBe(402);
+    expect(response.status).toBe(200);
+    const [membership] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(eq(schema.member.id, member.memberId));
+    expect(membership).toBeUndefined();
+  });
+
+  it('lets frozen members leave without restoring their seat', async () => {
+    const organization = await makeOrganization({ slug: 'frozen-leave-studio' });
+    await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006020',
+      role: 'owner',
+    });
+    const member = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006021',
+      role: 'member',
+      frozen: true,
+    });
+    await db
+      .update(schema.subscription)
+      .set({ planTier: 'hobby' })
+      .where(eq(schema.subscription.organizationId, organization.id));
+
+    const response = await postAuth('leave', member.cookie, {
+      organizationId: organization.id,
+    });
+
+    expect(response.status).toBe(200);
+    const [membership] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(eq(schema.member.id, member.memberId));
+    expect(membership).toBeUndefined();
   });
 
   it('removes member access without changing the user account or org-owned project', async () => {
@@ -448,6 +487,83 @@ describe('organization ownership transfer lifecycle', () => {
       .where(and(eq(schema.member.organizationId, organization.id), eq(schema.member.role, 'owner')));
     expect(transfer?.status).toBe('cancelled');
     expect(owners).toEqual([{ userId: owner.userId }]);
+  });
+
+  it('cancels a stale request when ownership changes and allows a replacement', async () => {
+    const organization = await makeOrganization({ slug: 'changed-owner-transfer-studio' });
+    const originalOwner = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006022',
+      role: 'owner',
+    });
+    const currentOwner = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006023',
+      role: 'admin',
+    });
+    const target = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006024',
+      role: 'member',
+    });
+    const create = await postApi('/ownership-transfers', originalOwner.cookie, {
+      targetMemberId: target.memberId,
+    });
+    const request = (await create.json()) as { id: string };
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.member)
+        .set({ role: 'admin' })
+        .where(eq(schema.member.id, originalOwner.memberId));
+      await tx
+        .update(schema.member)
+        .set({ role: 'owner' })
+        .where(eq(schema.member.id, currentOwner.memberId));
+    });
+
+    const staleAccept = await postApi(
+      `/ownership-transfers/${request.id}/accept`,
+      target.cookie,
+    );
+    const replacement = await postApi('/ownership-transfers', currentOwner.cookie, {
+      targetMemberId: target.memberId,
+    });
+
+    expect(staleAccept.status).toBe(409);
+    expect(replacement.status).toBe(201);
+    const [staleRequest] = await db
+      .select({ status: schema.ownershipTransferRequest.status })
+      .from(schema.ownershipTransferRequest)
+      .where(eq(schema.ownershipTransferRequest.id, request.id));
+    expect(staleRequest?.status).toBe('cancelled');
+  });
+
+  it('preserves resolved transfer history when a participant deletes their account', async () => {
+    const organization = await makeOrganization({ slug: 'deleted-transfer-user-studio' });
+    const owner = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006025',
+      role: 'owner',
+    });
+    const target = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006026',
+      role: 'admin',
+    });
+    const create = await postApi('/ownership-transfers', owner.cookie, {
+      targetMemberId: target.memberId,
+    });
+    const request = (await create.json()) as { id: string };
+    const decline = await postApi(`/ownership-transfers/${request.id}/decline`, target.cookie);
+    expect(decline.status).toBe(200);
+
+    await db.delete(schema.user).where(eq(schema.user.id, target.userId));
+
+    const [persisted] = await db
+      .select({ targetUserId: schema.ownershipTransferRequest.targetUserId })
+      .from(schema.ownershipTransferRequest)
+      .where(eq(schema.ownershipTransferRequest.id, request.id));
+    expect(persisted).toEqual({ targetUserId: null });
   });
 
   it('returns a tier error for ownership transfer below Corporate', async () => {

@@ -10,10 +10,11 @@ import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
   organizationMembershipLimit,
   requireActiveOrganizationMember,
+  requireOrganizationMember,
   requireOrganizationRbac,
   validateOrganizationRoleChange,
 } from './organization-policy.js';
-import { sendEmail } from './email.js';
+import { escapeHtml, sendEmail } from './email.js';
 
 assertProductionEmailConfig();
 
@@ -76,20 +77,6 @@ async function protectedMutationOrganizationId(
     .limit(1);
   return invitation?.organizationId;
 }
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return entities[character] ?? character;
-  });
-}
-
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
@@ -114,10 +101,13 @@ export const auth = betterAuth({
       );
       if (!organizationId) return;
 
-      if (isLifecycleMutation) await requireOrganizationRbac(organizationId);
-      const actorRole =
-        requiresActiveMembership || ctx.path === '/organization/leave'
-          ? await requireActiveOrganizationMember(session.user.id, organizationId)
+      if (ctx.path !== '/organization/leave') {
+        if (isLifecycleMutation) await requireOrganizationRbac(organizationId);
+      }
+      const actorRole = requiresActiveMembership
+        ? await requireActiveOrganizationMember(session.user.id, organizationId)
+        : ctx.path === '/organization/leave'
+          ? (await requireOrganizationMember(session.user.id, organizationId)).role
           : undefined;
       if (ctx.path === '/organization/leave') {
         if (actorRole === 'owner') {

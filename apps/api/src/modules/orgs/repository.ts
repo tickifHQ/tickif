@@ -372,6 +372,7 @@ export const orgsRepository = {
           : input.action === 'decline'
             ? 'declined'
             : 'cancelled';
+      let ownerStateChanged = false;
       if (input.action === 'accept') {
         await tx
           .select({ id: schema.organization.id })
@@ -400,7 +401,8 @@ export const orgsRepository = {
           !owner ||
           owner.userId !== request.initiatorUserId
         ) {
-          return OWNERSHIP_TRANSFER_RESULT.OWNER_STATE_CHANGED;
+          status = 'cancelled';
+          ownerStateChanged = true;
         } else {
           await tx
             .update(schema.member)
@@ -425,6 +427,7 @@ export const orgsRepository = {
         createdAt: input.now,
       });
       if (input.action === 'accept' && status === 'cancelled') {
+        if (ownerStateChanged) return OWNERSHIP_TRANSFER_RESULT.OWNER_STATE_CHANGED;
         return OWNERSHIP_TRANSFER_RESULT.INVALID_TARGET;
       }
       return resolved!;

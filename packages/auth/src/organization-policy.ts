@@ -58,18 +58,32 @@ export async function requireActiveOrganizationMember(
   userId: string,
   organizationId: string,
 ): Promise<OrganizationMemberRole> {
-  const [row] = await db
-    .select({ frozen: schema.member.frozen, role: schema.member.role })
-    .from(schema.member)
-    .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)))
-    .limit(1);
-  if (!row || row.frozen) {
+  const membership = await requireOrganizationMember(userId, organizationId);
+  if (membership.frozen) {
     throw new APIError('FORBIDDEN', {
       code: 'ORGANIZATION_MEMBER_INACTIVE',
       message: 'Organization membership is inactive',
     });
   }
-  return row.role;
+  return membership.role;
+}
+
+export async function requireOrganizationMember(
+  userId: string,
+  organizationId: string,
+): Promise<{ role: OrganizationMemberRole; frozen: boolean }> {
+  const [row] = await db
+    .select({ frozen: schema.member.frozen, role: schema.member.role })
+    .from(schema.member)
+    .where(and(eq(schema.member.userId, userId), eq(schema.member.organizationId, organizationId)))
+    .limit(1);
+  if (!row) {
+    throw new APIError('FORBIDDEN', {
+      code: 'ORGANIZATION_MEMBER_REQUIRED',
+      message: 'Organization membership required',
+    });
+  }
+  return row;
 }
 
 export async function validateOrganizationRoleChange(input: {
