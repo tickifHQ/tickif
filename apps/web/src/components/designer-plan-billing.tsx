@@ -24,7 +24,7 @@ import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
-import { SubscribeFlowDialog } from '@/components/subscribe/subscribe-flow-dialog';
+import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -702,16 +702,13 @@ function HelpCard() {
 
 export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [targetTier, setTargetTier] = useState<PlanTier | null>(null);
 
-  const openSubscribe = useCallback((tier?: PlanTier) => {
-    setTargetTier(tier ?? null);
+  const openSubscribe = useCallback((_tier?: PlanTier) => {
     setSubscribeOpen(true);
   }, []);
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
-    if (!next) setTargetTier(null);
   }, []);
 
   const showPaymentDueCard =
@@ -811,13 +808,11 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
         </aside>
       </div>
 
-      <SubscribeFlowDialog
+      <CheckoutFlow
         open={subscribeOpen}
         onOpenChange={handleSubscribeOpenChange}
         currentTier={billing.tier}
-        lifecycle={billing.lifecycle}
-        restoreTier={billing.preLapseTier}
-        initialTargetTier={targetTier}
+        lifecycleState={billing.lifecycle}
       />
     </div>
   );

@@ -84,7 +84,7 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade Now' })[0]!);
-      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
     });
   });
 
@@ -131,8 +131,8 @@ describe('DesignerPlanBilling', () => {
       const cta = screen.getByRole('button', { name: 'Reactivate Subscription' });
       expect(cta).toBeEnabled();
       await user.click(cta);
-      expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      // CheckoutFlow opens plan selection with locked-state UI
+      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
     });
   });
 
@@ -179,8 +179,8 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
-      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
-      expect(screen.getByText(/upgrading from Hobby to Corporate/i)).toBeInTheDocument();
+      // CheckoutFlow opens plan selection with downgraded-state UI
+      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
     });
   });
 

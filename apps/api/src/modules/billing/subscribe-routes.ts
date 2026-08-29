@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { createRoute, z } from '@hono/zod-openapi';
 import { planTierSchema } from '@repo/contracts';
+import { config } from '@repo/config';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { subscribeService } from './subscribe-service.js';
@@ -34,6 +35,7 @@ const subscribeRoute = createRoute({
           schema: z.object({
             razorpaySubscriptionId: z.string(),
             shortUrl: z.string().nullable(),
+            razorpayKeyId: z.string(),
           }),
         },
       },
@@ -111,6 +113,44 @@ const cancelRoute = createRoute({
   },
 });
 
+const verifyPaymentRoute = createRoute({
+  method: 'post',
+  path: '/verify-payment',
+  tags: ['Billing'],
+  summary: 'Verify a Razorpay Checkout JS payment callback',
+  description:
+    'Verifies the razorpay_signature from the Checkout JS handler callback. ' +
+    'Does NOT activate the subscription — E-117 webhook is authoritative. ' +
+    'Updates razorpayStatus to acknowledge payment authentication.',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            razorpayPaymentId: z.string().min(1),
+            razorpaySubscriptionId: z.string().min(1),
+            razorpaySignature: z.string().min(1),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Payment verified',
+      content: {
+        'application/json': {
+          schema: z.object({ verified: z.boolean() }),
+        },
+      },
+    },
+    400: { description: 'Invalid signature' },
+    401: { description: 'Unauthorized' },
+  },
+});
+
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
@@ -124,7 +164,7 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       { targetTier },
     );
 
-    return c.json(result, 200);
+    return c.json({ ...result, razorpayKeyId: config.RAZORPAY_KEY_ID ?? '' }, 200);
   })
   .openapi(changePlanRoute, async (c) => {
     const user = c.get('user');
@@ -146,6 +186,18 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       userId: user!.id,
       activeOrgId: session!.activeOrganizationId ?? null,
     });
+
+    return c.json(result, 200);
+  })
+  .openapi(verifyPaymentRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+    const body = c.req.valid('json');
+
+    const result = await subscribeService.verifyPayment(
+      { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
+      body,
+    );
 
     return c.json(result, 200);
   });

@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { createHmac } from 'node:crypto';
 import { db, schema } from '@repo/db';
 import type { PlanTier } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
@@ -258,5 +259,55 @@ export const subscribeService = {
       .where(eq(schema.subscription.id, subscription.id));
 
     return { razorpaySubscriptionId: subscription.razorpaySubscriptionId };
+  },
+
+  /**
+   * Verify a Razorpay Checkout JS payment callback.
+   *
+   * Verifies the signature from the Checkout JS handler callback.
+   * Does NOT upgrade planTier — E-117 webhook is authoritative for activation.
+   * Updates razorpayStatus to 'authenticated' to acknowledge the payment.
+   *
+   * Idempotent: safe to call multiple times for the same payment.
+   */
+  async verifyPayment(
+    caller: Caller,
+    params: {
+      razorpayPaymentId: string;
+      razorpaySubscriptionId: string;
+      razorpaySignature: string;
+    },
+  ): Promise<{ verified: boolean }> {
+    assertBillingConfigured();
+
+    if (!caller.activeOrgId) {
+      throw AppError.unprocessable('No active organization');
+    }
+
+    // Verify signature: HMAC-SHA256(razorpay_payment_id + '|' + razorpay_subscription_id, key_secret)
+    const expectedSignature = createHmac('sha256', config.RAZORPAY_KEY_SECRET!)
+      .update(`${params.razorpayPaymentId}|${params.razorpaySubscriptionId}`)
+      .digest('hex');
+
+    if (expectedSignature !== params.razorpaySignature) {
+      throw AppError.badRequest('Invalid payment signature');
+    }
+
+    // Signature valid — update razorpayStatus to acknowledge payment.
+    // Do NOT change planTier here. The webhook is authoritative for activation.
+    const [subscription] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, caller.activeOrgId))
+      .limit(1);
+
+    if (subscription?.razorpaySubscriptionId === params.razorpaySubscriptionId) {
+      await db
+        .update(schema.subscription)
+        .set({ razorpayStatus: 'authenticated' })
+        .where(eq(schema.subscription.id, subscription.id));
+    }
+
+    return { verified: true };
   },
 };

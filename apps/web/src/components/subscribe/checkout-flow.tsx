@@ -25,6 +25,7 @@ type FlowStep =
   | { step: 'review'; targetTier: PlanTier }
   | { step: 'processing' }
   | { step: 'pending'; targetTier: PlanTier }
+  | { step: 'activating'; targetTier: PlanTier }
   | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' }
   | { step: 'error'; message: string }
   | { step: 'cancelled' };
@@ -186,17 +187,46 @@ export function CheckoutFlow({
           return;
         }
 
-        const data = await response.json();
-        const { shortUrl } = data as { razorpaySubscriptionId: string; shortUrl: string | null };
+        const data = (await response.json()) as {
+          razorpaySubscriptionId: string;
+          shortUrl: string | null;
+          razorpayKeyId: string;
+        };
 
-        if (shortUrl) {
-          setFlowStep({ step: 'pending', targetTier });
-          setTimeout(() => {
-            window.location.href = shortUrl;
-          }, 500);
-        } else {
-          setFlowStep({ step: 'pending', targetTier });
-        }
+        // Open Razorpay Checkout JS modal instead of redirecting to shortUrl.
+        // The modal opens on our page — user never leaves Tickif.
+        openRazorpayCheckout({
+          keyId: data.razorpayKeyId,
+          subscriptionId: data.razorpaySubscriptionId,
+          targetTier,
+          onSuccess: async (paymentData) => {
+            // Verify the payment signature server-side
+            try {
+              const verifyResponse = await api.api.billing['verify-payment'].$post({
+                json: {
+                  razorpayPaymentId: paymentData.razorpay_payment_id,
+                  razorpaySubscriptionId: paymentData.razorpay_subscription_id,
+                  razorpaySignature: paymentData.razorpay_signature,
+                },
+              });
+
+              if (!verifyResponse.ok) {
+                setFlowStep({ step: 'error', message: 'Payment verification failed' });
+                return;
+              }
+
+              // Verification successful — now poll for webhook-driven activation.
+              setFlowStep({ step: 'activating', targetTier });
+              await pollSubscriptionActivation(setFlowStep, targetTier, onSubscriptionChange);
+            } catch {
+              setFlowStep({ step: 'error', message: 'Payment verification failed' });
+            }
+          },
+          onDismiss: () => {
+            setFlowStep({ step: 'cancelled' });
+            setIsApiLoading(false);
+          },
+        });
       } else {
         // Paid → paid upgrade (e.g., Professional+ → Corporate)
         const response = await api.api.billing['change-plan'].$post({
@@ -215,6 +245,7 @@ export function CheckoutFlow({
 
         // Change-plan is deferred to cycle end — show success acknowledgment.
         setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+        setIsApiLoading(false);
       }
     } catch (err) {
       setFlowStep({
@@ -240,7 +271,7 @@ export function CheckoutFlow({
     onSubscriptionChange?.();
   }
 
-  const isBlocking = flowStep.step === 'processing' || flowStep.step === 'pending';
+  const isBlocking = flowStep.step === 'processing' || flowStep.step === 'pending' || flowStep.step === 'activating';
   const isWide = flowStep.step === 'select';
 
   return (
@@ -291,6 +322,8 @@ export function CheckoutFlow({
         {flowStep.step === 'processing' && <ProcessingStep />}
 
         {flowStep.step === 'pending' && <PendingStep />}
+
+        {flowStep.step === 'activating' && <ActivatingStep />}
 
         {flowStep.step === 'success' && (
           <SuccessStep
@@ -414,4 +447,116 @@ function CancelledStep({ onClose }: { onClose: () => void }) {
       <Button className="mt-6" variant="outline" onClick={onClose}>Close</Button>
     </div>
   );
+}
+
+function ActivatingStep() {
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+      <Loader2 className="size-10 animate-spin text-primary" />
+      <h2 className="mt-4 text-lg font-semibold text-foreground">
+        Activating your subscription...
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Payment confirmed. We&rsquo;re activating your plan — this usually takes a few seconds.
+      </p>
+    </div>
+  );
+}
+
+// ─── Razorpay Checkout JS ────────────────────────────────────────────────────
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: Record<string, string>) => void) => void;
+    };
+  }
+}
+
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay Checkout'));
+    document.head.appendChild(script);
+  });
+}
+
+async function openRazorpayCheckout(params: {
+  keyId: string;
+  subscriptionId: string;
+  targetTier: PlanTier;
+  onSuccess: (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => void;
+  onDismiss: () => void;
+}): Promise<void> {
+  await loadRazorpayScript();
+
+  if (!window.Razorpay) {
+    throw new Error('Razorpay Checkout not available');
+  }
+
+  const rzp = new window.Razorpay({
+    key: params.keyId,
+    subscription_id: params.subscriptionId,
+    name: 'Tickif',
+    description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
+    handler: (response: Record<string, string>) => {
+      params.onSuccess({
+        razorpay_payment_id: response.razorpay_payment_id ?? '',
+        razorpay_subscription_id: response.razorpay_subscription_id ?? '',
+        razorpay_signature: response.razorpay_signature ?? '',
+      });
+    },
+    modal: {
+      ondismiss: () => {
+        params.onDismiss();
+      },
+    },
+    theme: {
+      color: '#FF8F73',
+    },
+  });
+
+  rzp.open();
+}
+
+// ─── Post-Payment Polling ────────────────────────────────────────────────────
+
+async function pollSubscriptionActivation(
+  setFlowStep: (step: FlowStep) => void,
+  targetTier: PlanTier,
+  onSubscriptionChange?: () => void,
+): Promise<void> {
+  const maxAttempts = 15; // 30 seconds total (2s intervals)
+  const interval = 2000;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, interval));
+
+    try {
+      const response = await api.api.billing.subscription.$get();
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as { tier: string; lifecycleState: string; razorpayStatus: string | null };
+
+      // Activation detected: tier changed from hobby OR razorpayStatus is 'active'
+      if (data.tier !== 'hobby' || data.razorpayStatus === 'active') {
+        setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+        onSubscriptionChange?.();
+        return;
+      }
+    } catch {
+      // Network error — continue polling
+    }
+  }
+
+  // Timeout — show success anyway since payment was verified, webhook may be delayed
+  setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+  onSubscriptionChange?.();
 }
