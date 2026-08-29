@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
-import { makeSubscription } from '@repo/db/testing';
+import { makeSubscription, makeUser } from '@repo/db/testing';
 import { RAZORPAY_EVENT } from '@repo/contracts';
 
 // Mock @repo/config to provide Razorpay plan IDs for the plan_id reverse-lookup tests.
@@ -84,6 +84,47 @@ function makeSubscriptionPayload(
       },
     },
   };
+}
+
+async function addOrganizationMembers(
+  organizationId: string,
+  prefix: string,
+  options: { frozen?: boolean } = {},
+) {
+  const users = await Promise.all([
+    makeUser({ email: `${prefix}-owner@example.com` }),
+    makeUser({ email: `${prefix}-member-1@example.com` }),
+    makeUser({ email: `${prefix}-member-2@example.com` }),
+  ]);
+  await db.insert(schema.member).values([
+    {
+      id: `${prefix}-owner`,
+      organizationId,
+      userId: users[0]!.id,
+      role: 'owner',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    },
+    {
+      id: `${prefix}-member-1`,
+      organizationId,
+      userId: users[1]!.id,
+      role: 'member',
+      frozen: options.frozen ?? false,
+      frozenAt: options.frozen ? new Date('2026-08-20T00:00:00.000Z') : null,
+      freezeRank: options.frozen ? 1 : null,
+      createdAt: new Date('2026-08-02T00:00:00.000Z'),
+    },
+    {
+      id: `${prefix}-member-2`,
+      organizationId,
+      userId: users[2]!.id,
+      role: 'member',
+      frozen: options.frozen ?? false,
+      frozenAt: options.frozen ? new Date('2026-08-20T00:00:00.000Z') : null,
+      freezeRank: options.frozen ? 2 : null,
+      createdAt: new Date('2026-08-03T00:00:00.000Z'),
+    },
+  ]);
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -182,6 +223,33 @@ describe('E-117: webhook event processing', () => {
         .where(eq(schema.subscription.id, sub.id));
       expect(updated!.planTier).toBe('corporate');
       expect(updated!.razorpayStatus).toBe('active');
+    });
+
+    it('restores frozen members when Corporate activates', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_activate_restore_members',
+        razorpayStatus: 'created',
+      });
+      await addOrganizationMembers(sub.organizationId, 'activate-restore', { frozen: true });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+        makeSubscriptionPayload(
+          RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+          'sub_activate_restore_members',
+          { status: 'active', notes: { tier: 'corporate' } },
+        ),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      expect(members).toHaveLength(3);
+      expect(members.every(({ frozen }) => !frozen)).toBe(true);
     });
 
     it('rejects activation when target tier cannot be determined', async () => {
@@ -659,6 +727,32 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('subscription.cancelled', () => {
+    it('freezes excess seats when Corporate downgrades to Hobby', async () => {
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_cancel_freeze_members',
+      });
+      await addOrganizationMembers(sub.organizationId, 'cancel-freeze');
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+        makeSubscriptionPayload(
+          RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+          'sub_cancel_freeze_members',
+          { status: 'cancelled' },
+        ),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ role: schema.member.role, frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      expect(members.filter(({ frozen }) => frozen)).toHaveLength(2);
+      expect(members.find(({ role }) => role === 'owner')?.frozen).toBe(false);
+    });
+
     it('from active → sets hobby + clears fields', async () => {
       const sub = await makeSubscription({
         planTier: 'corporate',

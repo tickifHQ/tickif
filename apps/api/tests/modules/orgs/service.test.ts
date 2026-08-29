@@ -10,6 +10,8 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     listPendingInvitations: vi.fn(),
     findOrganizationPlan: vi.fn(),
     countActiveMembers: vi.fn(),
+    freezeMembersToLimit: vi.fn(),
+    restoreMembersToLimit: vi.fn(),
   },
 }));
 
@@ -27,6 +29,28 @@ describe('orgsService', () => {
 
     await expect(orgsService.isMember('user-1', 'org-1')).resolves.toBe(true);
     await expect(orgsService.findSoleOrganizationForUser('user-1')).resolves.toBe('org-1');
+  });
+
+  it('reconciles frozen seats against the current entitlement limit', async () => {
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'hobby',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.freezeMembersToLimit).mockResolvedValue(['member-2']);
+    vi.mocked(orgsRepository.restoreMembersToLimit).mockResolvedValue([]);
+    const now = new Date('2026-08-29T00:00:00.000Z');
+
+    await orgsService.reconcileMemberSeats('org-1', now);
+
+    expect(orgsRepository.freezeMembersToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: 1,
+      now,
+    });
+    expect(orgsRepository.restoreMembersToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: 1,
+    });
   });
 
   it.each(['owner', 'admin'])(

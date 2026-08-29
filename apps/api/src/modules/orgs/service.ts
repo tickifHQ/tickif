@@ -81,7 +81,7 @@ export const orgsService = {
     return orgsRepository.findSoleOrganizationForUser(userId);
   },
 
-  /** True for Better Auth owner/admin roles, including comma-joined multi-role values. */
+  /** True for active Better Auth owner and admin memberships. */
   async isWriter(userId: string, organizationId: string): Promise<boolean> {
     const membership = await orgsRepository.findMembershipRole(userId, organizationId);
     return hasWriteRole(membership?.role ?? null, membership?.frozen ?? false);
@@ -107,6 +107,13 @@ export const orgsService = {
   ): Promise<boolean> {
     const capabilities = await orgsService.getCapabilities(userId, organizationId);
     return capabilities ? allowsCapability(capabilities, capability) : false;
+  },
+
+  async reconcileMemberSeats(organizationId: string, now = new Date()): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+    const activeLimit = seatLimit(plan.tier, plan.state);
+    await orgsRepository.freezeMembersToLimit({ organizationId, activeLimit, now });
+    await orgsRepository.restoreMembersToLimit({ organizationId, activeLimit });
   },
 
   async getCurrentWorkspace(input: {

@@ -37,7 +37,7 @@ export const orgsRepository = {
     const rows = await db
       .selectDistinct({ organizationId: schema.member.organizationId })
       .from(schema.member)
-      .where(eq(schema.member.userId, userId))
+      .where(and(eq(schema.member.userId, userId), eq(schema.member.frozen, false)))
       .limit(2);
     return rows.length === 1 ? (rows[0]?.organizationId ?? null) : null;
   },
@@ -126,6 +126,8 @@ export const orgsRepository = {
     activeLimit: number;
     now: Date;
   }): Promise<string[]> {
+    if (input.activeLimit < 0) return [];
+
     return db.transaction(async (tx) => {
       const activeMembers = await tx
         .select({ id: schema.member.id, role: schema.member.role })
