@@ -66,6 +66,7 @@ const workspace: OrganizationWorkspaceResponse = {
   },
   members: [],
   invitations: [],
+  ownershipTransfer: null,
 };
 
 describe('DesignerTermsRolesPage', () => {
