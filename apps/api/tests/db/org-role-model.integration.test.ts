@@ -46,6 +46,28 @@ async function seedMembers() {
 }
 
 describe('organization role persistence and freeze transitions', () => {
+  it('preserves owner when backfilling a comma-joined legacy role', async () => {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`create temporary table member_role_backfill_fixture (role text)`);
+      await tx.execute(sql`insert into member_role_backfill_fixture values ('owner,admin')`);
+      await tx.execute(sql`
+        update member_role_backfill_fixture
+        set role = case
+          when 'owner' = any(regexp_split_to_array(role, '\s*,\s*')) then 'owner'
+          when 'admin' = any(regexp_split_to_array(role, '\s*,\s*')) then 'admin'
+          when 'billing_admin' = any(regexp_split_to_array(role, '\s*,\s*')) then 'billing_admin'
+          when 'member' = any(regexp_split_to_array(role, '\s*,\s*')) then 'member'
+          when 'viewer' = any(regexp_split_to_array(role, '\s*,\s*')) then 'viewer'
+          else 'member'
+        end
+      `);
+      const result = await tx.execute<{ role: string }>(
+        sql`select role from member_role_backfill_fixture`,
+      );
+      expect(result.rows).toEqual([{ role: 'owner' }]);
+    });
+  });
+
   it('rejects roles outside the fixed five-role model', async () => {
     const organization = await makeOrganization({ slug: 'invalid-role-studio' });
     const user = await makeUser({ email: 'invalid-role@example.com' });
