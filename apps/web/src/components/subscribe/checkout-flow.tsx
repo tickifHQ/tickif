@@ -235,9 +235,13 @@ export function CheckoutFlow({
 
         if (!response.ok) {
           const error = await response.json().catch(() => null);
-          const message =
-            (error as { error?: { message?: string } })?.error?.message ??
-            `Plan change failed (${response.status})`;
+          const rawMessage =
+            (error as { error?: { message?: string } })?.error?.message ?? '';
+          // Detect Razorpay UPI limitation and show a helpful message
+          const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
+          const message = isUpiLimitation
+            ? 'Plan changes are not supported for UPI-based subscriptions. Please cancel your current subscription and subscribe again using a card to change plans.'
+            : rawMessage || `Plan change failed (${response.status})`;
           setFlowStep({ step: 'error', message });
           setIsApiLoading(false);
           return;
@@ -506,6 +510,21 @@ async function openRazorpayCheckout(params: {
     subscription_id: params.subscriptionId,
     name: 'Tickif',
     description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
+    // Restrict to card payments only for subscriptions.
+    // Razorpay does not support updateSubscription (plan changes) for UPI/emandate.
+    // See: https://razorpay.com/docs/payments/subscriptions/faqs/
+    prefill: {
+      method: 'card',
+    },
+    config: {
+      display: {
+        blocks: {
+          banks: { name: 'Pay via Card', instruments: [{ method: 'card' }] },
+        },
+        sequence: ['block.banks'],
+        preferences: { show_default_blocks: false },
+      },
+    },
     handler: (response: Record<string, string>) => {
       params.onSuccess({
         razorpay_payment_id: response.razorpay_payment_id ?? '',
