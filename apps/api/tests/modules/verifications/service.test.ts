@@ -126,7 +126,7 @@ describe('verificationsService', () => {
     vi.setSystemTime(new Date('2026-08-13T00:00:00.000Z'));
     vi.clearAllMocks();
     vi.mocked(orgsService.isMember).mockResolvedValue(true);
-    vi.mocked(orgsService.isWriter).mockResolvedValue(true);
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
     vi.mocked(verificationsRepository.getOrCreateForOrganization).mockResolvedValue(application);
     vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue(context);
     vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([document]);
@@ -153,7 +153,7 @@ describe('verificationsService', () => {
   });
 
   it('does not expose the owner phone or identity edits to another organization member', async () => {
-    vi.mocked(orgsService.isWriter).mockResolvedValue(false);
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
 
     const result = await verificationsService.getState({ ...caller, userId: 'member-2' });
 

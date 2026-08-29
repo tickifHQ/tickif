@@ -258,7 +258,11 @@ export const verificationsService = {
     await verificationsRepository.getOrCreateForOrganization(organizationId);
     const [context, canManage] = await Promise.all([
       verificationsRepository.findContextByOrganization(organizationId),
-      orgsService.isWriter(caller.userId, organizationId),
+      orgsService.hasCapability(
+        caller.userId,
+        organizationId,
+        ORGANIZATION_CAPABILITY.MANAGE_VERIFICATION,
+      ),
     ]);
     if (!context) throw AppError.unprocessable('Complete designer onboarding before verification');
     return stateForContext(context, caller.userId, canManage);
