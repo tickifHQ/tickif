@@ -33,19 +33,25 @@ type Feedback = { tone: 'success' | 'error'; message: string };
 const roleLabels: Record<OrganizationMemberRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
+  billing_admin: 'Billing Admin',
   member: 'Member',
+  viewer: 'Viewer',
 };
 
 const roleDescriptions: Record<OrganizationMemberRole, string> = {
   owner: 'Full control of this studio, including its team and settings.',
   admin: 'Can manage the studio team and day-to-day workspace access.',
+  billing_admin: 'Can manage billing, invoices, and subscription operations.',
   member: 'Can access the studio workspace without team-management controls.',
+  viewer: 'Can view organization analytics without editing workspace data.',
 };
 
 const roleBadgeStyles: Record<OrganizationMemberRole, string> = {
   owner: 'bg-secondary text-secondary-foreground',
   admin: 'bg-info/10 text-info',
+  billing_admin: 'bg-feature/10 text-feature',
   member: 'bg-success-lighter text-success',
+  viewer: 'bg-muted text-muted-foreground',
 };
 
 const avatarStyles = [
@@ -56,6 +62,8 @@ const avatarStyles = [
 
 const assignableRoles = [
   { value: 'member', label: 'Member' },
+  { value: 'viewer', label: 'Viewer' },
+  { value: 'billing_admin', label: 'Billing Admin' },
   { value: 'admin', label: 'Admin' },
 ] satisfies ReadonlyArray<{ value: AssignableRole; label: string }>;
 
