@@ -110,6 +110,11 @@ export type RazorpaySubscription = {
   current_start: number | null;
   current_end: number | null;
   short_url: string | null;
+  notes?: Record<string, string>;
+  /** Unix timestamp when cancellation was scheduled (cancel_at_cycle_end). Null if not cancelled. */
+  cancelled_at?: number | null;
+  /** Unix timestamp when subscription ended. Null if still active/scheduled. */
+  ended_at?: number | null;
   created_at: number;
 };
 
@@ -240,6 +245,30 @@ export async function cancelSubscription(params: {
     const error = (await response.json()) as RazorpayError;
     throw AppError.badGateway(
       `Razorpay cancelSubscription failed: ${error.error?.description ?? response.statusText}`,
+      { razorpayCode: error.error?.code, source: 'razorpay' },
+    );
+  }
+
+  return (await response.json()) as RazorpaySubscription;
+}
+
+/**
+ * Fetch a subscription's live state from Razorpay.
+ * Used for reconciliation when webhooks may have been missed.
+ */
+export async function fetchSubscription(
+  subscriptionId: string,
+): Promise<RazorpaySubscription> {
+  const { keyId, keySecret } = getCredentials();
+  const response = await fetch(`${baseUrl()}/subscriptions/${subscriptionId}`, {
+    method: 'GET',
+    headers: authHeaders(keyId, keySecret),
+  });
+
+  if (!response.ok) {
+    const error = (await response.json()) as RazorpayError;
+    throw AppError.badGateway(
+      `Razorpay fetchSubscription failed: ${error.error?.description ?? response.statusText}`,
       { razorpayCode: error.error?.code, source: 'razorpay' },
     );
   }

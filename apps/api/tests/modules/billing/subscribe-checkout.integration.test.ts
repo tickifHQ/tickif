@@ -524,22 +524,63 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 
-  it('rejects when organization already has a Razorpay subscription (409)', async () => {
+  it('allows re-subscribe when existing subscription is abandoned (created + hobby)', async () => {
     const { user, org } = await makeOrgWithOwner();
 
-    // Pre-existing subscription with a Razorpay ID
+    // Abandoned checkout: razorpayStatus "created" + planTier "hobby"
     await db.insert(schema.subscription).values({
       organizationId: org.id,
       planTier: 'hobby',
       subscriptionState: 'active',
-      razorpaySubscriptionId: 'sub_already_exists',
+      razorpaySubscriptionId: 'sub_abandoned_old',
       razorpayStatus: 'created',
+    });
+
+    vi.mocked(mockCreateSubscription).mockResolvedValue({
+      id: 'sub_abandoned_retry',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'created',
+      current_start: null,
+      current_end: null,
+      short_url: 'https://rzp.io/retry',
+      created_at: Math.floor(Date.now() / 1000),
+    });
+
+    const result = await subscribeService.createSubscription(
+      { userId: user.id, activeOrgId: org.id },
+      { targetTier: 'professional_plus' },
+    );
+
+    // New Razorpay subscription replaces the abandoned one
+    expect(result.razorpaySubscriptionId).toBe('sub_abandoned_retry');
+    expect(mockCreateSubscription).toHaveBeenCalledOnce();
+
+    // DB: subscription row updated with new Razorpay ID, still hobby
+    const [sub] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, org.id));
+    expect(sub!.razorpaySubscriptionId).toBe('sub_abandoned_retry');
+    expect(sub!.planTier).toBe('hobby');
+  });
+
+  it('rejects when organization has an active paid Razorpay subscription (409)', async () => {
+    const { user, org } = await makeOrgWithOwner();
+
+    // Active paid subscription — not abandoned
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_active_paid',
+      razorpayStatus: 'active',
     });
 
     await expect(
       subscribeService.createSubscription(
         { userId: user.id, activeOrgId: org.id },
-        { targetTier: 'professional_plus' },
+        { targetTier: 'corporate' },
       ),
     ).rejects.toMatchObject({ status: 409 });
 

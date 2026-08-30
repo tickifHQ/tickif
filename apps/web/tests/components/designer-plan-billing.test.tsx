@@ -12,6 +12,8 @@ function makeBilling(overrides: Partial<BillingState> = {}): BillingState {
   return {
     lifecycle: 'active',
     tier: 'professional_plus',
+    razorpayStatus: 'active',
+    cancellationScheduled: false,
     preLapseTier: null,
     renewalDate: '2099-12-12',
     subscriptionId: 'sub_TEST_123',

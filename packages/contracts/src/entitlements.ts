@@ -169,6 +169,7 @@ export const subscriptionResponseSchema = z
     lifecycleState: subscriptionStateSchema,
     razorpayStatus: z.string().nullable(),
     currentPeriodEnd: z.string().datetime().nullable(),
+    cancellationScheduled: z.boolean(),
     seatUsage: z.number().int().min(0),
     branchUsage: z.number().int().min(0),
     entitlements: entitlementsObjectSchema,

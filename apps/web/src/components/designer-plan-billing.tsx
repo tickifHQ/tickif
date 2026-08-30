@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -25,6 +25,7 @@ import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
+import { api } from '@/lib/api';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -700,8 +701,36 @@ function HelpCard() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
+export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBillingProps) {
+  const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+
+  // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
+  // Called on mount (SSR hydration catch-up) and after checkout flow completes.
+  const refreshBilling = useCallback(async () => {
+    try {
+      await api.api.billing.subscription.refresh.$get();
+      const response = await api.api.billing.subscription.$get();
+      if (response.ok) {
+        const data = await response.json();
+        setBilling((prev) => ({
+          ...prev,
+          tier: (data as { tier: typeof prev.tier }).tier,
+          lifecycle: (data as { lifecycleState: typeof prev.lifecycle }).lifecycleState,
+          razorpayStatus: (data as { razorpayStatus: string | null }).razorpayStatus,
+          cancellationScheduled: (data as { cancellationScheduled: boolean }).cancellationScheduled ?? false,
+          renewalDate: (data as { currentPeriodEnd: string | null }).currentPeriodEnd ?? prev.renewalDate,
+        }));
+      }
+    } catch {
+      // Non-fatal — keep the current data
+    }
+  }, []);
+
+  // Reconcile on mount so the client sees the latest state after SSR.
+  useEffect(() => {
+    void refreshBilling();
+  }, [refreshBilling]);
 
   const openSubscribe = useCallback((_tier?: PlanTier) => {
     setSubscribeOpen(true);
@@ -813,6 +842,9 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
         onOpenChange={handleSubscribeOpenChange}
         currentTier={billing.tier}
         lifecycleState={billing.lifecycle}
+        cancellationScheduled={billing.cancellationScheduled}
+        currentPeriodEnd={billing.renewalDate}
+        onSubscriptionChange={refreshBilling}
       />
     </div>
   );

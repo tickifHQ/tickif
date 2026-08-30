@@ -26,6 +26,8 @@ type FlowStep =
   | { step: 'processing' }
   | { step: 'pending'; targetTier: PlanTier }
   | { step: 'activating'; targetTier: PlanTier }
+  | { step: 'upi-limitation'; targetTier: PlanTier }
+  | { step: 'cancellation-scheduled'; periodEnd: string | null }
   | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' }
   | { step: 'error'; message: string }
   | { step: 'cancelled' };
@@ -35,6 +37,8 @@ interface CheckoutFlowProps {
   onOpenChange: (open: boolean) => void;
   currentTier: PlanTier;
   lifecycleState: SubscriptionState;
+  cancellationScheduled: boolean;
+  currentPeriodEnd: string | null;
   onSubscriptionChange?: () => void;
 }
 
@@ -58,6 +62,8 @@ export function CheckoutFlow({
   onOpenChange,
   currentTier,
   lifecycleState,
+  cancellationScheduled,
+  currentPeriodEnd,
   onSubscriptionChange,
 }: CheckoutFlowProps) {
   const [flowStep, setFlowStep] = useState<FlowStep>({ step: 'select' });
@@ -97,6 +103,14 @@ export function CheckoutFlow({
 
   function handleSelectPlan(targetTier: PlanTier) {
     if (targetTier === currentTier) return;
+
+    // If cancellation is already scheduled, don't let the user start any plan change.
+    // Show the cancellation-scheduled modal immediately with the end date.
+    if (cancellationScheduled) {
+      setFlowStep({ step: 'cancellation-scheduled', periodEnd: currentPeriodEnd });
+      return;
+    }
+
     if (isUpgrade(currentTier, targetTier)) {
       setFlowStep({ step: 'confirm-upgrade', targetTier });
     } else if (isDowngrade(currentTier, targetTier)) {
@@ -124,8 +138,17 @@ export function CheckoutFlow({
             `Cancellation failed (${response.status})`;
           setFlowStep({ step: 'error', message });
         } else {
-          // Cancellation scheduled — subscription stays active until period ends.
-          setFlowStep({ step: 'success', targetTier, kind: 'downgrade' });
+          const data = (await response.json()) as {
+            alreadyCancelled?: boolean;
+            currentPeriodEnd?: string | null;
+          };
+          if (data.alreadyCancelled) {
+            // Already scheduled — show the status modal, don't claim we just cancelled.
+            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+          } else {
+            // Cancellation scheduled — subscription stays active until period ends.
+            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+          }
         }
       } catch (err) {
         setFlowStep({
@@ -191,14 +214,19 @@ export function CheckoutFlow({
           razorpaySubscriptionId: string;
           shortUrl: string | null;
           razorpayKeyId: string;
+          prefill: { name: string | null; email: string | null; contact: string | null };
         };
 
-        // Open Razorpay Checkout JS modal instead of redirecting to shortUrl.
-        // The modal opens on our page — user never leaves Tickif.
+        // Close our Dialog before opening Razorpay Checkout.
+        // The Radix Dialog overlay would block clicks on the Razorpay iframe.
+        onOpenChange(false);
+
+        // Open Razorpay Checkout JS modal on the page.
         openRazorpayCheckout({
           keyId: data.razorpayKeyId,
           subscriptionId: data.razorpaySubscriptionId,
           targetTier,
+          prefill: data.prefill,
           onSuccess: async (paymentData) => {
             // Verify the payment signature server-side
             try {
@@ -211,24 +239,29 @@ export function CheckoutFlow({
               });
 
               if (!verifyResponse.ok) {
+                // Reopen dialog with error
+                onOpenChange(true);
                 setFlowStep({ step: 'error', message: 'Payment verification failed' });
                 return;
               }
 
-              // Verification successful — now poll for webhook-driven activation.
+              // Verification successful — reopen dialog with activating state and poll.
+              onOpenChange(true);
               setFlowStep({ step: 'activating', targetTier });
               await pollSubscriptionActivation(setFlowStep, targetTier, onSubscriptionChange);
             } catch {
+              onOpenChange(true);
               setFlowStep({ step: 'error', message: 'Payment verification failed' });
             }
           },
           onDismiss: () => {
-            setFlowStep({ step: 'cancelled' });
+            // User closed Razorpay checkout — return to Plan & Billing cleanly
+            setFlowStep({ step: 'select' });
             setIsApiLoading(false);
           },
         });
       } else {
-        // Paid → paid upgrade (e.g., Professional+ → Corporate)
+        // Paid → paid change-plan (e.g., Professional+ → Corporate or Corporate → Professional+)
         const response = await api.api.billing['change-plan'].$post({
           json: { targetTier },
         });
@@ -237,12 +270,14 @@ export function CheckoutFlow({
           const error = await response.json().catch(() => null);
           const rawMessage =
             (error as { error?: { message?: string } })?.error?.message ?? '';
-          // Detect Razorpay UPI limitation and show a helpful message
+          // Detect Razorpay UPI limitation → show cancel-and-resubscribe flow
           const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
-          const message = isUpiLimitation
-            ? 'Plan changes are not supported for UPI-based subscriptions. Please cancel your current subscription and subscribe again using a card to change plans.'
-            : rawMessage || `Plan change failed (${response.status})`;
-          setFlowStep({ step: 'error', message });
+          if (isUpiLimitation) {
+            setFlowStep({ step: 'upi-limitation', targetTier });
+            setIsApiLoading(false);
+            return;
+          }
+          setFlowStep({ step: 'error', message: rawMessage || `Plan change failed (${response.status})` });
           setIsApiLoading(false);
           return;
         }
@@ -255,6 +290,34 @@ export function CheckoutFlow({
       setFlowStep({
         step: 'error',
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
+      });
+    } finally {
+      setIsApiLoading(false);
+    }
+  }
+
+  async function handleUpiCancel() {
+    setIsApiLoading(true);
+    setFlowStep({ step: 'processing' });
+    try {
+      const response = await api.api.billing.cancel.$post({});
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        const message =
+          (error as { error?: { message?: string } })?.error?.message ??
+          `Cancellation failed (${response.status})`;
+        setFlowStep({ step: 'error', message });
+      } else {
+        const data = (await response.json()) as {
+          alreadyCancelled?: boolean;
+          currentPeriodEnd?: string | null;
+        };
+        setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+      }
+    } catch (err) {
+      setFlowStep({
+        step: 'error',
+        message: err instanceof Error ? err.message : 'Cancellation failed',
       });
     } finally {
       setIsApiLoading(false);
@@ -328,6 +391,27 @@ export function CheckoutFlow({
         {flowStep.step === 'pending' && <PendingStep />}
 
         {flowStep.step === 'activating' && <ActivatingStep />}
+
+        {flowStep.step === 'upi-limitation' && (
+          <UpiLimitationStep
+            currentTier={currentTier}
+            targetTier={flowStep.targetTier}
+            onCancel={handleUpiCancel}
+            onClose={() => handleOpenChange(false)}
+            isLoading={isApiLoading}
+          />
+        )}
+
+        {flowStep.step === 'cancellation-scheduled' && (
+          <CancellationScheduledStep
+            currentTier={currentTier}
+            periodEnd={flowStep.periodEnd}
+            onDone={() => {
+              handleOpenChange(false);
+              onSubscriptionChange?.();
+            }}
+          />
+        )}
 
         {flowStep.step === 'success' && (
           <SuccessStep
@@ -496,6 +580,7 @@ async function openRazorpayCheckout(params: {
   keyId: string;
   subscriptionId: string;
   targetTier: PlanTier;
+  prefill: { name: string | null; email: string | null; contact: string | null };
   onSuccess: (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => void;
   onDismiss: () => void;
 }): Promise<void> {
@@ -505,26 +590,19 @@ async function openRazorpayCheckout(params: {
     throw new Error('Razorpay Checkout not available');
   }
 
+  // Build prefill from the user's actual Tickif profile data.
+  // Only include fields that have values — Razorpay handles missing fields gracefully.
+  const prefill: Record<string, string> = {};
+  if (params.prefill.name) prefill.name = params.prefill.name;
+  if (params.prefill.email) prefill.email = params.prefill.email;
+  if (params.prefill.contact) prefill.contact = params.prefill.contact;
+
   const rzp = new window.Razorpay({
     key: params.keyId,
     subscription_id: params.subscriptionId,
     name: 'Tickif',
     description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
-    // Restrict to card payments only for subscriptions.
-    // Razorpay does not support updateSubscription (plan changes) for UPI/emandate.
-    // See: https://razorpay.com/docs/payments/subscriptions/faqs/
-    prefill: {
-      method: 'card',
-    },
-    config: {
-      display: {
-        blocks: {
-          banks: { name: 'Pay via Card', instruments: [{ method: 'card' }] },
-        },
-        sequence: ['block.banks'],
-        preferences: { show_default_blocks: false },
-      },
-    },
+    ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
     handler: (response: Record<string, string>) => {
       params.onSuccess({
         razorpay_payment_id: response.razorpay_payment_id ?? '',
@@ -559,6 +637,10 @@ async function pollSubscriptionActivation(
     await new Promise((resolve) => setTimeout(resolve, interval));
 
     try {
+      // Trigger reconciliation so webhook-driven changes are picked up even if
+      // the local DB hasn't been updated yet by the time we poll.
+      await api.api.billing.subscription.refresh.$get().catch(() => {});
+
       const response = await api.api.billing.subscription.$get();
       if (!response.ok) continue;
 
@@ -578,4 +660,103 @@ async function pollSubscriptionActivation(
   // Timeout — show success anyway since payment was verified, webhook may be delayed
   setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
   onSubscriptionChange?.();
+}
+
+
+// ─── UPI Limitation Flow ─────────────────────────────────────────────────────
+
+function UpiLimitationStep({
+  currentTier,
+  targetTier,
+  onCancel,
+  onClose,
+  isLoading,
+}: {
+  currentTier: PlanTier;
+  targetTier: PlanTier;
+  onCancel: () => void;
+  onClose: () => void;
+  isLoading?: boolean;
+}) {
+  const current = PLAN_MAP[currentTier];
+  const target = PLAN_MAP[targetTier];
+
+  return (
+    <div className="flex flex-col items-center py-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
+        <AlertCircle className="size-8 text-yellow-600" />
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Plan change unavailable
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Your current {current?.label} subscription uses UPI, which does not support
+        plan changes. To switch to {target?.label}, cancel your current subscription
+        and subscribe again on the new plan.
+      </p>
+      <p className="mt-3 max-w-sm text-xs text-muted-foreground">
+        Your {current?.label} access will remain active until the end of your current
+        billing period after cancellation. You can pay with any supported method
+        (card, UPI, etc.) when you resubscribe.
+      </p>
+      <div className="mt-6 flex gap-3">
+        <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          Not Now
+        </Button>
+        <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
+          {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CancellationScheduledStep({
+  currentTier,
+  periodEnd,
+  onDone,
+}: {
+  currentTier: PlanTier;
+  periodEnd: string | null;
+  onDone: () => void;
+}) {
+  const current = PLAN_MAP[currentTier];
+
+  const formattedEnd = (() => {
+    if (!periodEnd) return null;
+    try {
+      const d = new Date(periodEnd);
+      if (Number.isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      }).format(d);
+    } catch {
+      return null;
+    }
+  })();
+
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center py-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
+        <CheckCircle2 className="size-8 text-primary" />
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Cancellation scheduled
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Your {current?.label} subscription will remain active
+        {formattedEnd ? ` until ${formattedEnd}` : ' until the end of your current billing period'}.
+        After that, your account will automatically move to the Hobby plan.
+      </p>
+      <p className="mt-2 max-w-sm text-xs text-muted-foreground">
+        You can subscribe again on a new plan at any time after the current period ends.
+      </p>
+      <Button className="mt-6" onClick={onDone}>
+        Done
+      </Button>
+    </div>
+  );
 }

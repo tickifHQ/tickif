@@ -121,6 +121,8 @@ export function SubscribePage() {
         onOpenChange={setDialogOpen}
         currentTier={tier}
         lifecycleState={lifecycleState}
+        cancellationScheduled={subscription.cancellationScheduled ?? false}
+        currentPeriodEnd={subscription.currentPeriodEnd}
         onSubscriptionChange={fetchSubscription}
       />
     </div>

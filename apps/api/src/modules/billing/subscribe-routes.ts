@@ -36,6 +36,11 @@ const subscribeRoute = createRoute({
             razorpaySubscriptionId: z.string(),
             shortUrl: z.string().nullable(),
             razorpayKeyId: z.string(),
+            prefill: z.object({
+              name: z.string().nullable(),
+              email: z.string().nullable(),
+              contact: z.string().nullable(),
+            }),
           }),
         },
       },
@@ -97,11 +102,13 @@ const cancelRoute = createRoute({
   middleware: [requireAuth] as const,
   responses: {
     200: {
-      description: 'Cancellation scheduled',
+      description: 'Cancellation scheduled or already scheduled',
       content: {
         'application/json': {
           schema: z.object({
             razorpaySubscriptionId: z.string(),
+            alreadyCancelled: z.boolean(),
+            currentPeriodEnd: z.string().datetime().nullable(),
           }),
         },
       },
@@ -151,6 +158,32 @@ const verifyPaymentRoute = createRoute({
   },
 });
 
+const refreshRoute = createRoute({
+  method: 'get',
+  path: '/subscription/refresh',
+  tags: ['Billing'],
+  summary: 'Refresh subscription state from Razorpay (reconciliation)',
+  description:
+    'Queries Razorpay live API for the current subscription state and reconciles local DB if needed. ' +
+    'Self-healing when webhooks were missed or delayed. Throttled server-side.',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Reconciliation result',
+      content: {
+        'application/json': {
+          schema: z.object({
+            reconciled: z.boolean(),
+            razorpayStatus: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    401: { description: 'Unauthorized' },
+  },
+});
+
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
@@ -164,7 +197,23 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       { targetTier },
     );
 
-    return c.json({ ...result, razorpayKeyId: config.RAZORPAY_KEY_ID ?? '' }, 200);
+    // Filter out placeholder values from phone-OTP signup:
+    // - email: "+91xxx@phone.tickif.local" is not a real email
+    // - name: better-auth sets the phone number as temp name
+    const rawEmail = user!.email ?? null;
+    const rawName = user!.name ?? null;
+    const email = rawEmail?.endsWith('@phone.tickif.local') ? null : rawEmail;
+    const name = rawName?.startsWith('+') ? null : rawName;
+
+    return c.json({
+      ...result,
+      razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
+      prefill: {
+        name,
+        email,
+        contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
+      },
+    }, 200);
   })
   .openapi(changePlanRoute, async (c) => {
     const user = c.get('user');
@@ -198,6 +247,17 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
       body,
     );
+
+    return c.json(result, 200);
+  })
+  .openapi(refreshRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+
+    const result = await subscribeService.refreshSubscription({
+      userId: user!.id,
+      activeOrgId: session!.activeOrganizationId ?? null,
+    });
 
     return c.json(result, 200);
   });
