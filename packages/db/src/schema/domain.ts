@@ -1288,6 +1288,7 @@ export const subscription = pgTable(
     subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
     razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
     razorpayStatus: text('razorpay_status'),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
     lockedAt: timestamp('locked_at', { withTimezone: true }),

@@ -481,6 +481,7 @@ describe('E-117: subscription.cancelled', () => {
       subscriptionState: 'active',
       razorpaySubscriptionId: `sub_cancel_${Date.now()}`,
       razorpayStatus: 'active',
+      cancelAtPeriodEnd: true,
     });
 
     const payload = buildPayload('subscription.cancelled', {
@@ -499,6 +500,7 @@ describe('E-117: subscription.cancelled', () => {
     expect(updated!.subscriptionState).toBe('active');
     expect(updated!.razorpaySubscriptionId).toBeNull();
     expect(updated!.razorpayStatus).toBeNull();
+    expect(updated!.cancelAtPeriodEnd).toBe(false);
     expect(updated!.currentPeriodEnd).toBeNull();
     expect(updated!.graceStartedAt).toBeNull();
     expect(updated!.preLapseTier).toBeNull();

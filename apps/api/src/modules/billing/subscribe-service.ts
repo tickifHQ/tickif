@@ -290,10 +290,9 @@ export const subscribeService = {
       throw AppError.unprocessable('Already on the Hobby plan');
     }
 
-    // Guard: if Razorpay already reports this subscription as cancelled, don't call
-    // the cancel API again. Return the existing cancellation state so the frontend
-    // can show the appropriate "already scheduled" message.
-    if (subscription.razorpayStatus === 'cancelled') {
+    // A scheduled cancellation is local lifecycle metadata, separate from
+    // Razorpay's raw status (which remains `active` until the cycle ends).
+    if (subscription.cancelAtPeriodEnd) {
       return {
         razorpaySubscriptionId: subscription.razorpaySubscriptionId,
         alreadyCancelled: true,
@@ -308,13 +307,15 @@ export const subscribeService = {
       cancelAtCycleEnd: true,
     });
 
-    // Update razorpayStatus to 'cancelled' to signal that cancellation is scheduled.
-    // Razorpay returns status="active" for cancel_at_cycle_end (subscription stays active
-    // until the period ends), so we CANNOT use cancelled.status here — it would store "active"
-    // and lose the cancellation signal. We use our own 'cancelled' value as the local flag.
+    // Preserve Razorpay's actual status and record the scheduled transition in
+    // its own column. This keeps reconciliation able to observe the later
+    // active -> cancelled transition even when the webhook is missed.
     await db
       .update(schema.subscription)
-      .set({ razorpayStatus: 'cancelled' })
+      .set({
+        razorpayStatus: cancelled.status,
+        cancelAtPeriodEnd: true,
+      })
       .where(eq(schema.subscription.id, subscription.id));
 
     // Invalidate entitlement cache so GET /subscription reflects cancellationScheduled: true.
@@ -425,17 +426,17 @@ export const subscribeService = {
       return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
     }
 
-    // If local razorpayStatus already matches, no reconciliation needed.
-    // Special case: when local is 'cancelled' (cancel_at_cycle_end scheduled) and
-    // Razorpay returns 'active' (subscription still active until period ends),
-    // do NOT overwrite — our local 'cancelled' flag is the cancellation-scheduled signal.
-    if (subscription.razorpayStatus === rzpSub.status) {
+    const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
+    // Terminal statuses must always pass through the state transition below. This
+    // also repairs rows written by older code that stored `cancelled` before the
+    // subscription had actually ended.
+    if (
+      subscription.razorpayStatus === rzpSub.status &&
+      !terminalStatuses.has(rzpSub.status) &&
+      (rzpSub.cancel_at_cycle_end === undefined ||
+        subscription.cancelAtPeriodEnd === rzpSub.cancel_at_cycle_end)
+    ) {
       return { reconciled: false, razorpayStatus: rzpSub.status };
-    }
-    if (subscription.razorpayStatus === 'cancelled' && rzpSub.status === 'active') {
-      // Razorpay says active because cancel_at_cycle_end keeps it active until period ends.
-      // Preserve our local 'cancelled' status — it's the only signal that cancellation is scheduled.
-      return { reconciled: false, razorpayStatus: 'cancelled' };
     }
 
     // Reconcile based on Razorpay's live status
@@ -454,6 +455,9 @@ export const subscribeService = {
           tierChanged = true;
         }
         updates.subscriptionState = 'active';
+        if (rzpSub.cancel_at_cycle_end !== undefined) {
+          updates.cancelAtPeriodEnd = rzpSub.cancel_at_cycle_end;
+        }
         updates.currentPeriodEnd = rzpSub.current_end ? new Date(rzpSub.current_end * 1000) : undefined;
 
         // Clear any lapse fields (reactivation)
@@ -494,6 +498,7 @@ export const subscribeService = {
         }
         updates.subscriptionState = 'active';
         updates.razorpaySubscriptionId = null;
+        updates.cancelAtPeriodEnd = false;
         updates.currentPeriodEnd = null;
         updates.graceStartedAt = null;
         updates.lockedAt = null;

@@ -167,6 +167,7 @@ async function handleActivated(
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
       planTier: targetTier,
       razorpayStatus,
+      cancelAtPeriodEnd: false,
       // Clear any lapse fields (handles reactivation from lapse states)
       graceStartedAt: null,
       lockedAt: null,
@@ -378,6 +379,7 @@ async function handleCancelled(
         subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
         razorpaySubscriptionId: null,
         razorpayStatus: null,
+        cancelAtPeriodEnd: false,
         currentPeriodEnd: null,
         graceStartedAt: null,
         lockedAt: null,

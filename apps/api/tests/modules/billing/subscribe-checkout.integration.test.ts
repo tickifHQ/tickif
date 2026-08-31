@@ -402,6 +402,7 @@ vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal
     createSubscription: vi.fn(),
     updateSubscription: vi.fn(),
     fetchSubscription: vi.fn(),
+    cancelSubscription: vi.fn(),
     // Override plan resolution to avoid depending on CI env vars
     resolveRazorpayPlanId: vi.fn((tier: string) => `plan_test_${tier}`),
   };
@@ -410,6 +411,7 @@ vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal
 const {
   createSubscription: mockCreateSubscription,
   fetchSubscription: mockFetchSubscription,
+  cancelSubscription: mockCancelSubscription,
 } = await import(
   '../../../src/modules/billing/razorpay-client.js'
 );
@@ -436,6 +438,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     vi.clearAllMocks();
     vi.mocked(mockCreateSubscription).mockReset();
     vi.mocked(mockFetchSubscription).mockReset();
+    vi.mocked(mockCancelSubscription).mockReset();
   });
 
   it('createSubscription persists hobby tier + razorpayStatus "created" (no paid upgrade)', async () => {
@@ -643,6 +646,76 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
 
     expect(result.razorpaySubscriptionId).toBe('sub_fresh');
     expect(mockCreateSubscription).toHaveBeenCalledOnce();
+  });
+
+  it('records cycle-end cancellation without pretending Razorpay is already cancelled', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_cancel_scheduled',
+      razorpayStatus: 'active',
+    });
+    vi.mocked(mockCancelSubscription).mockResolvedValue({
+      id: 'sub_cancel_scheduled',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'active',
+      current_start: 1_788_000_000,
+      current_end: 1_790_000_000,
+      short_url: null,
+      cancel_at_cycle_end: true,
+      created_at: 1_787_000_000,
+    });
+
+    await subscribeService.cancelSubscription({ userId: user.id, activeOrgId: org.id });
+
+    const [scheduled] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, org.id));
+    expect(scheduled!.razorpayStatus).toBe('active');
+    expect(scheduled!.cancelAtPeriodEnd).toBe(true);
+  });
+
+  it('reconciles a missed cycle-end cancellation webhook to Hobby', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_cancel_missed_webhook',
+      razorpayStatus: 'active',
+      cancelAtPeriodEnd: true,
+    });
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_cancel_missed_webhook',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'cancelled',
+      current_start: 1_788_000_000,
+      current_end: 1_790_000_000,
+      short_url: null,
+      cancel_at_cycle_end: true,
+      cancelled_at: 1_790_000_000,
+      ended_at: 1_790_000_000,
+      created_at: 1_787_000_000,
+    });
+
+    const result = await subscribeService.refreshSubscription({
+      userId: user.id,
+      activeOrgId: org.id,
+    });
+
+    expect(result).toEqual({ reconciled: true, razorpayStatus: 'cancelled' });
+    const [reconciled] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, org.id));
+    expect(reconciled!.planTier).toBe('hobby');
+    expect(reconciled!.razorpaySubscriptionId).toBeNull();
+    expect(reconciled!.cancelAtPeriodEnd).toBe(false);
   });
 
   it('rejects when organization has an active paid Razorpay subscription (409)', async () => {

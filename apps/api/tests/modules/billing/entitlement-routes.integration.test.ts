@@ -206,5 +206,26 @@ describe('E-119: entitlement service integration', () => {
 
     expect(result.razorpayStatus).toBe('active');
     expect(result.currentPeriodEnd).toBe('2026-09-25T00:00:00.000Z');
+    expect(result.cancellationScheduled).toBe(false);
+  });
+
+  it('exposes cycle-end cancellation separately from Razorpay active status', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_cancel_at_period_end',
+      razorpayStatus: 'active',
+      cancelAtPeriodEnd: true,
+    });
+
+    const result = await entitlementService.getSubscription({
+      userId: user.id,
+      activeOrgId: org.id,
+    });
+
+    expect(result.razorpayStatus).toBe('active');
+    expect(result.cancellationScheduled).toBe(true);
   });
 });

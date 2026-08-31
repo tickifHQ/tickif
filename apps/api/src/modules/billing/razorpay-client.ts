@@ -111,6 +111,8 @@ export type RazorpaySubscription = {
   current_end: number | null;
   short_url: string | null;
   notes?: Record<string, string>;
+  /** True when Razorpay will cancel the subscription after the current cycle. */
+  cancel_at_cycle_end?: boolean;
   /** Unix timestamp when cancellation was scheduled (cancel_at_cycle_end). Null if not cancelled. */
   cancelled_at?: number | null;
   /** Unix timestamp when subscription ended. Null if still active/scheduled. */

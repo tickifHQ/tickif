@@ -87,7 +87,7 @@ export const entitlementService = {
       lifecycleState: state,
       razorpayStatus: subscription.razorpayStatus,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
-      cancellationScheduled: subscription.razorpayStatus === 'cancelled' && tier !== 'hobby',
+      cancellationScheduled: subscription.cancelAtPeriodEnd && tier !== 'hobby',
       seatUsage: await countSeats(caller.activeOrgId),
       branchUsage: await countBranches(caller.activeOrgId),
       entitlements: resolveEntitlements(tier, state, isVerified),
