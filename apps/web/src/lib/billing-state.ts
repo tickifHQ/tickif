@@ -32,7 +32,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
     tier: sub.tier,
     razorpayStatus: sub.razorpayStatus,
     cancellationScheduled: sub.cancellationScheduled,
-    preLapseTier: null,
+    preLapseTier: sub.preLapseTier,
     renewalDate: sub.currentPeriodEnd,
     subscriptionId: sub.razorpayStatus ? `sub_${sub.tier}` : null,
     usage: {

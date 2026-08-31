@@ -167,6 +167,7 @@ export const subscriptionResponseSchema = z
   .object({
     tier: planTierSchema,
     lifecycleState: subscriptionStateSchema,
+    preLapseTier: planTierSchema.nullable(),
     razorpayStatus: z.string().nullable(),
     currentPeriodEnd: z.string().datetime().nullable(),
     cancellationScheduled: z.boolean(),

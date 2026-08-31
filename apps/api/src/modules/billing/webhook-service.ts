@@ -138,6 +138,17 @@ async function handleActivated(
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
   const currentState = subscription.subscriptionState as SubscriptionState;
+
+  // A downgraded organization must explicitly start a replacement checkout.
+  // The subscribe flow replaces the old halted ID and records created/authenticated;
+  // a delayed charge for the old halted subscription must remain ignored.
+  if (
+    currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+    subscription.razorpayStatus !== 'created' &&
+    subscription.razorpayStatus !== 'authenticated'
+  ) {
+    return { outcome: 'ignored', reason: 'Subscription is downgraded; explicit recovery checkout required' };
+  }
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
 
   // Determine the target tier. During E-116 checkout, planTier stays 'hobby' until
@@ -208,9 +219,12 @@ async function handleCharged(
 ): Promise<WebhookResult> {
   const currentState = subscription.subscriptionState as SubscriptionState;
 
-  // Cannot reactivate from downgraded via payment alone (requires explicit action)
-  if (currentState === SUBSCRIPTION_STATE.DOWNGRADED) {
-    return { outcome: 'ignored', reason: 'Subscription is downgraded; charge ignored' };
+  if (
+    currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+    subscription.razorpayStatus !== 'created' &&
+    subscription.razorpayStatus !== 'authenticated'
+  ) {
+    return { outcome: 'ignored', reason: 'Subscription is downgraded; explicit recovery checkout required' };
   }
 
   const razorpayPaymentId = extractPaymentId(payload);
@@ -247,7 +261,8 @@ async function handleCharged(
     const isReactivation =
       currentState === SUBSCRIPTION_STATE.PAYMENT_FAILED ||
       currentState === SUBSCRIPTION_STATE.GRACE ||
-      currentState === SUBSCRIPTION_STATE.LOCKED;
+      currentState === SUBSCRIPTION_STATE.LOCKED ||
+      currentState === SUBSCRIPTION_STATE.DOWNGRADED;
 
     const updates: Partial<typeof schema.subscription.$inferInsert> = {
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,

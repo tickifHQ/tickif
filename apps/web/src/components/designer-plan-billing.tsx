@@ -706,6 +706,7 @@ function HelpCard() {
 export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBillingProps) {
   const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [initialTargetTier, setInitialTargetTier] = useState<PlanTier | null>(null);
 
   // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
   // Called on mount (SSR hydration catch-up) and after checkout flow completes.
@@ -727,12 +728,23 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
     void refreshBilling();
   }, [refreshBilling]);
 
-  const openSubscribe = useCallback((_tier?: PlanTier) => {
-    setSubscribeOpen(true);
-  }, []);
+  const openSubscribe = useCallback(
+    (tier?: PlanTier) => {
+      const recoveryTier =
+        billing.lifecycle === 'downgraded'
+          ? billing.preLapseTier
+          : billing.lifecycle === 'locked'
+            ? billing.tier
+            : null;
+      setInitialTargetTier(tier ?? recoveryTier);
+      setSubscribeOpen(true);
+    },
+    [billing.lifecycle, billing.preLapseTier, billing.tier],
+  );
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
+    if (!next) setInitialTargetTier(null);
   }, []);
 
   const showPaymentDueCard =
@@ -839,6 +851,8 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
         lifecycleState={billing.lifecycle}
         cancellationScheduled={billing.cancellationScheduled}
         currentPeriodEnd={billing.renewalDate}
+        restoreTier={billing.preLapseTier}
+        initialTargetTier={initialTargetTier}
         onSubscriptionChange={refreshBilling}
       />
     </div>

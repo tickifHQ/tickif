@@ -26,6 +26,7 @@ const { getBillingState } = await import('../../src/lib/billing-data');
 const subscription: SubscriptionResponse = {
   tier: 'corporate',
   lifecycleState: 'active',
+  preLapseTier: null,
   razorpayStatus: 'active',
   currentPeriodEnd: '2026-10-01T00:00:00.000Z',
   cancellationScheduled: false,

@@ -111,7 +111,7 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade Now' })[0]!);
-      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
     });
   });
 
@@ -158,8 +158,9 @@ describe('DesignerPlanBilling', () => {
       const cta = screen.getByRole('button', { name: 'Reactivate Subscription' });
       expect(cta).toBeEnabled();
       await user.click(cta);
-      // CheckoutFlow opens plan selection with locked-state UI
-      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Proceed to Checkout' }));
+      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
     });
   });
 
@@ -206,8 +207,9 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
-      // CheckoutFlow opens plan selection with downgraded-state UI
-      expect(screen.getByRole('heading', { name: 'Choose your plan' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Proceed to Payment Review' }));
+      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
     });
   });
 
@@ -234,6 +236,7 @@ describe('DesignerPlanBilling', () => {
         JSON.stringify({
           tier: 'corporate',
           lifecycleState: 'active',
+          preLapseTier: null,
           razorpayStatus: 'active',
           currentPeriodEnd: '2026-10-01T00:00:00.000Z',
           cancellationScheduled: false,

@@ -16,10 +16,11 @@ interface PlanSelectionProps {
  * Lifecycle awareness:
  * - active/payment_failed/grace: allow plan changes
  * - locked: disable all upgrade actions (org is suspended)
- * - downgraded: show plans but note that org needs to reactivate first
+ * - downgraded: allow a paid recovery checkout
  */
 export function PlanSelection({ currentTier, lifecycleState, onSelectPlan }: PlanSelectionProps) {
-  const isLocked = lifecycleState === 'locked' || lifecycleState === 'downgraded';
+  const isLocked = lifecycleState === 'locked';
+  const isDowngraded = lifecycleState === 'downgraded';
 
   return (
     <div>
@@ -30,11 +31,11 @@ export function PlanSelection({ currentTier, lifecycleState, onSelectPlan }: Pla
         </p>
       </div>
 
-      {isLocked && (
+      {(isLocked || isDowngraded) && (
         <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-center text-sm text-destructive">
           {lifecycleState === 'locked'
             ? 'Your subscription is currently suspended. Plan changes are unavailable until the payment issue is resolved.'
-            : 'Your subscription has been downgraded. Please contact support to reactivate.'}
+            : 'Your subscription was downgraded. Select a paid plan to restore access.'}
         </div>
       )}
 

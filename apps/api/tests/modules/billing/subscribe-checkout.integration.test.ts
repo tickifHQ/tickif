@@ -648,6 +648,58 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     expect(mockCreateSubscription).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    { lifecycle: 'locked' as const, tier: 'corporate' as const },
+    { lifecycle: 'downgraded' as const, tier: 'hobby' as const },
+  ])('allows an explicit recovery checkout from $lifecycle after Razorpay is halted', async ({ lifecycle, tier }) => {
+    const { user, org } = await makeOrgWithOwner();
+    const now = new Date();
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: tier,
+      subscriptionState: lifecycle,
+      razorpaySubscriptionId: `sub_${lifecycle}_old`,
+      razorpayStatus: 'halted',
+      graceStartedAt: new Date(now.getTime() - 40 * 86_400_000),
+      lockedAt: new Date(now.getTime() - 30 * 86_400_000),
+      downgradedAt: lifecycle === 'downgraded' ? now : null,
+      preLapseTier: 'corporate',
+    });
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: `sub_${lifecycle}_old`,
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'halted',
+      current_start: null,
+      current_end: null,
+      short_url: null,
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    vi.mocked(mockCreateSubscription).mockResolvedValue({
+      id: `sub_${lifecycle}_recovery`,
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'created',
+      current_start: null,
+      current_end: null,
+      short_url: 'https://rzp.io/recovery',
+      created_at: Math.floor(Date.now() / 1000),
+    });
+
+    const result = await subscribeService.createSubscription(
+      { userId: user.id, activeOrgId: org.id },
+      { targetTier: 'corporate' },
+    );
+
+    expect(result.razorpaySubscriptionId).toBe(`sub_${lifecycle}_recovery`);
+    const [recovering] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, org.id));
+    expect(recovering!.subscriptionState).toBe(lifecycle);
+    expect(recovering!.razorpayStatus).toBe('created');
+  });
+
   it('records cycle-end cancellation without pretending Razorpay is already cancelled', async () => {
     const { user, org } = await makeOrgWithOwner();
     await db.insert(schema.subscription).values({

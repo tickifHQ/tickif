@@ -102,6 +102,7 @@ export const subscribeService = {
           razorpaySubscriptionId: schema.subscription.razorpaySubscriptionId,
           razorpayStatus: schema.subscription.razorpayStatus,
           planTier: schema.subscription.planTier,
+          subscriptionState: schema.subscription.subscriptionState,
         })
         .from(schema.subscription)
         .where(eq(schema.subscription.organizationId, caller.activeOrgId!))
@@ -146,8 +147,12 @@ export const subscribeService = {
         }
 
         const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
+        const isExplicitRecovery =
+          existing.subscriptionState === 'locked' || existing.subscriptionState === 'downgraded';
+        const recoverableStatuses = new Set(['halted', ...terminalStatuses]);
         const canReplace =
-          existing.planTier === 'hobby' && terminalStatuses.has(remoteSubscription.status);
+          (existing.planTier === 'hobby' && terminalStatuses.has(remoteSubscription.status)) ||
+          (isExplicitRecovery && recoverableStatuses.has(remoteSubscription.status));
         if (!canReplace) {
           throw AppError.conflict(
             'Organization already has a live Razorpay subscription. Complete checkout or use change-plan instead.',

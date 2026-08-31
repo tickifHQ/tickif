@@ -14,12 +14,14 @@ import { PlanSelection } from './plan-selection';
 import { UpgradeConfirmationStep } from './upgrade-confirmation-step';
 import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
 import { ReviewPayStep } from './review-pay-step';
+import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
 
 // ─── State Machine ───────────────────────────────────────────────────────────
 
 type FlowStep =
   | { step: 'select' }
+  | { step: 'reactivate'; targetTier: PlanTier }
   | { step: 'confirm-upgrade'; targetTier: PlanTier }
   | { step: 'confirm-downgrade'; targetTier: PlanTier }
   | { step: 'review'; targetTier: PlanTier }
@@ -39,7 +41,27 @@ interface CheckoutFlowProps {
   lifecycleState: SubscriptionState;
   cancellationScheduled: boolean;
   currentPeriodEnd: string | null;
+  restoreTier?: PlanTier | null;
+  initialTargetTier?: PlanTier | null;
   onSubscriptionChange?: () => void;
+}
+
+function initialFlowStep(
+  lifecycleState: SubscriptionState,
+  currentTier: PlanTier,
+  restoreTier: PlanTier | null,
+  initialTargetTier: PlanTier | null,
+): FlowStep {
+  if (lifecycleState === 'locked') {
+    return { step: 'reactivate', targetTier: currentTier };
+  }
+  if (lifecycleState === 'downgraded' && restoreTier && restoreTier !== 'hobby') {
+    return { step: 'confirm-upgrade', targetTier: restoreTier };
+  }
+  if (initialTargetTier && initialTargetTier !== currentTier) {
+    return { step: 'confirm-upgrade', targetTier: initialTargetTier };
+  }
+  return { step: 'select' };
 }
 
 /**
@@ -64,18 +86,22 @@ export function CheckoutFlow({
   lifecycleState,
   cancellationScheduled,
   currentPeriodEnd,
+  restoreTier = null,
+  initialTargetTier = null,
   onSubscriptionChange,
 }: CheckoutFlowProps) {
   const [flowStep, setFlowStep] = useState<FlowStep>({ step: 'select' });
   const [isApiLoading, setIsApiLoading] = useState(false);
 
-  // Reset flow when dialog closes
+  // Reset or initialize from the current lifecycle when the dialog opens.
   useEffect(() => {
     if (!open) {
       setFlowStep({ step: 'select' });
       setIsApiLoading(false);
+      return;
     }
-  }, [open]);
+    setFlowStep(initialFlowStep(lifecycleState, currentTier, restoreTier, initialTargetTier));
+  }, [currentTier, initialTargetTier, lifecycleState, open, restoreTier]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -193,7 +219,10 @@ export function CheckoutFlow({
     try {
       // Hobby → paid: create a new Razorpay subscription via /subscribe.
       // Paid → paid: change the existing subscription via /change-plan.
-      const isNewSubscription = currentTier === 'hobby';
+      const isNewSubscription =
+        currentTier === 'hobby' ||
+        lifecycleState === 'locked' ||
+        lifecycleState === 'downgraded';
 
       if (isNewSubscription) {
         const response = await api.api.billing.subscribe.$post({
@@ -329,7 +358,11 @@ export function CheckoutFlow({
       setFlowStep({ step: 'select' });
     } else if (flowStep.step === 'review') {
       const { targetTier } = flowStep;
-      setFlowStep({ step: 'confirm-upgrade', targetTier });
+      if (lifecycleState === 'locked') {
+        setFlowStep({ step: 'reactivate', targetTier });
+      } else {
+        setFlowStep({ step: 'confirm-upgrade', targetTier });
+      }
     }
   }
 
@@ -356,6 +389,13 @@ export function CheckoutFlow({
             currentTier={currentTier}
             lifecycleState={lifecycleState}
             onSelectPlan={handleSelectPlan}
+          />
+        )}
+
+        {flowStep.step === 'reactivate' && (
+          <ReactivateStep
+            currentTier={flowStep.targetTier}
+            onConfirm={() => setFlowStep({ step: 'review', targetTier: flowStep.targetTier })}
           />
         )}
 
