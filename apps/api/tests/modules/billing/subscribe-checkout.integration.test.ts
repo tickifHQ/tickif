@@ -401,12 +401,16 @@ vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal
     // Override only the functions that call Razorpay's HTTP API
     createSubscription: vi.fn(),
     updateSubscription: vi.fn(),
+    fetchSubscription: vi.fn(),
     // Override plan resolution to avoid depending on CI env vars
     resolveRazorpayPlanId: vi.fn((tier: string) => `plan_test_${tier}`),
   };
 });
 
-const { createSubscription: mockCreateSubscription } = await import(
+const {
+  createSubscription: mockCreateSubscription,
+  fetchSubscription: mockFetchSubscription,
+} = await import(
   '../../../src/modules/billing/razorpay-client.js'
 );
 const { subscribeService } = await import(
@@ -430,6 +434,8 @@ async function makeOrgWithOwner() {
 describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(mockCreateSubscription).mockReset();
+    vi.mocked(mockFetchSubscription).mockReset();
   });
 
   it('createSubscription persists hobby tier + razorpayStatus "created" (no paid upgrade)', async () => {
@@ -524,7 +530,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 
-  it('allows re-subscribe when existing subscription is abandoned (created + hobby)', async () => {
+  it('reuses an existing created checkout instead of orphaning it', async () => {
     const { user, org } = await makeOrgWithOwner();
 
     // Abandoned checkout: razorpayStatus "created" + planTier "hobby"
@@ -536,14 +542,14 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
       razorpayStatus: 'created',
     });
 
-    vi.mocked(mockCreateSubscription).mockResolvedValue({
-      id: 'sub_abandoned_retry',
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_abandoned_old',
       entity: 'subscription',
       plan_id: 'plan_test',
       status: 'created',
       current_start: null,
       current_end: null,
-      short_url: 'https://rzp.io/retry',
+      short_url: 'https://rzp.io/existing',
       created_at: Math.floor(Date.now() / 1000),
     });
 
@@ -552,17 +558,91 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
       { targetTier: 'professional_plus' },
     );
 
-    // New Razorpay subscription replaces the abandoned one
-    expect(result.razorpaySubscriptionId).toBe('sub_abandoned_retry');
-    expect(mockCreateSubscription).toHaveBeenCalledOnce();
+    expect(result).toEqual({
+      razorpaySubscriptionId: 'sub_abandoned_old',
+      shortUrl: 'https://rzp.io/existing',
+    });
+    expect(mockCreateSubscription).not.toHaveBeenCalled();
 
     // DB: subscription row updated with new Razorpay ID, still hobby
     const [sub] = await db
       .select()
       .from(schema.subscription)
       .where(eq(schema.subscription.organizationId, org.id));
-    expect(sub!.razorpaySubscriptionId).toBe('sub_abandoned_retry');
+    expect(sub!.razorpaySubscriptionId).toBe('sub_abandoned_old');
     expect(sub!.planTier).toBe('hobby');
+  });
+
+  it('blocks a new checkout when Razorpay reports the existing subscription as authenticated', async () => {
+    const { user, org } = await makeOrgWithOwner();
+
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'hobby',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_authenticated',
+      razorpayStatus: 'authenticated',
+    });
+
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_authenticated',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'authenticated',
+      current_start: null,
+      current_end: null,
+      short_url: 'https://rzp.io/authenticated',
+      created_at: Math.floor(Date.now() / 1000),
+    });
+
+    await expect(
+      subscribeService.createSubscription(
+        { userId: user.id, activeOrgId: org.id },
+        { targetTier: 'professional_plus' },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mockCreateSubscription).not.toHaveBeenCalled();
+  });
+
+  it('replaces an existing checkout only after Razorpay reports a terminal state', async () => {
+    const { user, org } = await makeOrgWithOwner();
+
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'hobby',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_expired_old',
+      razorpayStatus: 'created',
+    });
+
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_expired_old',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'expired',
+      current_start: null,
+      current_end: null,
+      short_url: null,
+      created_at: Math.floor(Date.now() / 1000),
+    });
+    vi.mocked(mockCreateSubscription).mockResolvedValue({
+      id: 'sub_fresh',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'created',
+      current_start: null,
+      current_end: null,
+      short_url: 'https://rzp.io/fresh',
+      created_at: Math.floor(Date.now() / 1000),
+    });
+
+    const result = await subscribeService.createSubscription(
+      { userId: user.id, activeOrgId: org.id },
+      { targetTier: 'professional_plus' },
+    );
+
+    expect(result.razorpaySubscriptionId).toBe('sub_fresh');
+    expect(mockCreateSubscription).toHaveBeenCalledOnce();
   });
 
   it('rejects when organization has an active paid Razorpay subscription (409)', async () => {
@@ -575,6 +655,17 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
       subscriptionState: 'active',
       razorpaySubscriptionId: 'sub_active_paid',
       razorpayStatus: 'active',
+    });
+
+    vi.mocked(mockFetchSubscription).mockResolvedValue({
+      id: 'sub_active_paid',
+      entity: 'subscription',
+      plan_id: 'plan_test',
+      status: 'active',
+      current_start: null,
+      current_end: null,
+      short_url: null,
+      created_at: Math.floor(Date.now() / 1000),
     });
 
     await expect(

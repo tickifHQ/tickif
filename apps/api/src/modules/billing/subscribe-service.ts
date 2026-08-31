@@ -108,21 +108,51 @@ export const subscribeService = {
         .for('update')
         .limit(1);
 
-      // Block only if the org has a live Razorpay subscription (active, pending, halted).
-      // Abandoned checkouts (created/authenticated) are safe to replace — the customer
-      // never completed payment, so we create a fresh Razorpay subscription.
+      // Never infer abandonment from local status. In particular, Razorpay's
+      // `authenticated` status means the authorization transaction completed and
+      // replacing that ID can orphan a valid subscription. Reconcile the existing
+      // ID with Razorpay before deciding whether it is safe to create another one.
       if (existing?.razorpaySubscriptionId) {
-        const abandonedStatuses = ['created', 'authenticated'];
-        const isAbandoned = abandonedStatuses.includes(existing.razorpayStatus ?? '');
-        const isStillHobby = existing.planTier === 'hobby';
-
-        if (!isAbandoned || !isStillHobby) {
+        let remoteSubscription;
+        try {
+          remoteSubscription = await fetchSubscription(existing.razorpaySubscriptionId);
+        } catch {
           throw AppError.conflict(
-            'Organization already has an active Razorpay subscription. Use change-plan instead.',
+            'An existing checkout could not be verified. Retry shortly or contact support.',
           );
         }
-        // Abandoned checkout — fall through to create a new Razorpay subscription.
-        // The old Razorpay subscription in "created" status will expire on its own.
+
+        if (remoteSubscription.status === 'created' && existing.planTier === 'hobby') {
+          const checkoutTier =
+            inferTierFromConfig(remoteSubscription.plan_id) ??
+            inferTierFromNotes(remoteSubscription.notes);
+          if (checkoutTier && checkoutTier !== params.targetTier) {
+            throw AppError.conflict(
+              'A checkout for another plan is already open. Complete or expire it before changing plans.',
+            );
+          }
+
+          if (existing.razorpayStatus !== remoteSubscription.status) {
+            await tx
+              .update(schema.subscription)
+              .set({ razorpayStatus: remoteSubscription.status })
+              .where(eq(schema.subscription.id, existing.id));
+          }
+
+          return {
+            razorpaySubscriptionId: remoteSubscription.id,
+            shortUrl: remoteSubscription.short_url,
+          };
+        }
+
+        const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
+        const canReplace =
+          existing.planTier === 'hobby' && terminalStatuses.has(remoteSubscription.status);
+        if (!canReplace) {
+          throw AppError.conflict(
+            'Organization already has a live Razorpay subscription. Complete checkout or use change-plan instead.',
+          );
+        }
       }
 
       // Razorpay call happens inside the transaction while we hold the row lock.
