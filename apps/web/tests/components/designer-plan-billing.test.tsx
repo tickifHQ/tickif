@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
+
+const apiMocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  getSubscription: vi.fn(),
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    api: {
+      billing: {
+        subscription: {
+          refresh: { $get: apiMocks.refresh },
+          $get: apiMocks.getSubscription,
+        },
+      },
+    },
+  },
+}));
+
 import { DesignerPlanBilling } from '../../src/components/designer-plan-billing';
 import { BillingStatusBanner } from '../../src/components/billing-status-banner';
 import { BillingAccessDenied } from '../../src/components/billing-access-denied';
@@ -60,6 +80,11 @@ describe('BillingAccessDenied', () => {
 // ─── Lifecycle-Aware Rendering ───────────────────────────────────────────────
 
 describe('DesignerPlanBilling', () => {
+  beforeEach(() => {
+    apiMocks.refresh.mockReset().mockResolvedValue(new Response(null, { status: 200 }));
+    apiMocks.getSubscription.mockReset().mockResolvedValue(new Response(null, { status: 503 }));
+  });
+
   describe('active state', () => {
     it('renders the current plan name and price', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
@@ -201,6 +226,31 @@ describe('DesignerPlanBilling', () => {
       );
       expect(screen.getByText('Unlimited seats')).toBeInTheDocument();
     });
+  });
+
+  it('replaces the complete billing snapshot after reconciliation', async () => {
+    apiMocks.getSubscription.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tier: 'corporate',
+          lifecycleState: 'active',
+          razorpayStatus: 'active',
+          currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+          cancellationScheduled: false,
+          seatUsage: 7,
+          branchUsage: 5,
+          entitlements: resolveEntitlements('corporate', 'active'),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    render(<DesignerPlanBilling billing={makeBilling()} />);
+
+    await waitFor(() => expect(screen.getByText('Corporate')).toBeInTheDocument());
+    expect(screen.getByText('7 active seats')).toBeInTheDocument();
+    expect(screen.getByText('5 active branches')).toBeInTheDocument();
+    expect(screen.getAllByText('₹7,999').length).toBeGreaterThan(0);
   });
 });
 

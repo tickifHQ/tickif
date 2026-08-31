@@ -26,6 +26,8 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
 import { api } from '@/lib/api';
+import { mapSubscriptionToBillingState } from '@/lib/billing-state';
+import type { SubscriptionResponse } from '@repo/contracts';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -712,15 +714,8 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
       await api.api.billing.subscription.refresh.$get();
       const response = await api.api.billing.subscription.$get();
       if (response.ok) {
-        const data = await response.json();
-        setBilling((prev) => ({
-          ...prev,
-          tier: (data as { tier: typeof prev.tier }).tier,
-          lifecycle: (data as { lifecycleState: typeof prev.lifecycle }).lifecycleState,
-          razorpayStatus: (data as { razorpayStatus: string | null }).razorpayStatus,
-          cancellationScheduled: (data as { cancellationScheduled: boolean }).cancellationScheduled ?? false,
-          renewalDate: (data as { currentPeriodEnd: string | null }).currentPeriodEnd ?? prev.renewalDate,
-        }));
+        const data = (await response.json()) as SubscriptionResponse;
+        setBilling(mapSubscriptionToBillingState(data));
       }
     } catch {
       // Non-fatal — keep the current data
