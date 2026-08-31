@@ -16,6 +16,7 @@ import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
 import { ReviewPayStep } from './review-pay-step';
 import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
+import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
 
 // ─── State Machine ───────────────────────────────────────────────────────────
 
@@ -100,7 +101,11 @@ export function CheckoutFlow({
       setIsApiLoading(false);
       return;
     }
-    setFlowStep(initialFlowStep(lifecycleState, currentTier, restoreTier, initialTargetTier));
+    setFlowStep((currentStep) =>
+      currentStep.step === 'select'
+        ? initialFlowStep(lifecycleState, currentTier, restoreTier, initialTargetTier)
+        : currentStep,
+    );
   }, [currentTier, initialTargetTier, lifecycleState, open, restoreTier]);
 
   const handleOpenChange = useCallback(
@@ -277,7 +282,17 @@ export function CheckoutFlow({
               // Verification successful — reopen dialog with activating state and poll.
               onOpenChange(true);
               setFlowStep({ step: 'activating', targetTier });
-              await pollSubscriptionActivation(setFlowStep, targetTier, onSubscriptionChange);
+              const activated = await waitForSubscriptionActivation(targetTier);
+              if (activated) {
+                setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+                onSubscriptionChange?.();
+              } else {
+                setFlowStep({
+                  step: 'error',
+                  message:
+                    'Payment was verified, but subscription activation is still pending. Refresh or try again shortly.',
+                });
+              }
             } catch {
               onOpenChange(true);
               setFlowStep({ step: 'error', message: 'Payment verification failed' });
@@ -662,46 +677,6 @@ async function openRazorpayCheckout(params: {
 
   rzp.open();
 }
-
-// ─── Post-Payment Polling ────────────────────────────────────────────────────
-
-async function pollSubscriptionActivation(
-  setFlowStep: (step: FlowStep) => void,
-  targetTier: PlanTier,
-  onSubscriptionChange?: () => void,
-): Promise<void> {
-  const maxAttempts = 15; // 30 seconds total (2s intervals)
-  const interval = 2000;
-
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((resolve) => setTimeout(resolve, interval));
-
-    try {
-      // Trigger reconciliation so webhook-driven changes are picked up even if
-      // the local DB hasn't been updated yet by the time we poll.
-      await api.api.billing.subscription.refresh.$get().catch(() => {});
-
-      const response = await api.api.billing.subscription.$get();
-      if (!response.ok) continue;
-
-      const data = (await response.json()) as { tier: string; lifecycleState: string; razorpayStatus: string | null };
-
-      // Activation detected: tier changed from hobby OR razorpayStatus is 'active'
-      if (data.tier !== 'hobby' || data.razorpayStatus === 'active') {
-        setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
-        onSubscriptionChange?.();
-        return;
-      }
-    } catch {
-      // Network error — continue polling
-    }
-  }
-
-  // Timeout — show success anyway since payment was verified, webhook may be delayed
-  setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
-  onSubscriptionChange?.();
-}
-
 
 // ─── UPI Limitation Flow ─────────────────────────────────────────────────────
 
