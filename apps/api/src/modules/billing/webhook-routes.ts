@@ -24,11 +24,9 @@ const webhookRoute = createRoute({
     'Receives and processes Razorpay subscription webhook events. ' +
     'Verifies HMAC-SHA256 signature before any processing. ' +
     'No application auth — Razorpay authenticates via webhook secret.',
-  request: {
-    body: {
-      content: { 'application/json': { schema: z.object({}).passthrough() } },
-    },
-  },
+  // No request.body schema — the handler must read the raw body for HMAC-SHA256
+  // signature verification before any parsing. Declaring a body schema here would
+  // cause zod-openapi to consume the stream, making it unusable for signature checks.
   responses: {
     200: {
       description: 'Event processed, duplicated, or safely ignored',

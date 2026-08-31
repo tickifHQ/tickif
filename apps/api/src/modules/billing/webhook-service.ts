@@ -138,6 +138,17 @@ async function handleActivated(
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
   const currentState = subscription.subscriptionState as SubscriptionState;
+
+  // A downgraded organization must explicitly start a replacement checkout.
+  // The subscribe flow replaces the old halted ID and records created/authenticated;
+  // a delayed charge for the old halted subscription must remain ignored.
+  if (
+    currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+    subscription.razorpayStatus !== 'created' &&
+    subscription.razorpayStatus !== 'authenticated'
+  ) {
+    return { outcome: 'ignored', reason: 'Subscription is downgraded; explicit recovery checkout required' };
+  }
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
 
   // Determine the target tier. During E-116 checkout, planTier stays 'hobby' until
@@ -167,6 +178,7 @@ async function handleActivated(
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
       planTier: targetTier,
       razorpayStatus,
+      cancelAtPeriodEnd: false,
       // Clear any lapse fields (handles reactivation from lapse states)
       graceStartedAt: null,
       lockedAt: null,
@@ -207,9 +219,12 @@ async function handleCharged(
 ): Promise<WebhookResult> {
   const currentState = subscription.subscriptionState as SubscriptionState;
 
-  // Cannot reactivate from downgraded via payment alone (requires explicit action)
-  if (currentState === SUBSCRIPTION_STATE.DOWNGRADED) {
-    return { outcome: 'ignored', reason: 'Subscription is downgraded; charge ignored' };
+  if (
+    currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+    subscription.razorpayStatus !== 'created' &&
+    subscription.razorpayStatus !== 'authenticated'
+  ) {
+    return { outcome: 'ignored', reason: 'Subscription is downgraded; explicit recovery checkout required' };
   }
 
   const razorpayPaymentId = extractPaymentId(payload);
@@ -220,6 +235,7 @@ async function handleCharged(
   const amount = extractAmount(payload);
   const currency = extractCurrency(payload) ?? 'INR';
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
+  const paymentStatus = extractPaymentStatus(payload) ?? 'captured';
   const currentPeriodEnd = extractCurrentPeriodEnd(payload) ?? new Date();
 
   return db.transaction(async (tx) => {
@@ -231,7 +247,7 @@ async function handleCharged(
         razorpayPaymentId,
         amount,
         currency,
-        status: razorpayStatus,
+        status: paymentStatus,
         payload,
         processedAt: new Date(),
       })
@@ -246,7 +262,8 @@ async function handleCharged(
     const isReactivation =
       currentState === SUBSCRIPTION_STATE.PAYMENT_FAILED ||
       currentState === SUBSCRIPTION_STATE.GRACE ||
-      currentState === SUBSCRIPTION_STATE.LOCKED;
+      currentState === SUBSCRIPTION_STATE.LOCKED ||
+      currentState === SUBSCRIPTION_STATE.DOWNGRADED;
 
     const updates: Partial<typeof schema.subscription.$inferInsert> = {
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
@@ -378,6 +395,7 @@ async function handleCancelled(
         subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
         razorpaySubscriptionId: null,
         razorpayStatus: null,
+        cancelAtPeriodEnd: false,
         currentPeriodEnd: null,
         graceStartedAt: null,
         lockedAt: null,
@@ -472,6 +490,13 @@ function extractCurrency(payload: Record<string, unknown>): string | null {
   return (
     (payload as { payload?: { payment?: { entity?: { currency?: string } } } })?.payload?.payment
       ?.entity?.currency ?? null
+  );
+}
+
+function extractPaymentStatus(payload: Record<string, unknown>): string | null {
+  return (
+    (payload as { payload?: { payment?: { entity?: { status?: string } } } })?.payload?.payment
+      ?.entity?.status ?? null
   );
 }
 

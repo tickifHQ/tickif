@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { PlanTier } from '@repo/contracts';
 import {
   PLANS,
   PLAN_MAP,
@@ -259,6 +258,7 @@ describe('E-120: PlanSelection lifecycle', () => {
   it('shows downgrade notice in downgraded state', () => {
     render(<PlanSelection currentTier="hobby" lifecycleState="downgraded" onSelectPlan={vi.fn()} />);
     expect(screen.getByText(/downgraded/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select corporate/i })).toBeEnabled();
   });
 
   it('enables selection in grace state', () => {

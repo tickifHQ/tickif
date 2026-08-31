@@ -84,6 +84,8 @@ export function buildBillingState(
   return {
     lifecycle,
     tier,
+    razorpayStatus: tier !== 'hobby' ? 'active' : null,
+    cancellationScheduled: false,
     preLapseTier: resolvedPreLapse,
     renewalDate: lifecycle === 'active' && tier !== 'hobby' ? isoDateOffsetDays(30) : null,
     subscriptionId: tier === 'hobby' && lifecycle !== 'downgraded' ? null : `sub_TICKIF_${tier.toUpperCase()}`,
