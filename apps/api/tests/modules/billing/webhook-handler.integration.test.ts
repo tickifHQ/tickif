@@ -61,6 +61,7 @@ function buildPayload(
     planId?: string;
     notes?: Record<string, string>;
     paymentId?: string;
+    paymentStatus?: string;
     amount?: number;
     currency?: string;
     currentEnd?: number;
@@ -85,6 +86,7 @@ function buildPayload(
     (payload.payload as Record<string, unknown>).payment = {
       entity: {
         id: opts.paymentId,
+        status: opts.paymentStatus ?? 'captured',
         amount: opts.amount ?? 299900,
         currency: opts.currency ?? 'INR',
         subscription_id: opts.subscriptionId,
@@ -239,6 +241,7 @@ describe('E-117: subscription.charged', () => {
       status: 'active',
       planId: 'plan_test_pro_plus',
       paymentId,
+      paymentStatus: 'captured',
       amount: 299900,
       currency: 'INR',
     });
@@ -256,7 +259,7 @@ describe('E-117: subscription.charged', () => {
     expect(txn!.subscriptionId).toBe(sub.id);
     expect(txn!.amount).toBe(299900);
     expect(txn!.currency).toBe('INR');
-    expect(txn!.status).toBe('active');
+    expect(txn!.status).toBe('captured');
     expect(txn!.payload).toBeDefined();
     expect(txn!.processedAt).not.toBeNull();
   });

@@ -235,6 +235,7 @@ async function handleCharged(
   const amount = extractAmount(payload);
   const currency = extractCurrency(payload) ?? 'INR';
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
+  const paymentStatus = extractPaymentStatus(payload) ?? 'captured';
   const currentPeriodEnd = extractCurrentPeriodEnd(payload) ?? new Date();
 
   return db.transaction(async (tx) => {
@@ -246,7 +247,7 @@ async function handleCharged(
         razorpayPaymentId,
         amount,
         currency,
-        status: razorpayStatus,
+        status: paymentStatus,
         payload,
         processedAt: new Date(),
       })
@@ -489,6 +490,13 @@ function extractCurrency(payload: Record<string, unknown>): string | null {
   return (
     (payload as { payload?: { payment?: { entity?: { currency?: string } } } })?.payload?.payment
       ?.entity?.currency ?? null
+  );
+}
+
+function extractPaymentStatus(payload: Record<string, unknown>): string | null {
+  return (
+    (payload as { payload?: { payment?: { entity?: { status?: string } } } })?.payload?.payment
+      ?.entity?.status ?? null
   );
 }
 

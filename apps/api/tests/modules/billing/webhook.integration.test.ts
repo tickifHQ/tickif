@@ -35,6 +35,7 @@ import { processWebhookEvent } from '../../../src/modules/billing/webhook-servic
 function makeChargedPayload(overrides: {
   subscriptionId: string;
   paymentId?: string;
+  paymentStatus?: string;
   amount?: number;
   currentEnd?: number;
   status?: string;
@@ -56,6 +57,7 @@ function makeChargedPayload(overrides: {
       payment: {
         entity: {
           id: overrides.paymentId ?? `pay_test_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          status: overrides.paymentStatus ?? 'captured',
           amount: overrides.amount ?? 299900,
           currency: 'INR',
         },
@@ -330,6 +332,7 @@ describe('E-117: webhook event processing', () => {
         .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_charge_1'));
       expect(payment).toBeDefined();
       expect(payment!.amount).toBe(299900);
+      expect(payment!.status).toBe('captured');
       expect(payment!.subscriptionId).toBe(sub.id);
       expect(payment!.payload).toBeDefined();
 
