@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { createHmac } from 'node:crypto';
 import { db, schema } from '@repo/db';
-import type { PlanTier } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY, type PlanTier } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
   createSubscription,
@@ -13,6 +13,7 @@ import {
 } from './razorpay-client.js';
 import { config } from '@repo/config';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
+import { orgsService } from '../orgs/service.js';
 
 /**
  * E-115 Subscribe service — business logic for subscription creation and plan changes.
@@ -34,22 +35,14 @@ async function assertOrgOwner(caller: Caller): Promise<void> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization');
   }
-  // Verify the user is the org owner. Only owners can manage billing.
-  const [membership] = await db
-    .select({ role: schema.member.role })
-    .from(schema.member)
-    .where(
-      and(
-        eq(schema.member.organizationId, caller.activeOrgId),
-        eq(schema.member.userId, caller.userId),
-      ),
-    )
-    .limit(1);
-
-  const role = membership?.role ?? '';
-  const isOwner = role.split(',').some((r) => r.trim() === 'owner');
-  if (!isOwner) {
-    throw AppError.forbidden('Only the organization owner can manage billing');
+  if (
+    !(await orgsService.hasCapability(
+      caller.userId,
+      caller.activeOrgId,
+      ORGANIZATION_CAPABILITY.BILLING,
+    ))
+  ) {
+    throw AppError.forbidden('Organization billing access required');
   }
 }
 

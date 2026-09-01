@@ -302,6 +302,20 @@
       "when": 1788204906388,
       "tag": "0044_cheerful_zeigeist",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788269622864,
+      "tag": "0045_sturdy_donald_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788269972546,
+      "tag": "0046_slippery_silverclaw",
+      "breakpoints": true
     }
   ]
 }

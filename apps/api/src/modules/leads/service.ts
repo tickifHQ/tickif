@@ -9,6 +9,7 @@ import type {
   ListLeadsResponse,
   UpdateLeadInput,
 } from '@repo/contracts';
+import { ORGANIZATION_ACCESS_SCOPE } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
 import {
@@ -75,7 +76,8 @@ function toCounts(counts: LeadStatusCount[]): LeadCountsResponse {
 }
 
 async function assertOrgMember(userId: string, organizationId: string): Promise<void> {
-  if (!(await orgsService.isMember(userId, organizationId))) {
+  const capabilities = await orgsService.getCapabilities(userId, organizationId);
+  if (!capabilities || capabilities.leadScope !== ORGANIZATION_ACCESS_SCOPE.FULL) {
     throw AppError.forbidden();
   }
 }

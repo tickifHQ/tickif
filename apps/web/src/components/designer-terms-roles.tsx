@@ -33,19 +33,25 @@ type Feedback = { tone: 'success' | 'error'; message: string };
 const roleLabels: Record<OrganizationMemberRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
+  billing_admin: 'Billing Admin',
   member: 'Member',
+  viewer: 'Viewer',
 };
 
 const roleDescriptions: Record<OrganizationMemberRole, string> = {
   owner: 'Full control of this studio, including its team and settings.',
   admin: 'Can manage the studio team and day-to-day workspace access.',
+  billing_admin: 'Can manage billing, invoices, and subscription operations.',
   member: 'Can access the studio workspace without team-management controls.',
+  viewer: 'Can view organization analytics without editing workspace data.',
 };
 
 const roleBadgeStyles: Record<OrganizationMemberRole, string> = {
   owner: 'bg-secondary text-secondary-foreground',
   admin: 'bg-info/10 text-info',
+  billing_admin: 'bg-feature/10 text-feature',
   member: 'bg-success-lighter text-success',
+  viewer: 'bg-muted text-muted-foreground',
 };
 
 const avatarStyles = [
@@ -56,6 +62,8 @@ const avatarStyles = [
 
 const assignableRoles = [
   { value: 'member', label: 'Member' },
+  { value: 'viewer', label: 'Viewer' },
+  { value: 'billing_admin', label: 'Billing Admin' },
   { value: 'admin', label: 'Admin' },
 ] satisfies ReadonlyArray<{ value: AssignableRole; label: string }>;
 
@@ -114,7 +122,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
     <div className="grid gap-3.5 sm:grid-cols-3">
       <Card className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
         <p data-metric="members" className="text-2xl leading-tight text-card-foreground">
-          {workspace.members.length}
+          {workspace.seatUsage}
         </p>
         <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
           Active members
@@ -233,6 +241,14 @@ function MembersList({
                   className="border-transparent bg-info/10 px-2 py-1 text-xs leading-none text-info uppercase"
                 >
                   You
+                </Badge>
+              ) : null}
+              {member.frozen ? (
+                <Badge
+                  shape="square"
+                  className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
+                >
+                  Inactive
                 </Badge>
               ) : null}
             </div>

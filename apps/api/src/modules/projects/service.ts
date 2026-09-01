@@ -41,6 +41,7 @@ import type {
   UpdateProjectRoomInput,
   Derivative,
 } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
@@ -718,11 +719,31 @@ function requireActiveOrganization(caller: Caller): string {
   return caller.activeOrgId;
 }
 
-function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
+async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
-  if (ownership.ownerUserId && ownership.ownerUserId === caller.userId) return;
+  if (
+    caller.activeOrgId === ownership.organizationId &&
+    (await orgsService.isMember(caller.userId, ownership.organizationId))
+  ) {
+    return;
+  }
   throw AppError.forbidden();
+}
+
+async function assertProjectCapability(
+  ownership: ProjectOwnership,
+  caller: Caller,
+  capability:
+    | typeof ORGANIZATION_CAPABILITY.WRITE_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.DELETE_PROJECTS,
+): Promise<void> {
+  if (caller.isBanned) throw AppError.forbidden('Account suspended');
+  if (caller.userRole === 'superadmin') return;
+  if (caller.activeOrgId !== ownership.organizationId) throw AppError.forbidden();
+  if (await orgsService.hasCapability(caller.userId, ownership.organizationId, capability)) return;
+  throw AppError.forbidden('Organization role does not allow this project action');
 }
 
 function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
@@ -732,10 +753,14 @@ function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
 async function requireEditableProject(
   projectId: string,
   caller: Caller,
+  capability:
+    | typeof ORGANIZATION_CAPABILITY.WRITE_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.DELETE_PROJECTS = ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
 ): Promise<ProjectOwnership> {
   const ownership = await projectsRepository.findOwnership(projectId);
   if (!ownership) throw AppError.notFound('Project not found');
-  await assertAccess(ownership, caller);
+  await assertProjectCapability(ownership, caller, capability);
   if (!isEditableProjectStatus(ownership.status)) {
     throw AppError.conflict('Only draft or changes-requested projects can be edited');
   }
@@ -1430,7 +1455,13 @@ export const projectsService = {
       throw AppError.forbidden('Designer role required');
     }
     const activeOrgId = requireActiveOrganization(caller);
-    if (!(await orgsService.isWriter(caller.userId, activeOrgId))) {
+    if (
+      !(await orgsService.hasCapability(
+        caller.userId,
+        activeOrgId,
+        ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+      ))
+    ) {
       throw AppError.forbidden('Organization write access required');
     }
     await validateProjectTaxonomy(input);
@@ -1470,7 +1501,7 @@ export const projectsService = {
   },
 
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {
-    await requireEditableProject(projectId, caller);
+    await requireEditableProject(projectId, caller, ORGANIZATION_CAPABILITY.DELETE_PROJECTS);
     const outcome = await projectsRepository.deleteProject(projectId);
     if (outcome === 'moderated') {
       throw AppError.conflict('Projects with moderation history cannot be deleted');
@@ -1484,7 +1515,7 @@ export const projectsService = {
   async duplicate(projectId: string, caller: Caller): Promise<DuplicateProjectResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
-    await assertAccess(ownership, caller);
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.WRITE_PROJECTS);
 
     const source = await projectsRepository.findById(projectId);
     if (!source) throw AppError.notFound('Project not found');
@@ -1585,7 +1616,7 @@ export const projectsService = {
   },
 
   async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
-    await requireEditableProject(projectId, caller);
+    await requireEditableProject(projectId, caller, ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     const action = assertTransition(project.status, 'submitted', caller.userRole);
@@ -1636,7 +1667,7 @@ export const projectsService = {
   async withdraw(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
-    await assertAccess(ownership, caller);
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS);
 
     const withdrawn = await transitionProject(
       {

@@ -34,6 +34,23 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
   },
   currentUserRole: 'owner',
   canManage: true,
+  rbacEnabled: true,
+  seatUsage: 2,
+  seatLimit: 10,
+  capabilities: {
+    billing: true,
+    manageMembers: true,
+    changeMemberRoles: true,
+    transferOwnership: true,
+    writeProjects: true,
+    submitProjects: true,
+    archiveProjects: true,
+    deleteProjects: true,
+    leadScope: 'full',
+    analyticsScope: 'full',
+    editOrganization: true,
+    manageVerification: true,
+  },
   members: [
     {
       id: 'member-owner',
@@ -42,6 +59,9 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
       email: 'asha@example.com',
       image: null,
       role: 'owner',
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
       joinedAt: '2026-08-01T00:00:00.000Z',
       isCurrentUser: true,
     },
@@ -52,6 +72,9 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
       email: 'rohan@example.com',
       image: null,
       role: 'member',
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
       joinedAt: '2026-08-02T00:00:00.000Z',
       isCurrentUser: false,
     },
@@ -61,10 +84,12 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
       id: 'invitation-1',
       email: 'new@example.com',
       role: 'admin',
+      state: 'pending',
       createdAt: '2026-08-03T00:00:00.000Z',
       expiresAt: '2099-08-05T00:00:00.000Z',
     },
   ],
+  ownershipTransfer: null,
 };
 
 describe('DesignerTermsRoles', () => {
@@ -114,6 +139,29 @@ describe('DesignerTermsRoles', () => {
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage rohan shah/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Pending invites' })).not.toBeInTheDocument();
+  });
+
+  it('counts only active seats and labels frozen memberships', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          seatUsage: 1,
+          members: [
+            ownerWorkspace.members[0]!,
+            {
+              ...ownerWorkspace.members[1]!,
+              frozen: true,
+              frozenAt: '2026-08-20T00:00:00.000Z',
+              freezeRank: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('1', { selector: '[data-metric="members"]' })).toBeInTheDocument();
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
   });
 
   it('invites a member through Better Auth and shows visible success feedback', async () => {
