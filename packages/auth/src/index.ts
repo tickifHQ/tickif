@@ -48,6 +48,13 @@ const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
   '/organization/update-member-role',
 ]);
 
+const ACTIVE_MEMBER_ORGANIZATION_READS = new Set([
+  '/organization/get-full-organization',
+  '/organization/list-members',
+  '/organization/list-invitations',
+  '/organization/get-active-member-role',
+]);
+
 const LIFECYCLE_ORGANIZATION_MUTATIONS = new Set([
   '/organization/leave',
   '/organization/remove-member',
@@ -235,6 +242,23 @@ async function protectedMutationOrganizationId(
   return invitation?.organizationId;
 }
 
+async function protectedReadOrganizationId(
+  query: unknown,
+  activeOrganizationId: string | null | undefined,
+): Promise<string | undefined> {
+  const organizationId = bodyString(query, 'organizationId');
+  if (organizationId) return organizationId;
+
+  const organizationSlug = bodyString(query, 'organizationSlug');
+  if (!organizationSlug) return activeOrganizationId ?? undefined;
+  const [organization] = await db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .where(eq(schema.organization.slug, organizationSlug))
+    .limit(1);
+  return organization?.id;
+}
+
 async function cancelPendingTransfersForParticipant(input: {
   organizationId: string;
   participantUserId: string;
@@ -306,7 +330,9 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      const requiresActiveMembership = ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path);
+      const isProtectedRead = ACTIVE_MEMBER_ORGANIZATION_READS.has(ctx.path);
+      const requiresActiveMembership =
+        isProtectedRead || ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path);
       const isLifecycleMutation = LIFECYCLE_ORGANIZATION_MUTATIONS.has(ctx.path);
       const isTeamContextMutation = TEAM_CONTEXT_MUTATIONS.has(ctx.path);
       if (!requiresActiveMembership && !isLifecycleMutation && !isTeamContextMutation) return;
@@ -361,11 +387,13 @@ export const auth = betterAuth({
         await requireActiveOrganizationMember(session.user.id, target.organizationId);
         return;
       }
-      const organizationId = await protectedMutationOrganizationId(
-        ctx.path,
-        ctx.body,
-        session.session.activeOrganizationId,
-      );
+      const organizationId = isProtectedRead
+        ? await protectedReadOrganizationId(ctx.query, session.session.activeOrganizationId)
+        : await protectedMutationOrganizationId(
+            ctx.path,
+            ctx.body,
+            session.session.activeOrganizationId,
+          );
       if (!organizationId) return;
 
       if (ctx.path !== '/organization/leave') {
