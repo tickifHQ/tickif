@@ -139,6 +139,29 @@ describe('DesignerTermsRoles', () => {
     expect(screen.queryByRole('heading', { name: 'Pending invites' })).not.toBeInTheDocument();
   });
 
+  it('counts only active seats and labels frozen memberships', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          seatUsage: 1,
+          members: [
+            ownerWorkspace.members[0]!,
+            {
+              ...ownerWorkspace.members[1]!,
+              frozen: true,
+              frozenAt: '2026-08-20T00:00:00.000Z',
+              freezeRank: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('1', { selector: '[data-metric="members"]' })).toBeInTheDocument();
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
+  });
+
   it('invites a member through Better Auth and shows visible success feedback', async () => {
     const user = userEvent.setup();
     render(<DesignerTermsRoles workspace={ownerWorkspace} />);

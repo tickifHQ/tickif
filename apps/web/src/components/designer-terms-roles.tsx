@@ -122,7 +122,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
     <div className="grid gap-3.5 sm:grid-cols-3">
       <Card className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
         <p data-metric="members" className="text-2xl leading-tight text-card-foreground">
-          {workspace.members.length}
+          {workspace.seatUsage}
         </p>
         <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
           Active members
@@ -241,6 +241,14 @@ function MembersList({
                   className="border-transparent bg-info/10 px-2 py-1 text-xs leading-none text-info uppercase"
                 >
                   You
+                </Badge>
+              ) : null}
+              {member.frozen ? (
+                <Badge
+                  shape="square"
+                  className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
+                >
+                  Inactive
                 </Badge>
               ) : null}
             </div>
