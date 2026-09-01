@@ -689,17 +689,23 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   })
   .openapi(withdrawRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.withdraw(id, caller(c.get('user')));
+    const result = await projectsService.withdraw(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
   })
   .openapi(moderationHistoryRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.moderationHistory(id, caller(c.get('user')));
+    const result = await projectsService.moderationHistory(
+      id,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(reviewCommentsRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.reviewComments(id, caller(c.get('user')));
+    const result = await projectsService.reviewComments(
+      id,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   // --- Public read endpoints (E-195) ---

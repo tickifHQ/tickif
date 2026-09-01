@@ -10,6 +10,7 @@ import {
   type SubscriptionState,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
 
 /**
@@ -27,10 +28,8 @@ import { invalidateEntitlementCache } from '../../lib/redis.js';
  * - Deferred. Billing notifications depend on E-238's billing_admin role for complete
  *   recipient resolution. Owner-only notifications can be added independently later.
  *
- * Resource freeze/unfreeze:
- * - Deferred to E-239/E-240. No branch/seat freeze infrastructure exists yet.
- *   E-117 restores planTier from preLapseTier on reactivation — that IS the
- *   entitlement restoration (E-119 reads planTier for access decisions).
+ * Member seats are reconciled after every successful or duplicate event. Retrying
+ * a webhook after reconciliation fails therefore repairs the membership state.
  */
 
 // ─── Signature Verification ──────────────────────────────────────────────────
@@ -117,8 +116,10 @@ export async function processWebhookEvent(
       return { outcome: 'ignored', reason: `Unhandled event: ${event}` };
   }
 
-  // Invalidate entitlement cache after any successful state/tier change.
-  // This ensures the next entitlement read reflects the webhook-driven update.
+  if (result.outcome === 'processed' || result.outcome === 'duplicate') {
+    await orgsService.reconcileMemberSeats(subscription.organizationId);
+  }
+
   if (result.outcome === 'processed') {
     await invalidateEntitlementCache(subscription.organizationId);
   }
