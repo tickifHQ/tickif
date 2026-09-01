@@ -88,20 +88,48 @@ export async function makeOrganization(
   return row!;
 }
 
+export async function makeTeam(
+  overrides: Partial<typeof schema.team.$inferInsert> & { organizationId?: string } = {},
+) {
+  const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const id = overrides.id ?? uid('team');
+  const [row] = await db
+    .insert(schema.team)
+    .values({
+      id,
+      organizationId,
+      name: overrides.name ?? 'Test Branch',
+      createdAt: overrides.createdAt ?? new Date(),
+      updatedAt: overrides.updatedAt ?? new Date(),
+      ...overrides,
+    })
+    .returning();
+  return row!;
+}
+
 export async function makeDesigner(
   overrides: Partial<typeof schema.designerProfile.$inferInsert> = {},
 ) {
   const userId = overrides.userId ?? (await makeUser()).id;
   const orgId = overrides.orgId ?? (await makeOrganization()).id;
+  const teamId = overrides.teamId ?? (await makeTeam({ organizationId: orgId })).id;
   const [row] = await db
     .insert(schema.designerProfile)
     .values({
       userId,
       orgId,
+      teamId,
+      slug: overrides.slug ?? `test-studio-${uid('profile')}`,
       displayName: overrides.displayName ?? 'Test Studio',
       ...overrides,
     })
     .returning();
+  await db.insert(schema.teamMember).values({
+    id: uid('teamMember'),
+    teamId,
+    userId,
+    createdAt: new Date(),
+  });
   return row!;
 }
 
@@ -194,10 +222,20 @@ export async function makeProjectImage(
 
 export async function makeLead(overrides: Partial<typeof schema.lead.$inferInsert> = {}) {
   const organizationId = overrides.organizationId ?? (await makeOrganization()).id;
+  const [existingTeam] = overrides.teamId
+    ? []
+    : await db
+        .select({ id: schema.team.id })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, organizationId))
+        .orderBy(schema.team.createdAt, schema.team.id)
+        .limit(1);
+  const teamId = overrides.teamId ?? existingTeam?.id ?? (await makeTeam({ organizationId })).id;
   const [row] = await db
     .insert(schema.lead)
     .values({
       organizationId,
+      teamId,
       name: overrides.name ?? 'Test Lead',
       contactNumber: overrides.contactNumber ?? '+919800000000',
       ...overrides,

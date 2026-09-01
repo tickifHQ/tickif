@@ -31,6 +31,8 @@ const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
   orgId: 'org-1',
+  teamId: 'team-1',
+  slug: 'test-studio',
   userId: 'user-1',
   entityType: 'individual',
   displayName: 'Test Studio',

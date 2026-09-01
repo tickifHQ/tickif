@@ -83,6 +83,8 @@ const { presignUpload, presignDownload, objectExists, deleteObject } = await imp
 const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: 'profile-1',
   orgId: 'org-1',
+  teamId: 'team-1',
+  slug: 'test-studio',
   userId: 'user-1',
   entityType: 'individual',
   displayName: 'Test Studio',
@@ -286,7 +288,7 @@ describe('portfolioService.updatePortfolio', () => {
     expect(portfolioRepository.findOrCreate).not.toHaveBeenCalled();
   });
 
-  it('falls back to the org slug in portfolioUrl before a custom slug is chosen', async () => {
+  it('falls back to the branch profile slug before a custom slug is chosen', async () => {
     setupResolveProfile();
     setupGetPortfolio(makePortfolio({ portfolioSlug: null }));
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
@@ -295,7 +297,7 @@ describe('portfolioService.updatePortfolio', () => {
 
     const result = await portfolioService.updatePortfolio({ tagline: 'New tagline' }, caller);
 
-    expect(result.portfolioUrl).toBe('http://localhost:3000/d/anika-spaces-a1b2c3');
+    expect(result.portfolioUrl).toBe('http://localhost:3000/d/test-studio');
   });
 
   it('does not upsert the portfolio row when only profile fields change', async () => {

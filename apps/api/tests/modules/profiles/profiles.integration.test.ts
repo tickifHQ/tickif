@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
+import { makeDesigner, makeLead, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import {
   activateOrganization,
@@ -396,10 +396,19 @@ describe('GET /api/profiles/me/dashboard', () => {
       userId,
       displayName: 'Alpha Studio',
     });
+    const betaTeam = await makeTeam({ organizationId: orgB.id });
+    await db.insert(schema.teamMember).values({
+      id: `tm-beta-${userId}`,
+      teamId: betaTeam.id,
+      userId,
+      createdAt: new Date(),
+    });
     const [betaProfile] = await db
       .insert(schema.designerProfile)
       .values({
         orgId: orgB.id,
+        teamId: betaTeam.id,
+        slug: `beta-studio-${userId}`,
         displayName: 'Beta Studio',
         address: 'Indiranagar, Bangalore',
       })
@@ -411,14 +420,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       title: 'Beta Published',
     });
     await makeProject({ designerId: betaProfile!.id, status: 'draft', title: 'Beta Draft' });
-    await db
-      .update(schema.session)
-      .set({ activeOrganizationId: orgB.id })
-      .where(eq(schema.session.userId, userId));
-    const freshCookie = cookie
-      .split('; ')
-      .filter((c) => !c.startsWith('better-auth.session_data'))
-      .join('; ');
+    const freshCookie = await activateOrganization(cookie, orgB.id);
 
     const res = await request('GET', '/api/profiles/me/dashboard', { cookie: freshCookie });
 
@@ -433,7 +435,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       draft: 1,
     });
     expect(body.shareUrl).toBe(
-      new URL('/d/beta-studio', config.PUBLIC_WEB_URL).toString(),
+      new URL(`/d/${betaProfile!.slug}`, config.PUBLIC_WEB_URL).toString(),
     );
   });
 });
@@ -459,10 +461,11 @@ describe('GET /api/profiles/:id — public read', () => {
     expect(body).not.toHaveProperty('updatedAt');
   });
 
-  it('returns public projection by organization slug', async () => {
+  it('returns public projection by branch profile slug', async () => {
     const org = await makeOrganization({ name: 'Studio Noir', slug: 'studio-noir' });
     const designer = await makeDesigner({
       orgId: org.id,
+      slug: 'studio-noir',
       displayName: 'Studio Noir',
       status: 'active',
     });

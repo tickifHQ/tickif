@@ -67,6 +67,8 @@ const { reviewsService } = await import('../../../src/modules/reviews/service.js
 const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: 'profile-1',
   orgId: 'org-1',
+  teamId: 'team-1',
+  slug: 'test-studio',
   userId: 'user-1',
   entityType: 'company',
   displayName: 'Test Studio',
