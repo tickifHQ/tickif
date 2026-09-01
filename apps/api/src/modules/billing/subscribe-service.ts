@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { createHmac } from 'node:crypto';
 import { db, schema } from '@repo/db';
 import { ORGANIZATION_CAPABILITY, type PlanTier } from '@repo/contracts';
