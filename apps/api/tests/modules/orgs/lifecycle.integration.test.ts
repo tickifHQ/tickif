@@ -279,6 +279,10 @@ describe('organization leave and removal lifecycle', () => {
       role: 'member',
     });
     const project = await makeProject({ designerId: designer.id, status: 'published' });
+    const transferCreate = await postApi('/ownership-transfers', owner.cookie, {
+      targetMemberId: member.memberId,
+    });
+    const transfer = (await transferCreate.json()) as { id: string };
 
     const response = await postAuth('remove-member', owner.cookie, {
       organizationId,
@@ -291,10 +295,7 @@ describe('organization leave and removal lifecycle', () => {
         .select({ id: schema.member.id })
         .from(schema.member)
         .where(eq(schema.member.id, member.memberId)),
-      db
-        .select({ id: schema.user.id })
-        .from(schema.user)
-        .where(eq(schema.user.id, member.userId)),
+      db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.id, member.userId)),
       db
         .select({ id: schema.project.id, status: schema.project.status })
         .from(schema.project)
@@ -303,10 +304,93 @@ describe('organization leave and removal lifecycle', () => {
     expect(membership).toEqual([]);
     expect(user).toEqual([{ id: member.userId }]);
     expect(persistedProject).toEqual([{ id: project.id, status: 'published' }]);
+    const [audit] = await db
+      .select({ actorUserId: schema.ownershipTransferAuditEvent.actorUserId })
+      .from(schema.ownershipTransferAuditEvent)
+      .where(
+        and(
+          eq(schema.ownershipTransferAuditEvent.transferId, transfer.id),
+          eq(schema.ownershipTransferAuditEvent.status, 'cancelled'),
+        ),
+      );
+    expect(audit?.actorUserId).toBe(owner.userId);
+  });
+
+  it('blocks a frozen Owner from changing roles through Better Auth', async () => {
+    const organization = await makeOrganization({ slug: 'frozen-owner-role-studio' });
+    const owner = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006027',
+      role: 'owner',
+      frozen: true,
+    });
+    const member = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006028',
+      role: 'member',
+    });
+
+    const response = await postAuth('update-member-role', owner.cookie, {
+      organizationId: organization.id,
+      memberId: member.memberId,
+      role: 'admin',
+    });
+
+    expect(response.status).toBe(403);
+    const [unchanged] = await db
+      .select({ role: schema.member.role })
+      .from(schema.member)
+      .where(eq(schema.member.id, member.memberId));
+    expect(unchanged?.role).toBe('member');
   });
 });
 
 describe('organization ownership transfer lifecycle', () => {
+  it('expires a stale pending transfer atomically before creating its replacement', async () => {
+    const organization = await makeOrganization({ slug: 'expired-transfer-replacement-studio' });
+    const owner = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006029',
+      role: 'owner',
+    });
+    const target = await makeMemberSession({
+      organizationId: organization.id,
+      phone: '+919800006030',
+      role: 'member',
+    });
+    const firstCreatedAt = new Date('2026-08-01T00:00:00.000Z');
+    const first = await orgsService.createOwnershipTransfer({
+      userId: owner.userId,
+      organizationId: organization.id,
+      targetMemberId: target.memberId,
+      now: firstCreatedAt,
+    });
+
+    const replacement = await orgsService.createOwnershipTransfer({
+      userId: owner.userId,
+      organizationId: organization.id,
+      targetMemberId: target.memberId,
+      now: new Date(first.expiresAt),
+    });
+
+    expect(replacement.status).toBe('pending');
+    const [expired] = await db
+      .select({ status: schema.ownershipTransferRequest.status })
+      .from(schema.ownershipTransferRequest)
+      .where(eq(schema.ownershipTransferRequest.id, first.id));
+    const [audit] = await db
+      .select({ actorUserId: schema.ownershipTransferAuditEvent.actorUserId })
+      .from(schema.ownershipTransferAuditEvent)
+      .where(
+        and(
+          eq(schema.ownershipTransferAuditEvent.transferId, first.id),
+          eq(schema.ownershipTransferAuditEvent.status, 'expired'),
+        ),
+      );
+    expect(expired?.status).toBe('expired');
+    expect(audit?.actorUserId).toBe(owner.userId);
+  });
+
   it('supports target decline, initiator cancel, and injected-clock expiry', async () => {
     const organization = await makeOrganization({ slug: 'resolved-transfer-studio' });
     const owner = await makeMemberSession({
@@ -451,7 +535,9 @@ describe('organization ownership transfer lifecycle', () => {
     const owners = await db
       .select({ userId: schema.member.userId })
       .from(schema.member)
-      .where(and(eq(schema.member.organizationId, organization.id), eq(schema.member.role, 'owner')));
+      .where(
+        and(eq(schema.member.organizationId, organization.id), eq(schema.member.role, 'owner')),
+      );
     expect(owners).toEqual([{ userId: target.userId }]);
   });
 
@@ -484,7 +570,9 @@ describe('organization ownership transfer lifecycle', () => {
     const owners = await db
       .select({ userId: schema.member.userId })
       .from(schema.member)
-      .where(and(eq(schema.member.organizationId, organization.id), eq(schema.member.role, 'owner')));
+      .where(
+        and(eq(schema.member.organizationId, organization.id), eq(schema.member.role, 'owner')),
+      );
     expect(transfer?.status).toBe('cancelled');
     expect(owners).toEqual([{ userId: owner.userId }]);
   });
@@ -521,10 +609,7 @@ describe('organization ownership transfer lifecycle', () => {
         .where(eq(schema.member.id, currentOwner.memberId));
     });
 
-    const staleAccept = await postApi(
-      `/ownership-transfers/${request.id}/accept`,
-      target.cookie,
-    );
+    const staleAccept = await postApi(`/ownership-transfers/${request.id}/accept`, target.cookie);
     const replacement = await postApi('/ownership-transfers', currentOwner.cookie, {
       targetMemberId: target.memberId,
     });

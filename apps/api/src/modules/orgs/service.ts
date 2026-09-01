@@ -61,6 +61,16 @@ function isUniqueViolation(error: unknown, constraint: string): boolean {
   return isUniqueViolation(candidate.cause, constraint);
 }
 
+async function sendOwnershipEmailBestEffort(
+  message: Parameters<typeof sendEmail>[0],
+): Promise<void> {
+  try {
+    await sendEmail(message);
+  } catch {
+    console.error('[organizations] Ownership transfer email delivery failed');
+  }
+}
+
 async function transferResponse(
   request: OwnershipTransferRecord,
 ): Promise<OwnershipTransferResponse | null> {
@@ -285,17 +295,16 @@ export const orgsService = {
     ) {
       throw AppError.forbidden('Only the active organization Owner can transfer ownership');
     }
-    const target = await orgsRepository.findMemberById(
-      input.organizationId,
-      input.targetMemberId,
-    );
+    const target = await orgsRepository.findMemberById(input.organizationId, input.targetMemberId);
     if (
       !target ||
       target.frozen ||
-      target.role !== ORGANIZATION_MEMBER_ROLE.ADMIN &&
-      target.role !== ORGANIZATION_MEMBER_ROLE.MEMBER
+      (target.role !== ORGANIZATION_MEMBER_ROLE.ADMIN &&
+        target.role !== ORGANIZATION_MEMBER_ROLE.MEMBER)
     ) {
-      throw AppError.unprocessable('Ownership can only be transferred to an active Admin or Member');
+      throw AppError.unprocessable(
+        'Ownership can only be transferred to an active Admin or Member',
+      );
     }
     if (target.userId === input.userId) {
       throw AppError.unprocessable('Choose another organization member');
@@ -309,9 +318,7 @@ export const orgsService = {
         initiatorUserId: input.userId,
         targetUserId: target.userId,
         targetMemberId: target.id,
-        expiresAt: new Date(
-          now.getTime() + config.OWNERSHIP_TRANSFER_EXPIRY_SECONDS * 1_000,
-        ),
+        expiresAt: new Date(now.getTime() + config.OWNERSHIP_TRANSFER_EXPIRY_SECONDS * 1_000),
         now,
       });
     } catch (error) {
@@ -323,7 +330,7 @@ export const orgsService = {
     const response = await transferResponse(request);
     if (!response) throw AppError.conflict('Ownership transfer target changed');
     const transferUrl = new URL('/designer/terms-roles', config.PUBLIC_WEB_URL).toString();
-    await sendEmail({
+    await sendOwnershipEmailBestEffort({
       to: target.email,
       subject: 'Tickif ownership transfer request',
       idempotencyKey: `ownership-transfer-requested-${request.id}`,
@@ -373,13 +380,13 @@ export const orgsService = {
       ]);
       if (previousOwner && newOwner) {
         await Promise.all([
-          sendEmail({
+          sendOwnershipEmailBestEffort({
             to: previousOwner.email,
             subject: 'Tickif ownership transfer completed',
             idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
             html: `<p>${escapeHtml(newOwner.name)} is now the organization Owner. Your role is now Admin.</p>`,
           }),
-          sendEmail({
+          sendOwnershipEmailBestEffort({
             to: newOwner.email,
             subject: 'You are now the Tickif organization Owner',
             idempotencyKey: `ownership-transfer-completed-target-${result.id}`,

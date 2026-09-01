@@ -1,6 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({ sendEmail: vi.fn() }));
+
+vi.mock('@repo/auth/email', () => ({
+  escapeHtml: (value: string) => value,
+  sendEmail: mocks.sendEmail,
+}));
+
 vi.mock('../../../src/modules/orgs/repository.js', () => ({
+  OWNERSHIP_TRANSFER_RESULT: {
+    NOT_FOUND: 'not_found',
+    NOT_PENDING: 'not_pending',
+    EXPIRED: 'expired',
+    FORBIDDEN: 'forbidden',
+    INVALID_TARGET: 'invalid_target',
+    OWNER_STATE_CHANGED: 'owner_state_changed',
+  },
   orgsRepository: {
     hasMembership: vi.fn(),
     findSoleOrganizationForUser: vi.fn(),
@@ -13,6 +28,11 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     freezeMembersToLimit: vi.fn(),
     restoreMembersToLimit: vi.fn(),
     findPendingOwnershipTransfer: vi.fn(),
+    findMemberById: vi.fn(),
+    createOwnershipTransfer: vi.fn(),
+    findOwnershipTransfer: vi.fn(),
+    resolveOwnershipTransfer: vi.fn(),
+    findUser: vi.fn(),
   },
 }));
 
@@ -23,6 +43,7 @@ describe('orgsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(orgsRepository.findPendingOwnershipTransfer).mockResolvedValue(null);
+    mocks.sendEmail.mockResolvedValue(undefined);
   });
 
   it('delegates membership and unambiguous legacy-session lookup to the repository', async () => {
@@ -216,5 +237,108 @@ describe('orgsService', () => {
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
     ).resolves.toMatchObject({ currentUserRole: 'member', canManage: false, invitations: [] });
     expect(orgsRepository.listInvitations).not.toHaveBeenCalled();
+  });
+
+  it('returns a created transfer when request email delivery fails', async () => {
+    const request = {
+      id: '00000000-0000-4000-8000-000000000001',
+      organizationId: 'org-1',
+      initiatorUserId: 'owner-user',
+      targetUserId: 'target-user',
+      targetMemberId: 'target-member',
+      status: 'pending' as const,
+      expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+      resolvedAt: null,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    };
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'owner',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findMemberById).mockResolvedValue({
+      id: 'target-member',
+      userId: 'target-user',
+      role: 'member',
+      frozen: false,
+      name: 'Target User',
+      email: 'target@example.com',
+    });
+    vi.mocked(orgsRepository.createOwnershipTransfer).mockResolvedValue(request);
+    vi.mocked(orgsRepository.findUser).mockResolvedValue({
+      id: 'owner-user',
+      name: 'Owner User',
+      email: 'owner@example.com',
+    });
+    mocks.sendEmail.mockRejectedValue(new Error('provider unavailable'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      orgsService.createOwnershipTransfer({
+        userId: 'owner-user',
+        organizationId: 'org-1',
+        targetMemberId: 'target-member',
+        now: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ id: request.id, status: 'pending' });
+    expect(errorLog).toHaveBeenCalledWith(
+      '[organizations] Ownership transfer email delivery failed',
+    );
+    errorLog.mockRestore();
+  });
+
+  it('returns an accepted transfer when completion email delivery fails', async () => {
+    const accepted = {
+      id: '00000000-0000-4000-8000-000000000002',
+      organizationId: 'org-1',
+      initiatorUserId: 'owner-user',
+      targetUserId: 'target-user',
+      targetMemberId: 'target-member',
+      status: 'accepted' as const,
+      expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+      resolvedAt: new Date('2026-08-02T00:00:00.000Z'),
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-02T00:00:00.000Z'),
+    };
+    vi.mocked(orgsRepository.findOwnershipTransfer).mockResolvedValue({
+      ...accepted,
+      status: 'pending',
+      resolvedAt: null,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.resolveOwnershipTransfer).mockResolvedValue(accepted);
+    vi.mocked(orgsRepository.findMemberById).mockResolvedValue({
+      id: 'target-member',
+      userId: 'target-user',
+      role: 'owner',
+      frozen: false,
+      name: 'Target User',
+      email: 'target@example.com',
+    });
+    vi.mocked(orgsRepository.findUser).mockImplementation(async (userId) =>
+      userId === 'owner-user'
+        ? { id: userId, name: 'Owner User', email: 'owner@example.com' }
+        : { id: userId, name: 'Target User', email: 'target@example.com' },
+    );
+    mocks.sendEmail.mockRejectedValue(new Error('provider unavailable'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      orgsService.resolveOwnershipTransfer({
+        id: accepted.id,
+        userId: 'target-user',
+        action: 'accept',
+        now: new Date('2026-08-02T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ id: accepted.id, status: 'accepted' });
+    expect(errorLog).toHaveBeenCalledTimes(2);
+    errorLog.mockRestore();
   });
 });

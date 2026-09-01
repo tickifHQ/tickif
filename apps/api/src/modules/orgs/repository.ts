@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, lte, max, sql } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import type { OwnershipTransferStatus } from '@repo/contracts';
 
@@ -253,12 +253,7 @@ export const orgsRepository = {
       })
       .from(schema.member)
       .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-      .where(
-        and(
-          eq(schema.member.id, memberId),
-          eq(schema.member.organizationId, organizationId),
-        ),
-      )
+      .where(and(eq(schema.member.id, memberId), eq(schema.member.organizationId, organizationId)))
       .limit(1);
     return row ?? null;
   },
@@ -281,6 +276,28 @@ export const orgsRepository = {
     now: Date;
   }): Promise<OwnershipTransferRecord> {
     return db.transaction(async (tx) => {
+      const expired = await tx
+        .update(schema.ownershipTransferRequest)
+        .set({ status: 'expired', resolvedAt: input.now, updatedAt: input.now })
+        .where(
+          and(
+            eq(schema.ownershipTransferRequest.organizationId, input.organizationId),
+            eq(schema.ownershipTransferRequest.status, 'pending'),
+            lte(schema.ownershipTransferRequest.expiresAt, input.now),
+          ),
+        )
+        .returning({ id: schema.ownershipTransferRequest.id });
+      if (expired.length > 0) {
+        await tx.insert(schema.ownershipTransferAuditEvent).values(
+          expired.map(({ id }) => ({
+            transferId: id,
+            status: 'expired' as const,
+            actorUserId: input.initiatorUserId,
+            createdAt: input.now,
+          })),
+        );
+      }
+
       const [request] = await tx
         .insert(schema.ownershipTransferRequest)
         .values({
@@ -396,11 +413,7 @@ export const orgsRepository = {
         );
         if (!target || target.frozen || !['admin', 'member'].includes(target.role)) {
           status = 'cancelled';
-        } else if (
-          owners.length !== 1 ||
-          !owner ||
-          owner.userId !== request.initiatorUserId
-        ) {
+        } else if (owners.length !== 1 || !owner || owner.userId !== request.initiatorUserId) {
           status = 'cancelled';
           ownerStateChanged = true;
         } else {

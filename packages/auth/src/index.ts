@@ -77,6 +77,57 @@ async function protectedMutationOrganizationId(
     .limit(1);
   return invitation?.organizationId;
 }
+
+async function cancelPendingTransfersForParticipant(input: {
+  organizationId: string;
+  participantUserId: string;
+  actorUserId: string;
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    const cancelledAt = new Date();
+    const cancelled = await tx
+      .update(schema.ownershipTransferRequest)
+      .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
+      .where(
+        and(
+          eq(schema.ownershipTransferRequest.organizationId, input.organizationId),
+          eq(schema.ownershipTransferRequest.status, 'pending'),
+          or(
+            eq(schema.ownershipTransferRequest.targetUserId, input.participantUserId),
+            eq(schema.ownershipTransferRequest.initiatorUserId, input.participantUserId),
+          ),
+        ),
+      )
+      .returning({ id: schema.ownershipTransferRequest.id });
+    if (cancelled.length > 0) {
+      await tx.insert(schema.ownershipTransferAuditEvent).values(
+        cancelled.map(({ id }) => ({
+          transferId: id,
+          status: 'cancelled' as const,
+          actorUserId: input.actorUserId,
+          createdAt: cancelledAt,
+        })),
+      );
+    }
+  });
+}
+
+async function removedMember(body: unknown, organizationId: string) {
+  const memberIdOrEmail = bodyString(body, 'memberIdOrEmail');
+  if (!memberIdOrEmail) return undefined;
+  const [member] = await db
+    .select({ userId: schema.member.userId, role: schema.member.role })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+    .where(
+      and(
+        eq(schema.member.organizationId, organizationId),
+        or(eq(schema.member.id, memberIdOrEmail), eq(schema.user.email, memberIdOrEmail)),
+      ),
+    )
+    .limit(1);
+  return member;
+}
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
@@ -116,30 +167,24 @@ export const auth = betterAuth({
             message: 'Transfer ownership or delete the organization before leaving',
           });
         }
-        await db.transaction(async (tx) => {
-          const cancelledAt = new Date();
-          const cancelled = await tx
-            .update(schema.ownershipTransferRequest)
-            .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
-            .where(
-              and(
-                eq(schema.ownershipTransferRequest.organizationId, organizationId),
-                eq(schema.ownershipTransferRequest.status, 'pending'),
-                eq(schema.ownershipTransferRequest.targetUserId, session.user.id),
-              ),
-            )
-            .returning({ id: schema.ownershipTransferRequest.id });
-          if (cancelled.length > 0) {
-            await tx.insert(schema.ownershipTransferAuditEvent).values(
-              cancelled.map(({ id }) => ({
-                transferId: id,
-                status: 'cancelled' as const,
-                actorUserId: session.user.id,
-                createdAt: cancelledAt,
-              })),
-            );
-          }
+        await cancelPendingTransfersForParticipant({
+          organizationId,
+          participantUserId: session.user.id,
+          actorUserId: session.user.id,
         });
+      }
+      if (
+        ctx.path === '/organization/remove-member' &&
+        (actorRole === 'owner' || actorRole === 'admin')
+      ) {
+        const target = await removedMember(ctx.body, organizationId);
+        if (target && target.role !== 'owner') {
+          await cancelPendingTransfersForParticipant({
+            organizationId,
+            participantUserId: target.userId,
+            actorUserId: session.user.id,
+          });
+        }
       }
     }),
   },
@@ -306,36 +351,6 @@ export const auth = betterAuth({
               message: 'Ownership changes require an accepted transfer request',
             });
           }
-        },
-        beforeRemoveMember: async ({ member, user }) => {
-          await requireOrganizationRbac(member.organizationId);
-          await db.transaction(async (tx) => {
-            const cancelledAt = new Date();
-            const cancelled = await tx
-              .update(schema.ownershipTransferRequest)
-              .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
-              .where(
-                and(
-                  eq(schema.ownershipTransferRequest.organizationId, member.organizationId),
-                  eq(schema.ownershipTransferRequest.status, 'pending'),
-                  or(
-                    eq(schema.ownershipTransferRequest.targetUserId, member.userId),
-                    eq(schema.ownershipTransferRequest.initiatorUserId, member.userId),
-                  ),
-                ),
-              )
-              .returning({ id: schema.ownershipTransferRequest.id });
-            if (cancelled.length > 0) {
-              await tx.insert(schema.ownershipTransferAuditEvent).values(
-                cancelled.map(({ id }) => ({
-                  transferId: id,
-                  status: 'cancelled' as const,
-                  actorUserId: user.id,
-                  createdAt: cancelledAt,
-                })),
-              );
-            }
-          });
         },
         beforeAcceptInvitation: async ({ invitation }) => {
           await requireOrganizationRbac(invitation.organizationId);
