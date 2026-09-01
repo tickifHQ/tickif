@@ -441,6 +441,7 @@ export const auth = betterAuth({
       // flow. Generic create/delete endpoints would allow profile-less orgs or
       // destructive deletion outside that workflow.
       allowUserToCreateOrganization: false,
+      organizationLimit: Number.MAX_SAFE_INTEGER,
       disableOrganizationDeletion: true,
       ac: orgAc,
       roles: orgRoles,
@@ -711,7 +712,7 @@ export async function getSession(headers: Headers, opts?: { disableCookieCache?:
  * Select an authenticated user's active organization through better-auth so
  * membership is validated and both the session row and session cookie agree.
  */
-export function setActiveOrganization(headers: Headers, organizationId: string) {
+export function setActiveOrganization(headers: Headers, organizationId: string | null) {
   return auth.api.setActiveOrganization({
     headers,
     body: { organizationId },

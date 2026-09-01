@@ -1,5 +1,43 @@
 import { z } from 'zod';
 
+export const ACTIVE_CONTEXT_KIND = {
+  PERSONAL: 'personal',
+  ORGANIZATION: 'organization',
+} as const;
+
+export const activeContextSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal(ACTIVE_CONTEXT_KIND.PERSONAL) }).strict(),
+    z
+      .object({
+        kind: z.literal(ACTIVE_CONTEXT_KIND.ORGANIZATION),
+        organizationId: z.string().min(1),
+        teamId: z.string().min(1),
+      })
+      .strict(),
+  ])
+  .meta({ id: 'ActiveContext' });
+export type ActiveContext = z.infer<typeof activeContextSchema>;
+
+export const setActiveContextSchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal(ACTIVE_CONTEXT_KIND.PERSONAL) }).strict(),
+    z
+      .object({
+        kind: z.literal(ACTIVE_CONTEXT_KIND.ORGANIZATION),
+        organizationId: z.string().min(1),
+        teamId: z.string().min(1).optional(),
+      })
+      .strict(),
+  ])
+  .meta({ id: 'SetActiveContext' });
+export type SetActiveContext = z.infer<typeof setActiveContextSchema>;
+
+export const activeContextResponseSchema = z
+  .object({ context: activeContextSchema })
+  .meta({ id: 'ActiveContextResponse' });
+export type ActiveContextResponse = z.infer<typeof activeContextResponseSchema>;
+
 export const ORGANIZATION_MEMBER_ROLE = {
   OWNER: 'owner',
   ADMIN: 'admin',

@@ -14,6 +14,8 @@ import {
   type OrganizationBranchesResponse,
   type OrganizationInvitationState,
   type OwnershipTransferResponse,
+  type ActiveContext,
+  type SetActiveContext,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
 import { escapeHtml, sendEmail } from '@repo/auth/email';
@@ -156,14 +158,48 @@ function allowsCapability(
 }
 
 export const orgsService = {
+  async resolvePreferredContext(userId: string): Promise<ActiveContext> {
+    const context = await orgsRepository.findContextPreference(userId);
+    if (context.kind === 'personal') return context;
+    if (
+      await orgsRepository.isValidOrganizationContext(
+        userId,
+        context.organizationId,
+        context.teamId,
+      )
+    ) {
+      return context;
+    }
+    const personal = { kind: 'personal' } as const;
+    await orgsRepository.saveContextPreference(userId, personal);
+    return personal;
+  },
+
+  async resolveContextSelection(
+    userId: string,
+    selection: SetActiveContext,
+  ): Promise<ActiveContext> {
+    if (selection.kind === 'personal') return selection;
+    const teamId =
+      selection.teamId ??
+      (await orgsRepository.findDefaultActiveTeamForUser(userId, selection.organizationId));
+    if (!teamId) throw AppError.forbidden('Organization context is unavailable');
+    const valid = await orgsRepository.isValidOrganizationContext(
+      userId,
+      selection.organizationId,
+      teamId,
+    );
+    if (!valid) throw AppError.forbidden('Organization context is unavailable');
+    return { kind: 'organization', organizationId: selection.organizationId, teamId };
+  },
+
+  async saveContextPreference(userId: string, context: ActiveContext): Promise<void> {
+    await orgsRepository.saveContextPreference(userId, context);
+  },
+
   /** True when the user has any membership role in the organization. */
   isMember(userId: string, organizationId: string): Promise<boolean> {
     return orgsRepository.hasMembership(userId, organizationId);
-  },
-
-  /** Resolve a legacy session only when membership is unambiguous. */
-  findSoleOrganizationForUser(userId: string): Promise<string | null> {
-    return orgsRepository.findSoleOrganizationForUser(userId);
   },
 
   findDefaultActiveTeamForUser(userId: string, organizationId: string): Promise<string | null> {

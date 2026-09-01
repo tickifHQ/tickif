@@ -1,17 +1,23 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   createOwnershipTransferSchema,
+  activeContextResponseSchema,
+  setActiveContextSchema,
+  onboardDesignerSchema,
+  onboardDesignerResponseSchema,
   errorResponseSchema,
   organizationWorkspaceResponseSchema,
   organizationBranchesResponseSchema,
   ownershipTransferIdParamSchema,
   ownershipTransferResponseSchema,
 } from '@repo/contracts';
+import { setActiveOrganization, setActiveTeam } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { orgsService } from './service.js';
+import { profilesService } from '../profiles/service.js';
 
 const errorJson = (description: string) => ({
   description,
@@ -51,6 +57,62 @@ const listBranchesRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller is not a member of the active organization'),
     422: errorJson('No active organization selected'),
+  },
+});
+
+const getContextRoute = createRoute({
+  method: 'get',
+  path: '/context',
+  tags: ['Organizations'],
+  summary: 'Get the active personal or organization context',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Current validated context',
+      content: { 'application/json': { schema: activeContextResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+  },
+});
+
+const setContextRoute = createRoute({
+  method: 'put',
+  path: '/context',
+  tags: ['Organizations'],
+  summary: 'Select and persist a personal or organization context',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: { required: true, content: { 'application/json': { schema: setActiveContextSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Selected context',
+      content: { 'application/json': { schema: activeContextResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Organization or branch membership is unavailable'),
+  },
+});
+
+const createOrganizationRoute = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['Organizations'],
+  summary: 'Create another organization with its default branch and public profile',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: { required: true, content: { 'application/json': { schema: onboardDesignerSchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Organization created and selected',
+      content: { 'application/json': { schema: onboardDesignerResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    422: errorJson('Invalid organization profile'),
   },
 });
 
@@ -110,6 +172,57 @@ const cancelTransferRoute = transferActionRoute('cancel');
 export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(getContextRoute, async (c) => c.json({ context: c.get('activeContext') }, 200))
+  .openapi(setContextRoute, async (c) => {
+    const user = c.get('user')!;
+    const context = await orgsService.resolveContextSelection(user.id, c.req.valid('json'));
+
+    const organizationResponse = await setActiveOrganization(
+      c.req.raw.headers,
+      context.kind === 'organization' ? context.organizationId : null,
+    );
+    if (!organizationResponse.ok) throw new Error('Failed to select organization context');
+    for (const cookie of organizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
+    if (context.kind === 'organization') {
+      const teamResponse = await setActiveTeam(c.req.raw.headers, context.teamId);
+      if (!teamResponse.ok) throw new Error('Failed to select branch context');
+      for (const cookie of teamResponse.headers.getSetCookie()) {
+        c.header('Set-Cookie', cookie, { append: true });
+      }
+    }
+    await orgsService.saveContextPreference(user.id, context);
+    return c.json({ context }, 200);
+  })
+  .openapi(createOrganizationRoute, async (c) => {
+    const user = c.get('user')!;
+    const { data, activeTeamId } = await profilesService.onboardDesigner(
+      user.id,
+      c.req.valid('json'),
+      { allowAdditionalOrganization: true },
+    );
+    const context = {
+      kind: 'organization' as const,
+      organizationId: data.organization.id,
+      teamId: activeTeamId,
+    };
+    const organizationResponse = await setActiveOrganization(
+      c.req.raw.headers,
+      context.organizationId,
+    );
+    if (!organizationResponse.ok) throw new Error('Failed to activate the new organization');
+    for (const cookie of organizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
+    const teamResponse = await setActiveTeam(c.req.raw.headers, context.teamId);
+    if (!teamResponse.ok) throw new Error('Failed to activate the new branch');
+    for (const cookie of teamResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
+    await orgsService.saveContextPreference(user.id, context);
+    return c.json(data, 201);
+  })
   .openapi(currentWorkspaceRoute, async (c) => {
     const user = c.get('user');
     if (!user) throw AppError.unauthorized();

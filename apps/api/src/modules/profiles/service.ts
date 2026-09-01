@@ -74,9 +74,12 @@ export const profilesService = {
   async onboardDesigner(
     userId: string,
     input: OnboardDesignerInput,
+    options?: { allowAdditionalOrganization?: boolean },
   ): Promise<{ data: OnboardDesignerResponse; created: boolean; activeTeamId: string }> {
     // 1. Idempotency: check if user already onboarded
-    const existing = await profilesRepository.findByUserId(userId);
+    const existing = options?.allowAdditionalOrganization
+      ? null
+      : await profilesRepository.findByUserId(userId);
     if (existing) {
       return {
         data: {
@@ -176,7 +179,7 @@ export const profilesService = {
         err.code === '23505' &&
         'constraint' in err &&
         err.constraint === 'designer_profile_user_id_unique';
-      if (isUniqueViolation) {
+      if (isUniqueViolation && !options?.allowAdditionalOrganization) {
         const existing = await profilesRepository.findByUserId(userId);
         if (existing) {
           return {

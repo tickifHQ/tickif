@@ -33,6 +33,7 @@ import { profilesService } from './service.js';
 import { portfolioService } from './portfolio-service.js';
 import { googleReviewsService } from './google-service.js';
 import { projectsService } from '../projects/service.js';
+import { orgsService } from '../orgs/service.js';
 
 /**
  * Profiles HTTP routes. Authenticated endpoints for the current user's profile.
@@ -256,6 +257,11 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     for (const cookie of activeTeamResponse.headers.getSetCookie()) {
       c.header('Set-Cookie', cookie, { append: true });
     }
+    await orgsService.saveContextPreference(user.id, {
+      kind: 'organization',
+      organizationId: data.organization.id,
+      teamId: activeTeamId,
+    });
     return c.json(data, created ? 201 : 200);
   })
   .openapi(

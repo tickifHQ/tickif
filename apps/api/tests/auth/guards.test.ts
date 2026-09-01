@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import type { AuthVariables, Ownership } from '../../src/lib/auth-middleware.js';
-import { requireRole, requireAnyRole, requireOwnership } from '../../src/lib/auth-middleware.js';
+import {
+  requireRole,
+  requireAnyRole,
+  requireOwnership,
+  requireOrganizationContext,
+  requirePersonalContext,
+} from '../../src/lib/auth-middleware.js';
 import { onError } from '../../src/lib/errors.js';
 
 const { isOrgMemberMock, getSessionWithHeadersMock } = vi.hoisted(() => ({
@@ -10,7 +16,7 @@ const { isOrgMemberMock, getSessionWithHeadersMock } = vi.hoisted(() => ({
 }));
 vi.mock('../../src/modules/orgs/service.js', () => ({
   orgsService: {
-    findSoleOrganizationForUser: vi.fn(),
+    resolvePreferredContext: vi.fn().mockResolvedValue({ kind: 'personal' }),
     isMember: isOrgMemberMock,
   },
 }));
@@ -18,6 +24,7 @@ vi.mock('@repo/auth', () => ({
   getSession: vi.fn(),
   getSessionWithHeaders: getSessionWithHeadersMock,
   setActiveOrganization: vi.fn(),
+  setActiveTeam: vi.fn(),
 }));
 
 type StubUser = {
@@ -27,12 +34,17 @@ type StubUser = {
   banExpires?: Date | null;
 } | null;
 
-function appWithUser(user: StubUser, ownership?: Ownership | null) {
+function appWithUser(
+  user: StubUser,
+  ownership?: Ownership | null,
+  activeContext: AuthVariables['activeContext'] = { kind: 'personal' },
+) {
   const app = new Hono<{ Variables: AuthVariables }>();
   app.onError(onError);
   app.use('*', async (c, next) => {
     c.set('user', user as AuthVariables['user']);
     c.set('session', null);
+    c.set('activeContext', activeContext);
     c.set('sessionFresh', true);
     await next();
   });
@@ -40,6 +52,8 @@ function appWithUser(user: StubUser, ownership?: Ownership | null) {
   app.get('/designer', requireRole('designer'), (c) => c.json({ ok: true }));
   app.get('/staff', requireAnyRole(['admin', 'designer']), (c) => c.json({ ok: true }));
   app.get('/none', requireAnyRole([]), (c) => c.json({ ok: true }));
+  app.get('/personal', requirePersonalContext, (c) => c.json({ ok: true }));
+  app.get('/organization', requireOrganizationContext, (c) => c.json({ ok: true }));
   app.get(
     '/owned',
     requireOwnership(async () => ownership ?? null),
@@ -80,6 +94,21 @@ describe('RBAC guards (unit)', () => {
     expect((await appWithUser({ id: 'u1', role: 'designer' }).request('/staff')).status).toBe(200);
     expect((await appWithUser({ id: 'u1', role: 'admin' }).request('/staff')).status).toBe(200);
     expect((await appWithUser({ id: 'u1', role: 'visitor' }).request('/staff')).status).toBe(403);
+  });
+
+  it('checks context independently from the platform role', async () => {
+    const designer = { id: 'u1', role: 'designer' };
+    const personal = appWithUser(designer);
+    const organization = appWithUser(designer, null, {
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: 'team-1',
+    });
+
+    expect((await personal.request('/personal')).status).toBe(200);
+    expect((await personal.request('/organization')).status).toBe(403);
+    expect((await organization.request('/personal')).status).toBe(403);
+    expect((await organization.request('/organization')).status).toBe(200);
   });
 
   it('superadmin passes every gate', async () => {
@@ -166,6 +195,7 @@ describe('RBAC guards (unit)', () => {
     app.use('*', async (c, next) => {
       c.set('user', null);
       c.set('session', null);
+      c.set('activeContext', { kind: 'personal' });
       c.set('sessionFresh', false);
       await next();
     });

@@ -18,7 +18,6 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
   },
   orgsRepository: {
     hasMembership: vi.fn(),
-    findSoleOrganizationForUser: vi.fn(),
     findDefaultActiveTeamForUser: vi.fn(),
     findMembershipRole: vi.fn(),
     findWorkspaceMembership: vi.fn(),
@@ -52,12 +51,10 @@ describe('orgsService', () => {
     mocks.sendEmail.mockResolvedValue(undefined);
   });
 
-  it('delegates membership and unambiguous legacy-session lookup to the repository', async () => {
+  it('delegates membership lookup to the repository', async () => {
     vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
-    vi.mocked(orgsRepository.findSoleOrganizationForUser).mockResolvedValue('org-1');
 
     await expect(orgsService.isMember('user-1', 'org-1')).resolves.toBe(true);
-    await expect(orgsService.findSoleOrganizationForUser('user-1')).resolves.toBe('org-1');
   });
 
   it('reconciles frozen seats against the current entitlement limit', async () => {

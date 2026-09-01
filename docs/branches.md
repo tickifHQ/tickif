@@ -11,6 +11,21 @@ unique `team_id` and public `slug`. Projects inherit their branch through
 `project.designer_id`; leads store `team_id` directly because a lead may not refer
 to a project.
 
+## Active context
+
+Authentication and platform roles are independent from the active workspace.
+An authenticated user is either in personal context, represented by null active
+organization and team ids, or organization context, represented by a validated
+organization and team pair. The API exposes this through `GET /api/orgs/context`
+and changes it through `PUT /api/orgs/context`.
+
+The last explicit selection is stored in `user_context_preference`. A later
+session restores that selection only while both organization and active-team
+memberships remain valid; otherwise it repairs the preference to personal.
+Membership never selects an organization implicitly, including when the user has
+only one organization. Context guards remain separate from platform-role guards
+so the same designer can use personal and organization capabilities safely.
+
 ## Branch-scoped readers in E-244
 
 | Previous assumption | Branch-safe behavior |

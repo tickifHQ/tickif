@@ -190,6 +190,31 @@ export const teamMember = pgTable(
   ],
 );
 
+/** Last valid personal/org/branch scope restored when a new session starts. */
+export const userContextPreference = pgTable(
+  'user_context_preference',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    contextKind: text('context_kind').$type<'personal' | 'organization'>().notNull(),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
+    teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    check(
+      'user_context_preference_shape_check',
+      sql`(${t.contextKind} = 'personal' and ${t.organizationId} is null and ${t.teamId} is null) or (${t.contextKind} = 'organization' and ${t.organizationId} is not null and ${t.teamId} is not null)`,
+    ),
+  ],
+);
+
 export const member = pgTable(
   'member',
   {
