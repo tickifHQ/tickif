@@ -208,6 +208,31 @@ describe('GET /api/orgs/current', () => {
 });
 
 describe('organization management', () => {
+  it.each([
+    ['get-full-organization', '+919800004101'],
+    ['list-members', '+919800004102'],
+    ['list-invitations', '+919800004103'],
+    ['get-active-member-role', '+919800004104'],
+  ] as const)('blocks frozen members from Better Auth %s reads', async (path, phone) => {
+    const organization = await makeOrganization({ slug: `frozen-read-${path}` });
+    const owner = await makeOrganizationSession({
+      phone,
+      organizationId: organization.id,
+      role: 'owner',
+    });
+    await db
+      .update(schema.member)
+      .set({ frozen: true, frozenAt: new Date('2026-08-22T00:00:00.000Z'), freezeRank: 1 })
+      .where(eq(schema.member.userId, owner.userId));
+
+    const response = await app.request(
+      `/api/auth/organization/${path}?organizationId=${organization.id}`,
+      { headers: { cookie: owner.cookie } },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
   it('lets an owner invite a member through Better Auth', async () => {
     const organization = await makeOrganization({ slug: 'invite-studio' });
     const owner = await makeOrganizationSession({
