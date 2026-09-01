@@ -519,4 +519,82 @@ describe('organization management', () => {
     expect(response.status).toBe(403);
     expect(persisted).toEqual({ frozen: true });
   });
+
+  it('blocks a frozen admin from every privileged Better Auth organization mutation', async () => {
+    const organization = await makeOrganization({
+      name: 'Frozen Admin Studio',
+      slug: 'frozen-admin-mutations',
+    });
+    const admin = await makeOrganizationSession({
+      phone: '+919800004026',
+      organizationId: organization.id,
+      role: 'admin',
+    });
+    const teammate = await makeUser({ email: 'frozen-admin-target@example.com' });
+    const [targetMembership] = await db
+      .insert(schema.member)
+      .values({
+        id: 'member-frozen-admin-target',
+        organizationId: organization.id,
+        userId: teammate.id,
+        role: 'member',
+        createdAt: new Date('2026-08-02T00:00:00.000Z'),
+      })
+      .returning();
+    await db.insert(schema.invitation).values({
+      id: 'invitation-frozen-admin-cancel',
+      organizationId: organization.id,
+      email: 'frozen-admin-invite@example.com',
+      role: 'member',
+      status: 'pending',
+      inviterId: admin.userId,
+      createdAt: new Date('2026-08-03T00:00:00.000Z'),
+      expiresAt: new Date('2099-08-05T00:00:00.000Z'),
+    });
+    await db
+      .update(schema.member)
+      .set({ frozen: true, frozenAt: new Date('2026-08-20T00:00:00.000Z'), freezeRank: 1 })
+      .where(
+        and(
+          eq(schema.member.userId, admin.userId),
+          eq(schema.member.organizationId, organization.id),
+        ),
+      );
+
+    const responses = await Promise.all([
+      postOrganizationAction('update-member-role', admin.cookie, {
+        memberId: targetMembership!.id,
+        role: 'viewer',
+        organizationId: organization.id,
+      }),
+      postOrganizationAction('remove-member', admin.cookie, {
+        memberIdOrEmail: targetMembership!.id,
+        organizationId: organization.id,
+      }),
+      postOrganizationAction('update', admin.cookie, {
+        organizationId: organization.id,
+        data: { name: 'Mutated Studio' },
+      }),
+      postOrganizationAction('cancel-invitation', admin.cookie, {
+        invitationId: 'invitation-frozen-admin-cancel',
+      }),
+    ]);
+
+    expect(responses.map(({ status }) => status)).toEqual([403, 403, 403, 403]);
+    const [unchangedOrganization] = await db
+      .select({ name: schema.organization.name })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, organization.id));
+    const [unchangedMembership] = await db
+      .select({ role: schema.member.role })
+      .from(schema.member)
+      .where(eq(schema.member.id, targetMembership!.id));
+    const [unchangedInvitation] = await db
+      .select({ status: schema.invitation.status })
+      .from(schema.invitation)
+      .where(eq(schema.invitation.id, 'invitation-frozen-admin-cancel'));
+    expect(unchangedOrganization?.name).toBe('Frozen Admin Studio');
+    expect(unchangedMembership?.role).toBe('member');
+    expect(unchangedInvitation?.status).toBe('pending');
+  });
 });

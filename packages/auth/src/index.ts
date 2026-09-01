@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth';
-import { APIError } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
@@ -37,6 +37,39 @@ const socialProviders = googleEnabled
   ? { google: { clientId: googleClientId, clientSecret: googleClientSecret } }
   : undefined;
 
+const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
+  '/organization/update',
+  '/organization/invite-member',
+  '/organization/cancel-invitation',
+  '/organization/remove-member',
+  '/organization/update-member-role',
+]);
+
+function bodyString(body: unknown, key: string): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const value = Reflect.get(body, key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+async function protectedMutationOrganizationId(
+  path: string,
+  body: unknown,
+  activeOrganizationId: string | null | undefined,
+): Promise<string | undefined> {
+  if (path !== '/organization/cancel-invitation') {
+    return bodyString(body, 'organizationId') ?? activeOrganizationId ?? undefined;
+  }
+
+  const invitationId = bodyString(body, 'invitationId');
+  if (!invitationId) return undefined;
+  const [invitation] = await db
+    .select({ organizationId: schema.invitation.organizationId })
+    .from(schema.invitation)
+    .where(eq(schema.invitation.id, invitationId))
+    .limit(1);
+  return invitation?.organizationId;
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = {
@@ -58,6 +91,23 @@ export const auth = betterAuth({
   // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
+
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (!ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path)) return;
+
+      const session = await getSessionFromCtx(ctx);
+      if (!session) return;
+      const organizationId = await protectedMutationOrganizationId(
+        ctx.path,
+        ctx.body,
+        session.session.activeOrganizationId,
+      );
+      if (!organizationId) return;
+
+      await requireActiveOrganizationMember(session.user.id, organizationId);
+    }),
+  },
 
   // ─── Session management ───────────────────────────────────────────────────
   // Rolling refresh: session lives 7 days; after 1 day of activity the expiry
@@ -208,8 +258,7 @@ export const auth = betterAuth({
             });
           }
         },
-        beforeUpdateMemberRole: async ({ member, newRole, user }) => {
-          await requireActiveOrganizationMember(user.id, member.organizationId);
+        beforeUpdateMemberRole: async ({ member, newRole }) => {
           const role = await validateOrganizationRoleChange({
             organizationId: member.organizationId,
             newRole,
