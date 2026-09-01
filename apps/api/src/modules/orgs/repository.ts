@@ -18,6 +18,25 @@ export type OrganizationInvitationRecord = Pick<
   'id' | 'email' | 'role' | 'status' | 'createdAt' | 'expiresAt'
 >;
 
+type ActiveMemberFreezeCandidate = Pick<
+  typeof schema.member.$inferSelect,
+  'id' | 'role' | 'createdAt'
+>;
+
+export function selectMemberIdsToFreeze(
+  activeMembersNewestFirst: readonly ActiveMemberFreezeCandidate[],
+  activeLimit: number,
+): string[] {
+  const freezeCount = Math.max(0, activeMembersNewestFirst.length - activeLimit);
+  const preservedOwnerId = [...activeMembersNewestFirst]
+    .reverse()
+    .find(({ role }) => role === 'owner')?.id;
+  return activeMembersNewestFirst
+    .filter(({ id }) => id !== preservedOwnerId)
+    .slice(0, freezeCount)
+    .map(({ id }) => id);
+}
+
 export type OwnershipTransferRecord = typeof schema.ownershipTransferRequest.$inferSelect;
 
 export const OWNERSHIP_TRANSFER_RESULT = {
@@ -290,7 +309,11 @@ export const orgsRepository = {
 
     return db.transaction(async (tx) => {
       const activeMembers = await tx
-        .select({ id: schema.member.id, role: schema.member.role })
+        .select({
+          id: schema.member.id,
+          role: schema.member.role,
+          createdAt: schema.member.createdAt,
+        })
         .from(schema.member)
         .where(
           and(
@@ -300,11 +323,7 @@ export const orgsRepository = {
         )
         .orderBy(desc(schema.member.createdAt), desc(schema.member.id))
         .for('update');
-      const freezeCount = Math.max(0, activeMembers.length - input.activeLimit);
-      const ids = activeMembers
-        .filter(({ role }) => role !== 'owner')
-        .slice(0, freezeCount)
-        .map(({ id }) => id);
+      const ids = selectMemberIdsToFreeze(activeMembers, input.activeLimit);
       if (ids.length === 0) return [];
 
       const [rankRow] = await tx
