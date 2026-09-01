@@ -152,6 +152,7 @@ export const enquiriesRepository = {
       const [designer] = await tx
         .select({
           organizationId: schema.designerProfile.orgId,
+          teamId: schema.designerProfile.teamId,
           creatorUserId: schema.designerProfile.userId,
           memberUserId: schema.member.userId,
         })
@@ -201,6 +202,7 @@ export const enquiriesRepository = {
         .insert(schema.lead)
         .values({
           organizationId: designer.organizationId,
+          teamId: designer.teamId,
           referredProjectId: params.referredProjectId ?? null,
           name: params.requesterName,
           contactNumber: params.requesterPhoneNumber,

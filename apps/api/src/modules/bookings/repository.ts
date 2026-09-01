@@ -73,7 +73,7 @@ function bookingProjection() {
     createdAt: schema.consultationBooking.createdAt,
     updatedAt: schema.consultationBooking.updatedAt,
     organizationName: schema.organization.name,
-    organizationSlug: schema.organization.slug,
+    organizationSlug: schema.designerProfile.slug,
     requesterName: schema.user.name,
     requesterEmail: schema.user.email,
     requesterPhoneNumber: schema.user.phoneNumber,
@@ -155,6 +155,7 @@ export const bookingsRepository = {
         .select({
           id: schema.designerProfile.id,
           organizationId: schema.designerProfile.orgId,
+          teamId: schema.designerProfile.teamId,
           displayName: schema.designerProfile.displayName,
           phoneNumber: sql<string | null>`coalesce(
             nullif(btrim(${schema.designerProfile.phone}), ''),
@@ -219,6 +220,7 @@ export const bookingsRepository = {
 
       await tx.insert(schema.lead).values({
         organizationId: designer.organizationId,
+        teamId: designer.teamId,
         referredProjectId: params.referredProjectId ?? null,
         name: params.requesterName,
         contactNumber: params.requesterPhoneNumber,

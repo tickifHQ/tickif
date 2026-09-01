@@ -575,6 +575,7 @@ export type Caller = {
   userRole: string;
   isBanned: boolean;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
 };
 
 export type TransitionCaller = Pick<Caller, 'userId' | 'userRole'>;
@@ -719,11 +720,20 @@ function requireActiveOrganization(caller: Caller): string {
   return caller.activeOrgId;
 }
 
+function requireActiveTeam(caller: Caller): string {
+  const teamId = caller.activeTeamId ?? caller.activeOrgId;
+  if (!teamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  return teamId;
+}
+
 async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
   if (
     caller.activeOrgId === ownership.organizationId &&
+    (!ownership.teamId || (caller.activeTeamId ?? caller.activeOrgId) === ownership.teamId) &&
     (await orgsService.isMember(caller.userId, ownership.organizationId))
   ) {
     return;
@@ -742,6 +752,9 @@ async function assertProjectCapability(
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
   if (caller.activeOrgId !== ownership.organizationId) throw AppError.forbidden();
+  if (ownership.teamId && (caller.activeTeamId ?? caller.activeOrgId) !== ownership.teamId) {
+    throw AppError.forbidden();
+  }
   if (await orgsService.hasCapability(caller.userId, ownership.organizationId, capability)) return;
   throw AppError.forbidden('Organization role does not allow this project action');
 }
@@ -1296,6 +1309,7 @@ export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
@@ -1304,6 +1318,7 @@ export const projectsService = {
     const { items, total } = await projectsRepository.list({
       userId: caller.userId,
       activeOrgId,
+      activeTeamId,
       statuses: statusesForList(query.status),
       q: query.q,
       limit,
@@ -1335,6 +1350,7 @@ export const projectsService = {
   ): Promise<PortfolioProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
@@ -1343,6 +1359,7 @@ export const projectsService = {
       projectsRepository.list({
         userId: caller.userId,
         activeOrgId,
+        activeTeamId,
         statuses: statusesForPortfolio(query.status),
         limit,
         offset: (page - 1) * limit,
@@ -1351,6 +1368,7 @@ export const projectsService = {
       projectsRepository.countByStatus({
         userId: caller.userId,
         activeOrgId,
+        activeTeamId,
       }),
     ]);
     const [coverImages, reviewCommentRows] = await Promise.all([
@@ -1455,6 +1473,7 @@ export const projectsService = {
       throw AppError.forbidden('Designer role required');
     }
     const activeOrgId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     if (
       !(await orgsService.hasCapability(
         caller.userId,
@@ -1466,7 +1485,7 @@ export const projectsService = {
     }
     await validateProjectTaxonomy(input);
 
-    const designer = await projectsRepository.findDesignerByOrgId(activeOrgId);
+    const designer = await projectsRepository.findDesignerByTeamId(activeOrgId, activeTeamId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }

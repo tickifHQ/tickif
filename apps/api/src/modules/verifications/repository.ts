@@ -98,11 +98,30 @@ async function findOwner(organizationId: string) {
   return owner ?? null;
 }
 
-async function publishedProjectCount(profileId: string): Promise<number> {
+async function findPrimaryProfile(organizationId: string) {
+  const [profile] = await db
+    .select({
+      id: schema.designerProfile.id,
+      displayName: schema.designerProfile.displayName,
+    })
+    .from(schema.designerProfile)
+    .where(eq(schema.designerProfile.orgId, organizationId))
+    .orderBy(asc(schema.designerProfile.createdAt), asc(schema.designerProfile.id))
+    .limit(1);
+  return profile ?? null;
+}
+
+async function publishedProjectCount(organizationId: string): Promise<number> {
   const [row] = await db
     .select({ value: sql<number>`count(*)::int` })
     .from(schema.project)
-    .where(and(eq(schema.project.designerId, profileId), eq(schema.project.status, 'published')));
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.designerProfile.orgId, organizationId),
+        eq(schema.project.status, 'published'),
+      ),
+    );
   return row?.value ?? 0;
 }
 
@@ -110,15 +129,7 @@ async function contextForApplication(
   application: VerificationApplicationRecord,
 ): Promise<VerificationContextRecord | null> {
   const [profile, owner] = await Promise.all([
-    db
-      .select({
-        id: schema.designerProfile.id,
-        displayName: schema.designerProfile.displayName,
-      })
-      .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.orgId, application.organizationId))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
+    findPrimaryProfile(application.organizationId),
     findOwner(application.organizationId),
   ]);
   if (!profile || !owner) return null;
@@ -131,7 +142,7 @@ async function contextForApplication(
     ownerEmail: owner.email,
     ownerPhone: owner.phone,
     ownerPhoneVerified: owner.phoneVerified === true,
-    publishedProjectCount: await publishedProjectCount(profile.id),
+    publishedProjectCount: await publishedProjectCount(application.organizationId),
   };
 }
 
@@ -502,6 +513,7 @@ export const verificationsRepository = {
         .select({ id: schema.designerProfile.id })
         .from(schema.designerProfile)
         .where(eq(schema.designerProfile.orgId, application.organizationId))
+        .orderBy(asc(schema.designerProfile.createdAt), asc(schema.designerProfile.id))
         .limit(1);
       const [owner] = await tx
         .select({
@@ -646,7 +658,13 @@ export const verificationsRepository = {
           id: schema.verificationApplication.id,
           organizationId: schema.verificationApplication.organizationId,
           organizationName: schema.organization.name,
-          designerName: schema.designerProfile.displayName,
+          designerName: sql<string>`(
+            select ${schema.designerProfile.displayName}
+            from ${schema.designerProfile}
+            where ${schema.designerProfile.orgId} = ${schema.verificationApplication.organizationId}
+            order by ${schema.designerProfile.createdAt}, ${schema.designerProfile.id}
+            limit 1
+          )`,
           attempt: schema.verificationApplication.attempt,
           submittedAt: schema.verificationApplication.submittedAt,
           documentCount: sql<number>`coalesce(${currentDocuments.count}, 0)::int`,
@@ -655,10 +673,6 @@ export const verificationsRepository = {
         .innerJoin(
           schema.organization,
           eq(schema.verificationApplication.organizationId, schema.organization.id),
-        )
-        .innerJoin(
-          schema.designerProfile,
-          eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
         )
         .leftJoin(
           currentDocuments,
@@ -689,31 +703,30 @@ export const verificationsRepository = {
       .select({
         application: schema.verificationApplication,
         organizationName: schema.organization.name,
-        designerProfileId: schema.designerProfile.id,
-        designerName: schema.designerProfile.displayName,
       })
       .from(schema.verificationApplication)
       .innerJoin(
         schema.organization,
         eq(schema.verificationApplication.organizationId, schema.organization.id),
       )
-      .innerJoin(
-        schema.designerProfile,
-        eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
-      )
       .where(eq(schema.verificationApplication.id, applicationId))
       .limit(1);
     if (!row) return null;
-    const owner = await findOwner(row.application.organizationId);
-    if (!owner) return null;
+    const [owner, profile] = await Promise.all([
+      findOwner(row.application.organizationId),
+      findPrimaryProfile(row.application.organizationId),
+    ]);
+    if (!owner || !profile) return null;
     return {
       ...row,
+      designerProfileId: profile.id,
+      designerName: profile.displayName,
       ownerUserId: owner.id,
       ownerName: owner.name,
       ownerEmail: owner.email,
       ownerPhone: owner.phone,
       ownerPhoneVerified: owner.phoneVerified === true,
-      publishedProjectCount: await publishedProjectCount(row.designerProfileId),
+      publishedProjectCount: await publishedProjectCount(row.application.organizationId),
     };
   },
 
@@ -855,20 +868,20 @@ export const verificationsRepository = {
         })
         .onConflictDoNothing();
 
-      const [profile] = await tx
+      const profiles = await tx
         .select({ id: schema.designerProfile.id })
         .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.orgId, application.organizationId))
-        .limit(1);
-      if (profile) {
-        await recordSearchProjectionEvents(tx, [
-          {
+        .where(eq(schema.designerProfile.orgId, application.organizationId));
+      if (profiles.length > 0) {
+        await recordSearchProjectionEvents(
+          tx,
+          profiles.map((profile) => ({
             entityKind: 'designer',
             entityId: profile.id,
             operation: 'index',
             sourceUpdatedAt: reviewedAt,
-          },
-        ]);
+          })),
+        );
       }
       return updated;
     });

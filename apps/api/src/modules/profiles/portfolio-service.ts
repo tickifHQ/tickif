@@ -29,6 +29,7 @@ import { readState } from './google-mapper.js';
 export type Caller = {
   userId: string;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
 };
 
 const ALLOWED_LOGO_CONTENT_TYPES = new Set([
@@ -195,7 +196,9 @@ export async function resolveProfile(caller: Caller): Promise<DesignerProfileRec
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }
-  const profile = await profilesRepository.findByOrgId(caller.activeOrgId);
+  const profile = caller.activeTeamId
+    ? await profilesRepository.findByTeamId(caller.activeTeamId)
+    : await profilesRepository.findByOrgId(caller.activeOrgId);
   if (!profile) {
     throw AppError.notFound('No designer profile found for the active organization');
   }
@@ -211,19 +214,17 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   // Independent reads — one round-trip's worth of latency, not three.
-  const [logoUrl, googleRow, orgSlug, isKycVerified] = await Promise.all([
+  const [logoUrl, googleRow, isKycVerified] = await Promise.all([
     presignProfileLogo(profile),
     // Lightweight Google connection snapshot so the settings page renders the
     // real connection state (badge + rating) without a second request.
     googleReviewsRepository.findByProfileId(profile.id),
-    portfolioRepository.findOrgSlug(profile.orgId),
     profilesRepository.isOrganizationKycVerified(profile.orgId),
   ]);
   const badges = computeBadges(profile, isKycVerified);
 
   const googleConnection = googleRow ? readState(googleRow).summary : null;
-  // Null only if the owning org vanished mid-request; the FK makes that a no-op case.
-  const portfolioUrl = orgSlug ? publicPortfolioUrl(portfolio.portfolioSlug, orgSlug) : null;
+  const portfolioUrl = publicPortfolioUrl(portfolio.portfolioSlug, profile.slug);
 
   return {
     id: portfolio.id,

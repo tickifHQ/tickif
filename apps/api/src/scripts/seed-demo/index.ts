@@ -218,12 +218,38 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
       })
       .onConflictDoNothing({ target: schema.member.id });
 
+    const teamId = `branch-${spec.orgId}`;
+    await tx
+      .insert(schema.team)
+      .values({
+        id: teamId,
+        organizationId: spec.orgId,
+        name: spec.displayName,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: schema.team.id,
+        set: { name: spec.displayName, updatedAt: new Date() },
+      });
+    await tx
+      .insert(schema.teamMember)
+      .values({
+        id: `team-member-${spec.memberId}`,
+        teamId,
+        userId,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+
     const [profile] = await tx
       .insert(schema.designerProfile)
       .values({
         orgId: spec.orgId,
+        teamId,
         userId,
         displayName: spec.displayName,
+        slug: spec.orgSlug,
         entityType: spec.entityType,
         bio: spec.bio,
         status: 'active',
@@ -235,7 +261,7 @@ async function upsertDesigner(spec: SeedDesignerSpec, tax: TaxonomyMap): Promise
         staffCount: spec.staffCount,
       })
       .onConflictDoUpdate({
-        target: schema.designerProfile.orgId,
+        target: schema.designerProfile.teamId,
         set: {
           userId,
           displayName: spec.displayName,

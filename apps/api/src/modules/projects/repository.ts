@@ -46,6 +46,7 @@ export type ProjectOwnership = {
   projectId: string;
   designerId: string;
   organizationId: string;
+  teamId?: string;
   status: ProjectStatus;
   ownerUserId: string | null;
 };
@@ -111,6 +112,7 @@ const emptyUploadImageCounts: UploadImageCounts = {
 export type ListProjectsParams = {
   userId: string;
   activeOrgId: string;
+  activeTeamId: string;
   statuses?: ProjectStatus[];
   q?: string;
   limit: number;
@@ -339,7 +341,7 @@ const publicProjectReadColumns = {
   designerId: schema.designerProfile.id,
   designerStatus: schema.designerProfile.status,
   designerDisplayName: schema.designerProfile.displayName,
-  designerOrgSlug: schema.organization.slug,
+  designerOrgSlug: schema.designerProfile.slug,
   designerAvgRating: schema.designerProfile.avgRating,
   designerReviewCount: schema.designerProfile.reviewCount,
   designerEntityType: schema.designerProfile.entityType,
@@ -385,6 +387,8 @@ export const projectsRepository = {
     const filters = [
       eq(schema.member.userId, params.userId),
       eq(schema.designerProfile.orgId, params.activeOrgId),
+      eq(schema.designerProfile.teamId, params.activeTeamId),
+      eq(schema.teamMember.userId, params.userId),
       params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
       searchPattern
         ? or(
@@ -433,6 +437,7 @@ export const projectsRepository = {
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
+        .innerJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
         .where(where)
         .orderBy(orderBy)
         .limit(params.limit)
@@ -442,6 +447,7 @@ export const projectsRepository = {
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
+        .innerJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
         .where(where),
     ]);
 
@@ -451,10 +457,13 @@ export const projectsRepository = {
   async countByStatus(params: {
     userId: string;
     activeOrgId?: string | null;
+    activeTeamId?: string | null;
   }): Promise<ProjectStatusCountRecord[]> {
     const filters = [
       eq(schema.member.userId, params.userId),
       params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+      params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,
+      params.activeTeamId ? eq(schema.teamMember.userId, params.userId) : undefined,
     ].filter((filter) => filter !== undefined);
 
     return db
@@ -465,6 +474,7 @@ export const projectsRepository = {
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
+      .leftJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
       .where(and(...filters))
       .groupBy(schema.project.status);
   },
@@ -1104,6 +1114,29 @@ export const projectsRepository = {
     return row ?? null;
   },
 
+  async findDesignerByTeamId(
+    orgId: string,
+    teamId: string,
+  ): Promise<{ id: string; orgId: string; teamId: string } | null> {
+    const [row] = await db
+      .select({
+        id: schema.designerProfile.id,
+        orgId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(schema.team, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(
+        and(
+          eq(schema.designerProfile.orgId, orgId),
+          eq(schema.designerProfile.teamId, teamId),
+          eq(schema.team.frozen, false),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
   async findDesignerById(designerId: string): Promise<{ id: string; status: string } | null> {
     const [row] = await db
       .select({ id: schema.designerProfile.id, status: schema.designerProfile.status })
@@ -1119,6 +1152,7 @@ export const projectsRepository = {
         projectId: schema.project.id,
         designerId: schema.project.designerId,
         organizationId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
         status: schema.project.status,
         ownerUserId: schema.designerProfile.userId,
       })

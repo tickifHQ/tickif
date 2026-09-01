@@ -78,6 +78,7 @@ function caller(user: AuthVariables['user'], session?: AuthVariables['session'])
     userRole: user.role ?? '',
     isBanned,
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
   };
 }
 

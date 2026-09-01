@@ -28,6 +28,7 @@ function caller(user: AuthVariables['user'], session?: AuthVariables['session'])
     userId: user.id,
     isBanned,
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
   };
 }
 

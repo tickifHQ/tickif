@@ -305,7 +305,7 @@ export async function recentProjectsInCity(
       title: schema.project.title,
       description: schema.project.description,
       designerId: schema.project.designerId,
-      designerSlug: schema.organization.slug,
+      designerSlug: schema.designerProfile.slug,
       designerName: schema.designerProfile.displayName,
       citySlug: schema.project.citySlug,
       localitySlug: schema.project.localitySlug,
