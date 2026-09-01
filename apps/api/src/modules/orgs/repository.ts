@@ -54,6 +54,26 @@ export const orgsRepository = {
     return rows.length === 1 ? (rows[0]?.organizationId ?? null) : null;
   },
 
+  async findDefaultActiveTeamForUser(
+    userId: string,
+    organizationId: string,
+  ): Promise<string | null> {
+    const [row] = await db
+      .select({ teamId: schema.team.id })
+      .from(schema.team)
+      .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
+      .where(
+        and(
+          eq(schema.team.organizationId, organizationId),
+          eq(schema.teamMember.userId, userId),
+          eq(schema.team.frozen, false),
+        ),
+      )
+      .orderBy(asc(schema.team.createdAt), asc(schema.team.id))
+      .limit(1);
+    return row?.teamId ?? null;
+  },
+
   async findMembershipRole(
     userId: string,
     organizationId: string,
@@ -131,6 +151,134 @@ export const orgsRepository = {
         and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, false)),
       );
     return row?.count ?? 0;
+  },
+
+  async listActiveBranchesForUser(userId: string, organizationId: string) {
+    return db
+      .select({
+        id: schema.team.id,
+        name: schema.team.name,
+        createdAt: schema.team.createdAt,
+        profileId: schema.designerProfile.id,
+        profileSlug: schema.designerProfile.slug,
+        projectCount: schema.designerProfile.projectCount,
+      })
+      .from(schema.team)
+      .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
+      .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(
+        and(
+          eq(schema.team.organizationId, organizationId),
+          eq(schema.teamMember.userId, userId),
+          eq(schema.team.frozen, false),
+        ),
+      )
+      .orderBy(asc(schema.team.createdAt), asc(schema.team.id));
+  },
+
+  async listBranchMembers(teamIds: string[]) {
+    if (teamIds.length === 0) return [];
+    return db
+      .select({
+        teamId: schema.teamMember.teamId,
+        userId: schema.user.id,
+        name: schema.user.name,
+        email: schema.user.email,
+        image: schema.user.image,
+        role: schema.member.role,
+      })
+      .from(schema.teamMember)
+      .innerJoin(schema.team, eq(schema.teamMember.teamId, schema.team.id))
+      .innerJoin(schema.user, eq(schema.teamMember.userId, schema.user.id))
+      .innerJoin(
+        schema.member,
+        and(
+          eq(schema.member.organizationId, schema.team.organizationId),
+          eq(schema.member.userId, schema.teamMember.userId),
+        ),
+      )
+      .where(inArray(schema.teamMember.teamId, teamIds));
+  },
+
+  async countActiveBranches(organizationId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.team)
+      .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, false)));
+    return row?.count ?? 0;
+  },
+
+  async freezeBranchesToLimit(input: {
+    organizationId: string;
+    activeLimit: number;
+    now: Date;
+  }): Promise<string[]> {
+    if (input.activeLimit < 0) return [];
+    return db.transaction(async (tx) => {
+      const activeBranches = await tx
+        .select({ id: schema.team.id })
+        .from(schema.team)
+        .where(
+          and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)),
+        )
+        .orderBy(desc(schema.team.createdAt), desc(schema.team.id))
+        .for('update');
+      const ids = activeBranches
+        .slice(0, Math.max(0, activeBranches.length - input.activeLimit))
+        .map(({ id }) => id);
+      if (ids.length === 0) return [];
+      const [rankRow] = await tx
+        .select({ rank: max(schema.team.freezeRank) })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, input.organizationId));
+      const startingRank = (rankRow?.rank ?? 0) + 1;
+      for (const [index, id] of ids.entries()) {
+        await tx
+          .update(schema.team)
+          .set({ frozen: true, frozenAt: input.now, freezeRank: startingRank + index })
+          .where(and(eq(schema.team.id, id), eq(schema.team.frozen, false)));
+      }
+      await tx
+        .update(schema.session)
+        .set({ activeTeamId: null })
+        .where(inArray(schema.session.activeTeamId, ids));
+      return ids;
+    });
+  },
+
+  async restoreBranchesToLimit(input: {
+    organizationId: string;
+    activeLimit: number;
+  }): Promise<string[]> {
+    return db.transaction(async (tx) => {
+      const [activeRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.team)
+        .where(
+          and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)),
+        );
+      const capacity =
+        input.activeLimit < 0
+          ? Number.MAX_SAFE_INTEGER
+          : Math.max(0, input.activeLimit - (activeRow?.count ?? 0));
+      if (capacity === 0) return [];
+      const frozen = await tx
+        .select({ id: schema.team.id })
+        .from(schema.team)
+        .where(
+          and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, true)),
+        )
+        .orderBy(asc(schema.team.freezeRank), asc(schema.team.id))
+        .limit(capacity)
+        .for('update');
+      const ids = frozen.map(({ id }) => id);
+      if (ids.length === 0) return [];
+      await tx
+        .update(schema.team)
+        .set({ frozen: false, frozenAt: null, freezeRank: null })
+        .where(inArray(schema.team.id, ids));
+      return ids;
+    });
   },
 
   async freezeMembersToLimit(input: {

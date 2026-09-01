@@ -92,6 +92,15 @@ export const profilesRepository = {
     return row ?? null;
   },
 
+  async findByTeamId(teamId: string): Promise<DesignerProfileRecord | null> {
+    const [row] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.teamId, teamId))
+      .limit(1);
+    return row ?? null;
+  },
+
   /** Find the designer profile and organization by organization id. */
   async findByOrgIdWithOrg(orgId: string): Promise<{
     profile: DesignerProfileRecord;
@@ -105,6 +114,19 @@ export const profilesRepository = {
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .where(eq(schema.designerProfile.orgId, orgId))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async findByTeamIdWithOrg(teamId: string): Promise<{
+    profile: DesignerProfileRecord;
+    org: typeof schema.organization.$inferSelect;
+  } | null> {
+    const [row] = await db
+      .select({ profile: schema.designerProfile, org: schema.organization })
+      .from(schema.designerProfile)
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.designerProfile.teamId, teamId))
       .limit(1);
     return row ?? null;
   },
@@ -237,6 +259,8 @@ export const profilesRepository = {
     orgName: string;
     orgSlug: string;
     memberId: string;
+    teamId: string;
+    teamMemberId: string;
     userId: string;
     displayName: string;
     entityType: 'individual' | 'company';
@@ -272,12 +296,29 @@ export const profilesRepository = {
         createdAt: new Date(),
       });
 
+      await tx.insert(schema.team).values({
+        id: data.teamId,
+        name: data.orgName,
+        organizationId: data.orgId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await tx.insert(schema.teamMember).values({
+        id: data.teamMemberId,
+        teamId: data.teamId,
+        userId: data.userId,
+        createdAt: new Date(),
+      });
+
       const [profile] = await tx
         .insert(schema.designerProfile)
         .values({
           orgId: data.orgId,
+          teamId: data.teamId,
           userId: data.userId,
           displayName: data.displayName,
+          slug: data.orgSlug,
           entityType: data.entityType,
           bio: data.bio ?? undefined,
           address: data.address ?? undefined,
@@ -324,15 +365,14 @@ export const profilesRepository = {
     return row ?? null;
   },
 
-  /** Find a profile by owning organization slug (for public portfolio URLs). */
-  async findByOrgSlug(orgSlug: string): Promise<DesignerProfileRecord | null> {
+  /** Find a public branch profile by its globally unique slug. */
+  async findByOrgSlug(profileSlug: string): Promise<DesignerProfileRecord | null> {
     const [row] = await db
-      .select({ profile: schema.designerProfile })
+      .select()
       .from(schema.designerProfile)
-      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
-      .where(eq(schema.organization.slug, orgSlug))
+      .where(eq(schema.designerProfile.slug, profileSlug))
       .limit(1);
-    return row?.profile ?? null;
+    return row ?? null;
   },
 
   /** Get all footprint taxonomy terms for a profile. */

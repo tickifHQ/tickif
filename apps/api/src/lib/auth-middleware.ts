@@ -3,6 +3,7 @@ import {
   getSession,
   getSessionWithHeaders,
   setActiveOrganization,
+  setActiveTeam,
   type PlatformRole,
   type Session,
 } from '@repo/auth';
@@ -45,6 +46,7 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
+  let autoSelectedOrganizationId: string | null = null;
   if (result?.session && !result.session.activeOrganizationId) {
     const organizationId = await orgsService.findSoleOrganizationForUser(result.user.id);
     if (organizationId) {
@@ -54,6 +56,27 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
           c.header('Set-Cookie', cookie, { append: true });
         }
         result.session.activeOrganizationId = organizationId;
+        autoSelectedOrganizationId = organizationId;
+      }
+    }
+  }
+  if (
+    result?.session &&
+    autoSelectedOrganizationId &&
+    !result.session.activeTeamId &&
+    typeof orgsService.findDefaultActiveTeamForUser === 'function'
+  ) {
+    const teamId = await orgsService.findDefaultActiveTeamForUser(
+      result.user.id,
+      autoSelectedOrganizationId,
+    );
+    if (teamId) {
+      const response = await setActiveTeam(c.req.raw.headers, teamId);
+      if (response.ok) {
+        for (const cookie of response.headers.getSetCookie()) {
+          c.header('Set-Cookie', cookie, { append: true });
+        }
+        result.session.activeTeamId = teamId;
       }
     }
   }

@@ -36,6 +36,7 @@ type RequiredField = (typeof REQUIRED_FIELDS)[number];
 type CompletionInput = {
   userId: string;
   orgId: string | null;
+  teamId?: string | null;
 };
 
 type FieldCheckResult = {
@@ -60,7 +61,7 @@ export const profilesService = {
   async onboardDesigner(
     userId: string,
     input: OnboardDesignerInput,
-  ): Promise<{ data: OnboardDesignerResponse; created: boolean }> {
+  ): Promise<{ data: OnboardDesignerResponse; created: boolean; activeTeamId: string }> {
     // 1. Idempotency: check if user already onboarded
     const existing = await profilesRepository.findByUserId(userId);
     if (existing) {
@@ -81,6 +82,7 @@ export const profilesService = {
           },
         },
         created: false,
+        activeTeamId: existing.profile.teamId,
       };
     }
 
@@ -99,6 +101,8 @@ export const profilesService = {
     const orgSlug = `${slugify(orgName)}-${crypto.randomUUID().slice(0, 6)}`;
     const orgId = crypto.randomUUID();
     const memberId = crypto.randomUUID();
+    const teamId = crypto.randomUUID();
+    const teamMemberId = crypto.randomUUID();
 
     const footprintIds = [...new Set([...input.scopeIds, ...input.themeIds])].map((id) => ({
       taxonomyId: id,
@@ -111,6 +115,8 @@ export const profilesService = {
         orgName,
         orgSlug,
         memberId,
+        teamId,
+        teamMemberId,
         userId,
         displayName,
         entityType: input.entityType,
@@ -145,6 +151,7 @@ export const profilesService = {
           },
         },
         created: true,
+        activeTeamId: profile.teamId,
       };
     } catch (err: unknown) {
       // Race condition: concurrent request already created the profile.
@@ -176,6 +183,7 @@ export const profilesService = {
               },
             },
             created: false,
+            activeTeamId: existing.profile.teamId,
           };
         }
       }
@@ -195,7 +203,9 @@ export const profilesService = {
     }
 
     // Fetch profile ONCE and thread through (avoids duplicate DB hits)
-    const profile = await profilesRepository.findByOrgId(orgId);
+    const profile = input.teamId
+      ? await profilesRepository.findByTeamId(input.teamId)
+      : await profilesRepository.findByOrgId(orgId);
 
     // Parallelize independent reads
     const [hasGoogle, hasProject, fieldCheck] = await Promise.all([
@@ -299,6 +309,7 @@ export const profilesService = {
   async getCurrentProfile(
     userId: string,
     activeOrgId: string | null,
+    activeTeamId?: string | null,
   ): Promise<CurrentProfileResponse> {
     if (!activeOrgId) {
       throw AppError.unprocessable('No active organization selected');
@@ -309,7 +320,9 @@ export const profilesService = {
       throw AppError.forbidden('Organization membership required');
     }
 
-    const current = await profilesRepository.findByOrgIdWithOrg(activeOrgId);
+    const current = activeTeamId
+      ? await profilesRepository.findByTeamIdWithOrg(activeTeamId)
+      : await profilesRepository.findByOrgIdWithOrg(activeOrgId);
     if (!current) {
       throw AppError.notFound('No profile found for the active organization');
     }
@@ -347,7 +360,7 @@ export const profilesService = {
         name: org.name,
         slug: org.slug,
       },
-      shareUrl: `${config.PUBLIC_WEB_URL}/d/${org.slug}`,
+      shareUrl: `${config.PUBLIC_WEB_URL}/d/${profile.slug}`,
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
     };
@@ -423,6 +436,7 @@ export const profilesService = {
     userId: string,
     activeOrgId: string | null,
     input: UpdateProfileInput,
+    activeTeamId?: string | null,
   ): Promise<ProfileOwnerResponse> {
     if (!activeOrgId) {
       throw AppError.unprocessable('No active organization selected');
@@ -438,7 +452,9 @@ export const profilesService = {
       throw AppError.forbidden('Insufficient org role to update this profile');
     }
 
-    const profile = await profilesRepository.findByOrgId(activeOrgId);
+    const profile = activeTeamId
+      ? await profilesRepository.findByTeamId(activeTeamId)
+      : await profilesRepository.findByOrgId(activeOrgId);
     if (!profile) {
       throw AppError.notFound('No profile found for the active organization');
     }

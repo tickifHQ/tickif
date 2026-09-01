@@ -1,6 +1,7 @@
 import { APIError } from 'better-auth/api';
 import {
   organizationMemberRoleSchema,
+  branchLimit,
   rbacEnabled,
   seatLimit,
   type OrganizationMemberRole,
@@ -17,6 +18,11 @@ const DEFAULT_PLAN: { tier: PlanTier; state: SubscriptionState } = {
 export const ORGANIZATION_ENTITLEMENT_ERROR = {
   code: 'ORGANIZATION_RBAC_REQUIRES_CORPORATE',
   message: 'Upgrade to Corporate to manage organization roles and members',
+} as const;
+
+export const BRANCH_ENTITLEMENT_ERROR = {
+  code: 'BRANCHES_REQUIRE_CORPORATE',
+  message: 'Upgrade to Corporate to create additional branches',
 } as const;
 
 async function organizationPlan(organizationId: string) {
@@ -52,6 +58,17 @@ export async function organizationMembershipLimit(organizationId: string): Promi
     .from(schema.member)
     .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, true)));
   return limit + (row?.count ?? 0);
+}
+
+/** Better Auth's maximumTeams callback, resolved against tier and lifecycle state. */
+export async function organizationBranchLimit(organizationId: string): Promise<number> {
+  const plan = await organizationPlan(organizationId);
+  const limit = branchLimit(plan.tier, plan.state);
+  if (limit < 0) return Number.MAX_SAFE_INTEGER;
+  if (limit <= 1) {
+    throw new APIError('PAYMENT_REQUIRED', BRANCH_ENTITLEMENT_ERROR);
+  }
+  return limit;
 }
 
 export async function requireActiveOrganizationMember(

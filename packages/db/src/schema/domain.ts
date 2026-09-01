@@ -32,7 +32,7 @@ import {
   VERIFICATION_REVIEW_ACTION_VALUES,
   OWNERSHIP_TRANSFER_STATUS_VALUES,
 } from '@repo/contracts';
-import { user, organization } from './auth.js';
+import { user, organization, team } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -280,15 +280,20 @@ export const designerProfile = pgTable(
   'designer_profile',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Owning organization (unique — 1 profile per org)
+    // Billing/verification owner. Multiple branch profiles may share an organization.
     orgId: text('org_id')
       .notNull()
-      .unique()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    // Operational branch boundary. Exactly one public profile belongs to each team.
+    teamId: text('team_id')
+      .notNull()
+      .unique()
+      .references(() => team.id, { onDelete: 'cascade' }),
     // Creator/audit trail (not the ownership key)
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     entityType: entityTypeEnum('entity_type').notNull().default('individual'),
     displayName: text('display_name').notNull(),
+    slug: text('slug').notNull().unique(),
     bio: text('bio'),
     logoImageId: text('logo_image_id'), // R2 media key (FK deferred to media epic)
     status: profileStatusEnum('status').notNull().default('draft'),
@@ -316,10 +321,9 @@ export const designerProfile = pgTable(
   },
   (t) => [
     index('designer_profile_org_idx').on(t.orgId),
+    index('designer_profile_team_idx').on(t.teamId),
     index('designer_profile_status_idx').on(t.status),
-    uniqueIndex('designer_profile_user_id_unique')
-      .on(t.userId)
-      .where(sql`${t.userId} IS NOT NULL`),
+    index('designer_profile_user_idx').on(t.userId),
     // Paired with `project_title_trgm_idx` — the discovery feed's degraded text search
     // ORs the designer's display name into the same `ILIKE '%q%'` predicate.
     index('designer_profile_display_name_trgm_idx').using('gin', t.displayName.op('gin_trgm_ops')),
@@ -561,6 +565,9 @@ export const lead = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => team.id, { onDelete: 'cascade' }),
     referredProjectId: uuid('referred_project_id').references(() => project.id, {
       onDelete: 'set null',
     }),
@@ -577,8 +584,10 @@ export const lead = pgTable(
   },
   (t) => [
     index('lead_organization_idx').on(t.organizationId),
+    index('lead_team_idx').on(t.teamId),
     index('lead_referred_project_idx').on(t.referredProjectId),
     index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
+    index('lead_team_status_received_idx').on(t.teamId, t.status, t.receivedAt),
   ],
 );
 

@@ -217,3 +217,35 @@ export const organizationWorkspaceResponseSchema = z
   })
   .meta({ id: 'OrganizationWorkspaceResponse' });
 export type OrganizationWorkspaceResponse = z.infer<typeof organizationWorkspaceResponseSchema>;
+
+export const organizationBranchMemberSchema = z
+  .object({
+    userId: z.string().min(1),
+    name: z.string().min(1),
+    email: z.email(),
+    image: z.url().nullable(),
+    role: organizationMemberRoleSchema,
+  })
+  .meta({ id: 'OrganizationBranchMember' });
+
+export const organizationBranchSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    profileId: z.uuid(),
+    profileSlug: z.string().min(1),
+    projectCount: z.number().int().min(0),
+    createdAt: z.string().datetime(),
+    members: z.array(organizationBranchMemberSchema),
+  })
+  .meta({ id: 'OrganizationBranch' });
+
+export const organizationBranchesResponseSchema = z
+  .object({
+    activeTeamId: z.string().nullable(),
+    branchUsage: z.number().int().min(0),
+    branchLimit: z.number().int(),
+    branches: z.array(organizationBranchSchema),
+  })
+  .meta({ id: 'OrganizationBranchesResponse' });
+export type OrganizationBranchesResponse = z.infer<typeof organizationBranchesResponseSchema>;
