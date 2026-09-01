@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
+import { api } from '@/lib/api';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar } from '@repo/ui/components/avatar';
 import {
@@ -41,8 +42,10 @@ export function DesignerOrganizationSwitcher({
     setSwitchError(null);
     setSwitchingId(organizationId);
     try {
-      const result = await authClient.organization.setActive({ organizationId });
-      if (result.error) {
+      const response = await api.api.orgs.context.$put({
+        json: { kind: 'organization', organizationId },
+      });
+      if (!response.ok) {
         setSwitchError('Could not switch organization. Please try again.');
         return;
       }

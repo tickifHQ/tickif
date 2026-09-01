@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getServerSession, requireAuth, rolePassesCheck } from '../../src/lib/auth-guard';
+import {
+  activeContextForSession,
+  getServerSession,
+  requireAuth,
+  rolePassesCheck,
+} from '../../src/lib/auth-guard';
 
 const mock = vi.hoisted(() => ({
   headers: vi.fn(),
-  redirect: vi.fn().mockImplementation(() => { throw new Error('NEXT_REDIRECT'); }),
+  redirect: vi.fn().mockImplementation(() => {
+    throw new Error('NEXT_REDIRECT');
+  }),
 }));
 
 vi.mock('next/headers', () => ({
@@ -41,19 +48,50 @@ describe('rolePassesCheck', () => {
   });
 });
 
+describe('activeContextForSession', () => {
+  const user = { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' };
+
+  it('treats null organization and branch ids as personal context', () => {
+    expect(
+      activeContextForSession({
+        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00Z' },
+        user,
+      }),
+    ).toEqual({ kind: 'personal' });
+  });
+
+  it('returns the complete organization and branch context', () => {
+    expect(
+      activeContextForSession({
+        session: {
+          id: 'session-1',
+          token: 'token-1',
+          expiresAt: '2026-06-19T00:00:00Z',
+          activeOrganizationId: 'org-1',
+          activeTeamId: 'team-1',
+        },
+        user,
+      }),
+    ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: 'team-1' });
+  });
+});
+
 describe('getServerSession', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mock.headers.mockResolvedValue({
       get: vi.fn((name: string) => (name === 'cookie' ? 'better-auth.session_token=test' : null)),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-        user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+        }),
       }),
-    }));
+    );
   });
 
   it('can bypass better-auth cookie cache for fresh role reads', async () => {
@@ -104,6 +142,17 @@ describe('getServerSession', () => {
 
   it('redirects to /unauthorized when role is insufficient', async () => {
     await expect(requireAuth({ requiredRole: 'superadmin' })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
+  });
+
+  it('checks the active context separately from the platform role', async () => {
+    mock.redirect.mockClear();
+    await requireAuth({ requiredRole: 'designer', requiredContext: 'personal' });
+    expect(mock.redirect).not.toHaveBeenCalled();
+
+    await expect(
+      requireAuth({ requiredRole: 'designer', requiredContext: 'organization' }),
+    ).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
 });

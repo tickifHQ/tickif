@@ -29,6 +29,10 @@ async function makeDesignerSession(phoneNumber: string) {
     role: 'owner',
     createdAt: new Date(),
   });
+  await db
+    .update(schema.session)
+    .set({ activeOrganizationId: designer.orgId, activeTeamId: designer.teamId })
+    .where(eq(schema.session.userId, userId));
   return { cookie, userId, designer };
 }
 
