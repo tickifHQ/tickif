@@ -82,6 +82,31 @@ describe('organization role persistence and freeze transitions', () => {
     });
   });
 
+  it('enforces one owner per organization after legacy reconciliation', async () => {
+    const organization = await makeOrganization({ slug: 'single-owner-studio' });
+    const firstOwner = await makeUser({ email: 'first-owner@example.com' });
+    const secondOwner = await makeUser({ email: 'second-owner@example.com' });
+    await db.insert(schema.member).values({
+      id: 'first-owner-membership',
+      organizationId: organization.id,
+      userId: firstOwner.id,
+      role: 'owner',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    await expect(
+      db.insert(schema.member).values({
+        id: 'second-owner-membership',
+        organizationId: organization.id,
+        userId: secondOwner.id,
+        role: 'owner',
+        createdAt: new Date('2026-08-02T00:00:00.000Z'),
+      }),
+    ).rejects.toMatchObject({
+      cause: { code: '23505', constraint: 'member_one_owner_per_organization_uniq' },
+    });
+  });
+
   it('freezes newest non-owners first and preserves every member row', async () => {
     const organization = await seedMembers();
     const frozenAt = new Date('2026-08-21T00:00:00.000Z');
