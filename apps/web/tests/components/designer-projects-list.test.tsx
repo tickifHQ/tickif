@@ -93,6 +93,9 @@ describe('DesignerProjectsList', () => {
       'published',
       'changes_requested',
       'rejected',
+      'archived',
+      'delisted',
+      'deleted',
     ] as const;
     const allStatuses: ListProjectsResponse = {
       ...projects,
@@ -115,6 +118,9 @@ describe('DesignerProjectsList', () => {
     expect(screen.getAllByText('Live')).toHaveLength(2);
     expect(screen.getByText('Needs Change')).toBeInTheDocument();
     expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.getAllByText('Archived')).toHaveLength(2);
+    expect(screen.getByText('Delisted')).toBeInTheDocument();
+    expect(screen.getByText('Deleted')).toBeInTheDocument();
     expect(screen.getAllByRole('tooltip')).toHaveLength(2);
   });
 
