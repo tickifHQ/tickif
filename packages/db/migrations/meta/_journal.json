@@ -351,6 +351,13 @@
       "when": 1788477166022,
       "tag": "0051_amazing_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788481945768,
+      "tag": "0052_next_mathemanic",
+      "breakpoints": true
     }
   ]
 }
