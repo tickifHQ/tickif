@@ -39,6 +39,7 @@ function toListItem(row: LeadListRecord): LeadListItem {
     referredProjectTitle: row.referredProjectTitle,
     contactNumber: row.contactNumber,
     budgetBand: row.budgetBandSlug,
+    assignedMemberId: row.assignedMemberId,
     status: row.status,
     receivedAt: row.receivedAt.toISOString(),
   };
@@ -76,9 +77,25 @@ function toCounts(counts: LeadStatusCount[]): LeadCountsResponse {
   };
 }
 
-async function assertOrgMember(userId: string, organizationId: string): Promise<void> {
+type LeadAccess =
+  | { scope: typeof ORGANIZATION_ACCESS_SCOPE.FULL }
+  | { scope: typeof ORGANIZATION_ACCESS_SCOPE.ASSIGNED; memberIds: string[] };
+
+async function resolveLeadAccess(userId: string, organizationId: string): Promise<LeadAccess> {
   const capabilities = await orgsService.getCapabilities(userId, organizationId);
-  if (!capabilities || capabilities.leadScope !== ORGANIZATION_ACCESS_SCOPE.FULL) {
+  if (capabilities?.leadScope === ORGANIZATION_ACCESS_SCOPE.FULL) {
+    return { scope: ORGANIZATION_ACCESS_SCOPE.FULL };
+  }
+  if (capabilities?.leadScope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED) {
+    const memberIds = await leadsRepository.findActiveMemberIds(userId, organizationId);
+    if (memberIds.length > 0) return { scope: ORGANIZATION_ACCESS_SCOPE.ASSIGNED, memberIds };
+  }
+  throw AppError.forbidden();
+}
+
+async function assertFullLeadAccess(userId: string, organizationId: string): Promise<void> {
+  const access = await resolveLeadAccess(userId, organizationId);
+  if (access.scope !== ORGANIZATION_ACCESS_SCOPE.FULL) {
     throw AppError.forbidden();
   }
 }
@@ -96,17 +113,23 @@ function requireActiveTeam(caller: Caller): string {
   return teamId;
 }
 
-async function assertLeadInActiveOrganization(
+async function assertLeadAccess(
   caller: Caller,
-  organizationId: string,
-  teamId: string,
-): Promise<void> {
+  lead: Pick<LeadDetailRecord, 'organizationId' | 'teamId' | 'assignedMemberId'>,
+): Promise<LeadAccess> {
   const activeOrganizationId = requireActiveOrganization(caller);
-  if (organizationId !== activeOrganizationId) {
+  if (lead.organizationId !== activeOrganizationId) {
     throw AppError.notFound('Lead not found');
   }
-  if (teamId !== requireActiveTeam(caller)) throw AppError.notFound('Lead not found');
-  await assertOrgMember(caller.userId, activeOrganizationId);
+  if (lead.teamId !== requireActiveTeam(caller)) throw AppError.notFound('Lead not found');
+  const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
+  if (
+    access.scope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED &&
+    (!lead.assignedMemberId || !access.memberIds.includes(lead.assignedMemberId))
+  ) {
+    throw AppError.notFound('Lead not found');
+  }
+  return access;
 }
 
 async function resolveTargetOrganization(
@@ -117,7 +140,7 @@ async function resolveTargetOrganization(
   if (input.organizationId && input.organizationId !== activeOrganizationId) {
     throw AppError.forbidden('Lead organization must match the active organization');
   }
-  await assertOrgMember(caller.userId, activeOrganizationId);
+  await assertFullLeadAccess(caller.userId, activeOrganizationId);
   return activeOrganizationId;
 }
 
@@ -126,13 +149,16 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
     const activeTeamId = requireActiveTeam(caller);
-    await assertOrgMember(caller.userId, activeOrganizationId);
+    const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await leadsRepository.list({
       userId: caller.userId,
       activeOrgId: activeOrganizationId,
       activeTeamId,
+      ...(access.scope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED
+        ? { assignedMemberIds: access.memberIds }
+        : {}),
       status: listStatus(query.status),
       q: query.q,
       sortBy: query.sortBy,
@@ -154,7 +180,7 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const row = await leadsRepository.findById(id);
     if (!row) throw AppError.notFound('Lead not found');
-    await assertLeadInActiveOrganization(caller, row.organizationId, row.teamId);
+    await assertLeadAccess(caller, row);
     return toDetail(row);
   },
 
@@ -162,9 +188,14 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
     const activeTeamId = requireActiveTeam(caller);
-    await assertOrgMember(caller.userId, activeOrganizationId);
+    const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
     return toCounts(
-      await leadsRepository.countByStatus(activeOrganizationId, query.q, activeTeamId),
+      await leadsRepository.countByStatus(
+        activeOrganizationId,
+        query.q,
+        activeTeamId,
+        access.scope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED ? access.memberIds : undefined,
+      ),
     );
   },
 
@@ -172,9 +203,15 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const existing = await leadsRepository.findById(id);
     if (!existing) throw AppError.notFound('Lead not found');
-    await assertLeadInActiveOrganization(caller, existing.organizationId, existing.teamId);
+    const access = await assertLeadAccess(caller, existing);
+    if (access.scope !== ORGANIZATION_ACCESS_SCOPE.FULL) throw AppError.forbidden();
 
-    const row = await leadsRepository.update(id, input);
+    const row = await leadsRepository.update(id, existing.organizationId, input);
+    if (row === 'invalid_assignee') {
+      throw AppError.unprocessable(
+        'assignedMemberId must reference an active member of the organization',
+      );
+    }
     if (!row) throw AppError.notFound('Lead not found');
     return toDetail(row);
   },

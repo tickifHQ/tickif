@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { testClient } from 'hono/testing';
 import type { LeadCountsResponse, LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
-import { db, schema } from '@repo/db';
+import { db, eq, schema } from '@repo/db';
 import {
   makeDesigner,
   makeLead,
@@ -131,6 +131,127 @@ describe('GET /api/leads', () => {
     const unfilteredBody = (await unfiltered.json()) as ListLeadsResponse;
     expect(unfilteredBody.total).toBe(2);
     expect(unfilteredBody.items.map((item) => item.name)).toEqual(['Rahul Mehta', 'Priya Shah']);
+  });
+
+  it('scopes Corporate Member access to leads assigned to their membership', async () => {
+    const { cookie: ownerCookie, designer } = await makeDesignerSession('+919800003011');
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+    });
+
+    const firstMemberSession = await createRoleSession('+919800003012', 'designer');
+    const secondMemberSession = await createRoleSession('+919800003013', 'designer');
+    const adminSession = await createRoleSession('+919800003018', 'designer');
+    const firstMemberId = `mem-${firstMemberSession.userId}`;
+    const secondMemberId = `mem-${secondMemberSession.userId}`;
+    await db.insert(schema.member).values([
+      {
+        id: firstMemberId,
+        organizationId: designer.orgId,
+        userId: firstMemberSession.userId,
+        role: 'member',
+        createdAt: new Date(),
+      },
+      {
+        id: secondMemberId,
+        organizationId: designer.orgId,
+        userId: secondMemberSession.userId,
+        role: 'member',
+        createdAt: new Date(),
+      },
+      {
+        id: `mem-${adminSession.userId}`,
+        organizationId: designer.orgId,
+        userId: adminSession.userId,
+        role: 'admin',
+        createdAt: new Date(),
+      },
+    ]);
+    const firstMemberCookie = await activateOrganization(firstMemberSession.cookie, designer.orgId);
+    const secondMemberCookie = await activateOrganization(
+      secondMemberSession.cookie,
+      designer.orgId,
+    );
+    const adminCookie = await activateOrganization(adminSession.cookie, designer.orgId);
+
+    const assigned = await makeLead({
+      organizationId: designer.orgId,
+      assignedMemberId: firstMemberId,
+      name: 'Assigned Lead',
+    });
+    const assignedElsewhere = await makeLead({
+      organizationId: designer.orgId,
+      assignedMemberId: secondMemberId,
+      name: 'Other Assigned Lead',
+    });
+    const unassigned = await makeLead({
+      organizationId: designer.orgId,
+      name: 'Unassigned Lead',
+    });
+
+    const [memberList, memberCounts, ownerList, adminList] = await Promise.all([
+      client.api.leads.$get({ query: {} }, { headers: { cookie: firstMemberCookie } }),
+      app.request('/api/leads/counts', { headers: { cookie: firstMemberCookie } }),
+      client.api.leads.$get({ query: {} }, { headers: { cookie: ownerCookie } }),
+      client.api.leads.$get({ query: {} }, { headers: { cookie: adminCookie } }),
+    ]);
+
+    expect(memberList.status).toBe(200);
+    expect(((await memberList.json()) as ListLeadsResponse).items).toEqual([
+      expect.objectContaining({ id: assigned.id, assignedMemberId: firstMemberId }),
+    ]);
+    expect(memberCounts.status).toBe(200);
+    expect(((await memberCounts.json()) as LeadCountsResponse).total).toBe(1);
+    expect(ownerList.status).toBe(200);
+    expect(((await ownerList.json()) as ListLeadsResponse).total).toBe(3);
+    expect(adminList.status).toBe(200);
+    expect(((await adminList.json()) as ListLeadsResponse).total).toBe(3);
+
+    const ownRead = await app.request(`/api/leads/${assigned.id}`, {
+      headers: { cookie: firstMemberCookie },
+    });
+    const otherRead = await app.request(`/api/leads/${assignedElsewhere.id}`, {
+      headers: { cookie: firstMemberCookie },
+    });
+    expect(ownRead.status).toBe(200);
+    expect(otherRead.status).toBe(404);
+
+    const ownUpdate = await requestJson(`/api/leads/${assigned.id}`, 'PATCH', firstMemberCookie, {
+      notes: 'Member follow-up',
+    });
+    const forbiddenReassignment = await requestJson(
+      `/api/leads/${assigned.id}`,
+      'PATCH',
+      firstMemberCookie,
+      { assignedMemberId: secondMemberId },
+    );
+    expect(ownUpdate.status).toBe(403);
+    expect(forbiddenReassignment.status).toBe(403);
+
+    await db
+      .update(schema.member)
+      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
+      .where(eq(schema.member.id, secondMemberId));
+    const frozenRead = await app.request(`/api/leads/${assignedElsewhere.id}`, {
+      headers: { cookie: secondMemberCookie },
+    });
+    const frozenAssignment = await requestJson(
+      `/api/leads/${unassigned.id}`,
+      'PATCH',
+      ownerCookie,
+      {
+        assignedMemberId: secondMemberId,
+      },
+    );
+    expect(frozenRead.status).toBe(403);
+    expect(frozenAssignment.status).toBe(422);
+
+    const [retainedAssignment] = await db
+      .select({ assignedMemberId: schema.lead.assignedMemberId })
+      .from(schema.lead)
+      .where(eq(schema.lead.id, assignedElsewhere.id));
+    expect(retainedAssignment?.assignedMemberId).toBe(secondMemberId);
   });
 });
 
@@ -323,6 +444,71 @@ describe('GET/PATCH /api/leads/:id', () => {
       status: 'closed',
       notes: null,
     });
+  });
+
+  it('assigns, reassigns, and unassigns only active same-organization memberships', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800003014');
+    const firstUser = await createRoleSession('+919800003015', 'designer');
+    const secondUser = await createRoleSession('+919800003016', 'designer');
+    const otherOrganization = await makeOrganization();
+    const otherUser = await createRoleSession('+919800003017', 'designer');
+    await db.insert(schema.member).values([
+      {
+        id: 'member-assignee-first',
+        organizationId: designer.orgId,
+        userId: firstUser.userId,
+        role: 'member',
+        createdAt: new Date(),
+      },
+      {
+        id: 'member-assignee-second',
+        organizationId: designer.orgId,
+        userId: secondUser.userId,
+        role: 'member',
+        createdAt: new Date(),
+      },
+      {
+        id: 'member-assignee-other-org',
+        organizationId: otherOrganization.id,
+        userId: otherUser.userId,
+        role: 'member',
+        createdAt: new Date(),
+      },
+    ]);
+    const lead = await makeLead({ organizationId: designer.orgId });
+
+    const assign = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      assignedMemberId: 'member-assignee-first',
+    });
+    const reassign = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      assignedMemberId: 'member-assignee-second',
+    });
+    const crossOrganization = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      assignedMemberId: 'member-assignee-other-org',
+    });
+    expect(assign.status).toBe(200);
+    expect(await assign.json()).toMatchObject({ assignedMemberId: 'member-assignee-first' });
+    expect(reassign.status).toBe(200);
+    expect(await reassign.json()).toMatchObject({ assignedMemberId: 'member-assignee-second' });
+    expect(crossOrganization.status).toBe(422);
+
+    const unassign = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      assignedMemberId: null,
+    });
+    expect(unassign.status).toBe(200);
+    expect(await unassign.json()).toMatchObject({ assignedMemberId: null });
+
+    const assignBeforeRemoval = await requestJson(`/api/leads/${lead.id}`, 'PATCH', cookie, {
+      assignedMemberId: 'member-assignee-second',
+    });
+    expect(assignBeforeRemoval.status).toBe(200);
+
+    await db.delete(schema.member).where(eq(schema.member.id, 'member-assignee-second'));
+    const [retainedLead] = await db
+      .select({ id: schema.lead.id, assignedMemberId: schema.lead.assignedMemberId })
+      .from(schema.lead)
+      .where(eq(schema.lead.id, lead.id));
+    expect(retainedLead).toEqual({ id: lead.id, assignedMemberId: null });
   });
 
   it('hides cross-org leads and returns 422 for invalid status', async () => {

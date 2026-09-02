@@ -1,5 +1,5 @@
 import { ilike, type SQL } from 'drizzle-orm';
-import { db, schema, eq, and, or, desc, asc, sql } from '@repo/db';
+import { db, schema, eq, and, or, desc, asc, inArray, sql } from '@repo/db';
 import type { CreateLeadInput, LeadStatus, UpdateLeadInput } from '@repo/contracts';
 
 export type LeadRecord = typeof schema.lead.$inferSelect;
@@ -8,6 +8,7 @@ export type LeadListRecord = Pick<
   LeadRecord,
   'id' | 'name' | 'contactNumber' | 'budgetBandSlug' | 'status' | 'receivedAt'
 > & {
+  assignedMemberId: string | null;
   city: string | null;
   referredProjectTitle: string | null;
 };
@@ -34,6 +35,7 @@ export type ListLeadsParams = {
   userId: string;
   activeOrgId: string;
   activeTeamId: string;
+  assignedMemberIds?: string[];
   status?: LeadStatus;
   q?: string;
   sortBy?: 'name' | 'receivedAt' | 'budget';
@@ -48,12 +50,15 @@ export type CreateLeadParams = Omit<CreateLeadInput, 'receivedAt'> & {
   receivedAt?: Date;
 };
 
+export type UpdateLeadResult = LeadDetailRecord | 'invalid_assignee' | null;
+
 function leadProjection() {
   return {
     id: schema.lead.id,
     organizationId: schema.lead.organizationId,
     teamId: schema.lead.teamId,
     referredProjectId: schema.lead.referredProjectId,
+    assignedMemberId: schema.lead.assignedMemberId,
     name: schema.lead.name,
     contactNumber: schema.lead.contactNumber,
     budgetBandSlug: schema.lead.budgetBandSlug,
@@ -93,17 +98,21 @@ export const leadsRepository = {
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
       eq(schema.lead.teamId, params.activeTeamId),
+      params.assignedMemberIds
+        ? inArray(schema.lead.assignedMemberId, params.assignedMemberIds)
+        : undefined,
       params.status ? eq(schema.lead.status, params.status) : undefined,
       leadSearchFilter(params.q),
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
 
     const direction = params.sortOrder === 'asc' ? asc : desc;
-    const sortColumn = params.sortBy === 'name'
-      ? schema.lead.name
-      : params.sortBy === 'budget'
-        ? schema.lead.budgetBandSlug
-        : schema.lead.receivedAt;
+    const sortColumn =
+      params.sortBy === 'name'
+        ? schema.lead.name
+        : params.sortBy === 'budget'
+          ? schema.lead.budgetBandSlug
+          : schema.lead.receivedAt;
 
     const [items, [count]] = await Promise.all([
       db
@@ -112,6 +121,7 @@ export const leadsRepository = {
           name: schema.lead.name,
           contactNumber: schema.lead.contactNumber,
           budgetBandSlug: schema.lead.budgetBandSlug,
+          assignedMemberId: schema.lead.assignedMemberId,
           status: schema.lead.status,
           receivedAt: schema.lead.receivedAt,
           city: schema.project.citySlug,
@@ -143,18 +153,50 @@ export const leadsRepository = {
     return row ?? null;
   },
 
-  async update(id: string, input: UpdateLeadInput): Promise<LeadDetailRecord | null> {
-    const [row] = await db
-      .update(schema.lead)
-      .set({
-        ...(input.status !== undefined ? { status: input.status } : {}),
-        ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.lead.id, id))
-      .returning({ id: schema.lead.id });
-    if (!row) return null;
-    return this.findById(row.id);
+  async update(
+    id: string,
+    organizationId: string,
+    input: UpdateLeadInput,
+  ): Promise<UpdateLeadResult> {
+    return db.transaction(async (tx) => {
+      if (input.assignedMemberId) {
+        const [assignee] = await tx
+          .select({ id: schema.member.id })
+          .from(schema.member)
+          .where(
+            and(
+              eq(schema.member.id, input.assignedMemberId),
+              eq(schema.member.organizationId, organizationId),
+              eq(schema.member.frozen, false),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        if (!assignee) return 'invalid_assignee';
+      }
+
+      const [row] = await tx
+        .update(schema.lead)
+        .set({
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.assignedMemberId !== undefined
+            ? { assignedMemberId: input.assignedMemberId }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.lead.id, id), eq(schema.lead.organizationId, organizationId)))
+        .returning({ id: schema.lead.id });
+      if (!row) return null;
+
+      const [updated] = await tx
+        .select(leadProjection())
+        .from(schema.lead)
+        .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
+        .where(eq(schema.lead.id, row.id))
+        .limit(1);
+      return updated ?? null;
+    });
   },
 
   async create(input: CreateLeadParams): Promise<LeadDetailRecord> {
@@ -202,10 +244,25 @@ export const leadsRepository = {
     return !!row;
   },
 
+  async findActiveMemberIds(userId: string, organizationId: string): Promise<string[]> {
+    const rows = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.member.organizationId, organizationId),
+          eq(schema.member.frozen, false),
+        ),
+      );
+    return rows.map(({ id }) => id);
+  },
+
   async countByStatus(
     organizationId: string,
     q?: string,
     teamId?: string,
+    assignedMemberIds?: string[],
   ): Promise<LeadStatusCount[]> {
     const projection = {
       status: schema.lead.status,
@@ -220,6 +277,9 @@ export const leadsRepository = {
           and(
             eq(schema.lead.organizationId, organizationId),
             teamId ? eq(schema.lead.teamId, teamId) : undefined,
+            assignedMemberIds
+              ? inArray(schema.lead.assignedMemberId, assignedMemberIds)
+              : undefined,
           ),
         )
         .groupBy(schema.lead.status);
@@ -233,6 +293,7 @@ export const leadsRepository = {
         and(
           eq(schema.lead.organizationId, organizationId),
           teamId ? eq(schema.lead.teamId, teamId) : undefined,
+          assignedMemberIds ? inArray(schema.lead.assignedMemberId, assignedMemberIds) : undefined,
           leadSearchFilter(q),
         ),
       )

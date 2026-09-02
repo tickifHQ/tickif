@@ -117,7 +117,7 @@ const updateRoute = createRoute({
   method: 'patch',
   path: '/{id}',
   tags: ['Leads'],
-  summary: 'Update lead status or notes',
+  summary: 'Update lead assignment, status, or notes',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
