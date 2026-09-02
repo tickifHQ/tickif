@@ -183,7 +183,7 @@ function QueueTable({
   const emptyState = emptyStateContent[queue.tab];
   return (
     <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-      <Table className="min-w-3xl">
+      <Table className="min-w-[48rem]">
         <TableHeader>
           <TableRow className="bg-muted/35 hover:bg-muted/35">
             <TableHead className="min-w-56">Organization</TableHead>
@@ -274,9 +274,7 @@ function ReviewDetail({
   const { application, documents, eligibility, history } = detail;
   const [reviewIntent, setReviewIntent] = useState<ReviewIntent | null>(null);
   const [feedback, setFeedback] = useState('');
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(
-    () => new Set(documents.map((document) => document.id)),
-  );
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(() => new Set());
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<ReviewIntent | null>(null);
@@ -305,7 +303,7 @@ function ReviewDetail({
     setFeedbackError(null);
     setActionError(null);
     if (intent === 'request_changes') {
-      setSelectedDocumentIds(new Set(documents.map((document) => document.id)));
+      setSelectedDocumentIds(new Set());
     }
   }
 
@@ -460,10 +458,10 @@ function ReviewDetail({
                   <XCircle className="size-5 text-destructive" aria-hidden="true" />
                 )}
                 <div>
-                  <p className="text-sm font-medium">Approved projects</p>
+                  <p className="text-sm font-medium">Published projects</p>
                   <p className="text-xs text-muted-foreground">
                     {eligibility.publishedProjects.current} of{' '}
-                    {eligibility.publishedProjects.required} approved
+                    {eligibility.publishedProjects.required} published
                   </p>
                 </div>
               </div>
@@ -673,7 +671,10 @@ function ReviewDetail({
               type="button"
               variant={reviewIntent === 'approve' ? 'default' : 'destructive'}
               onClick={() => void submitReview()}
-              disabled={busyAction !== null}
+              disabled={
+                busyAction !== null ||
+                (reviewIntent === 'request_changes' && selectedDocumentIds.size === 0)
+              }
             >
               {busyAction ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               {reviewIntent === 'approve'

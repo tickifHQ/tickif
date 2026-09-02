@@ -101,6 +101,46 @@ describe('verification repository lifecycle', () => {
     ]);
   });
 
+  it('keeps queue totals aligned with applications that can be rendered', async () => {
+    const visible = await setupApplication('+919800000015');
+    const ownerWithoutProfile = await makeUser({
+      name: 'Owner Without Profile',
+      phoneNumber: '+919800000016',
+      phoneNumberVerified: true,
+    });
+    const organizationWithoutProfile = await makeOrganization();
+    await db.insert(schema.member).values({
+      id: `member-${ownerWithoutProfile.id}`,
+      organizationId: organizationWithoutProfile.id,
+      userId: ownerWithoutProfile.id,
+      role: ORGANIZATION_MEMBER_ROLE.OWNER,
+      createdAt: new Date(),
+    });
+    const applicationWithoutProfile = await verificationsRepository.getOrCreateForOrganization(
+      organizationWithoutProfile.id,
+    );
+
+    await Promise.all([
+      db
+        .update(schema.verificationApplication)
+        .set({ status: 'pending', submittedAt: new Date('2026-09-01T08:00:00.000Z') })
+        .where(eq(schema.verificationApplication.id, visible.application.id)),
+      db
+        .update(schema.verificationApplication)
+        .set({ status: 'pending', submittedAt: new Date('2026-09-01T09:00:00.000Z') })
+        .where(eq(schema.verificationApplication.id, applicationWithoutProfile.id)),
+    ]);
+
+    const result = await verificationsRepository.listAdminQueue({
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.NEW,
+      page: 1,
+      limit: 20,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.items.map((item) => item.id)).toEqual([visible.application.id]);
+  });
+
   it('keeps document versions immutable and tenant scoped', async () => {
     const { owner, organization, application } = await setupApplication();
     const otherOrganization = await makeOrganization();

@@ -15,7 +15,7 @@ import {
   type VerificationApplicationStatus,
   type VerificationDocumentType,
 } from '@repo/contracts';
-import { and, asc, db, desc, eq, inArray, schema, sql } from '@repo/db';
+import { and, asc, db, desc, eq, inArray, isNotNull, schema, sql } from '@repo/db';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 export type VerificationApplicationRecord = typeof schema.verificationApplication.$inferSelect;
@@ -666,6 +666,10 @@ export const verificationsRepository = {
     }>;
     total: number;
   }> {
+    const queuePredicate = and(
+      adminQueuePredicate(query.tab),
+      isNotNull(schema.verificationApplication.submittedAt),
+    );
     const currentDocuments = db
       .select({
         applicationId: schema.verificationDocumentSlot.applicationId,
@@ -722,7 +726,7 @@ export const verificationsRepository = {
           currentDocuments,
           eq(schema.verificationApplication.id, currentDocuments.applicationId),
         )
-        .where(adminQueuePredicate(query.tab))
+        .where(queuePredicate)
         .orderBy(
           query.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ||
             query.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
@@ -738,7 +742,15 @@ export const verificationsRepository = {
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.verificationApplication)
-        .where(adminQueuePredicate(query.tab)),
+        .innerJoin(
+          schema.organization,
+          eq(schema.verificationApplication.organizationId, schema.organization.id),
+        )
+        .innerJoin(
+          schema.designerProfile,
+          eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
+        )
+        .where(queuePredicate),
     ]);
     return {
       items: items.flatMap((item) =>
@@ -838,8 +850,8 @@ export const verificationsRepository = {
       const currentIds = reviewableDocuments.map((row) => row.id);
       if (currentIds.length === 0) return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
 
-      const requestedRejectedIds = input.rejection?.rejectedDocumentVersionIds;
-      const rejectedIds = input.decision === 'reject' ? (requestedRejectedIds ?? currentIds) : [];
+      const rejectedIds =
+        input.decision === 'reject' ? input.rejection.rejectedDocumentVersionIds : [];
       if (rejectedIds.some((id) => !currentIds.includes(id))) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
       }

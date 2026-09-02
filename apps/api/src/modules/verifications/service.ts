@@ -179,6 +179,9 @@ async function stateForContext(
   const latestRejection = [...history]
     .reverse()
     .find((event) => event.action === VERIFICATION_REVIEW_ACTION.REJECTED);
+  const latestRevocation = [...history]
+    .reverse()
+    .find((event) => event.action === VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED);
   const canEditIdentity = context.ownerUserId === callerUserId;
   return {
     applicationId: context.application.id,
@@ -197,7 +200,10 @@ async function stateForContext(
     latestNote:
       context.application.status === VERIFICATION_APPLICATION_STATUS.REJECTED
         ? (latestRejection?.note ?? null)
-        : null,
+        : context.application.status === VERIFICATION_APPLICATION_STATUS.PENDING &&
+            latestRevocation?.attempt === context.application.attempt
+          ? (latestRevocation.note ?? null)
+          : null,
     submittedAt: context.application.submittedAt?.toISOString() ?? null,
     reviewedAt: context.application.reviewedAt?.toISOString() ?? null,
     approvedAt: context.application.approvedAt?.toISOString() ?? null,

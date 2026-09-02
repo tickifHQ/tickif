@@ -126,6 +126,7 @@ describe('AdminVerificationQueue', () => {
     render(<AdminVerificationQueue initialQueue={queue} />);
 
     expect(screen.getByRole('heading', { name: 'Profile verification' })).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveClass('min-w-[48rem]');
     expect(screen.getByText('Studio North')).toBeInTheDocument();
     expect(screen.getByText('Anika Sharma')).toBeInTheDocument();
     expect(screen.getByText('Attempt 1')).toBeInTheDocument();
@@ -157,7 +158,8 @@ describe('AdminVerificationQueue', () => {
     await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
     expect(await screen.findByText('GST registration certificate')).toBeInTheDocument();
     expect(screen.getByText('Phone verified')).toBeInTheDocument();
-    expect(screen.getByText('3 of 3 approved')).toBeInTheDocument();
+    expect(screen.getByText('Published projects')).toBeInTheDocument();
+    expect(screen.getByText('3 of 3 published')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /view gst registration certificate/i }));
 
     await waitFor(() => {
@@ -509,14 +511,23 @@ describe('AdminVerificationQueue', () => {
 
     await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
     await user.click(await screen.findByRole('button', { name: 'Request changes' }));
-    await user.click(screen.getByRole('button', { name: 'Send feedback' }));
+    const documentCheckbox = screen.getByRole('checkbox', {
+      name: 'GST registration certificate',
+    });
+    const submitButton = screen.getByRole('button', { name: 'Send feedback' });
+    expect(documentCheckbox).not.toBeChecked();
+    expect(submitButton).toBeDisabled();
+
+    await user.click(documentCheckbox);
+    expect(submitButton).toBeEnabled();
+    await user.click(submitButton);
     expect(await screen.findByText('Feedback is required.')).toBeInTheDocument();
 
     await user.type(
       screen.getByRole('textbox', { name: 'Feedback for the designer' }),
       'Upload a clearer certificate.',
     );
-    await user.click(screen.getByRole('button', { name: 'Send feedback' }));
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mock.reject).toHaveBeenCalledWith(applicationId, {

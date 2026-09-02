@@ -154,6 +154,23 @@ describe('DesignerVerification', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the approval revocation reason while the application is back in review', () => {
+    render(
+      <DesignerVerification
+        initialState={pendingState({
+          latestNote: 'The registration details need another review.',
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'Your approval was reversed and returned to review. Reason: The registration details need another review.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submitted' })).toBeDisabled();
+  });
+
   it('lets the owner edit completed identity details before submission', async () => {
     const user = userEvent.setup();
     const { container } = render(<DesignerVerification initialState={draftState()} />);

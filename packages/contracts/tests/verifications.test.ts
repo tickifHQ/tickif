@@ -63,9 +63,21 @@ describe('verification contracts', () => {
 
   it('requires a user-visible rejection note', () => {
     expect(
-      rejectVerificationSchema.safeParse({ note: 'Please upload a clearer copy.' }).success,
+      rejectVerificationSchema.safeParse({
+        note: 'Please upload a clearer copy.',
+        rejectedDocumentVersionIds: ['22222222-2222-4222-8222-222222222222'],
+      }).success,
     ).toBe(true);
     expect(rejectVerificationSchema.safeParse({ note: '  ' }).success).toBe(false);
+    expect(
+      rejectVerificationSchema.safeParse({
+        note: 'Please upload a clearer copy.',
+        rejectedDocumentVersionIds: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      rejectVerificationSchema.safeParse({ note: 'Please upload a clearer copy.' }).success,
+    ).toBe(false);
   });
 
   it('requires a reason when revoking an approval', () => {

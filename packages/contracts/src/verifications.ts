@@ -307,7 +307,7 @@ export type AdminVerificationDetailResponse = z.infer<typeof adminVerificationDe
 export const rejectVerificationSchema = z
   .object({
     note: z.string().trim().min(1).max(2_000),
-    rejectedDocumentVersionIds: z.array(z.uuid()).max(20).optional(),
+    rejectedDocumentVersionIds: z.array(z.uuid()).min(1).max(20),
   })
   .meta({ id: 'RejectVerification' });
 export type RejectVerificationInput = z.infer<typeof rejectVerificationSchema>;

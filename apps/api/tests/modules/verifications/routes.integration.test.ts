@@ -276,6 +276,18 @@ describe('verification route authorization', () => {
     ]);
     expect(detail.documents[0]).not.toHaveProperty('objectKey');
 
+    const emptySelectionResponse = await client.api.admin.verifications[':id'].reject.$post(
+      {
+        param: { id: submission.applicationId },
+        json: {
+          note: 'Upload a clearer registration certificate.',
+          rejectedDocumentVersionIds: [],
+        },
+      },
+      { headers },
+    );
+    expect(emptySelectionResponse.status).toBe(422);
+
     const rejectResponse = await client.api.admin.verifications[':id'].reject.$post(
       {
         param: { id: submission.applicationId },

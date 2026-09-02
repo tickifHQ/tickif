@@ -199,6 +199,37 @@ describe('verificationsService', () => {
     });
   });
 
+  it('surfaces the approval revocation reason while the application is pending re-review', async () => {
+    vi.mocked(verificationsRepository.listHistory).mockResolvedValue([
+      {
+        id: 'd9cb1795-ecbf-4ed0-a28a-9768ab47f81e',
+        applicationId: application.id,
+        attempt: 2,
+        action: VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
+        actorUserId: 'admin-1',
+        fromStatus: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+        toStatus: VERIFICATION_APPLICATION_STATUS.PENDING,
+        note: 'The identity evidence needs another review.',
+        rejectedDocumentVersionIds: [],
+        createdAt: new Date('2026-08-03T00:00:00.000Z'),
+      },
+    ]);
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: {
+        ...application,
+        status: VERIFICATION_APPLICATION_STATUS.PENDING,
+        attempt: 2,
+        submittedAt: new Date('2026-08-03T00:00:00.000Z'),
+      },
+    });
+
+    await expect(verificationsService.getState(caller)).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.PENDING,
+      latestNote: 'The identity evidence needs another review.',
+    });
+  });
+
   it('treats an elapsed approval as expired without mutating stored history', async () => {
     vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
       ...context,
