@@ -96,6 +96,13 @@ describe('leadsService.list', () => {
     ).rejects.toMatchObject({ status: 422 });
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
+
+  it('rejects listing without an active branch', async () => {
+    await expect(
+      leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeTeamId: null }),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(leadsRepository.list).not.toHaveBeenCalled();
+  });
 });
 
 describe('leadsService.getById', () => {

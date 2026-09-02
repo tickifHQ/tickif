@@ -174,7 +174,7 @@ export const organizationMemberSchema = z
     userId: z.string().min(1),
     name: z.string().min(1),
     email: z.email(),
-    image: z.url().nullable(),
+    image: z.string().nullable(),
     role: organizationMemberRoleSchema,
     frozen: z.boolean(),
     frozenAt: z.string().datetime().nullable(),
@@ -223,7 +223,7 @@ export const organizationBranchMemberSchema = z
     userId: z.string().min(1),
     name: z.string().min(1),
     email: z.email(),
-    image: z.url().nullable(),
+    image: z.string().nullable(),
     role: organizationMemberRoleSchema,
   })
   .meta({ id: 'OrganizationBranchMember' });

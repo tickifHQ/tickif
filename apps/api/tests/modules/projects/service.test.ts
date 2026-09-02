@@ -209,6 +209,16 @@ describe('projectsService.list', () => {
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
   });
 
+  it('rejects listing without an active branch', async () => {
+    await expect(
+      projectsService.list(
+        { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
+        { ...caller, activeTeamId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(projectsRepository.list).not.toHaveBeenCalled();
+  });
+
   it('surfaces only unresolved comments for changes-requested list rows', async () => {
     const project = row({ status: 'changes_requested' });
     const comment: ProjectReviewCommentRecord = {

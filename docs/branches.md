@@ -11,7 +11,7 @@ unique `team_id` and public `slug`. Projects inherit their branch through
 `project.designer_id`; leads store `team_id` directly because a lead may not refer
 to a project.
 
-## Migration of one-profile-per-org reads
+## Branch-scoped readers in E-244
 
 | Previous assumption | Branch-safe behavior |
 | --- | --- |
@@ -24,6 +24,9 @@ to a project.
 | Verification and subscription reindex | Fan out org-level state changes to every branch profile. |
 | Organization workspace members | `GET /api/orgs/branches` returns only active teams with team-scoped members. |
 
+Reports remain organization-scoped until E-246 adds its branch and organization
+analytics scopes. They must not be treated as branch-scoped reads in the meantime.
+
 Migration `0047` creates a deterministic default team for every existing org,
 adds all existing org members to it, assigns existing profiles and leads, and
 backfills session and invitation team context before enforcing non-null profile
@@ -35,8 +38,12 @@ single field.
 
 Downgrades freeze active teams newest-first. `freeze_rank` records that order and
 restoration consumes it ascending. Freezing clears sessions that point at those
-teams. Operational endpoints reject or omit frozen teams, while public profile and
+teams. The next authenticated request selects the user's oldest remaining active
+team. Operational endpoints reject or omit frozen teams, while public profile and
 published project reads deliberately do not join on `team.frozen`.
+
+Hard deletion through Better Auth is disabled because deleting a team cascades to
+its profile and projects. Lifecycle reconciliation uses freeze and restore instead.
 
 The billing webhook calls both member-seat and branch reconciliation. The same
 `orgsService.reconcileBranches()` helper is available to lifecycle sweeps.

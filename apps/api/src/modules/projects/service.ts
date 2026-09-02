@@ -721,7 +721,7 @@ function requireActiveOrganization(caller: Caller): string {
 }
 
 function requireActiveTeam(caller: Caller): string {
-  const teamId = caller.activeTeamId ?? caller.activeOrgId;
+  const teamId = caller.activeTeamId;
   if (!teamId) {
     throw AppError.unprocessable('No active branch selected');
   }
@@ -733,7 +733,7 @@ async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promis
   if (caller.userRole === 'superadmin') return;
   if (
     caller.activeOrgId === ownership.organizationId &&
-    (!ownership.teamId || (caller.activeTeamId ?? caller.activeOrgId) === ownership.teamId) &&
+    (!ownership.teamId || requireActiveTeam(caller) === ownership.teamId) &&
     (await orgsService.isMember(caller.userId, ownership.organizationId))
   ) {
     return;
@@ -752,7 +752,7 @@ async function assertProjectCapability(
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
   if (caller.activeOrgId !== ownership.organizationId) throw AppError.forbidden();
-  if (ownership.teamId && (caller.activeTeamId ?? caller.activeOrgId) !== ownership.teamId) {
+  if (ownership.teamId && requireActiveTeam(caller) !== ownership.teamId) {
     throw AppError.forbidden();
   }
   if (await orgsService.hasCapability(caller.userId, ownership.organizationId, capability)) return;

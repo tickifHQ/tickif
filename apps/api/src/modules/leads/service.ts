@@ -91,7 +91,7 @@ function requireActiveOrganization(caller: Caller): string {
 }
 
 function requireActiveTeam(caller: Caller): string {
-  const teamId = caller.activeTeamId ?? caller.activeOrgId;
+  const teamId = caller.activeTeamId;
   if (!teamId) throw AppError.unprocessable('No active branch selected');
   return teamId;
 }

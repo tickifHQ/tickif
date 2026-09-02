@@ -44,6 +44,19 @@ type FieldCheckResult = {
   missing: RequiredField[];
 };
 
+function requireActiveTeam(teamId: string | null | undefined): string {
+  if (!teamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  return teamId;
+}
+
+function assertProfileOrganization(profile: DesignerProfileRecord, organizationId: string): void {
+  if (profile.orgId !== organizationId) {
+    throw AppError.forbidden('Active branch does not belong to the active organization');
+  }
+}
+
 function slugify(text: string): string {
   return (
     text
@@ -203,9 +216,8 @@ export const profilesService = {
     }
 
     // Fetch profile ONCE and thread through (avoids duplicate DB hits)
-    const profile = input.teamId
-      ? await profilesRepository.findByTeamId(input.teamId)
-      : await profilesRepository.findByOrgId(orgId);
+    const profile = await profilesRepository.findByTeamId(requireActiveTeam(input.teamId));
+    if (profile) assertProfileOrganization(profile, orgId);
 
     // Parallelize independent reads
     const [hasGoogle, hasProject, fieldCheck] = await Promise.all([
@@ -320,14 +332,13 @@ export const profilesService = {
       throw AppError.forbidden('Organization membership required');
     }
 
-    const current = activeTeamId
-      ? await profilesRepository.findByTeamIdWithOrg(activeTeamId)
-      : await profilesRepository.findByOrgIdWithOrg(activeOrgId);
+    const current = await profilesRepository.findByTeamIdWithOrg(requireActiveTeam(activeTeamId));
     if (!current) {
-      throw AppError.notFound('No profile found for the active organization');
+      throw AppError.notFound('No profile found for the active branch');
     }
 
     const { profile, org } = current;
+    assertProfileOrganization(profile, activeOrgId);
     const footprint = await profilesRepository.getFootprint(profile.id);
 
     return {
@@ -452,12 +463,11 @@ export const profilesService = {
       throw AppError.forbidden('Insufficient org role to update this profile');
     }
 
-    const profile = activeTeamId
-      ? await profilesRepository.findByTeamId(activeTeamId)
-      : await profilesRepository.findByOrgId(activeOrgId);
+    const profile = await profilesRepository.findByTeamId(requireActiveTeam(activeTeamId));
     if (!profile) {
-      throw AppError.notFound('No profile found for the active organization');
+      throw AppError.notFound('No profile found for the active branch');
     }
+    assertProfileOrganization(profile, activeOrgId);
 
     // Validate taxonomy IDs (shared helper — single round-trip, consistent reporting)
     const { cityIds, scopeIds, themeIds, ...profileFields } = input;

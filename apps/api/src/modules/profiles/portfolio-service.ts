@@ -196,11 +196,15 @@ export async function resolveProfile(caller: Caller): Promise<DesignerProfileRec
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }
-  const profile = caller.activeTeamId
-    ? await profilesRepository.findByTeamId(caller.activeTeamId)
-    : await profilesRepository.findByOrgId(caller.activeOrgId);
+  if (!caller.activeTeamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  const profile = await profilesRepository.findByTeamId(caller.activeTeamId);
   if (!profile) {
-    throw AppError.notFound('No designer profile found for the active organization');
+    throw AppError.notFound('No designer profile found for the active branch');
+  }
+  if (profile.orgId !== caller.activeOrgId) {
+    throw AppError.forbidden('Active branch does not belong to the active organization');
   }
   return profile;
 }

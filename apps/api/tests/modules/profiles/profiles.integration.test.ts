@@ -564,6 +564,17 @@ describe('PATCH /api/profiles/me — update', () => {
       role: 'member',
       createdAt: new Date(),
     });
+    const [team] = await db
+      .select({ id: schema.designerProfile.teamId })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.orgId, orgId))
+      .limit(1);
+    await db.insert(schema.teamMember).values({
+      id: `tm-read-only-${userId}`,
+      teamId: team!.id,
+      userId,
+      createdAt: new Date(),
+    });
     const activeCookie = await activateOrganization(cookie, orgId);
 
     const res = await request('GET', '/api/profiles/me', { cookie: activeCookie });
@@ -571,6 +582,30 @@ describe('PATCH /api/profiles/me — update', () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.orgId).toBe(orgId);
+  });
+
+  it('returns 422 instead of choosing a random profile when no branch is active', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001024', 'designer');
+    const organization = await makeOrganization({ slug: 'multi-profile-no-team' });
+    await db.insert(schema.member).values({
+      id: `mem-no-team-${userId}`,
+      organizationId: organization.id,
+      userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    const firstTeam = await makeTeam({ organizationId: organization.id, name: 'First' });
+    const secondTeam = await makeTeam({ organizationId: organization.id, name: 'Second' });
+    await makeDesigner({ orgId: organization.id, teamId: firstTeam.id, slug: 'first-profile' });
+    await makeDesigner({ orgId: organization.id, teamId: secondTeam.id, slug: 'second-profile' });
+    const activeCookie = await activateOrganization(cookie, organization.id);
+
+    const res = await request('GET', '/api/profiles/me', { cookie: activeCookie });
+
+    expect(res.status).toBe(422);
+    expect(await json(res)).toMatchObject({
+      error: { message: 'No active branch selected' },
+    });
   });
 
   it('updates profile fields (partial — bio only)', async () => {

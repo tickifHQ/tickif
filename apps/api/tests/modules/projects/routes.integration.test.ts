@@ -1441,6 +1441,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       role: 'member',
       createdAt: new Date(),
     });
+    await db.insert(schema.teamMember).values({
+      id: `team-mem-${sameOrgMember.userId}`,
+      teamId: designer.teamId,
+      userId: sameOrgMember.userId,
+      createdAt: new Date(),
+    });
     const project = await makeProject({ designerId: designer.id, status: 'published' });
 
     const res = await app.request(`/api/projects/${project.id}/duplicate`, {
@@ -1511,6 +1517,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       organizationId: designer.orgId,
       userId: sameOrgMember.userId,
       role: 'member',
+      createdAt: new Date(),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `team-mem-${sameOrgMember.userId}`,
+      teamId: designer.teamId,
+      userId: sameOrgMember.userId,
       createdAt: new Date(),
     });
     const project = await makeProject({ designerId: designer.id, status: 'draft' });

@@ -140,6 +140,32 @@ describe('corporate branch persistence', () => {
     expect(await rejected.json()).toMatchObject({ code: 'BRANCHES_REQUIRE_CORPORATE' });
   });
 
+  it('blocks hard deletion so branch projects cannot cascade', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const created = await createBranch(corporate.cookie, corporate.organization.id, 'Pune');
+    expect(created.status).toBe(200);
+    const team = (await created.json()) as { id: string };
+    const [profile] = await db
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.teamId, team.id));
+    const project = await makeProject({ designerId: profile!.id, status: 'draft' });
+
+    const response = await app.request('/api/auth/organization/remove-team', {
+      method: 'POST',
+      headers: { cookie: corporate.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ organizationId: corporate.organization.id, teamId: team.id }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: 'BRANCH_DELETE_NOT_ALLOWED' });
+    const [persisted] = await db
+      .select({ id: schema.project.id })
+      .from(schema.project)
+      .where(eq(schema.project.id, project.id));
+    expect(persisted?.id).toBe(project.id);
+  });
+
   it('freezes newest branches first and keeps published projects public', async () => {
     const organization = await makeOrganization();
     const oldest = await makeTeam({

@@ -78,6 +78,74 @@ function branchSlug(name: string): string {
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+async function availableBranchSlug(name: string): Promise<string> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = branchSlug(name);
+    const [profile, organization] = await Promise.all([
+      db
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.slug, candidate))
+        .limit(1),
+      db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.slug, candidate))
+        .limit(1),
+    ]);
+    if (!profile[0] && !organization[0]) return candidate;
+  }
+  throw new APIError('CONFLICT', {
+    code: 'BRANCH_SLUG_CONFLICT',
+    message: 'Could not allocate a unique branch slug',
+  });
+}
+
+async function activeInvitationTeamIds(input: {
+  organizationId: string;
+  teamId?: string | null;
+  teamIds?: unknown;
+}): Promise<string[]> {
+  const requestedIds = Array.isArray(input.teamIds)
+    ? input.teamIds.filter((teamId): teamId is string => typeof teamId === 'string' && !!teamId)
+    : (input.teamId?.split(',').filter(Boolean) ?? []);
+  if (requestedIds.length === 0) {
+    const [team] = await db
+      .select({ id: schema.team.id })
+      .from(schema.team)
+      .where(
+        and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)),
+      )
+      .orderBy(schema.team.createdAt, schema.team.id)
+      .limit(1);
+    if (!team) {
+      throw new APIError('BAD_REQUEST', {
+        code: 'ACTIVE_BRANCH_REQUIRED',
+        message: 'The organization has no active branch',
+      });
+    }
+    return [team.id];
+  }
+
+  const teams = await db
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .where(
+      and(
+        inArray(schema.team.id, requestedIds),
+        eq(schema.team.organizationId, input.organizationId),
+        eq(schema.team.frozen, false),
+      ),
+    );
+  if (teams.length !== new Set(requestedIds).size) {
+    throw new APIError('FORBIDDEN', {
+      code: 'BRANCH_INACTIVE',
+      message: 'Branch is inactive',
+    });
+  }
+  return requestedIds;
+}
+
 async function requireActiveTeam(teamId: string): Promise<void> {
   const [row] = await db
     .select({ frozen: schema.team.frozen })
@@ -424,27 +492,33 @@ export const auth = betterAuth({
           if (user) await requireActiveOrganizationMember(user.id, team.organizationId);
         },
         afterCreateTeam: async ({ team, user, organization }) => {
-          await db.transaction(async (tx) => {
-            if (user) {
-              await tx
-                .insert(schema.teamMember)
-                .values({
-                  id: crypto.randomUUID(),
-                  teamId: team.id,
-                  userId: user.id,
-                  createdAt: new Date(),
-                })
-                .onConflictDoNothing();
-            }
-            await tx.insert(schema.designerProfile).values({
-              orgId: organization.id,
-              teamId: team.id,
-              userId: user?.id ?? null,
-              displayName: team.name,
-              slug: branchSlug(team.name),
-              entityType: 'company',
+          try {
+            const slug = await availableBranchSlug(team.name);
+            await db.transaction(async (tx) => {
+              if (user) {
+                await tx
+                  .insert(schema.teamMember)
+                  .values({
+                    id: crypto.randomUUID(),
+                    teamId: team.id,
+                    userId: user.id,
+                    createdAt: new Date(),
+                  })
+                  .onConflictDoNothing();
+              }
+              await tx.insert(schema.designerProfile).values({
+                orgId: organization.id,
+                teamId: team.id,
+                userId: user?.id ?? null,
+                displayName: team.name,
+                slug,
+                entityType: 'company',
+              });
             });
-          });
+          } catch (error) {
+            await db.delete(schema.team).where(eq(schema.team.id, team.id));
+            throw error;
+          }
         },
         beforeUpdateTeam: async ({ team, user }) => {
           await requireActiveOrganizationMember(user.id, team.organizationId);
@@ -470,6 +544,10 @@ export const auth = betterAuth({
               message: 'Branch is inactive',
             });
           }
+          throw new APIError('BAD_REQUEST', {
+            code: 'BRANCH_DELETE_NOT_ALLOWED',
+            message: 'Branch deletion is disabled because it would delete branch projects',
+          });
         },
         beforeAddTeamMember: async ({ team }) => {
           await requireActiveTeam(team.id);
@@ -490,6 +568,8 @@ export const auth = betterAuth({
               message: 'Ownership must be transferred through an accepted transfer request',
             });
           }
+          const teamIds = await activeInvitationTeamIds(invitation);
+          if (!invitation.teamId) return { data: { teamIds } };
         },
         beforeUpdateMemberRole: async ({ member, newRole }) => {
           const role = await validateOrganizationRoleChange({
@@ -505,6 +585,7 @@ export const auth = betterAuth({
         },
         beforeAcceptInvitation: async ({ invitation }) => {
           await requireOrganizationRbac(invitation.organizationId);
+          await activeInvitationTeamIds(invitation);
         },
         beforeRejectInvitation: async ({ invitation }) => {
           await requireOrganizationRbac(invitation.organizationId);
@@ -526,17 +607,31 @@ export const auth = betterAuth({
             html: `<p>${escapeHtml(invitation.email)} declined the invitation to ${escapeHtml(organization.name)}.</p>`,
           });
         },
-        afterAcceptInvitation: async ({ user }) => {
-          await db
-            .update(schema.user)
-            .set({ role: 'designer', status: 'active', updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.user.id, user.id),
-                or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
-                inArray(schema.user.status, ['pending', 'active']),
-              ),
-            );
+        afterAcceptInvitation: async ({ invitation, user }) => {
+          const teamIds = await activeInvitationTeamIds(invitation);
+          await db.transaction(async (tx) => {
+            await tx
+              .insert(schema.teamMember)
+              .values(
+                teamIds.map((teamId) => ({
+                  id: crypto.randomUUID(),
+                  teamId,
+                  userId: user.id,
+                  createdAt: new Date(),
+                })),
+              )
+              .onConflictDoNothing();
+            await tx
+              .update(schema.user)
+              .set({ role: 'designer', status: 'active', updatedAt: new Date() })
+              .where(
+                and(
+                  eq(schema.user.id, user.id),
+                  or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
+                  inArray(schema.user.status, ['pending', 'active']),
+                ),
+              );
+          });
         },
       },
     }),
