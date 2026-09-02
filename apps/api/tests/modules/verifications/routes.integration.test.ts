@@ -4,7 +4,11 @@ import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeOrganization, makeProject } from '@repo/db/testing';
 import type * as queueModule from '@repo/queue';
 import type * as storageModule from '@repo/storage';
-import { ORGANIZATION_MEMBER_ROLE, PLATFORM_ROLE } from '@repo/contracts';
+import {
+  ORGANIZATION_MEMBER_ROLE,
+  PLATFORM_ROLE,
+  type VerificationDocumentType,
+} from '@repo/contracts';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 import { profilesRepository } from '../../../src/modules/profiles/repository.js';
@@ -20,6 +24,31 @@ vi.mock('@repo/storage', async (original) => ({
 }));
 
 const client = testClient(app);
+
+async function uploadVerificationDocument(
+  cookie: string,
+  type: VerificationDocumentType,
+): Promise<string> {
+  const headers = { cookie };
+  const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+    {
+      json: {
+        type,
+        contentType: 'application/pdf',
+        size: 1000,
+      },
+    },
+    { headers },
+  );
+  if (uploadResponse.status !== 201) throw new Error('expected verification upload reservation');
+  const upload = await uploadResponse.json();
+  const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+    { param: { versionId: upload.documentVersionId } },
+    { headers },
+  );
+  if (commitResponse.status !== 200) throw new Error('expected verification upload commit');
+  return upload.documentVersionId;
+}
 
 async function designerWorkspace(phoneNumber = '+919800000071') {
   const session = await createRoleSession(phoneNumber, 'designer');
@@ -59,30 +88,17 @@ async function submitEligibleVerification(phoneNumber: string) {
     makeProject({ designerId: workspace.profile.id, status: 'published' }),
   ]);
   const headers = { cookie: workspace.cookie };
-  const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
-    {
-      json: {
-        type: 'gst_registration_certificate',
-        contentType: 'application/pdf',
-        size: 1000,
-      },
-    },
-    { headers },
+  const documentVersionId = await uploadVerificationDocument(
+    workspace.cookie,
+    'gst_registration_certificate',
   );
-  if (uploadResponse.status !== 201) throw new Error('expected verification upload reservation');
-  const upload = await uploadResponse.json();
-  const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
-    { param: { versionId: upload.documentVersionId } },
-    { headers },
-  );
-  if (commitResponse.status !== 200) throw new Error('expected verification upload commit');
   const submitResponse = await client.api.verifications.submit.$post({}, { headers });
   if (submitResponse.status !== 200) throw new Error('expected verification submission');
   const submitted = await submitResponse.json();
   return {
     ...workspace,
     applicationId: submitted.applicationId,
-    documentVersionId: upload.documentVersionId,
+    documentVersionId,
   };
 }
 
@@ -351,6 +367,270 @@ describe('verification route authorization', () => {
     await expect(acceptedQueue.json()).resolves.toMatchObject({
       tab: 'accepted',
       items: [expect.objectContaining({ id: submission.applicationId, status: 'verified' })],
+    });
+  });
+
+  it('revokes an approval into re-review and allows a later reapproval', async () => {
+    const submission = await submitEligibleVerification('+919800000086');
+    const admin = await createRoleSession('+919800000087', PLATFORM_ROLE.ADMIN);
+    const headers = { cookie: admin.cookie };
+    const approveResponse = await client.api.admin.verifications[':id'].approve.$post(
+      { param: { id: submission.applicationId } },
+      { headers },
+    );
+    expect(approveResponse.status).toBe(200);
+
+    const revokeResponse = await client.api.admin.verifications[':id'].revoke.$post(
+      {
+        param: { id: submission.applicationId },
+        json: { note: 'The profile needs another identity review.' },
+      },
+      { headers },
+    );
+
+    expect(revokeResponse.status).toBe(200);
+    if (revokeResponse.status !== 200) throw new Error('expected approval revocation');
+    await expect(revokeResponse.json()).resolves.toMatchObject({
+      application: {
+        status: 'pending',
+        attempt: 2,
+        reviewedAt: null,
+        approvedAt: null,
+        expiresAt: null,
+      },
+      documents: [{ id: submission.documentVersionId, status: 'verified' }],
+      history: expect.arrayContaining([
+        expect.objectContaining({
+          attempt: 2,
+          action: 'approval_revoked',
+          fromStatus: 'verified',
+          toStatus: 'pending',
+          note: 'The profile needs another identity review.',
+        }),
+      ]),
+    });
+    expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
+      false,
+    );
+
+    const reReviewResponse = await client.api.admin.verifications.$get(
+      { query: { tab: 're_review' } },
+      { headers },
+    );
+    expect(reReviewResponse.status).toBe(200);
+    if (reReviewResponse.status !== 200) throw new Error('expected re-review queue');
+    await expect(reReviewResponse.json()).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          id: submission.applicationId,
+          attempt: 2,
+          status: 'pending',
+        }),
+      ],
+    });
+    const acceptedAfterRevoke = await client.api.admin.verifications.$get(
+      { query: { tab: 'accepted' } },
+      { headers },
+    );
+    expect(acceptedAfterRevoke.status).toBe(200);
+    if (acceptedAfterRevoke.status !== 200) throw new Error('expected accepted queue');
+    expect((await acceptedAfterRevoke.json()).items).toEqual([]);
+
+    const designerStateResponse = await client.api.verifications.$get(
+      {},
+      { headers: { cookie: submission.cookie } },
+    );
+    expect(designerStateResponse.status).toBe(200);
+    if (designerStateResponse.status !== 200)
+      throw new Error('expected designer verification state');
+    await expect(designerStateResponse.json()).resolves.toMatchObject({
+      status: 'pending',
+      applicationEditable: false,
+      attempt: 2,
+      approvedAt: null,
+      expiresAt: null,
+    });
+
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, submission.profile.id));
+    const publicSlug = 'revoked-verification-test';
+    await db
+      .update(schema.organization)
+      .set({ slug: publicSlug })
+      .where(eq(schema.organization.id, submission.organization.id));
+    const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
+      param: { slug: publicSlug },
+    });
+    expect(publicProfileResponse.status).toBe(200);
+    if (publicProfileResponse.status !== 200) throw new Error('expected public designer profile');
+    await expect(publicProfileResponse.json()).resolves.toMatchObject({
+      isKycVerified: false,
+    });
+    const publicPortfolioResponse = await client.api.portfolios[':slug'].$get({
+      param: { slug: publicSlug },
+    });
+    expect(publicPortfolioResponse.status).toBe(200);
+    if (publicPortfolioResponse.status !== 200)
+      throw new Error('expected public designer portfolio');
+    const publicPortfolio = await publicPortfolioResponse.json();
+    expect(publicPortfolio).toMatchObject({ isKycVerified: false });
+    expect(publicPortfolio.badges).not.toContain('verified');
+
+    const allNotifications = await db
+      .select()
+      .from(schema.verificationNotificationOutbox)
+      .where(eq(schema.verificationNotificationOutbox.applicationId, submission.applicationId));
+    expect(allNotifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attempt: 2,
+          eventType: 'verification_approval_revoked',
+          note: 'The profile needs another identity review.',
+        }),
+      ]),
+    );
+
+    const reapproveResponse = await client.api.admin.verifications[':id'].approve.$post(
+      { param: { id: submission.applicationId } },
+      { headers },
+    );
+    expect(reapproveResponse.status).toBe(200);
+    if (reapproveResponse.status !== 200) throw new Error('expected verification reapproval');
+    await expect(reapproveResponse.json()).resolves.toMatchObject({
+      application: { status: 'verified', attempt: 2 },
+    });
+    expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
+      true,
+    );
+    const notificationsAfterReapproval = await db
+      .select()
+      .from(schema.verificationNotificationOutbox)
+      .where(eq(schema.verificationNotificationOutbox.applicationId, submission.applicationId));
+    expect(notificationsAfterReapproval).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ attempt: 2, eventType: 'verification_approved' }),
+      ]),
+    );
+  });
+
+  it('ignores a removed optional document slot when approving verification', async () => {
+    const workspace = await designerWorkspace('+919800000084');
+    await Promise.all([
+      makeProject({ designerId: workspace.profile.id, status: 'published' }),
+      makeProject({ designerId: workspace.profile.id, status: 'published' }),
+      makeProject({ designerId: workspace.profile.id, status: 'published' }),
+    ]);
+    const initialStateResponse = await client.api.verifications.$get(
+      {},
+      { headers: { cookie: workspace.cookie } },
+    );
+    expect(initialStateResponse.status).toBe(200);
+    await uploadVerificationDocument(workspace.cookie, 'personal_pan');
+    const removedOptionalDocumentId = await uploadVerificationDocument(
+      workspace.cookie,
+      'personal_pan',
+    );
+    const removeResponse = await client.api.verifications.documents[':versionId'].$delete(
+      { param: { versionId: removedOptionalDocumentId } },
+      { headers: { cookie: workspace.cookie } },
+    );
+    expect(removeResponse.status).toBe(200);
+    const businessDocumentId = await uploadVerificationDocument(
+      workspace.cookie,
+      'gst_registration_certificate',
+    );
+    const submitResponse = await client.api.verifications.submit.$post(
+      {},
+      { headers: { cookie: workspace.cookie } },
+    );
+    expect(submitResponse.status).toBe(200);
+    if (submitResponse.status !== 200) throw new Error('expected verification submission');
+    const submitted = await submitResponse.json();
+    const admin = await createRoleSession('+919800000085', PLATFORM_ROLE.ADMIN);
+
+    const detailResponse = await client.api.admin.verifications[':id'].$get(
+      { param: { id: submitted.applicationId } },
+      { headers: { cookie: admin.cookie } },
+    );
+    expect(detailResponse.status).toBe(200);
+    if (detailResponse.status !== 200) throw new Error('expected admin verification detail');
+    await expect(detailResponse.json()).resolves.toMatchObject({
+      documents: [{ id: businessDocumentId, status: 'uploaded' }],
+    });
+
+    const approveResponse = await client.api.admin.verifications[':id'].approve.$post(
+      { param: { id: submitted.applicationId } },
+      { headers: { cookie: admin.cookie } },
+    );
+
+    expect(approveResponse.status).toBe(200);
+    if (approveResponse.status !== 200) throw new Error('expected verification approval');
+    await expect(approveResponse.json()).resolves.toMatchObject({
+      application: { status: 'verified' },
+      documents: [{ id: businessDocumentId, status: 'verified' }],
+    });
+    expect(await profilesRepository.isOrganizationKycVerified(workspace.organization.id)).toBe(
+      true,
+    );
+    const acceptedQueue = await client.api.admin.verifications.$get(
+      { query: { tab: 'accepted' } },
+      { headers: { cookie: admin.cookie } },
+    );
+    expect(acceptedQueue.status).toBe(200);
+    if (acceptedQueue.status !== 200) throw new Error('expected accepted queue');
+    await expect(acceptedQueue.json()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: submitted.applicationId, status: 'verified' })],
+    });
+    const designerStateResponse = await client.api.verifications.$get(
+      {},
+      { headers: { cookie: workspace.cookie } },
+    );
+    expect(designerStateResponse.status).toBe(200);
+    if (designerStateResponse.status !== 200)
+      throw new Error('expected designer verification state');
+    await expect(designerStateResponse.json()).resolves.toMatchObject({
+      status: 'verified',
+      approvedAt: expect.any(String),
+      expiresAt: expect.any(String),
+    });
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'active' })
+      .where(eq(schema.designerProfile.id, workspace.profile.id));
+    const publicSlug = 'verified-studio-test';
+    await db
+      .update(schema.organization)
+      .set({ slug: publicSlug })
+      .where(eq(schema.organization.id, workspace.organization.id));
+    const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
+      param: { slug: publicSlug },
+    });
+    expect(publicProfileResponse.status).toBe(200);
+    if (publicProfileResponse.status !== 200) throw new Error('expected public designer profile');
+    await expect(publicProfileResponse.json()).resolves.toMatchObject({
+      id: workspace.profile.id,
+      isKycVerified: true,
+    });
+    const publicPortfolioResponse = await client.api.portfolios[':slug'].$get({
+      param: { slug: publicSlug },
+    });
+    expect(publicPortfolioResponse.status).toBe(200);
+    if (publicPortfolioResponse.status !== 200)
+      throw new Error('expected public designer portfolio');
+    await expect(publicPortfolioResponse.json()).resolves.toMatchObject({
+      profileId: workspace.profile.id,
+      isKycVerified: true,
+      badges: expect.arrayContaining(['verified']),
+    });
+    const [searchProjection] = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(eq(schema.searchProjectionOutbox.entityId, workspace.profile.id));
+    expect(searchProjection).toMatchObject({
+      entityKind: 'designer',
+      operation: 'index',
     });
   });
 

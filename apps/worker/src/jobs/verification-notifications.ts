@@ -62,16 +62,22 @@ export async function processVerificationEmail(outboxId: string): Promise<void> 
 
   const changesRequested =
     notification.eventType === VERIFICATION_NOTIFICATION_EVENT.CHANGES_REQUESTED;
+  const approvalRevoked =
+    notification.eventType === VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED;
   const note =
-    changesRequested && notification.note
+    (changesRequested || approvalRevoked) && notification.note
       ? `<p><strong>Reviewer note:</strong> ${escapeHtml(notification.note)}</p>`
       : '';
-  const title = changesRequested
-    ? 'Changes requested for your Tickif verification'
-    : 'Your Tickif verification is approved';
-  const action = changesRequested
-    ? 'Review the note, replace the requested documents, and resubmit your verification.'
-    : 'Your verified status is now visible on Tickif.';
+  const title = approvalRevoked
+    ? 'Your Tickif verification is under review again'
+    : changesRequested
+      ? 'Changes requested for your Tickif verification'
+      : 'Your Tickif verification is approved';
+  const action = approvalRevoked
+    ? 'Your verified status has been removed while the Tickif Review Team reviews your profile again.'
+    : changesRequested
+      ? 'Review the note, replace the requested documents, and resubmit your verification.'
+      : 'Your verified status is now visible on Tickif.';
   const verificationUrl = new URL('/designer/verification', config.PUBLIC_WEB_URL).toString();
 
   await sendEmail({

@@ -1,6 +1,6 @@
 {
-  "id": "775b52ae-23cc-4a8d-b9d6-b1b3336eb413",
-  "prevId": "74208e33-78ca-42b1-8d8c-61c92110cd52",
+  "id": "08d077c3-5729-4e70-b6e8-04f69d8c2bcb",
+  "prevId": "1257728d-123c-46b0-b5d8-099faddbbda8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1022,6 +1022,126 @@
       },
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_context_preference": {
+      "name": "user_context_preference",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "context_kind": {
+          "name": "context_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_context_preference_organizationId_idx": {
+          "name": "user_context_preference_organizationId_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_context_preference_teamId_idx": {
+          "name": "user_context_preference_teamId_idx",
+          "columns": [
+            {
+              "expression": "team_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_context_preference_user_id_user_id_fk": {
+          "name": "user_context_preference_user_id_user_id_fk",
+          "tableFrom": "user_context_preference",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_context_preference_organization_id_organization_id_fk": {
+          "name": "user_context_preference_organization_id_organization_id_fk",
+          "tableFrom": "user_context_preference",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_context_preference_team_id_team_id_fk": {
+          "name": "user_context_preference_team_id_team_id_fk",
+          "tableFrom": "user_context_preference",
+          "tableTo": "team",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "user_context_preference_shape_check": {
+          "name": "user_context_preference_shape_check",
+          "value": "(\"user_context_preference\".\"context_kind\" = 'personal' and \"user_context_preference\".\"organization_id\" is null and \"user_context_preference\".\"team_id\" is null) or (\"user_context_preference\".\"context_kind\" = 'organization' and \"user_context_preference\".\"organization_id\" is not null and \"user_context_preference\".\"team_id\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.verification": {
@@ -5817,6 +5937,50 @@
           "method": "btree",
           "with": {}
         },
+        "verification_application_verified_review_queue_idx": {
+          "name": "verification_application_verified_review_queue_idx",
+          "columns": [
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"verification_application\".\"status\" = 'verified'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "verification_application_rejected_review_queue_idx": {
+          "name": "verification_application_rejected_review_queue_idx",
+          "columns": [
+            {
+              "expression": "reviewed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"verification_application\".\"status\" = 'rejected'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "verification_application_reviewer_idx": {
           "name": "verification_application_reviewer_idx",
           "columns": [
@@ -7007,7 +7171,8 @@
       "schema": "public",
       "values": [
         "verification_approved",
-        "verification_changes_requested"
+        "verification_changes_requested",
+        "verification_approval_revoked"
       ]
     },
     "public.verification_review_action": {
@@ -7017,7 +7182,8 @@
         "submitted",
         "resubmitted",
         "approved",
-        "rejected"
+        "rejected",
+        "approval_revoked"
       ]
     },
     "public.search_projection_entity_kind": {

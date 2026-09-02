@@ -1,5 +1,10 @@
 import { headers } from 'next/headers';
-import { ADMIN_VERIFICATION_QUEUE_TAB, type AdminVerificationQueueResponse } from '@repo/contracts';
+import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
+  ADMIN_VERIFICATION_QUEUE_TAB_VALUES,
+  type AdminVerificationQueueResponse,
+  type AdminVerificationQueueTab,
+} from '@repo/contracts';
 import { AdminVerificationQueue } from '@/components/admin-verification-queue';
 import { requireAuth } from '@/lib/auth-guard';
 import { fetchAdminVerificationQueue } from '@/lib/admin-verification-api';
@@ -22,12 +27,25 @@ export default async function AdminVerificationsPage() {
   const cookie = (await headers()).get('cookie');
 
   let queue = emptyQueue;
+  const initialCounts: Record<AdminVerificationQueueTab, number> = {
+    new: 0,
+    re_review: 0,
+    accepted: 0,
+    changes_requested: 0,
+  };
   let error: string | undefined;
   if (cookie) {
     try {
-      queue = await fetchAdminVerificationQueue(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1, {
-        headers: { cookie },
-      });
+      const queues = await Promise.all(
+        ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map(
+          async (tab) =>
+            [tab, await fetchAdminVerificationQueue(tab, 1, { headers: { cookie } })] as const,
+        ),
+      );
+      for (const [tab, loadedQueue] of queues) {
+        initialCounts[tab] = loadedQueue.total;
+        if (tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW) queue = loadedQueue;
+      }
     } catch {
       error = 'Could not load submitted verifications. Try refreshing the page.';
     }
@@ -35,5 +53,11 @@ export default async function AdminVerificationsPage() {
     error = 'Your admin session could not be found. Please sign in again.';
   }
 
-  return <AdminVerificationQueue initialQueue={queue} initialError={error} />;
+  return (
+    <AdminVerificationQueue
+      initialQueue={queue}
+      initialCounts={initialCounts}
+      initialError={error}
+    />
+  );
 }

@@ -6,6 +6,7 @@ import {
   type AdminVerificationQueueResponse,
   type AdminVerificationQueueTab,
   type RejectVerificationInput,
+  type RevokeVerificationInput,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
@@ -76,5 +77,20 @@ export async function rejectAdminVerification(
     response,
     adminVerificationDetailResponseSchema,
     'Could not request verification changes.',
+  );
+}
+
+export async function revokeAdminVerification(
+  applicationId: string,
+  input: RevokeVerificationInput,
+): Promise<AdminVerificationDetailResponse> {
+  const response = await api.api.admin.verifications[':id'].revoke.$post({
+    param: { id: applicationId },
+    json: input,
+  });
+  return handleApiResponse(
+    response,
+    adminVerificationDetailResponseSchema,
+    'Could not revoke this verification approval.',
   );
 }

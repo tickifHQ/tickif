@@ -114,6 +114,7 @@ export const VERIFICATION_REVIEW_ACTION = {
   RESUBMITTED: 'resubmitted',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+  APPROVAL_REVOKED: 'approval_revoked',
 } as const;
 
 export const VERIFICATION_REVIEW_ACTION_VALUES = [
@@ -121,16 +122,19 @@ export const VERIFICATION_REVIEW_ACTION_VALUES = [
   VERIFICATION_REVIEW_ACTION.RESUBMITTED,
   VERIFICATION_REVIEW_ACTION.APPROVED,
   VERIFICATION_REVIEW_ACTION.REJECTED,
+  VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
 ] as const;
 
 export const VERIFICATION_NOTIFICATION_EVENT = {
   APPROVED: 'verification_approved',
   CHANGES_REQUESTED: 'verification_changes_requested',
+  APPROVAL_REVOKED: 'verification_approval_revoked',
 } as const;
 
 export const VERIFICATION_NOTIFICATION_EVENT_VALUES = [
   VERIFICATION_NOTIFICATION_EVENT.APPROVED,
   VERIFICATION_NOTIFICATION_EVENT.CHANGES_REQUESTED,
+  VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED,
 ] as const;
 
 export const VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES = [
@@ -307,6 +311,11 @@ export const rejectVerificationSchema = z
   })
   .meta({ id: 'RejectVerification' });
 export type RejectVerificationInput = z.infer<typeof rejectVerificationSchema>;
+
+export const revokeVerificationSchema = z
+  .object({ note: z.string().trim().min(1).max(2_000) })
+  .meta({ id: 'RevokeVerification' });
+export type RevokeVerificationInput = z.infer<typeof revokeVerificationSchema>;
 
 export const verificationDocumentDownloadResponseSchema = z
   .object({ downloadUrl: z.url() })

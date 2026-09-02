@@ -46,6 +46,7 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Undo,
   UserRound,
   XCircle,
 } from 'lucide-react';
@@ -55,9 +56,10 @@ import {
   fetchAdminVerificationDocumentUrl,
   fetchAdminVerificationQueue,
   rejectAdminVerification,
+  revokeAdminVerification,
 } from '@/lib/admin-verification-api';
 
-type ReviewIntent = 'approve' | 'request_changes';
+type ReviewIntent = 'approve' | 'request_changes' | 'revoke';
 
 const tabLabels: Record<AdminVerificationQueueTab, string> = {
   new: 'New',
@@ -154,6 +156,20 @@ function queueMetricDate(queue: AdminVerificationQueueResponse): string | null {
 
 function emptyQueue(tab: AdminVerificationQueueTab, limit: number): AdminVerificationQueueResponse {
   return { items: [], page: 1, limit, total: 0, totalPages: 0, tab };
+}
+
+function removeReviewedApplication(
+  queue: AdminVerificationQueueResponse,
+  applicationId: string,
+): AdminVerificationQueueResponse {
+  if (!queue.items.some((item) => item.id === applicationId)) return queue;
+  const total = Math.max(0, queue.total - 1);
+  return {
+    ...queue,
+    items: queue.items.filter((item) => item.id !== applicationId),
+    total,
+    totalPages: Math.ceil(total / queue.limit),
+  };
 }
 
 function QueueTable({
@@ -253,7 +269,7 @@ function ReviewDetail({
 }: {
   detail: AdminVerificationDetailResponse;
   onClose: () => void;
-  onReviewed: () => Promise<void>;
+  onReviewed: (applicationId: string, intent: ReviewIntent) => void;
 }) {
   const { application, documents, eligibility, history } = detail;
   const [reviewIntent, setReviewIntent] = useState<ReviewIntent | null>(null);
@@ -328,6 +344,10 @@ function ReviewDetail({
         return;
       }
     }
+    if (intent === 'revoke' && !feedback.trim()) {
+      setFeedbackError('A reason for revocation is required.');
+      return;
+    }
 
     setBusyAction(intent);
     setFeedbackError(null);
@@ -335,22 +355,26 @@ function ReviewDetail({
     try {
       if (intent === 'approve') {
         await approveAdminVerification(application.id);
-      } else {
+      } else if (intent === 'request_changes') {
         await rejectAdminVerification(application.id, {
           note: feedback.trim(),
           rejectedDocumentVersionIds: [...selectedDocumentIds],
         });
+      } else {
+        await revokeAdminVerification(application.id, { note: feedback.trim() });
       }
-      setReviewIntent(null);
-      await onReviewed();
     } catch (error) {
       setReviewIntent(null);
       setActionError(
         error instanceof Error ? error.message : 'The verification decision could not be saved.',
       );
+      return;
     } finally {
       setBusyAction(null);
     }
+
+    setReviewIntent(null);
+    onReviewed(application.id, intent);
   }
 
   return (
@@ -553,6 +577,17 @@ function ReviewDetail({
               </Button>
             </>
           ) : null}
+          {application.status === 'verified' ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => openReviewConfirmation('revoke')}
+              disabled={busyAction !== null}
+            >
+              <Undo className="size-4" aria-hidden="true" />
+              Revoke approval
+            </Button>
+          ) : null}
           <Button type="button" variant="ghost" onClick={onClose}>
             Close
           </Button>
@@ -563,12 +598,18 @@ function ReviewDetail({
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {reviewIntent === 'approve' ? 'Approve profile verification' : 'Request changes'}
+              {reviewIntent === 'approve'
+                ? 'Approve profile verification'
+                : reviewIntent === 'revoke'
+                  ? 'Revoke profile verification'
+                  : 'Request changes'}
             </DialogTitle>
             <DialogDescription>
               {reviewIntent === 'approve'
                 ? 'This verifies the designer profile and all current documents.'
-                : 'Tell the designer what must be corrected before they resubmit.'}
+                : reviewIntent === 'revoke'
+                  ? 'This removes the verified status immediately and returns the application to Re-review.'
+                  : 'Tell the designer what must be corrected before they resubmit.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -610,18 +651,36 @@ function ReviewDetail({
             </div>
           ) : null}
 
+          {reviewIntent === 'revoke' ? (
+            <div className="space-y-2">
+              <Label htmlFor="verification-revocation-reason">Reason for revocation</Label>
+              <Textarea
+                id="verification-revocation-reason"
+                value={feedback}
+                onChange={(event) => setFeedback(event.target.value)}
+                placeholder="Explain why this profile needs another review..."
+                maxLength={2000}
+              />
+              {feedbackError ? <p className="text-sm text-destructive">{feedbackError}</p> : null}
+            </div>
+          ) : null}
+
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setReviewIntent(null)}>
               Cancel
             </Button>
             <Button
               type="button"
-              variant={reviewIntent === 'request_changes' ? 'destructive' : 'default'}
+              variant={reviewIntent === 'approve' ? 'default' : 'destructive'}
               onClick={() => void submitReview()}
               disabled={busyAction !== null}
             >
               {busyAction ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-              {reviewIntent === 'approve' ? 'Confirm approval' : 'Send feedback'}
+              {reviewIntent === 'approve'
+                ? 'Confirm approval'
+                : reviewIntent === 'revoke'
+                  ? 'Confirm revocation'
+                  : 'Send feedback'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -632,9 +691,11 @@ function ReviewDetail({
 
 export function AdminVerificationQueue({
   initialQueue,
+  initialCounts,
   initialError,
 }: {
   initialQueue: AdminVerificationQueueResponse;
+  initialCounts?: Record<AdminVerificationQueueTab, number>;
   initialError?: string;
 }) {
   const [activeTab, setActiveTab] = useState<AdminVerificationQueueTab>(initialQueue.tab);
@@ -643,6 +704,14 @@ export function AdminVerificationQueue({
   >({
     [initialQueue.tab]: initialQueue,
   });
+  const [tabCounts, setTabCounts] = useState<Record<AdminVerificationQueueTab, number>>(() => ({
+    new: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ? initialQueue.total : 0,
+    re_review: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW ? initialQueue.total : 0,
+    accepted: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED ? initialQueue.total : 0,
+    changes_requested:
+      initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED ? initialQueue.total : 0,
+    ...initialCounts,
+  }));
   const [queueError, setQueueError] = useState<string | null>(initialError ?? null);
   const [loadingTab, setLoadingTab] = useState<AdminVerificationQueueTab | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
@@ -669,6 +738,7 @@ export function AdminVerificationQueue({
     try {
       const nextQueue = await fetchQueuePage(tab, page);
       setQueues((current) => ({ ...current, [tab]: nextQueue }));
+      setTabCounts((current) => ({ ...current, [tab]: nextQueue.total }));
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not load this queue.');
     } finally {
@@ -707,13 +777,15 @@ export function AdminVerificationQueue({
     setDetailError(null);
   }
 
-  async function handleReviewed() {
-    closeDetail();
-    setQueueError(null);
-    const loadedTabs = ADMIN_VERIFICATION_QUEUE_TAB_VALUES.filter((tab) => queues[tab]);
+  async function refreshLoadedQueues(
+    loadedQueues: Partial<
+      Record<AdminVerificationQueueTab, AdminVerificationQueueResponse>
+    > = queues,
+  ) {
+    const loadedTabs = ADMIN_VERIFICATION_QUEUE_TAB_VALUES.filter((tab) => loadedQueues[tab]);
     const results = await Promise.allSettled(
       loadedTabs.map(async (tab) => {
-        const currentPage = queues[tab]?.page ?? 1;
+        const currentPage = loadedQueues[tab]?.page ?? 1;
         return [tab, await fetchQueuePage(tab, currentPage)] as const;
       }),
     );
@@ -726,10 +798,42 @@ export function AdminVerificationQueue({
         for (const [tab, queue] of successfulQueues) next[tab] = queue;
         return next;
       });
+      setTabCounts((current) => {
+        const next = { ...current };
+        for (const [tab, queue] of successfulQueues) next[tab] = queue.total;
+        return next;
+      });
     }
     if (results.some((result) => result.status === 'rejected')) {
       setQueueError('The decision was saved, but the queue could not refresh. Try again.');
     }
+  }
+
+  function handleReviewed(applicationId: string, intent: ReviewIntent) {
+    const loadedQueues = queues;
+    const sourceTab = activeTab;
+    const destinationTab =
+      intent === 'approve'
+        ? ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED
+        : intent === 'revoke'
+          ? ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
+          : ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED;
+    closeDetail();
+    setQueueError(null);
+    setQueues((current) => {
+      const next = { ...current };
+      for (const tab of ADMIN_VERIFICATION_QUEUE_TAB_VALUES) {
+        const queue = current[tab];
+        if (queue) next[tab] = removeReviewedApplication(queue, applicationId);
+      }
+      return next;
+    });
+    setTabCounts((current) => ({
+      ...current,
+      [sourceTab]: Math.max(0, current[sourceTab] - 1),
+      [destinationTab]: current[destinationTab] + 1,
+    }));
+    void refreshLoadedQueues(loadedQueues);
   }
 
   const metricDate = queueMetricDate(activeQueue);
@@ -787,9 +891,7 @@ export function AdminVerificationQueue({
                   <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                 ) : null}
                 {tabLabels[tab]}
-                {queues[tab] ? (
-                  <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
-                ) : null}
+                <span className="ml-1 text-xs text-muted-foreground">{tabCounts[tab]}</span>
               </TabsTrigger>
             ))}
           </TabsList>

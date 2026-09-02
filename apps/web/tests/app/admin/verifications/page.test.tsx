@@ -13,8 +13,16 @@ vi.mock('@/lib/admin-verification-api', () => ({
   fetchAdminVerificationQueue: mock.fetchQueue,
 }));
 vi.mock('@/components/admin-verification-queue', () => ({
-  AdminVerificationQueue: ({ initialError }: { initialError?: string }) => (
-    <div data-testid="admin-verification-queue">{initialError ?? 'loaded'}</div>
+  AdminVerificationQueue: ({
+    initialCounts,
+    initialError,
+  }: {
+    initialCounts?: Record<string, number>;
+    initialError?: string;
+  }) => (
+    <div data-testid="admin-verification-queue">
+      {initialError ?? 'loaded'} {JSON.stringify(initialCounts)}
+    </div>
   ),
 }));
 
@@ -23,14 +31,14 @@ describe('AdminVerificationsPage', () => {
     vi.clearAllMocks();
     mock.requireAuth.mockResolvedValue({ user: { role: 'admin' } });
     mock.headers.mockResolvedValue(new Headers({ cookie: 'session=valid' }));
-    mock.fetchQueue.mockResolvedValue({
+    mock.fetchQueue.mockImplementation(async (tab: string) => ({
       items: [],
       page: 1,
       limit: 20,
-      total: 0,
+      total: { new: 2, re_review: 3, accepted: 4, changes_requested: 5 }[tab] ?? 0,
       totalPages: 0,
-      tab: 'new',
-    });
+      tab,
+    }));
   });
 
   it('server-loads the protected admin verification queue', async () => {
@@ -39,10 +47,15 @@ describe('AdminVerificationsPage', () => {
     render(await Page());
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'admin' });
-    expect(mock.fetchQueue).toHaveBeenCalledWith('new', 1, {
-      headers: { cookie: 'session=valid' },
-    });
-    expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent('loaded');
+    expect(mock.fetchQueue).toHaveBeenCalledTimes(4);
+    for (const tab of ['new', 're_review', 'accepted', 'changes_requested']) {
+      expect(mock.fetchQueue).toHaveBeenCalledWith(tab, 1, {
+        headers: { cookie: 'session=valid' },
+      });
+    }
+    expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent(
+      'loaded {"new":2,"re_review":3,"accepted":4,"changes_requested":5}',
+    );
   });
 
   it('shows a safe retryable error without exposing infrastructure details', async () => {

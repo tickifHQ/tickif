@@ -11,6 +11,7 @@ import {
   type AdminVerificationQueueResponse,
   type AdminVerificationQueueTab,
   type RejectVerificationInput,
+  type RevokeVerificationInput,
   type VerificationApplicationStatus,
   type VerificationDocumentType,
 } from '@repo/contracts';
@@ -826,7 +827,10 @@ export const verificationsRepository = {
             )`,
           ),
         );
-      const reviewableDocuments = documentRows.filter(
+      const activeDocuments = documentRows.filter(
+        (document) => document.status !== VERIFICATION_DOCUMENT_STATUS.REMOVED,
+      );
+      const reviewableDocuments = activeDocuments.filter(
         (document) =>
           document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
           document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED,
@@ -870,7 +874,7 @@ export const verificationsRepository = {
           !owner.phone ||
           owner.phoneVerified !== true ||
           owner.name.trim().length < 2 ||
-          documentRows.some(
+          activeDocuments.some(
             (document) =>
               document.status !== VERIFICATION_DOCUMENT_STATUS.UPLOADED &&
               document.status !== VERIFICATION_DOCUMENT_STATUS.VERIFIED,
@@ -996,6 +1000,93 @@ export const verificationsRepository = {
             sourceUpdatedAt: reviewedAt,
           })),
         );
+      }
+      return updated;
+    });
+  },
+
+  async revokeApproval(input: {
+    applicationId: string;
+    reviewerId: string;
+    revocation: RevokeVerificationInput;
+  }): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
+    return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select()
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.id, input.applicationId))
+        .for('update')
+        .limit(1);
+      if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      if (application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED) {
+        return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
+      }
+
+      const revokedAt = new Date();
+      const nextAttempt = application.attempt + 1;
+      const [updated] = await tx
+        .update(schema.verificationApplication)
+        .set({
+          status: VERIFICATION_APPLICATION_STATUS.PENDING,
+          attempt: nextAttempt,
+          submittedAt: revokedAt,
+          reviewedAt: null,
+          reviewedByUserId: null,
+          approvedAt: null,
+          expiresAt: null,
+          updatedAt: revokedAt,
+        })
+        .where(eq(schema.verificationApplication.id, application.id))
+        .returning();
+      if (!updated) throw new Error('Verification approval revocation failed');
+
+      await tx.insert(schema.verificationReviewEvent).values({
+        applicationId: application.id,
+        attempt: nextAttempt,
+        action: VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
+        actorUserId: input.reviewerId,
+        fromStatus: application.status,
+        toStatus: VERIFICATION_APPLICATION_STATUS.PENDING,
+        note: input.revocation.note,
+        rejectedDocumentVersionIds: [],
+      });
+
+      const [owner] = await tx
+        .select({
+          userId: schema.member.userId,
+          email: schema.user.email,
+        })
+        .from(schema.member)
+        .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+        .where(
+          and(eq(schema.member.organizationId, application.organizationId), ownerRolePredicate()),
+        )
+        .orderBy(asc(schema.member.createdAt), asc(schema.member.id))
+        .limit(1);
+      if (!owner) throw new Error('Verification organization owner not found');
+      await tx.insert(schema.verificationNotificationOutbox).values({
+        applicationId: application.id,
+        attempt: nextAttempt,
+        eventType: VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED,
+        recipientUserId: owner.userId,
+        recipientEmail: owner.email,
+        note: input.revocation.note,
+      });
+
+      const [profile] = await tx
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.orgId, application.organizationId))
+        .limit(1);
+      if (profile) {
+        await recordSearchProjectionEvents(tx, [
+          {
+            entityKind: 'designer',
+            entityId: profile.id,
+            operation: 'index',
+            sourceUpdatedAt: revokedAt,
+          },
+        ]);
       }
       return updated;
     });

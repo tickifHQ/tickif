@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -15,6 +15,7 @@ const mock = vi.hoisted(() => ({
   fetchDocumentUrl: vi.fn(),
   fetchQueue: vi.fn(),
   reject: vi.fn(),
+  revoke: vi.fn(),
 }));
 
 vi.mock('../../src/lib/admin-verification-api', () => ({
@@ -23,6 +24,7 @@ vi.mock('../../src/lib/admin-verification-api', () => ({
   fetchAdminVerificationDocumentUrl: mock.fetchDocumentUrl,
   fetchAdminVerificationQueue: mock.fetchQueue,
   rejectAdminVerification: mock.reject,
+  revokeAdminVerification: mock.revoke,
 }));
 
 const applicationId = '11111111-1111-4111-8111-111111111111';
@@ -114,6 +116,10 @@ describe('AdminVerificationQueue', () => {
       ...detail,
       application: { ...detail.application, status: 'rejected' },
     });
+    mock.revoke.mockResolvedValue({
+      ...detail,
+      application: { ...detail.application, status: 'pending', attempt: 3 },
+    });
   });
 
   it('shows submitted designer verifications in FIFO order', () => {
@@ -124,6 +130,23 @@ describe('AdminVerificationQueue', () => {
     expect(screen.getByText('Anika Sharma')).toBeInTheDocument();
     expect(screen.getByText('Attempt 1')).toBeInTheDocument();
     expect(screen.getByText(/oldest submission/i)).toBeInTheDocument();
+  });
+
+  it('shows every verification queue count before inactive queues are loaded', () => {
+    render(
+      <AdminVerificationQueue
+        initialQueue={queue}
+        initialCounts={{ new: 1, re_review: 2, accepted: 7, changes_requested: 3 }}
+      />,
+    );
+
+    expect(within(screen.getByRole('tab', { name: /new/i })).getByText('1')).toBeVisible();
+    expect(within(screen.getByRole('tab', { name: /re-review/i })).getByText('2')).toBeVisible();
+    expect(within(screen.getByRole('tab', { name: /accepted/i })).getByText('7')).toBeVisible();
+    expect(
+      within(screen.getByRole('tab', { name: /changes requested/i })).getByText('3'),
+    ).toBeVisible();
+    expect(mock.fetchQueue).not.toHaveBeenCalled();
   });
 
   it('opens the submitted application and allows the document to be reviewed', async () => {
@@ -149,6 +172,13 @@ describe('AdminVerificationQueue', () => {
 
   it('confirms approval and removes the reviewed application from the pending queue', async () => {
     const user = userEvent.setup();
+    let resolveQueueRefresh!: (value: AdminVerificationQueueResponse) => void;
+    mock.fetchQueue.mockImplementation(
+      () =>
+        new Promise<AdminVerificationQueueResponse>((resolve) => {
+          resolveQueueRefresh = resolve;
+        }),
+    );
     render(<AdminVerificationQueue initialQueue={queue} />);
 
     await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
@@ -157,8 +187,17 @@ describe('AdminVerificationQueue', () => {
 
     await waitFor(() => expect(mock.approve).toHaveBeenCalledWith(applicationId));
     await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Profile verification review' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Studio North')).not.toBeInTheDocument();
+    expect(screen.getByText('No new verifications')).toBeInTheDocument();
+    await waitFor(() =>
       expect(mock.fetchQueue).toHaveBeenCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1),
     );
+    resolveQueueRefresh({ ...queue, items: [], total: 0, totalPages: 0 });
+    expect(await screen.findByText('No new verifications')).toBeInTheDocument();
   });
 
   it('keeps approval disabled when live eligibility is no longer met', async () => {
@@ -176,6 +215,61 @@ describe('AdminVerificationQueue', () => {
 
     expect(await screen.findByRole('button', { name: 'Approve verification' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Request changes' })).toBeEnabled();
+  });
+
+  it('moves an approved re-review application into an already loaded accepted queue', async () => {
+    const user = userEvent.setup();
+    let approved = false;
+    const reReviewQueue: AdminVerificationQueueResponse = {
+      ...queue,
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
+      items: queue.items.map((item) => ({ ...item, attempt: 3 })),
+    };
+    const acceptedItem = {
+      ...queue.items[0]!,
+      attempt: 3,
+      status: 'verified' as const,
+      reviewedAt: '2026-09-02T10:00:00.000Z',
+    };
+    mock.approve.mockImplementation(async () => {
+      approved = true;
+      return {
+        ...detail,
+        application: { ...detail.application, status: 'verified' as const },
+      };
+    });
+    mock.fetchQueue.mockImplementation(async (tab: AdminVerificationQueueTab) => {
+      if (tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED) {
+        return {
+          ...queue,
+          tab,
+          items: approved ? [acceptedItem] : [],
+          total: approved ? 1 : 0,
+          totalPages: approved ? 1 : 0,
+        };
+      }
+      return { ...queue, tab, items: [], total: 0, totalPages: 0 };
+    });
+    render(<AdminVerificationQueue initialQueue={reReviewQueue} />);
+
+    await user.click(screen.getByRole('tab', { name: /accepted/i }));
+    expect(await screen.findByText('No accepted verifications')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /re-review/i }));
+    await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
+    await user.click(await screen.findByRole('button', { name: 'Approve verification' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm approval' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Profile verification review' }),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(mock.fetchQueue).toHaveBeenCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED, 1),
+    );
+    await user.click(screen.getByRole('tab', { name: /accepted/i }));
+    expect(await screen.findByText('Studio North')).toBeInTheDocument();
+    expect(screen.getByText('Verified')).toBeInTheDocument();
   });
 
   it('loads every lifecycle tab from the server and renders its empty state', async () => {
@@ -266,7 +360,7 @@ describe('AdminVerificationQueue', () => {
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
   });
 
-  it('keeps accepted verification history view-only', async () => {
+  it('keeps accepted verification history protected from pending-only actions', async () => {
     const user = userEvent.setup();
     const acceptedQueue: AdminVerificationQueueResponse = {
       ...queue,
@@ -301,6 +395,97 @@ describe('AdminVerificationQueue', () => {
     expect(await screen.findAllByText('Verified')).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Approve verification' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Request changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke approval' })).toBeEnabled();
+  });
+
+  it('requires a reason and moves a revoked approval into re-review', async () => {
+    const user = userEvent.setup();
+    let revoked = false;
+    const acceptedItem = {
+      ...queue.items[0]!,
+      status: 'verified' as const,
+      reviewedAt: '2026-09-02T10:00:00.000Z',
+    };
+    const acceptedQueue: AdminVerificationQueueResponse = {
+      ...queue,
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+      items: [acceptedItem],
+    };
+    const verifiedDetail: AdminVerificationDetailResponse = {
+      ...detail,
+      application: {
+        ...detail.application,
+        status: 'verified',
+        reviewedAt: '2026-09-02T10:00:00.000Z',
+        approvedAt: '2026-09-02T10:00:00.000Z',
+        expiresAt: '2026-11-02T10:00:00.000Z',
+      },
+      documents: detail.documents.map((document) => ({ ...document, status: 'verified' })),
+    };
+    mock.fetchDetail.mockResolvedValue(verifiedDetail);
+    mock.revoke.mockImplementation(async () => {
+      revoked = true;
+      return {
+        ...verifiedDetail,
+        application: {
+          ...verifiedDetail.application,
+          status: 'pending' as const,
+          attempt: 3,
+          reviewedAt: null,
+          approvedAt: null,
+          expiresAt: null,
+        },
+      };
+    });
+    mock.fetchQueue.mockImplementation(async (tab: AdminVerificationQueueTab) => {
+      if (tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW) {
+        return {
+          ...queue,
+          tab,
+          items: revoked
+            ? [
+                {
+                  ...acceptedItem,
+                  status: 'pending' as const,
+                  attempt: 3,
+                  reviewedAt: null,
+                },
+              ]
+            : [],
+          total: revoked ? 1 : 0,
+          totalPages: revoked ? 1 : 0,
+        };
+      }
+      return { ...acceptedQueue, items: revoked ? [] : [acceptedItem], total: revoked ? 0 : 1 };
+    });
+    render(<AdminVerificationQueue initialQueue={acceptedQueue} />);
+
+    await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
+    await user.click(await screen.findByRole('button', { name: 'Revoke approval' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm revocation' }));
+    expect(await screen.findByText('A reason for revocation is required.')).toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Reason for revocation' }),
+      'The identity evidence needs another review.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Confirm revocation' }));
+
+    await waitFor(() =>
+      expect(mock.revoke).toHaveBeenCalledWith(applicationId, {
+        note: 'The identity evidence needs another review.',
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Profile verification review' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('No accepted verifications')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /re-review/i }));
+    expect(await screen.findByText('Studio North')).toBeInTheDocument();
+    expect(screen.getByText('Attempt 3')).toBeInTheDocument();
   });
 
   it('does not render a queue response for the wrong lifecycle tab', async () => {
@@ -339,5 +524,10 @@ describe('AdminVerificationQueue', () => {
         rejectedDocumentVersionIds: [documentId],
       });
     });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Profile verification review' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

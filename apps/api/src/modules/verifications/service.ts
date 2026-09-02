@@ -11,6 +11,7 @@ import {
   type AdminVerificationDetailResponse,
   type AdminVerificationQueueQuery,
   type RejectVerificationInput,
+  type RevokeVerificationInput,
   type VerificationDocumentUploadInput,
   type VerificationStateResponse,
 } from '@repo/contracts';
@@ -500,6 +501,21 @@ export const verificationsService = {
     }
     if (typeof result === 'string') {
       throw AppError.invalidTransition('Verification application is no longer pending');
+    }
+    return getAdminDetail(applicationId);
+  },
+
+  async revokeApproval(applicationId: string, reviewerId: string, input: RevokeVerificationInput) {
+    const result = await verificationsRepository.revokeApproval({
+      applicationId,
+      reviewerId,
+      revocation: input,
+    });
+    if (result === VERIFICATION_MUTATION_RESULT.NOT_FOUND) {
+      throw AppError.notFound('Verification application not found');
+    }
+    if (typeof result === 'string') {
+      throw AppError.invalidTransition('Verification application is no longer approved');
     }
     return getAdminDetail(applicationId);
   },

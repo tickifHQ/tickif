@@ -6,6 +6,7 @@ import {
   VERIFICATION_DOCUMENT_TYPE,
   adminVerificationQueueQuerySchema,
   rejectVerificationSchema,
+  revokeVerificationSchema,
   verificationDocumentUploadSchema,
 } from '../src/verifications.js';
 
@@ -65,5 +66,12 @@ describe('verification contracts', () => {
       rejectVerificationSchema.safeParse({ note: 'Please upload a clearer copy.' }).success,
     ).toBe(true);
     expect(rejectVerificationSchema.safeParse({ note: '  ' }).success).toBe(false);
+  });
+
+  it('requires a reason when revoking an approval', () => {
+    expect(
+      revokeVerificationSchema.safeParse({ note: 'Identity details need another review.' }).success,
+    ).toBe(true);
+    expect(revokeVerificationSchema.safeParse({ note: '  ' }).success).toBe(false);
   });
 });
