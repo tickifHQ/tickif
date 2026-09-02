@@ -1,6 +1,7 @@
 import { Card } from '@repo/ui/components/card';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { cn } from '@repo/ui/lib/utils';
+import { Container } from '@/components/container';
 
 const TWO_ITEMS = [0, 1] as const;
 const THREE_ITEMS = [0, 1, 2] as const;
@@ -13,7 +14,7 @@ function LoadingRegion({
 }: {
   label: string;
   children: React.ReactNode;
-  className: string;
+  className?: string;
 }) {
   return (
     <div role="status" aria-busy="true" aria-label={label} className={className}>
@@ -185,28 +186,27 @@ function FormCardLoading({ fields = 4 }: { fields?: number }) {
 
 export function DesignerProfileLoading() {
   return (
-    <LoadingRegion
-      label="Loading profile settings"
-      className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8"
-    >
-      <div className="mb-8 max-w-2xl">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="mt-3 h-9 w-64 max-w-full" />
-        <Skeleton className="mt-3 h-4 w-full" />
-      </div>
-      <div className="space-y-6">
-        <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-36" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <Skeleton className="h-4 w-full sm:w-64" />
-        </Card>
-        <FormCardLoading fields={4} />
-        <FormCardLoading fields={6} />
-        <FormCardLoading fields={4} />
-      </div>
-    </LoadingRegion>
+    <Container className="py-10">
+      <LoadingRegion label="Loading profile settings">
+        <div className="mb-8 max-w-2xl">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="mt-3 h-9 w-64 max-w-full" />
+          <Skeleton className="mt-3 h-4 w-full" />
+        </div>
+        <div className="space-y-6">
+          <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-4 w-full sm:w-64" />
+          </Card>
+          <FormCardLoading fields={4} />
+          <FormCardLoading fields={6} />
+          <FormCardLoading fields={4} />
+        </div>
+      </LoadingRegion>
+    </Container>
   );
 }
 
@@ -217,13 +217,15 @@ export function DesignerPortfolioLoading() {
         <Skeleton className="h-8 w-40" />
         <Skeleton className="mt-2 h-4 w-80 max-w-full" />
       </div>
-      <div className="flex flex-1 gap-6 p-6">
-        <div className="flex-1 space-y-6 lg:max-w-2xl">
-          <Skeleton className="h-40 w-full rounded-xl" />
-          <Skeleton className="h-40 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+      <div className="-mt-2 flex flex-1">
+        <div className="flex-1 p-6 lg:max-w-[65%]">
+          <div className="space-y-6">
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+          </div>
         </div>
-        <div className="hidden flex-1 lg:block">
+        <div className="hidden flex-col items-center p-6 lg:flex lg:w-[35%]">
           <Skeleton className="h-96 w-full rounded-3xl" />
         </div>
       </div>

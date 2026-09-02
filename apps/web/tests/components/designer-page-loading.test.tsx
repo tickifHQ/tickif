@@ -28,4 +28,22 @@ describe('designer page loading states', () => {
     expect(loadingRegion).toHaveAttribute('aria-busy', 'true');
     expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(5);
   });
+
+  it('matches the loaded profile page container width', () => {
+    const { container } = render(<DesignerProfileLoading />);
+
+    const outerContainer = container.firstElementChild;
+    expect(outerContainer).toHaveClass('max-w-5xl');
+    expect(outerContainer).not.toHaveClass('max-w-7xl');
+  });
+
+  it('preserves the loaded portfolio column proportions', () => {
+    const { container } = render(<DesignerPortfolioLoading />);
+    const classNames = Array.from(container.querySelectorAll('[class]')).flatMap((element) =>
+      Array.from(element.classList),
+    );
+
+    expect(classNames).toContain('lg:max-w-[65%]');
+    expect(classNames).toContain('lg:w-[35%]');
+  });
 });
