@@ -258,6 +258,13 @@ export const adminVerificationDetailResponseSchema = z
       approvedAt: z.string().datetime().nullable(),
       expiresAt: z.string().datetime().nullable(),
     }),
+    eligibility: z.object({
+      phoneVerified: eligibilityCriterionSchema,
+      publishedProjects: eligibilityCriterionSchema.extend({
+        current: z.number().int().nonnegative(),
+        required: z.number().int().positive(),
+      }),
+    }),
     documents: z.array(verificationDocumentSchema),
     history: z.array(verificationReviewEventSchema),
   })

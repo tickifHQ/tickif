@@ -42,6 +42,9 @@ const projectDocuments: ProjectSearchDocument[] = Array.from(
 );
 
 test.describe('homepage search feed', () => {
+  // These tests share search fixtures that are created and removed at the suite boundary.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeAll(async () => {
     await bootstrapSearch();
     await Promise.all(

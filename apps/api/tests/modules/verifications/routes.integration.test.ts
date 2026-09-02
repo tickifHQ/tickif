@@ -7,6 +7,7 @@ import type * as storageModule from '@repo/storage';
 import { ORGANIZATION_MEMBER_ROLE, PLATFORM_ROLE } from '@repo/contracts';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
+import { profilesRepository } from '../../../src/modules/profiles/repository.js';
 
 vi.mock('@repo/queue', async (original) => ({
   ...(await original<typeof queueModule>()),
@@ -48,6 +49,41 @@ async function designerWorkspace(phoneNumber = '+919800000071') {
     .set({ activeOrganizationId: organization.id })
     .where(eq(schema.session.userId, session.userId));
   return { ...session, organization, profile };
+}
+
+async function submitEligibleVerification(phoneNumber: string) {
+  const workspace = await designerWorkspace(phoneNumber);
+  await Promise.all([
+    makeProject({ designerId: workspace.profile.id, status: 'published' }),
+    makeProject({ designerId: workspace.profile.id, status: 'published' }),
+    makeProject({ designerId: workspace.profile.id, status: 'published' }),
+  ]);
+  const headers = { cookie: workspace.cookie };
+  const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+    {
+      json: {
+        type: 'gst_registration_certificate',
+        contentType: 'application/pdf',
+        size: 1000,
+      },
+    },
+    { headers },
+  );
+  if (uploadResponse.status !== 201) throw new Error('expected verification upload reservation');
+  const upload = await uploadResponse.json();
+  const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+    { param: { versionId: upload.documentVersionId } },
+    { headers },
+  );
+  if (commitResponse.status !== 200) throw new Error('expected verification upload commit');
+  const submitResponse = await client.api.verifications.submit.$post({}, { headers });
+  if (submitResponse.status !== 200) throw new Error('expected verification submission');
+  const submitted = await submitResponse.json();
+  return {
+    ...workspace,
+    applicationId: submitted.applicationId,
+    documentVersionId: upload.documentVersionId,
+  };
 }
 
 describe('verification route authorization', () => {
@@ -130,6 +166,123 @@ describe('verification route authorization', () => {
       { headers: { cookie } },
     );
     expect(response.status).toBe(200);
+  });
+
+  it('surfaces a designer submission to admin review and persists requested changes', async () => {
+    const submission = await submitEligibleVerification('+919800000075');
+    const admin = await createRoleSession('+919800000076', PLATFORM_ROLE.ADMIN);
+    const headers = { cookie: admin.cookie };
+
+    const queueResponse = await client.api.admin.verifications.$get(
+      { query: { page: '1', limit: '20' } },
+      { headers },
+    );
+    expect(queueResponse.status).toBe(200);
+    if (queueResponse.status !== 200) throw new Error('expected admin verification queue');
+    await expect(queueResponse.json()).resolves.toMatchObject({
+      total: 1,
+      items: [
+        {
+          id: submission.applicationId,
+          organizationId: submission.organization.id,
+          documentCount: 1,
+        },
+      ],
+    });
+
+    const detailResponse = await client.api.admin.verifications[':id'].$get(
+      { param: { id: submission.applicationId } },
+      { headers },
+    );
+    expect(detailResponse.status).toBe(200);
+    if (detailResponse.status !== 200) throw new Error('expected admin verification detail');
+    const detail = await detailResponse.json();
+    expect(detail.eligibility).toEqual({
+      phoneVerified: { met: true, label: 'Verify the account owner phone number' },
+      publishedProjects: {
+        met: true,
+        label: 'Publish at least 3 projects',
+        current: 3,
+        required: 3,
+      },
+    });
+    expect(detail.documents).toEqual([
+      expect.objectContaining({ id: submission.documentVersionId, status: 'uploaded' }),
+    ]);
+    expect(detail.documents[0]).not.toHaveProperty('objectKey');
+
+    const rejectResponse = await client.api.admin.verifications[':id'].reject.$post(
+      {
+        param: { id: submission.applicationId },
+        json: {
+          note: 'Upload a clearer registration certificate.',
+          rejectedDocumentVersionIds: [submission.documentVersionId],
+        },
+      },
+      { headers },
+    );
+    expect(rejectResponse.status).toBe(200);
+    if (rejectResponse.status !== 200) throw new Error('expected requested changes response');
+    const rejected = await rejectResponse.json();
+    expect(rejected).toMatchObject({
+      application: { status: 'rejected' },
+      documents: [{ id: submission.documentVersionId, status: 'rejected' }],
+    });
+    expect(rejected.history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'rejected',
+          note: 'Upload a clearer registration certificate.',
+        }),
+      ]),
+    );
+
+    const designerStateResponse = await client.api.verifications.$get(
+      {},
+      { headers: { cookie: submission.cookie } },
+    );
+    expect(designerStateResponse.status).toBe(200);
+    if (designerStateResponse.status !== 200)
+      throw new Error('expected designer verification state');
+    await expect(designerStateResponse.json()).resolves.toMatchObject({
+      status: 'rejected',
+      latestNote: 'Upload a clearer registration certificate.',
+      history: expect.arrayContaining([
+        expect.objectContaining({
+          actorLabel: 'Tickif Review Team',
+          note: 'Upload a clearer registration certificate.',
+        }),
+      ]),
+    });
+  });
+
+  it('allows an admin to approve a submitted designer verification', async () => {
+    const submission = await submitEligibleVerification('+919800000077');
+    const admin = await createRoleSession('+919800000078', PLATFORM_ROLE.ADMIN);
+
+    expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
+      false,
+    );
+
+    const response = await client.api.admin.verifications[':id'].approve.$post(
+      { param: { id: submission.applicationId } },
+      { headers: { cookie: admin.cookie } },
+    );
+
+    expect(response.status).toBe(200);
+    if (response.status !== 200) throw new Error('expected verification approval');
+    await expect(response.json()).resolves.toMatchObject({
+      application: {
+        status: 'verified',
+        reviewedAt: expect.any(String),
+        approvedAt: expect.any(String),
+        expiresAt: expect.any(String),
+      },
+      documents: [{ id: submission.documentVersionId, status: 'verified' }],
+    });
+    expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
+      true,
+    );
   });
 
   it('validates upload metadata before reserving a document', async () => {

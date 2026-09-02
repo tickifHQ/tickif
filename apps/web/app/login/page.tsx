@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { LoginCard } from '@/components/login-card';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
-import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
+import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -35,7 +35,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   }
 
   if (rolePassesCheck(session?.user.role ?? null, PLATFORM_ROLE.ADMIN)) {
-    redirect(ADMIN_MODERATION_PATH);
+    redirect(ADMIN_DASHBOARD_PATH);
   }
 
   if (session) {

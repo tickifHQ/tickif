@@ -221,6 +221,7 @@ function adminDetail(
   documents: VerificationDocumentRecord[],
   history: Awaited<ReturnType<typeof verificationsRepository.listHistory>>,
 ): AdminVerificationDetailResponse {
+  const applicationEligibility = eligibility(context, latestDocuments(documents));
   return {
     application: {
       id: context.application.id,
@@ -236,6 +237,10 @@ function adminDetail(
       reviewedAt: context.application.reviewedAt?.toISOString() ?? null,
       approvedAt: context.application.approvedAt?.toISOString() ?? null,
       expiresAt: context.application.expiresAt?.toISOString() ?? null,
+    },
+    eligibility: {
+      phoneVerified: applicationEligibility.phoneVerified,
+      publishedProjects: applicationEligibility.publishedProjects,
     },
     documents: latestDocuments(documents).map(documentDto),
     history: historyDto(history),

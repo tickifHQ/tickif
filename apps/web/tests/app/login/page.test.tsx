@@ -75,7 +75,7 @@ describe('LoginPage', () => {
   });
 
   it.each(['admin', 'superadmin'])(
-    'redirects an authenticated %s to moderation on the server',
+    'redirects an authenticated %s to the admin dashboard on the server',
     async (role) => {
       mock.getServerSession.mockResolvedValue({
         user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role },
@@ -84,7 +84,7 @@ describe('LoginPage', () => {
       const { default: Page } = await import('../../../app/login/page');
 
       await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
-        'NEXT_REDIRECT:/moderation',
+        'NEXT_REDIRECT:/dashboard',
       );
     },
   );
