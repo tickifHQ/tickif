@@ -28,6 +28,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
+      assignResponsibleMember: vi.fn(),
       deleteProject: vi.fn(),
       findDesignerByTeamId: vi.fn(),
       findOwnership: vi.fn(),
@@ -72,6 +73,8 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
     isMember: vi.fn(),
     hasCapability: vi.fn(),
+    isWriter: vi.fn(),
+    canAssignProjectResponsibility: vi.fn(),
   },
 }));
 
@@ -85,6 +88,7 @@ const { deleteObject } = await import('@repo/storage');
 const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
   designerId: '22222222-2222-4222-8222-222222222222',
+  responsibleMemberId: null,
   title: 'Sunlit Bandra Apartment',
   slug: 'sunlit-bandra-apartment',
   description: null,
@@ -179,6 +183,8 @@ beforeEach(() => {
   vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
   vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
+  vi.mocked(orgsService.isWriter).mockResolvedValue(true);
+  vi.mocked(orgsService.canAssignProjectResponsibility).mockResolvedValue(true);
 });
 
 describe('projectsService.list', () => {
@@ -647,6 +653,78 @@ describe('projectsService.update', () => {
 
     await expect(
       projectsService.update(row().id, { coverImageId: imageRow().id }, caller),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+});
+
+describe('projectsService.assignResponsibleMember', () => {
+  it('lets an organization owner or admin assign an active same-organization member', async () => {
+    const project = row({ responsibleMemberId: 'member_2' });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      ownerUserId: null,
+    });
+    vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue(project);
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    const result = await projectsService.assignResponsibleMember(
+      project.id,
+      { responsibleMemberId: 'member_2' },
+      caller,
+    );
+
+    expect(projectsRepository.assignResponsibleMember).toHaveBeenCalledWith({
+      projectId: project.id,
+      organizationId: 'org_1',
+      responsibleMemberId: 'member_2',
+    });
+    expect(result.responsibleMemberId).toBe('member_2');
+  });
+
+  it('rejects members and viewers from assigning project responsibility', async () => {
+    const project = row();
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      ownerUserId: null,
+    });
+    vi.mocked(orgsService.canAssignProjectResponsibility).mockResolvedValue(false);
+
+    await expect(
+      projectsService.assignResponsibleMember(
+        project.id,
+        { responsibleMemberId: 'member_2' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.assignResponsibleMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects a removed, frozen, or cross-organization assignee', async () => {
+    const project = row();
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      ownerUserId: null,
+    });
+    vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue('invalid_member');
+
+    await expect(
+      projectsService.assignResponsibleMember(
+        project.id,
+        { responsibleMemberId: 'member_bad' },
+        caller,
+      ),
     ).rejects.toMatchObject({ status: 422 });
   });
 });

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
+  assignProjectResponsibleMemberSchema,
   createProjectRoomSchema,
   createProjectSchema,
   deleteProjectImageResponseSchema,
@@ -200,6 +201,31 @@ const updateProjectRoute = createRoute({
     404: errorJson('Project not found'),
     409: errorJson('Only draft or changes-requested projects can be edited'),
     422: errorJson('Invalid taxonomy refs or cover image'),
+  },
+});
+
+const assignResponsibleMemberRoute = createRoute({
+  method: 'patch',
+  path: '/{id}/responsible-member',
+  tags: ['Projects'],
+  summary: 'Assign an active organization member to a project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    params: projectIdParamSchema,
+    body: {
+      content: { 'application/json': { schema: assignProjectResponsibleMemberSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated project responsibility',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Organization owner or admin access required'),
+    404: errorJson('Project not found'),
+    422: errorJson('Responsible member must be active in this organization'),
   },
 });
 
@@ -598,6 +624,15 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(updateProjectRoute, async (c) => {
     const { id } = c.req.valid('param');
     const project = await projectsService.update(
+      id,
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
+    return c.json(project, 200);
+  })
+  .openapi(assignResponsibleMemberRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const project = await projectsService.assignResponsibleMember(
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),

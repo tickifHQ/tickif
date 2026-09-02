@@ -181,6 +181,24 @@ describe('orgsService', () => {
     await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
   });
 
+  it.each([
+    ['admin', 'corporate', 'active', true],
+    ['owner', 'corporate', 'active', true],
+    ['member', 'corporate', 'active', false],
+    ['admin', 'corporate', 'locked', false],
+    ['admin', 'professional_plus', 'active', false],
+  ] as const)(
+    'resolves project assignment authority for %s on %s/%s',
+    async (role, tier, state, expected) => {
+      vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({ role, frozen: false });
+      vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({ tier, state });
+
+      await expect(orgsService.canAssignProjectResponsibility('user-1', 'org-1')).resolves.toBe(
+        expected,
+      );
+    },
+  );
+
   it('rejects workspace reads without an active organization', async () => {
     await expect(
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: null }),

@@ -6,6 +6,7 @@ import { ProjectCard } from '../../src/components/project-card';
 const project: ProjectResponse = {
   id: '1',
   designerId: '2',
+  responsibleMemberId: null,
   title: 'Sunlit Bandra Apartment',
   slug: 'sunlit-bandra-apartment',
   description: null,

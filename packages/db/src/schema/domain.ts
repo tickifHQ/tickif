@@ -32,7 +32,7 @@ import {
   VERIFICATION_REVIEW_ACTION_VALUES,
   OWNERSHIP_TRANSFER_STATUS_VALUES,
 } from '@repo/contracts';
-import { user, organization, team } from './auth.js';
+import { user, organization, team, member } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -357,6 +357,10 @@ export const project = pgTable(
     designerId: uuid('designer_id')
       .notNull()
       .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    // Internal responsibility only. Public project ownership remains with the organization.
+    responsibleMemberId: text('responsible_member_id').references(() => member.id, {
+      onDelete: 'set null',
+    }),
     title: text('title').notNull(),
     slug: text('slug').notNull().unique(),
     description: text('description'),
@@ -392,6 +396,7 @@ export const project = pgTable(
   (t) => [
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
+    index('project_responsible_member_idx').on(t.responsibleMemberId),
     index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
     index('project_published_budget_recommendation_idx')

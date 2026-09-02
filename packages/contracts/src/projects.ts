@@ -65,6 +65,14 @@ export const updateProjectSchema = z
   .meta({ id: 'UpdateProject' });
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 
+export const assignProjectResponsibleMemberSchema = z
+  .object({ responsibleMemberId: z.string().min(1).nullable() })
+  .strict()
+  .meta({ id: 'AssignProjectResponsibleMember' });
+export type AssignProjectResponsibleMemberInput = z.infer<
+  typeof assignProjectResponsibleMemberSchema
+>;
+
 export const projectRoomMetadataSchema = z
   .object({
     labels: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
@@ -148,6 +156,7 @@ export const projectResponseSchema = z
   .object({
     id: z.uuid(),
     designerId: z.uuid(),
+    responsibleMemberId: z.string().nullable(),
     title: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
@@ -615,6 +624,7 @@ export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommend
 export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .omit({
     designerId: true,
+    responsibleMemberId: true,
     coverImageId: true,
     metadata: true,
     submittedAt: true,
