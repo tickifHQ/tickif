@@ -23,6 +23,7 @@ import {
   orgsRepository,
   OWNERSHIP_TRANSFER_RESULT,
   type OwnershipTransferRecord,
+  type DbTransaction,
 } from './repository.js';
 
 const WRITE_ROLES = new Set<OrganizationMemberRole>([
@@ -198,18 +199,35 @@ export const orgsService = {
     return capabilities ? allowsCapability(capabilities, capability) : false;
   },
 
-  async reconcileMemberSeats(organizationId: string, now = new Date()): Promise<void> {
-    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+  /**
+   * Reconcile frozen seats against the current plan's seat limit: freeze
+   * over-limit members, then restore any that now fit.
+   *
+   * When `tx` is provided (E-239 reactivation), the freeze+restore run inside the
+   * caller's transaction so tier restoration and seat restoration commit
+   * atomically — a successful charge can never leave paid-tier + frozen seats.
+   * Idempotent: converges on every call, so a redelivered webhook is safe.
+   */
+  async reconcileMemberSeats(
+    organizationId: string,
+    now = new Date(),
+    tx?: DbTransaction,
+  ): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
     const activeLimit = seatLimit(plan.tier, plan.state);
-    await orgsRepository.freezeMembersToLimit({ organizationId, activeLimit, now });
-    await orgsRepository.restoreMembersToLimit({ organizationId, activeLimit });
+    await orgsRepository.freezeMembersToLimit({ organizationId, activeLimit, now, tx });
+    await orgsRepository.restoreMembersToLimit({ organizationId, activeLimit, tx });
   },
 
-  async reconcileBranches(organizationId: string, now = new Date()): Promise<void> {
-    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+  async reconcileBranches(
+    organizationId: string,
+    now = new Date(),
+    tx?: DbTransaction,
+  ): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
     const activeLimit = branchLimit(plan.tier, plan.state);
-    await orgsRepository.freezeBranchesToLimit({ organizationId, activeLimit, now });
-    await orgsRepository.restoreBranchesToLimit({ organizationId, activeLimit });
+    await orgsRepository.freezeBranchesToLimit({ organizationId, activeLimit, now, tx });
+    await orgsRepository.restoreBranchesToLimit({ organizationId, activeLimit, tx });
   },
 
   async listBranches(input: {

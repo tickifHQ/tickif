@@ -60,7 +60,7 @@ export function verifyWebhookSignature(
 type SubscriptionRecord = typeof schema.subscription.$inferSelect;
 
 export type WebhookResult =
-  | { outcome: 'processed' }
+  | { outcome: 'processed'; resourcesReconciled?: boolean }
   | { outcome: 'duplicate' }
   | { outcome: 'ignored'; reason: string }
   | { outcome: 'invalid_transition'; reason: string };
@@ -116,7 +116,9 @@ export async function processWebhookEvent(
       return { outcome: 'ignored', reason: `Unhandled event: ${event}` };
   }
 
-  if (result.outcome === 'processed' || result.outcome === 'duplicate') {
+  const alreadyReconciled =
+    result.outcome === 'processed' && result.resourcesReconciled === true;
+  if ((result.outcome === 'processed' || result.outcome === 'duplicate') && !alreadyReconciled) {
     await Promise.all([
       orgsService.reconcileMemberSeats(subscription.organizationId),
       orgsService.reconcileBranches(subscription.organizationId),
@@ -304,6 +306,17 @@ async function handleCharged(
     const nextTier = (updates.planTier ?? subscription.planTier) as PlanTier;
     if (nextTier !== subscription.planTier) {
       await queueDesignerReindex(tx, subscription.organizationId);
+    }
+
+    // E-239 atomic restore: on reactivation, reconcile seats INSIDE this same
+    // transaction so tier restoration and seat restoration commit together. A
+    // successful charge can never leave paid-tier + frozen seats — if the seat
+    // reconcile throws, the whole tier update rolls back and the webhook is
+    // retried (idempotent via payment_transaction UNIQUE).
+    if (isReactivation) {
+      await orgsService.reconcileMemberSeats(subscription.organizationId, new Date(), tx);
+      await orgsService.reconcileBranches(subscription.organizationId, new Date(), tx);
+      return { outcome: 'processed' as const, resourcesReconciled: true };
     }
 
     return { outcome: 'processed' as const };
