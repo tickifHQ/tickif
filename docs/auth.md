@@ -9,7 +9,7 @@ and mounted into the API. We do not hand-roll sessions, OTP, or OAuth.
 | --- | --- | --- |
 | Phone OTP (primary, India) | `phoneNumber` plugin | OTP is the main login path. |
 | Gmail SSO | `google` social provider | For designers; only active if `GOOGLE_CLIENT_ID/SECRET` are set. |
-| Role-based access | `admin` plugin | Defaults today (`admin` + `user`); see RBAC below. |
+| Role-based access | `admin` plugin | Four platform roles with superadmin-only account administration; see RBAC below. |
 | Orgs / membership | `organization` plugin | Tables provisioned; wire up as needed. |
 | Email + password | — | Disabled (`emailAndPassword.enabled: false`). |
 
@@ -150,18 +150,20 @@ schema drift-free against `pnpm auth:generate`.
 > E-87); we kept the tables in place and only reconciled/indexed them. Ratify this
 > split with the Epic owner before Epic-3 RBAC work begins.
 
-## RBAC — current state and the plan
+## Platform RBAC
 
-The product needs four roles: **superadmin, admin, designer, visitor**. Today the
-`admin()` plugin runs with its defaults (`admin` + `user` roles), which is enough
-to boot and gate admin endpoints. The `user.role` column already exists to store
-a role per user.
+The platform roles are `superadmin`, `admin`, `designer`, and `visitor`. Both
+privileged roles can enter the Tickif admin console, where app permissions are
+enforced by the Hono guards. Only `superadmin` has Better Auth's user and session
+administration permissions. A regular `admin` cannot create, promote, ban, remove,
+or reset another account through `/api/auth/admin/*`.
 
-The full four-role model is layered on via better-auth's access-control
-(`createAccessControl`) — defining role statements and permissions — in a later
-phase. When you implement it, define the roles in the `admin` plugin's `roles`
-config and pass them to `adminRoles`; passing role names that aren't defined
-throws at startup (we hit this — keep them in sync).
+Both privileged role names remain in Better Auth's `adminRoles` option. That option
+also tells Better Auth which accounts are protected admin targets. Actual endpoint
+permissions come from the role statements in `packages/auth/src/permissions.ts`.
+
+See [the admin access runbook](./runbooks/admin-access.md) before creating the first
+superadmin or recovering a deployment with no accessible superadmin.
 
 ## Client side (web)
 
