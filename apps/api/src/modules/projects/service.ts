@@ -29,6 +29,7 @@ import type {
   ProjectReviewComment,
   ProjectReviewCommentsResponse,
   PublicProjectBySlugResponse,
+  PublicProjectPageResponse,
   ListProjectsResponse,
   ProjectRoom,
   PublicProjectGalleryImage,
@@ -1465,11 +1466,27 @@ export const projectsService = {
     return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
   },
 
-  async getPublicById(id: string): Promise<PublicProjectBySlugResponse> {
+  async getPublicById(id: string): Promise<PublicProjectPageResponse> {
     const result = await projectsRepository.findPublicProjectById(id);
-    if (!result) throw AppError.notFound('Project not found');
+    if (result) {
+      return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    }
 
-    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (!lifecycle) throw AppError.notFound('Project not found');
+    if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
+    if (lifecycle.status !== 'delisted') throw AppError.notFound('Project not found');
+
+    return {
+      availability: 'unavailable',
+      id: lifecycle.id,
+      title: lifecycle.title,
+      status: 'delisted',
+      designer: {
+        displayName: lifecycle.designerDisplayName,
+        slug: lifecycle.designerOrgSlug,
+      },
+    };
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {

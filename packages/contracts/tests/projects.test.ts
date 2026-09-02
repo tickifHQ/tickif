@@ -7,6 +7,7 @@ import {
   listProjectsQuerySchema,
   portfolioProjectsQuerySchema,
   publicProjectBySlugResponseSchema,
+  publicProjectPageResponseSchema,
   publicImageDetailResponseSchema,
   projectListStatus,
   projectStatus,
@@ -17,6 +18,26 @@ import {
 
 // A valid RFC-4122 UUID (version + variant nibbles correct).
 const VALID_UUID = '11111111-1111-4111-8111-111111111111';
+
+describe('publicProjectPageResponseSchema', () => {
+  it('accepts the minimal delisted notice without private project fields', () => {
+    expect(
+      publicProjectPageResponseSchema.parse({
+        availability: 'unavailable',
+        id: VALID_UUID,
+        title: 'Recoverable Home',
+        status: 'delisted',
+        designer: { displayName: 'Studio A', slug: 'studio-a' },
+      }),
+    ).toEqual({
+      availability: 'unavailable',
+      id: VALID_UUID,
+      title: 'Recoverable Home',
+      status: 'delisted',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+    });
+  });
+});
 
 describe('createProjectSchema', () => {
   it('accepts a valid payload', () => {

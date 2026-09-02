@@ -48,6 +48,14 @@ export type ProjectOwnership = {
   ownerUserId: string | null;
 };
 
+export type PublicProjectLifecycleRecord = {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  designerDisplayName: string;
+  designerOrgSlug: string;
+};
+
 export type UploadImageCounts = {
   imageCount: number;
   taggedImageCount: number;
@@ -1517,6 +1525,25 @@ export const projectsRepository = {
         isKycVerified: row.designerIsKycVerified,
       },
     };
+  },
+
+  /** Minimal retained identity used to distinguish private, delisted, and gone URLs. */
+  async findPublicProjectLifecycleById(id: string): Promise<PublicProjectLifecycleRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.project.id,
+        title: schema.project.title,
+        status: schema.project.status,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.project.id, id))
+      .limit(1);
+
+    return row ?? null;
   },
 
   /**

@@ -669,6 +669,29 @@ export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .meta({ id: 'PublicProjectDetail' });
 export type PublicProjectDetailResponse = z.infer<typeof publicProjectDetailResponseSchema>;
 
+/** Minimal public response retained while an organization-owned project is recoverable. */
+export const publicProjectUnavailableResponseSchema = z
+  .object({
+    availability: z.literal('unavailable'),
+    id: z.uuid(),
+    title: z.string(),
+    status: z.literal('delisted'),
+    designer: z.object({
+      displayName: z.string(),
+      slug: z.string().nullable(),
+    }),
+  })
+  .meta({ id: 'PublicProjectUnavailable' });
+export type PublicProjectUnavailableResponse = z.infer<
+  typeof publicProjectUnavailableResponseSchema
+>;
+
+export const publicProjectPageResponseSchema = z.union([
+  publicProjectDetailResponseSchema,
+  publicProjectUnavailableResponseSchema,
+]);
+export type PublicProjectPageResponse = z.infer<typeof publicProjectPageResponseSchema>;
+
 /** Compatibility alias for existing slug-route consumers. */
 export const publicProjectBySlugResponseSchema = publicProjectDetailResponseSchema;
 export type PublicProjectBySlugResponse = PublicProjectDetailResponse;

@@ -20,7 +20,7 @@ import {
   projectDetailResponseSchema,
   publicImageDetailParamSchema,
   publicImageDetailResponseSchema,
-  publicProjectDetailResponseSchema,
+  publicProjectPageResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
   projectIdParamSchema,
@@ -148,9 +148,10 @@ const publicProjectByIdRoute = createRoute({
     200: {
       description:
         'Published project read model with rooms, gallery, designer, and recommendations',
-      content: { 'application/json': { schema: publicProjectDetailResponseSchema } },
+      content: { 'application/json': { schema: publicProjectPageResponseSchema } },
     },
     404: errorJson('Project not found or not published'),
+    410: errorJson('Project permanently deleted'),
   },
 });
 
