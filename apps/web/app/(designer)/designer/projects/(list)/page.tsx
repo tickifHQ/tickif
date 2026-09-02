@@ -10,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import { requireAuth } from '@/lib/auth-guard';
 import { DesignerProjectsList } from '@/components/designer-projects-list';
+import { getCurrentOrgCapabilities } from '@/lib/current-org-role';
 
 export const metadata = {
   title: 'Projects · Tickif',
@@ -27,7 +28,13 @@ const emptyProjects: ListProjectsResponse = {
   totalPages: 1,
 };
 
-const projectCountStatuses: ProjectListStatus[] = ['all', 'published', 'in_review', 'draft'];
+const projectCountStatuses: ProjectListStatus[] = [
+  'all',
+  'published',
+  'in_review',
+  'draft',
+  'archived',
+];
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -98,7 +105,11 @@ export default async function DesignerProjectsPage({ searchParams }: DesignerPro
   await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
   const params = await searchParams;
   const query = parseProjectQuery(params);
-  const [projects, tabCounts] = await Promise.all([getProjects(query), getProjectTabCounts(query)]);
+  const [projects, tabCounts, capabilities] = await Promise.all([
+    getProjects(query),
+    getProjectTabCounts(query),
+    getCurrentOrgCapabilities(),
+  ]);
 
   return (
     <DesignerProjectsList
@@ -107,6 +118,8 @@ export default async function DesignerProjectsPage({ searchParams }: DesignerPro
       activeStatus={query.status as ProjectListStatus}
       query={query.q}
       error={projects.ok ? undefined : projects.message}
+      canArchiveProjects={capabilities?.archiveProjects ?? false}
+      canDeleteProjects={capabilities?.deleteProjects ?? false}
     />
   );
 }

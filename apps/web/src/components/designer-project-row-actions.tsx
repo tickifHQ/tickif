@@ -25,12 +25,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
-import { Copy, ExternalLink, MoreVertical, Pencil, Trash2, Undo2 } from 'lucide-react';
+import {
+  Archive,
+  Copy,
+  ExternalLink,
+  MoreVertical,
+  Pencil,
+  RotateCcw,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 import { api } from '@/lib/api';
-
-function canDeleteProject(status: ProjectStatus) {
-  return status === 'draft' || status === 'changes_requested';
-}
 
 function canWithdrawProject(status: ProjectStatus) {
   return status === 'submitted';
@@ -40,10 +45,14 @@ export function DesignerProjectRowActions({
   projectId,
   projectTitle,
   projectStatus,
+  canArchive = false,
+  canDelete = false,
 }: {
   projectId: string;
   projectTitle: string;
   projectStatus: ProjectStatus;
+  canArchive?: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -55,7 +64,10 @@ export function DesignerProjectRowActions({
   // wait until the menu has finished closing. Holds which dialog to open next.
   const pendingDialogRef = useRef<'delete' | 'withdraw' | null>(null);
   const refreshAfterDeleteRef = useRef(false);
-  const deleteEnabled = canDeleteProject(projectStatus);
+  const isTerminal = projectStatus === 'deleted' || projectStatus === 'delisted';
+  const archiveEnabled = canArchive && (projectStatus === 'draft' || projectStatus === 'published');
+  const restoreEnabled = canArchive && projectStatus === 'archived';
+  const deleteEnabled = canDelete && !isTerminal;
   const withdrawEnabled = canWithdrawProject(projectStatus);
 
   function handleMenuOpenChange(open: boolean) {
@@ -113,6 +125,33 @@ export function DesignerProjectRowActions({
     });
   }
 
+  function changeArchiveState(action: 'archive' | 'restore') {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const response =
+          action === 'archive'
+            ? await api.api.projects[':id'].archive.$post({ param: { id: projectId } })
+            : await api.api.projects[':id'].restore.$post({ param: { id: projectId } });
+        const payload: unknown = await response.json();
+        const parsed = projectDetailResponseSchema.safeParse(payload);
+
+        if (!response.ok || !parsed.success) {
+          setError(
+            action === 'archive' ? 'Could not archive project.' : 'Could not restore project.',
+          );
+          return;
+        }
+
+        router.refresh();
+      } catch {
+        setError(
+          action === 'archive' ? 'Could not archive project.' : 'Could not restore project.',
+        );
+      }
+    });
+  }
+
   function withdrawProject() {
     setError(null);
     startTransition(async () => {
@@ -136,28 +175,32 @@ export function DesignerProjectRowActions({
 
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        aria-label={`Duplicate ${projectTitle}`}
-        disabled={isPending}
-        onClick={duplicateProject}
-      >
-        <Copy className="size-4" />
-      </Button>
-      <Button
-        asChild
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        aria-label={`Edit ${projectTitle}`}
-      >
-        <Link href={`/designer/projects/${projectId}/edit`}>
-          <Pencil className="size-4" />
-        </Link>
-      </Button>
+      {!isTerminal && projectStatus !== 'archived' ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`Duplicate ${projectTitle}`}
+            disabled={isPending}
+            onClick={duplicateProject}
+          >
+            <Copy className="size-4" />
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`Edit ${projectTitle}`}
+          >
+            <Link href={`/designer/projects/${projectId}/edit`}>
+              <Pencil className="size-4" />
+            </Link>
+          </Button>
+        </>
+      ) : null}
 
       <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <DropdownMenuTrigger asChild>
@@ -189,17 +232,31 @@ export function DesignerProjectRowActions({
               </DropdownMenuItem>
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={!deleteEnabled}
-            onSelect={() => {
-              if (deleteEnabled) pendingDialogRef.current = 'delete';
-            }}
-          >
-            <Trash2 className="size-4" />
-            Delete draft
-          </DropdownMenuItem>
+          {archiveEnabled || restoreEnabled ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => changeArchiveState(restoreEnabled ? 'restore' : 'archive')}
+              >
+                {restoreEnabled ? <RotateCcw className="size-4" /> : <Archive className="size-4" />}
+                {restoreEnabled ? 'Restore to drafts' : 'Archive project'}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+          {deleteEnabled ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => {
+                  pendingDialogRef.current = 'delete';
+                }}
+              >
+                <Trash2 className="size-4" />
+                Delete project
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -212,9 +269,10 @@ export function DesignerProjectRowActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Delete project draft?</DialogTitle>
+            <DialogTitle>Delete project?</DialogTitle>
             <DialogDescription>
-              This removes “{projectTitle}” from your drafts. This action cannot be undone.
+              This removes “{projectTitle}” from the workspace and public portfolio. Its records
+              remain subject to the organization retention policy.
             </DialogDescription>
           </DialogHeader>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}

@@ -13,6 +13,7 @@ import {
 } from '@repo/ui/components/table';
 import {
   CheckCircle2,
+  Archive,
   CircleAlert,
   CircleCheck,
   CircleDashed,
@@ -20,6 +21,8 @@ import {
   FileClock,
   FileCheck,
   ImagePlus,
+  EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { DesignerListControls } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
@@ -31,6 +34,7 @@ const projectTabs: Array<{ value: ProjectListStatus; label: string }> = [
   { value: 'published', label: 'Live' },
   { value: 'in_review', label: 'In review' },
   { value: 'draft', label: 'Drafts' },
+  { value: 'archived', label: 'Archived' },
 ];
 
 function formatDate(value: string) {
@@ -130,6 +134,9 @@ function statusLabel(status: ProjectStatus) {
   if (status === 'in_review') return 'In review';
   if (status === 'changes_requested') return 'Needs Change';
   if (status === 'rejected') return 'Rejected';
+  if (status === 'archived') return 'Archived';
+  if (status === 'delisted') return 'Delisted';
+  if (status === 'deleted') return 'Deleted';
   return 'Draft';
 }
 
@@ -159,7 +166,11 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
   }
 
   const variant =
-    status === 'rejected' ? 'destructive' : status === 'draft' ? 'secondary' : 'warning';
+    status === 'rejected' || status === 'deleted'
+      ? 'destructive'
+      : status === 'draft' || status === 'archived' || status === 'delisted'
+        ? 'secondary'
+        : 'warning';
   const StatusIcon =
     status === 'draft'
       ? CircleDashed
@@ -169,11 +180,17 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
           ? FileClock
           : status === 'rejected'
             ? CircleX
-            : CheckCircle2;
+            : status === 'archived'
+              ? Archive
+              : status === 'delisted'
+                ? EyeOff
+                : status === 'deleted'
+                  ? Trash2
+                  : CheckCircle2;
   const statusClassName =
     status === 'submitted' || status === 'in_review'
       ? 'rounded-md bg-warning/10 px-2 py-1 text-[13px] text-warning'
-      : status === 'rejected'
+      : status === 'rejected' || status === 'deleted'
         ? 'rounded-md bg-destructive/10 px-2 py-1 text-[13px] text-destructive'
         : 'rounded-md px-2 py-1 text-[13px]';
 
@@ -212,12 +229,16 @@ export function DesignerProjectsList({
   activeStatus,
   query,
   error,
+  canArchiveProjects = false,
+  canDeleteProjects = false,
 }: {
   projects: ListProjectsResponse;
   tabCounts?: Partial<Record<ProjectListStatus, number>>;
   activeStatus: ProjectListStatus;
   query?: string;
   error?: string;
+  canArchiveProjects?: boolean;
+  canDeleteProjects?: boolean;
 }) {
   return (
     <div className="space-y-6 p-5">
@@ -299,6 +320,8 @@ export function DesignerProjectsList({
                       projectId={project.id}
                       projectTitle={project.title}
                       projectStatus={project.status}
+                      canArchive={canArchiveProjects}
+                      canDelete={canDeleteProjects}
                     />
                   </TableCell>
                 </TableRow>
