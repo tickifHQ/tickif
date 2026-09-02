@@ -17,6 +17,7 @@ export const QUEUES = {
   googleReviews: 'google-reviews',
   searchIndex: 'search-index',
   verificationEmail: 'verification-email',
+  billingLifecycle: 'billing-lifecycle',
 } as const;
 
 export const JOBS = {
@@ -33,6 +34,7 @@ export const JOBS = {
   reindexAll: 'reindex-all',
   sendVerificationEmail: 'send-verification-email',
   sweepVerificationNotifications: 'sweep-verification-notifications',
+  sweepBillingLifecycle: 'sweep-billing-lifecycle',
 } as const;
 
 export type MediaProcessJob = {
@@ -127,10 +129,16 @@ export type VerificationNotificationSweepJob = {
 
 export type VerificationEmailQueueJob = VerificationEmailJob | VerificationNotificationSweepJob;
 
+/** E-239 plan-lapse lifecycle sweep tick. Carries no data — the processor queries due rows. */
+export type BillingLifecycleSweepJob = {
+  kind: 'billing-lifecycle-sweep';
+};
+
 /** Stable scheduler id so re-registering the repeatable sweep is idempotent. */
 export const GOOGLE_REVIEWS_SWEEP_SCHEDULER = 'google-reviews-sweep';
 export const BOOKING_NOTIFICATIONS_SWEEP_SCHEDULER = 'booking-notifications-sweep';
 export const VERIFICATION_NOTIFICATIONS_SWEEP_SCHEDULER = 'verification-notifications-sweep';
+export const BILLING_LIFECYCLE_SWEEP_SCHEDULER = 'billing-lifecycle-sweep';
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -148,6 +156,7 @@ let mediaQueue: Queue<MediaProcessJob> | undefined;
 let googleReviewsQueue: Queue<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
 let searchIndexQueue: Queue<SearchIndexJob> | undefined;
 let verificationEmailQueue: Queue<VerificationEmailQueueJob> | undefined;
+let billingLifecycleQueue: Queue<BillingLifecycleSweepJob> | undefined;
 
 function getSmsQueue(): Queue<SmsQueueJob> {
   smsQueue ??= new Queue<SmsQueueJob>(QUEUES.sms, {
@@ -219,6 +228,14 @@ function getVerificationEmailQueue(): Queue<VerificationEmailQueueJob> {
     defaultJobOptions,
   });
   return verificationEmailQueue;
+}
+
+function getBillingLifecycleQueue(): Queue<BillingLifecycleSweepJob> {
+  billingLifecycleQueue ??= new Queue<BillingLifecycleSweepJob>(QUEUES.billingLifecycle, {
+    connection,
+    defaultJobOptions,
+  });
+  return billingLifecycleQueue;
 }
 
 /**
@@ -331,6 +348,17 @@ export async function scheduleVerificationNotificationSweep(everyMs: number): Pr
   );
 }
 
+export async function scheduleBillingLifecycleSweep(everyMs: number): Promise<void> {
+  await getBillingLifecycleQueue().upsertJobScheduler(
+    BILLING_LIFECYCLE_SWEEP_SCHEDULER,
+    { every: everyMs },
+    {
+      name: JOBS.sweepBillingLifecycle,
+      data: { kind: 'billing-lifecycle-sweep' },
+    },
+  );
+}
+
 export async function closeQueues(): Promise<void> {
   await Promise.all([
     smsQueue?.close(),
@@ -338,10 +366,12 @@ export async function closeQueues(): Promise<void> {
     googleReviewsQueue?.close(),
     searchIndexQueue?.close(),
     verificationEmailQueue?.close(),
+    billingLifecycleQueue?.close(),
   ]);
   smsQueue = undefined;
   mediaQueue = undefined;
   googleReviewsQueue = undefined;
   searchIndexQueue = undefined;
   verificationEmailQueue = undefined;
+  billingLifecycleQueue = undefined;
 }

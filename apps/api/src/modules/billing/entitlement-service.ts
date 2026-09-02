@@ -3,10 +3,14 @@ import { db, schema } from '@repo/db';
 import {
   type PlanTier,
   type SubscriptionState,
+  type FrozenResource,
   resolveEntitlements,
   type SubscriptionResponse,
 } from '@repo/contracts';
+import { config } from '@repo/config';
 import { getCachedEntitlement, setCachedEntitlement } from '../../lib/redis.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * E-119 Entitlement Service.
@@ -39,6 +43,9 @@ const HOBBY_DEFAULT: SubscriptionResponse = {
   seatUsage: 0,
   branchUsage: 0,
   entitlements: resolveEntitlements('hobby', 'active', false),
+  graceDaysRemaining: null,
+  lockedDaysRemaining: null,
+  frozenResources: [],
 };
 
 export const entitlementService = {
@@ -83,6 +90,7 @@ export const entitlementService = {
     // An org is verified when their application status is 'verified' and not expired.
     const isVerified = await checkOrgVerified(caller.activeOrgId);
 
+    const now = new Date();
     const response: SubscriptionResponse = {
       tier,
       lifecycleState: state,
@@ -93,6 +101,18 @@ export const entitlementService = {
       seatUsage: await countSeats(caller.activeOrgId),
       branchUsage: await countBranches(caller.activeOrgId),
       entitlements: resolveEntitlements(tier, state, isVerified),
+      // E-239 lapse counters — derived from lapse timestamps + config windows.
+      graceDaysRemaining:
+        state === 'grace'
+          ? daysRemaining(subscription.graceStartedAt, config.BILLING_GRACE_PERIOD_DAYS, now)
+          : null,
+      lockedDaysRemaining:
+        state === 'locked'
+          ? daysRemaining(subscription.lockedAt, config.BILLING_LOCKED_PERIOD_DAYS, now)
+          : null,
+      // Frozen resources are only relevant once downgraded (seats frozen by E-239 sweep).
+      frozenResources:
+        state === 'downgraded' ? await frozenResourcesFor(caller.activeOrgId) : [],
     };
 
     // Cache the response
@@ -126,6 +146,36 @@ async function countBranches(organizationId: string): Promise<number> {
   return result?.count ?? 0;
 }
 
+
+/**
+ * Whole days remaining in a lapse window: (startedAt + windowDays) − now, floored at 0.
+ * Returns null when the start timestamp is missing (shouldn't happen for the
+ * relevant states, but keeps the counter defensive).
+ */
+function daysRemaining(startedAt: Date | null, windowDays: number, now: Date): number | null {
+  if (!startedAt) return null;
+  const deadline = startedAt.getTime() + windowDays * DAY_MS;
+  const remainingMs = deadline - now.getTime();
+  if (remainingMs <= 0) return 0;
+  return Math.ceil(remainingMs / DAY_MS);
+}
+
+/**
+ * Resources preserved-but-frozen while downgraded. Currently seats only —
+ * branch freeze follows once E-244 lands the branch table.
+ */
+async function frozenResourcesFor(organizationId: string): Promise<FrozenResource[]> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.member)
+    .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, true)));
+  const frozenSeats = row?.count ?? 0;
+  const resources: FrozenResource[] = [];
+  if (frozenSeats > 0) {
+    resources.push({ kind: 'seat', label: 'Team Seats', count: frozenSeats });
+  }
+  return resources;
+}
 
 /**
  * Check whether the organization has a verified (and non-expired) verification application.

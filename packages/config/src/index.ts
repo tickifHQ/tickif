@@ -195,6 +195,15 @@ const envSchema = z.object({
   RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: z.string().min(1).optional(),
   RAZORPAY_PLAN_ID_CORPORATE: z.string().min(1).optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+
+  // Plan-lapse lifecycle windows (E-239). Config-driven because the locked window
+  // is provisional (E-255). Days a subscription stays in `grace` before `locked`,
+  // and in `locked` before `downgraded`. The lifecycle sweep reads these.
+  BILLING_GRACE_PERIOD_DAYS: z.coerce.number().int().min(1).default(7),
+  BILLING_LOCKED_PERIOD_DAYS: z.coerce.number().int().min(1).default(30),
+  // How often the billing lifecycle sweep runs (ms). Day-granularity windows
+  // tolerate an hourly cadence.
+  BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
 });
 
 /**

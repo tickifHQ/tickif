@@ -449,6 +449,9 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
+      ioredis:
+        specifier: 'catalog:'
+        version: 5.11.1
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@26.0.0)

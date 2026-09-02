@@ -60,7 +60,7 @@ export function verifyWebhookSignature(
 type SubscriptionRecord = typeof schema.subscription.$inferSelect;
 
 export type WebhookResult =
-  | { outcome: 'processed' }
+  | { outcome: 'processed'; seatsReconciled?: boolean }
   | { outcome: 'duplicate' }
   | { outcome: 'ignored'; reason: string }
   | { outcome: 'invalid_transition'; reason: string };
@@ -116,7 +116,12 @@ export async function processWebhookEvent(
       return { outcome: 'ignored', reason: `Unhandled event: ${event}` };
   }
 
-  if (result.outcome === 'processed' || result.outcome === 'duplicate') {
+  // Seat reconcile: skip when handleCharged already reconciled atomically inside
+  // its own transaction (E-239 reactivation restore). Otherwise reconcile here
+  // for all other processed/duplicate events (non-reactivation charges, plan
+  // changes, cancellations) so seat state converges. Idempotent either way.
+  const alreadyReconciled = result.outcome === 'processed' && result.seatsReconciled === true;
+  if ((result.outcome === 'processed' || result.outcome === 'duplicate') && !alreadyReconciled) {
     await orgsService.reconcileMemberSeats(subscription.organizationId);
   }
 
@@ -301,6 +306,16 @@ async function handleCharged(
     const nextTier = (updates.planTier ?? subscription.planTier) as PlanTier;
     if (nextTier !== subscription.planTier) {
       await queueDesignerReindex(tx, subscription.organizationId);
+    }
+
+    // E-239 atomic restore: on reactivation, reconcile seats INSIDE this same
+    // transaction so tier restoration and seat restoration commit together. A
+    // successful charge can never leave paid-tier + frozen seats — if the seat
+    // reconcile throws, the whole tier update rolls back and the webhook is
+    // retried (idempotent via payment_transaction UNIQUE).
+    if (isReactivation) {
+      await orgsService.reconcileMemberSeats(subscription.organizationId, new Date(), tx);
+      return { outcome: 'processed' as const, seatsReconciled: true };
     }
 
     return { outcome: 'processed' as const };
