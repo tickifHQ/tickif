@@ -22,6 +22,7 @@ import {
   makeProjectReviewComment,
   makeProjectRoom,
   makeReview,
+  makeSubscription,
   makeTaxonomy,
   makeTeam,
 } from '@repo/db/testing';
@@ -832,6 +833,9 @@ describe('GET /api/projects/portfolio', () => {
         published: 1,
         changesRequested: 1,
         rejected: 1,
+        archived: 0,
+        delisted: 0,
+        deleted: 0,
       },
     });
     expect(body.items).toHaveLength(1);
@@ -903,6 +907,9 @@ describe('GET /api/projects/portfolio', () => {
       published: 1,
       changesRequested: 0,
       rejected: 1,
+      archived: 0,
+      delisted: 0,
+      deleted: 0,
     });
   });
 
@@ -921,6 +928,9 @@ describe('GET /api/projects/portfolio', () => {
         published: 0,
         changesRequested: 0,
         rejected: 0,
+        archived: 0,
+        delisted: 0,
+        deleted: 0,
       },
       page: 1,
       total: 0,
@@ -978,6 +988,9 @@ describe('GET /api/projects/portfolio', () => {
       published: 1,
       changesRequested: 0,
       rejected: 0,
+      archived: 0,
+      delisted: 0,
+      deleted: 0,
     });
   });
 });
@@ -1301,7 +1314,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(projectRow?.coverImageId).toBeNull();
   });
 
-  it('deletes owned draft projects and cascades rooms and images', async () => {
+  it('marks owned drafts deleted while retaining project data for the owner audit view', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002016');
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
     await makeProjectRoom({ projectId: project.id });
@@ -1320,9 +1333,98 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       db.select().from(schema.projectRoom).where(eq(schema.projectRoom.projectId, project.id)),
       db.select().from(schema.projectImage).where(eq(schema.projectImage.projectId, project.id)),
     ]);
-    expect(projectRows).toHaveLength(0);
-    expect(roomRows).toHaveLength(0);
-    expect(imageRows).toHaveLength(0);
+    expect(projectRows).toEqual([expect.objectContaining({ id: project.id, status: 'deleted' })]);
+    expect(roomRows).toHaveLength(1);
+    expect(imageRows).toHaveLength(1);
+  });
+
+  it('archives a published project, removes it from public reads, and restores it as a draft', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002060');
+    await db
+      .update(schema.designerProfile)
+      .set({ projectCount: 1 })
+      .where(eq(schema.designerProfile.id, designer.id));
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'published',
+      publishedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    await makeProjectRoom({ projectId: project.id });
+
+    const archive = await app.request(`/api/projects/${project.id}/archive`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(archive.status).toBe(200);
+    expect(await archive.json()).toMatchObject({ id: project.id, status: 'archived' });
+
+    const [[archivedProject], [archivedDesigner], searchEvents] = await Promise.all([
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      db.select().from(schema.designerProfile).where(eq(schema.designerProfile.id, designer.id)),
+      db
+        .select()
+        .from(schema.searchProjectionOutbox)
+        .where(eq(schema.searchProjectionOutbox.entityId, project.id)),
+    ]);
+    expect(archivedProject?.status).toBe('archived');
+    expect(archivedDesigner?.projectCount).toBe(0);
+    expect(searchEvents).toEqual([
+      expect.objectContaining({ entityKind: 'project', operation: 'delete' }),
+    ]);
+
+    const publicRead = await app.request(`/api/projects/public/${project.id}`);
+    expect(publicRead.status).toBe(404);
+    const archivedList = await app.request('/api/projects?status=archived', {
+      headers: { cookie },
+    });
+    expect(archivedList.status).toBe(200);
+    expect((await archivedList.json()) as ListProjectsResponse).toMatchObject({
+      items: [{ id: project.id, status: 'archived' }],
+    });
+
+    const restore = await app.request(`/api/projects/${project.id}/restore`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(restore.status).toBe(200);
+    expect(await restore.json()).toMatchObject({ id: project.id, status: 'draft' });
+    expect(
+      await db
+        .select()
+        .from(schema.projectRoom)
+        .where(eq(schema.projectRoom.projectId, project.id)),
+    ).toHaveLength(1);
+  });
+
+  it('allows Corporate Members to archive but not delete projects', async () => {
+    const { designer } = await makeDesignerSession('+919800002061');
+    const member = await createRoleSession('+919800002062', 'designer');
+    await db.insert(schema.member).values({
+      id: `mem-${member.userId}`,
+      organizationId: designer.orgId,
+      userId: member.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    await makeSubscription({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+    });
+    const memberCookie = await activateOrganization(member.cookie, designer.orgId);
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const archive = await app.request(`/api/projects/${project.id}/archive`, {
+      method: 'POST',
+      headers: { cookie: memberCookie },
+    });
+    expect(archive.status).toBe(200);
+
+    const deletion = await app.request(`/api/projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie: memberCookie },
+    });
+    expect(deletion.status).toBe(403);
   });
 
   it('duplicates an owned project into a fresh draft with rooms and image metadata', async () => {

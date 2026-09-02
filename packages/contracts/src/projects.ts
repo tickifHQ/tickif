@@ -8,7 +8,17 @@ import { projectReviewCommentSchema } from './review-comments';
  */
 
 export const projectStatus = z
-  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested'])
+  .enum([
+    'draft',
+    'submitted',
+    'in_review',
+    'published',
+    'rejected',
+    'changes_requested',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
 
@@ -208,7 +218,7 @@ export const linkProjectImageSchema = z
 export type LinkProjectImageInput = z.infer<typeof linkProjectImageSchema>;
 
 export const projectListStatus = z
-  .enum(['all', 'draft', 'in_review', 'published'])
+  .enum(['all', 'draft', 'in_review', 'published', 'archived'])
   .default('all')
   .meta({ id: 'ProjectListStatus' });
 export type ProjectListStatus = z.infer<typeof projectListStatus>;
@@ -261,13 +271,32 @@ export const listProjectsResponseSchema = z
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
 
 export const portfolioProjectStatus = z
-  .enum(['all', 'draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .enum([
+    'all',
+    'draft',
+    'in_review',
+    'published',
+    'changes_requested',
+    'rejected',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .default('all')
   .meta({ id: 'PortfolioProjectStatus' });
 export type PortfolioProjectStatus = z.infer<typeof portfolioProjectStatus>;
 
 export const portfolioProjectStatusGroup = z
-  .enum(['draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .enum([
+    'draft',
+    'in_review',
+    'published',
+    'changes_requested',
+    'rejected',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .meta({ id: 'PortfolioProjectStatusGroup' });
 export type PortfolioProjectStatusGroup = z.infer<typeof portfolioProjectStatusGroup>;
 
@@ -304,6 +333,9 @@ export const portfolioProjectStatusCountsSchema = z
     published: z.number().int().min(0),
     changesRequested: z.number().int().min(0),
     rejected: z.number().int().min(0),
+    archived: z.number().int().min(0),
+    delisted: z.number().int().min(0),
+    deleted: z.number().int().min(0),
   })
   .meta({ id: 'PortfolioProjectStatusCounts' });
 export type PortfolioProjectStatusCounts = z.infer<typeof portfolioProjectStatusCountsSchema>;

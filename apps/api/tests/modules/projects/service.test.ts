@@ -317,6 +317,9 @@ describe('projectsService.portfolio', () => {
       published: 1,
       changesRequested: 3,
       rejected: 1,
+      archived: 0,
+      delisted: 0,
+      deleted: 0,
     });
     expect(result.items[0]).toMatchObject({
       status: 'changes_requested',
@@ -733,6 +736,118 @@ describe('projectsService.deleteImage', () => {
     expect(deleteObject).not.toHaveBeenCalledWith('originals/project/image');
     expect(deleteObject).not.toHaveBeenCalledWith('derivatives/project/image/thumb.webp');
     expect(deleteObject).toHaveBeenCalledWith('derivatives/project/image/large.avif');
+  });
+});
+
+describe('projectsService project lifecycle', () => {
+  it('archives a published project through the archive capability', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'published',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'archived' }));
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    await expect(projectsService.archive(row().id, caller)).resolves.toMatchObject({
+      id: row().id,
+      status: 'archived',
+    });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'archive_projects',
+    );
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'published',
+      toStatus: 'archived',
+      actorUserId: caller.userId,
+      action: 'archive',
+    });
+  });
+
+  it('restores an archived project as a draft', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'draft' }));
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    await expect(projectsService.restore(row().id, caller)).resolves.toMatchObject({
+      status: 'draft',
+    });
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'archived',
+      toStatus: 'draft',
+      actorUserId: caller.userId,
+      action: 'restore',
+    });
+  });
+
+  it('marks a published project deleted without removing its audit row', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'published',
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'deleted' }));
+
+    await expect(projectsService.delete(row().id, caller)).resolves.toEqual({
+      id: row().id,
+      deleted: true,
+    });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'delete_projects',
+    );
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'published',
+      toStatus: 'deleted',
+      actorUserId: caller.userId,
+      action: 'delete',
+    });
+  });
+
+  it('rejects delete when the organization role lacks delete permission', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'draft',
+      ownerUserId: 'another-user',
+    });
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
+
+    await expect(projectsService.delete(row().id, caller)).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
+  it.each(['deleted', 'delisted'] as const)('does not duplicate a %s project', async (status) => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status,
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.duplicate(row().id, caller)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(projectsRepository.findById).not.toHaveBeenCalled();
+    expect(projectsRepository.duplicateProject).not.toHaveBeenCalled();
   });
 });
 
