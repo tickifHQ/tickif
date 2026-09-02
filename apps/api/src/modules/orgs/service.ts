@@ -240,6 +240,19 @@ export const orgsService = {
     return hasWriteRole(membership?.role ?? null, membership?.frozen ?? false);
   },
 
+  /** Owner/Admin project assignment authority with current tier and lifecycle enforcement. */
+  async canAssignProjectResponsibility(userId: string, organizationId: string): Promise<boolean> {
+    const membership = await orgsRepository.findMembershipRole(userId, organizationId);
+    if (!membership || membership.frozen) return false;
+    const parsedRole = organizationMemberRoleSchema.safeParse(membership.role);
+    if (!parsedRole.success || !WRITE_ROLES.has(parsedRole.data)) return false;
+    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+    return organizationCapabilitiesForRole(parsedRole.data, {
+      rbacEnabled: rbacEnabled(plan.tier, plan.state),
+      frozen: false,
+    }).writeProjects;
+  },
+
   async getCapabilities(
     userId: string,
     organizationId: string,

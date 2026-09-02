@@ -64,6 +64,7 @@ function project(overrides: Partial<AdminProjectRecord> = {}): AdminProjectRecor
   return {
     id: '11111111-1111-4111-8111-111111111111',
     designerId: '22222222-2222-4222-8222-222222222222',
+    responsibleMemberId: null,
     designerName: 'Review Studio',
     title: 'Complete project',
     slug: 'complete-project',
