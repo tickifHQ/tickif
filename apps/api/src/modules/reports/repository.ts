@@ -1,9 +1,27 @@
+import { inArray } from 'drizzle-orm';
 import { and, db, desc, eq, gte, lte, schema, sql } from '@repo/db';
 import { INTERACTION_EVENT_TYPE } from '@repo/contracts';
 
 export type AnalyticsProfileContext = {
   profileId: string;
+  teamId: string;
+  teamName: string;
+};
+
+export type AnalyticsAccessContext = {
+  memberId: string;
+  role: string;
+  frozen: boolean;
+  tier: (typeof schema.planTierEnum.enumValues)[number] | null;
+  lifecycleState: (typeof schema.subscriptionStateEnum.enumValues)[number] | null;
+  currentPeriodEnd: Date | null;
+};
+
+export type AnalyticsDataScope = {
   orgId: string;
+  profileIds: string[];
+  teamIds: string[];
+  responsibleMemberId?: string;
 };
 
 export type AnalyticsProjectStatusCount = {
@@ -41,51 +59,128 @@ export type AnalyticsAcquisitionSource = {
   conversions: number;
 };
 
+export type BillingCurrencyAnalyticsRecord = {
+  currency: string;
+  capturedAmount: number;
+  failedAmount: number;
+  transactionCount: number;
+  capturedTransactions: number;
+  failedTransactions: number;
+};
+
+export type FrozenBranchRecord = {
+  branchId: string;
+  name: string;
+  frozenAt: Date;
+  freezeRank: number;
+};
+
+export type BranchAnalyticsRecord = {
+  branchId: string;
+  name: string;
+  projects: number;
+  enquiries: number;
+  conversions: number;
+  projectViews: number;
+  profileViews: number;
+};
+
+function projectScope(input: AnalyticsDataScope) {
+  return and(
+    inArray(schema.project.designerId, input.profileIds),
+    input.responsibleMemberId
+      ? eq(schema.project.responsibleMemberId, input.responsibleMemberId)
+      : undefined,
+  );
+}
+
 export const reportsRepository = {
-  async findProfileContext(input: {
+  async findAccessContext(input: {
     userId: string;
     orgId: string;
-  }): Promise<AnalyticsProfileContext | null> {
+  }): Promise<AnalyticsAccessContext | null> {
     const [row] = await db
       .select({
-        profileId: schema.designerProfile.id,
-        orgId: schema.designerProfile.orgId,
+        memberId: schema.member.id,
+        role: schema.member.role,
+        frozen: schema.member.frozen,
+        tier: schema.subscription.planTier,
+        lifecycleState: schema.subscription.subscriptionState,
+        currentPeriodEnd: schema.subscription.currentPeriodEnd,
       })
-      .from(schema.designerProfile)
-      .innerJoin(schema.member, eq(schema.member.organizationId, schema.designerProfile.orgId))
+      .from(schema.member)
+      .leftJoin(
+        schema.subscription,
+        eq(schema.subscription.organizationId, schema.member.organizationId),
+      )
       .where(
-        and(eq(schema.member.userId, input.userId), eq(schema.designerProfile.orgId, input.orgId)),
+        and(eq(schema.member.userId, input.userId), eq(schema.member.organizationId, input.orgId)),
       )
       .limit(1);
 
     return row ?? null;
   },
 
-  async countProjectsByStatus(profileId: string): Promise<AnalyticsProjectStatusCount[]> {
+  async listActiveProfiles(orgId: string): Promise<AnalyticsProfileContext[]> {
+    return db
+      .select({
+        profileId: schema.designerProfile.id,
+        teamId: schema.team.id,
+        teamName: schema.team.name,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(schema.team, eq(schema.team.id, schema.designerProfile.teamId))
+      .where(and(eq(schema.designerProfile.orgId, orgId), eq(schema.team.frozen, false)))
+      .orderBy(schema.team.createdAt, schema.team.id);
+  },
+
+  async listFrozenBranches(orgId: string): Promise<FrozenBranchRecord[]> {
+    const rows = await db
+      .select({
+        branchId: schema.team.id,
+        name: schema.team.name,
+        frozenAt: schema.team.frozenAt,
+        freezeRank: schema.team.freezeRank,
+      })
+      .from(schema.team)
+      .where(and(eq(schema.team.organizationId, orgId), eq(schema.team.frozen, true)))
+      .orderBy(schema.team.freezeRank, schema.team.createdAt, schema.team.id);
+    return rows.filter(
+      (row): row is FrozenBranchRecord => row.frozenAt !== null && row.freezeRank !== null,
+    );
+  },
+
+  async countProjectsByStatus(input: AnalyticsDataScope): Promise<AnalyticsProjectStatusCount[]> {
     return db
       .select({
         status: schema.project.status,
         count: sql<number>`count(*)::int`,
       })
       .from(schema.project)
-      .where(eq(schema.project.designerId, profileId))
+      .where(projectScope(input))
       .groupBy(schema.project.status);
   },
 
   async countLeadsByStatus(input: {
-    orgId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsLeadStatusCount[]> {
-    return db
+    const query = db
       .select({
         status: schema.lead.status,
         count: sql<number>`count(*)::int`,
       })
-      .from(schema.lead)
+      .from(schema.lead);
+    const scoped = input.scope.responsibleMemberId
+      ? query.innerJoin(schema.project, eq(schema.project.id, schema.lead.referredProjectId))
+      : query;
+    return scoped
       .where(
         and(
-          eq(schema.lead.organizationId, input.orgId),
+          eq(schema.lead.organizationId, input.scope.orgId),
+          inArray(schema.lead.teamId, input.scope.teamIds),
+          input.scope.responsibleMemberId ? projectScope(input.scope) : undefined,
           gte(schema.lead.receivedAt, input.from),
           lte(schema.lead.receivedAt, input.to),
         ),
@@ -94,7 +189,7 @@ export const reportsRepository = {
   },
 
   async countProjectsCreatedByDay(input: {
-    profileId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
@@ -107,7 +202,7 @@ export const reportsRepository = {
       .from(schema.project)
       .where(
         and(
-          eq(schema.project.designerId, input.profileId),
+          projectScope(input.scope),
           sql<boolean>`${schema.project.createdAt} >= ${input.from}`,
           sql<boolean>`${schema.project.createdAt} <= ${input.to}`,
         ),
@@ -117,20 +212,26 @@ export const reportsRepository = {
   },
 
   async countLeadsReceivedByDay(input: {
-    orgId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsDailyCount[]> {
     const day = sql<string>`to_char(date_trunc('day', ${schema.lead.receivedAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
-    return db
+    const query = db
       .select({
         date: day,
         count: sql<number>`count(*)::int`,
       })
-      .from(schema.lead)
+      .from(schema.lead);
+    const scoped = input.scope.responsibleMemberId
+      ? query.innerJoin(schema.project, eq(schema.project.id, schema.lead.referredProjectId))
+      : query;
+    return scoped
       .where(
         and(
-          eq(schema.lead.organizationId, input.orgId),
+          eq(schema.lead.organizationId, input.scope.orgId),
+          inArray(schema.lead.teamId, input.scope.teamIds),
+          input.scope.responsibleMemberId ? projectScope(input.scope) : undefined,
           sql<boolean>`${schema.lead.receivedAt} >= ${input.from}`,
           sql<boolean>`${schema.lead.receivedAt} <= ${input.to}`,
         ),
@@ -140,29 +241,31 @@ export const reportsRepository = {
   },
 
   async countViewsByDay(input: {
-    profileId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsViewDailyCount[]> {
     const day = sql<string>`to_char(date_trunc('day', ${schema.interactionEvent.createdAt} at time zone 'Asia/Kolkata'), 'YYYY-MM-DD')`;
     const [profileViews, projectViews] = await Promise.all([
-      db
-        .select({
-          type: schema.interactionEvent.type,
-          date: day,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(schema.interactionEvent)
-        .where(
-          and(
-            eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROFILE_VIEW),
-            eq(schema.interactionEvent.designerProfileId, input.profileId),
-            gte(schema.interactionEvent.createdAt, input.from),
-            lte(schema.interactionEvent.createdAt, input.to),
-          ),
-        )
-        .groupBy(schema.interactionEvent.type, day)
-        .orderBy(day),
+      input.scope.responsibleMemberId
+        ? Promise.resolve([])
+        : db
+            .select({
+              type: schema.interactionEvent.type,
+              date: day,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(schema.interactionEvent)
+            .where(
+              and(
+                eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROFILE_VIEW),
+                inArray(schema.interactionEvent.designerProfileId, input.scope.profileIds),
+                gte(schema.interactionEvent.createdAt, input.from),
+                lte(schema.interactionEvent.createdAt, input.to),
+              ),
+            )
+            .groupBy(schema.interactionEvent.type, day)
+            .orderBy(day),
       db
         .select({
           type: schema.interactionEvent.type,
@@ -174,7 +277,7 @@ export const reportsRepository = {
         .where(
           and(
             eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
-            eq(schema.project.designerId, input.profileId),
+            projectScope(input.scope),
             gte(schema.interactionEvent.createdAt, input.from),
             lte(schema.interactionEvent.createdAt, input.to),
           ),
@@ -186,8 +289,7 @@ export const reportsRepository = {
   },
 
   async findTopConvertingProjects(input: {
-    profileId: string;
-    orgId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsTopProject[]> {
@@ -210,7 +312,7 @@ export const reportsRepository = {
         )
         .where(
           and(
-            eq(schema.project.designerId, input.profileId),
+            projectScope(input.scope),
             eq(schema.interactionEvent.type, INTERACTION_EVENT_TYPE.PROJECT_VIEW),
             gte(schema.interactionEvent.createdAt, input.from),
             lte(schema.interactionEvent.createdAt, input.to),
@@ -232,8 +334,9 @@ export const reportsRepository = {
         .innerJoin(schema.lead, eq(schema.lead.referredProjectId, schema.project.id))
         .where(
           and(
-            eq(schema.project.designerId, input.profileId),
-            eq(schema.lead.organizationId, input.orgId),
+            projectScope(input.scope),
+            eq(schema.lead.organizationId, input.scope.orgId),
+            inArray(schema.lead.teamId, input.scope.teamIds),
             gte(schema.lead.receivedAt, input.from),
             lte(schema.lead.receivedAt, input.to),
           ),
@@ -271,20 +374,26 @@ export const reportsRepository = {
   },
 
   async countAcquisitionSources(input: {
-    orgId: string;
+    scope: AnalyticsDataScope;
     from: Date;
     to: Date;
   }): Promise<AnalyticsAcquisitionSource[]> {
-    return db
+    const query = db
       .select({
         source: schema.lead.source,
         enquiries: sql<number>`count(*)::int`,
         conversions: sql<number>`count(*) filter (where ${schema.lead.status} in ('contacted', 'closed'))::int`,
       })
-      .from(schema.lead)
+      .from(schema.lead);
+    const scoped = input.scope.responsibleMemberId
+      ? query.innerJoin(schema.project, eq(schema.project.id, schema.lead.referredProjectId))
+      : query;
+    return scoped
       .where(
         and(
-          eq(schema.lead.organizationId, input.orgId),
+          eq(schema.lead.organizationId, input.scope.orgId),
+          inArray(schema.lead.teamId, input.scope.teamIds),
+          input.scope.responsibleMemberId ? projectScope(input.scope) : undefined,
           gte(schema.lead.receivedAt, input.from),
           lte(schema.lead.receivedAt, input.to),
         ),
@@ -292,5 +401,84 @@ export const reportsRepository = {
       .groupBy(schema.lead.source)
       .orderBy(desc(sql`count(*)`))
       .limit(4);
+  },
+
+  async getBillingAnalytics(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<BillingCurrencyAnalyticsRecord[]> {
+    return db
+      .select({
+        currency: schema.paymentTransaction.currency,
+        capturedAmount: sql<number>`coalesce(sum(${schema.paymentTransaction.amount}) filter (where ${schema.paymentTransaction.status} = 'captured'), 0)::double precision`,
+        failedAmount: sql<number>`coalesce(sum(${schema.paymentTransaction.amount}) filter (where ${schema.paymentTransaction.status} = 'failed'), 0)::double precision`,
+        transactionCount: sql<number>`count(*)::int`,
+        capturedTransactions: sql<number>`count(*) filter (where ${schema.paymentTransaction.status} = 'captured')::int`,
+        failedTransactions: sql<number>`count(*) filter (where ${schema.paymentTransaction.status} = 'failed')::int`,
+      })
+      .from(schema.paymentTransaction)
+      .innerJoin(
+        schema.subscription,
+        eq(schema.subscription.id, schema.paymentTransaction.subscriptionId),
+      )
+      .where(
+        and(
+          eq(schema.subscription.organizationId, input.orgId),
+          gte(schema.paymentTransaction.createdAt, input.from),
+          lte(schema.paymentTransaction.createdAt, input.to),
+        ),
+      )
+      .groupBy(schema.paymentTransaction.currency)
+      .orderBy(schema.paymentTransaction.currency);
+  },
+
+  async getBranchBreakdown(input: {
+    orgId: string;
+    from: Date;
+    to: Date;
+  }): Promise<BranchAnalyticsRecord[]> {
+    return db
+      .select({
+        branchId: schema.team.id,
+        name: schema.team.name,
+        projects: sql<number>`(
+          select count(*)::int from project p
+          where p.designer_id = ${schema.designerProfile.id}
+        )`,
+        enquiries: sql<number>`(
+          select count(*)::int from lead l
+          where l.team_id = ${schema.team.id}
+            and l.received_at >= ${input.from}
+            and l.received_at <= ${input.to}
+        )`,
+        conversions: sql<number>`(
+          select count(*)::int from lead l
+          where l.team_id = ${schema.team.id}
+            and l.status in ('contacted', 'closed')
+            and l.received_at >= ${input.from}
+            and l.received_at <= ${input.to}
+        )`,
+        projectViews: sql<number>`(
+          select count(*)::int
+          from interaction_event ie
+          inner join project p on p.id = ie.project_id
+          where p.designer_id = ${schema.designerProfile.id}
+            and ie.type = ${INTERACTION_EVENT_TYPE.PROJECT_VIEW}
+            and ie.created_at >= ${input.from}
+            and ie.created_at <= ${input.to}
+        )`,
+        profileViews: sql<number>`(
+          select count(*)::int from interaction_event ie
+          where ie.designer_profile_id = ${schema.designerProfile.id}
+            and ie.type = ${INTERACTION_EVENT_TYPE.PROFILE_VIEW}
+            and ie.created_at >= ${input.from}
+            and ie.created_at <= ${input.to}
+        )`,
+      })
+      .from(schema.team)
+      .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(and(eq(schema.team.organizationId, input.orgId), eq(schema.team.frozen, false)))
+      .orderBy(schema.team.createdAt, schema.team.id);
   },
 };

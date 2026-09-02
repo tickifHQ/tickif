@@ -75,6 +75,7 @@ export const organizationAccessScopeSchema = z
     ORGANIZATION_ACCESS_SCOPE.ORGANIZATION,
   ])
   .meta({ id: 'OrganizationAccessScope' });
+export type OrganizationAccessScope = z.infer<typeof organizationAccessScopeSchema>;
 
 export const organizationCapabilitiesSchema = z
   .object({

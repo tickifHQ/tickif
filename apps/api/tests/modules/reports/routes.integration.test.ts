@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { analyticsResponseSchema } from '@repo/contracts';
-import { db, schema } from '@repo/db';
-import { makeDesigner, makeLead, makeProject } from '@repo/db/testing';
+import { db, eq, schema } from '@repo/db';
+import { makeDesigner, makeLead, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
@@ -227,5 +227,234 @@ describe('GET /api/reports/analytics', () => {
     });
 
     expect(response.status).toBe(422);
+  });
+
+  it.each([
+    ['owner', 'full'],
+    ['admin', 'full'],
+    ['billing_admin', 'billing'],
+    ['member', 'own'],
+    ['viewer', 'organization'],
+  ] as const)('enforces the %s analytics dataset on the route', async (role, expectedScope) => {
+    const owner = await makeDesignerSession(
+      `+9198000050${role.length.toString().padStart(2, '0')}`,
+    );
+    const [subscription] = await db
+      .insert(schema.subscription)
+      .values({ organizationId: owner.designer.orgId, planTier: 'corporate' })
+      .returning();
+
+    let cookie = owner.cookie;
+    let responsibleMemberId: string | null = null;
+    if (role !== 'owner') {
+      const caller = await createRoleSession(
+        `+9198000060${role.length.toString().padStart(2, '0')}`,
+        'designer',
+      );
+      responsibleMemberId = `member-${role}`;
+      await db.insert(schema.member).values({
+        id: responsibleMemberId,
+        organizationId: owner.designer.orgId,
+        userId: caller.userId,
+        role,
+        createdAt: new Date(),
+      });
+      await db.insert(schema.teamMember).values({
+        id: `team-member-${role}`,
+        teamId: owner.designer.teamId,
+        userId: caller.userId,
+      });
+      cookie = await activateOrganization(caller.cookie, owner.designer.orgId);
+    }
+
+    const project = await makeProject({
+      designerId: owner.designer.id,
+      responsibleMemberId: role === 'member' ? responsibleMemberId : null,
+    });
+    if (role === 'member') {
+      await makeProject({ designerId: owner.designer.id, title: 'Unassigned project' });
+      const now = new Date();
+      await db.insert(schema.interactionEvent).values({
+        type: 'profile_view',
+        eventKey: randomUUID(),
+        anonymousId: randomUUID(),
+        designerProfileId: owner.designer.id,
+        eventDay: now.toISOString().slice(0, 10),
+        createdAt: now,
+      });
+    }
+    if (role === 'billing_admin') {
+      await db.insert(schema.paymentTransaction).values([
+        {
+          subscriptionId: subscription!.id,
+          razorpayPaymentId: `pay-${role}-inr`,
+          amount: 299900,
+          currency: 'INR',
+          status: 'captured',
+          payload: {},
+        },
+        {
+          subscriptionId: subscription!.id,
+          razorpayPaymentId: `pay-${role}-usd`,
+          amount: 1000,
+          currency: 'USD',
+          status: 'captured',
+          payload: {},
+        },
+      ]);
+    }
+
+    const response = await app.request('/api/reports/analytics?days=7', {
+      headers: { cookie },
+    });
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed.access).toMatchObject({ role, roleScope: expectedScope });
+    if (role === 'billing_admin') {
+      expect(parsed.billing?.currencies).toEqual([
+        expect.objectContaining({ currency: 'INR', capturedAmount: 299900 }),
+        expect.objectContaining({ currency: 'USD', capturedAmount: 1000 }),
+      ]);
+      expect(parsed.projects.total).toBe(0);
+    } else {
+      expect(parsed.billing).toBeNull();
+      expect(parsed.projects.total).toBe(1);
+      if (role === 'member') expect(parsed.engagement.profileViews).toBe(0);
+    }
+    expect(project.id).toBeTruthy();
+  });
+
+  it('excludes frozen branches without deleting their analytics history', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004020');
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+    });
+    const frozenTeamId = `team-frozen-${randomUUID()}`;
+    await db.insert(schema.team).values({
+      id: frozenTeamId,
+      name: 'Frozen branch',
+      organizationId: designer.orgId,
+      frozen: true,
+      frozenAt: new Date(),
+      freezeRank: 1,
+    });
+    const frozenProfile = await makeDesigner({
+      orgId: designer.orgId,
+      teamId: frozenTeamId,
+      displayName: 'Frozen branch',
+    });
+    await makeProject({ designerId: designer.id, title: 'Active branch project' });
+    await makeProject({ designerId: frozenProfile.id, title: 'Frozen branch project' });
+
+    const frozenResponse = analyticsResponseSchema.parse(
+      await (await app.request('/api/reports/analytics?days=7', { headers: { cookie } })).json(),
+    );
+    expect(frozenResponse.projects.total).toBe(1);
+    expect(frozenResponse.branches.map(({ branchId }) => branchId)).not.toContain(frozenTeamId);
+    expect(frozenResponse.frozenBranches).toEqual([
+      expect.objectContaining({ branchId: frozenTeamId, name: 'Frozen branch', freezeRank: 1 }),
+    ]);
+
+    await db
+      .update(schema.team)
+      .set({ frozen: false, frozenAt: null, freezeRank: null })
+      .where(eq(schema.team.id, frozenTeamId));
+    const restoredResponse = analyticsResponseSchema.parse(
+      await (await app.request('/api/reports/analytics?days=7', { headers: { cookie } })).json(),
+    );
+    expect(restoredResponse.projects.total).toBe(2);
+    expect(restoredResponse.branches.map(({ branchId }) => branchId)).toContain(frozenTeamId);
+    expect(restoredResponse.frozenBranches).toEqual([]);
+  });
+
+  it('isolates every metric to the requested active Corporate branch', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004021');
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+    });
+    const secondTeam = await makeTeam({ organizationId: designer.orgId, name: 'Pune branch' });
+    const secondProfile = await makeDesigner({
+      orgId: designer.orgId,
+      teamId: secondTeam.id,
+      displayName: 'Pune branch',
+    });
+    await makeProject({ designerId: designer.id, title: 'Mumbai one' });
+    await makeProject({ designerId: designer.id, title: 'Mumbai two' });
+    const puneProject = await makeProject({ designerId: secondProfile.id, title: 'Pune only' });
+    const now = new Date();
+    await makeLead({
+      organizationId: designer.orgId,
+      teamId: secondProfile.teamId,
+      referredProjectId: puneProject.id,
+      receivedAt: now,
+    });
+
+    const response = await app.request(
+      `/api/reports/analytics?days=7&branchId=${secondProfile.teamId}`,
+      { headers: { cookie } },
+    );
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed.access).toMatchObject({ level: 'branch', branchId: secondProfile.teamId });
+    expect(parsed.projects.total).toBe(1);
+    expect(parsed.leads.total).toBe(1);
+    expect(parsed.branches).toEqual([]);
+  });
+
+  it('returns 402 when a lower-tier organization requests branch analytics', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004022');
+
+    const response = await app.request(
+      `/api/reports/analytics?days=7&branchId=${designer.teamId}`,
+      { headers: { cookie } },
+    );
+    expect(response.status).toBe(402);
+  });
+
+  it('returns 404 for missing, frozen, and cross-organization branch ids', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004023');
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+    });
+    const frozenTeamId = `frozen-${randomUUID()}`;
+    await db.insert(schema.team).values({
+      id: frozenTeamId,
+      name: 'Frozen',
+      organizationId: designer.orgId,
+      frozen: true,
+      frozenAt: new Date(),
+      freezeRank: 1,
+    });
+    await makeDesigner({ orgId: designer.orgId, teamId: frozenTeamId });
+    const crossOrg = await makeDesigner();
+
+    for (const branchId of [`missing-${randomUUID()}`, frozenTeamId, crossOrg.teamId]) {
+      const response = await app.request(`/api/reports/analytics?days=7&branchId=${branchId}`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it('denies a branch analytics request while the organization is locked', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004024');
+    const graceStartedAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+      subscriptionState: 'locked',
+      preLapseTier: 'corporate',
+      graceStartedAt,
+      lockedAt: new Date(graceStartedAt.getTime() + 24 * 60 * 60 * 1000),
+    });
+
+    const response = await app.request(
+      `/api/reports/analytics?days=7&branchId=${designer.teamId}`,
+      { headers: { cookie } },
+    );
+    expect(response.status).toBe(403);
   });
 });
