@@ -163,11 +163,8 @@ describe('DesignerVerification', () => {
       />,
     );
 
-    expect(
-      screen.getByText(
-        'Your approval was reversed and returned to review. Reason: The registration details need another review.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Approval returned to review')).toBeInTheDocument();
+    expect(screen.getByText('The registration details need another review.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Submitted' })).toBeDisabled();
   });
 

@@ -738,9 +738,11 @@ export function DesignerVerification({
               {applicationPending ? (
                 <>
                   {state.latestNote ? (
-                    <TipCallout variant="warning">
-                      Your approval was reversed and returned to review. Reason: {state.latestNote}
-                    </TipCallout>
+                    <Alert variant="warning">
+                      <CircleAlert aria-hidden="true" />
+                      <AlertTitle>Approval returned to review</AlertTitle>
+                      <AlertDescription>{state.latestNote}</AlertDescription>
+                    </Alert>
                   ) : null}
                   <TipCallout variant="info">
                     Once you submit, the admin team reviews within 2–5 business days. They may ask
