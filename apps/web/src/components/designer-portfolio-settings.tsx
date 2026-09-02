@@ -37,11 +37,11 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
-import { Skeleton } from '@repo/ui/components/skeleton';
 import { Switch } from '@repo/ui/components/switch';
 import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
+import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -131,7 +131,10 @@ const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
   new: { label: 'New on Tickif', src: '/illustrations/badges/new.svg' },
   'top-performer': { label: 'Top performer', src: '/illustrations/badges/top-performer.svg' },
   established: { label: 'Established studio', src: '/illustrations/badges/established.svg' },
-  'projects-published': { label: 'Projects published', src: '/illustrations/badges/projects-published.svg' },
+  'projects-published': {
+    label: 'Projects published',
+    src: '/illustrations/badges/projects-published.svg',
+  },
 };
 
 function formatProjectOption(project: PortfolioProjectItem) {
@@ -180,11 +183,8 @@ function computeChangedFields(current: FormState, saved: FormState): UpdatePortf
   if (current.showGoogleOverallRating !== saved.showGoogleOverallRating) {
     googleReviewSettings.showOverallRating = current.showGoogleOverallRating;
   }
-  if (
-    current.showGooglePositiveReviewsOnly !== saved.showGooglePositiveReviewsOnly
-  ) {
-    googleReviewSettings.showPositiveReviewsOnly =
-      current.showGooglePositiveReviewsOnly;
+  if (current.showGooglePositiveReviewsOnly !== saved.showGooglePositiveReviewsOnly) {
+    googleReviewSettings.showPositiveReviewsOnly = current.showGooglePositiveReviewsOnly;
   }
   if (Object.keys(googleReviewSettings).length > 0) {
     patch.reviewSettings = { google: googleReviewSettings };
@@ -581,8 +581,10 @@ export function DesignerPortfolioSettings() {
           const refreshed = await fetchPortfolio();
           setPortfolio(refreshed);
         } catch {
-          setPortfolio((prev) => prev ? { ...prev, logoUrl: result.logoUrl } : prev);
-          setLogoError('Logo updated successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+          setPortfolio((prev) => (prev ? { ...prev, logoUrl: result.logoUrl } : prev));
+          setLogoError(
+            "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
+          );
         }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
@@ -600,7 +602,9 @@ export function DesignerPortfolioSettings() {
           setPortfolio(refreshed);
         } catch {
           setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
-          setLogoError('Logo removed successfully. We couldn\'t refresh your portfolio status — please refresh the page to see the latest publish status.');
+          setLogoError(
+            "Logo removed successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
+          );
         }
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not delete logo.');
@@ -613,24 +617,7 @@ export function DesignerPortfolioSettings() {
   // -------------------------------------------------------------------------
 
   if (loading) {
-    return (
-      <div className="flex flex-col">
-        <div className="px-6 py-5">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="mt-2 h-4 w-80" />
-        </div>
-        <div className="flex flex-1 gap-6 p-6">
-          <div className="flex-1 space-y-6 lg:max-w-[65%]">
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-64 w-full rounded-xl" />
-          </div>
-          <div className="hidden lg:block lg:w-[35%]">
-            <Skeleton className="h-96 w-full rounded-3xl" />
-          </div>
-        </div>
-      </div>
-    );
+    return <DesignerPortfolioLoading />;
   }
 
   // -------------------------------------------------------------------------
@@ -749,6 +736,7 @@ export function DesignerPortfolioSettings() {
                     data-slot="portfolio-visibility-notice"
                     className="flex items-start gap-2 border-b border-border bg-muted/40 px-5 py-3"
                     role="status"
+                    aria-label="Portfolio visibility"
                   >
                     <AlertCircle
                       className="mt-px size-4 shrink-0 text-muted-foreground"
@@ -1067,9 +1055,7 @@ export function DesignerPortfolioSettings() {
                 title="Reviews"
                 subtitle="What it's like to work with us"
                 enabled={form.showGoogleReviews}
-                onToggle={() =>
-                  updateField('showGoogleReviews', !form.showGoogleReviews)
-                }
+                onToggle={() => updateField('showGoogleReviews', !form.showGoogleReviews)}
                 expanded={sectionExpanded.reviews}
                 onToggleExpanded={() => toggleExpanded('reviews')}
               >

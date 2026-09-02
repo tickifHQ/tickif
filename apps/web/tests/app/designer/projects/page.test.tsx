@@ -65,7 +65,8 @@ describe('DesignerProjectsPage', () => {
   });
 
   it('requires designer auth and lists projects through the typed API', async () => {
-    const { default: Page } = await import('../../../../app/(designer)/designer/projects/page');
+    const { default: Page } =
+      await import('../../../../app/(designer)/designer/projects/(list)/page');
 
     const page = await Page({
       searchParams: Promise.resolve({
@@ -88,7 +89,8 @@ describe('DesignerProjectsPage', () => {
 
   it('surfaces a load error when the API response is unavailable', async () => {
     mock.getProjects.mockResolvedValue(new Response(null, { status: 500 }));
-    const { default: Page } = await import('../../../../app/(designer)/designer/projects/page');
+    const { default: Page } =
+      await import('../../../../app/(designer)/designer/projects/(list)/page');
 
     const page = await Page({ searchParams: Promise.resolve({}) });
     render(page);

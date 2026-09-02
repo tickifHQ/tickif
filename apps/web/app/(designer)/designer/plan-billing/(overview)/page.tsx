@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic';
-import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 import { BillingAccessDenied } from '@/components/billing-access-denied';
+import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 import { getBillingState } from '@/lib/billing-data';
 import { getCurrentOrgRole, hasBillingAccess } from '@/lib/current-org-role';
 import { requireAuth } from '@/lib/auth-guard';
@@ -29,9 +29,7 @@ export default async function DesignerPlanBillingPage() {
   return (
     <>
       <DesignerPlanBilling billing={billing} />
-      {process.env.NODE_ENV !== 'production' && (
-        <BillingDevSwitcher initialBilling={billing} />
-      )}
+      {process.env.NODE_ENV !== 'production' && <BillingDevSwitcher initialBilling={billing} />}
     </>
   );
 }
