@@ -10,7 +10,6 @@ import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import {
-  CalendarDays,
   ChartLine,
   CreditCard,
   ExternalLink,
@@ -24,7 +23,6 @@ import {
   Settings,
   Shield,
   ShieldCheck,
-  Star,
   UsersRound,
   X,
 } from 'lucide-react';
@@ -43,8 +41,6 @@ const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: LayoutDashboard },
   { label: 'Projects', href: '/designer/projects', icon: Layers },
   { label: 'Leads', href: '/designer/leads', icon: FileUser },
-  { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
-  { label: 'Reviews', href: '/designer/reviews', icon: Star },
   { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 
