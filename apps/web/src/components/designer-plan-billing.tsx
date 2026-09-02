@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
@@ -24,7 +24,10 @@ import type { BillingState, FrozenResource, PlanTier } from '@/lib/billing-types
 import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
-import { SubscribeFlowDialog } from '@/components/subscribe/subscribe-flow-dialog';
+import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
+import { api } from '@/lib/api';
+import { mapSubscriptionToBillingState } from '@/lib/billing-state';
+import type { SubscriptionResponse } from '@repo/contracts';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -700,18 +703,48 @@ function HelpCard() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
+export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBillingProps) {
+  const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [targetTier, setTargetTier] = useState<PlanTier | null>(null);
+  const [initialTargetTier, setInitialTargetTier] = useState<PlanTier | null>(null);
 
-  const openSubscribe = useCallback((tier?: PlanTier) => {
-    setTargetTier(tier ?? null);
-    setSubscribeOpen(true);
+  // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
+  // Called on mount (SSR hydration catch-up) and after checkout flow completes.
+  const refreshBilling = useCallback(async () => {
+    try {
+      await api.api.billing.subscription.refresh.$get();
+      const response = await api.api.billing.subscription.$get();
+      if (response.ok) {
+        const data = (await response.json()) as SubscriptionResponse;
+        setBilling(mapSubscriptionToBillingState(data));
+      }
+    } catch {
+      // Non-fatal — keep the current data
+    }
   }, []);
+
+  // Reconcile on mount so the client sees the latest state after SSR.
+  useEffect(() => {
+    void refreshBilling();
+  }, [refreshBilling]);
+
+  const openSubscribe = useCallback(
+    (tier?: PlanTier) => {
+      const recoveryTier =
+        billing.lifecycle === 'downgraded'
+          ? billing.preLapseTier
+          : billing.lifecycle === 'locked'
+            ? billing.tier
+            : null;
+      setInitialTargetTier(tier ?? recoveryTier);
+      setSubscribeOpen(true);
+    },
+    [billing.lifecycle, billing.preLapseTier, billing.tier],
+  );
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
-    if (!next) setTargetTier(null);
+    if (!next) setInitialTargetTier(null);
   }, []);
 
   const showPaymentDueCard =
@@ -811,13 +844,16 @@ export function DesignerPlanBilling({ billing }: DesignerPlanBillingProps) {
         </aside>
       </div>
 
-      <SubscribeFlowDialog
+      <CheckoutFlow
         open={subscribeOpen}
         onOpenChange={handleSubscribeOpenChange}
         currentTier={billing.tier}
-        lifecycle={billing.lifecycle}
+        lifecycleState={billing.lifecycle}
+        cancellationScheduled={billing.cancellationScheduled}
+        currentPeriodEnd={billing.renewalDate}
         restoreTier={billing.preLapseTier}
-        initialTargetTier={targetTier}
+        initialTargetTier={initialTargetTier}
+        onSubscriptionChange={refreshBilling}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { createRoute, z } from '@hono/zod-openapi';
 import { planTierSchema } from '@repo/contracts';
+import { config } from '@repo/config';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { subscribeService } from './subscribe-service.js';
@@ -34,6 +35,12 @@ const subscribeRoute = createRoute({
           schema: z.object({
             razorpaySubscriptionId: z.string(),
             shortUrl: z.string().nullable(),
+            razorpayKeyId: z.string(),
+            prefill: z.object({
+              name: z.string().nullable(),
+              email: z.string().nullable(),
+              contact: z.string().nullable(),
+            }),
           }),
         },
       },
@@ -95,11 +102,13 @@ const cancelRoute = createRoute({
   middleware: [requireAuth] as const,
   responses: {
     200: {
-      description: 'Cancellation scheduled',
+      description: 'Cancellation scheduled or already scheduled',
       content: {
         'application/json': {
           schema: z.object({
             razorpaySubscriptionId: z.string(),
+            alreadyCancelled: z.boolean(),
+            currentPeriodEnd: z.string().datetime().nullable(),
           }),
         },
       },
@@ -108,6 +117,70 @@ const cancelRoute = createRoute({
     403: { description: 'Caller is not the organization owner' },
     404: { description: 'No active subscription found' },
     422: { description: 'Already on Hobby' },
+  },
+});
+
+const verifyPaymentRoute = createRoute({
+  method: 'post',
+  path: '/verify-payment',
+  tags: ['Billing'],
+  summary: 'Verify a Razorpay Checkout JS payment callback',
+  description:
+    'Verifies the razorpay_signature from the Checkout JS handler callback. ' +
+    'Does NOT activate the subscription — E-117 webhook is authoritative. ' +
+    'Updates razorpayStatus to acknowledge payment authentication.',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            razorpayPaymentId: z.string().min(1),
+            razorpaySubscriptionId: z.string().min(1),
+            razorpaySignature: z.string().min(1),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Payment verified',
+      content: {
+        'application/json': {
+          schema: z.object({ verified: z.boolean() }),
+        },
+      },
+    },
+    400: { description: 'Invalid signature' },
+    401: { description: 'Unauthorized' },
+  },
+});
+
+const refreshRoute = createRoute({
+  method: 'get',
+  path: '/subscription/refresh',
+  tags: ['Billing'],
+  summary: 'Refresh subscription state from Razorpay (reconciliation)',
+  description:
+    'Queries Razorpay live API for the current subscription state and reconciles local DB if needed. ' +
+    'Self-healing when webhooks were missed or delayed. Throttled server-side.',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Reconciliation result',
+      content: {
+        'application/json': {
+          schema: z.object({
+            reconciled: z.boolean(),
+            razorpayStatus: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    401: { description: 'Unauthorized' },
   },
 });
 
@@ -124,7 +197,23 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
       { targetTier },
     );
 
-    return c.json(result, 200);
+    // Filter out placeholder values from phone-OTP signup:
+    // - email: "+91xxx@phone.tickif.local" is not a real email
+    // - name: better-auth sets the phone number as temp name
+    const rawEmail = user!.email ?? null;
+    const rawName = user!.name ?? null;
+    const email = rawEmail?.endsWith('@phone.tickif.local') ? null : rawEmail;
+    const name = rawName?.startsWith('+') ? null : rawName;
+
+    return c.json({
+      ...result,
+      razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
+      prefill: {
+        name,
+        email,
+        contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
+      },
+    }, 200);
   })
   .openapi(changePlanRoute, async (c) => {
     const user = c.get('user');
@@ -143,6 +232,29 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
     const session = c.get('session');
 
     const result = await subscribeService.cancelSubscription({
+      userId: user!.id,
+      activeOrgId: session!.activeOrganizationId ?? null,
+    });
+
+    return c.json(result, 200);
+  })
+  .openapi(verifyPaymentRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+    const body = c.req.valid('json');
+
+    const result = await subscribeService.verifyPayment(
+      { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
+      body,
+    );
+
+    return c.json(result, 200);
+  })
+  .openapi(refreshRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+
+    const result = await subscribeService.refreshSubscription({
       userId: user!.id,
       activeOrgId: session!.activeOrganizationId ?? null,
     });

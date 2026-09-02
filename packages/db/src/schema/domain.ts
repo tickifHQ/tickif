@@ -30,6 +30,7 @@ import {
   VERIFICATION_DOCUMENT_TYPE_VALUES,
   VERIFICATION_NOTIFICATION_EVENT_VALUES,
   VERIFICATION_REVIEW_ACTION_VALUES,
+  OWNERSHIP_TRANSFER_STATUS_VALUES,
 } from '@repo/contracts';
 import { user, organization } from './auth.js';
 
@@ -55,6 +56,69 @@ export const projectStatusEnum = pgEnum('project_status', [
 export const interactionEventTypeEnum = pgEnum(
   'interaction_event_type',
   INTERACTION_EVENT_TYPE_VALUES,
+);
+
+export const ownershipTransferStatusEnum = pgEnum(
+  'ownership_transfer_status',
+  OWNERSHIP_TRANSFER_STATUS_VALUES,
+);
+
+export const ownershipTransferRequest = pgTable(
+  'ownership_transfer_request',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    initiatorUserId: text('initiator_user_id')
+      .references(() => user.id, { onDelete: 'set null' }),
+    targetUserId: text('target_user_id')
+      .references(() => user.id, { onDelete: 'set null' }),
+    targetMemberId: text('target_member_id').notNull(),
+    status: ownershipTransferStatusEnum('status').default('pending').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex('ownership_transfer_pending_organization_uniq')
+      .on(t.organizationId)
+      .where(sql`${t.status} = 'pending'`),
+    index('ownership_transfer_target_status_idx').on(t.targetUserId, t.status),
+    index('ownership_transfer_expiry_idx')
+      .on(t.expiresAt)
+      .where(sql`${t.status} = 'pending'`),
+    check(
+      'ownership_transfer_distinct_parties_check',
+      sql`${t.initiatorUserId} <> ${t.targetUserId}`,
+    ),
+    check(
+      'ownership_transfer_resolution_check',
+      sql`(${t.status} = 'pending' and ${t.resolvedAt} is null) or (${t.status} <> 'pending' and ${t.resolvedAt} is not null)`,
+    ),
+  ],
+);
+
+export const ownershipTransferAuditEvent = pgTable(
+  'ownership_transfer_audit_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transferId: uuid('transfer_id')
+      .notNull()
+      .references(() => ownershipTransferRequest.id, { onDelete: 'cascade' }),
+    status: ownershipTransferStatusEnum('status').notNull(),
+    actorUserId: text('actor_user_id')
+      .references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('ownership_transfer_audit_status_uniq').on(t.transferId, t.status),
+    index('ownership_transfer_audit_transfer_idx').on(t.transferId, t.createdAt),
+  ],
 );
 
 export const moderationActionEnum = pgEnum('moderation_action', [
@@ -1288,6 +1352,7 @@ export const subscription = pgTable(
     subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
     razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
     razorpayStatus: text('razorpay_status'),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
     lockedAt: timestamp('locked_at', { withTimezone: true }),

@@ -32,8 +32,10 @@ type Caller = { userId: string; activeOrgId: string | null };
 const HOBBY_DEFAULT: SubscriptionResponse = {
   tier: 'hobby',
   lifecycleState: 'active',
+  preLapseTier: null,
   razorpayStatus: null,
   currentPeriodEnd: null,
+  cancellationScheduled: false,
   seatUsage: 0,
   branchUsage: 0,
   entitlements: resolveEntitlements('hobby', 'active', false),
@@ -84,8 +86,10 @@ export const entitlementService = {
     const response: SubscriptionResponse = {
       tier,
       lifecycleState: state,
+      preLapseTier: subscription.preLapseTier as PlanTier | null,
       razorpayStatus: subscription.razorpayStatus,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+      cancellationScheduled: subscription.cancelAtPeriodEnd && tier !== 'hobby',
       seatUsage: await countSeats(caller.activeOrgId),
       branchUsage: await countBranches(caller.activeOrgId),
       entitlements: resolveEntitlements(tier, state, isVerified),

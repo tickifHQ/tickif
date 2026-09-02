@@ -5,6 +5,7 @@ import type {
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
 } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
 import { config } from '@repo/config';
 import { randomUUID } from 'node:crypto';
@@ -186,7 +187,11 @@ export async function resolveProfile(caller: Caller): Promise<DesignerProfileRec
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
   }
-  const canWrite = await orgsService.isWriter(caller.userId, caller.activeOrgId);
+  const canWrite = await orgsService.hasCapability(
+    caller.userId,
+    caller.activeOrgId,
+    ORGANIZATION_CAPABILITY.EDIT_ORGANIZATION,
+  );
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }

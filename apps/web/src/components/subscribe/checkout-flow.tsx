@@ -14,17 +14,23 @@ import { PlanSelection } from './plan-selection';
 import { UpgradeConfirmationStep } from './upgrade-confirmation-step';
 import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
 import { ReviewPayStep } from './review-pay-step';
+import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
+import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
 
 // ─── State Machine ───────────────────────────────────────────────────────────
 
 type FlowStep =
   | { step: 'select' }
+  | { step: 'reactivate'; targetTier: PlanTier }
   | { step: 'confirm-upgrade'; targetTier: PlanTier }
   | { step: 'confirm-downgrade'; targetTier: PlanTier }
   | { step: 'review'; targetTier: PlanTier }
   | { step: 'processing' }
   | { step: 'pending'; targetTier: PlanTier }
+  | { step: 'activating'; targetTier: PlanTier }
+  | { step: 'upi-limitation'; targetTier: PlanTier }
+  | { step: 'cancellation-scheduled'; periodEnd: string | null }
   | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' }
   | { step: 'error'; message: string }
   | { step: 'cancelled' };
@@ -34,7 +40,29 @@ interface CheckoutFlowProps {
   onOpenChange: (open: boolean) => void;
   currentTier: PlanTier;
   lifecycleState: SubscriptionState;
+  cancellationScheduled: boolean;
+  currentPeriodEnd: string | null;
+  restoreTier?: PlanTier | null;
+  initialTargetTier?: PlanTier | null;
   onSubscriptionChange?: () => void;
+}
+
+function initialFlowStep(
+  lifecycleState: SubscriptionState,
+  currentTier: PlanTier,
+  restoreTier: PlanTier | null,
+  initialTargetTier: PlanTier | null,
+): FlowStep {
+  if (lifecycleState === 'locked') {
+    return { step: 'reactivate', targetTier: currentTier };
+  }
+  if (lifecycleState === 'downgraded' && restoreTier && restoreTier !== 'hobby') {
+    return { step: 'confirm-upgrade', targetTier: restoreTier };
+  }
+  if (initialTargetTier && initialTargetTier !== currentTier) {
+    return { step: 'confirm-upgrade', targetTier: initialTargetTier };
+  }
+  return { step: 'select' };
 }
 
 /**
@@ -57,18 +85,28 @@ export function CheckoutFlow({
   onOpenChange,
   currentTier,
   lifecycleState,
+  cancellationScheduled,
+  currentPeriodEnd,
+  restoreTier = null,
+  initialTargetTier = null,
   onSubscriptionChange,
 }: CheckoutFlowProps) {
   const [flowStep, setFlowStep] = useState<FlowStep>({ step: 'select' });
   const [isApiLoading, setIsApiLoading] = useState(false);
 
-  // Reset flow when dialog closes
+  // Reset or initialize from the current lifecycle when the dialog opens.
   useEffect(() => {
     if (!open) {
       setFlowStep({ step: 'select' });
       setIsApiLoading(false);
+      return;
     }
-  }, [open]);
+    setFlowStep((currentStep) =>
+      currentStep.step === 'select'
+        ? initialFlowStep(lifecycleState, currentTier, restoreTier, initialTargetTier)
+        : currentStep,
+    );
+  }, [currentTier, initialTargetTier, lifecycleState, open, restoreTier]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -96,6 +134,14 @@ export function CheckoutFlow({
 
   function handleSelectPlan(targetTier: PlanTier) {
     if (targetTier === currentTier) return;
+
+    // If cancellation is already scheduled, don't let the user start any plan change.
+    // Show the cancellation-scheduled modal immediately with the end date.
+    if (cancellationScheduled) {
+      setFlowStep({ step: 'cancellation-scheduled', periodEnd: currentPeriodEnd });
+      return;
+    }
+
     if (isUpgrade(currentTier, targetTier)) {
       setFlowStep({ step: 'confirm-upgrade', targetTier });
     } else if (isDowngrade(currentTier, targetTier)) {
@@ -123,8 +169,17 @@ export function CheckoutFlow({
             `Cancellation failed (${response.status})`;
           setFlowStep({ step: 'error', message });
         } else {
-          // Cancellation scheduled — subscription stays active until period ends.
-          setFlowStep({ step: 'success', targetTier, kind: 'downgrade' });
+          const data = (await response.json()) as {
+            alreadyCancelled?: boolean;
+            currentPeriodEnd?: string | null;
+          };
+          if (data.alreadyCancelled) {
+            // Already scheduled — show the status modal, don't claim we just cancelled.
+            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+          } else {
+            // Cancellation scheduled — subscription stays active until period ends.
+            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+          }
         }
       } catch (err) {
         setFlowStep({
@@ -169,7 +224,10 @@ export function CheckoutFlow({
     try {
       // Hobby → paid: create a new Razorpay subscription via /subscribe.
       // Paid → paid: change the existing subscription via /change-plan.
-      const isNewSubscription = currentTier === 'hobby';
+      const isNewSubscription =
+        currentTier === 'hobby' ||
+        lifecycleState === 'locked' ||
+        lifecycleState === 'downgraded';
 
       if (isNewSubscription) {
         const response = await api.api.billing.subscribe.$post({
@@ -186,35 +244,91 @@ export function CheckoutFlow({
           return;
         }
 
-        const data = await response.json();
-        const { shortUrl } = data as { razorpaySubscriptionId: string; shortUrl: string | null };
+        const data = (await response.json()) as {
+          razorpaySubscriptionId: string;
+          shortUrl: string | null;
+          razorpayKeyId: string;
+          prefill: { name: string | null; email: string | null; contact: string | null };
+        };
 
-        if (shortUrl) {
-          setFlowStep({ step: 'pending', targetTier });
-          setTimeout(() => {
-            window.location.href = shortUrl;
-          }, 500);
-        } else {
-          setFlowStep({ step: 'pending', targetTier });
-        }
+        // Close our Dialog before opening Razorpay Checkout.
+        // The Radix Dialog overlay would block clicks on the Razorpay iframe.
+        onOpenChange(false);
+
+        // Open Razorpay Checkout JS modal on the page.
+        openRazorpayCheckout({
+          keyId: data.razorpayKeyId,
+          subscriptionId: data.razorpaySubscriptionId,
+          targetTier,
+          prefill: data.prefill,
+          onSuccess: async (paymentData) => {
+            // Verify the payment signature server-side
+            try {
+              const verifyResponse = await api.api.billing['verify-payment'].$post({
+                json: {
+                  razorpayPaymentId: paymentData.razorpay_payment_id,
+                  razorpaySubscriptionId: paymentData.razorpay_subscription_id,
+                  razorpaySignature: paymentData.razorpay_signature,
+                },
+              });
+
+              if (!verifyResponse.ok) {
+                // Reopen dialog with error
+                onOpenChange(true);
+                setFlowStep({ step: 'error', message: 'Payment verification failed' });
+                return;
+              }
+
+              // Verification successful — reopen dialog with activating state and poll.
+              onOpenChange(true);
+              setFlowStep({ step: 'activating', targetTier });
+              const activated = await waitForSubscriptionActivation(targetTier);
+              if (activated) {
+                setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+                onSubscriptionChange?.();
+              } else {
+                setFlowStep({
+                  step: 'error',
+                  message:
+                    'Payment was verified, but subscription activation is still pending. Refresh or try again shortly.',
+                });
+              }
+            } catch {
+              onOpenChange(true);
+              setFlowStep({ step: 'error', message: 'Payment verification failed' });
+            }
+          },
+          onDismiss: () => {
+            // User closed Razorpay checkout — return to Plan & Billing cleanly
+            setFlowStep({ step: 'select' });
+            setIsApiLoading(false);
+          },
+        });
       } else {
-        // Paid → paid upgrade (e.g., Professional+ → Corporate)
+        // Paid → paid change-plan (e.g., Professional+ → Corporate or Corporate → Professional+)
         const response = await api.api.billing['change-plan'].$post({
           json: { targetTier },
         });
 
         if (!response.ok) {
           const error = await response.json().catch(() => null);
-          const message =
-            (error as { error?: { message?: string } })?.error?.message ??
-            `Plan change failed (${response.status})`;
-          setFlowStep({ step: 'error', message });
+          const rawMessage =
+            (error as { error?: { message?: string } })?.error?.message ?? '';
+          // Detect Razorpay UPI limitation → show cancel-and-resubscribe flow
+          const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
+          if (isUpiLimitation) {
+            setFlowStep({ step: 'upi-limitation', targetTier });
+            setIsApiLoading(false);
+            return;
+          }
+          setFlowStep({ step: 'error', message: rawMessage || `Plan change failed (${response.status})` });
           setIsApiLoading(false);
           return;
         }
 
         // Change-plan is deferred to cycle end — show success acknowledgment.
         setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+        setIsApiLoading(false);
       }
     } catch (err) {
       setFlowStep({
@@ -226,12 +340,44 @@ export function CheckoutFlow({
     }
   }
 
+  async function handleUpiCancel() {
+    setIsApiLoading(true);
+    setFlowStep({ step: 'processing' });
+    try {
+      const response = await api.api.billing.cancel.$post({});
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        const message =
+          (error as { error?: { message?: string } })?.error?.message ??
+          `Cancellation failed (${response.status})`;
+        setFlowStep({ step: 'error', message });
+      } else {
+        const data = (await response.json()) as {
+          alreadyCancelled?: boolean;
+          currentPeriodEnd?: string | null;
+        };
+        setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+      }
+    } catch (err) {
+      setFlowStep({
+        step: 'error',
+        message: err instanceof Error ? err.message : 'Cancellation failed',
+      });
+    } finally {
+      setIsApiLoading(false);
+    }
+  }
+
   function handleBack() {
     if (flowStep.step === 'confirm-upgrade' || flowStep.step === 'confirm-downgrade') {
       setFlowStep({ step: 'select' });
     } else if (flowStep.step === 'review') {
       const { targetTier } = flowStep;
-      setFlowStep({ step: 'confirm-upgrade', targetTier });
+      if (lifecycleState === 'locked') {
+        setFlowStep({ step: 'reactivate', targetTier });
+      } else {
+        setFlowStep({ step: 'confirm-upgrade', targetTier });
+      }
     }
   }
 
@@ -240,7 +386,7 @@ export function CheckoutFlow({
     onSubscriptionChange?.();
   }
 
-  const isBlocking = flowStep.step === 'processing' || flowStep.step === 'pending';
+  const isBlocking = flowStep.step === 'processing' || flowStep.step === 'pending' || flowStep.step === 'activating';
   const isWide = flowStep.step === 'select';
 
   return (
@@ -258,6 +404,13 @@ export function CheckoutFlow({
             currentTier={currentTier}
             lifecycleState={lifecycleState}
             onSelectPlan={handleSelectPlan}
+          />
+        )}
+
+        {flowStep.step === 'reactivate' && (
+          <ReactivateStep
+            currentTier={flowStep.targetTier}
+            onConfirm={() => setFlowStep({ step: 'review', targetTier: flowStep.targetTier })}
           />
         )}
 
@@ -291,6 +444,29 @@ export function CheckoutFlow({
         {flowStep.step === 'processing' && <ProcessingStep />}
 
         {flowStep.step === 'pending' && <PendingStep />}
+
+        {flowStep.step === 'activating' && <ActivatingStep />}
+
+        {flowStep.step === 'upi-limitation' && (
+          <UpiLimitationStep
+            currentTier={currentTier}
+            targetTier={flowStep.targetTier}
+            onCancel={handleUpiCancel}
+            onClose={() => handleOpenChange(false)}
+            isLoading={isApiLoading}
+          />
+        )}
+
+        {flowStep.step === 'cancellation-scheduled' && (
+          <CancellationScheduledStep
+            currentTier={currentTier}
+            periodEnd={flowStep.periodEnd}
+            onDone={() => {
+              handleOpenChange(false);
+              onSubscriptionChange?.();
+            }}
+          />
+        )}
 
         {flowStep.step === 'success' && (
           <SuccessStep
@@ -412,6 +588,190 @@ function CancelledStep({ onClose }: { onClose: () => void }) {
         No changes were made to your subscription.
       </p>
       <Button className="mt-6" variant="outline" onClick={onClose}>Close</Button>
+    </div>
+  );
+}
+
+function ActivatingStep() {
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+      <Loader2 className="size-10 animate-spin text-primary" />
+      <h2 className="mt-4 text-lg font-semibold text-foreground">
+        Activating your subscription...
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Payment confirmed. We&rsquo;re activating your plan — this usually takes a few seconds.
+      </p>
+    </div>
+  );
+}
+
+// ─── Razorpay Checkout JS ────────────────────────────────────────────────────
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: Record<string, string>) => void) => void;
+    };
+  }
+}
+
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay Checkout'));
+    document.head.appendChild(script);
+  });
+}
+
+async function openRazorpayCheckout(params: {
+  keyId: string;
+  subscriptionId: string;
+  targetTier: PlanTier;
+  prefill: { name: string | null; email: string | null; contact: string | null };
+  onSuccess: (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => void;
+  onDismiss: () => void;
+}): Promise<void> {
+  await loadRazorpayScript();
+
+  if (!window.Razorpay) {
+    throw new Error('Razorpay Checkout not available');
+  }
+
+  // Build prefill from the user's actual Tickif profile data.
+  // Only include fields that have values — Razorpay handles missing fields gracefully.
+  const prefill: Record<string, string> = {};
+  if (params.prefill.name) prefill.name = params.prefill.name;
+  if (params.prefill.email) prefill.email = params.prefill.email;
+  if (params.prefill.contact) prefill.contact = params.prefill.contact;
+
+  const rzp = new window.Razorpay({
+    key: params.keyId,
+    subscription_id: params.subscriptionId,
+    name: 'Tickif',
+    description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
+    ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
+    handler: (response: Record<string, string>) => {
+      params.onSuccess({
+        razorpay_payment_id: response.razorpay_payment_id ?? '',
+        razorpay_subscription_id: response.razorpay_subscription_id ?? '',
+        razorpay_signature: response.razorpay_signature ?? '',
+      });
+    },
+    modal: {
+      ondismiss: () => {
+        params.onDismiss();
+      },
+    },
+    theme: {
+      color: '#FF8F73',
+    },
+  });
+
+  rzp.open();
+}
+
+// ─── UPI Limitation Flow ─────────────────────────────────────────────────────
+
+function UpiLimitationStep({
+  currentTier,
+  targetTier,
+  onCancel,
+  onClose,
+  isLoading,
+}: {
+  currentTier: PlanTier;
+  targetTier: PlanTier;
+  onCancel: () => void;
+  onClose: () => void;
+  isLoading?: boolean;
+}) {
+  const current = PLAN_MAP[currentTier];
+  const target = PLAN_MAP[targetTier];
+
+  return (
+    <div className="flex flex-col items-center py-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
+        <AlertCircle className="size-8 text-yellow-600" />
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Plan change unavailable
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Your current {current?.label} subscription uses UPI, which does not support
+        plan changes. To switch to {target?.label}, cancel your current subscription
+        and subscribe again on the new plan.
+      </p>
+      <p className="mt-3 max-w-sm text-xs text-muted-foreground">
+        Your {current?.label} access will remain active until the end of your current
+        billing period after cancellation. You can pay with any supported method
+        (card, UPI, etc.) when you resubscribe.
+      </p>
+      <div className="mt-6 flex gap-3">
+        <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          Not Now
+        </Button>
+        <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
+          {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CancellationScheduledStep({
+  currentTier,
+  periodEnd,
+  onDone,
+}: {
+  currentTier: PlanTier;
+  periodEnd: string | null;
+  onDone: () => void;
+}) {
+  const current = PLAN_MAP[currentTier];
+
+  const formattedEnd = (() => {
+    if (!periodEnd) return null;
+    try {
+      const d = new Date(periodEnd);
+      if (Number.isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      }).format(d);
+    } catch {
+      return null;
+    }
+  })();
+
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center py-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
+        <CheckCircle2 className="size-8 text-primary" />
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">
+        Cancellation scheduled
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Your {current?.label} subscription will remain active
+        {formattedEnd ? ` until ${formattedEnd}` : ' until the end of your current billing period'}.
+        After that, your account will automatically move to the Hobby plan.
+      </p>
+      <p className="mt-2 max-w-sm text-xs text-muted-foreground">
+        You can subscribe again on a new plan at any time after the current period ends.
+      </p>
+      <Button className="mt-6" onClick={onDone}>
+        Done
+      </Button>
     </div>
   );
 }

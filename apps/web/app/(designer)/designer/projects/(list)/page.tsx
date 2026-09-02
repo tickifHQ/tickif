@@ -33,7 +33,9 @@ function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseProjectQuery(searchParams: Record<string, string | string[] | undefined>): ListProjectsQuery {
+function parseProjectQuery(
+  searchParams: Record<string, string | string[] | undefined>,
+): ListProjectsQuery {
   const raw = {
     status: firstParam(searchParams.status),
     q: firstParam(searchParams.q) || undefined,
@@ -46,15 +48,19 @@ function parseProjectQuery(searchParams: Record<string, string | string[] | unde
 }
 
 async function fetchProjects(query: ListProjectsQuery, cookie: string | null) {
-  if (!cookie) return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
+  if (!cookie) {
+    return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
+  }
 
   try {
     const response = await api.api.projects.$get({ query }, { headers: { cookie } });
-    if (!response.ok) return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
+    if (!response.ok)
+      return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
 
     const payload = await response.json();
     const parsed = listProjectsResponseSchema.safeParse(payload);
-    if (!parsed.success) return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
+    if (!parsed.success)
+      return { ok: false as const, data: emptyProjects, message: 'Could not load projects.' };
 
     return { ok: true as const, data: parsed.data };
   } catch {
@@ -92,10 +98,7 @@ export default async function DesignerProjectsPage({ searchParams }: DesignerPro
   await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
   const params = await searchParams;
   const query = parseProjectQuery(params);
-  const [projects, tabCounts] = await Promise.all([
-    getProjects(query),
-    getProjectTabCounts(query),
-  ]);
+  const [projects, tabCounts] = await Promise.all([getProjects(query), getProjectTabCounts(query)]);
 
   return (
     <DesignerProjectsList

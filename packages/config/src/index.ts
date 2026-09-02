@@ -120,6 +120,11 @@ const envSchema = z.object({
   // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links
   // resolve to the same origin in every environment.
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  OWNERSHIP_TRANSFER_EXPIRY_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(7 * 24 * 60 * 60),
 
   // SMS provider. Selection is explicit; credentials and workflows are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),

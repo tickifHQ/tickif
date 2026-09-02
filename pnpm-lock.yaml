@@ -307,6 +307,9 @@ importers:
       '@dicebear/styles':
         specifier: 'catalog:'
         version: 10.2.0
+      '@repo/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@repo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

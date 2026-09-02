@@ -9,6 +9,7 @@ import type {
   CurrentProfileResponse,
   UpdateProfileInput,
 } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import { profilesRepository, type DesignerProfileRecord } from './repository.js';
@@ -428,7 +429,11 @@ export const profilesService = {
     }
 
     // Authz FIRST — don't leak profile existence to non-writers
-    const canWrite = await orgsService.isWriter(userId, activeOrgId);
+    const canWrite = await orgsService.hasCapability(
+      userId,
+      activeOrgId,
+      ORGANIZATION_CAPABILITY.EDIT_ORGANIZATION,
+    );
     if (!canWrite) {
       throw AppError.forbidden('Insufficient org role to update this profile');
     }

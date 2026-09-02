@@ -19,7 +19,7 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
 }));
 
 vi.mock('../../../src/modules/orgs/service.js', () => ({
-  orgsService: { isMember: vi.fn() },
+  orgsService: { getCapabilities: vi.fn() },
 }));
 
 const { leadsService } = await import('../../../src/modules/leads/service.js');
@@ -58,7 +58,7 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(orgsService.isMember).mockResolvedValue(true);
+  vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
 });
 
 describe('leadsService.list', () => {
@@ -98,7 +98,7 @@ describe('leadsService.list', () => {
 describe('leadsService.getById', () => {
   it('requires organization membership for lead reads', async () => {
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
-    vi.mocked(orgsService.isMember).mockResolvedValue(false);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue(null);
 
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toBeInstanceOf(AppError);
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
@@ -114,7 +114,7 @@ describe('leadsService.getById', () => {
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
       status: 404,
     });
-    expect(orgsService.isMember).not.toHaveBeenCalled();
+    expect(orgsService.getCapabilities).not.toHaveBeenCalled();
   });
 });
 
@@ -169,7 +169,7 @@ describe('leadsService.update', () => {
 
 describe('leadsService.create', () => {
   it('validates organization membership, budget taxonomy, and referred project org', async () => {
-    vi.mocked(orgsService.isMember).mockResolvedValue(true);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(true);
     vi.mocked(leadsRepository.findProjectOrganization).mockResolvedValue('org_1');
     vi.mocked(leadsRepository.create).mockResolvedValue(leadDetailRow());
@@ -194,7 +194,7 @@ describe('leadsService.create', () => {
   });
 
   it('rejects invalid budget bands', async () => {
-    vi.mocked(orgsService.isMember).mockResolvedValue(true);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(false);
 
     await expect(

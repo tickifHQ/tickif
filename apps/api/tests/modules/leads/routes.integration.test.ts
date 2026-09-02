@@ -102,7 +102,7 @@ describe('GET /api/leads', () => {
       id: `mem-duplicate-${userId}`,
       organizationId: designer.orgId,
       userId,
-      role: 'owner',
+      role: 'member',
       createdAt: new Date(),
     });
 

@@ -19,7 +19,7 @@ vi.mock('../../../src/modules/profiles/repository.js', () => {
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
     isMember: vi.fn(),
-    isWriter: vi.fn(),
+    hasCapability: vi.fn(),
   },
 }));
 
@@ -61,6 +61,7 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
 });
 
 describe('profilesService.getCompletion', () => {
