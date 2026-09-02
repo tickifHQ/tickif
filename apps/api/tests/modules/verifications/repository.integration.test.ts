@@ -224,4 +224,168 @@ describe('verification repository lifecycle', () => {
       attempt: 2,
     });
   });
+
+  it('requires every rejected current document to be replaced before resubmission', async () => {
+    const { owner, organization, profile, application } = await setupApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    await Promise.all([
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+    ]);
+    const businessDocument = await verificationsRepository.reserveDocumentVersion({
+      applicationId: application.id,
+      documentVersionId: '6a29d745-f375-49ab-b21d-61bc7551c764',
+      type: 'gst_registration_certificate',
+      objectKey: 'verification-documents/org/business-version',
+      contentType: 'application/pdf',
+      contentLength: 1000,
+      userId: owner.id,
+    });
+    const personalDocument = await verificationsRepository.reserveDocumentVersion({
+      applicationId: application.id,
+      documentVersionId: '32631776-953f-4388-a635-c74b9e8959ab',
+      type: 'personal_pan',
+      objectKey: 'verification-documents/org/personal-version',
+      contentType: 'application/pdf',
+      contentLength: 1000,
+      userId: owner.id,
+    });
+    expect(typeof businessDocument).not.toBe('string');
+    expect(typeof personalDocument).not.toBe('string');
+    if (typeof businessDocument === 'string' || typeof personalDocument === 'string') return;
+    await verificationsRepository.commitDocument(businessDocument.id, organization.id);
+    await verificationsRepository.commitDocument(personalDocument.id, organization.id);
+    await verificationsRepository.submit({
+      applicationId: application.id,
+      userId: owner.id,
+      expectedStatus: VERIFICATION_APPLICATION_STATUS.DRAFT,
+    });
+    await verificationsRepository.review({
+      applicationId: application.id,
+      reviewerId: reviewer.id,
+      decision: 'reject',
+      rejection: {
+        note: 'Upload a clearer PAN card.',
+        rejectedDocumentVersionIds: [personalDocument.id],
+      },
+    });
+
+    await expect(
+      verificationsRepository.submit({
+        applicationId: application.id,
+        userId: owner.id,
+        expectedStatus: VERIFICATION_APPLICATION_STATUS.REJECTED,
+      }),
+    ).resolves.toBe(VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS);
+
+    const replacement = await verificationsRepository.reserveDocumentVersion({
+      applicationId: application.id,
+      documentVersionId: '6128912e-c2f9-4245-b89b-a43f9acfdd74',
+      type: 'personal_pan',
+      objectKey: 'verification-documents/org/personal-replacement',
+      contentType: 'application/pdf',
+      contentLength: 1200,
+      userId: owner.id,
+    });
+    expect(typeof replacement).not.toBe('string');
+    if (typeof replacement === 'string') return;
+    await verificationsRepository.commitDocument(replacement.id, organization.id);
+
+    await expect(
+      verificationsRepository.submit({
+        applicationId: application.id,
+        userId: owner.id,
+        expectedStatus: VERIFICATION_APPLICATION_STATUS.REJECTED,
+      }),
+    ).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.PENDING,
+      attempt: 2,
+    });
+  });
+
+  it('does not approve an application after its eligibility becomes stale', async () => {
+    const { owner, organization, profile, application } = await setupApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    await Promise.all([
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+    ]);
+    const document = await verificationsRepository.reserveDocumentVersion({
+      applicationId: application.id,
+      documentVersionId: 'f02f365d-a3a6-41d2-a87d-b1f016bbfdf7',
+      type: 'gst_registration_certificate',
+      objectKey: 'verification-documents/org/stale-eligibility',
+      contentType: 'application/pdf',
+      contentLength: 1000,
+      userId: owner.id,
+    });
+    expect(typeof document).not.toBe('string');
+    if (typeof document === 'string') return;
+    await verificationsRepository.commitDocument(document.id, organization.id);
+    await verificationsRepository.submit({
+      applicationId: application.id,
+      userId: owner.id,
+      expectedStatus: VERIFICATION_APPLICATION_STATUS.DRAFT,
+    });
+    await db
+      .update(schema.user)
+      .set({ phoneNumberVerified: false })
+      .where(eq(schema.user.id, owner.id));
+
+    await expect(
+      verificationsRepository.review({
+        applicationId: application.id,
+        reviewerId: reviewer.id,
+        decision: 'approve',
+        expiresAt: new Date('2026-11-01T00:00:00.000Z'),
+      }),
+    ).resolves.toBe('ineligible');
+    const [storedApplication] = await db
+      .select()
+      .from(schema.verificationApplication)
+      .where(eq(schema.verificationApplication.id, application.id));
+    expect(storedApplication?.status).toBe(VERIFICATION_APPLICATION_STATUS.PENDING);
+  });
+
+  it('does not approve after the published project count drops below the requirement', async () => {
+    const { owner, organization, profile, application } = await setupApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    const projects = await Promise.all([
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+      makeProject({ designerId: profile.id, status: 'published' }),
+    ]);
+    const document = await verificationsRepository.reserveDocumentVersion({
+      applicationId: application.id,
+      documentVersionId: '818730f0-c9fb-43c3-958d-5a139dff3986',
+      type: 'gst_registration_certificate',
+      objectKey: 'verification-documents/org/stale-project-count',
+      contentType: 'application/pdf',
+      contentLength: 1000,
+      userId: owner.id,
+    });
+    expect(typeof document).not.toBe('string');
+    if (typeof document === 'string') return;
+    await verificationsRepository.commitDocument(document.id, organization.id);
+    await verificationsRepository.submit({
+      applicationId: application.id,
+      userId: owner.id,
+      expectedStatus: VERIFICATION_APPLICATION_STATUS.DRAFT,
+    });
+    await db
+      .update(schema.project)
+      .set({ status: 'draft' })
+      .where(eq(schema.project.id, projects[0]!.id));
+
+    await expect(
+      verificationsRepository.review({
+        applicationId: application.id,
+        reviewerId: reviewer.id,
+        decision: 'approve',
+        expiresAt: new Date('2026-11-01T00:00:00.000Z'),
+      }),
+    ).resolves.toBe(VERIFICATION_MUTATION_RESULT.INELIGIBLE);
+  });
 });

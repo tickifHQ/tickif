@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ORGANIZATION_CAPABILITY,
+  MIN_VERIFICATION_PUBLISHED_PROJECTS,
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
@@ -34,7 +35,6 @@ import {
   type VerificationDocumentRecord,
 } from './repository.js';
 
-const MIN_PUBLISHED_PROJECTS = 3;
 const personalIdentityDocumentTypes = new Set<VerificationDocumentRecord['type']>(
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
 );
@@ -147,7 +147,7 @@ function eligibility(
   const phoneVerified = context.ownerPhoneVerified && !!context.ownerPhone;
   const legalNamePresent = context.ownerName.trim().length >= 2;
   const businessDocumentPresent = hasBusinessDocument(documents);
-  const enoughProjects = context.publishedProjectCount >= MIN_PUBLISHED_PROJECTS;
+  const enoughProjects = context.publishedProjectCount >= MIN_VERIFICATION_PUBLISHED_PROJECTS;
   return {
     eligible: phoneVerified && legalNamePresent && businessDocumentPresent && enoughProjects,
     phoneVerified: { met: phoneVerified, label: 'Verify the account owner phone number' },
@@ -158,9 +158,9 @@ function eligibility(
     },
     publishedProjects: {
       met: enoughProjects,
-      label: `Publish at least ${MIN_PUBLISHED_PROJECTS} projects`,
+      label: `Publish at least ${MIN_VERIFICATION_PUBLISHED_PROJECTS} projects`,
       current: context.publishedProjectCount,
-      required: MIN_PUBLISHED_PROJECTS,
+      required: MIN_VERIFICATION_PUBLISHED_PROJECTS,
     },
   };
 }
@@ -398,10 +398,14 @@ export const verificationsService = {
       verificationsRepository.hasIncompleteDocument(context.application.id),
     ]);
     const currentEligibility = eligibility(context, documents);
-    if (!currentEligibility.eligible || hasIncompleteDocument) {
+    const hasRejectedDocument = documents.some(
+      (document) => document.status === VERIFICATION_DOCUMENT_STATUS.REJECTED,
+    );
+    if (!currentEligibility.eligible || hasIncompleteDocument || hasRejectedDocument) {
       throw AppError.unprocessable('Verification eligibility requirements are not met', {
         eligibility: currentEligibility,
         hasIncompleteDocument,
+        hasRejectedDocument,
       });
     }
     const result = await verificationsRepository.submit({
@@ -466,6 +470,9 @@ export const verificationsService = {
     }
     if (result === VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS) {
       throw AppError.unprocessable('Verification has no reviewable documents');
+    }
+    if (result === VERIFICATION_MUTATION_RESULT.INELIGIBLE) {
+      throw AppError.unprocessable('Verification eligibility requirements are no longer met');
     }
     if (typeof result === 'string') {
       throw AppError.invalidTransition('Verification application is no longer pending');

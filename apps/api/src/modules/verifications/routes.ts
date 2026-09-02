@@ -248,7 +248,7 @@ const approveAdminRoute = createRoute({
     403: errorJson('Admin role required'),
     404: errorJson('Verification application not found'),
     409: errorJson('Verification state changed'),
-    422: errorJson('Verification has no reviewable documents'),
+    422: errorJson('Reviewable documents and current eligibility are required'),
   },
 });
 

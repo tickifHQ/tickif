@@ -34,6 +34,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     STATE_CHANGED: 'state_changed',
     DOCUMENT_NOT_FOUND: 'document_not_found',
     INVALID_DOCUMENTS: 'invalid_documents',
+    INELIGIBLE: 'ineligible',
   },
   hasBusinessDocument: vi.fn((documents: Array<{ type: string; status: string }>) =>
     documents.some(
@@ -250,6 +251,34 @@ describe('verificationsService', () => {
         businessDocumentPresent: { met: false },
       },
     });
+    await expect(verificationsService.submit(caller)).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
+    });
+    expect(verificationsRepository.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects resubmission while an optional identity document still needs replacement', async () => {
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: {
+        ...application,
+        status: VERIFICATION_APPLICATION_STATUS.REJECTED,
+        submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+        reviewedAt: new Date('2026-08-02T00:00:00.000Z'),
+      },
+    });
+    vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([
+      { ...document, status: VERIFICATION_DOCUMENT_STATUS.VERIFIED },
+      {
+        ...document,
+        id: '668388de-2aa9-4aaf-afda-d352ad198169',
+        slotId: 'd9012a16-f987-4109-9b3b-b5d7e195b6dc',
+        type: 'personal_pan',
+        status: VERIFICATION_DOCUMENT_STATUS.REJECTED,
+      },
+    ]);
+
     await expect(verificationsService.submit(caller)).rejects.toMatchObject({
       code: 'validation_error',
       status: 422,
@@ -551,6 +580,15 @@ describe('verificationsService', () => {
     expect(presignDownload).toHaveBeenCalledWith({
       key: document.objectKey,
       expiresIn: 60,
+    });
+  });
+
+  it('returns a validation error when approval eligibility is no longer met', async () => {
+    vi.mocked(verificationsRepository.review).mockResolvedValue('ineligible');
+
+    await expect(verificationsService.approve(application.id, 'reviewer-1')).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
     });
   });
 

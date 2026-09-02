@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const MIN_VERIFICATION_PUBLISHED_PROJECTS = 3;
+
 export const VERIFICATION_APPLICATION_STATUS = {
   DRAFT: 'draft',
   PENDING: 'pending',

@@ -285,6 +285,30 @@ describe('verification route authorization', () => {
     );
   });
 
+  it('rejects approval when eligibility changed after submission', async () => {
+    const submission = await submitEligibleVerification('+919800000079');
+    const admin = await createRoleSession('+919800000080', PLATFORM_ROLE.ADMIN);
+    await db
+      .update(schema.user)
+      .set({ phoneNumberVerified: false })
+      .where(eq(schema.user.id, submission.userId));
+
+    const response = await client.api.admin.verifications[':id'].approve.$post(
+      { param: { id: submission.applicationId } },
+      { headers: { cookie: admin.cookie } },
+    );
+
+    expect(response.status).toBe(422);
+    expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
+      false,
+    );
+    const [storedApplication] = await db
+      .select()
+      .from(schema.verificationApplication)
+      .where(eq(schema.verificationApplication.id, submission.applicationId));
+    expect(storedApplication?.status).toBe('pending');
+  });
+
   it('validates upload metadata before reserving a document', async () => {
     const { cookie } = await designerWorkspace();
     const response = await client.api.verifications.documents['upload-url'].$post(

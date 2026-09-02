@@ -231,6 +231,28 @@ describe('DesignerVerification', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('blocks resubmission until a rejected optional identity document is replaced', () => {
+    const initialState = draftState();
+    render(
+      <DesignerVerification
+        initialState={rejectedState({
+          eligibility: initialState.eligibility,
+          documents: [
+            { ...verifiedState.documents[0]!, status: 'verified' },
+            {
+              ...verifiedState.documents[0]!,
+              id: '55555555-5555-4555-8555-555555555555',
+              type: 'personal_pan',
+              status: 'rejected',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeDisabled();
+  });
+
   it('does not expose raw infrastructure errors from verification actions', async () => {
     const user = userEvent.setup();
     mock.submit.mockRejectedValue(new Error('fetch failed: ECONNREFUSED 127.0.0.1:3001'));

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import type {
-  AdminVerificationDetailResponse,
-  AdminVerificationQueueResponse,
-  VerificationDocumentType,
+import {
+  BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+  VERIFICATION_DOCUMENT_STATUS,
+  type AdminVerificationDetailResponse,
+  type AdminVerificationQueueResponse,
+  type VerificationDocumentType,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
@@ -51,6 +53,10 @@ import {
 } from '@/lib/admin-verification-api';
 
 type ReviewIntent = 'approve' | 'request_changes';
+
+const businessDocumentTypes = new Set<VerificationDocumentType>(
+  BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+);
 
 const documentLabels: Record<VerificationDocumentType, string> = {
   personal_pan: 'Personal PAN',
@@ -207,6 +213,23 @@ function ReviewDetail({
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<ReviewIntent | null>(null);
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const hasReviewableBusinessDocument = documents.some(
+    (document) =>
+      businessDocumentTypes.has(document.type) &&
+      (document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
+        document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED),
+  );
+  const hasOnlyReviewableDocuments = documents.every(
+    (document) =>
+      document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
+      document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+  );
+  const approvalEligible =
+    eligibility.phoneVerified.met &&
+    eligibility.publishedProjects.met &&
+    application.ownerName.trim().length >= 2 &&
+    hasReviewableBusinessDocument &&
+    hasOnlyReviewableDocuments;
 
   function openReviewConfirmation(intent: ReviewIntent) {
     setReviewIntent(intent);
@@ -471,7 +494,7 @@ function ReviewDetail({
               <Button
                 type="button"
                 onClick={() => openReviewConfirmation('approve')}
-                disabled={busyAction !== null}
+                disabled={busyAction !== null || !approvalEligible}
               >
                 <CheckCircle2 className="size-4" aria-hidden="true" />
                 Approve verification

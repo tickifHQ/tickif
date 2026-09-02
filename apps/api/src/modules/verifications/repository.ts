@@ -1,5 +1,6 @@
 import {
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+  MIN_VERIFICATION_PUBLISHED_PROJECTS,
   ORGANIZATION_MEMBER_ROLE,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
@@ -56,6 +57,7 @@ export const VERIFICATION_MUTATION_RESULT = {
   STATE_CHANGED: 'state_changed',
   DOCUMENT_NOT_FOUND: 'document_not_found',
   INVALID_DOCUMENTS: 'invalid_documents',
+  INELIGIBLE: 'ineligible',
 } as const;
 
 type VerificationMutationFailure =
@@ -567,13 +569,21 @@ export const verificationsRepository = {
       const hasIncompleteDocument = currentDocuments.some(
         (document) => document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
       );
+      const hasRejectedDocument = currentDocuments.some(
+        (document) => document.status === VERIFICATION_DOCUMENT_STATUS.REJECTED,
+      );
       const hasCurrentBusinessDocument = currentDocuments.some(
         (document) =>
           businessTypes.has(document.type) &&
           (document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
             document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED),
       );
-      if (hasIncompleteDocument || !hasCurrentBusinessDocument || (projectCount?.value ?? 0) < 3) {
+      if (
+        hasIncompleteDocument ||
+        hasRejectedDocument ||
+        !hasCurrentBusinessDocument ||
+        (projectCount?.value ?? 0) < MIN_VERIFICATION_PUBLISHED_PROJECTS
+      ) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
       }
       const nextAttempt =
@@ -746,7 +756,11 @@ export const verificationsRepository = {
       }
 
       const documentRows = await tx
-        .select({ id: schema.verificationDocumentVersion.id })
+        .select({
+          id: schema.verificationDocumentVersion.id,
+          type: schema.verificationDocumentSlot.type,
+          status: schema.verificationDocumentVersion.status,
+        })
         .from(schema.verificationDocumentVersion)
         .innerJoin(
           schema.verificationDocumentSlot,
@@ -755,10 +769,6 @@ export const verificationsRepository = {
         .where(
           and(
             eq(schema.verificationDocumentSlot.applicationId, application.id),
-            inArray(schema.verificationDocumentVersion.status, [
-              VERIFICATION_DOCUMENT_STATUS.UPLOADED,
-              VERIFICATION_DOCUMENT_STATUS.VERIFIED,
-            ]),
             sql`not exists (
               select 1 from verification_document_version newer
               where newer.slot_id = ${schema.verificationDocumentVersion.slotId}
@@ -766,7 +776,12 @@ export const verificationsRepository = {
             )`,
           ),
         );
-      const currentIds = documentRows.map((row) => row.id);
+      const reviewableDocuments = documentRows.filter(
+        (document) =>
+          document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
+          document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+      );
+      const currentIds = reviewableDocuments.map((row) => row.id);
       if (currentIds.length === 0) return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
 
       const requestedRejectedIds = input.rejection?.rejectedDocumentVersionIds;
@@ -779,6 +794,55 @@ export const verificationsRepository = {
       const approved = input.decision === 'approve';
       if (!approved && rejectedIds.length === 0) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
+      }
+      if (approved) {
+        const [profile] = await tx
+          .select({ id: schema.designerProfile.id })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.orgId, application.organizationId))
+          .limit(1);
+        const [owner] = await tx
+          .select({
+            name: schema.user.name,
+            phone: schema.user.phoneNumber,
+            phoneVerified: schema.user.phoneNumberVerified,
+          })
+          .from(schema.member)
+          .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+          .where(
+            and(eq(schema.member.organizationId, application.organizationId), ownerRolePredicate()),
+          )
+          .orderBy(asc(schema.member.createdAt), asc(schema.member.id))
+          .limit(1);
+        if (
+          !profile ||
+          !owner ||
+          !owner.phone ||
+          owner.phoneVerified !== true ||
+          owner.name.trim().length < 2 ||
+          documentRows.some(
+            (document) =>
+              document.status !== VERIFICATION_DOCUMENT_STATUS.UPLOADED &&
+              document.status !== VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+          )
+        ) {
+          return VERIFICATION_MUTATION_RESULT.INELIGIBLE;
+        }
+        const [projectCount] = await tx
+          .select({ value: sql<number>`count(*)::int` })
+          .from(schema.project)
+          .where(
+            and(eq(schema.project.designerId, profile.id), eq(schema.project.status, 'published')),
+          );
+        const businessTypes = new Set<VerificationDocumentType>(
+          BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+        );
+        if (
+          (projectCount?.value ?? 0) < MIN_VERIFICATION_PUBLISHED_PROJECTS ||
+          !reviewableDocuments.some((document) => businessTypes.has(document.type))
+        ) {
+          return VERIFICATION_MUTATION_RESULT.INELIGIBLE;
+        }
       }
       const nextStatus = approved
         ? VERIFICATION_APPLICATION_STATUS.VERIFIED

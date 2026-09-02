@@ -154,6 +154,23 @@ describe('AdminVerificationQueue', () => {
     await waitFor(() => expect(mock.fetchQueue).toHaveBeenCalledWith(1));
   });
 
+  it('keeps approval disabled when live eligibility is no longer met', async () => {
+    const user = userEvent.setup();
+    mock.fetchDetail.mockResolvedValue({
+      ...detail,
+      eligibility: {
+        ...detail.eligibility,
+        phoneVerified: { ...detail.eligibility.phoneVerified, met: false },
+      },
+    });
+    render(<AdminVerificationQueue initialQueue={queue} />);
+
+    await user.click(screen.getByRole('button', { name: /open verification for studio north/i }));
+
+    expect(await screen.findByRole('button', { name: 'Approve verification' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Request changes' })).toBeEnabled();
+  });
+
   it('requires feedback and sends selected documents when declining', async () => {
     const user = userEvent.setup();
     render(<AdminVerificationQueue initialQueue={queue} />);
