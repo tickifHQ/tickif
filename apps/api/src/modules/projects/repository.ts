@@ -1,10 +1,7 @@
 import { ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
-import {
-  SELF_SERVICE_MODERATION_ACTIONS,
-  VERIFICATION_APPLICATION_STATUS,
-} from '@repo/contracts';
+import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -1055,54 +1052,6 @@ export const projectsRepository = {
       imageCount: row?.imageCount ?? 0,
       taggedImageCount: row?.taggedImageCount ?? 0,
     };
-  },
-
-  async deleteProject(id: string): Promise<'deleted' | 'moderated' | 'missing'> {
-    return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ id: schema.project.id })
-        .from(schema.project)
-        .where(eq(schema.project.id, id))
-        .for('update')
-        .limit(1);
-      if (!project) return 'missing';
-
-      // Only a reviewer verdict is worth retaining. A project the designer submitted and then
-      // withdrew has history but no verdict, and blocking on that stranded such drafts
-      // permanently — nothing could ever clear them.
-      const [reviewedEvent] = await tx
-        .select({ id: schema.projectModerationEvent.id })
-        .from(schema.projectModerationEvent)
-        .where(
-          and(
-            eq(schema.projectModerationEvent.projectId, id),
-            notInArray(schema.projectModerationEvent.action, [...SELF_SERVICE_MODERATION_ACTIONS]),
-          ),
-        )
-        .limit(1);
-      const [reviewComment] = await tx
-        .select({ id: schema.projectReviewComment.id })
-        .from(schema.projectReviewComment)
-        .where(eq(schema.projectReviewComment.projectId, id))
-        .limit(1);
-      if (reviewedEvent || reviewComment) return 'moderated';
-
-      // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
-      // even if the check above ever regresses. Self-service rows must therefore go explicitly.
-      await tx
-        .delete(schema.projectModerationEvent)
-        .where(eq(schema.projectModerationEvent.projectId, id));
-      await tx.delete(schema.project).where(eq(schema.project.id, id));
-      await recordSearchProjectionEvents(tx, [
-        {
-          entityKind: 'project',
-          entityId: id,
-          operation: 'delete',
-          sourceUpdatedAt: new Date(),
-        },
-      ]);
-      return 'deleted';
-    });
   },
 
   async findDesignerByOrgId(orgId: string): Promise<{ id: string; orgId: string } | null> {

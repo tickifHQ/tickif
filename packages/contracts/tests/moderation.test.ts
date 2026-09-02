@@ -19,11 +19,21 @@ describe('moderation contracts', () => {
       'reject',
       'unpublish',
       'metadata_corrected',
+      'archive',
+      'restore',
+      'delete',
     ]);
   });
 
   it('classifies every action as either self-service or a reviewer verdict', () => {
-    expect(SELF_SERVICE_MODERATION_ACTIONS).toEqual(['submit', 'resubmit', 'withdraw']);
+    expect(SELF_SERVICE_MODERATION_ACTIONS).toEqual([
+      'submit',
+      'resubmit',
+      'withdraw',
+      'archive',
+      'restore',
+      'delete',
+    ]);
     // Retention keys off "not self-service", so an unclassified new action must default to
     // being treated as a reviewer verdict rather than silently becoming deletable.
     const reviewerActions = moderationAction.options.filter(

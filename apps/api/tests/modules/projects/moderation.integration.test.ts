@@ -236,7 +236,7 @@ describe('project moderation transitions', () => {
     expect(response.status).toBe(403);
   });
 
-  it('allows deleting a project whose only history is the designer submitting and withdrawing', async () => {
+  it('soft-deletes a withdrawn project while retaining its self-service history', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002087');
     const project = await makeProject({
       designerId: designer.id,
@@ -249,8 +249,6 @@ describe('project moderation transitions', () => {
     });
     expect(withdraw.status).toBe(200);
 
-    // No reviewer ever saw this project, so there is no verdict to retain — blocking here
-    // stranded the draft permanently, with nothing able to clear it.
     const deletion = await app.request(`/api/projects/${project.id}`, {
       method: 'DELETE',
       headers: { cookie },
@@ -264,21 +262,11 @@ describe('project moderation transitions', () => {
         .from(schema.projectModerationEvent)
         .where(eq(schema.projectModerationEvent.projectId, project.id)),
     ]);
-    expect(rows).toHaveLength(0);
-    expect(events).toHaveLength(0);
-    const projectionEvents = await db
-      .select()
-      .from(schema.searchProjectionOutbox)
-      .where(eq(schema.searchProjectionOutbox.entityId, project.id));
-    expect(projectionEvents).toEqual([
-      expect.objectContaining({
-        entityKind: 'project',
-        operation: 'delete',
-      }),
-    ]);
+    expect(rows).toEqual([expect.objectContaining({ status: 'deleted' })]);
+    expect(events.map((event) => event.action)).toEqual(['withdraw', 'delete']);
   });
 
-  it('still refuses to delete a project once a reviewer has acted on it', async () => {
+  it('retains reviewer history when an owner deletes the project', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002090');
     const admin = await makeUser();
     const project = await makeProject({
@@ -288,8 +276,6 @@ describe('project moderation transitions', () => {
     });
     const adminCaller = { userId: admin.id, userRole: 'admin' };
     await transitionProject({ projectId: project.id, toStatus: 'in_review' }, adminCaller);
-    // Ends on changes_requested, which is editable — so the delete reaches the retention
-    // check rather than being turned away for the project's status.
     await transitionProject(
       { projectId: project.id, toStatus: 'changes_requested', note: 'Add room labels.' },
       adminCaller,
@@ -299,7 +285,7 @@ describe('project moderation transitions', () => {
       method: 'DELETE',
       headers: { cookie },
     });
-    expect(deletion.status).toBe(409);
+    expect(deletion.status).toBe(200);
 
     const [rows, events] = await Promise.all([
       db.select().from(schema.project).where(eq(schema.project.id, project.id)),
@@ -308,11 +294,15 @@ describe('project moderation transitions', () => {
         .from(schema.projectModerationEvent)
         .where(eq(schema.projectModerationEvent.projectId, project.id)),
     ]);
-    expect(rows).toHaveLength(1);
-    expect(events.map((event) => event.action)).toEqual(['start_review', 'request_changes']);
+    expect(rows).toEqual([expect.objectContaining({ status: 'deleted' })]);
+    expect(events.map((event) => event.action)).toEqual([
+      'start_review',
+      'request_changes',
+      'delete',
+    ]);
   });
 
-  it('retains a project that has review comments even without a transition verdict', async () => {
+  it('retains review comments on a deleted project', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002093');
     const project = await makeProject({
       designerId: designer.id,
@@ -325,9 +315,15 @@ describe('project moderation transitions', () => {
       headers: { cookie },
     });
 
-    expect(deletion.status).toBe(409);
+    expect(deletion.status).toBe(200);
+    expect(await db.select().from(schema.project).where(eq(schema.project.id, project.id))).toEqual(
+      [expect.objectContaining({ status: 'deleted' })],
+    );
     expect(
-      await db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      await db
+        .select()
+        .from(schema.projectReviewComment)
+        .where(eq(schema.projectReviewComment.projectId, project.id)),
     ).toHaveLength(1);
   });
 

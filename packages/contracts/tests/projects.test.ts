@@ -71,6 +71,21 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
+  it('keeps lifecycle states append-only and exposes archived projects to owners', () => {
+    expect(projectStatus.options).toEqual([
+      'draft',
+      'submitted',
+      'in_review',
+      'published',
+      'rejected',
+      'changes_requested',
+      'archived',
+      'delisted',
+      'deleted',
+    ]);
+    expect(projectListStatus.parse('archived')).toBe('archived');
+  });
+
   it('keeps moderation statuses persisted while using grouped list buckets', () => {
     expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
     expect(projectListStatus.safeParse('changes_requested').success).toBe(false);

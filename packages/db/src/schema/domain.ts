@@ -51,6 +51,9 @@ export const projectStatusEnum = pgEnum('project_status', [
   'published',
   'rejected',
   'changes_requested',
+  'archived',
+  'delisted',
+  'deleted',
 ]);
 
 export const interactionEventTypeEnum = pgEnum(
@@ -70,10 +73,8 @@ export const ownershipTransferRequest = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    initiatorUserId: text('initiator_user_id')
-      .references(() => user.id, { onDelete: 'set null' }),
-    targetUserId: text('target_user_id')
-      .references(() => user.id, { onDelete: 'set null' }),
+    initiatorUserId: text('initiator_user_id').references(() => user.id, { onDelete: 'set null' }),
+    targetUserId: text('target_user_id').references(() => user.id, { onDelete: 'set null' }),
     targetMemberId: text('target_member_id').notNull(),
     status: ownershipTransferStatusEnum('status').default('pending').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -111,8 +112,7 @@ export const ownershipTransferAuditEvent = pgTable(
       .notNull()
       .references(() => ownershipTransferRequest.id, { onDelete: 'cascade' }),
     status: ownershipTransferStatusEnum('status').notNull(),
-    actorUserId: text('actor_user_id')
-      .references(() => user.id, { onDelete: 'set null' }),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -131,6 +131,9 @@ export const moderationActionEnum = pgEnum('moderation_action', [
   'reject',
   'unpublish',
   'metadata_corrected',
+  'archive',
+  'restore',
+  'delete',
 ]);
 
 export const projectReviewCommentStatusEnum = pgEnum('project_review_comment_status', [
