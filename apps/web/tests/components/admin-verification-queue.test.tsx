@@ -214,6 +214,58 @@ describe('AdminVerificationQueue', () => {
     }
   });
 
+  it('keeps the lifecycle tabs horizontally scrollable on narrow screens', () => {
+    render(<AdminVerificationQueue initialQueue={queue} />);
+
+    expect(
+      screen.getByRole('tablist', { name: 'Profile verification queues' }).parentElement,
+    ).toHaveClass('overflow-x-auto');
+  });
+
+  it('moves forward and backward through a multi-page lifecycle queue', async () => {
+    const user = userEvent.setup();
+    const firstPage: AdminVerificationQueueResponse = {
+      ...queue,
+      total: 21,
+      totalPages: 2,
+    };
+    const secondPage: AdminVerificationQueueResponse = {
+      ...firstPage,
+      page: 2,
+      items: [
+        {
+          ...queue.items[0]!,
+          id: '44444444-4444-4444-8444-444444444444',
+          organizationId: 'organization-2',
+          organizationName: 'Studio South',
+          designerName: 'Meera Rao',
+        },
+      ],
+    };
+    mock.fetchQueue.mockImplementation(async (_tab: AdminVerificationQueueTab, page: number) =>
+      page === 2 ? secondPage : firstPage,
+    );
+    render(<AdminVerificationQueue initialQueue={firstPage} />);
+
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByText('Studio South')).toBeInTheDocument();
+    expect(mock.fetchQueue).toHaveBeenLastCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 2);
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+
+    expect(await screen.findByText('Studio North')).toBeInTheDocument();
+    expect(mock.fetchQueue).toHaveBeenLastCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1);
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+  });
+
   it('keeps accepted verification history view-only', async () => {
     const user = userEvent.setup();
     const acceptedQueue: AdminVerificationQueueResponse = {

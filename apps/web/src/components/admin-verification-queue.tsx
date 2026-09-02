@@ -779,19 +779,21 @@ export function AdminVerificationQueue({
       ) : null}
 
       <Tabs value={activeTab} onValueChange={(value) => void changeTab(value)}>
-        <TabsList aria-label="Profile verification queues">
-          {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => (
-            <TabsTrigger key={tab} value={tab} disabled={loadingTab !== null}>
-              {loadingTab === tab ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-              ) : null}
-              {tabLabels[tab]}
-              {queues[tab] ? (
-                <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
-              ) : null}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="max-w-full overflow-x-auto pb-1">
+          <TabsList aria-label="Profile verification queues">
+            {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => (
+              <TabsTrigger key={tab} value={tab} disabled={loadingTab !== null}>
+                {loadingTab === tab ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : null}
+                {tabLabels[tab]}
+                {queues[tab] ? (
+                  <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
+                ) : null}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => {
           const tabQueue = queues[tab] ?? emptyQueue(tab, initialQueue.limit);
