@@ -52,6 +52,7 @@ export type PublicProjectLifecycleRecord = {
   id: string;
   title: string;
   status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
   designerDisplayName: string;
   designerOrgSlug: string;
 };
@@ -80,6 +81,7 @@ export type ProjectTransitionPatch = Partial<
     | 'rejectionReasonCode'
     | 'moderationNote'
     | 'featuredAt'
+    | 'archiveReason'
   >
 >;
 
@@ -1534,6 +1536,7 @@ export const projectsRepository = {
         id: schema.project.id,
         title: schema.project.title,
         status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
         designerDisplayName: schema.designerProfile.displayName,
         designerOrgSlug: schema.organization.slug,
       })

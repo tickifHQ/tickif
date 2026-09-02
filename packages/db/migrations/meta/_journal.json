@@ -330,6 +330,13 @@
       "when": 1788291043351,
       "tag": "0048_chunky_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788374834634,
+      "tag": "0048_lucky_genesis",
+      "breakpoints": true
     }
   ]
 }

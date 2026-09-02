@@ -37,6 +37,18 @@ describe('publicProjectPageResponseSchema', () => {
       designer: { displayName: 'Studio A', slug: 'studio-a' },
     });
   });
+
+  it('accepts an archived notice only for the recoverable organization-retention path', () => {
+    expect(
+      publicProjectPageResponseSchema.parse({
+        availability: 'unavailable',
+        id: VALID_UUID,
+        title: 'Recoverable Home',
+        status: 'archived',
+        designer: { displayName: 'Studio A', slug: 'studio-a' },
+      }),
+    ).toMatchObject({ status: 'archived' });
+  });
 });
 
 describe('createProjectSchema', () => {

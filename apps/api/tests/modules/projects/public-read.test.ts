@@ -67,6 +67,7 @@ function makeProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     slug: 'modern-apartment',
     description: 'A modern apartment design',
     status: 'published',
+    archiveReason: null,
     propertyTypeSlug: 'apartment',
     propertySubtypeSlug: null,
     scopeSlug: 'full-home',
@@ -448,6 +449,7 @@ describe('projectsService.getPublicById', () => {
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Delisted Home',
       status: 'delisted',
+      archiveReason: null,
       designerDisplayName: 'Studio A',
       designerOrgSlug: 'studio-a',
     });
@@ -463,12 +465,48 @@ describe('projectsService.getPublicById', () => {
     });
   });
 
+  it('returns a minimal unavailable response for an organization-retention archive', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Recoverable Home',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).resolves.toMatchObject({
+      availability: 'unavailable',
+      status: 'archived',
+    });
+  });
+
+  it('keeps manually archived projects private', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Manually Archived Home',
+      status: 'archived',
+      archiveReason: 'manual',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   it('returns 410 for a permanently deleted project', async () => {
     vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
     vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
       id: '11111111-1111-4111-8111-111111111111',
       title: 'Deleted Home',
       status: 'deleted',
+      archiveReason: null,
       designerDisplayName: 'Studio A',
       designerOrgSlug: 'studio-a',
     });

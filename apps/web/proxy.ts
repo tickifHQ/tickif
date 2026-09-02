@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
+import { api } from '@/lib/api';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
 
@@ -23,8 +24,38 @@ export function isPublicPath(pathname: string): boolean {
   );
 }
 
-export function proxy(req: NextRequest) {
+const PUBLIC_PROJECT_PATH =
+  /^\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i;
+
+async function deletedProjectResponse(pathname: string): Promise<NextResponse | null> {
+  const projectId = PUBLIC_PROJECT_PATH.exec(pathname)?.[1];
+  if (!projectId) return null;
+
+  try {
+    const response = await api.api.projects.public[':id'].$head({ param: { id: projectId } });
+    if (response.status !== 410) return null;
+  } catch {
+    // The page request remains the source of truth when the API probe is unavailable.
+    return null;
+  }
+
+  return new NextResponse(
+    '<!doctype html><title>Project gone</title><h1>Project no longer available</h1>',
+    {
+      status: 410,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Robots-Tag': 'noindex',
+      },
+    },
+  );
+}
+
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  const gone = await deletedProjectResponse(pathname);
+  if (gone) return gone;
 
   // Optimistic only; requireAuth in the server layouts is the real security boundary.
   const hasSession = !!getSessionCookie(req);

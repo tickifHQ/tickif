@@ -56,6 +56,11 @@ export const projectStatusEnum = pgEnum('project_status', [
   'deleted',
 ]);
 
+export const projectArchiveReasonEnum = pgEnum('project_archive_reason', [
+  'manual',
+  'organization_retention',
+]);
+
 export const interactionEventTypeEnum = pgEnum(
   'interaction_event_type',
   INTERACTION_EVENT_TYPE_VALUES,
@@ -364,6 +369,7 @@ export const project = pgTable(
     slug: text('slug').notNull().unique(),
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
+    archiveReason: projectArchiveReasonEnum('archive_reason'),
     // Project upload drafts store taxonomy slugs denormalized for ergonomic edits;
     // services validate slugs on write while profile footprint remains FK-backed for search.
     propertyTypeSlug: text('property_type_slug'),

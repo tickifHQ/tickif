@@ -89,6 +89,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   slug: 'sunlit-bandra-apartment',
   description: null,
   status: 'published',
+  archiveReason: null,
   propertyTypeSlug: null,
   propertySubtypeSlug: null,
   scopeSlug: null,
@@ -766,6 +767,7 @@ describe('projectsService project lifecycle', () => {
       toStatus: 'archived',
       actorUserId: caller.userId,
       action: 'archive',
+      patch: { archiveReason: 'manual' },
     });
   });
 
@@ -789,6 +791,11 @@ describe('projectsService project lifecycle', () => {
       toStatus: 'draft',
       actorUserId: caller.userId,
       action: 'restore',
+      patch: {
+        archiveReason: null,
+        publishedAt: null,
+        featuredAt: null,
+      },
     });
   });
 

@@ -1340,6 +1340,11 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     const publicRead = await app.request(`/api/projects/public/${project.id}`);
     expect(publicRead.status).toBe(410);
     expect(await publicRead.json()).toMatchObject({ error: { code: 'gone' } });
+
+    const publicStatus = await app.request(`/api/projects/public/${project.id}`, {
+      method: 'HEAD',
+    });
+    expect(publicStatus.status).toBe(410);
   });
 
   it('keeps a no-detail public notice for recoverable delisted projects', async () => {
@@ -1362,6 +1367,25 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
   });
 
+  it('keeps a no-detail public notice for organization-retention archives', async () => {
+    const { designer } = await makeDesignerSession('+919800002064');
+    const project = await makeProject({
+      designerId: designer.id,
+      title: 'Recoverable Archived Home',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+    });
+
+    const publicRead = await app.request(`/api/projects/public/${project.id}`);
+
+    expect(publicRead.status).toBe(200);
+    expect(await publicRead.json()).toMatchObject({
+      availability: 'unavailable',
+      id: project.id,
+      status: 'archived',
+    });
+  });
+
   it('archives a published project, removes it from public reads, and restores it as a draft', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002060');
     await db
@@ -1372,6 +1396,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       designerId: designer.id,
       status: 'published',
       publishedAt: new Date('2026-08-01T00:00:00.000Z'),
+      featuredAt: new Date('2026-08-02T00:00:00.000Z'),
     });
     await makeProjectRoom({ projectId: project.id });
 
@@ -1391,6 +1416,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
         .where(eq(schema.searchProjectionOutbox.entityId, project.id)),
     ]);
     expect(archivedProject?.status).toBe('archived');
+    expect(archivedProject?.archiveReason).toBe('manual');
     expect(archivedDesigner?.projectCount).toBe(0);
     expect(searchEvents).toEqual([
       expect.objectContaining({ entityKind: 'project', operation: 'delete' }),
@@ -1411,16 +1437,26 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       headers: { cookie },
     });
     expect(restore.status).toBe(200);
-    expect(await restore.json()).toMatchObject({ id: project.id, status: 'draft' });
-    expect(
-      await db
-        .select()
-        .from(schema.projectRoom)
-        .where(eq(schema.projectRoom.projectId, project.id)),
-    ).toHaveLength(1);
+    expect(await restore.json()).toMatchObject({
+      id: project.id,
+      status: 'draft',
+      archiveReason: null,
+      publishedAt: null,
+    });
+    const [[restoredProject], rooms] = await Promise.all([
+      db.select().from(schema.project).where(eq(schema.project.id, project.id)),
+      db.select().from(schema.projectRoom).where(eq(schema.projectRoom.projectId, project.id)),
+    ]);
+    expect(restoredProject).toMatchObject({
+      status: 'draft',
+      archiveReason: null,
+      publishedAt: null,
+      featuredAt: null,
+    });
+    expect(rooms).toHaveLength(1);
   });
 
-  it('allows Corporate Members to archive but not delete projects', async () => {
+  it('allows Corporate Members to archive any project in their org but not delete it', async () => {
     const { designer } = await makeDesignerSession('+919800002061');
     const member = await createRoleSession('+919800002062', 'designer');
     await db.insert(schema.member).values({

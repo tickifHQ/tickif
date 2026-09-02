@@ -22,6 +22,11 @@ export const projectStatus = z
   .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
 
+export const projectArchiveReason = z
+  .enum(['manual', 'organization_retention'])
+  .meta({ id: 'ProjectArchiveReason' });
+export type ProjectArchiveReason = z.infer<typeof projectArchiveReason>;
+
 const taxonomySlug = z
   .string()
   .trim()
@@ -162,6 +167,7 @@ export const projectResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     status: projectStatus,
+    archiveReason: projectArchiveReason.nullable(),
     rejectionReasonCode: z.string().nullable(),
     moderationNote: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
@@ -647,6 +653,7 @@ export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommend
 export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .omit({
     designerId: true,
+    archiveReason: true,
     coverImageId: true,
     metadata: true,
     submittedAt: true,
@@ -675,7 +682,7 @@ export const publicProjectUnavailableResponseSchema = z
     availability: z.literal('unavailable'),
     id: z.uuid(),
     title: z.string(),
-    status: z.literal('delisted'),
+    status: z.enum(['delisted', 'archived']),
     designer: z.object({
       displayName: z.string(),
       slug: z.string().nullable(),
