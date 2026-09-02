@@ -29,13 +29,14 @@ export const ac = createAccessControl(statement);
 
 /**
  * The 4 platform roles (must stay in sync with the user_role pgEnum, see ADR 0001).
- * visitor/designer hold no admin-API permissions; admin/superadmin get the full
- * user/session admin set.
+ * Only superadmins may use Better Auth's account-administration endpoints. Platform
+ * admins moderate Tickif through the app's Hono routes and must not be able to create,
+ * promote, ban, or remove privileged accounts through `/api/auth/admin/*`.
  */
 export const roles = {
   [PLATFORM_ROLE.VISITOR]: ac.newRole({ user: [], session: [] }),
   [PLATFORM_ROLE.DESIGNER]: ac.newRole({ user: [], session: [] }),
-  [PLATFORM_ROLE.ADMIN]: ac.newRole({ ...adminAc.statements }),
+  [PLATFORM_ROLE.ADMIN]: ac.newRole({ user: [], session: [] }),
   [PLATFORM_ROLE.SUPERADMIN]: ac.newRole({ ...adminAc.statements }),
 } satisfies Record<PlatformRole, ReturnType<typeof ac.newRole>>;
 

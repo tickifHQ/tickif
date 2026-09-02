@@ -528,9 +528,9 @@ export const auth = betterAuth({
     // Platform RBAC: 4 roles (visitor/designer/admin/superadmin) live on user.role.
     // defaultRole keeps better-auth writing only our values; ac/roles define the four
     // roles so adminRoles validates at startup (rules/auth.md: adminRoles entries MUST
-    // exist in roles). admin and superadmin both pass the /admin/* permission checks.
-    // set-role still does no role-value validation upstream — the user_role pgEnum is
-    // the write backstop (pinned by set-role.integration.test.ts).
+    // exist in roles). Both privileged roles enter the Tickif admin console, but only
+    // superadmin has Better Auth user/session administration permissions. Keeping both
+    // names here also makes Better Auth treat both as protected impersonation targets.
     admin({
       defaultRole: PLATFORM_ROLE.VISITOR,
       ac,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { auth, getSession } from '@repo/auth';
 import { db, schema } from '@repo/db';
 import { makeDesigner } from '@repo/db/testing';
@@ -319,14 +319,29 @@ describe('RBAC matrix: fresh session state (E-184)', () => {
 });
 
 describe('RBAC matrix: escalation attempts (E-89)', () => {
-  function postSetRole(cookie: string, body: { userId: string; role: string }) {
+  function adminRequest(
+    cookie: string,
+    path: string,
+    options: { method?: 'GET' | 'POST'; body?: unknown } = {},
+  ) {
+    const headers: Record<string, string> = { cookie };
+    if (options.body !== undefined) headers['content-type'] = 'application/json';
+
     return auth.handler(
-      new Request('http://localhost:3000/api/auth/admin/set-role', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify(body),
+      new Request(`http://localhost:3000/api/auth/admin/${path}`, {
+        method: options.method ?? 'POST',
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
       }),
     );
+  }
+
+  function postAdminRequest(cookie: string, path: string, body: unknown) {
+    return adminRequest(cookie, path, { body });
+  }
+
+  function postSetRole(cookie: string, body: { userId: string; role: string }) {
+    return postAdminRequest(cookie, 'set-role', body);
   }
 
   it.each(['visitor', 'designer'] as const)(
@@ -345,17 +360,94 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     },
   );
 
-  it('an admin CAN currently mint a superadmin via set-role (deliberate policy lock)', async () => {
-    // adminRoles is ['admin', 'superadmin'] with the full set-role permission, so today an
-    // admin can self-promote to superadmin. This row LOCKS that policy: restricting
-    // superadmin minting to superadmins is a deliberate future change that must edit this.
-    const { cookie, userId } = await createRoleSession('+919800011024', 'admin');
+  it('an admin cannot administer accounts or mint a superadmin through Better Auth', async () => {
+    const admin = await createRoleSession('+919800011024', 'admin');
+    const target = await createRoleSession('+919800011025', 'visitor');
+    const bannedTarget = await createRoleSession('+919800011026', 'visitor');
+    await db
+      .update(schema.user)
+      .set({ banned: true })
+      .where(eq(schema.user.id, bannedTarget.userId));
 
-    const res = await postSetRole(cookie, { userId, role: 'superadmin' });
-    expect(res.ok).toBe(true);
+    const selfPromotion = await postSetRole(admin.cookie, {
+      userId: admin.userId,
+      role: 'superadmin',
+    });
+    const targetPromotion = await postSetRole(admin.cookie, {
+      userId: target.userId,
+      role: 'superadmin',
+    });
+    const updatePromotion = await postAdminRequest(admin.cookie, 'update-user', {
+      userId: target.userId,
+      data: { role: 'superadmin' },
+    });
+    const createPromotion = await postAdminRequest(admin.cookie, 'create-user', {
+      name: 'Unauthorized Superadmin',
+      email: 'unauthorized-superadmin@tickif.test',
+      role: 'superadmin',
+    });
+    const banTarget = await postAdminRequest(admin.cookie, 'ban-user', {
+      userId: target.userId,
+      banReason: 'Unauthorized action',
+    });
+    const removeTarget = await postAdminRequest(admin.cookie, 'remove-user', {
+      userId: target.userId,
+    });
+    const replacePassword = await postAdminRequest(admin.cookie, 'set-user-password', {
+      userId: target.userId,
+      newPassword: 'unauthorized-password-change',
+    });
+    const impersonateTarget = await postAdminRequest(admin.cookie, 'impersonate-user', {
+      userId: target.userId,
+    });
+    const listUsers = await adminRequest(admin.cookie, 'list-users?limit=1', { method: 'GET' });
+    const listSessions = await postAdminRequest(admin.cookie, 'list-user-sessions', {
+      userId: target.userId,
+    });
+    const revokeSession = await postAdminRequest(admin.cookie, 'revoke-user-session', {
+      sessionToken: 'session-token-admin-must-not-revoke',
+    });
+    const revokeSessions = await postAdminRequest(admin.cookie, 'revoke-user-sessions', {
+      userId: target.userId,
+    });
+    const unbanTarget = await postAdminRequest(admin.cookie, 'unban-user', {
+      userId: bannedTarget.userId,
+    });
 
-    const [row] = await db.select().from(schema.user).where(eq(schema.user.id, userId));
-    expect(row!.role).toBe('superadmin');
+    expect(selfPromotion.status).toBe(403);
+    expect(targetPromotion.status).toBe(403);
+    expect(updatePromotion.status).toBe(403);
+    expect(createPromotion.status).toBe(403);
+    expect(banTarget.status).toBe(403);
+    expect(removeTarget.status).toBe(403);
+    expect(replacePassword.status).toBe(403);
+    expect(impersonateTarget.status).toBe(403);
+    expect(listUsers.status).toBe(403);
+    expect(listSessions.status).toBe(403);
+    expect(revokeSession.status).toBe(403);
+    expect(revokeSessions.status).toBe(403);
+    expect(unbanTarget.status).toBe(403);
+
+    const rows = await db
+      .select({ id: schema.user.id, role: schema.user.role, banned: schema.user.banned })
+      .from(schema.user)
+      .where(inArray(schema.user.id, [admin.userId, target.userId, bannedTarget.userId]));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: admin.userId, role: 'admin', banned: false },
+        { id: target.userId, role: 'visitor', banned: false },
+        { id: bannedTarget.userId, role: 'visitor', banned: true },
+      ]),
+    );
+    expect(rows).toHaveLength(3);
+
+    expect(await getSession(new Headers({ cookie: target.cookie }))).not.toBeNull();
+
+    const [created] = await db
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.email, 'unauthorized-superadmin@tickif.test'));
+    expect(created).toBeUndefined();
   });
 
   it('update-user cannot smuggle a role change', async () => {
