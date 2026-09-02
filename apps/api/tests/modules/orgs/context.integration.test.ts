@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { and, db, eq, schema, sql } from '@repo/db';
 import { makeOrganization, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
-import { createRoleSession } from '../../helpers/auth.js';
+import { createAuthedSession, createRoleSession } from '../../helpers/auth.js';
 
 async function createOrganizationContext(phone: string) {
   const account = await createRoleSession(phone, 'designer');
@@ -77,13 +77,100 @@ describe('personal and organization context', () => {
   });
 
   it('restores the last valid organization context on the next request', async () => {
-    const account = await createOrganizationContext('+919800004203');
+    const phone = '+919800004203';
+    const account = await createOrganizationContext(phone);
     await db.insert(schema.userContextPreference).values({
       userId: account.userId,
       contextKind: 'organization',
       organizationId: account.organization.id,
       teamId: account.team.id,
     });
+
+    const nextLogin = await createAuthedSession(phone);
+    const response = await app.request('/api/orgs/context', {
+      headers: { cookie: nextLogin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: account.team.id,
+      },
+    });
+  });
+
+  it('preserves an explicit personal selection on the next login', async () => {
+    const phone = '+919800004210';
+    const account = await createOrganizationContext(phone);
+    expect(
+      (
+        await setContext(account.cookie, {
+          kind: 'organization',
+          organizationId: account.organization.id,
+          teamId: account.team.id,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await setContext(account.cookie, { kind: 'personal' })).status).toBe(200);
+
+    const nextLogin = await createAuthedSession(phone);
+    const response = await app.request('/api/orgs/context', {
+      headers: { cookie: nextLogin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
+  });
+
+  it('revalidates an active session and repairs a later-frozen context to personal', async () => {
+    const account = await createOrganizationContext('+919800004204');
+    expect(
+      (
+        await setContext(account.cookie, {
+          kind: 'organization',
+          organizationId: account.organization.id,
+          teamId: account.team.id,
+        })
+      ).status,
+    ).toBe(200);
+    await db
+      .update(schema.team)
+      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
+      .where(eq(schema.team.id, account.team.id));
+
+    const response = await app.request('/api/orgs/context', {
+      headers: { cookie: account.cookie },
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
+
+    const [session] = await db
+      .select({
+        organizationId: schema.session.activeOrganizationId,
+        teamId: schema.session.activeTeamId,
+      })
+      .from(schema.session)
+      .where(eq(schema.session.userId, account.userId));
+    expect(session).toEqual({ organizationId: null, teamId: null });
+    const [preference] = await db
+      .select()
+      .from(schema.userContextPreference)
+      .where(eq(schema.userContextPreference.userId, account.userId));
+    expect(preference).toMatchObject({
+      contextKind: 'personal',
+      organizationId: null,
+      teamId: null,
+    });
+  });
+
+  it('repairs an incomplete organization session with its default active branch', async () => {
+    const account = await createOrganizationContext('+919800004206');
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: account.organization.id, activeTeamId: null })
+      .where(eq(schema.session.userId, account.userId));
 
     const response = await app.request('/api/orgs/context', {
       headers: { cookie: account.cookie },
@@ -99,35 +186,29 @@ describe('personal and organization context', () => {
     });
   });
 
-  it('rejects frozen context targets and repairs a stale preference to personal', async () => {
-    const account = await createOrganizationContext('+919800004204');
-    await db.insert(schema.userContextPreference).values({
-      userId: account.userId,
-      contextKind: 'organization',
-      organizationId: account.organization.id,
-      teamId: account.team.id,
-    });
-    await db
-      .update(schema.team)
-      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
-      .where(eq(schema.team.id, account.team.id));
+  it('clears both session ids when personal context is selected', async () => {
+    const account = await createOrganizationContext('+919800004207');
+    expect(
+      (
+        await setContext(account.cookie, {
+          kind: 'organization',
+          organizationId: account.organization.id,
+          teamId: account.team.id,
+        })
+      ).status,
+    ).toBe(200);
 
-    const response = await setContext(account.cookie, {
-      kind: 'organization',
-      organizationId: account.organization.id,
-      teamId: account.team.id,
-    });
+    const response = await setContext(account.cookie, { kind: 'personal' });
 
-    expect(response.status).toBe(403);
-    const [preference] = await db
-      .select()
-      .from(schema.userContextPreference)
-      .where(eq(schema.userContextPreference.userId, account.userId));
-    expect(preference).toMatchObject({
-      contextKind: 'personal',
-      organizationId: null,
-      teamId: null,
-    });
+    expect(response.status).toBe(200);
+    const [session] = await db
+      .select({
+        organizationId: schema.session.activeOrganizationId,
+        teamId: schema.session.activeTeamId,
+      })
+      .from(schema.session)
+      .where(eq(schema.session.userId, account.userId));
+    expect(session).toEqual({ organizationId: null, teamId: null });
   });
 
   it('lets a visitor create multiple transactional organizations', async () => {
@@ -164,5 +245,28 @@ describe('personal and organization context', () => {
       .where(eq(schema.user.id, account.userId));
     expect(counts).toEqual({ memberships: 2, branches: 2, profiles: 2 });
     expect(user?.role).toBe('designer');
+  });
+
+  it('keeps admin and superadmin platform roles when creating organizations', async () => {
+    const accounts = [
+      { role: 'admin' as const, phone: '+919800004208' },
+      { role: 'superadmin' as const, phone: '+919800004209' },
+    ];
+    for (const { role, phone } of accounts) {
+      const account = await createRoleSession(phone, role);
+
+      const response = await app.request('/api/orgs', {
+        method: 'POST',
+        headers: { cookie: account.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ entityType: 'individual', userName: `${role} Studio` }),
+      });
+
+      expect(response.status).toBe(201);
+      const [user] = await db
+        .select({ role: schema.user.role })
+        .from(schema.user)
+        .where(eq(schema.user.id, account.userId));
+      expect(user?.role).toBe(role);
+    }
   });
 });

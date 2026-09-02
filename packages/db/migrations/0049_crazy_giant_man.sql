@@ -9,4 +9,6 @@ CREATE TABLE "user_context_preference" (
 --> statement-breakpoint
 ALTER TABLE "user_context_preference" ADD CONSTRAINT "user_context_preference_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_context_preference" ADD CONSTRAINT "user_context_preference_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_context_preference" ADD CONSTRAINT "user_context_preference_team_id_team_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "user_context_preference" ADD CONSTRAINT "user_context_preference_team_id_team_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "user_context_preference_organizationId_idx" ON "user_context_preference" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX "user_context_preference_teamId_idx" ON "user_context_preference" USING btree ("team_id");

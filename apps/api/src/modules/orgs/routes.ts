@@ -11,9 +11,13 @@ import {
   ownershipTransferIdParamSchema,
   ownershipTransferResponseSchema,
 } from '@repo/contracts';
-import { setActiveOrganization, setActiveTeam } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import {
+  applyActiveContext,
+  requireAuth,
+  requireOrganizationContext,
+  resolveActiveContext,
+} from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { orgsService } from './service.js';
@@ -30,7 +34,7 @@ const currentWorkspaceRoute = createRoute({
   tags: ['Organizations'],
   summary: 'Get the active organization workspace',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   responses: {
     200: {
       description: 'Active organization members, roles, and pending invitations',
@@ -39,6 +43,7 @@ const currentWorkspaceRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller is not a member of the active organization'),
     422: errorJson('No active organization selected'),
+    502: errorJson('Context session update failed'),
   },
 });
 
@@ -48,13 +53,14 @@ const listBranchesRoute = createRoute({
   tags: ['Organizations'],
   summary: 'List active branches and branch-scoped members',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   responses: {
     200: {
       description: 'Branches visible to the current organization member',
       content: { 'application/json': { schema: organizationBranchesResponseSchema } },
     },
     401: errorJson('Unauthorized'),
+    502: errorJson('Context session update failed'),
     403: errorJson('Caller is not a member of the active organization'),
     422: errorJson('No active organization selected'),
   },
@@ -73,6 +79,7 @@ const getContextRoute = createRoute({
       content: { 'application/json': { schema: activeContextResponseSchema } },
     },
     401: errorJson('Unauthorized'),
+    502: errorJson('Context session update failed'),
   },
 });
 
@@ -93,6 +100,7 @@ const setContextRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Organization or branch membership is unavailable'),
+    502: errorJson('Context session update failed'),
   },
 });
 
@@ -113,6 +121,7 @@ const createOrganizationRoute = createRoute({
     },
     401: errorJson('Unauthorized'),
     422: errorJson('Invalid organization profile'),
+    502: errorJson('Context session update failed'),
   },
 });
 
@@ -122,7 +131,7 @@ const createTransferRoute = createRoute({
   tags: ['Organizations'],
   summary: 'Nominate an Admin or Member for organization ownership',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: {
     body: {
       required: true,
@@ -139,6 +148,7 @@ const createTransferRoute = createRoute({
     403: errorJson('Only the organization Owner can initiate a transfer'),
     409: errorJson('A transfer is already pending'),
     422: errorJson('Target must be an active Admin or Member'),
+    502: errorJson('Context session update failed'),
   },
 });
 
@@ -172,26 +182,14 @@ const cancelTransferRoute = transferActionRoute('cancel');
 export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
-  .openapi(getContextRoute, async (c) => c.json({ context: c.get('activeContext') }, 200))
+  .openapi(getContextRoute, async (c) =>
+    c.json({ context: await resolveActiveContext(c) }, 200),
+  )
   .openapi(setContextRoute, async (c) => {
     const user = c.get('user')!;
     const context = await orgsService.resolveContextSelection(user.id, c.req.valid('json'));
 
-    const organizationResponse = await setActiveOrganization(
-      c.req.raw.headers,
-      context.kind === 'organization' ? context.organizationId : null,
-    );
-    if (!organizationResponse.ok) throw new Error('Failed to select organization context');
-    for (const cookie of organizationResponse.headers.getSetCookie()) {
-      c.header('Set-Cookie', cookie, { append: true });
-    }
-    if (context.kind === 'organization') {
-      const teamResponse = await setActiveTeam(c.req.raw.headers, context.teamId);
-      if (!teamResponse.ok) throw new Error('Failed to select branch context');
-      for (const cookie of teamResponse.headers.getSetCookie()) {
-        c.header('Set-Cookie', cookie, { append: true });
-      }
-    }
+    await applyActiveContext(c, context);
     await orgsService.saveContextPreference(user.id, context);
     return c.json({ context }, 200);
   })
@@ -207,19 +205,7 @@ export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       organizationId: data.organization.id,
       teamId: activeTeamId,
     };
-    const organizationResponse = await setActiveOrganization(
-      c.req.raw.headers,
-      context.organizationId,
-    );
-    if (!organizationResponse.ok) throw new Error('Failed to activate the new organization');
-    for (const cookie of organizationResponse.headers.getSetCookie()) {
-      c.header('Set-Cookie', cookie, { append: true });
-    }
-    const teamResponse = await setActiveTeam(c.req.raw.headers, context.teamId);
-    if (!teamResponse.ok) throw new Error('Failed to activate the new branch');
-    for (const cookie of teamResponse.headers.getSetCookie()) {
-      c.header('Set-Cookie', cookie, { append: true });
-    }
+    await applyActiveContext(c, context);
     await orgsService.saveContextPreference(user.id, context);
     return c.json(data, 201);
   })

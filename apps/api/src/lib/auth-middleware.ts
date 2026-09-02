@@ -35,6 +35,23 @@ export type Ownership = {
 /** Resolves the requested resource's ownership; return null when it doesn't exist. */
 export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
 
+async function repairIncompleteOrganizationContext(
+  headers: Headers,
+  result: { user: Session['user']; session: Session['session'] },
+  appendCookie: (cookie: string) => void,
+): Promise<void> {
+  if (!result.session.activeOrganizationId || result.session.activeTeamId !== null) return;
+  const teamId = await orgsService.findDefaultActiveTeamForUser(
+    result.user.id,
+    result.session.activeOrganizationId,
+  );
+  if (!teamId) return;
+  const response = await setActiveTeam(headers, teamId);
+  if (!response.ok) return;
+  for (const cookie of response.headers.getSetCookie()) appendCookie(cookie);
+  result.session.activeTeamId = teamId;
+}
+
 /**
  * Resolves the better-auth session from the incoming request and attaches
  * `user` / `session` to the Hono context. Always runs; does not block.
@@ -48,47 +65,10 @@ export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
-  let autoSelectedOrganizationId: string | null = null;
-  if (result?.session && !result.session.activeOrganizationId) {
-    const preferredContext = await orgsService.resolvePreferredContext(result.user.id);
-    if (preferredContext.kind === 'organization') {
-      const response = await setActiveOrganization(
-        c.req.raw.headers,
-        preferredContext.organizationId,
-      );
-      if (response.ok) {
-        for (const cookie of response.headers.getSetCookie()) {
-          c.header('Set-Cookie', cookie, { append: true });
-        }
-        result.session.activeOrganizationId = preferredContext.organizationId;
-        autoSelectedOrganizationId = preferredContext.organizationId;
-      }
-    }
-  }
-  if (
-    result?.session &&
-    autoSelectedOrganizationId &&
-    !result.session.activeTeamId &&
-    typeof orgsService.findDefaultActiveTeamForUser === 'function'
-  ) {
-    const preferredContext = await orgsService.resolvePreferredContext(result.user.id);
-    const teamId =
-      preferredContext.kind === 'organization' &&
-      preferredContext.organizationId === autoSelectedOrganizationId
-        ? preferredContext.teamId
-        : await orgsService.findDefaultActiveTeamForUser(
-            result.user.id,
-            autoSelectedOrganizationId,
-          );
-    if (teamId) {
-      const response = await setActiveTeam(c.req.raw.headers, teamId);
-      if (response.ok) {
-        for (const cookie of response.headers.getSetCookie()) {
-          c.header('Set-Cookie', cookie, { append: true });
-        }
-        result.session.activeTeamId = teamId;
-      }
-    }
+  if (result) {
+    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
+      c.header('Set-Cookie', cookie, { append: true });
+    });
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
@@ -105,6 +85,72 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   c.set('sessionFresh', false);
   await next();
 };
+
+function appendResponseCookies(
+  c: Context<{ Variables: AuthVariables }>,
+  response: Response,
+): void {
+  for (const cookie of response.headers.getSetCookie()) {
+    c.header('Set-Cookie', cookie, { append: true });
+  }
+}
+
+export async function applyActiveContext(
+  c: Context<{ Variables: AuthVariables }>,
+  context: ActiveContext,
+): Promise<void> {
+  const headers = c.req.raw.headers;
+  if (context.kind === 'personal') {
+    const teamResponse = await setActiveTeam(headers, null);
+    if (!teamResponse.ok) throw AppError.badGateway('Failed to clear the active branch');
+    appendResponseCookies(c, teamResponse);
+
+    const organizationResponse = await setActiveOrganization(headers, null);
+    if (!organizationResponse.ok) {
+      throw AppError.badGateway('Failed to clear the active organization');
+    }
+    appendResponseCookies(c, organizationResponse);
+  } else {
+    const organizationResponse = await setActiveOrganization(headers, context.organizationId);
+    if (!organizationResponse.ok) {
+      throw AppError.badGateway('Failed to select the active organization');
+    }
+    appendResponseCookies(c, organizationResponse);
+
+    const teamResponse = await setActiveTeam(headers, context.teamId);
+    if (!teamResponse.ok) throw AppError.badGateway('Failed to select the active branch');
+    appendResponseCookies(c, teamResponse);
+  }
+
+  const session = c.get('session');
+  if (session) {
+    session.activeOrganizationId =
+      context.kind === 'organization' ? context.organizationId : null;
+    session.activeTeamId = context.kind === 'organization' ? context.teamId : null;
+  }
+  c.set('activeContext', context);
+}
+
+export async function resolveActiveContext(
+  c: Context<{ Variables: AuthVariables }>,
+): Promise<ActiveContext> {
+  const user = c.get('user');
+  const session = c.get('session');
+  if (!user || !session) throw AppError.unauthorized();
+  const context = await orgsService.resolveSessionContext(
+    user.id,
+    session.activeOrganizationId ?? null,
+    session.activeTeamId ?? null,
+  );
+  const expectedOrganizationId = context.kind === 'organization' ? context.organizationId : null;
+  const expectedTeamId = context.kind === 'organization' ? context.teamId : null;
+  const differs =
+    expectedOrganizationId !== (session.activeOrganizationId ?? null) ||
+    expectedTeamId !== (session.activeTeamId ?? null);
+  if (differs) await applyActiveContext(c, context);
+  else c.set('activeContext', context);
+  return context;
+}
 
 /**
  * Re-reads the session past the cookie cache, at most once per request, and forwards
@@ -124,6 +170,11 @@ async function refreshSession(c: Context<{ Variables: AuthVariables }>): Promise
   });
   for (const cookie of headers.getSetCookie()) {
     c.header('Set-Cookie', cookie, { append: true });
+  }
+  if (result) {
+    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
+      c.header('Set-Cookie', cookie, { append: true });
+    });
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
@@ -194,7 +245,7 @@ export function requireContext(
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
   return async (c, next) => {
     await getFreshActiveUser(c);
-    if (c.get('activeContext').kind !== kind) {
+    if ((await resolveActiveContext(c)).kind !== kind) {
       throw AppError.forbidden(`Switch to ${kind} context to continue`);
     }
     await next();

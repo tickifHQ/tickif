@@ -30,26 +30,6 @@ export const OWNERSHIP_TRANSFER_RESULT = {
 } as const;
 
 export const orgsRepository = {
-  async findContextPreference(userId: string): Promise<ActiveContext> {
-    const [preference] = await db
-      .select({
-        kind: schema.userContextPreference.contextKind,
-        organizationId: schema.userContextPreference.organizationId,
-        teamId: schema.userContextPreference.teamId,
-      })
-      .from(schema.userContextPreference)
-      .where(eq(schema.userContextPreference.userId, userId))
-      .limit(1);
-    if (preference?.kind === 'organization' && preference.organizationId && preference.teamId) {
-      return {
-        kind: 'organization',
-        organizationId: preference.organizationId,
-        teamId: preference.teamId,
-      };
-    }
-    return { kind: 'personal' };
-  },
-
   async isValidOrganizationContext(
     userId: string,
     organizationId: string,

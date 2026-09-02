@@ -158,23 +158,6 @@ function allowsCapability(
 }
 
 export const orgsService = {
-  async resolvePreferredContext(userId: string): Promise<ActiveContext> {
-    const context = await orgsRepository.findContextPreference(userId);
-    if (context.kind === 'personal') return context;
-    if (
-      await orgsRepository.isValidOrganizationContext(
-        userId,
-        context.organizationId,
-        context.teamId,
-      )
-    ) {
-      return context;
-    }
-    const personal = { kind: 'personal' } as const;
-    await orgsRepository.saveContextPreference(userId, personal);
-    return personal;
-  },
-
   async resolveContextSelection(
     userId: string,
     selection: SetActiveContext,
@@ -191,6 +174,39 @@ export const orgsService = {
     );
     if (!valid) throw AppError.forbidden('Organization context is unavailable');
     return { kind: 'organization', organizationId: selection.organizationId, teamId };
+  },
+
+  async resolveSessionContext(
+    userId: string,
+    activeOrganizationId: string | null,
+    activeTeamId: string | null,
+  ): Promise<ActiveContext> {
+    if (!activeOrganizationId) {
+      if (activeTeamId) {
+        await orgsRepository.saveContextPreference(userId, { kind: 'personal' });
+      }
+      return { kind: 'personal' };
+    }
+
+    const teamId =
+      activeTeamId ??
+      (await orgsRepository.findDefaultActiveTeamForUser(userId, activeOrganizationId));
+    if (
+      teamId &&
+      (await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, teamId))
+    ) {
+      const context = {
+        kind: 'organization' as const,
+        organizationId: activeOrganizationId,
+        teamId,
+      };
+      if (!activeTeamId) await orgsRepository.saveContextPreference(userId, context);
+      return context;
+    }
+
+    const personal = { kind: 'personal' } as const;
+    await orgsRepository.saveContextPreference(userId, personal);
+    return personal;
   },
 
   async saveContextPreference(userId: string, context: ActiveContext): Promise<void> {

@@ -17,6 +17,8 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     OWNER_STATE_CHANGED: 'owner_state_changed',
   },
   orgsRepository: {
+    isValidOrganizationContext: vi.fn(),
+    saveContextPreference: vi.fn(),
     hasMembership: vi.fn(),
     findDefaultActiveTeamForUser: vi.fn(),
     findMembershipRole: vi.fn(),
@@ -55,6 +57,40 @@ describe('orgsService', () => {
     vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
 
     await expect(orgsService.isMember('user-1', 'org-1')).resolves.toBe(true);
+  });
+
+  it('repairs an incomplete organization session with the default active branch', async () => {
+    vi.mocked(orgsRepository.findDefaultActiveTeamForUser).mockResolvedValue('team-1');
+    vi.mocked(orgsRepository.isValidOrganizationContext).mockResolvedValue(true);
+
+    await expect(
+      orgsService.resolveSessionContext('user-1', 'org-1', null),
+    ).resolves.toEqual({ kind: 'organization', organizationId: 'org-1', teamId: 'team-1' });
+    expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: 'team-1',
+    });
+  });
+
+  it('repairs a stale organization session to personal context', async () => {
+    vi.mocked(orgsRepository.isValidOrganizationContext).mockResolvedValue(false);
+
+    await expect(
+      orgsService.resolveSessionContext('user-1', 'org-1', 'team-1'),
+    ).resolves.toEqual({ kind: 'personal' });
+    expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
+      kind: 'personal',
+    });
+  });
+
+  it('clears a team id that has no active organization', async () => {
+    await expect(
+      orgsService.resolveSessionContext('user-1', null, 'team-1'),
+    ).resolves.toEqual({ kind: 'personal' });
+    expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
+      kind: 'personal',
+    });
   });
 
   it('reconciles frozen seats against the current entitlement limit', async () => {

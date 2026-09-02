@@ -1,5 +1,5 @@
 {
-  "id": "836064bb-95f6-4672-a6ac-910d27954ce5",
+  "id": "58e74be3-e0e3-4c12-80c8-ef13782f9263",
   "prevId": "775b52ae-23cc-4a8d-b9d6-b1b3336eb413",
   "version": "7",
   "dialect": "postgresql",
@@ -1060,7 +1060,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_context_preference_organizationId_idx": {
+          "name": "user_context_preference_organizationId_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_context_preference_teamId_idx": {
+          "name": "user_context_preference_teamId_idx",
+          "columns": [
+            {
+              "expression": "team_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "user_context_preference_user_id_user_id_fk": {
           "name": "user_context_preference_user_id_user_id_fk",

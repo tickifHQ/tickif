@@ -25,6 +25,10 @@ memberships remain valid; otherwise it repairs the preference to personal.
 Membership never selects an organization implicitly, including when the user has
 only one organization. Context guards remain separate from platform-role guards
 so the same designer can use personal and organization capabilities safely.
+Organization-only API routes validate and repair the pair before reading it.
+E-249 will add the organization-context check to the designer layout alongside
+the personal-to-organization chooser. Until that route exists, guarding the
+layout would redirect personal users away from the only current switcher.
 
 ## Branch-scoped readers in E-244
 
@@ -53,9 +57,10 @@ single field.
 
 Downgrades freeze active teams newest-first. `freeze_rank` records that order and
 restoration consumes it ascending. Freezing clears sessions that point at those
-teams. The next authenticated request selects the user's oldest remaining active
-team. Operational endpoints reject or omit frozen teams, while public profile and
-published project reads deliberately do not join on `team.frozen`.
+teams. The next validated organization-context request selects the user's oldest
+remaining active team. Operational endpoints reject or omit frozen teams, while
+public profile and published project reads deliberately do not join on
+`team.frozen`.
 
 Hard deletion through Better Auth is disabled because deleting a team cascades to
 its profile and projects. Lifecycle reconciliation uses freeze and restore instead.
