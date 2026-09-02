@@ -30,11 +30,27 @@ afterEach(() => {
 });
 
 const analytics: AnalyticsResponse = {
+  dataset: 'engagement',
   window: {
     days: 7,
     from: '2026-08-01T00:00:00.000Z',
     to: '2026-08-07T12:00:00.000Z',
   },
+  access: {
+    role: 'owner',
+    roleScope: 'full',
+    tier: 'corporate',
+    lifecycleState: 'active',
+    tierScope: 'branch',
+    level: 'organization',
+    branchId: null,
+    branchAccess: 'available',
+    readOnly: false,
+    engagementVisible: true,
+  },
+  billing: null,
+  branches: [],
+  frozenBranches: [],
   projects: {
     total: 6,
     draft: 2,
