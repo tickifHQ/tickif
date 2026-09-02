@@ -68,6 +68,38 @@ describe('/projects/[id]', () => {
     ).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
+  it('renders a noindex unavailable notice for a recoverable delisted project', async () => {
+    const project = {
+      availability: 'unavailable',
+      id: '88888888-8888-4888-8888-888888888888',
+      title: 'Recoverable Home',
+      status: 'delisted',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+    } as const;
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(response(project));
+
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: project.id }) }));
+
+    expect(screen.getByRole('heading', { name: project.title })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View studio profile' })).toHaveAttribute(
+      'href',
+      '/d/studio-a',
+    );
+
+    const metadata = await generateMetadata({ params: Promise.resolve({ id: project.id }) });
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+  });
+
+  it('returns not found when the API reports a permanently deleted project', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(response({}, 410));
+
+    await expect(
+      ProjectDetailPage({
+        params: Promise.resolve({ id: '77777777-7777-4777-8777-777777777777' }),
+      }),
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
   it.each([400, 422])(
     'returns not found for a malformed project id rejected with %s',
     async (status) => {

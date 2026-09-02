@@ -15,6 +15,7 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectById: vi.fn(),
+    findPublicProjectLifecycleById: vi.fn(),
     findPublicProjectBySlug: vi.fn(),
     findPublicProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
@@ -53,6 +54,7 @@ beforeEach(() => {
   vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue(null);
   vi.mocked(projectsRepository.listPublishedDesignerMotifCounts).mockResolvedValue([]);
   vi.mocked(projectsRepository.listPublishedRecommendationCandidates).mockResolvedValue([]);
+  vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
 });
 
 // --- Factories ---
@@ -438,6 +440,42 @@ describe('projectsService.getPublicById', () => {
     await expect(
       projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns a minimal unavailable response for a recoverable delisted project', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Delisted Home',
+      status: 'delisted',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).resolves.toEqual({
+      availability: 'unavailable',
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Delisted Home',
+      status: 'delisted',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+    });
+  });
+
+  it('returns 410 for a permanently deleted project', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Deleted Home',
+      status: 'deleted',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
   });
 });
 

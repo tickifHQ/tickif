@@ -1336,6 +1336,30 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(projectRows).toEqual([expect.objectContaining({ id: project.id, status: 'deleted' })]);
     expect(roomRows).toHaveLength(1);
     expect(imageRows).toHaveLength(1);
+
+    const publicRead = await app.request(`/api/projects/public/${project.id}`);
+    expect(publicRead.status).toBe(410);
+    expect(await publicRead.json()).toMatchObject({ error: { code: 'gone' } });
+  });
+
+  it('keeps a no-detail public notice for recoverable delisted projects', async () => {
+    const { designer } = await makeDesignerSession('+919800002063');
+    const project = await makeProject({
+      designerId: designer.id,
+      title: 'Recoverable Home',
+      status: 'delisted',
+    });
+
+    const publicRead = await app.request(`/api/projects/public/${project.id}`);
+
+    expect(publicRead.status).toBe(200);
+    expect(await publicRead.json()).toEqual({
+      availability: 'unavailable',
+      id: project.id,
+      title: 'Recoverable Home',
+      status: 'delisted',
+      designer: { displayName: designer.displayName, slug: expect.any(String) },
+    });
   });
 
   it('archives a published project, removes it from public reads, and restores it as a draft', async () => {
