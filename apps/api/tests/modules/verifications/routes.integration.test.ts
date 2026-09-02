@@ -168,6 +168,55 @@ describe('verification route authorization', () => {
     expect(response.status).toBe(200);
   });
 
+  it('rejects an unknown admin verification queue tab', async () => {
+    const { cookie } = await createRoleSession('+919800000081', PLATFORM_ROLE.ADMIN);
+    const response = await client.api.admin.verifications.$get(
+      { query: { tab: 'draft' } as never },
+      { headers: { cookie } },
+    );
+    expect(response.status).toBe(422);
+  });
+
+  it('does not expose a designer draft or its documents to an admin before submission', async () => {
+    const designer = await designerWorkspace('+919800000082');
+    const admin = await createRoleSession('+919800000083', PLATFORM_ROLE.ADMIN);
+    const uploadResponse = await client.api.verifications.documents['upload-url'].$post(
+      {
+        json: {
+          type: 'gst_registration_certificate',
+          contentType: 'application/pdf',
+          size: 1000,
+        },
+      },
+      { headers: { cookie: designer.cookie } },
+    );
+    expect(uploadResponse.status).toBe(201);
+    if (uploadResponse.status !== 201) throw new Error('expected verification upload reservation');
+    const upload = await uploadResponse.json();
+    const commitResponse = await client.api.verifications.documents[':versionId'].commit.$post(
+      { param: { versionId: upload.documentVersionId } },
+      { headers: { cookie: designer.cookie } },
+    );
+    expect(commitResponse.status).toBe(200);
+    if (commitResponse.status !== 200) throw new Error('expected verification upload commit');
+    const committed = await commitResponse.json();
+    const applicationId = committed.applicationId;
+
+    const detailResponse = await client.api.admin.verifications[':id'].$get(
+      { param: { id: applicationId } },
+      { headers: { cookie: admin.cookie } },
+    );
+    const downloadResponse = await client.api.admin.verifications[':id'].documents[
+      ':versionId'
+    ].download.$get(
+      { param: { id: applicationId, versionId: upload.documentVersionId } },
+      { headers: { cookie: admin.cookie } },
+    );
+
+    expect(detailResponse.status).toBe(404);
+    expect(downloadResponse.status).toBe(404);
+  });
+
   it('surfaces a designer submission to admin review and persists requested changes', async () => {
     const submission = await submitEligibleVerification('+919800000075');
     const admin = await createRoleSession('+919800000076', PLATFORM_ROLE.ADMIN);
@@ -236,6 +285,16 @@ describe('verification route authorization', () => {
         }),
       ]),
     );
+    const changesRequestedQueue = await client.api.admin.verifications.$get(
+      { query: { tab: 'changes_requested' } },
+      { headers },
+    );
+    expect(changesRequestedQueue.status).toBe(200);
+    if (changesRequestedQueue.status !== 200) throw new Error('expected changes-requested queue');
+    await expect(changesRequestedQueue.json()).resolves.toMatchObject({
+      tab: 'changes_requested',
+      items: [expect.objectContaining({ id: submission.applicationId, status: 'rejected' })],
+    });
 
     const designerStateResponse = await client.api.verifications.$get(
       {},
@@ -283,6 +342,16 @@ describe('verification route authorization', () => {
     expect(await profilesRepository.isOrganizationKycVerified(submission.organization.id)).toBe(
       true,
     );
+    const acceptedQueue = await client.api.admin.verifications.$get(
+      { query: { tab: 'accepted' } },
+      { headers: { cookie: admin.cookie } },
+    );
+    expect(acceptedQueue.status).toBe(200);
+    if (acceptedQueue.status !== 200) throw new Error('expected accepted queue');
+    await expect(acceptedQueue.json()).resolves.toMatchObject({
+      tab: 'accepted',
+      items: [expect.objectContaining({ id: submission.applicationId, status: 'verified' })],
+    });
   });
 
   it('rejects approval when eligibility changed after submission', async () => {
@@ -447,6 +516,17 @@ describe('verification route authorization', () => {
       status: 'pending',
       attempt: 2,
       latestNote: null,
+    });
+    const admin = await createRoleSession('+919800000084', PLATFORM_ROLE.ADMIN);
+    const reReviewQueue = await client.api.admin.verifications.$get(
+      { query: { tab: 're_review' } },
+      { headers: { cookie: admin.cookie } },
+    );
+    expect(reReviewQueue.status).toBe(200);
+    if (reReviewQueue.status !== 200) throw new Error('expected re-review queue');
+    await expect(reReviewQueue.json()).resolves.toMatchObject({
+      tab: 're_review',
+      items: [expect.objectContaining({ attempt: 2, status: 'pending' })],
     });
   });
 

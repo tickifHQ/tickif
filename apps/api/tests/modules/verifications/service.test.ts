@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
   VERIFICATION_EFFECTIVE_STATUS,
@@ -63,7 +64,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     cancelPendingDocument: vi.fn(async () => 'state_changed'),
     removeCommittedDocument: vi.fn(),
     submit: vi.fn(),
-    listPending: vi.fn(),
+    listAdminQueue: vi.fn(),
     findAdminDetail: vi.fn(),
     review: vi.fn(),
   },
@@ -580,6 +581,44 @@ describe('verificationsService', () => {
     expect(presignDownload).toHaveBeenCalledWith({
       key: document.objectKey,
       expiresIn: 60,
+    });
+  });
+
+  it('serializes the selected admin queue tab and its lifecycle timestamps', async () => {
+    const submittedAt = new Date('2026-08-10T00:00:00.000Z');
+    const reviewedAt = new Date('2026-08-11T00:00:00.000Z');
+    vi.mocked(verificationsRepository.listAdminQueue).mockResolvedValue({
+      items: [
+        {
+          id: application.id,
+          organizationId: 'org-1',
+          organizationName: 'Studio One',
+          designerName: 'Studio One',
+          attempt: 1,
+          status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+          submittedAt,
+          reviewedAt,
+          documentCount: 1,
+        },
+      ],
+      total: 1,
+    });
+
+    await expect(
+      verificationsService.listAdmin({
+        tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+        page: 1,
+        limit: 20,
+      }),
+    ).resolves.toMatchObject({
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+      items: [
+        {
+          status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+          submittedAt: submittedAt.toISOString(),
+          reviewedAt: reviewedAt.toISOString(),
+        },
+      ],
     });
   });
 

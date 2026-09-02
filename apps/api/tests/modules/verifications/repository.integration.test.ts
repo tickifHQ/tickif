@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeOrganization, makeProject, makeUser } from '@repo/db/testing';
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   ORGANIZATION_MEMBER_ROLE,
   PLATFORM_ROLE,
   VERIFICATION_APPLICATION_STATUS,
@@ -14,10 +15,10 @@ import {
   verificationsRepository,
 } from '../../../src/modules/verifications/repository.js';
 
-async function setupApplication() {
+async function setupApplication(phoneNumber = '+919800000010') {
   const owner = await makeUser({
     name: 'Legal Owner',
-    phoneNumber: '+919800000010',
+    phoneNumber,
     phoneNumberVerified: true,
   });
   const organization = await makeOrganization();
@@ -39,6 +40,67 @@ async function setupApplication() {
 }
 
 describe('verification repository lifecycle', () => {
+  it('filters the admin queue into new, re-review, accepted, and changes-requested tabs', async () => {
+    const newSubmission = await setupApplication('+919800000011');
+    const reReview = await setupApplication('+919800000012');
+    const accepted = await setupApplication('+919800000013');
+    const changesRequested = await setupApplication('+919800000014');
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    const submittedAt = new Date('2026-09-01T08:00:00.000Z');
+    const reviewedAt = new Date('2026-09-01T09:00:00.000Z');
+
+    await Promise.all([
+      db
+        .update(schema.verificationApplication)
+        .set({ status: 'pending', submittedAt })
+        .where(eq(schema.verificationApplication.id, newSubmission.application.id)),
+      db
+        .update(schema.verificationApplication)
+        .set({ status: 'pending', attempt: 2, submittedAt })
+        .where(eq(schema.verificationApplication.id, reReview.application.id)),
+      db
+        .update(schema.verificationApplication)
+        .set({
+          status: 'verified',
+          submittedAt,
+          reviewedAt,
+          approvedAt: reviewedAt,
+          expiresAt: new Date('2026-11-01T09:00:00.000Z'),
+          reviewedByUserId: reviewer.id,
+        })
+        .where(eq(schema.verificationApplication.id, accepted.application.id)),
+      db
+        .update(schema.verificationApplication)
+        .set({
+          status: 'rejected',
+          submittedAt,
+          reviewedAt,
+          reviewedByUserId: reviewer.id,
+        })
+        .where(eq(schema.verificationApplication.id, changesRequested.application.id)),
+    ]);
+
+    const tabs = await Promise.all(
+      Object.values(ADMIN_VERIFICATION_QUEUE_TAB).map((tab) =>
+        verificationsRepository.listAdminQueue({ tab, page: 1, limit: 20 }),
+      ),
+    );
+
+    expect(tabs.map(({ total }) => total)).toEqual([1, 1, 1, 1]);
+    expect(tabs.map(({ items }) => items[0]?.id)).toEqual([
+      newSubmission.application.id,
+      reReview.application.id,
+      accepted.application.id,
+      changesRequested.application.id,
+    ]);
+    expect(tabs.map(({ items }) => items[0]?.status)).toEqual([
+      'pending',
+      'pending',
+      'verified',
+      'rejected',
+    ]);
+  });
+
   it('keeps document versions immutable and tenant scoped', async () => {
     const { owner, organization, application } = await setupApplication();
     const otherOrganization = await makeOrganization();

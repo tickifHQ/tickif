@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import type { AdminVerificationQueueResponse } from '@repo/contracts';
+import { ADMIN_VERIFICATION_QUEUE_TAB, type AdminVerificationQueueResponse } from '@repo/contracts';
 import { AdminVerificationQueue } from '@/components/admin-verification-queue';
 import { requireAuth } from '@/lib/auth-guard';
 import { fetchAdminVerificationQueue } from '@/lib/admin-verification-api';
@@ -14,6 +14,7 @@ const emptyQueue: AdminVerificationQueueResponse = {
   limit: 20,
   total: 0,
   totalPages: 0,
+  tab: ADMIN_VERIFICATION_QUEUE_TAB.NEW,
 };
 
 export default async function AdminVerificationsPage() {
@@ -24,7 +25,9 @@ export default async function AdminVerificationsPage() {
   let error: string | undefined;
   if (cookie) {
     try {
-      queue = await fetchAdminVerificationQueue(1, { headers: { cookie } });
+      queue = await fetchAdminVerificationQueue(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1, {
+        headers: { cookie },
+      });
     } catch {
       error = 'Could not load submitted verifications. Try refreshing the page.';
     }

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  AdminVerificationDetailResponse,
-  AdminVerificationQueueResponse,
+import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
+  type AdminVerificationDetailResponse,
+  type AdminVerificationQueueResponse,
 } from '@repo/contracts';
 import {
   approveAdminVerification,
@@ -50,7 +51,9 @@ const queue: AdminVerificationQueueResponse = {
       organizationName: 'Studio North',
       designerName: 'Anika Sharma',
       attempt: 1,
+      status: 'pending',
       submittedAt: '2026-09-01T10:00:00.000Z',
+      reviewedAt: null,
       documentCount: 2,
     },
   ],
@@ -58,6 +61,7 @@ const queue: AdminVerificationQueueResponse = {
   limit: 20,
   total: 1,
   totalPages: 1,
+  tab: 'new',
 };
 
 const detail: AdminVerificationDetailResponse = {
@@ -111,10 +115,12 @@ describe('admin-verification-api', () => {
     mock.queueGet.mockResolvedValue(jsonResponse(queue));
 
     await expect(
-      fetchAdminVerificationQueue(1, { headers: { cookie: 'session=valid' } }),
+      fetchAdminVerificationQueue(ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW, 2, {
+        headers: { cookie: 'session=valid' },
+      }),
     ).resolves.toEqual(queue);
     expect(mock.queueGet).toHaveBeenCalledWith(
-      { query: { page: '1', limit: '20' } },
+      { query: { tab: 're_review', page: '2', limit: '20' } },
       { headers: { cookie: 'session=valid' } },
     );
   });

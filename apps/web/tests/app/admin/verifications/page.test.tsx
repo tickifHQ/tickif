@@ -29,6 +29,7 @@ describe('AdminVerificationsPage', () => {
       limit: 20,
       total: 0,
       totalPages: 0,
+      tab: 'new',
     });
   });
 
@@ -38,7 +39,7 @@ describe('AdminVerificationsPage', () => {
     render(await Page());
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'admin' });
-    expect(mock.fetchQueue).toHaveBeenCalledWith(1, {
+    expect(mock.fetchQueue).toHaveBeenCalledWith('new', 1, {
       headers: { cookie: 'session=valid' },
     });
     expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent('loaded');

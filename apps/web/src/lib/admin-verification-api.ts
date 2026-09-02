@@ -4,6 +4,7 @@ import {
   verificationDocumentDownloadResponseSchema,
   type AdminVerificationDetailResponse,
   type AdminVerificationQueueResponse,
+  type AdminVerificationQueueTab,
   type RejectVerificationInput,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
@@ -15,11 +16,12 @@ const QUEUE_ERROR = 'Could not load submitted verifications.';
 const DETAIL_ERROR = 'Could not load this verification application.';
 
 export async function fetchAdminVerificationQueue(
+  tab: AdminVerificationQueueTab,
   page = 1,
   requestInit?: ServerRequestInit,
 ): Promise<AdminVerificationQueueResponse> {
   const response = await api.api.admin.verifications.$get(
-    { query: { page: String(page), limit: '20' } },
+    { query: { tab, page: String(page), limit: '20' } },
     requestInit,
   );
   return handleApiResponse(response, adminVerificationQueueResponseSchema, QUEUE_ERROR);

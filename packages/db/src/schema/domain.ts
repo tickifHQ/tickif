@@ -976,6 +976,12 @@ export const verificationApplication = pgTable(
     index('verification_application_verified_expiry_idx')
       .on(t.expiresAt, t.id)
       .where(sql`${t.status} = 'verified'`),
+    index('verification_application_verified_review_queue_idx')
+      .on(t.reviewedAt, t.id)
+      .where(sql`${t.status} = 'verified'`),
+    index('verification_application_rejected_review_queue_idx')
+      .on(t.reviewedAt, t.id)
+      .where(sql`${t.status} = 'rejected'`),
     index('verification_application_reviewer_idx').on(t.reviewedByUserId),
   ],
 );

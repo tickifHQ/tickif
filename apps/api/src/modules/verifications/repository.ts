@@ -1,4 +1,5 @@
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
   MIN_VERIFICATION_PUBLISHED_PROJECTS,
   ORGANIZATION_MEMBER_ROLE,
@@ -7,6 +8,8 @@ import {
   VERIFICATION_NOTIFICATION_EVENT,
   VERIFICATION_REVIEW_ACTION,
   type AdminVerificationQueueQuery,
+  type AdminVerificationQueueResponse,
+  type AdminVerificationQueueTab,
   type RejectVerificationInput,
   type VerificationApplicationStatus,
   type VerificationDocumentType,
@@ -38,6 +41,31 @@ export type VerificationContextRecord = {
 export type AdminVerificationRecord = VerificationContextRecord & {
   organizationName: string;
 };
+
+function adminQueuePredicate(tab: AdminVerificationQueueTab) {
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING),
+      eq(schema.verificationApplication.attempt, 1),
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING),
+      sql`${schema.verificationApplication.attempt} > 1`,
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED) {
+    return eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED);
+  }
+  return eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.REJECTED);
+}
+
+function isAdminQueueStatus(
+  status: VerificationApplicationStatus,
+): status is AdminVerificationQueueResponse['items'][number]['status'] {
+  return status !== VERIFICATION_APPLICATION_STATUS.DRAFT;
+}
 
 export function isApplicationEditable(
   application: Pick<VerificationApplicationRecord, 'status' | 'expiresAt'>,
@@ -623,14 +651,16 @@ export const verificationsRepository = {
     });
   },
 
-  async listPending(query: AdminVerificationQueueQuery): Promise<{
+  async listAdminQueue(query: AdminVerificationQueueQuery): Promise<{
     items: Array<{
       id: string;
       organizationId: string;
       organizationName: string;
       designerName: string;
       attempt: number;
+      status: AdminVerificationQueueResponse['items'][number]['status'];
       submittedAt: Date;
+      reviewedAt: Date | null;
       documentCount: number;
     }>;
     total: number;
@@ -652,6 +682,7 @@ export const verificationsRepository = {
           inArray(schema.verificationDocumentVersion.status, [
             VERIFICATION_DOCUMENT_STATUS.UPLOADED,
             VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+            VERIFICATION_DOCUMENT_STATUS.REJECTED,
           ]),
           sql`not exists (
             select 1 from verification_document_version newer
@@ -676,7 +707,9 @@ export const verificationsRepository = {
             limit 1
           )`,
           attempt: schema.verificationApplication.attempt,
+          status: schema.verificationApplication.status,
           submittedAt: schema.verificationApplication.submittedAt,
+          reviewedAt: schema.verificationApplication.reviewedAt,
           documentCount: sql<number>`coalesce(${currentDocuments.count}, 0)::int`,
         })
         .from(schema.verificationApplication)
@@ -688,21 +721,29 @@ export const verificationsRepository = {
           currentDocuments,
           eq(schema.verificationApplication.id, currentDocuments.applicationId),
         )
-        .where(eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING))
+        .where(adminQueuePredicate(query.tab))
         .orderBy(
-          asc(schema.verificationApplication.submittedAt),
-          asc(schema.verificationApplication.id),
+          query.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ||
+            query.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
+            ? asc(schema.verificationApplication.submittedAt)
+            : desc(schema.verificationApplication.reviewedAt),
+          query.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ||
+            query.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
+            ? asc(schema.verificationApplication.id)
+            : desc(schema.verificationApplication.id),
         )
         .limit(query.limit)
         .offset((query.page - 1) * query.limit),
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.verificationApplication)
-        .where(eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING)),
+        .where(adminQueuePredicate(query.tab)),
     ]);
     return {
       items: items.flatMap((item) =>
-        item.submittedAt ? [{ ...item, submittedAt: item.submittedAt }] : [],
+        item.submittedAt && isAdminQueueStatus(item.status)
+          ? [{ ...item, submittedAt: item.submittedAt, status: item.status }]
+          : [],
       ),
       total: count?.value ?? 0,
     };
@@ -719,7 +760,16 @@ export const verificationsRepository = {
         schema.organization,
         eq(schema.verificationApplication.organizationId, schema.organization.id),
       )
-      .where(eq(schema.verificationApplication.id, applicationId))
+      .where(
+        and(
+          eq(schema.verificationApplication.id, applicationId),
+          inArray(schema.verificationApplication.status, [
+            VERIFICATION_APPLICATION_STATUS.PENDING,
+            VERIFICATION_APPLICATION_STATUS.VERIFIED,
+            VERIFICATION_APPLICATION_STATUS.REJECTED,
+          ]),
+        ),
+      )
       .limit(1);
     if (!row) return null;
     const [owner, profile] = await Promise.all([

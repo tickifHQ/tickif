@@ -1,9 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  AdminVerificationDetailResponse,
-  AdminVerificationQueueResponse,
+import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
+  type AdminVerificationDetailResponse,
+  type AdminVerificationQueueResponse,
+  type AdminVerificationQueueTab,
 } from '@repo/contracts';
 import { AdminVerificationQueue } from '../../src/components/admin-verification-queue';
 
@@ -33,8 +35,10 @@ const queue: AdminVerificationQueueResponse = {
       organizationId: 'organization-1',
       organizationName: 'Studio North',
       designerName: 'Anika Sharma',
-      attempt: 2,
+      attempt: 1,
+      status: 'pending',
       submittedAt: '2026-09-01T10:00:00.000Z',
+      reviewedAt: null,
       documentCount: 2,
     },
   ],
@@ -42,6 +46,7 @@ const queue: AdminVerificationQueueResponse = {
   limit: 20,
   total: 1,
   totalPages: 1,
+  tab: 'new',
 };
 
 const detail: AdminVerificationDetailResponse = {
@@ -117,7 +122,7 @@ describe('AdminVerificationQueue', () => {
     expect(screen.getByRole('heading', { name: 'Profile verification' })).toBeInTheDocument();
     expect(screen.getByText('Studio North')).toBeInTheDocument();
     expect(screen.getByText('Anika Sharma')).toBeInTheDocument();
-    expect(screen.getByText('Attempt 2')).toBeInTheDocument();
+    expect(screen.getByText('Attempt 1')).toBeInTheDocument();
     expect(screen.getByText(/oldest submission/i)).toBeInTheDocument();
   });
 
@@ -151,7 +156,9 @@ describe('AdminVerificationQueue', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm approval' }));
 
     await waitFor(() => expect(mock.approve).toHaveBeenCalledWith(applicationId));
-    await waitFor(() => expect(mock.fetchQueue).toHaveBeenCalledWith(1));
+    await waitFor(() =>
+      expect(mock.fetchQueue).toHaveBeenCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1),
+    );
   });
 
   it('keeps approval disabled when live eligibility is no longer met', async () => {
@@ -169,6 +176,94 @@ describe('AdminVerificationQueue', () => {
 
     expect(await screen.findByRole('button', { name: 'Approve verification' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Request changes' })).toBeEnabled();
+  });
+
+  it('loads every lifecycle tab from the server and renders its empty state', async () => {
+    const user = userEvent.setup();
+    mock.fetchQueue.mockImplementation(async (tab: AdminVerificationQueueTab) => ({
+      ...queue,
+      items: [],
+      total: 0,
+      totalPages: 0,
+      tab,
+    }));
+    render(<AdminVerificationQueue initialQueue={queue} />);
+
+    const tabs = [
+      {
+        tab: ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
+        name: /re-review/i,
+        emptyState: 'No verifications awaiting re-review',
+      },
+      {
+        tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+        name: /accepted/i,
+        emptyState: 'No accepted verifications',
+      },
+      {
+        tab: ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED,
+        name: /changes requested/i,
+        emptyState: 'No changes requested',
+      },
+    ];
+
+    for (const { tab, name, emptyState } of tabs) {
+      await user.click(screen.getByRole('tab', { name }));
+      await waitFor(() => expect(mock.fetchQueue).toHaveBeenCalledWith(tab, 1));
+      expect(await screen.findByText(emptyState)).toBeInTheDocument();
+    }
+  });
+
+  it('keeps accepted verification history view-only', async () => {
+    const user = userEvent.setup();
+    const acceptedQueue: AdminVerificationQueueResponse = {
+      ...queue,
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+      items: [
+        {
+          ...queue.items[0]!,
+          status: 'verified',
+          reviewedAt: '2026-09-02T10:00:00.000Z',
+        },
+      ],
+    };
+    mock.fetchQueue.mockResolvedValue(acceptedQueue);
+    mock.fetchDetail.mockResolvedValue({
+      ...detail,
+      application: {
+        ...detail.application,
+        status: 'verified',
+        reviewedAt: '2026-09-02T10:00:00.000Z',
+        approvedAt: '2026-09-02T10:00:00.000Z',
+        expiresAt: '2026-11-02T10:00:00.000Z',
+      },
+      documents: detail.documents.map((document) => ({ ...document, status: 'verified' })),
+    });
+    render(<AdminVerificationQueue initialQueue={queue} />);
+
+    await user.click(screen.getByRole('tab', { name: /accepted/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /open verification for studio north/i }),
+    );
+
+    expect(await screen.findAllByText('Verified')).not.toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Approve verification' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request changes' })).not.toBeInTheDocument();
+  });
+
+  it('does not render a queue response for the wrong lifecycle tab', async () => {
+    const user = userEvent.setup();
+    mock.fetchQueue.mockResolvedValue(queue);
+    render(<AdminVerificationQueue initialQueue={queue} />);
+
+    await user.click(screen.getByRole('tab', { name: /accepted/i }));
+
+    expect(await screen.findByText('Could not load this queue.')).toBeInTheDocument();
+    expect(screen.getByText('No accepted verifications')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: /new/i }));
+    expect(screen.queryByText('Could not load this queue.')).not.toBeInTheDocument();
+    expect(screen.getByText('Studio North')).toBeInTheDocument();
   });
 
   it('requires feedback and sends selected documents when declining', async () => {

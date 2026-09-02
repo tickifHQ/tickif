@@ -175,13 +175,13 @@ const listAdminRoute = createRoute({
   method: 'get',
   path: '/',
   tags: ['Admin Verification'],
-  summary: 'List pending verification applications in FIFO order',
+  summary: 'List verification applications by review lifecycle tab',
   security: [{ cookieAuth: [] }],
   middleware: adminMiddleware,
   request: { query: adminVerificationQueueQuerySchema },
   responses: {
     200: {
-      description: 'Pending verification queue',
+      description: 'Filtered verification review queue',
       content: { 'application/json': { schema: adminVerificationQueueResponseSchema } },
     },
     401: errorJson('Unauthorized'),

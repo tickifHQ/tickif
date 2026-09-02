@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
+  ADMIN_VERIFICATION_QUEUE_TAB_VALUES,
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_DOCUMENT_STATUS,
   type AdminVerificationDetailResponse,
   type AdminVerificationQueueResponse,
+  type AdminVerificationQueueTab,
   type VerificationDocumentType,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
@@ -29,10 +32,12 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
 import { Textarea } from '@repo/ui/components/textarea';
 import {
   AlertCircle,
   ArrowDown,
+  ArrowUp,
   Building2,
   CheckCircle2,
   Clock3,
@@ -53,6 +58,33 @@ import {
 } from '@/lib/admin-verification-api';
 
 type ReviewIntent = 'approve' | 'request_changes';
+
+const tabLabels: Record<AdminVerificationQueueTab, string> = {
+  new: 'New',
+  re_review: 'Re-review',
+  accepted: 'Accepted',
+  changes_requested: 'Changes requested',
+};
+
+const emptyStateContent: Record<AdminVerificationQueueTab, { title: string; description: string }> =
+  {
+    new: {
+      title: 'No new verifications',
+      description: 'First-time designer submissions will appear here automatically.',
+    },
+    re_review: {
+      title: 'No verifications awaiting re-review',
+      description: 'Resubmitted applications will appear here automatically.',
+    },
+    accepted: {
+      title: 'No accepted verifications',
+      description: 'Approved designer verifications will appear here.',
+    },
+    changes_requested: {
+      title: 'No changes requested',
+      description: 'Applications returned to designers for corrections will appear here.',
+    },
+  };
 
 const businessDocumentTypes = new Set<VerificationDocumentType>(
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
@@ -80,7 +112,7 @@ function formatDate(value: string | null): string {
 }
 
 function formatAge(value: string | null): string {
-  if (!value) return 'No pending submissions';
+  if (!value) return 'No applications';
   const ageMs = Math.max(0, Date.now() - new Date(value).getTime());
   const ageHours = Math.floor(ageMs / 3_600_000);
   if (ageHours < 1) return 'Less than an hour';
@@ -108,12 +140,20 @@ function statusVariant(status: AdminVerificationDetailResponse['application']['s
   return 'secondary' as const;
 }
 
-function oldestSubmission(queue: AdminVerificationQueueResponse): string | null {
-  return (
-    queue.items
-      .map((item) => item.submittedAt)
-      .sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null
-  );
+function isPendingTab(tab: AdminVerificationQueueTab): boolean {
+  return tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW || tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW;
+}
+
+function queueMetricDate(queue: AdminVerificationQueueResponse): string | null {
+  const dates = queue.items
+    .map((item) => (isPendingTab(queue.tab) ? item.submittedAt : item.reviewedAt))
+    .filter((value): value is string => value !== null)
+    .sort((left, right) => new Date(left).getTime() - new Date(right).getTime());
+  return isPendingTab(queue.tab) ? (dates[0] ?? null) : (dates.at(-1) ?? null);
+}
+
+function emptyQueue(tab: AdminVerificationQueueTab, limit: number): AdminVerificationQueueResponse {
+  return { items: [], page: 1, limit, total: 0, totalPages: 0, tab };
 }
 
 function QueueTable({
@@ -123,6 +163,8 @@ function QueueTable({
   queue: AdminVerificationQueueResponse;
   onOpen: (applicationId: string) => void;
 }) {
+  const pending = isPendingTab(queue.tab);
+  const emptyState = emptyStateContent[queue.tab];
   return (
     <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
       <Table className="min-w-3xl">
@@ -132,10 +174,15 @@ function QueueTable({
             <TableHead>Designer</TableHead>
             <TableHead>
               <span className="inline-flex items-center gap-1">
-                Submitted <ArrowDown className="size-3.5" aria-hidden="true" />
+                {pending ? 'Submitted' : 'Reviewed'}
+                {pending ? (
+                  <ArrowUp className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <ArrowDown className="size-3.5" aria-hidden="true" />
+                )}
               </span>
             </TableHead>
-            <TableHead>Submission</TableHead>
+            <TableHead>{pending ? 'Submission' : 'Status'}</TableHead>
             <TableHead>Documents</TableHead>
             <TableHead className="text-right"> </TableHead>
           </TableRow>
@@ -154,12 +201,16 @@ function QueueTable({
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{item.designerName}</TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                  {formatDate(item.submittedAt)}
+                  {formatDate(pending ? item.submittedAt : item.reviewedAt)}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={item.attempt > 1 ? 'warning' : 'outline'}>
-                    Attempt {item.attempt}
-                  </Badge>
+                  {pending ? (
+                    <Badge variant={item.attempt > 1 ? 'warning' : 'outline'}>
+                      Attempt {item.attempt}
+                    </Badge>
+                  ) : (
+                    <Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {item.documentCount}
@@ -172,7 +223,8 @@ function QueueTable({
                     onClick={() => onOpen(item.id)}
                     aria-label={`Open verification for ${item.organizationName}`}
                   >
-                    Review <ExternalLink className="size-3.5" aria-hidden="true" />
+                    {pending ? 'Review' : 'View'}
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -182,8 +234,8 @@ function QueueTable({
               <TableCell colSpan={6} className="py-16">
                 <EmptyState
                   icon={<FileCheck2 className="size-5" />}
-                  title="No pending verifications"
-                  description="New designer submissions will appear here automatically."
+                  title={emptyState.title}
+                  description={emptyState.description}
                 />
               </TableCell>
             </TableRow>
@@ -585,24 +637,52 @@ export function AdminVerificationQueue({
   initialQueue: AdminVerificationQueueResponse;
   initialError?: string;
 }) {
-  const [queue, setQueue] = useState(initialQueue);
+  const [activeTab, setActiveTab] = useState<AdminVerificationQueueTab>(initialQueue.tab);
+  const [queues, setQueues] = useState<
+    Partial<Record<AdminVerificationQueueTab, AdminVerificationQueueResponse>>
+  >({
+    [initialQueue.tab]: initialQueue,
+  });
   const [queueError, setQueueError] = useState<string | null>(initialError ?? null);
-  const [loadingQueue, setLoadingQueue] = useState(false);
+  const [loadingTab, setLoadingTab] = useState<AdminVerificationQueueTab | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminVerificationDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  async function loadPage(page: number) {
-    setLoadingQueue(true);
+  const activeQueue = queues[activeTab] ?? emptyQueue(activeTab, initialQueue.limit);
+
+  async function fetchQueuePage(tab: AdminVerificationQueueTab, page: number) {
+    const nextQueue = await fetchAdminVerificationQueue(tab, page);
+    if (nextQueue.tab !== tab) throw new Error('Could not load this queue.');
+    if (nextQueue.items.length === 0 && page > 1) {
+      const previousQueue = await fetchAdminVerificationQueue(tab, page - 1);
+      if (previousQueue.tab !== tab) throw new Error('Could not load this queue.');
+      return previousQueue;
+    }
+    return nextQueue;
+  }
+
+  async function loadPage(tab: AdminVerificationQueueTab, page: number) {
+    setLoadingTab(tab);
     setQueueError(null);
     try {
-      setQueue(await fetchAdminVerificationQueue(page));
+      const nextQueue = await fetchQueuePage(tab, page);
+      setQueues((current) => ({ ...current, [tab]: nextQueue }));
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not load this queue.');
     } finally {
-      setLoadingQueue(false);
+      setLoadingTab(null);
     }
+  }
+
+  async function changeTab(value: string) {
+    const tab = ADMIN_VERIFICATION_QUEUE_TAB_VALUES.find((candidate) => candidate === value);
+    if (!tab) return;
+    setQueueError(null);
+    setActiveTab(tab);
+    if (queues[tab]) return;
+    await loadPage(tab, 1);
   }
 
   async function openDetail(applicationId: string) {
@@ -630,20 +710,30 @@ export function AdminVerificationQueue({
   async function handleReviewed() {
     closeDetail();
     setQueueError(null);
-    try {
-      const currentPage = queue.page;
-      const refreshed = await fetchAdminVerificationQueue(currentPage);
-      if (refreshed.items.length === 0 && currentPage > 1) {
-        setQueue(await fetchAdminVerificationQueue(currentPage - 1));
-      } else {
-        setQueue(refreshed);
-      }
-    } catch {
+    const loadedTabs = ADMIN_VERIFICATION_QUEUE_TAB_VALUES.filter((tab) => queues[tab]);
+    const results = await Promise.allSettled(
+      loadedTabs.map(async (tab) => {
+        const currentPage = queues[tab]?.page ?? 1;
+        return [tab, await fetchQueuePage(tab, currentPage)] as const;
+      }),
+    );
+    const successfulQueues = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    if (successfulQueues.length > 0) {
+      setQueues((current) => {
+        const next = { ...current };
+        for (const [tab, queue] of successfulQueues) next[tab] = queue;
+        return next;
+      });
+    }
+    if (results.some((result) => result.status === 'rejected')) {
       setQueueError('The decision was saved, but the queue could not refresh. Try again.');
     }
   }
 
-  const oldest = oldestSubmission(queue);
+  const metricDate = queueMetricDate(activeQueue);
+  const pendingTab = isPendingTab(activeTab);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -662,8 +752,10 @@ export function AdminVerificationQueue({
         </div>
         <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
           <Clock3 className="size-4 text-primary" aria-hidden="true" />
-          <span className="text-muted-foreground">Oldest submission</span>
-          <span className="font-medium text-foreground">{formatAge(oldest)}</span>
+          <span className="text-muted-foreground">
+            {pendingTab ? 'Oldest submission' : 'Latest decision'}
+          </span>
+          <span className="font-medium text-foreground">{formatAge(metricDate)}</span>
         </div>
       </div>
 
@@ -674,11 +766,11 @@ export function AdminVerificationQueue({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => void loadPage(queue.page)}
-            disabled={loadingQueue}
+            onClick={() => void loadPage(activeTab, activeQueue.page)}
+            disabled={loadingTab !== null}
           >
             <RefreshCw
-              className={`size-3.5 ${loadingQueue ? 'animate-spin' : ''}`}
+              className={`size-3.5 ${loadingTab ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
             Retry
@@ -686,20 +778,43 @@ export function AdminVerificationQueue({
         </div>
       ) : null}
 
-      <QueueTable queue={queue} onOpen={(id) => void openDetail(id)} />
+      <Tabs value={activeTab} onValueChange={(value) => void changeTab(value)}>
+        <TabsList aria-label="Profile verification queues">
+          {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => (
+            <TabsTrigger key={tab} value={tab} disabled={loadingTab !== null}>
+              {loadingTab === tab ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : null}
+              {tabLabels[tab]}
+              {queues[tab] ? (
+                <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
+              ) : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {queue.totalPages > 1 ? (
+        {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => {
+          const tabQueue = queues[tab] ?? emptyQueue(tab, initialQueue.limit);
+          return (
+            <TabsContent key={tab} value={tab} className="mt-5">
+              <QueueTable queue={tabQueue} onOpen={(id) => void openDetail(id)} />
+            </TabsContent>
+          );
+        })}
+      </Tabs>
+
+      {activeQueue.totalPages > 1 ? (
         <div className="mt-5 flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            Page {queue.page} of {queue.totalPages}
+            Page {activeQueue.page} of {activeQueue.totalPages}
           </p>
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void loadPage(queue.page - 1)}
-              disabled={loadingQueue || queue.page <= 1}
+              onClick={() => void loadPage(activeTab, activeQueue.page - 1)}
+              disabled={loadingTab !== null || activeQueue.page <= 1}
             >
               Previous
             </Button>
@@ -707,8 +822,8 @@ export function AdminVerificationQueue({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void loadPage(queue.page + 1)}
-              disabled={loadingQueue || queue.page >= queue.totalPages}
+              onClick={() => void loadPage(activeTab, activeQueue.page + 1)}
+              disabled={loadingTab !== null || activeQueue.page >= activeQueue.totalPages}
             >
               Next
             </Button>

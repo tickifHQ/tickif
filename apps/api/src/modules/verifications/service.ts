@@ -423,13 +423,18 @@ export const verificationsService = {
   },
 
   async listAdmin(query: AdminVerificationQueueQuery) {
-    const { items, total } = await verificationsRepository.listPending(query);
+    const { items, total } = await verificationsRepository.listAdminQueue(query);
     return {
-      items: items.map((item) => ({ ...item, submittedAt: item.submittedAt.toISOString() })),
+      items: items.map((item) => ({
+        ...item,
+        submittedAt: item.submittedAt.toISOString(),
+        reviewedAt: item.reviewedAt?.toISOString() ?? null,
+      })),
       page: query.page,
       limit: query.limit,
       total,
       totalPages: total === 0 ? 0 : Math.ceil(total / query.limit),
+      tab: query.tab,
     };
   },
 

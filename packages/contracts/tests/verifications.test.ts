@@ -1,13 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_DOCUMENT_TYPE,
+  adminVerificationQueueQuerySchema,
   rejectVerificationSchema,
   verificationDocumentUploadSchema,
 } from '../src/verifications.js';
 
 describe('verification contracts', () => {
+  it('keeps admin verification queue tabs closed and defaults to new submissions', () => {
+    expect(adminVerificationQueueQuerySchema.parse({})).toMatchObject({
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.NEW,
+      page: 1,
+      limit: 20,
+    });
+    expect(
+      [
+        ADMIN_VERIFICATION_QUEUE_TAB.NEW,
+        ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
+        ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+        ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED,
+      ].every((tab) => adminVerificationQueueQuerySchema.safeParse({ tab }).success),
+    ).toBe(true);
+    expect(adminVerificationQueueQuerySchema.safeParse({ tab: 'draft' }).success).toBe(false);
+  });
+
   it('keeps the supported business-document set closed and typed', () => {
     expect(BUSINESS_VERIFICATION_DOCUMENT_TYPES).toContain(
       VERIFICATION_DOCUMENT_TYPE.GST_REGISTRATION_CERTIFICATE,

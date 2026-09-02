@@ -2,6 +2,25 @@ import { z } from 'zod';
 
 export const MIN_VERIFICATION_PUBLISHED_PROJECTS = 3;
 
+export const ADMIN_VERIFICATION_QUEUE_TAB = {
+  NEW: 'new',
+  RE_REVIEW: 're_review',
+  ACCEPTED: 'accepted',
+  CHANGES_REQUESTED: 'changes_requested',
+} as const;
+
+export const ADMIN_VERIFICATION_QUEUE_TAB_VALUES = [
+  ADMIN_VERIFICATION_QUEUE_TAB.NEW,
+  ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
+  ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+  ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED,
+] as const;
+
+export const adminVerificationQueueTabSchema = z
+  .enum(ADMIN_VERIFICATION_QUEUE_TAB_VALUES)
+  .meta({ id: 'AdminVerificationQueueTab' });
+export type AdminVerificationQueueTab = z.infer<typeof adminVerificationQueueTabSchema>;
+
 export const VERIFICATION_APPLICATION_STATUS = {
   DRAFT: 'draft',
   PENDING: 'pending',
@@ -210,6 +229,7 @@ export type VerificationStateResponse = z.infer<typeof verificationStateResponse
 
 export const adminVerificationQueueQuerySchema = z
   .object({
+    tab: adminVerificationQueueTabSchema.default(ADMIN_VERIFICATION_QUEUE_TAB.NEW),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
   })
@@ -227,7 +247,13 @@ export const adminVerificationQueueItemSchema = z
     organizationName: z.string().min(1),
     designerName: z.string().min(1),
     attempt: z.number().int().positive(),
+    status: z.enum([
+      VERIFICATION_APPLICATION_STATUS.PENDING,
+      VERIFICATION_APPLICATION_STATUS.VERIFIED,
+      VERIFICATION_APPLICATION_STATUS.REJECTED,
+    ]),
     submittedAt: z.string().datetime(),
+    reviewedAt: z.string().datetime().nullable(),
     documentCount: z.number().int().nonnegative(),
   })
   .meta({ id: 'AdminVerificationQueueItem' });
@@ -239,6 +265,7 @@ export const adminVerificationQueueResponseSchema = z
     limit: z.number().int().positive(),
     total: z.number().int().nonnegative(),
     totalPages: z.number().int().nonnegative(),
+    tab: adminVerificationQueueTabSchema,
   })
   .meta({ id: 'AdminVerificationQueueResponse' });
 export type AdminVerificationQueueResponse = z.infer<typeof adminVerificationQueueResponseSchema>;
