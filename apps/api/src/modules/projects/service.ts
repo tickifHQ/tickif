@@ -102,6 +102,7 @@ function toResponse(
     slug: row.slug,
     description: row.description,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
@@ -1312,6 +1313,13 @@ async function buildPublicProjectDetail(
 }
 
 export const projectsService = {
+  async assertPublicProjectNotDeleted(id: string): Promise<void> {
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (lifecycle?.status === 'deleted') {
+      throw AppError.gone('Project permanently deleted');
+    }
+  },
+
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
@@ -1475,13 +1483,18 @@ export const projectsService = {
     const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
     if (!lifecycle) throw AppError.notFound('Project not found');
     if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
-    if (lifecycle.status !== 'delisted') throw AppError.notFound('Project not found');
+    if (
+      lifecycle.status !== 'delisted' &&
+      !(lifecycle.status === 'archived' && lifecycle.archiveReason === 'organization_retention')
+    ) {
+      throw AppError.notFound('Project not found');
+    }
 
     return {
       availability: 'unavailable',
       id: lifecycle.id,
       title: lifecycle.title,
-      status: 'delisted',
+      status: lifecycle.status,
       designer: {
         displayName: lifecycle.designerDisplayName,
         slug: lifecycle.designerOrgSlug,
@@ -1573,6 +1586,7 @@ export const projectsService = {
       toStatus: 'archived',
       actorUserId: caller.userId,
       action: 'archive',
+      patch: { archiveReason: 'manual' },
     });
     if (!archived || archived === 'unresolved_review_comments') throw AppError.invalidTransition();
     return toDetailResponse(archived, await projectsRepository.listRooms(projectId));
@@ -1589,6 +1603,11 @@ export const projectsService = {
       toStatus: 'draft',
       actorUserId: caller.userId,
       action: 'restore',
+      patch: {
+        archiveReason: null,
+        publishedAt: null,
+        featuredAt: null,
+      },
     });
     if (!restored || restored === 'unresolved_review_comments') throw AppError.invalidTransition();
     return toDetailResponse(restored, await projectsRepository.listRooms(projectId));

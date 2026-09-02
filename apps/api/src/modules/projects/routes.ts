@@ -155,6 +155,18 @@ const publicProjectByIdRoute = createRoute({
   },
 });
 
+const publicProjectStatusRoute = createRoute({
+  method: 'head',
+  path: '/public/{id}',
+  tags: ['Projects'],
+  summary: 'Check whether a retained public project URL is permanently gone',
+  request: { params: projectIdParamSchema },
+  responses: {
+    204: { description: 'The project URL is not permanently gone' },
+    410: errorJson('Project permanently deleted'),
+  },
+});
+
 const createProjectRoute = createRoute({
   method: 'post',
   path: '/',
@@ -613,6 +625,12 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       caller(c.get('user'), c.get('session')),
     );
     return c.json(result, 200);
+  })
+  .openapi(publicProjectStatusRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    await projectsService.assertPublicProjectNotDeleted(id);
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return c.body(null, 204);
   })
   .openapi(publicProjectByIdRoute, async (c) => {
     const { id } = c.req.valid('param');
