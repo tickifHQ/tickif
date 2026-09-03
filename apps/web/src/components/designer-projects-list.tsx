@@ -320,6 +320,7 @@ export function DesignerProjectsList({
                       projectId={project.id}
                       projectTitle={project.title}
                       projectStatus={project.status}
+                      archiveReason={project.archiveReason}
                       canArchive={canArchiveProjects}
                       canDelete={canDeleteProjects}
                     />

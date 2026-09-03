@@ -55,6 +55,7 @@ describe('DesignerProjectRowActions', () => {
             slug: 'copied-draft',
             description: null,
             status: 'draft',
+            archiveReason: null,
             rejectionReasonCode: null,
             moderationNote: null,
             propertyTypeSlug: null,
@@ -99,6 +100,7 @@ describe('DesignerProjectRowActions', () => {
           slug: 'warm-walnut-family-home',
           description: null,
           status: 'draft',
+          archiveReason: null,
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: null,
@@ -133,6 +135,7 @@ describe('DesignerProjectRowActions', () => {
           slug: 'warm-walnut-family-home',
           description: null,
           status: 'archived',
+          archiveReason: 'manual',
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: null,
@@ -167,6 +170,7 @@ describe('DesignerProjectRowActions', () => {
           slug: 'warm-walnut-family-home',
           description: null,
           status: 'draft',
+          archiveReason: null,
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: null,
@@ -320,5 +324,26 @@ describe('DesignerProjectRowActions', () => {
       });
       expect(mock.router.refresh).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('hides restore and delete for an organization-retention archive', () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="archived"
+        archiveReason="organization_retention"
+        canArchive
+        canDelete
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(screen.queryByRole('menuitem', { name: /restore to drafts/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /delete project/i })).not.toBeInTheDocument();
   });
 });

@@ -620,6 +620,7 @@ describe('projectsService.update', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'changes_requested',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'changes_requested' }));
@@ -644,6 +645,7 @@ describe('projectsService.update', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
@@ -662,6 +664,7 @@ describe('projectsService.reorderRooms', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.reorderRooms).mockResolvedValue(null);
@@ -683,6 +686,7 @@ describe('projectsService.linkImage', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
@@ -701,6 +705,7 @@ describe('projectsService.deleteImage', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
@@ -721,6 +726,7 @@ describe('projectsService.deleteImage', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
@@ -747,6 +753,7 @@ describe('projectsService project lifecycle', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'published',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'archived' }));
@@ -777,6 +784,7 @@ describe('projectsService project lifecycle', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'archived',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'draft' }));
@@ -799,12 +807,27 @@ describe('projectsService project lifecycle', () => {
     });
   });
 
+  it('does not restore a project managed by organization retention', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.restore(row().id, caller)).rejects.toMatchObject({ status: 409 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
   it('marks a published project deleted without removing its audit row', async () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'published',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'deleted' }));
@@ -827,12 +850,27 @@ describe('projectsService project lifecycle', () => {
     });
   });
 
+  it('does not delete a project managed by organization retention', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.delete(row().id, caller)).rejects.toMatchObject({ status: 409 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
   it('rejects delete when the organization role lacks delete permission', async () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: 'another-user',
     });
     vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
@@ -847,6 +885,7 @@ describe('projectsService project lifecycle', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status,
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
 
@@ -865,6 +904,7 @@ describe('projectsService.getCompleteness', () => {
       designerId: row().designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
@@ -911,6 +951,7 @@ describe('projectsService.submit', () => {
       designerId: complete.designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
@@ -945,6 +986,7 @@ describe('projectsService.submit', () => {
       designerId: requestedChanges.designerId,
       organizationId: 'org_1',
       status: 'changes_requested',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(requestedChanges);
@@ -986,6 +1028,7 @@ describe('projectsService.submit', () => {
       designerId: rejected.designerId,
       organizationId: 'org_1',
       status: 'rejected',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(rejected);
@@ -1024,6 +1067,7 @@ describe('projectsService.submit', () => {
       designerId: complete.designerId,
       organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);

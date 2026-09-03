@@ -255,6 +255,7 @@ export const projectListItemSchema = z
     city: z.string().nullable(),
     locality: z.string().nullable(),
     status: projectStatus,
+    archiveReason: projectArchiveReason.nullable(),
     rejectionReasonCode: z.string().nullable(),
     moderationNote: z.string().nullable(),
     coverImageUrl: z.string().url().nullable(),

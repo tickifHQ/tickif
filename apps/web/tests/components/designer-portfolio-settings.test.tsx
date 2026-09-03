@@ -103,6 +103,7 @@ const portfolioProjects: PortfolioProjectsResponse = {
       city: 'Chennai',
       locality: 'OMR',
       status: 'published',
+      archiveReason: null,
       statusGroup: 'published',
       rejectionReasonCode: null,
       moderationNote: null,
