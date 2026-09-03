@@ -80,7 +80,7 @@ describe('E-34 migration safety on populated designer_profile', () => {
     await testPool?.end();
     await adminPool?.query(`DROP DATABASE IF EXISTS "${TEMP_DB}"`);
     await adminPool?.end();
-  });
+  }, 30000);
 
   it('preserves and backfills existing data through expand (0008) + contract (0009)', async () => {
     // 1. Apply migrations 0000–0007 (pre-E34 state)
