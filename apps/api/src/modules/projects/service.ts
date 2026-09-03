@@ -29,6 +29,7 @@ import type {
   ProjectReviewComment,
   ProjectReviewCommentsResponse,
   PublicProjectBySlugResponse,
+  PublicProjectPageResponse,
   ListProjectsResponse,
   ProjectRoom,
   PublicProjectGalleryImage,
@@ -101,6 +102,7 @@ function toResponse(
     slug: row.slug,
     description: row.description,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
@@ -489,6 +491,7 @@ function toListItemFields(
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     coverImageUrl,
@@ -566,6 +569,9 @@ function buildPortfolioStatusCounts(
     published: count(['published']),
     changesRequested: count(['changes_requested']),
     rejected: count(['rejected']),
+    archived: count(['archived']),
+    delisted: count(['delisted']),
+    deleted: count(['deleted']),
   };
 }
 
@@ -747,6 +753,7 @@ async function assertProjectCapability(
   capability:
     | typeof ORGANIZATION_CAPABILITY.WRITE_PROJECTS
     | typeof ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS
     | typeof ORGANIZATION_CAPABILITY.DELETE_PROJECTS,
 ): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
@@ -1043,6 +1050,7 @@ function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] |
   if (status === 'draft') return ['draft', 'changes_requested', 'rejected'];
   if (status === 'in_review') return ['submitted', 'in_review'];
   if (status === 'published') return ['published'];
+  if (status === 'archived') return ['archived'];
   return undefined;
 }
 
@@ -1306,6 +1314,13 @@ async function buildPublicProjectDetail(
 }
 
 export const projectsService = {
+  async assertPublicProjectNotDeleted(id: string): Promise<void> {
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (lifecycle?.status === 'deleted') {
+      throw AppError.gone('Project permanently deleted');
+    }
+  },
+
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
@@ -1460,11 +1475,32 @@ export const projectsService = {
     return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
   },
 
-  async getPublicById(id: string): Promise<PublicProjectBySlugResponse> {
+  async getPublicById(id: string): Promise<PublicProjectPageResponse> {
     const result = await projectsRepository.findPublicProjectById(id);
-    if (!result) throw AppError.notFound('Project not found');
+    if (result) {
+      return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    }
 
-    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (!lifecycle) throw AppError.notFound('Project not found');
+    if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
+    if (
+      lifecycle.status !== 'delisted' &&
+      !(lifecycle.status === 'archived' && lifecycle.archiveReason === 'organization_retention')
+    ) {
+      throw AppError.notFound('Project not found');
+    }
+
+    return {
+      availability: 'unavailable',
+      id: lifecycle.id,
+      title: lifecycle.title,
+      status: lifecycle.status,
+      designer: {
+        displayName: lifecycle.designerDisplayName,
+        slug: lifecycle.designerOrgSlug,
+      },
+    };
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {
@@ -1520,21 +1556,77 @@ export const projectsService = {
   },
 
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {
-    await requireEditableProject(projectId, caller, ORGANIZATION_CAPABILITY.DELETE_PROJECTS);
-    const outcome = await projectsRepository.deleteProject(projectId);
-    if (outcome === 'moderated') {
-      throw AppError.conflict('Projects with moderation history cannot be deleted');
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.DELETE_PROJECTS);
+    if (ownership.status === 'deleted') throw AppError.conflict('Project is already deleted');
+    if (ownership.status === 'delisted') {
+      throw AppError.conflict('Delisted projects follow the organization retention policy');
     }
-    if (outcome === 'missing') {
-      throw AppError.notFound('Project not found');
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
     }
+    const deleted = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: ownership.status,
+      toStatus: 'deleted',
+      actorUserId: caller.userId,
+      action: 'delete',
+    });
+    if (!deleted) throw AppError.invalidTransition();
     return { id: projectId, deleted: true };
+  },
+
+  async archive(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
+    if (ownership.status !== 'draft' && ownership.status !== 'published') {
+      throw AppError.conflict('Only draft or published projects can be archived');
+    }
+    const archived = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: ownership.status,
+      toStatus: 'archived',
+      actorUserId: caller.userId,
+      action: 'archive',
+      patch: { archiveReason: 'manual' },
+    });
+    if (!archived || archived === 'unresolved_review_comments') throw AppError.invalidTransition();
+    return toDetailResponse(archived, await projectsRepository.listRooms(projectId));
+  },
+
+  async restore(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
+    if (ownership.status !== 'archived') throw AppError.conflict('Project is not archived');
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
+    }
+    const restored = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: 'archived',
+      toStatus: 'draft',
+      actorUserId: caller.userId,
+      action: 'restore',
+      patch: {
+        archiveReason: null,
+        publishedAt: null,
+        featuredAt: null,
+      },
+    });
+    if (!restored || restored === 'unresolved_review_comments') throw AppError.invalidTransition();
+    return toDetailResponse(restored, await projectsRepository.listRooms(projectId));
   },
 
   async duplicate(projectId: string, caller: Caller): Promise<DuplicateProjectResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.WRITE_PROJECTS);
+    if (ownership.status === 'deleted' || ownership.status === 'delisted') {
+      throw AppError.conflict('Deleted or delisted projects cannot be duplicated');
+    }
 
     const source = await projectsRepository.findById(projectId);
     if (!source) throw AppError.notFound('Project not found');

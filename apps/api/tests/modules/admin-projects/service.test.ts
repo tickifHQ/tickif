@@ -69,6 +69,7 @@ function project(overrides: Partial<AdminProjectRecord> = {}): AdminProjectRecor
     slug: 'complete-project',
     description: null,
     status: 'in_review',
+    archiveReason: null,
     propertyTypeSlug: 'residential',
     propertySubtypeSlug: null,
     scopeSlug: 'full-home',

@@ -1,10 +1,7 @@
 import { ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
-import {
-  SELF_SERVICE_MODERATION_ACTIONS,
-  VERIFICATION_APPLICATION_STATUS,
-} from '@repo/contracts';
+import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -48,7 +45,17 @@ export type ProjectOwnership = {
   organizationId: string;
   teamId?: string;
   status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
   ownerUserId: string | null;
+};
+
+export type PublicProjectLifecycleRecord = {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
+  designerDisplayName: string;
+  designerOrgSlug: string;
 };
 
 export type UploadImageCounts = {
@@ -75,6 +82,7 @@ export type ProjectTransitionPatch = Partial<
     | 'rejectionReasonCode'
     | 'moderationNote'
     | 'featuredAt'
+    | 'archiveReason'
   >
 >;
 
@@ -130,6 +138,7 @@ export type ProjectListItemRecord = Pick<
   | 'citySlug'
   | 'localitySlug'
   | 'status'
+  | 'archiveReason'
   | 'rejectionReasonCode'
   | 'moderationNote'
   | 'coverImageId'
@@ -428,6 +437,7 @@ export const projectsRepository = {
           citySlug: schema.project.citySlug,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
+          archiveReason: schema.project.archiveReason,
           rejectionReasonCode: schema.project.rejectionReasonCode,
           moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
@@ -1057,54 +1067,6 @@ export const projectsRepository = {
     };
   },
 
-  async deleteProject(id: string): Promise<'deleted' | 'moderated' | 'missing'> {
-    return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ id: schema.project.id })
-        .from(schema.project)
-        .where(eq(schema.project.id, id))
-        .for('update')
-        .limit(1);
-      if (!project) return 'missing';
-
-      // Only a reviewer verdict is worth retaining. A project the designer submitted and then
-      // withdrew has history but no verdict, and blocking on that stranded such drafts
-      // permanently — nothing could ever clear them.
-      const [reviewedEvent] = await tx
-        .select({ id: schema.projectModerationEvent.id })
-        .from(schema.projectModerationEvent)
-        .where(
-          and(
-            eq(schema.projectModerationEvent.projectId, id),
-            notInArray(schema.projectModerationEvent.action, [...SELF_SERVICE_MODERATION_ACTIONS]),
-          ),
-        )
-        .limit(1);
-      const [reviewComment] = await tx
-        .select({ id: schema.projectReviewComment.id })
-        .from(schema.projectReviewComment)
-        .where(eq(schema.projectReviewComment.projectId, id))
-        .limit(1);
-      if (reviewedEvent || reviewComment) return 'moderated';
-
-      // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
-      // even if the check above ever regresses. Self-service rows must therefore go explicitly.
-      await tx
-        .delete(schema.projectModerationEvent)
-        .where(eq(schema.projectModerationEvent.projectId, id));
-      await tx.delete(schema.project).where(eq(schema.project.id, id));
-      await recordSearchProjectionEvents(tx, [
-        {
-          entityKind: 'project',
-          entityId: id,
-          operation: 'delete',
-          sourceUpdatedAt: new Date(),
-        },
-      ]);
-      return 'deleted';
-    });
-  },
-
   async findDesignerByOrgId(orgId: string): Promise<{ id: string; orgId: string } | null> {
     const [row] = await db
       .select({ id: schema.designerProfile.id, orgId: schema.designerProfile.orgId })
@@ -1154,6 +1116,7 @@ export const projectsRepository = {
         organizationId: schema.designerProfile.orgId,
         teamId: schema.designerProfile.teamId,
         status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
         ownerUserId: schema.designerProfile.userId,
       })
       .from(schema.project)
@@ -1568,6 +1531,26 @@ export const projectsRepository = {
         isKycVerified: row.designerIsKycVerified,
       },
     };
+  },
+
+  /** Minimal retained identity used to distinguish private, delisted, and gone URLs. */
+  async findPublicProjectLifecycleById(id: string): Promise<PublicProjectLifecycleRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.project.id,
+        title: schema.project.title,
+        status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.project.id, id))
+      .limit(1);
+
+    return row ?? null;
   },
 
   /**

@@ -12,6 +12,13 @@ vi.mock('@/lib/auth-guard', () => ({
   requireAuth: mock.requireAuth,
 }));
 
+vi.mock('@/lib/current-org-role', () => ({
+  getCurrentOrgCapabilities: vi.fn().mockResolvedValue({
+    archiveProjects: true,
+    deleteProjects: true,
+  }),
+}));
+
 vi.mock('next/headers', () => ({
   headers: mock.headers,
 }));

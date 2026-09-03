@@ -337,6 +337,13 @@
       "when": 1788375000050,
       "tag": "0049_crazy_giant_man",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788472244544,
+      "tag": "0050_dizzy_albert_cleary",
+      "breakpoints": true
     }
   ]
 }

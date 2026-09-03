@@ -5,6 +5,8 @@ import { DesignerProjectRowActions } from '../../src/components/designer-project
 const mock = vi.hoisted(() => ({
   duplicatePost: vi.fn(),
   deleteProject: vi.fn(),
+  archivePost: vi.fn(),
+  restorePost: vi.fn(),
   withdrawPost: vi.fn(),
   router: {
     push: vi.fn(),
@@ -23,6 +25,12 @@ vi.mock('@/lib/api', () => ({
         ':id': {
           duplicate: {
             $post: mock.duplicatePost,
+          },
+          archive: {
+            $post: mock.archivePost,
+          },
+          restore: {
+            $post: mock.restorePost,
           },
           $delete: mock.deleteProject,
           withdraw: {
@@ -47,6 +55,7 @@ describe('DesignerProjectRowActions', () => {
             slug: 'copied-draft',
             description: null,
             status: 'draft',
+            archiveReason: null,
             rejectionReasonCode: null,
             moderationNote: null,
             propertyTypeSlug: null,
@@ -91,6 +100,7 @@ describe('DesignerProjectRowActions', () => {
           slug: 'warm-walnut-family-home',
           description: null,
           status: 'draft',
+          archiveReason: null,
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: null,
@@ -108,6 +118,77 @@ describe('DesignerProjectRowActions', () => {
           metadata: null,
           publishedAt: null,
           submittedAt: null,
+          reviewComments: [],
+          createdAt: '2026-07-02T00:00:00.000Z',
+          updatedAt: '2026-07-02T00:00:00.000Z',
+          rooms: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    mock.archivePost.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: '11111111-1111-4111-8111-111111111111',
+          designerId: '44444444-4444-4444-8444-444444444444',
+          title: 'Warm Walnut Family Home',
+          slug: 'warm-walnut-family-home',
+          description: null,
+          status: 'archived',
+          archiveReason: 'manual',
+          rejectionReasonCode: null,
+          moderationNote: null,
+          propertyTypeSlug: null,
+          propertySubtypeSlug: null,
+          scopeSlug: null,
+          bhkSlug: null,
+          sizeSqft: null,
+          citySlug: null,
+          localitySlug: null,
+          buildingName: null,
+          budgetBandSlug: null,
+          completedMonth: null,
+          durationMonths: null,
+          coverImageId: null,
+          metadata: null,
+          publishedAt: null,
+          submittedAt: null,
+          reviewComments: [],
+          createdAt: '2026-07-02T00:00:00.000Z',
+          updatedAt: '2026-07-02T00:00:00.000Z',
+          rooms: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    mock.restorePost.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: '11111111-1111-4111-8111-111111111111',
+          designerId: '44444444-4444-4444-8444-444444444444',
+          title: 'Warm Walnut Family Home',
+          slug: 'warm-walnut-family-home',
+          description: null,
+          status: 'draft',
+          archiveReason: null,
+          rejectionReasonCode: null,
+          moderationNote: null,
+          propertyTypeSlug: null,
+          propertySubtypeSlug: null,
+          scopeSlug: null,
+          bhkSlug: null,
+          sizeSqft: null,
+          citySlug: null,
+          localitySlug: null,
+          buildingName: null,
+          budgetBandSlug: null,
+          completedMonth: null,
+          durationMonths: null,
+          coverImageId: null,
+          metadata: null,
+          publishedAt: null,
+          submittedAt: null,
+          reviewComments: [],
           createdAt: '2026-07-02T00:00:00.000Z',
           updatedAt: '2026-07-02T00:00:00.000Z',
           rooms: [],
@@ -143,6 +224,7 @@ describe('DesignerProjectRowActions', () => {
         projectId="11111111-1111-4111-8111-111111111111"
         projectTitle="Warm Walnut Family Home"
         projectStatus="draft"
+        canDelete
       />,
     );
 
@@ -150,7 +232,7 @@ describe('DesignerProjectRowActions', () => {
       screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
       { button: 0, ctrlKey: false },
     );
-    fireEvent.click(screen.getByRole('menuitem', { name: /delete draft/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /delete project/i }));
     await screen.findByRole('dialog');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
@@ -171,5 +253,97 @@ describe('DesignerProjectRowActions', () => {
     await waitFor(() => {
       expect(mock.router.refresh).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('archives a project when the member has archive permission', async () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="draft"
+        canArchive
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /archive project/i }));
+
+    await waitFor(() => {
+      expect(mock.archivePost).toHaveBeenCalledWith({
+        param: { id: '11111111-1111-4111-8111-111111111111' },
+      });
+      expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('hides permanent delete when the member lacks delete permission', () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="draft"
+        canArchive
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    expect(screen.queryByRole('menuitem', { name: /delete project/i })).not.toBeInTheDocument();
+  });
+
+  it('restores an archived project to drafts without exposing edit or duplicate actions', async () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="archived"
+        canArchive
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: /duplicate warm walnut family home/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /edit warm walnut family home/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: /restore to drafts/i }));
+
+    await waitFor(() => {
+      expect(mock.restorePost).toHaveBeenCalledWith({
+        param: { id: '11111111-1111-4111-8111-111111111111' },
+      });
+      expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('hides restore and delete for an organization-retention archive', () => {
+    render(
+      <DesignerProjectRowActions
+        projectId="11111111-1111-4111-8111-111111111111"
+        projectTitle="Warm Walnut Family Home"
+        projectStatus="archived"
+        archiveReason="organization_retention"
+        canArchive
+        canDelete
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /more actions for warm walnut family home/i }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(screen.queryByRole('menuitem', { name: /restore to drafts/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /delete project/i })).not.toBeInTheDocument();
   });
 });

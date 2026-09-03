@@ -8,9 +8,24 @@ import { projectReviewCommentSchema } from './review-comments';
  */
 
 export const projectStatus = z
-  .enum(['draft', 'submitted', 'in_review', 'published', 'rejected', 'changes_requested'])
+  .enum([
+    'draft',
+    'submitted',
+    'in_review',
+    'published',
+    'rejected',
+    'changes_requested',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .meta({ id: 'ProjectStatus' });
 export type ProjectStatus = z.infer<typeof projectStatus>;
+
+export const projectArchiveReason = z
+  .enum(['manual', 'organization_retention'])
+  .meta({ id: 'ProjectArchiveReason' });
+export type ProjectArchiveReason = z.infer<typeof projectArchiveReason>;
 
 const taxonomySlug = z
   .string()
@@ -152,6 +167,7 @@ export const projectResponseSchema = z
     slug: z.string(),
     description: z.string().nullable(),
     status: projectStatus,
+    archiveReason: projectArchiveReason.nullable(),
     rejectionReasonCode: z.string().nullable(),
     moderationNote: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
@@ -208,7 +224,7 @@ export const linkProjectImageSchema = z
 export type LinkProjectImageInput = z.infer<typeof linkProjectImageSchema>;
 
 export const projectListStatus = z
-  .enum(['all', 'draft', 'in_review', 'published'])
+  .enum(['all', 'draft', 'in_review', 'published', 'archived'])
   .default('all')
   .meta({ id: 'ProjectListStatus' });
 export type ProjectListStatus = z.infer<typeof projectListStatus>;
@@ -239,6 +255,7 @@ export const projectListItemSchema = z
     city: z.string().nullable(),
     locality: z.string().nullable(),
     status: projectStatus,
+    archiveReason: projectArchiveReason.nullable(),
     rejectionReasonCode: z.string().nullable(),
     moderationNote: z.string().nullable(),
     coverImageUrl: z.string().url().nullable(),
@@ -261,13 +278,32 @@ export const listProjectsResponseSchema = z
 export type ListProjectsResponse = z.infer<typeof listProjectsResponseSchema>;
 
 export const portfolioProjectStatus = z
-  .enum(['all', 'draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .enum([
+    'all',
+    'draft',
+    'in_review',
+    'published',
+    'changes_requested',
+    'rejected',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .default('all')
   .meta({ id: 'PortfolioProjectStatus' });
 export type PortfolioProjectStatus = z.infer<typeof portfolioProjectStatus>;
 
 export const portfolioProjectStatusGroup = z
-  .enum(['draft', 'in_review', 'published', 'changes_requested', 'rejected'])
+  .enum([
+    'draft',
+    'in_review',
+    'published',
+    'changes_requested',
+    'rejected',
+    'archived',
+    'delisted',
+    'deleted',
+  ])
   .meta({ id: 'PortfolioProjectStatusGroup' });
 export type PortfolioProjectStatusGroup = z.infer<typeof portfolioProjectStatusGroup>;
 
@@ -304,6 +340,9 @@ export const portfolioProjectStatusCountsSchema = z
     published: z.number().int().min(0),
     changesRequested: z.number().int().min(0),
     rejected: z.number().int().min(0),
+    archived: z.number().int().min(0),
+    delisted: z.number().int().min(0),
+    deleted: z.number().int().min(0),
   })
   .meta({ id: 'PortfolioProjectStatusCounts' });
 export type PortfolioProjectStatusCounts = z.infer<typeof portfolioProjectStatusCountsSchema>;
@@ -615,6 +654,7 @@ export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommend
 export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .omit({
     designerId: true,
+    archiveReason: true,
     coverImageId: true,
     metadata: true,
     submittedAt: true,
@@ -636,6 +676,29 @@ export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   })
   .meta({ id: 'PublicProjectDetail' });
 export type PublicProjectDetailResponse = z.infer<typeof publicProjectDetailResponseSchema>;
+
+/** Minimal public response retained while an organization-owned project is recoverable. */
+export const publicProjectUnavailableResponseSchema = z
+  .object({
+    availability: z.literal('unavailable'),
+    id: z.uuid(),
+    title: z.string(),
+    status: z.enum(['delisted', 'archived']),
+    designer: z.object({
+      displayName: z.string(),
+      slug: z.string().nullable(),
+    }),
+  })
+  .meta({ id: 'PublicProjectUnavailable' });
+export type PublicProjectUnavailableResponse = z.infer<
+  typeof publicProjectUnavailableResponseSchema
+>;
+
+export const publicProjectPageResponseSchema = z.union([
+  publicProjectDetailResponseSchema,
+  publicProjectUnavailableResponseSchema,
+]);
+export type PublicProjectPageResponse = z.infer<typeof publicProjectPageResponseSchema>;
 
 /** Compatibility alias for existing slug-route consumers. */
 export const publicProjectBySlugResponseSchema = publicProjectDetailResponseSchema;

@@ -20,7 +20,7 @@ import {
   projectDetailResponseSchema,
   publicImageDetailParamSchema,
   publicImageDetailResponseSchema,
-  publicProjectDetailResponseSchema,
+  publicProjectPageResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
   projectIdParamSchema,
@@ -148,9 +148,22 @@ const publicProjectByIdRoute = createRoute({
     200: {
       description:
         'Published project read model with rooms, gallery, designer, and recommendations',
-      content: { 'application/json': { schema: publicProjectDetailResponseSchema } },
+      content: { 'application/json': { schema: publicProjectPageResponseSchema } },
     },
     404: errorJson('Project not found or not published'),
+    410: errorJson('Project permanently deleted'),
+  },
+});
+
+const publicProjectStatusRoute = createRoute({
+  method: 'head',
+  path: '/public/{id}',
+  tags: ['Projects'],
+  summary: 'Check whether a retained public project URL is permanently gone',
+  request: { params: projectIdParamSchema },
+  responses: {
+    204: { description: 'The project URL is not permanently gone' },
+    410: errorJson('Project permanently deleted'),
   },
 });
 
@@ -207,7 +220,7 @@ const deleteProjectRoute = createRoute({
   method: 'delete',
   path: '/{id}',
   tags: ['Projects'],
-  summary: 'Delete an owned editable project',
+  summary: 'Mark an owned project deleted while retaining its audit data',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { params: projectIdParamSchema },
@@ -219,7 +232,47 @@ const deleteProjectRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot delete this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft or changes-requested projects can be deleted'),
+    409: errorJson('Project is already deleted or governed by organization retention'),
+  },
+});
+
+const archiveProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/archive',
+  tags: ['Projects'],
+  summary: 'Archive an owned draft or published project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Archived project',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot archive this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Only draft or published projects can be archived'),
+  },
+});
+
+const restoreProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/restore',
+  tags: ['Projects'],
+  summary: 'Restore an archived project to draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Restored project draft',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot restore this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Project is not archived'),
   },
 });
 
@@ -573,6 +626,12 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     );
     return c.json(result, 200);
   })
+  .openapi(publicProjectStatusRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    await projectsService.assertPublicProjectNotDeleted(id);
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return c.body(null, 204);
+  })
   .openapi(publicProjectByIdRoute, async (c) => {
     const { id } = c.req.valid('param');
     const result = await projectsService.getPublicById(id);
@@ -603,6 +662,16 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       caller(c.get('user'), c.get('session')),
     );
     return c.json(project, 200);
+  })
+  .openapi(archiveProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.archive(id, caller(c.get('user'), c.get('session')));
+    return c.json(result, 200);
+  })
+  .openapi(restoreProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.restore(id, caller(c.get('user'), c.get('session')));
+    return c.json(result, 200);
   })
   .openapi(deleteProjectRoute, async (c) => {
     const { id } = c.req.valid('param');

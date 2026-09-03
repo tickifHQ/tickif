@@ -13,6 +13,9 @@ export const moderationAction = z
     'reject',
     'unpublish',
     'metadata_corrected',
+    'archive',
+    'restore',
+    'delete',
   ])
   .meta({ id: 'ModerationAction' });
 export type ModerationAction = z.infer<typeof moderationAction>;
@@ -30,6 +33,9 @@ export const SELF_SERVICE_MODERATION_ACTIONS: readonly ModerationAction[] = [
   'submit',
   'resubmit',
   'withdraw',
+  'archive',
+  'restore',
+  'delete',
 ];
 
 export const moderationFieldDiff = z
