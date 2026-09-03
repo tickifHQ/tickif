@@ -20,8 +20,15 @@ describe('project lifecycle schema', () => {
     ]);
   });
 
-  it('appends self-service lifecycle audit actions', () => {
-    expect(moderationActionEnum.enumValues.slice(-3)).toEqual(['archive', 'restore', 'delete']);
+  it('appends self-service and organization-retention lifecycle audit actions', () => {
+    expect(moderationActionEnum.enumValues.slice(-6)).toEqual([
+      'archive',
+      'restore',
+      'delete',
+      'organization_delist',
+      'organization_archive',
+      'organization_restore',
+    ]);
   });
 
   it('distinguishes manual archives from organization-retention archives', () => {

@@ -139,6 +139,9 @@ export const moderationActionEnum = pgEnum('moderation_action', [
   'archive',
   'restore',
   'delete',
+  'organization_delist',
+  'organization_archive',
+  'organization_restore',
 ]);
 
 export const projectReviewCommentStatusEnum = pgEnum('project_review_comment_status', [

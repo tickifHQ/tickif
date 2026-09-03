@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   organizationMemberRoleSchema,
   organizationBranchesResponseSchema,
+  organizationRetentionResponseSchema,
+  permanentlyEraseOrganizationSchema,
+  placeOrganizationRetentionHoldSchema,
+  requestOrganizationDeletionSchema,
   organizationWorkspaceResponseSchema,
 } from '../src/organizations.js';
 
@@ -95,6 +99,67 @@ describe('organization contracts', () => {
           ],
         },
       ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('requires the exact organization slug when requesting deletion', () => {
+    expect(
+      requestOrganizationDeletionSchema.safeParse({ confirmationSlug: 'studio-one' }).success,
+    ).toBe(true);
+    expect(requestOrganizationDeletionSchema.safeParse({}).success).toBe(false);
+    expect(
+      requestOrganizationDeletionSchema.safeParse({
+        confirmationSlug: 'studio-one',
+        unexpected: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires an explicit phrase and slug for permanent erasure', () => {
+    expect(
+      permanentlyEraseOrganizationSchema.safeParse({
+        confirmation: 'PERMANENTLY DELETE',
+        confirmationSlug: 'studio-one',
+      }).success,
+    ).toBe(true);
+    expect(
+      permanentlyEraseOrganizationSchema.safeParse({
+        confirmation: 'DELETE',
+        confirmationSlug: 'studio-one',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates bounded legal-hold reasons', () => {
+    expect(
+      placeOrganizationRetentionHoldSchema.safeParse({ reason: 'Regulatory request' }).success,
+    ).toBe(true);
+    expect(placeOrganizationRetentionHoldSchema.safeParse({ reason: '   ' }).success).toBe(false);
+    expect(
+      placeOrganizationRetentionHoldSchema.safeParse({ reason: 'x'.repeat(501) }).success,
+    ).toBe(false);
+  });
+
+  it('represents lifecycle deadlines, hold state, and optimistic revision', () => {
+    const result = organizationRetentionResponseSchema.safeParse({
+      retention: {
+        organizationId: 'org-1',
+        status: 'deletion_requested',
+        requestedAt: '2026-09-03T00:00:00.000Z',
+        archiveDueAt: '2026-12-02T00:00:00.000Z',
+        hardDeleteDueAt: '2027-12-02T00:00:00.000Z',
+        delistWindowDays: 90,
+        archiveWindowDays: 365,
+        archivedAt: null,
+        purgeRequestedAt: null,
+        purgingAt: null,
+        erasedAt: null,
+        holdPlacedAt: null,
+        holdReason: null,
+        revision: 1,
+      },
     });
 
     expect(result.success).toBe(true);
