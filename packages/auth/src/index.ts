@@ -50,6 +50,7 @@ const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
 
 const ACTIVE_MEMBER_ORGANIZATION_READS = new Set([
   '/organization/get-full-organization',
+  '/organization/get-active-member',
   '/organization/list-members',
   '/organization/list-invitations',
   '/organization/get-active-member-role',

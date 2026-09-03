@@ -210,9 +210,10 @@ describe('GET /api/orgs/current', () => {
 describe('organization management', () => {
   it.each([
     ['get-full-organization', '+919800004101'],
-    ['list-members', '+919800004102'],
-    ['list-invitations', '+919800004103'],
-    ['get-active-member-role', '+919800004104'],
+    ['get-active-member', '+919800004102'],
+    ['list-members', '+919800004103'],
+    ['list-invitations', '+919800004104'],
+    ['get-active-member-role', '+919800004105'],
   ] as const)('blocks frozen members from Better Auth %s reads', async (path, phone) => {
     const organization = await makeOrganization({ slug: `frozen-read-${path}` });
     const owner = await makeOrganizationSession({
@@ -237,7 +238,7 @@ describe('organization management', () => {
     const activeOrganization = await makeOrganization({ slug: 'active-selector-studio' });
     const frozenOrganization = await makeOrganization({ slug: 'frozen-selector-studio' });
     const member = await makeOrganizationSession({
-      phone: '+919800004105',
+      phone: '+919800004106',
       organizationId: activeOrganization.id,
       role: 'member',
     });
