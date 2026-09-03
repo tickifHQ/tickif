@@ -260,7 +260,7 @@ export function DesignerTeamRolesLoading() {
           </div>
         </Card>
 
-        {['Members', 'Pending invitations'].map((section) => (
+        {['Members', 'Invitations', 'Ownership and access'].map((section) => (
           <Card key={section} className="p-5 shadow-xs">
             <Skeleton className="h-5 w-32" />
             <div className="mt-4 space-y-4">

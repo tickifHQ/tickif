@@ -6,12 +6,16 @@ import { OrganizationInvitation } from '../../src/components/organization-invita
 const mocks = vi.hoisted(() => ({
   useSession: vi.fn(),
   acceptInvitation: vi.fn(),
+  rejectInvitation: vi.fn(),
 }));
 
 vi.mock('../../src/lib/auth-client', () => ({
   authClient: {
     useSession: mocks.useSession,
-    organization: { acceptInvitation: mocks.acceptInvitation },
+    organization: {
+      acceptInvitation: mocks.acceptInvitation,
+      rejectInvitation: mocks.rejectInvitation,
+    },
   },
 }));
 
@@ -20,6 +24,7 @@ describe('OrganizationInvitation', () => {
     vi.clearAllMocks();
     mocks.useSession.mockReturnValue({ data: null, isPending: false });
     mocks.acceptInvitation.mockResolvedValue({ data: {}, error: null });
+    mocks.rejectInvitation.mockResolvedValue({ data: {}, error: null });
   });
 
   it('sends a signed-out recipient through login and back to the invitation', () => {
@@ -41,6 +46,19 @@ describe('OrganizationInvitation', () => {
     await waitFor(() => {
       expect(mocks.acceptInvitation).toHaveBeenCalledWith({ invitationId: 'invitation-1' });
     });
+  });
+
+  it('declines the invitation and notifies the studio team', async () => {
+    mocks.useSession.mockReturnValue({ data: { user: { id: 'user-1' } }, isPending: false });
+    const user = userEvent.setup();
+    render(<OrganizationInvitation invitationId="invitation-1" />);
+
+    await user.click(screen.getByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => {
+      expect(mocks.rejectInvitation).toHaveBeenCalledWith({ invitationId: 'invitation-1' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Invitation declined');
   });
 
   it('shows the server error when the invitation cannot be accepted', async () => {

@@ -10,6 +10,7 @@ import { authClient } from '@/lib/auth-client';
 export function OrganizationInvitation({ invitationId }: { invitationId: string }) {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
   const [error, setError] = useState<string | null>(null);
+  const [declined, setDeclined] = useState(false);
   const [isAccepting, startTransition] = useTransition();
 
   function acceptInvitation() {
@@ -24,6 +25,22 @@ export function OrganizationInvitation({ invitationId }: { invitationId: string 
         window.location.href = '/designer/terms-roles';
       } catch {
         setError('Could not accept this invitation.');
+      }
+    });
+  }
+
+  function declineInvitation() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await authClient.organization.rejectInvitation({ invitationId });
+        if (result.error) {
+          setError(result.error.message || 'Could not decline this invitation.');
+          return;
+        }
+        setDeclined(true);
+      } catch {
+        setError('Could not decline this invitation.');
       }
     });
   }
@@ -47,28 +64,44 @@ export function OrganizationInvitation({ invitationId }: { invitationId: string 
           </p>
         ) : null}
 
-        <div className="mt-6">
+        {declined ? (
+          <p role="status" className="mt-5 text-sm text-muted-foreground">
+            Invitation declined. The studio team has been notified.
+          </p>
+        ) : null}
+
+        <div className="mt-6 space-y-2">
           {isSessionPending ? (
             <Button className="w-full" disabled>
               <Loader2 className="size-4 animate-spin" />
               Checking your account
             </Button>
-          ) : session ? (
-            <Button className="w-full" disabled={isAccepting} onClick={acceptInvitation}>
-              {isAccepting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Check className="size-4" />
-              )}
-              Accept invitation
-            </Button>
-          ) : (
+          ) : session && !declined ? (
+            <>
+              <Button className="w-full" disabled={isAccepting} onClick={acceptInvitation}>
+                {isAccepting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Check className="size-4" />
+                )}
+                Accept invitation
+              </Button>
+              <Button
+                className="w-full"
+                variant="neutral"
+                disabled={isAccepting}
+                onClick={declineInvitation}
+              >
+                Decline
+              </Button>
+            </>
+          ) : !session ? (
             <Button className="w-full" asChild>
               <Link href={`/login?mode=designer&callbackURL=${encodeURIComponent(callbackPath)}`}>
                 Sign in to continue
               </Link>
             </Button>
-          )}
+          ) : null}
         </div>
       </Card>
     </main>
