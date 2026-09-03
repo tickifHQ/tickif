@@ -4,10 +4,15 @@ import {
   makeConsultationBooking,
   makeDesigner,
   makeProject,
+  makeTeam,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { bookingsRepository } from '../../../src/modules/bookings/repository.js';
-import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+import {
+  activateOrganization,
+  createRoleSession,
+  mergeResponseCookies,
+} from '../../helpers/auth.js';
 
 vi.mock('@repo/queue', () => ({
   enqueueSms: vi.fn(async () => {}),
@@ -64,6 +69,19 @@ async function requestJson(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+async function activateTeam(cookie: string, teamId: string): Promise<string> {
+  const response = await requestJson(
+    '/api/auth/organization/set-active-team',
+    'POST',
+    cookie,
+    { teamId },
+  );
+  if (!response.ok) {
+    throw new Error(`activateTeam: Better Auth returned ${response.status}`);
+  }
+  return mergeResponseCookies(cookie, response);
 }
 
 describe('POST /api/bookings', () => {
@@ -346,6 +364,69 @@ describe('booking lists and transitions', () => {
     expect(terminalCancel.status).toBe(409);
   });
 
+  it('scopes the designer inbox and confirmation to the active branch', async () => {
+    const designerSession = await makeDesignerSession('+919800004014');
+    const secondTeam = await makeTeam({
+      organizationId: designerSession.designer.orgId,
+      name: 'Pune',
+    });
+    const secondDesigner = await makeDesigner({
+      orgId: designerSession.designer.orgId,
+      teamId: secondTeam.id,
+      userId: designerSession.userId,
+      status: 'active',
+      displayName: 'North Star Studio Pune',
+      phone: '+919800009998',
+    });
+    const requesterSession = await createRoleSession('+919800004114', 'visitor');
+    const firstBooking = await makeConsultationBooking({
+      organizationId: designerSession.designer.orgId,
+      designerProfileId: designerSession.designer.id,
+      requesterId: requesterSession.userId,
+      preferredSlots: [slot],
+    });
+    const secondBooking = await makeConsultationBooking({
+      organizationId: designerSession.designer.orgId,
+      designerProfileId: secondDesigner.id,
+      requesterId: requesterSession.userId,
+      preferredSlots: [slot],
+    });
+    const firstBranchCookie = await activateTeam(
+      designerSession.cookie,
+      designerSession.designer.teamId,
+    );
+
+    const inbox = await app.request('/api/bookings?status=requested', {
+      headers: { cookie: firstBranchCookie },
+    });
+    expect(inbox.status).toBe(200);
+    expect(await inbox.json()).toMatchObject({
+      total: 1,
+      items: [{ id: firstBooking.id }],
+    });
+
+    const hiddenConfirmation = await requestJson(
+      `/api/bookings/${secondBooking.id}/confirm`,
+      'POST',
+      firstBranchCookie,
+      { confirmedSlot: slot },
+    );
+    expect(hiddenConfirmation.status).toBe(404);
+
+    const secondBranchCookie = await activateTeam(firstBranchCookie, secondTeam.id);
+    const confirmation = await requestJson(
+      `/api/bookings/${secondBooking.id}/confirm`,
+      'POST',
+      secondBranchCookie,
+      { confirmedSlot: slot },
+    );
+    expect(confirmation.status).toBe(200);
+    expect(await confirmation.json()).toMatchObject({
+      id: secondBooking.id,
+      status: 'confirmed',
+    });
+  });
+
   it('allows only one compare-and-swap transition to win', async () => {
     const designerSession = await makeDesignerSession('+919800004012');
     const requesterSession = await createRoleSession('+919800004112', 'visitor');
@@ -507,6 +588,12 @@ describe('booking lists and transitions', () => {
       organizationId: designerSession.designer.orgId,
       userId: readOnlySession.userId,
       role: 'member',
+      createdAt: new Date(),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `booking-readonly-team-${readOnlySession.userId}`,
+      teamId: designerSession.designer.teamId,
+      userId: readOnlySession.userId,
       createdAt: new Date(),
     });
     const readOnlyCookie = await activateOrganization(
