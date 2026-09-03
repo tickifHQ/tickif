@@ -1,2 +1,4 @@
+ALTER TYPE "public"."verification_notification_event" ADD VALUE 'verification_approval_revoked';--> statement-breakpoint
+ALTER TYPE "public"."verification_review_action" ADD VALUE 'approval_revoked';--> statement-breakpoint
 CREATE INDEX "verification_application_verified_review_queue_idx" ON "verification_application" USING btree ("reviewed_at","id") WHERE "verification_application"."status" = 'verified';--> statement-breakpoint
 CREATE INDEX "verification_application_rejected_review_queue_idx" ON "verification_application" USING btree ("reviewed_at","id") WHERE "verification_application"."status" = 'rejected';

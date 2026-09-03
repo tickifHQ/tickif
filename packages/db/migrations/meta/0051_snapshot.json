@@ -1,6 +1,6 @@
 {
-  "id": "08d077c3-5729-4e70-b6e8-04f69d8c2bcb",
-  "prevId": "1257728d-123c-46b0-b5d8-099faddbbda8",
+  "id": "62371a30-dd8c-4dae-aa72-6005d9887c65",
+  "prevId": "41834ef5-d597-48b9-8eb2-7e04cabc382a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3656,6 +3656,13 @@
           "notNull": true,
           "default": "'draft'"
         },
+        "archive_reason": {
+          "name": "archive_reason",
+          "type": "project_archive_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "property_type_slug": {
           "name": "property_type_slug",
           "type": "text",
@@ -7016,7 +7023,10 @@
         "request_changes",
         "reject",
         "unpublish",
-        "metadata_corrected"
+        "metadata_corrected",
+        "archive",
+        "restore",
+        "delete"
       ]
     },
     "public.ownership_transfer_status": {
@@ -7048,6 +7058,14 @@
         "suspended"
       ]
     },
+    "public.project_archive_reason": {
+      "name": "project_archive_reason",
+      "schema": "public",
+      "values": [
+        "manual",
+        "organization_retention"
+      ]
+    },
     "public.project_image_status": {
       "name": "project_image_status",
       "schema": "public",
@@ -7074,7 +7092,10 @@
         "in_review",
         "published",
         "rejected",
-        "changes_requested"
+        "changes_requested",
+        "archived",
+        "delisted",
+        "deleted"
       ]
     },
     "public.review_moderation_action": {
