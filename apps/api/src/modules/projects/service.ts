@@ -491,6 +491,7 @@ function toListItemFields(
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     coverImageUrl,
@@ -1562,6 +1563,9 @@ export const projectsService = {
     if (ownership.status === 'delisted') {
       throw AppError.conflict('Delisted projects follow the organization retention policy');
     }
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
+    }
     const deleted = await projectsRepository.transition({
       id: projectId,
       fromStatus: ownership.status,
@@ -1597,6 +1601,9 @@ export const projectsService = {
     if (!ownership) throw AppError.notFound('Project not found');
     await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
     if (ownership.status !== 'archived') throw AppError.conflict('Project is not archived');
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
+    }
     const restored = await projectsRepository.transition({
       id: projectId,
       fromStatus: 'archived',

@@ -1386,6 +1386,35 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
   });
 
+  it('rejects ordinary restore and delete for organization-retention archives', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800002065');
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'archived',
+      archiveReason: 'organization_retention',
+    });
+
+    const restore = await app.request(`/api/projects/${project.id}/restore`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    const remove = await app.request(`/api/projects/${project.id}`, {
+      method: 'DELETE',
+      headers: { cookie },
+    });
+
+    expect(restore.status).toBe(409);
+    expect(remove.status).toBe(409);
+    const [unchanged] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, project.id));
+    expect(unchanged).toMatchObject({
+      status: 'archived',
+      archiveReason: 'organization_retention',
+    });
+  });
+
   it('archives a published project, removes it from public reads, and restores it as a draft', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002060');
     await db
@@ -1429,7 +1458,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
     expect(archivedList.status).toBe(200);
     expect((await archivedList.json()) as ListProjectsResponse).toMatchObject({
-      items: [{ id: project.id, status: 'archived' }],
+      items: [{ id: project.id, status: 'archived', archiveReason: 'manual' }],
     });
 
     const restore = await app.request(`/api/projects/${project.id}/restore`, {

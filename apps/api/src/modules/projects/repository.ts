@@ -45,6 +45,7 @@ export type ProjectOwnership = {
   organizationId: string;
   teamId?: string;
   status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
   ownerUserId: string | null;
 };
 
@@ -137,6 +138,7 @@ export type ProjectListItemRecord = Pick<
   | 'citySlug'
   | 'localitySlug'
   | 'status'
+  | 'archiveReason'
   | 'rejectionReasonCode'
   | 'moderationNote'
   | 'coverImageId'
@@ -435,6 +437,7 @@ export const projectsRepository = {
           citySlug: schema.project.citySlug,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
+          archiveReason: schema.project.archiveReason,
           rejectionReasonCode: schema.project.rejectionReasonCode,
           moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
@@ -1113,6 +1116,7 @@ export const projectsRepository = {
         organizationId: schema.designerProfile.orgId,
         teamId: schema.designerProfile.teamId,
         status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
         ownerUserId: schema.designerProfile.userId,
       })
       .from(schema.project)

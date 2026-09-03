@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ProjectStatus } from '@repo/contracts';
+import type { ProjectArchiveReason, ProjectStatus } from '@repo/contracts';
 import {
   deleteProjectResponseSchema,
   duplicateProjectResponseSchema,
@@ -45,12 +45,14 @@ export function DesignerProjectRowActions({
   projectId,
   projectTitle,
   projectStatus,
+  archiveReason = null,
   canArchive = false,
   canDelete = false,
 }: {
   projectId: string;
   projectTitle: string;
   projectStatus: ProjectStatus;
+  archiveReason?: ProjectArchiveReason | null;
   canArchive?: boolean;
   canDelete?: boolean;
 }) {
@@ -65,9 +67,10 @@ export function DesignerProjectRowActions({
   const pendingDialogRef = useRef<'delete' | 'withdraw' | null>(null);
   const refreshAfterDeleteRef = useRef(false);
   const isTerminal = projectStatus === 'deleted' || projectStatus === 'delisted';
+  const isRetentionManaged = archiveReason === 'organization_retention';
   const archiveEnabled = canArchive && (projectStatus === 'draft' || projectStatus === 'published');
-  const restoreEnabled = canArchive && projectStatus === 'archived';
-  const deleteEnabled = canDelete && !isTerminal;
+  const restoreEnabled = canArchive && projectStatus === 'archived' && !isRetentionManaged;
+  const deleteEnabled = canDelete && !isTerminal && !isRetentionManaged;
   const withdrawEnabled = canWithdrawProject(projectStatus);
 
   function handleMenuOpenChange(open: boolean) {
