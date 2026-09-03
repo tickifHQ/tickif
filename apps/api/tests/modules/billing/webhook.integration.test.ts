@@ -590,8 +590,8 @@ describe('E-117: webhook event processing', () => {
         planTier: 'hobby',
         preLapseTier: 'corporate',
         subscriptionState: 'downgraded',
-        downgradedAt: new Date('2026-08-20T00:00:00.000Z'),
         razorpaySubscriptionId: 'sub_downgraded_restore_resources',
+        razorpayStatus: 'authenticated',
       });
       await addOrganizationMembers(sub.organizationId, 'downgraded-restore', { frozen: true });
       await makeTeam({
