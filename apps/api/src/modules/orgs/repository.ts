@@ -42,6 +42,15 @@ export const OWNERSHIP_TRANSFER_RESULT = {
 } as const;
 
 export const orgsRepository = {
+  async hasActiveRetention(organizationId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ organizationId: schema.organizationRetention.organizationId })
+      .from(schema.organizationRetention)
+      .where(eq(schema.organizationRetention.organizationId, organizationId))
+      .limit(1);
+    return !!row;
+  },
+
   async isValidOrganizationContext(
     userId: string,
     organizationId: string,
@@ -266,9 +275,10 @@ export const orgsRepository = {
     organizationId: string;
     activeLimit: number;
     now: Date;
+    tx?: DbTransaction;
   }): Promise<string[]> {
     if (input.activeLimit < 0) return [];
-    return db.transaction(async (tx) => {
+    const run = async (tx: DbTransaction) => {
       const activeBranches = await tx
         .select({ id: schema.team.id })
         .from(schema.team)
@@ -297,14 +307,16 @@ export const orgsRepository = {
         .set({ activeTeamId: null })
         .where(inArray(schema.session.activeTeamId, ids));
       return ids;
-    });
+    };
+    return input.tx ? run(input.tx) : db.transaction(run);
   },
 
   async restoreBranchesToLimit(input: {
     organizationId: string;
     activeLimit: number;
+    tx?: DbTransaction;
   }): Promise<string[]> {
-    return db.transaction(async (tx) => {
+    const run = async (tx: DbTransaction) => {
       const [activeRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.team)
@@ -332,7 +344,8 @@ export const orgsRepository = {
         .set({ frozen: false, frozenAt: null, freezeRank: null })
         .where(inArray(schema.team.id, ids));
       return ids;
-    });
+    };
+    return input.tx ? run(input.tx) : db.transaction(run);
   },
 
   async freezeMembersToLimit(input: {

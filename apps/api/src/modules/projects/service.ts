@@ -26,9 +26,9 @@ import type {
   PortfolioProjectStatusGroup,
   ProjectResponse,
   PublicImageDetailResponse,
+  PublicProjectDetailResponse,
   ProjectReviewComment,
   ProjectReviewCommentsResponse,
-  PublicProjectBySlugResponse,
   PublicProjectPageResponse,
   ListProjectsResponse,
   ProjectRoom,
@@ -965,14 +965,11 @@ function expandRoomPrefillSlugs(
 ): RoomPrefillSpec[] {
   return slugs.flatMap((slug): RoomPrefillSpec[] => {
     if (slug === 'bedroom') {
-      return Array.from(
-        { length: bhkCount(project.bhkSlug) },
-        (_, index): RoomPrefillSpec => ({
-          slug,
-          name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
-          metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
-        }),
-      );
+      return Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
+        slug,
+        name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+        metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+      }));
     }
     return [{ slug, metadata: prefillMetadata(slug) }];
   });
@@ -1146,7 +1143,7 @@ type PublicProjectDetailBuildOptions = {
 async function buildPublicProjectDetail(
   result: PublicProjectReadRecord,
   options: PublicProjectDetailBuildOptions,
-): Promise<PublicProjectBySlugResponse> {
+): Promise<PublicProjectDetailResponse> {
   const { project, designer } = result;
   if (project.status !== 'published' || designer.status !== 'active') {
     throw AppError.notFound('Project not found');
@@ -1316,7 +1313,10 @@ async function buildPublicProjectDetail(
 export const projectsService = {
   async assertPublicProjectNotDeleted(id: string): Promise<void> {
     const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
-    if (lifecycle?.status === 'deleted') {
+    if (
+      lifecycle?.status === 'deleted' ||
+      (!lifecycle && (await projectsRepository.isProjectTombstonedById(id)))
+    ) {
       throw AppError.gone('Project permanently deleted');
     }
   },
@@ -1482,7 +1482,12 @@ export const projectsService = {
     }
 
     const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
-    if (!lifecycle) throw AppError.notFound('Project not found');
+    if (!lifecycle) {
+      if (await projectsRepository.isProjectTombstonedById(id)) {
+        throw AppError.gone('Project permanently deleted');
+      }
+      throw AppError.notFound('Project not found');
+    }
     if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
     if (
       lifecycle.status !== 'delisted' &&
@@ -1890,9 +1895,42 @@ export const projectsService = {
    * GET /api/projects/slug/{slug} — published project detail with designer summary,
    * rooms, and gallery images. Public, no auth.
    */
-  async getPublicBySlug(slug: string): Promise<PublicProjectBySlugResponse> {
+  async getPublicBySlug(slug: string): Promise<PublicProjectDetailResponse> {
     const result = await projectsRepository.findPublicProjectBySlug(slug);
     if (!result) throw AppError.notFound('Project not found');
+
+    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+  },
+
+  /** Public slug page, including recoverable retention placeholders. */
+  async getPublicPageBySlug(slug: string): Promise<PublicProjectPageResponse> {
+    const result = await projectsRepository.findPublicProjectBySlug(slug);
+    if (!result) {
+      const lifecycle = await projectsRepository.findPublicProjectLifecycleBySlug(slug);
+      if (!lifecycle) {
+        if (await projectsRepository.isProjectTombstonedBySlug(slug)) {
+          throw AppError.gone('Project permanently deleted');
+        }
+        throw AppError.notFound('Project not found');
+      }
+      if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
+      if (
+        lifecycle.status !== 'delisted' &&
+        !(lifecycle.status === 'archived' && lifecycle.archiveReason === 'organization_retention')
+      ) {
+        throw AppError.notFound('Project not found');
+      }
+      return {
+        availability: 'unavailable',
+        id: lifecycle.id,
+        title: lifecycle.title,
+        status: lifecycle.status,
+        designer: {
+          displayName: lifecycle.designerDisplayName,
+          slug: lifecycle.designerOrgSlug,
+        },
+      };
+    }
 
     return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
   },

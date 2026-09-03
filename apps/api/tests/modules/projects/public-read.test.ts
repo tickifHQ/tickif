@@ -16,6 +16,9 @@ vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectById: vi.fn(),
     findPublicProjectLifecycleById: vi.fn(),
+    findPublicProjectLifecycleBySlug: vi.fn(),
+    isProjectTombstonedById: vi.fn(),
+    isProjectTombstonedBySlug: vi.fn(),
     findPublicProjectBySlug: vi.fn(),
     findPublicProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
@@ -55,6 +58,9 @@ beforeEach(() => {
   vi.mocked(projectsRepository.listPublishedDesignerMotifCounts).mockResolvedValue([]);
   vi.mocked(projectsRepository.listPublishedRecommendationCandidates).mockResolvedValue([]);
   vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+  vi.mocked(projectsRepository.findPublicProjectLifecycleBySlug).mockResolvedValue(null);
+  vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(false);
+  vi.mocked(projectsRepository.isProjectTombstonedBySlug).mockResolvedValue(false);
 });
 
 // --- Factories ---
@@ -153,6 +159,33 @@ describe('projectsService.getPublicBySlug', () => {
       projectsService.getPublicBySlug('inactive-designer-project'),
     ).rejects.toMatchObject({
       status: 404,
+    });
+  });
+
+  it('returns a minimal unavailable response for a retained slug', async () => {
+    vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleBySlug).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Retained Home',
+      status: 'delisted',
+      archiveReason: 'organization_retention',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(projectsService.getPublicPageBySlug('retained-home')).resolves.toMatchObject({
+      availability: 'unavailable',
+      status: 'delisted',
+    });
+  });
+
+  it('returns 410 for a purged project slug tombstone', async () => {
+    vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedBySlug).mockResolvedValue(true);
+
+    await expect(projectsService.getPublicPageBySlug('purged-home')).rejects.toMatchObject({
+      status: 410,
+      code: 'gone',
     });
   });
 
@@ -510,6 +543,16 @@ describe('projectsService.getPublicById', () => {
       designerDisplayName: 'Studio A',
       designerOrgSlug: 'studio-a',
     });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
+  });
+
+  it('returns 410 from a durable tombstone after the project row is purged', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(true);
 
     await expect(
       projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),

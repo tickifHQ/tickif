@@ -265,6 +265,20 @@ async function protectedReadOrganizationId(
   return organization?.id;
 }
 
+async function requireOrganizationNotRetained(organizationId: string): Promise<void> {
+  const [retention] = await db
+    .select({ status: schema.organizationRetention.status })
+    .from(schema.organizationRetention)
+    .where(eq(schema.organizationRetention.organizationId, organizationId))
+    .limit(1);
+  if (retention) {
+    throw new APIError('FORBIDDEN', {
+      code: 'ORGANIZATION_RETENTION_ACTIVE',
+      message: 'Organization changes are disabled while deletion or retention is active',
+    });
+  }
+}
+
 async function cancelPendingTransfersForParticipant(input: {
   organizationId: string;
   participantUserId: string;
@@ -401,6 +415,10 @@ export const auth = betterAuth({
             session.session.activeOrganizationId,
           );
       if (!organizationId) return;
+
+      if (!isProtectedRead && !isTeamContextMutation) {
+        await requireOrganizationNotRetained(organizationId);
+      }
 
       if (ctx.path !== '/organization/leave') {
         if (isLifecycleMutation) await requireOrganizationRbac(organizationId);

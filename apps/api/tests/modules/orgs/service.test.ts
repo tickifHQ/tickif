@@ -17,6 +17,7 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     OWNER_STATE_CHANGED: 'owner_state_changed',
   },
   orgsRepository: {
+    hasActiveRetention: vi.fn(),
     isValidOrganizationContext: vi.fn(),
     saveContextPreference: vi.fn(),
     hasMembership: vi.fn(),
@@ -49,6 +50,7 @@ const { orgsRepository } = await import('../../../src/modules/orgs/repository.js
 describe('orgsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(orgsRepository.hasActiveRetention).mockResolvedValue(false);
     vi.mocked(orgsRepository.findPendingOwnershipTransfer).mockResolvedValue(null);
     mocks.sendEmail.mockResolvedValue(undefined);
   });
@@ -212,6 +214,24 @@ describe('orgsService', () => {
     );
 
     await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
+  });
+
+  it('blocks owner writes while organization retention is active', async () => {
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'owner',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.hasActiveRetention).mockResolvedValue(true);
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+
+    await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
+    await expect(orgsService.getCapabilities('user-1', 'org-1')).resolves.toMatchObject({
+      writeProjects: false,
+      manageMembers: false,
+    });
   });
 
   it('rejects workspace reads without an active organization', async () => {
