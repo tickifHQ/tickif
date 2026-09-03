@@ -247,9 +247,14 @@ async function protectedReadOrganizationId(
   activeOrganizationId: string | null | undefined,
 ): Promise<string | undefined> {
   const organizationId = bodyString(query, 'organizationId');
-  if (organizationId) return organizationId;
-
   const organizationSlug = bodyString(query, 'organizationSlug');
+  if (organizationId && organizationSlug) {
+    throw new APIError('BAD_REQUEST', {
+      code: 'AMBIGUOUS_ORGANIZATION_SELECTOR',
+      message: 'Provide either organizationId or organizationSlug, not both',
+    });
+  }
+  if (organizationId) return organizationId;
   if (!organizationSlug) return activeOrganizationId ?? undefined;
   const [organization] = await db
     .select({ id: schema.organization.id })
