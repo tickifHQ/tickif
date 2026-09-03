@@ -28,6 +28,13 @@ test('api is healthy and protects the projects endpoint', async ({ request }) =>
   });
 });
 
+test('admin verification review requires an authenticated admin session', async ({ page }) => {
+  await page.goto('/verifications');
+
+  await expect(page).toHaveURL('/login?callbackURL=%2Fverifications');
+  await expect(page.getByRole('heading', { name: 'Login to continue' })).toBeVisible();
+});
+
 test('OpenAPI spec and Scalar docs are served', async ({ request, page }) => {
   const spec = await request.get(`${API_URL}/openapi.json`);
   expect(spec.ok()).toBeTruthy();

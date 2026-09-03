@@ -13,6 +13,9 @@ import { api } from '@/lib/api';
 
 type ServerRequestInit = { headers: { cookie: string } };
 
+export const ADMIN_MODERATION_QUEUE_TABS = ['submitted', 'in_review', 'published'] as const;
+export type AdminModerationQueueTab = (typeof ADMIN_MODERATION_QUEUE_TABS)[number];
+
 function parseDetail(payload: unknown): AdminModerationDetailResponse {
   const parsed = adminModerationDetailResponseSchema.safeParse(payload);
   if (!parsed.success) throw new Error('The moderation detail response was invalid.');
@@ -20,7 +23,7 @@ function parseDetail(payload: unknown): AdminModerationDetailResponse {
 }
 
 export async function fetchAdminModerationQueue(
-  status: 'submitted' | 'in_review' | 'published',
+  status: AdminModerationQueueTab,
   requestInit?: ServerRequestInit,
 ): Promise<AdminModerationQueueResponse> {
   const response = await api.api.admin.projects.$get(

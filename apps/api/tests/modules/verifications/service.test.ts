@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
   VERIFICATION_EFFECTIVE_STATUS,
@@ -34,6 +35,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     STATE_CHANGED: 'state_changed',
     DOCUMENT_NOT_FOUND: 'document_not_found',
     INVALID_DOCUMENTS: 'invalid_documents',
+    INELIGIBLE: 'ineligible',
   },
   hasBusinessDocument: vi.fn((documents: Array<{ type: string; status: string }>) =>
     documents.some(
@@ -62,7 +64,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     cancelPendingDocument: vi.fn(async () => 'state_changed'),
     removeCommittedDocument: vi.fn(),
     submit: vi.fn(),
-    listPending: vi.fn(),
+    listAdminQueue: vi.fn(),
     findAdminDetail: vi.fn(),
     review: vi.fn(),
   },
@@ -197,6 +199,37 @@ describe('verificationsService', () => {
     });
   });
 
+  it('surfaces the approval revocation reason while the application is pending re-review', async () => {
+    vi.mocked(verificationsRepository.listHistory).mockResolvedValue([
+      {
+        id: 'd9cb1795-ecbf-4ed0-a28a-9768ab47f81e',
+        applicationId: application.id,
+        attempt: 2,
+        action: VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
+        actorUserId: 'admin-1',
+        fromStatus: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+        toStatus: VERIFICATION_APPLICATION_STATUS.PENDING,
+        note: 'The identity evidence needs another review.',
+        rejectedDocumentVersionIds: [],
+        createdAt: new Date('2026-08-03T00:00:00.000Z'),
+      },
+    ]);
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: {
+        ...application,
+        status: VERIFICATION_APPLICATION_STATUS.PENDING,
+        attempt: 2,
+        submittedAt: new Date('2026-08-03T00:00:00.000Z'),
+      },
+    });
+
+    await expect(verificationsService.getState(caller)).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.PENDING,
+      latestNote: 'The identity evidence needs another review.',
+    });
+  });
+
   it('treats an elapsed approval as expired without mutating stored history', async () => {
     vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
       ...context,
@@ -250,6 +283,34 @@ describe('verificationsService', () => {
         businessDocumentPresent: { met: false },
       },
     });
+    await expect(verificationsService.submit(caller)).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
+    });
+    expect(verificationsRepository.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects resubmission while an optional identity document still needs replacement', async () => {
+    vi.mocked(verificationsRepository.findContextByOrganization).mockResolvedValue({
+      ...context,
+      application: {
+        ...application,
+        status: VERIFICATION_APPLICATION_STATUS.REJECTED,
+        submittedAt: new Date('2026-08-01T00:00:00.000Z'),
+        reviewedAt: new Date('2026-08-02T00:00:00.000Z'),
+      },
+    });
+    vi.mocked(verificationsRepository.listDocuments).mockResolvedValue([
+      { ...document, status: VERIFICATION_DOCUMENT_STATUS.VERIFIED },
+      {
+        ...document,
+        id: '668388de-2aa9-4aaf-afda-d352ad198169',
+        slotId: 'd9012a16-f987-4109-9b3b-b5d7e195b6dc',
+        type: 'personal_pan',
+        status: VERIFICATION_DOCUMENT_STATUS.REJECTED,
+      },
+    ]);
+
     await expect(verificationsService.submit(caller)).rejects.toMatchObject({
       code: 'validation_error',
       status: 422,
@@ -551,6 +612,53 @@ describe('verificationsService', () => {
     expect(presignDownload).toHaveBeenCalledWith({
       key: document.objectKey,
       expiresIn: 60,
+    });
+  });
+
+  it('serializes the selected admin queue tab and its lifecycle timestamps', async () => {
+    const submittedAt = new Date('2026-08-10T00:00:00.000Z');
+    const reviewedAt = new Date('2026-08-11T00:00:00.000Z');
+    vi.mocked(verificationsRepository.listAdminQueue).mockResolvedValue({
+      items: [
+        {
+          id: application.id,
+          organizationId: 'org-1',
+          organizationName: 'Studio One',
+          designerName: 'Studio One',
+          attempt: 1,
+          status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+          submittedAt,
+          reviewedAt,
+          documentCount: 1,
+        },
+      ],
+      total: 1,
+    });
+
+    await expect(
+      verificationsService.listAdmin({
+        tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+        page: 1,
+        limit: 20,
+      }),
+    ).resolves.toMatchObject({
+      tab: ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+      items: [
+        {
+          status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+          submittedAt: submittedAt.toISOString(),
+          reviewedAt: reviewedAt.toISOString(),
+        },
+      ],
+    });
+  });
+
+  it('returns a validation error when approval eligibility is no longer met', async () => {
+    vi.mocked(verificationsRepository.review).mockResolvedValue('ineligible');
+
+    await expect(verificationsService.approve(application.id, 'reviewer-1')).rejects.toMatchObject({
+      code: 'validation_error',
+      status: 422,
     });
   });
 

@@ -86,6 +86,25 @@ describe('verification notifications', () => {
     expect(repository.markVerificationNotificationSent).toHaveBeenCalledWith(notification.id);
   });
 
+  it('notifies the designer when an approval is revoked and escapes the reason', async () => {
+    vi.mocked(repository.findVerificationNotification).mockResolvedValue({
+      ...notification,
+      eventType: VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED,
+    });
+
+    await processVerificationEmail(notification.id);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: notification.recipientEmail,
+        subject: 'Your Tickif verification is under review again',
+        idempotencyKey: `verification-${notification.id}`,
+        html: expect.stringContaining('&lt;script&gt;not html&lt;/script&gt;'),
+      }),
+    );
+    expect(repository.markVerificationNotificationSent).toHaveBeenCalledWith(notification.id);
+  });
+
   it('does not resend an outbox row already marked delivered', async () => {
     vi.mocked(repository.findVerificationNotification).mockResolvedValue({
       ...notification,

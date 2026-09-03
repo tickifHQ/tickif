@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import {
+  ADMIN_MODERATION_QUEUE_TABS,
   correctAdminProject,
   fetchAdminModerationDetail,
   fetchAdminModerationQueue,
@@ -56,17 +57,13 @@ import {
   requestAdminChanges,
   startAdminReview,
   unpublishAdminProject,
+  type AdminModerationQueueTab,
 } from '@/lib/admin-moderation-api';
 
-type ModerationTab = 'submitted' | 'in_review' | 'published';
+type ModerationTab = AdminModerationQueueTab;
 type ActionIntent = 'request_changes' | 'reject' | 'unpublish';
 type EditableField =
-  | 'title'
-  | 'propertyTypeSlug'
-  | 'scopeSlug'
-  | 'citySlug'
-  | 'localitySlug'
-  | 'budgetBandSlug';
+  'title' | 'propertyTypeSlug' | 'scopeSlug' | 'citySlug' | 'localitySlug' | 'budgetBandSlug';
 
 const tabLabels: Record<ModerationTab, string> = {
   submitted: 'Submitted',
@@ -687,11 +684,13 @@ function ReviewDetail({
 
 export function AdminModerationQueue({
   initialQueue,
+  initialCounts,
   currentUserId,
   currentUserRole,
   initialError,
 }: {
   initialQueue: AdminModerationQueueResponse;
+  initialCounts?: Record<ModerationTab, number>;
   currentUserId: string;
   currentUserRole: string;
   initialError?: string;
@@ -702,6 +701,14 @@ export function AdminModerationQueue({
   >({
     submitted: initialQueue,
   });
+  const [tabCounts, setTabCounts] = useState<Record<ModerationTab, number>>(
+    () =>
+      initialCounts ?? {
+        submitted: initialQueue.total,
+        in_review: 0,
+        published: 0,
+      },
+  );
   const [queueError, setQueueError] = useState<string | null>(initialError ?? null);
   const [loadingTab, setLoadingTab] = useState<ModerationTab | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -721,6 +728,7 @@ export function AdminModerationQueue({
     try {
       const nextQueue = await fetchAdminModerationQueue(tab);
       setQueues((current) => ({ ...current, [tab]: nextQueue }));
+      setTabCounts((current) => ({ ...current, [tab]: nextQueue.total }));
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not load this queue.');
     } finally {
@@ -751,13 +759,22 @@ export function AdminModerationQueue({
   }
 
   async function refreshQueues() {
-    const tabs: ModerationTab[] = ['submitted', 'in_review', 'published'];
-    const results = await Promise.allSettled(tabs.map((tab) => fetchAdminModerationQueue(tab)));
+    const results = await Promise.allSettled(
+      ADMIN_MODERATION_QUEUE_TABS.map((tab) => fetchAdminModerationQueue(tab)),
+    );
     setQueues((current) => {
       const next = { ...current };
       results.forEach((result, index) => {
-        const tab = tabs[index]!;
+        const tab = ADMIN_MODERATION_QUEUE_TABS[index]!;
         if (result.status === 'fulfilled') next[tab] = result.value;
+      });
+      return next;
+    });
+    setTabCounts((current) => {
+      const next = { ...current };
+      results.forEach((result, index) => {
+        const tab = ADMIN_MODERATION_QUEUE_TABS[index]!;
+        if (result.status === 'fulfilled') next[tab] = result.value.total;
       });
       return next;
     });
@@ -798,13 +815,11 @@ export function AdminModerationQueue({
 
       <Tabs value={activeTab} onValueChange={(value) => void changeTab(value)}>
         <TabsList aria-label="Moderation queues">
-          {(Object.keys(tabLabels) as ModerationTab[]).map((tab) => (
+          {ADMIN_MODERATION_QUEUE_TABS.map((tab) => (
             <TabsTrigger key={tab} value={tab} disabled={loadingTab === tab}>
               {loadingTab === tab ? <Loader2 className="size-3.5 animate-spin" /> : null}
               {tabLabels[tab]}
-              {queues[tab] ? (
-                <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
-              ) : null}
+              <span className="ml-1 text-xs text-muted-foreground">{tabCounts[tab]}</span>
             </TabsTrigger>
           ))}
         </TabsList>

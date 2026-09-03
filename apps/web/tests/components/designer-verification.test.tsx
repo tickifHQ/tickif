@@ -154,6 +154,20 @@ describe('DesignerVerification', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the approval revocation reason while the application is back in review', () => {
+    render(
+      <DesignerVerification
+        initialState={pendingState({
+          latestNote: 'The registration details need another review.',
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Approval returned to review')).toBeInTheDocument();
+    expect(screen.getByText('The registration details need another review.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submitted' })).toBeDisabled();
+  });
+
   it('lets the owner edit completed identity details before submission', async () => {
     const user = userEvent.setup();
     const { container } = render(<DesignerVerification initialState={draftState()} />);
@@ -229,6 +243,28 @@ describe('DesignerVerification', () => {
     expect(
       screen.queryByRole('button', { name: 'Submit for verification' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('blocks resubmission until a rejected optional identity document is replaced', () => {
+    const initialState = draftState();
+    render(
+      <DesignerVerification
+        initialState={rejectedState({
+          eligibility: initialState.eligibility,
+          documents: [
+            { ...verifiedState.documents[0]!, status: 'verified' },
+            {
+              ...verifiedState.documents[0]!,
+              id: '55555555-5555-4555-8555-555555555555',
+              type: 'personal_pan',
+              status: 'rejected',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Submit for verification' })).toBeDisabled();
   });
 
   it('does not expose raw infrastructure errors from verification actions', async () => {

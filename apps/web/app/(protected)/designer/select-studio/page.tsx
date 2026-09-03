@@ -3,7 +3,7 @@ import { PLATFORM_ROLE } from '@repo/contracts';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { Card } from '@repo/ui/components/card';
-import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
+import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
 export const metadata = {
   title: 'Choose your studio · Tickif',
@@ -14,7 +14,7 @@ export default async function DesignerSelectStudioPage() {
   const userRole = session?.user.role ?? null;
 
   if (rolePassesCheck(userRole, PLATFORM_ROLE.ADMIN)) {
-    redirect(ADMIN_MODERATION_PATH);
+    redirect(ADMIN_DASHBOARD_PATH);
   }
 
   if (!rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {

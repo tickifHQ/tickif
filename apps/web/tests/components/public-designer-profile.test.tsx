@@ -161,6 +161,32 @@ describe('PublicDesignerProfile', () => {
     expect(within(container).queryByAltText('Projects published')).not.toBeInTheDocument();
   });
 
+  it('never presents the studio as verified before current KYC approval', () => {
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          badges: ['new', 'projects-published'],
+          isKycVerified: false,
+          sections: {
+            ...makePublicPortfolio().sections,
+            tickifBadge: true,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Verified studio')).not.toBeInTheDocument();
+    expect(screen.queryByText('KYC verified')).not.toBeInTheDocument();
+    expect(within(container).queryByAltText('Identity verified')).not.toBeInTheDocument();
+  });
+
+  it('shows studio verification marks after current KYC approval', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(4);
+    expect(screen.getByText('KYC verified')).toBeInTheDocument();
+  });
+
   it('renders the reviews the API returned, once to assistive technology', () => {
     const reviews = [
       makeReview({ id: 'r1', author: 'Rahul S.' }),

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { DesignerOnboarding } from '@/components/designer-onboarding';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
-import { ADMIN_MODERATION_PATH } from '@/lib/auth-paths';
+import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
 export const metadata = {
   title: 'Designer onboarding · Tickif',
@@ -13,7 +13,7 @@ export default async function DesignerOnboardingPage() {
   const userRole = session?.user.role ?? null;
 
   if (rolePassesCheck(userRole, PLATFORM_ROLE.ADMIN)) {
-    redirect(ADMIN_MODERATION_PATH);
+    redirect(ADMIN_DASHBOARD_PATH);
   }
 
   if (rolePassesCheck(userRole, PLATFORM_ROLE.DESIGNER)) {

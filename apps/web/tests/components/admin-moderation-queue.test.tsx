@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminModerationDetailResponse, AdminModerationQueueResponse } from '@repo/contracts';
@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/lib/admin-moderation-api', () => ({
+  ADMIN_MODERATION_QUEUE_TABS: ['submitted', 'in_review', 'published'],
   fetchAdminModerationQueue: mocks.fetchQueue,
   fetchAdminModerationDetail: mocks.fetchDetail,
   startAdminReview: mocks.startReview,
@@ -138,6 +139,7 @@ function renderQueue(currentUserId = 'admin-1') {
   return render(
     <AdminModerationQueue
       initialQueue={queue}
+      initialCounts={{ submitted: 1, in_review: 4, published: 9 }}
       currentUserId={currentUserId}
       currentUserRole="admin"
     />,
@@ -162,6 +164,17 @@ describe('AdminModerationQueue', () => {
     expect(screen.getByRole('tab', { name: /submitted/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /in review by me/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /published/i })).toBeInTheDocument();
+  });
+
+  it('shows every moderation queue count before inactive queues are loaded', () => {
+    renderQueue();
+
+    expect(within(screen.getByRole('tab', { name: /submitted/i })).getByText('1')).toBeVisible();
+    expect(
+      within(screen.getByRole('tab', { name: /in review by me/i })).getByText('4'),
+    ).toBeVisible();
+    expect(within(screen.getByRole('tab', { name: /published/i })).getByText('9')).toBeVisible();
+    expect(mocks.fetchQueue).not.toHaveBeenCalled();
   });
 
   it('claims a submission and then enables the current admin review actions', async () => {

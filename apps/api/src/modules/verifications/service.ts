@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ORGANIZATION_CAPABILITY,
+  MIN_VERIFICATION_PUBLISHED_PROJECTS,
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
@@ -10,6 +11,7 @@ import {
   type AdminVerificationDetailResponse,
   type AdminVerificationQueueQuery,
   type RejectVerificationInput,
+  type RevokeVerificationInput,
   type VerificationDocumentUploadInput,
   type VerificationStateResponse,
 } from '@repo/contracts';
@@ -34,7 +36,6 @@ import {
   type VerificationDocumentRecord,
 } from './repository.js';
 
-const MIN_PUBLISHED_PROJECTS = 3;
 const personalIdentityDocumentTypes = new Set<VerificationDocumentRecord['type']>(
   PERSONAL_VERIFICATION_DOCUMENT_TYPES,
 );
@@ -147,7 +148,7 @@ function eligibility(
   const phoneVerified = context.ownerPhoneVerified && !!context.ownerPhone;
   const legalNamePresent = context.ownerName.trim().length >= 2;
   const businessDocumentPresent = hasBusinessDocument(documents);
-  const enoughProjects = context.publishedProjectCount >= MIN_PUBLISHED_PROJECTS;
+  const enoughProjects = context.publishedProjectCount >= MIN_VERIFICATION_PUBLISHED_PROJECTS;
   return {
     eligible: phoneVerified && legalNamePresent && businessDocumentPresent && enoughProjects,
     phoneVerified: { met: phoneVerified, label: 'Verify the account owner phone number' },
@@ -158,9 +159,9 @@ function eligibility(
     },
     publishedProjects: {
       met: enoughProjects,
-      label: `Publish at least ${MIN_PUBLISHED_PROJECTS} projects`,
+      label: `Publish at least ${MIN_VERIFICATION_PUBLISHED_PROJECTS} projects`,
       current: context.publishedProjectCount,
-      required: MIN_PUBLISHED_PROJECTS,
+      required: MIN_VERIFICATION_PUBLISHED_PROJECTS,
     },
   };
 }
@@ -178,6 +179,9 @@ async function stateForContext(
   const latestRejection = [...history]
     .reverse()
     .find((event) => event.action === VERIFICATION_REVIEW_ACTION.REJECTED);
+  const latestRevocation = [...history]
+    .reverse()
+    .find((event) => event.action === VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED);
   const canEditIdentity = context.ownerUserId === callerUserId;
   return {
     applicationId: context.application.id,
@@ -196,7 +200,10 @@ async function stateForContext(
     latestNote:
       context.application.status === VERIFICATION_APPLICATION_STATUS.REJECTED
         ? (latestRejection?.note ?? null)
-        : null,
+        : context.application.status === VERIFICATION_APPLICATION_STATUS.PENDING &&
+            latestRevocation?.attempt === context.application.attempt
+          ? (latestRevocation.note ?? null)
+          : null,
     submittedAt: context.application.submittedAt?.toISOString() ?? null,
     reviewedAt: context.application.reviewedAt?.toISOString() ?? null,
     approvedAt: context.application.approvedAt?.toISOString() ?? null,
@@ -221,6 +228,7 @@ function adminDetail(
   documents: VerificationDocumentRecord[],
   history: Awaited<ReturnType<typeof verificationsRepository.listHistory>>,
 ): AdminVerificationDetailResponse {
+  const applicationEligibility = eligibility(context, latestDocuments(documents));
   return {
     application: {
       id: context.application.id,
@@ -236,6 +244,10 @@ function adminDetail(
       reviewedAt: context.application.reviewedAt?.toISOString() ?? null,
       approvedAt: context.application.approvedAt?.toISOString() ?? null,
       expiresAt: context.application.expiresAt?.toISOString() ?? null,
+    },
+    eligibility: {
+      phoneVerified: applicationEligibility.phoneVerified,
+      publishedProjects: applicationEligibility.publishedProjects,
     },
     documents: latestDocuments(documents).map(documentDto),
     history: historyDto(history),
@@ -393,10 +405,14 @@ export const verificationsService = {
       verificationsRepository.hasIncompleteDocument(context.application.id),
     ]);
     const currentEligibility = eligibility(context, documents);
-    if (!currentEligibility.eligible || hasIncompleteDocument) {
+    const hasRejectedDocument = documents.some(
+      (document) => document.status === VERIFICATION_DOCUMENT_STATUS.REJECTED,
+    );
+    if (!currentEligibility.eligible || hasIncompleteDocument || hasRejectedDocument) {
       throw AppError.unprocessable('Verification eligibility requirements are not met', {
         eligibility: currentEligibility,
         hasIncompleteDocument,
+        hasRejectedDocument,
       });
     }
     const result = await verificationsRepository.submit({
@@ -414,13 +430,18 @@ export const verificationsService = {
   },
 
   async listAdmin(query: AdminVerificationQueueQuery) {
-    const { items, total } = await verificationsRepository.listPending(query);
+    const { items, total } = await verificationsRepository.listAdminQueue(query);
     return {
-      items: items.map((item) => ({ ...item, submittedAt: item.submittedAt.toISOString() })),
+      items: items.map((item) => ({
+        ...item,
+        submittedAt: item.submittedAt.toISOString(),
+        reviewedAt: item.reviewedAt?.toISOString() ?? null,
+      })),
       page: query.page,
       limit: query.limit,
       total,
       totalPages: total === 0 ? 0 : Math.ceil(total / query.limit),
+      tab: query.tab,
     };
   },
 
@@ -462,6 +483,9 @@ export const verificationsService = {
     if (result === VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS) {
       throw AppError.unprocessable('Verification has no reviewable documents');
     }
+    if (result === VERIFICATION_MUTATION_RESULT.INELIGIBLE) {
+      throw AppError.unprocessable('Verification eligibility requirements are no longer met');
+    }
     if (typeof result === 'string') {
       throw AppError.invalidTransition('Verification application is no longer pending');
     }
@@ -483,6 +507,21 @@ export const verificationsService = {
     }
     if (typeof result === 'string') {
       throw AppError.invalidTransition('Verification application is no longer pending');
+    }
+    return getAdminDetail(applicationId);
+  },
+
+  async revokeApproval(applicationId: string, reviewerId: string, input: RevokeVerificationInput) {
+    const result = await verificationsRepository.revokeApproval({
+      applicationId,
+      reviewerId,
+      revocation: input,
+    });
+    if (result === VERIFICATION_MUTATION_RESULT.NOT_FOUND) {
+      throw AppError.notFound('Verification application not found');
+    }
+    if (typeof result === 'string') {
+      throw AppError.invalidTransition('Verification application is no longer approved');
     }
     return getAdminDetail(applicationId);
   },

@@ -8,6 +8,7 @@ import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 const adminLinks = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/moderation', label: 'Moderation' },
+  { href: '/verifications', label: 'Profile verification' },
   { href: '/', label: 'View site' },
 ];
 

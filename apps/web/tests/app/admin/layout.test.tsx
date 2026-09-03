@@ -10,7 +10,15 @@ vi.mock('@/lib/auth-guard', () => ({
 }));
 
 vi.mock('@/components/site-nav', () => ({
-  SiteNav: () => <nav>Admin navigation</nav>,
+  SiteNav: ({ links }: { links: Array<{ href: string; label: string }> }) => (
+    <nav>
+      {links.map((link) => (
+        <a key={link.href} href={link.href}>
+          {link.label}
+        </a>
+      ))}
+    </nav>
+  ),
 }));
 
 vi.mock('@/components/site-footer', () => ({
@@ -32,6 +40,10 @@ describe('AdminLayout', () => {
     render(await Layout({ children: <div>Moderation</div> }));
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'admin' });
-    expect(screen.getByText('Moderation')).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveTextContent('Moderation');
+    expect(screen.getByRole('link', { name: 'Profile verification' })).toHaveAttribute(
+      'href',
+      '/verifications',
+    );
   });
 });

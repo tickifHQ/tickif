@@ -145,8 +145,11 @@ function StudioBar({ portfolio, view }: SectionProps) {
           <div className="min-w-0">
             <p className="flex items-center gap-1 truncate text-sm font-medium">
               {portfolio.displayName}
-              {portfolio.sections.tickifBadge ? (
-                <BadgeCheck className="size-4 shrink-0 fill-primary text-primary-foreground" />
+              {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                <BadgeCheck
+                  aria-label="Verified studio"
+                  className="size-4 shrink-0 fill-primary text-primary-foreground"
+                />
               ) : null}
             </p>
             <p className="truncate text-xs text-muted-foreground">
@@ -477,8 +480,11 @@ function StorySection({ portfolio, view }: SectionProps) {
                     </p>
                     <p className="mt-1 flex items-center gap-1 font-medium">
                       <span className="truncate">{portfolio.displayName}</span>
-                      {portfolio.sections.tickifBadge ? (
-                        <BadgeCheck className="size-4 shrink-0 fill-primary text-primary-foreground" />
+                      {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                        <BadgeCheck
+                          aria-label="Verified studio"
+                          className="size-4 shrink-0 fill-primary text-primary-foreground"
+                        />
                       ) : null}
                     </p>
                     {portfolio.badges.includes('verified') ? (
@@ -795,7 +801,7 @@ function StudioDetailsSection({ portfolio, view }: SectionProps) {
               <div>
                 <div className="flex items-center gap-1">
                   <h2 className="text-2xl font-medium">{portfolio.displayName}</h2>
-                  {portfolio.sections.tickifBadge ? (
+                  {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
                     <BadgeCheck
                       className="size-5 shrink-0 fill-primary text-primary-foreground"
                       aria-label="Verified studio"
@@ -893,8 +899,11 @@ function ShareSection({ portfolio, view }: SectionProps) {
 
               <div className="mt-2 flex items-center justify-center gap-1">
                 <p className="text-xl font-medium">{portfolio.displayName}</p>
-                {portfolio.sections.tickifBadge ? (
-                  <BadgeCheck className="size-5 fill-primary text-primary-foreground" />
+                {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+                  <BadgeCheck
+                    aria-label="Verified studio"
+                    className="size-5 fill-primary text-primary-foreground"
+                  />
                 ) : null}
               </div>
               {view.location ? (
