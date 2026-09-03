@@ -61,6 +61,63 @@ const TEAM_CONTEXT_MUTATIONS = new Set([
   '/organization/set-active-team',
 ]);
 
+async function preferredContextForNewSession(userId: string): Promise<{
+  activeOrganizationId: string | null;
+  activeTeamId: string | null;
+}> {
+  const [preference] = await db
+    .select({
+      kind: schema.userContextPreference.contextKind,
+      organizationId: schema.userContextPreference.organizationId,
+      teamId: schema.userContextPreference.teamId,
+    })
+    .from(schema.userContextPreference)
+    .where(eq(schema.userContextPreference.userId, userId))
+    .limit(1);
+
+  if (preference?.kind === 'organization' && preference.organizationId && preference.teamId) {
+    const [valid] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .innerJoin(
+        schema.team,
+        and(
+          eq(schema.team.id, preference.teamId),
+          eq(schema.team.organizationId, preference.organizationId),
+          eq(schema.team.frozen, false),
+        ),
+      )
+      .innerJoin(
+        schema.teamMember,
+        and(
+          eq(schema.teamMember.teamId, preference.teamId),
+          eq(schema.teamMember.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.member.organizationId, preference.organizationId),
+          eq(schema.member.frozen, false),
+        ),
+      )
+      .limit(1);
+    if (valid) {
+      return {
+        activeOrganizationId: preference.organizationId,
+        activeTeamId: preference.teamId,
+      };
+    }
+
+    await db
+      .update(schema.userContextPreference)
+      .set({ contextKind: 'personal', organizationId: null, teamId: null })
+      .where(eq(schema.userContextPreference.userId, userId));
+  }
+
+  return { activeOrganizationId: null, activeTeamId: null };
+}
+
 function bodyString(body: unknown, key: string): string | undefined {
   if (!body || typeof body !== 'object') return undefined;
   const value = Reflect.get(body, key);
@@ -236,6 +293,16 @@ export const auth = betterAuth({
   // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
+
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => ({
+          data: { ...session, ...(await preferredContextForNewSession(session.userId)) },
+        }),
+      },
+    },
+  },
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
@@ -441,6 +508,7 @@ export const auth = betterAuth({
       // flow. Generic create/delete endpoints would allow profile-less orgs or
       // destructive deletion outside that workflow.
       allowUserToCreateOrganization: false,
+      organizationLimit: Number.MAX_SAFE_INTEGER,
       disableOrganizationDeletion: true,
       ac: orgAc,
       roles: orgRoles,
@@ -711,7 +779,7 @@ export async function getSession(headers: Headers, opts?: { disableCookieCache?:
  * Select an authenticated user's active organization through better-auth so
  * membership is validated and both the session row and session cookie agree.
  */
-export function setActiveOrganization(headers: Headers, organizationId: string) {
+export function setActiveOrganization(headers: Headers, organizationId: string | null) {
   return auth.api.setActiveOrganization({
     headers,
     body: { organizationId },
@@ -720,6 +788,6 @@ export function setActiveOrganization(headers: Headers, organizationId: string) 
 }
 
 /** Select an authenticated user's active branch through Better Auth. */
-export function setActiveTeam(headers: Headers, teamId: string) {
+export function setActiveTeam(headers: Headers, teamId: string | null) {
   return auth.api.setActiveTeam({ headers, body: { teamId }, asResponse: true });
 }

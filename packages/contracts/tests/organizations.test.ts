@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activeContextSchema,
   organizationMemberRoleSchema,
   organizationBranchesResponseSchema,
   organizationWorkspaceResponseSchema,
 } from '../src/organizations.js';
 
 describe('organization contracts', () => {
+  it('requires a complete organization and branch pair outside personal context', () => {
+    expect(activeContextSchema.parse({ kind: 'personal' })).toEqual({ kind: 'personal' });
+    expect(
+      activeContextSchema.parse({
+        kind: 'organization',
+        organizationId: 'org-1',
+        teamId: 'team-1',
+      }),
+    ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: 'team-1' });
+    expect(
+      activeContextSchema.safeParse({ kind: 'organization', organizationId: 'org-1' }).success,
+    ).toBe(false);
+  });
+
   it('accepts the Better Auth organization roles used by Tickif', () => {
     expect(organizationMemberRoleSchema.parse('owner')).toBe('owner');
     expect(organizationMemberRoleSchema.parse('admin')).toBe('admin');

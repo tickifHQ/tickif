@@ -7,12 +7,14 @@ import {
   type PlatformRole,
   type Session,
 } from '@repo/auth';
+import type { ActiveContext } from '@repo/contracts';
 import { AppError } from './errors.js';
 import { orgsService } from '../modules/orgs/service.js';
 
 export type AuthVariables = {
   user: Session['user'] | null;
   session: Session['session'] | null;
+  activeContext: ActiveContext;
   /**
    * Whether `user`/`session` were read past the ≤5-min session cookie cache.
    * Optional on purpose: only `withSession` and the guards below set it, so a
@@ -33,34 +35,21 @@ export type Ownership = {
 /** Resolves the requested resource's ownership; return null when it doesn't exist. */
 export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
 
-async function repairWorkspaceContext(
+async function repairIncompleteOrganizationContext(
   headers: Headers,
   result: { user: Session['user']; session: Session['session'] },
   appendCookie: (cookie: string) => void,
 ): Promise<void> {
-  if (!result.session.activeOrganizationId) {
-    const organizationId = await orgsService.findSoleOrganizationForUser(result.user.id);
-    if (organizationId) {
-      const response = await setActiveOrganization(headers, organizationId);
-      if (response.ok) {
-        for (const cookie of response.headers.getSetCookie()) appendCookie(cookie);
-        result.session.activeOrganizationId = organizationId;
-      }
-    }
-  }
-  if (result.session.activeOrganizationId && result.session.activeTeamId === null) {
-    const teamId = await orgsService.findDefaultActiveTeamForUser(
-      result.user.id,
-      result.session.activeOrganizationId,
-    );
-    if (teamId) {
-      const response = await setActiveTeam(headers, teamId);
-      if (response.ok) {
-        for (const cookie of response.headers.getSetCookie()) appendCookie(cookie);
-        result.session.activeTeamId = teamId;
-      }
-    }
-  }
+  if (!result.session.activeOrganizationId || result.session.activeTeamId !== null) return;
+  const teamId = await orgsService.findDefaultActiveTeamForUser(
+    result.user.id,
+    result.session.activeOrganizationId,
+  );
+  if (!teamId) return;
+  const response = await setActiveTeam(headers, teamId);
+  if (!response.ok) return;
+  for (const cookie of response.headers.getSetCookie()) appendCookie(cookie);
+  result.session.activeTeamId = teamId;
 }
 
 /**
@@ -77,15 +66,91 @@ async function repairWorkspaceContext(
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
   if (result) {
-    await repairWorkspaceContext(c.req.raw.headers, result, (cookie) => {
+    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
       c.header('Set-Cookie', cookie, { append: true });
     });
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
+  c.set(
+    'activeContext',
+    result?.session.activeOrganizationId && result.session.activeTeamId
+      ? {
+          kind: 'organization',
+          organizationId: result.session.activeOrganizationId,
+          teamId: result.session.activeTeamId,
+        }
+      : { kind: 'personal' },
+  );
   c.set('sessionFresh', false);
   await next();
 };
+
+function appendResponseCookies(
+  c: Context<{ Variables: AuthVariables }>,
+  response: Response,
+): void {
+  for (const cookie of response.headers.getSetCookie()) {
+    c.header('Set-Cookie', cookie, { append: true });
+  }
+}
+
+export async function applyActiveContext(
+  c: Context<{ Variables: AuthVariables }>,
+  context: ActiveContext,
+): Promise<void> {
+  const headers = c.req.raw.headers;
+  if (context.kind === 'personal') {
+    const teamResponse = await setActiveTeam(headers, null);
+    if (!teamResponse.ok) throw AppError.badGateway('Failed to clear the active branch');
+    appendResponseCookies(c, teamResponse);
+
+    const organizationResponse = await setActiveOrganization(headers, null);
+    if (!organizationResponse.ok) {
+      throw AppError.badGateway('Failed to clear the active organization');
+    }
+    appendResponseCookies(c, organizationResponse);
+  } else {
+    const organizationResponse = await setActiveOrganization(headers, context.organizationId);
+    if (!organizationResponse.ok) {
+      throw AppError.badGateway('Failed to select the active organization');
+    }
+    appendResponseCookies(c, organizationResponse);
+
+    const teamResponse = await setActiveTeam(headers, context.teamId);
+    if (!teamResponse.ok) throw AppError.badGateway('Failed to select the active branch');
+    appendResponseCookies(c, teamResponse);
+  }
+
+  const session = c.get('session');
+  if (session) {
+    session.activeOrganizationId =
+      context.kind === 'organization' ? context.organizationId : null;
+    session.activeTeamId = context.kind === 'organization' ? context.teamId : null;
+  }
+  c.set('activeContext', context);
+}
+
+export async function resolveActiveContext(
+  c: Context<{ Variables: AuthVariables }>,
+): Promise<ActiveContext> {
+  const user = c.get('user');
+  const session = c.get('session');
+  if (!user || !session) throw AppError.unauthorized();
+  const context = await orgsService.resolveSessionContext(
+    user.id,
+    session.activeOrganizationId ?? null,
+    session.activeTeamId ?? null,
+  );
+  const expectedOrganizationId = context.kind === 'organization' ? context.organizationId : null;
+  const expectedTeamId = context.kind === 'organization' ? context.teamId : null;
+  const differs =
+    expectedOrganizationId !== (session.activeOrganizationId ?? null) ||
+    expectedTeamId !== (session.activeTeamId ?? null);
+  if (differs) await applyActiveContext(c, context);
+  else c.set('activeContext', context);
+  return context;
+}
 
 /**
  * Re-reads the session past the cookie cache, at most once per request, and forwards
@@ -107,12 +172,22 @@ async function refreshSession(c: Context<{ Variables: AuthVariables }>): Promise
     c.header('Set-Cookie', cookie, { append: true });
   }
   if (result) {
-    await repairWorkspaceContext(c.req.raw.headers, result, (cookie) => {
+    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
       c.header('Set-Cookie', cookie, { append: true });
     });
   }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
+  c.set(
+    'activeContext',
+    result?.session.activeOrganizationId && result.session.activeTeamId
+      ? {
+          kind: 'organization',
+          organizationId: result.session.activeOrganizationId,
+          teamId: result.session.activeTeamId,
+        }
+      : { kind: 'personal' },
+  );
   c.set('sessionFresh', true);
 }
 
@@ -164,6 +239,21 @@ export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   await getFreshActiveUser(c);
   await next();
 };
+
+export function requireContext(
+  kind: ActiveContext['kind'],
+): MiddlewareHandler<{ Variables: AuthVariables }> {
+  return async (c, next) => {
+    await getFreshActiveUser(c);
+    if ((await resolveActiveContext(c)).kind !== kind) {
+      throw AppError.forbidden(`Switch to ${kind} context to continue`);
+    }
+    await next();
+  };
+}
+
+export const requirePersonalContext = requireContext('personal');
+export const requireOrganizationContext = requireContext('organization');
 
 /**
  * Guard: the user's platform role must be one of `roles` (exact match — no

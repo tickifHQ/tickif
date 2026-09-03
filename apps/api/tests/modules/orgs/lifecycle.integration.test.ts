@@ -29,6 +29,19 @@ async function makeMemberSession(input: {
       createdAt: new Date(),
     })
     .returning();
+  const [existingTeam] = await db
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .where(eq(schema.team.organizationId, input.organizationId))
+    .limit(1);
+  const teamId =
+    existingTeam?.id ?? (await makeTeam({ organizationId: input.organizationId })).id;
+  await db.insert(schema.teamMember).values({
+    id: `lifecycle-team-member-${session.userId}`,
+    teamId,
+    userId: session.userId,
+    createdAt: new Date(),
+  });
   await db
     .insert(schema.subscription)
     .values({ organizationId: input.organizationId, planTier: 'corporate' })

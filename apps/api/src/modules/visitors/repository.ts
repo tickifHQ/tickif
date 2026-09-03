@@ -41,7 +41,7 @@ export const visitorsRepository = {
         const isBanned =
           account?.banned === true && (!account.banExpires || account.banExpires > now);
         const canWrite =
-          account?.role === PLATFORM_ROLE.VISITOR &&
+          (account?.role === PLATFORM_ROLE.VISITOR || account?.role === PLATFORM_ROLE.DESIGNER) &&
           (account.status === ACCOUNT_STATUS.PENDING || account.status === ACCOUNT_STATUS.ACTIVE) &&
           !isBanned;
         if (!canWrite) throw new VisitorProfileAccessDeniedError();

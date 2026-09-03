@@ -21,8 +21,11 @@ vi.mock('@/lib/auth-client', () => ({
       isPending: mock.isPending,
       error: mock.error,
     }),
-    organization: { setActive: mock.setActive },
   },
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: { api: { orgs: { context: { $put: mock.setActive } } } },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -38,7 +41,7 @@ describe('DesignerOrganizationSwitcher', () => {
     mock.isPending = false;
     mock.error = null;
     mock.setActive.mockReset();
-    mock.setActive.mockResolvedValue({ data: mock.organizations[1], error: null });
+    mock.setActive.mockResolvedValue({ ok: true });
     mock.router.refresh.mockReset();
   });
 
@@ -71,14 +74,14 @@ describe('DesignerOrganizationSwitcher', () => {
     await user.click(screen.getByRole('button', { name: 'Switch organization' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
-    expect(mock.setActive).toHaveBeenCalledWith({ organizationId: 'org-2' });
+    expect(mock.setActive).toHaveBeenCalledWith({
+      json: { kind: 'organization', organizationId: 'org-2' },
+    });
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('shows a busy state and blocks repeated switches while the request is pending', async () => {
-    let resolveSwitch:
-      | ((value: { data: (typeof mock.organizations)[number]; error: null }) => void)
-      | undefined;
+    let resolveSwitch: ((value: { ok: boolean }) => void) | undefined;
     mock.setActive.mockReturnValue(
       new Promise((resolve) => {
         resolveSwitch = resolve;
@@ -108,7 +111,7 @@ describe('DesignerOrganizationSwitcher', () => {
     );
 
     await act(async () => {
-      resolveSwitch?.({ data: mock.organizations[1]!, error: null });
+      resolveSwitch?.({ ok: true });
     });
     await waitFor(() => {
       expect(mock.router.refresh).toHaveBeenCalledTimes(1);
@@ -152,7 +155,7 @@ describe('DesignerOrganizationSwitcher', () => {
   });
 
   it('does not refresh or hide an error when switching fails', async () => {
-    mock.setActive.mockResolvedValue({ data: null, error: { message: 'Not a member' } });
+    mock.setActive.mockResolvedValue({ ok: false });
     const user = userEvent.setup();
     render(
       <DesignerOrganizationSwitcher

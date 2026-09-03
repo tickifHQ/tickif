@@ -102,8 +102,18 @@ describe('visitorsService.upsertMine', () => {
 });
 
 describe('visitor profile authorization', () => {
+  it('allows a designer to use the same personal profile', async () => {
+    vi.mocked(visitorsRepository.findByUserId).mockResolvedValue(profile);
+    vi.mocked(visitorsRepository.upsertCompleted).mockResolvedValue(profile);
+    const designer = { ...pendingVisitor, role: PLATFORM_ROLE.DESIGNER };
+
+    await expect(visitorsService.getMine(designer)).resolves.toBeDefined();
+    await expect(
+      visitorsService.upsertMine({ address: null, whatsappNumber: null }, designer),
+    ).resolves.toBeDefined();
+  });
+
   it.each([
-    ['designer', { ...pendingVisitor, role: PLATFORM_ROLE.DESIGNER }],
     ['admin', { ...pendingVisitor, role: PLATFORM_ROLE.ADMIN }],
     ['superadmin', { ...pendingVisitor, role: PLATFORM_ROLE.SUPERADMIN }],
     ['suspended account', { ...pendingVisitor, status: ACCOUNT_STATUS.SUSPENDED }],

@@ -11,6 +11,25 @@ unique `team_id` and public `slug`. Projects inherit their branch through
 `project.designer_id`; leads store `team_id` directly because a lead may not refer
 to a project.
 
+## Active context
+
+Authentication and platform roles are independent from the active workspace.
+An authenticated user is either in personal context, represented by null active
+organization and team ids, or organization context, represented by a validated
+organization and team pair. The API exposes this through `GET /api/orgs/context`
+and changes it through `PUT /api/orgs/context`.
+
+The last explicit selection is stored in `user_context_preference`. A later
+session restores that selection only while both organization and active-team
+memberships remain valid; otherwise it repairs the preference to personal.
+Membership never selects an organization implicitly, including when the user has
+only one organization. Context guards remain separate from platform-role guards
+so the same designer can use personal and organization capabilities safely.
+Organization-only API routes validate and repair the pair before reading it.
+E-249 will add the organization-context check to the designer layout alongside
+the personal-to-organization chooser. Until that route exists, guarding the
+layout would redirect personal users away from the only current switcher.
+
 ## Branch-scoped readers in E-244
 
 | Previous assumption | Branch-safe behavior |
@@ -38,9 +57,10 @@ single field.
 
 Downgrades freeze active teams newest-first. `freeze_rank` records that order and
 restoration consumes it ascending. Freezing clears sessions that point at those
-teams. The next authenticated request selects the user's oldest remaining active
-team. Operational endpoints reject or omit frozen teams, while public profile and
-published project reads deliberately do not join on `team.frozen`.
+teams. The next validated organization-context request selects the user's oldest
+remaining active team. Operational endpoints reject or omit frozen teams, while
+public profile and published project reads deliberately do not join on
+`team.frozen`.
 
 Hard deletion through Better Auth is disabled because deleting a team cascades to
 its profile and projects. Lifecycle reconciliation uses freeze and restore instead.

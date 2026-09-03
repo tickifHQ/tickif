@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, lt, lte, max, sql } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
-import type { OwnershipTransferStatus } from '@repo/contracts';
+import type { ActiveContext, OwnershipTransferStatus } from '@repo/contracts';
 
 export type OrganizationSummaryRecord = Pick<
   typeof schema.organization.$inferSelect,
@@ -30,6 +30,56 @@ export const OWNERSHIP_TRANSFER_RESULT = {
 } as const;
 
 export const orgsRepository = {
+  async isValidOrganizationContext(
+    userId: string,
+    organizationId: string,
+    teamId: string,
+  ): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .innerJoin(
+        schema.team,
+        and(
+          eq(schema.team.id, teamId),
+          eq(schema.team.organizationId, schema.member.organizationId),
+        ),
+      )
+      .innerJoin(
+        schema.teamMember,
+        and(eq(schema.teamMember.teamId, teamId), eq(schema.teamMember.userId, userId)),
+      )
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.member.organizationId, organizationId),
+          eq(schema.member.frozen, false),
+          eq(schema.team.frozen, false),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  },
+
+  async saveContextPreference(userId: string, context: ActiveContext): Promise<void> {
+    const values =
+      context.kind === 'personal'
+        ? { userId, contextKind: context.kind, organizationId: null, teamId: null }
+        : {
+            userId,
+            contextKind: context.kind,
+            organizationId: context.organizationId,
+            teamId: context.teamId,
+          };
+    await db
+      .insert(schema.userContextPreference)
+      .values(values)
+      .onConflictDoUpdate({
+        target: schema.userContextPreference.userId,
+        set: { ...values, updatedAt: new Date() },
+      });
+  },
+
   async hasMembership(userId: string, organizationId: string): Promise<boolean> {
     const [row] = await db
       .select({ id: schema.member.id })
@@ -43,15 +93,6 @@ export const orgsRepository = {
       )
       .limit(1);
     return !!row;
-  },
-
-  async findSoleOrganizationForUser(userId: string): Promise<string | null> {
-    const rows = await db
-      .selectDistinct({ organizationId: schema.member.organizationId })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.frozen, false)))
-      .limit(2);
-    return rows.length === 1 ? (rows[0]?.organizationId ?? null) : null;
   },
 
   async findDefaultActiveTeamForUser(

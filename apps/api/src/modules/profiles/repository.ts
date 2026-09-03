@@ -1,5 +1,4 @@
-import { db, schema, eq, and, sql } from '@repo/db';
-import { inArray } from 'drizzle-orm';
+import { db, schema, eq, and, inArray, isNull, or, sql } from '@repo/db';
 import {
   VERIFICATION_APPLICATION_STATUS,
   taxonomyKindSchema,
@@ -338,7 +337,12 @@ export const profilesRepository = {
       await tx
         .update(schema.user)
         .set({ role: 'designer', status: 'active' })
-        .where(eq(schema.user.id, data.userId));
+        .where(
+          and(
+            eq(schema.user.id, data.userId),
+            or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
+          ),
+        );
 
       if (data.footprintIds.length > 0) {
         await tx.insert(schema.designerProfileFootprint).values(

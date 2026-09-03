@@ -5,6 +5,20 @@ import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 describe('saved project routes', () => {
+  it('lets a designer save projects while in personal context', async () => {
+    const account = await createRoleSession('+919800005100', 'designer');
+    const designer = await makeDesigner({ status: 'active' });
+    const project = await makeProject({ designerId: designer.id, status: 'published' });
+
+    const response = await app.request(`/api/saved-projects/${project.id}`, {
+      method: 'PUT',
+      headers: { cookie: account.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ projectId: project.id, saved: true });
+  });
+
   it('saves and removes a project idempotently', async () => {
     const visitor = await createRoleSession('+919800005101', 'visitor');
     const designer = await makeDesigner({ status: 'active' });
@@ -84,9 +98,9 @@ describe('saved project routes', () => {
 
   it('requires authentication and validates the bounded state query', async () => {
     const project = await makeProject();
-    expect(
-      (await app.request(`/api/saved-projects/${project.id}`, { method: 'PUT' })).status,
-    ).toBe(401);
+    expect((await app.request(`/api/saved-projects/${project.id}`, { method: 'PUT' })).status).toBe(
+      401,
+    );
     expect(
       (await app.request(`/api/saved-projects/${project.id}`, { method: 'DELETE' })).status,
     ).toBe(401);

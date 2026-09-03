@@ -26,7 +26,6 @@ vi.mock('../../../src/modules/billing/subscribe-service.js', () => ({
 
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
-    findSoleOrganizationForUser: vi.fn().mockResolvedValue(null),
     isMember: vi.fn().mockResolvedValue(true),
   },
 }));
