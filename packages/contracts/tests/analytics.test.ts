@@ -146,6 +146,17 @@ describe('analytics contracts', () => {
         access: { ...billing.access, engagementVisible: true },
       }).success,
     ).toBe(false);
+    expect(
+      analyticsResponseSchema.safeParse({
+        ...billing,
+        access: {
+          ...billing.access,
+          tier: 'hobby',
+          tierScope: 'basic',
+          branchAccess: 'upgrade_required',
+        },
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects impossible engagement role and scope mappings', () => {
@@ -235,13 +246,43 @@ describe('analytics contracts', () => {
     expect(
       analyticsResponseSchema.safeParse({
         ...valid,
-        access: { ...valid.access, lifecycleState: 'locked' },
+        access: {
+          ...valid.access,
+          lifecycleState: 'locked',
+          tierScope: 'basic',
+          branchAccess: 'suspended',
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      analyticsResponseSchema.safeParse({
+        ...valid,
+        access: {
+          ...valid.access,
+          tier: 'hobby',
+          tierScope: 'basic',
+          branchAccess: 'upgrade_required',
+        },
       }).success,
     ).toBe(false);
     expect(
       analyticsResponseSchema.safeParse({
         ...valid,
         access: { ...valid.access, level: 'branch', branchId: 'team_1' },
+      }).success,
+    ).toBe(true);
+    expect(
+      analyticsResponseSchema.safeParse({
+        ...valid,
+        access: {
+          ...valid.access,
+          role: 'owner',
+          roleScope: 'full',
+          readOnly: false,
+          tier: 'hobby',
+          tierScope: 'basic',
+          branchAccess: 'upgrade_required',
+        },
       }).success,
     ).toBe(true);
   });

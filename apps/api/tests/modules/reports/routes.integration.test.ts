@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { analyticsResponseSchema } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
-import { makeDesigner, makeLead, makeProject, makeTeam } from '@repo/db/testing';
+import { makeDesigner, makeLead, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
@@ -322,6 +322,50 @@ describe('GET /api/reports/analytics', () => {
       if (role === 'member') expect(parsed.engagement.profileViews).toBe(0);
     }
     expect(project.id).toBeTruthy();
+  });
+
+  it('returns billing analytics when the organization has no designer profile', async () => {
+    const caller = await createRoleSession('+919800004025', 'designer');
+    const organization = await makeOrganization({ slug: `billing-only-${randomUUID()}` });
+    await db.insert(schema.member).values({
+      id: `member-billing-only-${randomUUID()}`,
+      organizationId: organization.id,
+      userId: caller.userId,
+      role: 'billing_admin',
+      createdAt: new Date(),
+    });
+    const [subscription] = await db
+      .insert(schema.subscription)
+      .values({ organizationId: organization.id, planTier: 'corporate' })
+      .returning();
+    await db.insert(schema.paymentTransaction).values({
+      subscriptionId: subscription!.id,
+      razorpayPaymentId: `pay-billing-only-${randomUUID()}`,
+      amount: 499900,
+      currency: 'INR',
+      status: 'captured',
+      payload: {},
+    });
+    const cookie = await activateOrganization(caller.cookie, organization.id);
+
+    const response = await app.request('/api/reports/analytics?days=7', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed.dataset).toBe('billing');
+    expect(parsed.billing?.currencies).toEqual([
+      expect.objectContaining({ currency: 'INR', capturedAmount: 499900 }),
+    ]);
+    expect(parsed.projects.total).toBe(0);
+    expect(parsed.engagement).toEqual({ projectViews: 0, profileViews: 0 });
+    expect(
+      await db
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.orgId, organization.id)),
+    ).toEqual([]);
   });
 
   it('excludes frozen branches without deleting their analytics history', async () => {
