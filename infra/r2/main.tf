@@ -33,30 +33,6 @@ resource "cloudflare_r2_bucket_cors_configuration" "media" {
   }
 }
 
-# Lifecycle rule: expire orphaned originals (stalled uploads, crash-deleted objects).
-# Covers objects in originals/* prefix that were never promoted to permanent location.
-resource "cloudflare_r2_bucket_lifecycle_configuration" "media" {
-  account_id = var.cloudflare_account_id
-  bucket_name = cloudflare_r2_bucket.media.bucket_name
-
-  rule {
-    id     = "expire-orphaned-originals"
-    status = "Enabled"
-
-    filter {
-      prefix = "originals/"
-    }
-
-    expiration {
-      days = var.lifecycle_expiry_days
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle_expiry_days
-    }
-  }
-}
-
 # Outputs for environment setup.
 output "r2_bucket_name" {
   value       = cloudflare_r2_bucket.media.bucket_name

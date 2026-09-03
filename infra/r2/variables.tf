@@ -26,9 +26,3 @@ variable "cors_allowed_origins" {
   default     = ["https://tickif.co", "https://www.tickif.co", "http://localhost:3000"]
   description = "Allowed origins for CORS (browser direct uploads)"
 }
-
-variable "lifecycle_expiry_days" {
-  type        = number
-  default     = 7
-  description = "Days before orphaned originals are auto-expired"
-}

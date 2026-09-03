@@ -1,17 +1,3 @@
 {
-  "Rules": [
-    {
-      "Id": "expire-orphaned-originals",
-      "Filter": {
-        "Prefix": "originals/"
-      },
-      "Status": "Enabled",
-      "Expiration": {
-        "Days": 7
-      },
-      "NoncurrentVersionExpiration": {
-        "NoncurrentDays": 7
-      }
-    }
-  ]
+  "Rules": []
 }

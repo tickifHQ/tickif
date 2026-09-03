@@ -7,7 +7,7 @@ Cloudflare R2 (S3-compatible) bucket configuration for media uploads, processing
 - **Bucket**: `tickif-media` — stores originals (private) and derived images (public)
 - **Public Access Block**: Originals at `originals/*` are private; derivatives at `images/*` are public
 - **CORS**: Enables browser-based direct uploads and HEAD checks for presigned URLs
-- **Lifecycle**: Auto-expires orphaned originals (never promoted to permanent status) after N days
+- **Lifecycle**: No prefix-wide expiry; application jobs delete only unreferenced objects
 
 ## Setup
 
@@ -17,12 +17,13 @@ Cloudflare R2 (S3-compatible) bucket configuration for media uploads, processing
 cd infra/r2
 terraform init
 terraform plan -var="r2_bucket_name=tickif-media" \
-  -var="cors_allowed_origin=https://tickif.co" \
-  -var="lifecycle_expiry_days=7"
+  -var='cors_allowed_origins=["https://tickif.co"]'
 terraform apply
 ```
 
-Exports account ID and bucket details to `.terraform.tfvars` for your environment.
+Removing the old lifecycle resource from Terraform removes its active
+`originals/` expiry configuration on the next apply. Review the plan and confirm
+that it destroys only the bucket lifecycle configuration, not the bucket.
 
 ### Option B: AWS CLI / wrangler
 
@@ -35,11 +36,10 @@ aws s3api put-bucket-cors --bucket tickif-media \
   --cors-configuration file://cors.json
 ```
 
-2. Apply lifecycle rule:
+2. Clear any existing lifecycle rules:
 
 ```bash
-aws s3api put-bucket-lifecycle-configuration --bucket tickif-media \
-  --lifecycle-configuration file://lifecycle.json
+aws s3api delete-bucket-lifecycle --bucket tickif-media
 ```
 
 3. Block public access to originals (optional, if ACLs are used):
@@ -50,16 +50,15 @@ aws s3api put-public-access-block --bucket tickif-media \
   BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 ```
 
-## Orphan Cleanup Intent
+## Object cleanup
 
-The app's media pipeline:
-1. Uploads originals to `originals/<upload-id>/` (temporary)
-2. On success, moves/copies to permanent location (e.g., `images/<project-id>/`)
-3. On permanent failure, deletes the original
-
-The lifecycle rule in `lifecycle.json` expires objects in `originals/` older than **7 days** that were never promoted. This catches:
-- Long-stalled upload jobs (e.g., stuck BullMQ consumers)
-- Orphaned originals from crashes before deletion
+Committed project originals and profile logos remain under `originals/`, so a
+prefix-wide age rule would delete live and retained media. `lifecycle.json` is
+therefore an empty policy reference, not a configuration to apply. The
+application deletes known failed uploads immediately, and the
+organization-retention worker deletes persisted manifest entries during an
+explicit purge. Any future abandoned-upload sweep must first prove from the
+database that an object is unreferenced.
 
 ## CORS Policy
 
