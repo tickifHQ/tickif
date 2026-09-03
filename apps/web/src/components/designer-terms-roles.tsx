@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
   OrganizationInvitation,
@@ -67,6 +68,52 @@ const assignableRoles = [
   { value: 'admin', label: 'Admin' },
 ] satisfies ReadonlyArray<{ value: AssignableRole; label: string }>;
 
+// Owner is intentionally absent: Admin must not be offered Owner, and ownership
+// changes only through the two-party transfer flow (E-243), never the role menu.
+const TIER_ERROR_CODE = 'ORGANIZATION_RBAC_REQUIRES_CORPORATE';
+const UPGRADE_MESSAGE = 'Upgrade to Corporate to unlock team management.';
+
+function isTierError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
+  if (candidate.code === TIER_ERROR_CODE) return true;
+  if (candidate.status === 402) return true;
+  return (
+    typeof candidate.message === 'string' &&
+    (candidate.message.includes(TIER_ERROR_CODE) ||
+      candidate.message.includes('Upgrade to Corporate'))
+  );
+}
+
+function formatMutationError(fallback: string, error: unknown): string {
+  if (isTierError(error)) return UPGRADE_MESSAGE;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
+}
+
+function formatSeatLimit(limit: number): string {
+  if (!Number.isFinite(limit)) return 'Unlimited';
+  return String(limit);
+}
+
+function UpgradePrompt({ organizationName }: { organizationName: string }) {
+  return (
+    <Card className="space-y-3 p-5 shadow-none">
+      <p className="text-sm font-medium text-foreground">Team management is a Corporate feature</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {organizationName} is on a single-user plan. The org is Owner solo with 1 of 1 seats used.
+        Upgrade to Corporate to invite teammates, assign roles, and manage seats.
+      </p>
+      <Button type="button" size="compact" asChild>
+        <Link href="/designer/plan-billing">View Corporate plans</Link>
+      </Button>
+    </Card>
+  );
+}
+
 function initials(name: string) {
   return (
     name
@@ -128,7 +175,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
           Active members
         </p>
         <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
-          Members with studio access
+          {workspace.seatUsage} of {formatSeatLimit(workspace.seatLimit)} seats used
         </p>
       </Card>
 
@@ -248,13 +295,21 @@ function MembersList({
                   shape="square"
                   className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
                 >
-                  Inactive
+                  Frozen
                 </Badge>
               ) : null}
             </div>
             <p className="truncate text-xs text-muted-foreground">
               {member.email} · Joined {formatDate(member.joinedAt)}
             </p>
+            {member.frozen ? (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Frozen, restores on re-upgrade. Published work stays live.{' '}
+                <Link href="/designer/plan-billing" className="text-primary underline">
+                  Re-upgrade to restore
+                </Link>
+              </p>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <RoleBadge role={member.role} />
@@ -358,6 +413,10 @@ export function DesignerTermsRoles({
   }
 
   const activeWorkspace = workspace;
+  const canInvite =
+    workspace.canManage && workspace.capabilities.manageMembers && workspace.rbacEnabled;
+  const canChangeRoles =
+    workspace.canManage && workspace.capabilities.changeMemberRoles && workspace.rbacEnabled;
 
   function submitInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -386,7 +445,7 @@ export function DesignerTermsRoles({
         if (result.error) {
           setFeedback({
             tone: 'error',
-            message: result.error.message || 'Could not send the invitation.',
+            message: formatMutationError('Could not send the invitation.', result.error),
           });
           return;
         }
@@ -413,7 +472,7 @@ export function DesignerTermsRoles({
         if (result.error) {
           setFeedback({
             tone: 'error',
-            message: result.error.message || 'Could not update this role.',
+            message: formatMutationError('Could not update this role.', result.error),
           });
           return;
         }
@@ -438,7 +497,7 @@ export function DesignerTermsRoles({
         if (result.error) {
           setFeedback({
             tone: 'error',
-            message: result.error.message || 'Could not revoke the invitation.',
+            message: formatMutationError('Could not revoke the invitation.', result.error),
           });
           return;
         }
@@ -466,7 +525,11 @@ export function DesignerTermsRoles({
 
         <SummaryCards workspace={workspace} />
 
-        {workspace.canManage ? (
+        {!workspace.rbacEnabled ? (
+          <UpgradePrompt organizationName={workspace.organization.name} />
+        ) : null}
+
+        {canInvite ? (
           <SectionCard title="Invite a teammate">
             <form
               className="grid gap-3 rounded-xl border bg-card p-3 shadow-xs sm:grid-cols-[minmax(0,1.7fr)_minmax(12rem,1fr)_auto] sm:items-end"
@@ -523,13 +586,13 @@ export function DesignerTermsRoles({
         <SectionCard title="Members">
           <MembersList
             members={workspace.members}
-            canManage={workspace.canManage}
+            canManage={canChangeRoles}
             isPending={isPending}
             onChangeRole={updateRole}
           />
         </SectionCard>
 
-        {workspace.canManage ? (
+        {canInvite ? (
           <SectionCard title="Pending invites">
             {workspace.invitations.length ? (
               <PendingInvites

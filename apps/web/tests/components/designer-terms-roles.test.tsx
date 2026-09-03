@@ -141,7 +141,7 @@ describe('DesignerTermsRoles', () => {
     expect(screen.queryByRole('heading', { name: 'Pending invites' })).not.toBeInTheDocument();
   });
 
-  it('counts only active seats and labels frozen memberships', () => {
+  it('counts only active seats and labels frozen memberships as recoverable', () => {
     render(
       <DesignerTermsRoles
         workspace={{
@@ -161,7 +161,112 @@ describe('DesignerTermsRoles', () => {
     );
 
     expect(screen.getByText('1', { selector: '[data-metric="members"]' })).toBeInTheDocument();
-    expect(screen.getByText('Inactive')).toBeInTheDocument();
+    expect(screen.getByText('Frozen')).toBeInTheDocument();
+    expect(screen.getByText(/restores on re-upgrade/i)).toBeInTheDocument();
+    expect(screen.getByText('1 of 10 seats used')).toBeInTheDocument();
+  });
+
+  it('renders all five roles with badges and descriptions', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          currentUserRole: 'billing_admin',
+          members: [
+            ownerWorkspace.members[0]!,
+            { ...ownerWorkspace.members[1]!, role: 'billing_admin' },
+            {
+              id: 'member-viewer',
+              userId: 'user-viewer',
+              name: 'Mira Khan',
+              email: 'mira@example.com',
+              image: null,
+              role: 'viewer',
+              frozen: false,
+              frozenAt: null,
+              freezeRank: null,
+              joinedAt: '2026-08-04T00:00:00.000Z',
+              isCurrentUser: false,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText('Billing Admin').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Viewer').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('Can manage billing, invoices, and subscription operations.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an upgrade prompt instead of role management on single-user plans', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          rbacEnabled: false,
+          canManage: false,
+          seatUsage: 1,
+          seatLimit: 1,
+          capabilities: {
+            ...ownerWorkspace.capabilities,
+            billing: true,
+            manageMembers: false,
+            changeMemberRoles: false,
+          },
+          invitations: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Corporate feature/i)).toBeInTheDocument();
+    expect(screen.getByText(/Owner solo with 1 of 1 seats/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+  });
+
+  it('hides member management for billing admins, members, and viewers', () => {
+    for (const role of ['billing_admin', 'member', 'viewer'] as const) {
+      const { unmount } = render(
+        <DesignerTermsRoles
+          workspace={{
+            ...ownerWorkspace,
+            currentUserRole: role,
+            canManage: false,
+            capabilities: {
+              ...ownerWorkspace.capabilities,
+              manageMembers: false,
+              changeMemberRoles: false,
+              billing: role === 'billing_admin',
+            },
+            invitations: [],
+          }}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /manage rohan/i })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('maps corporate tier errors to an upgrade message', async () => {
+    mocks.inviteMember.mockResolvedValue({
+      data: null,
+      error: { code: 'ORGANIZATION_RBAC_REQUIRES_CORPORATE', message: 'Upgrade to Corporate' },
+    });
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'tier@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Upgrade to Corporate to unlock team management.',
+    );
   });
 
   it('invites a member through Better Auth and shows visible success feedback', async () => {
