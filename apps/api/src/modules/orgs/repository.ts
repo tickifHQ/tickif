@@ -4,6 +4,7 @@ import {
   schema,
   expirePendingInvitations,
   expirePendingOwnershipTransfers,
+  selectMemberIdsToFreeze,
 } from '@repo/db';
 import type { ActiveContext, OwnershipTransferStatus } from '@repo/contracts';
 
@@ -23,24 +24,7 @@ export type OrganizationInvitationRecord = Pick<
   'id' | 'email' | 'role' | 'status' | 'createdAt' | 'expiresAt'
 >;
 
-type ActiveMemberFreezeCandidate = Pick<
-  typeof schema.member.$inferSelect,
-  'id' | 'role' | 'createdAt'
->;
-
-export function selectMemberIdsToFreeze(
-  activeMembersNewestFirst: readonly ActiveMemberFreezeCandidate[],
-  activeLimit: number,
-): string[] {
-  const freezeCount = Math.max(0, activeMembersNewestFirst.length - activeLimit);
-  const preservedOwnerId = [...activeMembersNewestFirst]
-    .reverse()
-    .find(({ role }) => role === 'owner')?.id;
-  return activeMembersNewestFirst
-    .filter(({ id }) => id !== preservedOwnerId)
-    .slice(0, freezeCount)
-    .map(({ id }) => id);
-}
+export { selectMemberIdsToFreeze };
 
 export type OwnershipTransferRecord = typeof schema.ownershipTransferRequest.$inferSelect;
 
@@ -73,10 +57,7 @@ async function freezeMembersToLimitOnTx(
     })
     .from(schema.member)
     .where(
-      and(
-        eq(schema.member.organizationId, input.organizationId),
-        eq(schema.member.frozen, false),
-      ),
+      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, false)),
     )
     .orderBy(desc(schema.member.createdAt), desc(schema.member.id))
     .for('update');
@@ -110,10 +91,7 @@ async function restoreMembersToLimitOnTx(
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.member)
     .where(
-      and(
-        eq(schema.member.organizationId, input.organizationId),
-        eq(schema.member.frozen, false),
-      ),
+      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, false)),
     );
   const capacity =
     input.activeLimit < 0
@@ -125,10 +103,7 @@ async function restoreMembersToLimitOnTx(
     .select({ id: schema.member.id })
     .from(schema.member)
     .where(
-      and(
-        eq(schema.member.organizationId, input.organizationId),
-        eq(schema.member.frozen, true),
-      ),
+      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, true)),
     )
     .orderBy(asc(schema.member.freezeRank), asc(schema.member.id))
     .limit(capacity)

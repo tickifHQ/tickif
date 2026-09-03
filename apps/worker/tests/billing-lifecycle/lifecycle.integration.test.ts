@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { and, db, eq, schema } from '@repo/db';
+import { and, db, eq, schema, selectMemberIdsToFreeze } from '@repo/db';
 import { config } from '@repo/config';
 import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
 import {
@@ -226,6 +226,17 @@ describe('E-239 seat freeze on downgrade', () => {
       .where(and(eq(schema.member.organizationId, org.id), eq(schema.member.role, 'owner')));
     expect(owner[0]?.frozen).toBe(false);
   });
+
+  it('preserves only the oldest owner when selecting legacy multi-owner candidates', () => {
+    const candidates = [
+      { id: 'new-owner', role: 'owner', createdAt: new Date('2026-08-04') },
+      { id: 'new-member', role: 'member', createdAt: new Date('2026-08-03') },
+      { id: 'old-owner', role: 'owner', createdAt: new Date('2026-08-01') },
+    ];
+
+    expect(selectMemberIdsToFreeze(candidates, 1)).toEqual(['new-owner', 'new-member']);
+    expect(selectMemberIdsToFreeze(candidates, -1)).toEqual([]);
+  });
 });
 
 describe('E-239 seat restore on reactivation', () => {
@@ -292,7 +303,9 @@ describe('E-239 folded org-retention expiry', () => {
   it('expires stale pending invitations in the same sweep tick', async () => {
     const now = new Date();
     const org = await makeOrganization();
-    const inviter = await makeUser({ phoneNumber: `+9198000${String(memberSeq++).padStart(5, '0')}` });
+    const inviter = await makeUser({
+      phoneNumber: `+9198000${String(memberSeq++).padStart(5, '0')}`,
+    });
     await db.insert(schema.invitation).values({
       id: `e239-inv-${org.id}`,
       organizationId: org.id,

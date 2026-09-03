@@ -1,4 +1,15 @@
-import { and, asc, db, desc, eq, inArray, lt, schema, sql } from '@repo/db';
+import {
+  and,
+  asc,
+  db,
+  desc,
+  eq,
+  inArray,
+  lt,
+  schema,
+  selectMemberIdsToFreeze,
+  sql,
+} from '@repo/db';
 import { seatLimit, type PlanTier, type SubscriptionState } from '@repo/contracts';
 
 /**
@@ -30,7 +41,11 @@ export type LapseCandidate = {
  * Grace subscriptions whose grace window has elapsed.
  * Uses the partial index `subscription_grace_sweep_idx`.
  */
-export async function findGraceExpired(now: Date, graceDays: number, limit: number): Promise<LapseCandidate[]> {
+export async function findGraceExpired(
+  now: Date,
+  graceDays: number,
+  limit: number,
+): Promise<LapseCandidate[]> {
   const cutoff = new Date(now.getTime() - graceDays * DAY_MS);
   return db
     .select({ id: schema.subscription.id, organizationId: schema.subscription.organizationId })
@@ -49,7 +64,11 @@ export async function findGraceExpired(now: Date, graceDays: number, limit: numb
  * Locked subscriptions whose locked window has elapsed.
  * Uses the partial index `subscription_locked_sweep_idx`.
  */
-export async function findLockedExpired(now: Date, lockedDays: number, limit: number): Promise<LapseCandidate[]> {
+export async function findLockedExpired(
+  now: Date,
+  lockedDays: number,
+  limit: number,
+): Promise<LapseCandidate[]> {
   const cutoff = new Date(now.getTime() - lockedDays * DAY_MS);
   return db
     .select({ id: schema.subscription.id, organizationId: schema.subscription.organizationId })
@@ -104,7 +123,10 @@ export async function transitionGraceToLocked(subscriptionId: string, now: Date)
  *
  * Returns true when the row transitioned, false when a concurrent writer won.
  */
-export async function transitionLockedToDowngraded(subscriptionId: string, now: Date): Promise<boolean> {
+export async function transitionLockedToDowngraded(
+  subscriptionId: string,
+  now: Date,
+): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [row] = await tx
       .select({
@@ -139,25 +161,27 @@ export async function transitionLockedToDowngraded(subscriptionId: string, now: 
 // The freeze/restore SQL below intentionally mirrors the API's orgsRepository so
 // the worker stays decoupled from the API package. Ordering is identical:
 // newest active members freeze first (highest freeze_rank); lowest freeze_rank
-// restores first. Owners are never frozen.
+// restores first. The oldest owner is preserved so legacy multi-owner data still
+// converges to the tier's active-seat limit.
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-async function freezeMembersToLimitTx(tx: Tx, organizationId: string, activeLimit: number, now: Date): Promise<void> {
+async function freezeMembersToLimitTx(
+  tx: Tx,
+  organizationId: string,
+  activeLimit: number,
+  now: Date,
+): Promise<void> {
   if (activeLimit < 0) return; // unlimited (corporate) — never freeze
 
   const activeMembers = await tx
-    .select({ id: schema.member.id, role: schema.member.role })
+    .select({ id: schema.member.id, role: schema.member.role, createdAt: schema.member.createdAt })
     .from(schema.member)
     .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, false)))
     .orderBy(desc(schema.member.createdAt), desc(schema.member.id))
     .for('update');
 
-  const freezeCount = Math.max(0, activeMembers.length - activeLimit);
-  const ids = activeMembers
-    .filter(({ role }) => role !== 'owner')
-    .slice(0, freezeCount)
-    .map(({ id }) => id);
+  const ids = selectMemberIdsToFreeze(activeMembers, activeLimit);
   if (ids.length === 0) return;
 
   const [rankRow] = await tx
@@ -179,13 +203,19 @@ async function freezeMembersToLimitTx(tx: Tx, organizationId: string, activeLimi
  * Idempotent: converges to the correct active-seat count on every run.
  * Called on reactivation from locked/downgraded when the plan tier is restored.
  */
-export async function restoreMembersToLimit(organizationId: string, tier: PlanTier, state: SubscriptionState): Promise<string[]> {
+export async function restoreMembersToLimit(
+  organizationId: string,
+  tier: PlanTier,
+  state: SubscriptionState,
+): Promise<string[]> {
   const activeLimit = seatLimit(tier, state);
   return db.transaction(async (tx) => {
     const [activeRow] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.member)
-      .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, false)));
+      .where(
+        and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, false)),
+      );
 
     const capacity =
       activeLimit < 0
@@ -211,5 +241,3 @@ export async function restoreMembersToLimit(organizationId: string, tier: PlanTi
     return ids;
   });
 }
-
-
