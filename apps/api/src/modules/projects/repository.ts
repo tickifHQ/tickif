@@ -1553,6 +1553,44 @@ export const projectsRepository = {
     return row ?? null;
   },
 
+  async findPublicProjectLifecycleBySlug(
+    slug: string,
+  ): Promise<PublicProjectLifecycleRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.project.id,
+        title: schema.project.title,
+        status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.project.slug, slug))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async isProjectTombstonedById(id: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.projectTombstone.projectId })
+      .from(schema.projectTombstone)
+      .where(eq(schema.projectTombstone.projectId, id))
+      .limit(1);
+    return !!row;
+  },
+
+  async isProjectTombstonedBySlug(slug: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.projectTombstone.projectId })
+      .from(schema.projectTombstone)
+      .where(eq(schema.projectTombstone.projectSlug, slug))
+      .limit(1);
+    return !!row;
+  },
+
   /**
    * Published project by slug with joined designer + org for slug resolution.
    * Returns raw data — service handles URL signing and response composition.

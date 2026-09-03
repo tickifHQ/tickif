@@ -225,7 +225,7 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.razorpayStatus).toBe('active');
     });
 
-    it('restores frozen members when Corporate activates', async () => {
+    it('restores frozen seats and branches when Corporate activates', async () => {
       const sub = await makeSubscription({
         planTier: 'hobby',
         subscriptionState: 'active',
@@ -233,6 +233,12 @@ describe('E-117: webhook event processing', () => {
         razorpayStatus: 'created',
       });
       await addOrganizationMembers(sub.organizationId, 'activate-restore', { frozen: true });
+      await makeTeam({
+        organizationId: sub.organizationId,
+        frozen: true,
+        frozenAt: new Date('2026-08-20T00:00:00.000Z'),
+        freezeRank: 1,
+      });
 
       const result = await processWebhookEvent(
         RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
@@ -250,6 +256,11 @@ describe('E-117: webhook event processing', () => {
         .where(eq(schema.member.organizationId, sub.organizationId));
       expect(members).toHaveLength(3);
       expect(members.every(({ frozen }) => !frozen)).toBe(true);
+      const branches = await db
+        .select({ frozen: schema.team.frozen })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, sub.organizationId));
+      expect(branches.every(({ frozen }) => !frozen)).toBe(true);
     });
 
     it('rejects activation when target tier cannot be determined', async () => {

@@ -125,6 +125,15 @@ async function restoreMembersToLimitOnTx(
 }
 
 export const orgsRepository = {
+  async hasActiveRetention(organizationId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ organizationId: schema.organizationRetention.organizationId })
+      .from(schema.organizationRetention)
+      .where(eq(schema.organizationRetention.organizationId, organizationId))
+      .limit(1);
+    return !!row;
+  },
+
   async hasMembership(userId: string, organizationId: string): Promise<boolean> {
     const [row] = await db
       .select({ id: schema.member.id })

@@ -173,7 +173,11 @@ export const orgsService = {
 
   /** True for active Better Auth owner and admin memberships. */
   async isWriter(userId: string, organizationId: string): Promise<boolean> {
-    const membership = await orgsRepository.findMembershipRole(userId, organizationId);
+    const [membership, retained] = await Promise.all([
+      orgsRepository.findMembershipRole(userId, organizationId),
+      orgsRepository.hasActiveRetention(organizationId),
+    ]);
+    if (retained) return false;
     return hasWriteRole(membership?.role ?? null, membership?.frozen ?? false);
   },
 
@@ -181,12 +185,15 @@ export const orgsService = {
     userId: string,
     organizationId: string,
   ): Promise<OrganizationCapabilities | null> {
-    const membership = await orgsRepository.findMembershipRole(userId, organizationId);
+    const [membership, retained] = await Promise.all([
+      orgsRepository.findMembershipRole(userId, organizationId),
+      orgsRepository.hasActiveRetention(organizationId),
+    ]);
     if (!membership) return null;
     const plan = await orgsRepository.findOrganizationPlan(organizationId);
     return organizationCapabilitiesForRole(normalizeRole(membership.role), {
       rbacEnabled: rbacEnabled(plan.tier, plan.state),
-      frozen: membership.frozen,
+      frozen: membership.frozen || retained,
     });
   },
 
@@ -290,12 +297,20 @@ export const orgsService = {
       frozen: false,
     });
     const canManage = capabilities.manageMembers;
-    const [memberRecords, invitationRecords, seatUsage, pendingTransfer] = await Promise.all([
-      orgsRepository.listMembers(input.activeOrgId),
-      canManage ? orgsRepository.listInvitations(input.activeOrgId) : Promise.resolve([]),
-      orgsRepository.countActiveMembers(input.activeOrgId),
-      orgsRepository.findPendingOwnershipTransfer(input.activeOrgId),
-    ]);
+    const [memberRecords, invitationRecords, seatUsage, pendingTransfer, retained] =
+      await Promise.all([
+        orgsRepository.listMembers(input.activeOrgId),
+        canManage ? orgsRepository.listInvitations(input.activeOrgId) : Promise.resolve([]),
+        orgsRepository.countActiveMembers(input.activeOrgId),
+        orgsRepository.findPendingOwnershipTransfer(input.activeOrgId),
+        orgsRepository.hasActiveRetention(input.activeOrgId),
+      ]);
+    const effectiveCapabilities = retained
+      ? organizationCapabilitiesForRole(currentUserRole, {
+          rbacEnabled: organizationRbacEnabled,
+          frozen: true,
+        })
+      : capabilities;
     const visibleTransfer =
       pendingTransfer &&
       (pendingTransfer.initiatorUserId === input.userId ||
@@ -325,11 +340,11 @@ export const orgsService = {
     return {
       organization: membership.organization,
       currentUserRole,
-      canManage,
+      canManage: effectiveCapabilities.manageMembers,
       rbacEnabled: organizationRbacEnabled,
       seatUsage,
       seatLimit: seatLimit(plan.tier, plan.state),
-      capabilities,
+      capabilities: effectiveCapabilities,
       members,
       invitations: invitationRecords.map((invitation) => ({
         id: invitation.id,

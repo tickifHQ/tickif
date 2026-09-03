@@ -8,7 +8,7 @@ import type {
   PortfolioProjectsResponse,
   ProjectCompletenessResponse,
   ProjectDetailResponse,
-  PublicProjectBySlugResponse,
+  PublicProjectDetailResponse,
   ProjectRoom,
   ProjectReviewCommentsResponse,
 } from '@repo/contracts';
@@ -486,7 +486,7 @@ describe('GET /api/projects/slug/{slug}', () => {
     expect(response.headers.get('cache-control')).toBe(
       'public, max-age=60, stale-while-revalidate=300',
     );
-    const body = (await response.json()) as PublicProjectBySlugResponse;
+    const body = (await response.json()) as PublicProjectDetailResponse;
     expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
     expect(body).toMatchObject({
       id: project.id,
@@ -536,7 +536,7 @@ describe('GET /api/projects/slug/{slug}', () => {
     expect(idResponse.headers.get('cache-control')).toBe(
       'public, max-age=60, stale-while-revalidate=300',
     );
-    const idBody = (await idResponse.json()) as PublicProjectBySlugResponse;
+    const idBody = (await idResponse.json()) as PublicProjectDetailResponse;
     expect(publicProjectBySlugResponseSchema.safeParse(idBody).success).toBe(true);
     expect(idBody).toMatchObject({
       id: project.id,
@@ -553,7 +553,7 @@ describe('GET /api/projects/slug/{slug}', () => {
       .where(eq(schema.taxonomy.id, roomType.id));
     const retiredRoomTypeResponse = await app.request('/api/projects/slug/sunlit-bandra-apartment');
     const retiredRoomTypeBody =
-      (await retiredRoomTypeResponse.json()) as PublicProjectBySlugResponse;
+      (await retiredRoomTypeResponse.json()) as PublicProjectDetailResponse;
     expect(retiredRoomTypeBody.rooms).toEqual([
       expect.objectContaining({ id: room.id, roomType: null, photoCount: 1 }),
     ]);
@@ -716,7 +716,7 @@ describe('GET /api/projects/slug/{slug}', () => {
     const response = await app.request('/api/projects/slug/recommendation-source');
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as PublicProjectBySlugResponse;
+    const body = (await response.json()) as PublicProjectDetailResponse;
     expect(publicProjectBySlugResponseSchema.safeParse(body).success).toBe(true);
     expect(body.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([sameDesigner.id]);
     expect(body.recommendations.sameBudgetDifferentStyle.map((item) => item.id)).toEqual([
@@ -754,7 +754,7 @@ describe('GET /api/projects/slug/{slug}', () => {
 
     const relaxed = await app.request('/api/projects/slug/recommendation-source');
     expect(relaxed.status).toBe(200);
-    const relaxedBody = (await relaxed.json()) as PublicProjectBySlugResponse;
+    const relaxedBody = (await relaxed.json()) as PublicProjectDetailResponse;
     expect(relaxedBody.recommendations.moreFromDesigner.map((item) => item.id)).toEqual([
       sameDesigner.id,
       draftSameDesigner.id,

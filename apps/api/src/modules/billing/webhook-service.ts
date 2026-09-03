@@ -202,7 +202,11 @@ async function handleActivated(
       await queueDesignerReindex(tx, subscription.organizationId);
     }
 
-    return { outcome: 'processed' as const };
+    // Keep activation, seat restoration, and branch restoration atomic. If any
+    // resource reconciliation fails, the activation rolls back for a safe retry.
+    await orgsService.reconcileMemberSeats(subscription.organizationId, new Date(), tx);
+    await orgsService.reconcileBranches(subscription.organizationId, new Date(), tx);
+    return { outcome: 'processed' as const, resourcesReconciled: true };
   });
 }
 
