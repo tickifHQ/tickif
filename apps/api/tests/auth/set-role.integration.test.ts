@@ -31,6 +31,7 @@ describe('superadmin platform-role administration', () => {
     const targetId = target!.user.id;
 
     const res = await postSetRole(superadminCookie, { userId: targetId, role: 'manager' });
+    // Better Auth rejects roles absent from its configured role map before PostgreSQL sees them.
     expect(res.status).toBe(400);
 
     const [row] = await db.select().from(schema.user).where(eq(schema.user.id, targetId));

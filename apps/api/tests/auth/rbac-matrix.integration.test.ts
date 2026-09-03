@@ -418,6 +418,9 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     expect(targetPromotion.status).toBe(403);
     expect(updatePromotion.status).toBe(403);
     expect(createPromotion.status).toBe(403);
+    await expect(createPromotion.json()).resolves.toMatchObject({
+      code: 'YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS',
+    });
     expect(banTarget.status).toBe(403);
     expect(removeTarget.status).toBe(403);
     expect(replacePassword.status).toBe(403);

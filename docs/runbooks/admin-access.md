@@ -80,10 +80,40 @@ the account is banned, suspended, or using the wrong identity before changing ro
    rows remain. The approval must name the replacement user ID and verified login identifier.
 2. Query all current superadmin rows and record their non-secret state in the incident
    ticket. If an accessible superadmin exists, stop and use the normal administration path.
-3. Start a new transaction, take the same advisory lock, and lock the replacement user row
-   with the identity query from bootstrap step 2. Do not apply bootstrap step 3's "no existing
-   superadmin" condition during recovery. Instead, compare the locked row and current
-   superadmin list with the approved incident record. Stop and run `ROLLBACK;` on any mismatch.
+3. Start a new transaction and take the same advisory lock. Before changing the replacement,
+   make the transaction abort unless the current superadmin count still matches the approved
+   incident record. Replace `<approved-superadmin-count>` with that recorded count before
+   running the block:
+
+   ```sql
+   BEGIN;
+
+   SELECT pg_advisory_xact_lock(hashtextextended('tickif-superadmin-bootstrap', 0));
+
+   DO $$
+   DECLARE
+     expected_superadmin_count integer := '<approved-superadmin-count>';
+     current_superadmin_count integer;
+   BEGIN
+     SELECT count(*) INTO current_superadmin_count
+     FROM "user"
+     WHERE role = 'superadmin';
+
+     IF current_superadmin_count <> expected_superadmin_count THEN
+       RAISE EXCEPTION 'Superadmin count changed: expected %, found %',
+         expected_superadmin_count, current_superadmin_count;
+     END IF;
+   END
+   $$;
+   ```
+
+   The advisory lock serializes operators following this runbook. The count guard stops a
+   second recovery after the first operator has already promoted a replacement. Next, lock
+   the replacement row with the identity query from bootstrap step 2. Do not apply bootstrap
+   step 3's "no existing superadmin" condition during recovery. Compare the locked row and
+   current superadmin list with the approved incident record. Stop and run `ROLLBACK;` on any
+   mismatch.
+
 4. Run the `UPDATE`, session deletion, and `COMMIT` from bootstrap step 4 for the one approved
    replacement. Existing superadmin rows remain unchanged for investigation.
 5. Sign in as the replacement and run the checks from bootstrap step 5 before demoting,
