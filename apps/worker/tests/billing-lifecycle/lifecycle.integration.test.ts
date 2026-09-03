@@ -238,14 +238,17 @@ describe('E-239 resource freeze on downgrade', () => {
     const { org, sub } = await makeLockedSubscription(now, LOCKED_DAYS + 1);
     const oldest = await makeTeam({
       organizationId: org.id,
+      name: 'Oldest Branch',
       createdAt: new Date(now.getTime() - 10 * DAY_MS),
     });
     const middle = await makeTeam({
       organizationId: org.id,
+      name: 'Middle Branch',
       createdAt: new Date(now.getTime() - 5 * DAY_MS),
     });
     const newest = await makeTeam({
       organizationId: org.id,
+      name: 'Newest Branch',
       createdAt: new Date(now.getTime() - 2 * DAY_MS),
     });
 

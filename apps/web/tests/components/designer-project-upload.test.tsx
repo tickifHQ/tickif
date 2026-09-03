@@ -155,6 +155,7 @@ describe('DesignerProjectUpload', () => {
           slug: '2-bhk-in-adyar',
           description: null,
           status: 'draft',
+          archiveReason: null,
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: 'residential',
