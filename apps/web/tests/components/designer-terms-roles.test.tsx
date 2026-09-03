@@ -35,6 +35,7 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
   currentUserRole: 'owner',
   canManage: true,
   rbacEnabled: true,
+  planTier: 'corporate',
   subscriptionState: 'active',
   seatUsage: 2,
   seatLimit: 10,
@@ -214,6 +215,8 @@ describe('DesignerTermsRoles', () => {
           ...ownerWorkspace,
           rbacEnabled: false,
           canManage: false,
+          planTier: 'hobby',
+          subscriptionState: 'active',
           seatUsage: 1,
           seatLimit: 1,
           capabilities: {
@@ -243,6 +246,7 @@ describe('DesignerTermsRoles', () => {
           ...ownerWorkspace,
           rbacEnabled: false,
           canManage: false,
+          planTier: 'corporate',
           subscriptionState: 'locked',
           seatUsage: 6,
           seatLimit: 1,
@@ -258,12 +262,41 @@ describe('DesignerTermsRoles', () => {
     );
 
     expect(screen.getByText(/Team access is suspended/i)).toBeInTheDocument();
+    expect(screen.getByText(/Corporate plan is retained/i)).toBeInTheDocument();
+    expect(screen.getByText(/reactivate 6 of Unlimited seats/i)).toBeInTheDocument();
     expect(screen.queryByText(/Upgrade to Corporate/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Restore access/i })).toHaveAttribute(
       'href',
       '/designer/plan-billing',
     );
+  });
+
+  it('names the retained tier for locked non-Corporate orgs', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          rbacEnabled: false,
+          canManage: false,
+          planTier: 'professional_plus',
+          subscriptionState: 'locked',
+          seatUsage: 1,
+          seatLimit: 1,
+          capabilities: {
+            ...ownerWorkspace.capabilities,
+            billing: true,
+            manageMembers: false,
+            changeMemberRoles: false,
+          },
+          invitations: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Professional\+ plan is retained/i)).toBeInTheDocument();
+    expect(screen.getByText(/reactivate 1 of 1 seats/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Corporate plan is retained/i)).not.toBeInTheDocument();
   });
 
   it('hides member management for billing admins, members, and viewers', () => {

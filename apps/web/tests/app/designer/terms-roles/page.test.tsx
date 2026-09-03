@@ -48,6 +48,7 @@ const workspace: OrganizationWorkspaceResponse = {
   currentUserRole: 'owner',
   canManage: true,
   rbacEnabled: true,
+  planTier: 'corporate',
   subscriptionState: 'active',
   seatUsage: 1,
   seatLimit: -1,

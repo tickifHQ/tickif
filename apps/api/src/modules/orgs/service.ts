@@ -375,6 +375,7 @@ export const orgsService = {
       currentUserRole,
       canManage,
       rbacEnabled: organizationRbacEnabled,
+      planTier: plan.tier,
       subscriptionState: plan.state,
       seatUsage,
       seatLimit: seatLimit(plan.tier, plan.state),

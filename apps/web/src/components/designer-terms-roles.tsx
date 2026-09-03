@@ -9,6 +9,7 @@ import type {
   OrganizationMemberRole,
   OrganizationWorkspaceResponse,
 } from '@repo/contracts';
+import { seatLimit } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
@@ -99,25 +100,34 @@ function formatSeatLimit(limit: number): string {
   return String(limit);
 }
 
+const planTierLabels: Record<OrganizationWorkspaceResponse['planTier'], string> = {
+  hobby: 'Hobby',
+  professional_plus: 'Professional+',
+  corporate: 'Corporate',
+};
+
 function UpgradePrompt({
   organizationName,
   seatUsage,
-  seatLimit,
+  seatLimit: suspendedSeatLimit,
+  planTier,
   subscriptionState,
 }: {
   organizationName: string;
   seatUsage: number;
   seatLimit: number;
+  planTier: OrganizationWorkspaceResponse['planTier'];
   subscriptionState: OrganizationWorkspaceResponse['subscriptionState'];
 }) {
   if (subscriptionState === 'locked') {
+    const restorableSeats = formatSeatLimit(seatLimit(planTier, 'active'));
     return (
       <Card className="space-y-3 p-5 shadow-none">
         <p className="text-sm font-medium text-foreground">Team access is suspended</p>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {organizationName} billing is past due, so team management is paused while the Corporate
-          plan is retained. Restore billing to reactivate {seatUsage} of{' '}
-          {formatSeatLimit(seatLimit)} seats with no data lost.
+          {organizationName} billing is past due, so team management is paused while the{' '}
+          {planTierLabels[planTier]} plan is retained. Restore billing to reactivate {seatUsage} of{' '}
+          {restorableSeats} seats with no data lost.
         </p>
         <Button type="button" size="compact" asChild>
           <Link href="/designer/plan-billing">Restore access</Link>
@@ -130,8 +140,8 @@ function UpgradePrompt({
       <p className="text-sm font-medium text-foreground">Team management is a Corporate feature</p>
       <p className="text-sm leading-relaxed text-muted-foreground">
         {organizationName} is on a single-user plan. The org is Owner solo with {seatUsage} of{' '}
-        {formatSeatLimit(seatLimit)} seats used. Upgrade to Corporate to invite teammates, assign
-        roles, and manage seats.
+        {formatSeatLimit(suspendedSeatLimit)} seats used. Upgrade to Corporate to invite teammates,
+        assign roles, and manage seats.
       </p>
       <Button type="button" size="compact" asChild>
         <Link href="/designer/plan-billing">View Corporate plans</Link>
@@ -556,6 +566,7 @@ export function DesignerTermsRoles({
             organizationName={workspace.organization.name}
             seatUsage={workspace.seatUsage}
             seatLimit={workspace.seatLimit}
+            planTier={workspace.planTier}
             subscriptionState={workspace.subscriptionState}
           />
         ) : null}

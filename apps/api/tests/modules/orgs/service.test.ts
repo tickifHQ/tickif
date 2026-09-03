@@ -283,6 +283,7 @@ describe('orgsService', () => {
       currentUserRole: 'owner',
       canManage: true,
       rbacEnabled: true,
+      planTier: 'corporate',
       subscriptionState: 'active',
       seatUsage: 2,
       seatLimit: -1,
@@ -359,6 +360,7 @@ describe('orgsService', () => {
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
     ).resolves.toMatchObject({
       rbacEnabled: false,
+      planTier: 'corporate',
       subscriptionState: 'locked',
       seatLimit: 1,
     });
