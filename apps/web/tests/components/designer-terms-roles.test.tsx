@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { OrganizationWorkspaceResponse } from '@repo/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -429,22 +429,29 @@ describe('DesignerTermsRoles', () => {
   });
 
   it('auto-dismisses the invitation success alert after five seconds', async () => {
-    const user = userEvent.setup();
-    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+    vi.useFakeTimers();
+    try {
+      render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Work email' }), {
+        target: { value: 'teammate@example.com' },
+      });
+      fireEvent.submit(
+        screen.getByRole('button', { name: 'Send invite' }).closest('form') as HTMLFormElement,
+      );
 
-    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'teammate@example.com');
-    await user.click(screen.getByRole('button', { name: 'Send invite' }));
-
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Invitation sent to teammate@example.com.',
-    );
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('status')).not.toBeInTheDocument();
-      },
-      { timeout: 8000 },
-    );
-  }, 15000);
+      await vi.waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'Invitation sent to teammate@example.com.',
+        );
+      });
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it('blocks inviting an existing member without calling the backend', async () => {
     const user = userEvent.setup();
@@ -517,6 +524,51 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByText('Declined')).toBeInTheDocument();
     expect(screen.getByText('Expired')).toBeInTheDocument();
     expect(screen.getByText(/days remaining/i)).toBeInTheDocument();
+  });
+
+  it('counts only pending invitations in the summary', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          invitations: [
+            {
+              ...ownerWorkspace.invitations[0]!,
+              id: 'inv-pending',
+              state: 'pending',
+              expiresAt: '2099-08-05T00:00:00.000Z',
+            },
+            {
+              id: 'inv-accepted',
+              email: 'accepted@example.com',
+              role: 'member',
+              state: 'active',
+              createdAt: '2026-08-03T00:00:00.000Z',
+              expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+            },
+            {
+              id: 'inv-declined',
+              email: 'declined@example.com',
+              role: 'viewer',
+              state: 'declined',
+              createdAt: '2026-08-03T00:00:00.000Z',
+              expiresAt: '2026-08-10T00:00:00.000Z',
+            },
+            {
+              id: 'inv-expired',
+              email: 'expired@example.com',
+              role: 'member',
+              state: 'expired',
+              createdAt: '2026-08-03T00:00:00.000Z',
+              expiresAt: '2026-08-10T00:00:00.000Z',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('1', { selector: '[data-metric="invitations"]' })).toBeInTheDocument();
+    expect(screen.queryByText(/expiring soon/i)).not.toBeInTheDocument();
   });
 
   it('resends a pending invite with replacement copy', async () => {

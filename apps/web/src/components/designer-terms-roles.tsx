@@ -246,7 +246,10 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
       ? seatLimit(workspace.planTier, 'active')
       : workspace.seatLimit;
   const now = Date.now();
-  const expiringSoon = workspace.invitations.filter((invitation) => {
+  const pendingInvitations = workspace.invitations.filter(
+    (invitation) => invitation.state === 'pending',
+  );
+  const expiringSoon = pendingInvitations.filter((invitation) => {
     const expiresAt = new Date(invitation.expiresAt).getTime();
     return expiresAt > now && expiresAt - now <= 2 * 86_400_000;
   }).length;
@@ -267,7 +270,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
 
       <Card className="flex min-h-32 flex-col gap-1.5 p-5 shadow-none">
         <p data-metric="invitations" className="text-2xl leading-tight text-card-foreground">
-          {workspace.invitations.length}
+          {pendingInvitations.length}
         </p>
         <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
           Pending invites
