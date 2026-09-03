@@ -208,6 +208,59 @@ describe('GET /api/orgs/current', () => {
 });
 
 describe('organization management', () => {
+  it.each([
+    ['get-full-organization', '+919800004101'],
+    ['get-active-member', '+919800004102'],
+    ['list-members', '+919800004103'],
+    ['list-invitations', '+919800004104'],
+    ['get-active-member-role', '+919800004105'],
+  ] as const)('blocks frozen members from Better Auth %s reads', async (path, phone) => {
+    const organization = await makeOrganization({ slug: `frozen-read-${path}` });
+    const owner = await makeOrganizationSession({
+      phone,
+      organizationId: organization.id,
+      role: 'owner',
+    });
+    await db
+      .update(schema.member)
+      .set({ frozen: true, frozenAt: new Date('2026-08-22T00:00:00.000Z'), freezeRank: 1 })
+      .where(eq(schema.member.userId, owner.userId));
+
+    const response = await app.request(
+      `/api/auth/organization/${path}?organizationId=${organization.id}`,
+      { headers: { cookie: owner.cookie } },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects mixed organization selectors before a protected Better Auth read', async () => {
+    const activeOrganization = await makeOrganization({ slug: 'active-selector-studio' });
+    const frozenOrganization = await makeOrganization({ slug: 'frozen-selector-studio' });
+    const member = await makeOrganizationSession({
+      phone: '+919800004106',
+      organizationId: activeOrganization.id,
+      role: 'member',
+    });
+    await db.insert(schema.member).values({
+      id: `member-frozen-${member.userId}`,
+      organizationId: frozenOrganization.id,
+      userId: member.userId,
+      role: 'member',
+      frozen: true,
+      frozenAt: new Date('2026-08-22T00:00:00.000Z'),
+      freezeRank: 1,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    const response = await app.request(
+      `/api/auth/organization/get-full-organization?organizationId=${activeOrganization.id}&organizationSlug=${frozenOrganization.slug}`,
+      { headers: { cookie: member.cookie } },
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it('lets an owner invite a member through Better Auth', async () => {
     const organization = await makeOrganization({ slug: 'invite-studio' });
     const owner = await makeOrganizationSession({

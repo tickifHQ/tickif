@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { db, schema, sql } from '@repo/db';
 import { makeOrganization, makeUser } from '@repo/db/testing';
 import { organizationMembershipLimit } from '@repo/auth';
-import { orgsRepository } from '../../src/modules/orgs/repository.js';
+import { orgsRepository, selectMemberIdsToFreeze } from '../../src/modules/orgs/repository.js';
 
 async function seedMembers() {
   const organization = await makeOrganization({ slug: 'role-freeze-studio' });
@@ -46,6 +46,16 @@ async function seedMembers() {
 }
 
 describe('organization role persistence and freeze transitions', () => {
+  it('preserves exactly one deterministic owner when reconciling legacy candidates', () => {
+    const members = [
+      { id: 'new-owner', role: 'owner', createdAt: new Date('2026-08-04') },
+      { id: 'new-member', role: 'member', createdAt: new Date('2026-08-03') },
+      { id: 'old-owner', role: 'owner', createdAt: new Date('2026-08-01') },
+    ] as const;
+
+    expect(selectMemberIdsToFreeze(members, 1)).toEqual(['new-owner', 'new-member']);
+  });
+
   it('preserves owner when backfilling a comma-joined legacy role', async () => {
     await db.transaction(async (tx) => {
       await tx.execute(sql`create temporary table member_role_backfill_fixture (role text)`);
