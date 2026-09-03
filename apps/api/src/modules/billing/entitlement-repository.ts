@@ -35,6 +35,14 @@ export const entitlementRepository = {
     return result?.count ?? 0;
   },
 
+  async countFrozenBranches(organizationId: string): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.team)
+      .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, true)));
+    return result?.count ?? 0;
+  },
+
   async isOrganizationVerified(organizationId: string): Promise<boolean> {
     const [application] = await db
       .select({ status: schema.verificationApplication.status })

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
-import { makeSubscription, makeUser } from '@repo/db/testing';
+import { makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 import { RAZORPAY_EVENT } from '@repo/contracts';
 
 // Mock @repo/config to provide Razorpay plan IDs for the plan_id reverse-lookup tests.
@@ -572,6 +572,45 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.graceStartedAt).toBeNull();
       expect(updated!.lockedAt).toBeNull();
       expect(updated!.preLapseTier).toBeNull();
+    });
+
+    it('reactivates a downgraded organization and restores seats and branches', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        preLapseTier: 'corporate',
+        subscriptionState: 'downgraded',
+        downgradedAt: new Date('2026-08-20T00:00:00.000Z'),
+        razorpaySubscriptionId: 'sub_downgraded_restore_resources',
+      });
+      await addOrganizationMembers(sub.organizationId, 'downgraded-restore', { frozen: true });
+      await makeTeam({
+        organizationId: sub.organizationId,
+        frozen: true,
+        frozenAt: new Date('2026-08-20T00:00:00.000Z'),
+        freezeRank: 1,
+      });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
+        makeChargedPayload({
+          subscriptionId: 'sub_downgraded_restore_resources',
+          paymentId: 'pay_restore_downgraded_resources',
+          amount: 799900,
+          planId: 'plan_test_corporate',
+        }),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      const branches = await db
+        .select({ frozen: schema.team.frozen })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, sub.organizationId));
+      expect(members.every(({ frozen }) => !frozen)).toBe(true);
+      expect(branches.every(({ frozen }) => !frozen)).toBe(true);
     });
 
     it('duplicate payment returns duplicate — no second row', async () => {
