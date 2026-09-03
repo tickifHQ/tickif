@@ -7,6 +7,7 @@ import {
   transitionLockedToDowngraded,
 } from '../billing-lifecycle/repository.js';
 import { invalidateEntitlementCache } from '../billing-lifecycle/cache.js';
+import { processOrganizationRetentionSweep } from './organization-retention.js';
 
 /** Cap the fan-out of one sweep tick so a backlog can't run unbounded. */
 const SWEEP_BATCH_SIZE = 200;
@@ -19,6 +20,9 @@ export type BillingLifecycleSweepResult = {
   graceFailures: number;
   downgradeFailures: number;
   orgExpiryFailures: number;
+  organizationsArchived: number;
+  organizationsPurged: number;
+  organizationRetentionFailures: number;
 };
 
 /**
@@ -93,6 +97,14 @@ export async function processBillingLifecycleSweep(
     console.error('[worker] org-expiration sweep failed:', error);
   }
 
+  let retention = { archived: 0, purged: 0, failed: 0 };
+  try {
+    retention = await processOrganizationRetentionSweep(now);
+  } catch (error) {
+    retention.failed += 1;
+    console.error('[worker] organization-retention sweep failed:', error);
+  }
+
   return {
     lockedFromGrace,
     downgradedFromLocked,
@@ -101,5 +113,8 @@ export async function processBillingLifecycleSweep(
     graceFailures,
     downgradeFailures,
     orgExpiryFailures,
+    organizationsArchived: retention.archived,
+    organizationsPurged: retention.purged,
+    organizationRetentionFailures: retention.failed,
   };
 }

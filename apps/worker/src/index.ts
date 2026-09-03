@@ -127,7 +127,7 @@ const billingLifecycleWorker = new Worker<BillingLifecycleSweepJob>(
   async () => {
     const result = await processBillingLifecycleSweep();
     console.log(
-      `[worker] billing-lifecycle sweep: locked ${result.lockedFromGrace}, downgraded ${result.downgradedFromLocked}, invitations-expired ${result.invitationsExpired}, transfers-expired ${result.transfersExpired}, failures ${result.graceFailures + result.downgradeFailures + result.orgExpiryFailures} (grace ${result.graceFailures}, downgrade ${result.downgradeFailures}, org-expiry ${result.orgExpiryFailures})`,
+      `[worker] billing-lifecycle sweep: locked ${result.lockedFromGrace}, downgraded ${result.downgradedFromLocked}, invitations-expired ${result.invitationsExpired}, transfers-expired ${result.transfersExpired}, organizations-archived ${result.organizationsArchived}, organizations-purged ${result.organizationsPurged}, failures ${result.graceFailures + result.downgradeFailures + result.orgExpiryFailures + result.organizationRetentionFailures} (grace ${result.graceFailures}, downgrade ${result.downgradeFailures}, org-expiry ${result.orgExpiryFailures}, organization-retention ${result.organizationRetentionFailures})`,
     );
   },
   { connection, concurrency: 1 },
