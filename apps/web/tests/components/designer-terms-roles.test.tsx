@@ -166,6 +166,12 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByText('1 of 10 seats used')).toBeInTheDocument();
   });
 
+  it('shows Unlimited for corporate seat caps', () => {
+    render(<DesignerTermsRoles workspace={{ ...ownerWorkspace, seatUsage: 5, seatLimit: -1 }} />);
+
+    expect(screen.getByText('5 of Unlimited seats used')).toBeInTheDocument();
+  });
+
   it('renders all five roles with badges and descriptions', () => {
     render(
       <DesignerTermsRoles

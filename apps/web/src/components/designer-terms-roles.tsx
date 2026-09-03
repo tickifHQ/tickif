@@ -95,17 +95,26 @@ function formatMutationError(fallback: string, error: unknown): string {
 }
 
 function formatSeatLimit(limit: number): string {
-  if (!Number.isFinite(limit)) return 'Unlimited';
+  if (!Number.isFinite(limit) || limit < 0) return 'Unlimited';
   return String(limit);
 }
 
-function UpgradePrompt({ organizationName }: { organizationName: string }) {
+function UpgradePrompt({
+  organizationName,
+  seatUsage,
+  seatLimit,
+}: {
+  organizationName: string;
+  seatUsage: number;
+  seatLimit: number;
+}) {
   return (
     <Card className="space-y-3 p-5 shadow-none">
       <p className="text-sm font-medium text-foreground">Team management is a Corporate feature</p>
       <p className="text-sm leading-relaxed text-muted-foreground">
-        {organizationName} is on a single-user plan. The org is Owner solo with 1 of 1 seats used.
-        Upgrade to Corporate to invite teammates, assign roles, and manage seats.
+        {organizationName} is on a single-user plan. The org is Owner solo with {seatUsage} of{' '}
+        {formatSeatLimit(seatLimit)} seats used. Upgrade to Corporate to invite teammates, assign
+        roles, and manage seats.
       </p>
       <Button type="button" size="compact" asChild>
         <Link href="/designer/plan-billing">View Corporate plans</Link>
@@ -526,7 +535,11 @@ export function DesignerTermsRoles({
         <SummaryCards workspace={workspace} />
 
         {!workspace.rbacEnabled ? (
-          <UpgradePrompt organizationName={workspace.organization.name} />
+          <UpgradePrompt
+            organizationName={workspace.organization.name}
+            seatUsage={workspace.seatUsage}
+            seatLimit={workspace.seatLimit}
+          />
         ) : null}
 
         {canInvite ? (
