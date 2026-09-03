@@ -121,6 +121,21 @@ describe('E-239 grace → locked transition', () => {
     const due = await findGraceExpired(now, GRACE_DAYS, 100);
     expect(due.some((c) => c.id === sub.id)).toBe(false);
   });
+
+  it('starts sweep eligibility strictly after the displayed deadline', async () => {
+    const now = new Date('2026-09-08T00:00:00.000Z');
+    const atDeadline = await makeGraceSubscription(now, GRACE_DAYS);
+    const pastDeadline = await makeGraceSubscription(now, GRACE_DAYS);
+    await db
+      .update(schema.subscription)
+      .set({ graceStartedAt: new Date(now.getTime() - GRACE_DAYS * DAY_MS - 1) })
+      .where(eq(schema.subscription.id, pastDeadline.sub.id));
+
+    const due = await findGraceExpired(now, GRACE_DAYS, 100);
+
+    expect(due.some(({ id }) => id === atDeadline.sub.id)).toBe(false);
+    expect(due.some(({ id }) => id === pastDeadline.sub.id)).toBe(true);
+  });
 });
 
 describe('E-239 locked → downgraded transition', () => {
@@ -178,27 +193,53 @@ describe('E-239 idempotency', () => {
 });
 
 describe('E-239 charge-wins concurrency', () => {
-  it('a reactivated subscription is not downgraded by a racing sweep', async () => {
+  it('a reactivation committed while a sweep is waiting on the row lock wins the race', async () => {
     const now = new Date();
     const { sub } = await makeLockedSubscription(now, LOCKED_DAYS + 1);
 
-    // Simulate a Razorpay charge/reactivation flipping the row back to active
-    // (clearing lapse fields) BEFORE the sweep runs its transition.
-    await db
-      .update(schema.subscription)
-      .set({
-        subscriptionState: 'active',
-        planTier: 'professional_plus',
-        graceStartedAt: null,
-        lockedAt: null,
-        downgradedAt: null,
-        preLapseTier: null,
-        razorpayStatus: 'active',
-      })
-      .where(eq(schema.subscription.id, sub.id));
+    let sweepTransition!: Promise<boolean>;
+    let sweepSettled = false;
 
-    // The sweep's transition is state-guarded — it must NOT downgrade an active row.
-    expect(await transitionLockedToDowngraded(sub.id, now)).toBe(false);
+    await db.transaction(async (reactivationTx) => {
+      // Hold the same row lock that the charge/reactivation transaction uses.
+      await reactivationTx
+        .select({ id: schema.subscription.id })
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id))
+        .for('update');
+
+      // Start the sweep before committing the reactivation. Its transaction must
+      // wait on the row lock, making this a real overlap rather than a sequential
+      // state-guard check.
+      sweepTransition = transitionLockedToDowngraded(sub.id, now);
+      void sweepTransition.then(
+        () => {
+          sweepSettled = true;
+        },
+        () => {
+          sweepSettled = true;
+        },
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(sweepSettled).toBe(false);
+
+      await reactivationTx
+        .update(schema.subscription)
+        .set({
+          subscriptionState: 'active',
+          planTier: 'professional_plus',
+          graceStartedAt: null,
+          lockedAt: null,
+          downgradedAt: null,
+          preLapseTier: null,
+          razorpayStatus: 'active',
+        })
+        .where(eq(schema.subscription.id, sub.id));
+    });
+
+    // Once the reactivation commits and releases the lock, the sweep observes
+    // `active`, fails its guarded update, and cannot downgrade the subscription.
+    expect(await sweepTransition).toBe(false);
 
     const after = await readState(sub.id);
     expect(after.state).toBe('active');

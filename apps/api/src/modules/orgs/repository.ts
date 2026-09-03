@@ -4,8 +4,11 @@ import {
   schema,
   expirePendingInvitations,
   expirePendingOwnershipTransfers,
+  freezeMembersToLimitOnTx,
+  restoreMembersToLimitOnTx,
   selectMemberIdsToFreeze,
 } from '@repo/db';
+import type { DbTransaction } from '@repo/db';
 import type { ActiveContext, OwnershipTransferStatus } from '@repo/contracts';
 
 export type OrganizationSummaryRecord = Pick<
@@ -25,6 +28,7 @@ export type OrganizationInvitationRecord = Pick<
 >;
 
 export { selectMemberIdsToFreeze };
+export type { DbTransaction };
 
 export type OwnershipTransferRecord = typeof schema.ownershipTransferRequest.$inferSelect;
 
@@ -36,87 +40,6 @@ export const OWNERSHIP_TRANSFER_RESULT = {
   INVALID_TARGET: 'invalid_target',
   OWNER_STATE_CHANGED: 'owner_state_changed',
 } as const;
-
-/** A Drizzle transaction handle, so seat freeze/restore can run inside a caller's tx. */
-export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/**
- * Freeze over-limit non-owner members, newest-first, assigning a monotonic
- * freeze_rank. Runs on the provided executor (a tx). Extracted so it can run
- * either standalone or inside a caller-provided transaction (E-239 atomic restore).
- */
-async function freezeMembersToLimitOnTx(
-  tx: DbTransaction,
-  input: { organizationId: string; activeLimit: number; now: Date },
-): Promise<string[]> {
-  const activeMembers = await tx
-    .select({
-      id: schema.member.id,
-      role: schema.member.role,
-      createdAt: schema.member.createdAt,
-    })
-    .from(schema.member)
-    .where(
-      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, false)),
-    )
-    .orderBy(desc(schema.member.createdAt), desc(schema.member.id))
-    .for('update');
-  const ids = selectMemberIdsToFreeze(activeMembers, input.activeLimit);
-  if (ids.length === 0) return [];
-
-  const [rankRow] = await tx
-    .select({ rank: max(schema.member.freezeRank) })
-    .from(schema.member)
-    .where(eq(schema.member.organizationId, input.organizationId));
-  const startingRank = (rankRow?.rank ?? 0) + 1;
-  for (const [index, id] of ids.entries()) {
-    await tx
-      .update(schema.member)
-      .set({ frozen: true, frozenAt: input.now, freezeRank: startingRank + index })
-      .where(and(eq(schema.member.id, id), eq(schema.member.frozen, false)));
-  }
-  return ids;
-}
-
-/**
- * Restore up to `activeLimit` seats, lowest freeze_rank first. Runs on the
- * provided executor. Never rewrites existing freeze_rank values — only clears
- * them on restore — so persisted freeze order is preserved across cycles.
- */
-async function restoreMembersToLimitOnTx(
-  tx: DbTransaction,
-  input: { organizationId: string; activeLimit: number },
-): Promise<string[]> {
-  const [activeRow] = await tx
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.member)
-    .where(
-      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, false)),
-    );
-  const capacity =
-    input.activeLimit < 0
-      ? Number.MAX_SAFE_INTEGER
-      : Math.max(0, input.activeLimit - (activeRow?.count ?? 0));
-  if (capacity === 0) return [];
-
-  const frozenMembers = await tx
-    .select({ id: schema.member.id })
-    .from(schema.member)
-    .where(
-      and(eq(schema.member.organizationId, input.organizationId), eq(schema.member.frozen, true)),
-    )
-    .orderBy(asc(schema.member.freezeRank), asc(schema.member.id))
-    .limit(capacity)
-    .for('update');
-  const ids = frozenMembers.map(({ id }) => id);
-  if (ids.length === 0) return [];
-
-  await tx
-    .update(schema.member)
-    .set({ frozen: false, frozenAt: null, freezeRank: null })
-    .where(inArray(schema.member.id, ids));
-  return ids;
-}
 
 export const orgsRepository = {
   async isValidOrganizationContext(

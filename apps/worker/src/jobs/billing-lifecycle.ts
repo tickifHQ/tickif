@@ -16,6 +16,9 @@ export type BillingLifecycleSweepResult = {
   downgradedFromLocked: number;
   invitationsExpired: number;
   transfersExpired: number;
+  graceFailures: number;
+  downgradeFailures: number;
+  orgExpiryFailures: number;
 };
 
 /**
@@ -41,6 +44,9 @@ export async function processBillingLifecycleSweep(
 
   let lockedFromGrace = 0;
   let downgradedFromLocked = 0;
+  let graceFailures = 0;
+  let downgradeFailures = 0;
+  let orgExpiryFailures = 0;
 
   // grace → locked
   const graceExpired = await findGraceExpired(now, graceDays, SWEEP_BATCH_SIZE);
@@ -53,6 +59,7 @@ export async function processBillingLifecycleSweep(
         await invalidateEntitlementCache(candidate.organizationId);
       }
     } catch (error) {
+      graceFailures += 1;
       console.error(`[worker] grace→locked failed for subscription ${candidate.id}:`, error);
     }
   }
@@ -66,6 +73,7 @@ export async function processBillingLifecycleSweep(
         await invalidateEntitlementCache(candidate.organizationId);
       }
     } catch (error) {
+      downgradeFailures += 1;
       console.error(`[worker] locked→downgraded failed for subscription ${candidate.id}:`, error);
     }
   }
@@ -81,8 +89,17 @@ export async function processBillingLifecycleSweep(
     invitationsExpired = expired.invitations;
     transfersExpired = expired.transfers;
   } catch (error) {
+    orgExpiryFailures += 1;
     console.error('[worker] org-expiration sweep failed:', error);
   }
 
-  return { lockedFromGrace, downgradedFromLocked, invitationsExpired, transfersExpired };
+  return {
+    lockedFromGrace,
+    downgradedFromLocked,
+    invitationsExpired,
+    transfersExpired,
+    graceFailures,
+    downgradeFailures,
+    orgExpiryFailures,
+  };
 }

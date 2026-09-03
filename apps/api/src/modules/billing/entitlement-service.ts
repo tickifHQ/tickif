@@ -1,5 +1,3 @@
-import { eq, sql, and } from 'drizzle-orm';
-import { db, schema } from '@repo/db';
 import {
   type PlanTier,
   type SubscriptionState,
@@ -9,8 +7,8 @@ import {
 } from '@repo/contracts';
 import { config } from '@repo/config';
 import { getCachedEntitlement, setCachedEntitlement } from '../../lib/redis.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { entitlementRepository } from './entitlement-repository.js';
+import { daysRemaining } from './lifecycle-time.js';
 
 /**
  * E-119 Entitlement Service.
@@ -73,11 +71,7 @@ export const entitlementService = {
     }
 
     // Cache miss — query DB
-    const [subscription] = await db
-      .select()
-      .from(schema.subscription)
-      .where(eq(schema.subscription.organizationId, caller.activeOrgId))
-      .limit(1);
+    const subscription = await entitlementRepository.findSubscription(caller.activeOrgId);
 
     if (!subscription) {
       return HOBBY_DEFAULT;
@@ -88,7 +82,7 @@ export const entitlementService = {
 
     // Resolve isVerified from the org's verification application.
     // An org is verified when their application status is 'verified' and not expired.
-    const isVerified = await checkOrgVerified(caller.activeOrgId);
+    const isVerified = await entitlementRepository.isOrganizationVerified(caller.activeOrgId);
 
     const now = new Date();
     const response: SubscriptionResponse = {
@@ -98,8 +92,8 @@ export const entitlementService = {
       razorpayStatus: subscription.razorpayStatus,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
       cancellationScheduled: subscription.cancelAtPeriodEnd && tier !== 'hobby',
-      seatUsage: await countSeats(caller.activeOrgId),
-      branchUsage: await countBranches(caller.activeOrgId),
+      seatUsage: await entitlementRepository.countSeats(caller.activeOrgId),
+      branchUsage: await entitlementRepository.countBranches(caller.activeOrgId),
       entitlements: resolveEntitlements(tier, state, isVerified),
       // E-239 lapse counters — derived from lapse timestamps + config windows.
       graceDaysRemaining:
@@ -111,8 +105,7 @@ export const entitlementService = {
           ? daysRemaining(subscription.lockedAt, config.BILLING_LOCKED_PERIOD_DAYS, now)
           : null,
       // Frozen resources are only relevant once downgraded (seats frozen by E-239 sweep).
-      frozenResources:
-        state === 'downgraded' ? await frozenResourcesFor(caller.activeOrgId) : [],
+      frozenResources: state === 'downgraded' ? await frozenResourcesFor(caller.activeOrgId) : [],
     };
 
     // Cache the response
@@ -122,73 +115,15 @@ export const entitlementService = {
   },
 };
 
-
-// ─── Usage Count Helpers ─────────────────────────────────────────────────────
-
-/** Count active members (seats) for the organization. */
-async function countSeats(organizationId: string): Promise<number> {
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.member)
-    .where(eq(schema.member.organizationId, organizationId));
-  return result?.count ?? 0;
-}
-
-/** Count operational (unfrozen) branches for the organization. */
-async function countBranches(organizationId: string): Promise<number> {
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.team)
-    .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, false)));
-  return result?.count ?? 0;
-}
-
-
-/**
- * Whole days remaining in a lapse window: (startedAt + windowDays) − now, floored at 0.
- * Returns null when the start timestamp is missing (shouldn't happen for the
- * relevant states, but keeps the counter defensive).
- */
-function daysRemaining(startedAt: Date | null, windowDays: number, now: Date): number | null {
-  if (!startedAt) return null;
-  const deadline = startedAt.getTime() + windowDays * DAY_MS;
-  const remainingMs = deadline - now.getTime();
-  if (remainingMs <= 0) return 0;
-  return Math.ceil(remainingMs / DAY_MS);
-}
-
 /**
  * Resources preserved-but-frozen while downgraded. Currently seats only —
  * branch freeze follows once E-244 lands the branch table.
  */
 async function frozenResourcesFor(organizationId: string): Promise<FrozenResource[]> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.member)
-    .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, true)));
-  const frozenSeats = row?.count ?? 0;
+  const frozenSeats = await entitlementRepository.countFrozenSeats(organizationId);
   const resources: FrozenResource[] = [];
   if (frozenSeats > 0) {
     resources.push({ kind: 'seat', label: 'Team Seats', count: frozenSeats });
   }
   return resources;
-}
-
-/**
- * Check whether the organization has a verified (and non-expired) verification application.
- * Returns true only when status = 'verified' AND expiresAt is in the future.
- */
-async function checkOrgVerified(organizationId: string): Promise<boolean> {
-  const [app] = await db
-    .select({ status: schema.verificationApplication.status })
-    .from(schema.verificationApplication)
-    .where(
-      and(
-        eq(schema.verificationApplication.organizationId, organizationId),
-        eq(schema.verificationApplication.status, 'verified'),
-        sql`${schema.verificationApplication.expiresAt} > NOW()`,
-      ),
-    )
-    .limit(1);
-  return !!app;
 }
