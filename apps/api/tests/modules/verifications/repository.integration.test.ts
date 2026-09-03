@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { db, eq, schema } from '@repo/db';
-import { makeDesigner, makeOrganization, makeProject, makeUser } from '@repo/db/testing';
+import { db, eq, inArray, schema } from '@repo/db';
+import { makeDesigner, makeOrganization, makeProject, makeTeam, makeUser } from '@repo/db/testing';
 import {
   ADMIN_VERIFICATION_QUEUE_TAB,
   ORGANIZATION_MEMBER_ROLE,
@@ -39,7 +39,134 @@ async function setupApplication(phoneNumber = '+919800000010') {
   return { owner, organization, profile, application };
 }
 
+async function setupBranchApplication() {
+  const context = await setupApplication();
+  const team = await makeTeam({ organizationId: context.organization.id, name: 'Second branch' });
+  const branchProfile = await makeDesigner({
+    orgId: context.organization.id,
+    teamId: team.id,
+    userId: context.owner.id,
+  });
+  await makeProject({ designerId: context.profile.id, status: 'published' });
+  await makeProject({ designerId: branchProfile.id, status: 'published' });
+  const thirdProject = await makeProject({ designerId: branchProfile.id, status: 'draft' });
+  const unrelatedProfile = await makeDesigner();
+  for (let index = 0; index < 3; index++) {
+    await makeProject({ designerId: unrelatedProfile.id, status: 'published' });
+  }
+  const document = await verificationsRepository.reserveDocumentVersion({
+    applicationId: context.application.id,
+    documentVersionId: '10f682ca-8483-4be9-a20d-a7c808962b88',
+    type: 'business_pan',
+    objectKey: 'verification-documents/branches/business-pan',
+    contentType: 'application/pdf',
+    contentLength: 1000,
+    userId: context.owner.id,
+  });
+  if (typeof document === 'string') throw new Error('Document fixture reservation failed');
+  await verificationsRepository.commitDocument(document.id, context.organization.id);
+  return { ...context, branchProfile, thirdProject };
+}
+
 describe('verification repository lifecycle', () => {
+  it('submits using published projects across the organization branches, not other organizations or drafts', async () => {
+    const { application, organization, owner, thirdProject } = await setupBranchApplication();
+    const input = {
+      applicationId: application.id,
+      userId: owner.id,
+      expectedStatus: VERIFICATION_APPLICATION_STATUS.DRAFT,
+    };
+
+    await expect(verificationsRepository.submit(input)).resolves.toBe(
+      VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS,
+    );
+    await db
+      .update(schema.project)
+      .set({ status: 'published' })
+      .where(eq(schema.project.id, thirdProject.id));
+
+    await expect(
+      verificationsRepository.findContextByOrganization(organization.id),
+    ).resolves.toMatchObject({
+      publishedProjectCount: 3,
+    });
+    await expect(verificationsRepository.submit(input)).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.PENDING,
+    });
+  });
+
+  it('rechecks organization-wide published projects inside approval and refreshes every branch', async () => {
+    const { application, profile, branchProfile, thirdProject } = await setupBranchApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    await db
+      .update(schema.verificationApplication)
+      .set({
+        status: VERIFICATION_APPLICATION_STATUS.PENDING,
+        submittedAt: new Date(),
+      })
+      .where(eq(schema.verificationApplication.id, application.id));
+    const input = {
+      applicationId: application.id,
+      reviewerId: reviewer.id,
+      decision: 'approve' as const,
+      expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+    };
+
+    await expect(verificationsRepository.review(input)).resolves.toBe(
+      VERIFICATION_MUTATION_RESULT.INELIGIBLE,
+    );
+    await db
+      .update(schema.project)
+      .set({ status: 'published' })
+      .where(eq(schema.project.id, thirdProject.id));
+    await expect(verificationsRepository.findAdminDetail(application.id)).resolves.toMatchObject({
+      publishedProjectCount: 3,
+    });
+    await expect(verificationsRepository.review(input)).resolves.toMatchObject({
+      status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+    });
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(inArray(schema.searchProjectionOutbox.entityId, [profile.id, branchProfile.id]));
+    expect(events.map((event) => event.entityId).sort()).toEqual(
+      [profile.id, branchProfile.id].sort(),
+    );
+  });
+
+  it('refreshes every branch badge when approval is reversed', async () => {
+    const { application, profile, branchProfile } = await setupBranchApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    const reviewedAt = new Date();
+    await db
+      .update(schema.verificationApplication)
+      .set({
+        status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+        submittedAt: reviewedAt,
+        reviewedAt,
+        reviewedByUserId: reviewer.id,
+        approvedAt: reviewedAt,
+        expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      })
+      .where(eq(schema.verificationApplication.id, application.id));
+
+    await expect(
+      verificationsRepository.revokeApproval({
+        applicationId: application.id,
+        reviewerId: reviewer.id,
+        revocation: { note: 'Recheck the registration details.' },
+      }),
+    ).resolves.toMatchObject({ status: VERIFICATION_APPLICATION_STATUS.PENDING, attempt: 2 });
+
+    const events = await db
+      .select()
+      .from(schema.searchProjectionOutbox)
+      .where(inArray(schema.searchProjectionOutbox.entityId, [profile.id, branchProfile.id]));
+    expect(events.map((event) => event.entityId).sort()).toEqual(
+      [profile.id, branchProfile.id].sort(),
+    );
+  });
+
   it('filters the admin queue into new, re-review, accepted, and changes-requested tabs', async () => {
     const newSubmission = await setupApplication('+919800000011');
     const reReview = await setupApplication('+919800000012');
@@ -103,6 +230,11 @@ describe('verification repository lifecycle', () => {
 
   it('keeps queue totals aligned with applications that can be rendered', async () => {
     const visible = await setupApplication('+919800000015');
+    const branch = await makeTeam({
+      organizationId: visible.organization.id,
+      name: 'Second branch',
+    });
+    await makeDesigner({ orgId: visible.organization.id, teamId: branch.id });
     const ownerWithoutProfile = await makeUser({
       name: 'Owner Without Profile',
       phoneNumber: '+919800000016',

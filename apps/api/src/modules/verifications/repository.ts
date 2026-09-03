@@ -148,10 +148,7 @@ async function publishedProjectCount(organizationId: string): Promise<number> {
     .from(schema.project)
     .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
     .where(
-      and(
-        eq(schema.designerProfile.orgId, organizationId),
-        eq(schema.project.status, 'published'),
-      ),
+      and(eq(schema.designerProfile.orgId, organizationId), eq(schema.project.status, 'published')),
     );
   return row?.value ?? 0;
 }
@@ -571,8 +568,12 @@ export const verificationsRepository = {
       const [projectCount] = await tx
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .where(
-          and(eq(schema.project.designerId, profile.id), eq(schema.project.status, 'published')),
+          and(
+            eq(schema.designerProfile.orgId, application.organizationId),
+            eq(schema.project.status, 'published'),
+          ),
         );
       const currentDocuments = await tx
         .select({
@@ -669,6 +670,10 @@ export const verificationsRepository = {
     const queuePredicate = and(
       adminQueuePredicate(query.tab),
       isNotNull(schema.verificationApplication.submittedAt),
+      sql`exists (
+        select 1 from ${schema.designerProfile}
+        where ${schema.designerProfile.orgId} = ${schema.verificationApplication.organizationId}
+      )`,
     );
     const currentDocuments = db
       .select({
@@ -745,10 +750,6 @@ export const verificationsRepository = {
         .innerJoin(
           schema.organization,
           eq(schema.verificationApplication.organizationId, schema.organization.id),
-        )
-        .innerJoin(
-          schema.designerProfile,
-          eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
         )
         .where(queuePredicate),
     ]);
@@ -897,8 +898,15 @@ export const verificationsRepository = {
         const [projectCount] = await tx
           .select({ value: sql<number>`count(*)::int` })
           .from(schema.project)
+          .innerJoin(
+            schema.designerProfile,
+            eq(schema.project.designerId, schema.designerProfile.id),
+          )
           .where(
-            and(eq(schema.project.designerId, profile.id), eq(schema.project.status, 'published')),
+            and(
+              eq(schema.designerProfile.orgId, application.organizationId),
+              eq(schema.project.status, 'published'),
+            ),
           );
         const businessTypes = new Set<VerificationDocumentType>(
           BUSINESS_VERIFICATION_DOCUMENT_TYPES,
@@ -1085,20 +1093,20 @@ export const verificationsRepository = {
         note: input.revocation.note,
       });
 
-      const [profile] = await tx
+      const profiles = await tx
         .select({ id: schema.designerProfile.id })
         .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.orgId, application.organizationId))
-        .limit(1);
-      if (profile) {
-        await recordSearchProjectionEvents(tx, [
-          {
+        .where(eq(schema.designerProfile.orgId, application.organizationId));
+      if (profiles.length > 0) {
+        await recordSearchProjectionEvents(
+          tx,
+          profiles.map((profile) => ({
             entityKind: 'designer',
             entityId: profile.id,
             operation: 'index',
             sourceUpdatedAt: revokedAt,
-          },
-        ]);
+          })),
+        );
       }
       return updated;
     });

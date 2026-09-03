@@ -63,12 +63,7 @@ import {
 type ModerationTab = AdminModerationQueueTab;
 type ActionIntent = 'request_changes' | 'reject' | 'unpublish';
 type EditableField =
-  | 'title'
-  | 'propertyTypeSlug'
-  | 'scopeSlug'
-  | 'citySlug'
-  | 'localitySlug'
-  | 'budgetBandSlug';
+  'title' | 'propertyTypeSlug' | 'scopeSlug' | 'citySlug' | 'localitySlug' | 'budgetBandSlug';
 
 const tabLabels: Record<ModerationTab, string> = {
   submitted: 'Submitted',

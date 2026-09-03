@@ -463,15 +463,11 @@ describe('verification route authorization', () => {
       expiresAt: null,
     });
 
-    await db
-      .update(schema.designerProfile)
-      .set({ status: 'active' })
-      .where(eq(schema.designerProfile.id, submission.profile.id));
     const publicSlug = 'revoked-verification-test';
     await db
-      .update(schema.organization)
-      .set({ slug: publicSlug })
-      .where(eq(schema.organization.id, submission.organization.id));
+      .update(schema.designerProfile)
+      .set({ status: 'active', slug: publicSlug })
+      .where(eq(schema.designerProfile.id, submission.profile.id));
     const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
       param: { slug: publicSlug },
     });
@@ -607,15 +603,11 @@ describe('verification route authorization', () => {
       approvedAt: expect.any(String),
       expiresAt: expect.any(String),
     });
-    await db
-      .update(schema.designerProfile)
-      .set({ status: 'active' })
-      .where(eq(schema.designerProfile.id, workspace.profile.id));
     const publicSlug = 'verified-studio-test';
     await db
-      .update(schema.organization)
-      .set({ slug: publicSlug })
-      .where(eq(schema.organization.id, workspace.organization.id));
+      .update(schema.designerProfile)
+      .set({ status: 'active', slug: publicSlug })
+      .where(eq(schema.designerProfile.id, workspace.profile.id));
     const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
       param: { slug: publicSlug },
     });
