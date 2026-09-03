@@ -35,6 +35,7 @@ const ownerWorkspace: OrganizationWorkspaceResponse = {
   currentUserRole: 'owner',
   canManage: true,
   rbacEnabled: true,
+  subscriptionState: 'active',
   seatUsage: 2,
   seatLimit: 10,
   capabilities: {
@@ -230,6 +231,36 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByText(/Owner solo with 1 of 1 seats/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+  });
+
+  it('prompts locked Corporate orgs to restore billing instead of upgrading', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          rbacEnabled: false,
+          canManage: false,
+          subscriptionState: 'locked',
+          seatUsage: 6,
+          seatLimit: 1,
+          capabilities: {
+            ...ownerWorkspace.capabilities,
+            billing: true,
+            manageMembers: false,
+            changeMemberRoles: false,
+          },
+          invitations: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/Team access is suspended/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upgrade to Corporate/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Restore access/i })).toHaveAttribute(
       'href',
       '/designer/plan-billing',
     );

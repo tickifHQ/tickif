@@ -103,11 +103,28 @@ function UpgradePrompt({
   organizationName,
   seatUsage,
   seatLimit,
+  subscriptionState,
 }: {
   organizationName: string;
   seatUsage: number;
   seatLimit: number;
+  subscriptionState: OrganizationWorkspaceResponse['subscriptionState'];
 }) {
+  if (subscriptionState === 'locked') {
+    return (
+      <Card className="space-y-3 p-5 shadow-none">
+        <p className="text-sm font-medium text-foreground">Team access is suspended</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {organizationName} billing is past due, so team management is paused while the Corporate
+          plan is retained. Restore billing to reactivate {seatUsage} of{' '}
+          {formatSeatLimit(seatLimit)} seats with no data lost.
+        </p>
+        <Button type="button" size="compact" asChild>
+          <Link href="/designer/plan-billing">Restore access</Link>
+        </Button>
+      </Card>
+    );
+  }
   return (
     <Card className="space-y-3 p-5 shadow-none">
       <p className="text-sm font-medium text-foreground">Team management is a Corporate feature</p>
@@ -539,6 +556,7 @@ export function DesignerTermsRoles({
             organizationName={workspace.organization.name}
             seatUsage={workspace.seatUsage}
             seatLimit={workspace.seatLimit}
+            subscriptionState={workspace.subscriptionState}
           />
         ) : null}
 
