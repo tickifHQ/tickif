@@ -1495,6 +1495,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       role: 'member',
       createdAt: new Date(),
     });
+    await db.insert(schema.teamMember).values({
+      id: `team-mem-${member.userId}`,
+      teamId: designer.teamId,
+      userId: member.userId,
+      createdAt: new Date(),
+    });
     await makeSubscription({
       organizationId: designer.orgId,
       planTier: 'corporate',
