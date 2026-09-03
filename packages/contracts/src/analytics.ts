@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { planTierSchema, subscriptionStateSchema } from './billing';
-import { analyticsScopeSchema } from './entitlements';
+import { analyticsScopeSchema, rbacEnabled } from './entitlements';
 
 export const analyticsQuerySchema = z
   .object({
@@ -118,7 +118,9 @@ const billingAnalyticsAccessSchema = analyticsAccessBaseSchema.extend({
   engagementVisible: z.literal(false),
 });
 
-type AnalyticsAccessInvariantInput = z.infer<typeof analyticsAccessBaseSchema>;
+type AnalyticsAccessInvariantInput = z.infer<typeof analyticsAccessBaseSchema> & {
+  role?: 'owner' | 'admin' | 'billing_admin' | 'member' | 'viewer';
+};
 
 function validateAnalyticsAccess(
   access: AnalyticsAccessInvariantInput,
@@ -127,6 +129,13 @@ function validateAnalyticsAccess(
   const reject = (message: string, path: string[]) =>
     ctx.addIssue({ code: 'custom', message, path, input: access });
 
+  if (
+    access.role !== undefined &&
+    access.role !== 'owner' &&
+    !rbacEnabled(access.tier, access.lifecycleState)
+  ) {
+    reject('Non-owner analytics roles require RBAC-enabled entitlements', ['role']);
+  }
   if (access.level === 'branch' && access.branchId === null) {
     reject('Branch-level analytics require a branch id', ['branchId']);
   }
