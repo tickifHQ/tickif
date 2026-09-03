@@ -157,19 +157,26 @@ function daysRemaining(startedAt: Date | null, windowDays: number, now: Date): n
   return Math.ceil(remainingMs / DAY_MS);
 }
 
-/**
- * Resources preserved-but-frozen while downgraded. Currently seats only —
- * branch freeze follows once E-244 lands the branch table.
- */
+/** Resources preserved-but-frozen while downgraded. */
 async function frozenResourcesFor(organizationId: string): Promise<FrozenResource[]> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.member)
-    .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, true)));
-  const frozenSeats = row?.count ?? 0;
+  const [[seatRow], [branchRow]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.member)
+      .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.frozen, true))),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.team)
+      .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, true))),
+  ]);
+  const frozenSeats = seatRow?.count ?? 0;
+  const frozenBranches = branchRow?.count ?? 0;
   const resources: FrozenResource[] = [];
   if (frozenSeats > 0) {
     resources.push({ kind: 'seat', label: 'Team Seats', count: frozenSeats });
+  }
+  if (frozenBranches > 0) {
+    resources.push({ kind: 'branch', label: 'Branches', count: frozenBranches });
   }
   return resources;
 }

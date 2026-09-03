@@ -1,5 +1,5 @@
-import { and, asc, db, desc, eq, inArray, lt, schema, sql } from '@repo/db';
-import { seatLimit, type PlanTier, type SubscriptionState } from '@repo/contracts';
+import { and, asc, db, desc, eq, inArray, lte, schema, sql } from '@repo/db';
+import { branchLimit, seatLimit, type PlanTier, type SubscriptionState } from '@repo/contracts';
 
 /**
  * Worker-local data access for the E-239 plan-lapse lifecycle engine.
@@ -15,8 +15,8 @@ import { seatLimit, type PlanTier, type SubscriptionState } from '@repo/contract
  *   by a racing sweep (the state predicate is the compare-and-set).
  * - Transitions take a `FOR UPDATE` row lock so the sweep and the Razorpay webhook
  *   serialize on the same subscription row.
- * - Seat freeze/restore mirrors E-240's ordering: newest active members freeze first
- *   (highest freeze_rank), lowest freeze_rank restores first — persisted indefinitely.
+ * - Seat and branch freeze/restore mirror the API ordering: newest active resources
+ *   freeze first and lowest freeze_rank restores first.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -38,7 +38,7 @@ export async function findGraceExpired(now: Date, graceDays: number, limit: numb
     .where(
       and(
         eq(schema.subscription.subscriptionState, 'grace'),
-        lt(schema.subscription.graceStartedAt, cutoff),
+        lte(schema.subscription.graceStartedAt, cutoff),
       ),
     )
     .orderBy(asc(schema.subscription.graceStartedAt), asc(schema.subscription.id))
@@ -57,7 +57,7 @@ export async function findLockedExpired(now: Date, lockedDays: number, limit: nu
     .where(
       and(
         eq(schema.subscription.subscriptionState, 'locked'),
-        lt(schema.subscription.lockedAt, cutoff),
+        lte(schema.subscription.lockedAt, cutoff),
       ),
     )
     .orderBy(asc(schema.subscription.lockedAt), asc(schema.subscription.id))
@@ -99,8 +99,8 @@ export async function transitionGraceToLocked(subscriptionId: string, now: Date)
 /**
  * locked → downgraded. Sets downgraded_at, moves plan_tier to 'hobby' (CHECK
  * requires this while downgraded), preserves pre_lapse_tier for restoration.
- * Freezes over-limit seats in the SAME transaction so entitlement and freeze
- * state can never diverge.
+ * Freezes over-limit seats and branches in the SAME transaction so entitlement
+ * and freeze state can never diverge.
  *
  * Returns true when the row transitioned, false when a concurrent writer won.
  */
@@ -128,8 +128,10 @@ export async function transitionLockedToDowngraded(subscriptionId: string, now: 
         ),
       );
 
-    // Downgraded tier is hobby → seat limit 1. Freeze over-limit members.
+    // Downgraded tier is hobby. Freeze every resource above its Hobby limit in
+    // this same transaction so the subscription and resource state are atomic.
     await freezeMembersToLimitTx(tx, row.organizationId, seatLimit('hobby', 'active'), now);
+    await freezeBranchesToLimitTx(tx, row.organizationId, branchLimit('hobby', 'active'), now);
     return true;
   });
 }
@@ -154,8 +156,9 @@ async function freezeMembersToLimitTx(tx: Tx, organizationId: string, activeLimi
     .for('update');
 
   const freezeCount = Math.max(0, activeMembers.length - activeLimit);
+  const preservedOwnerId = [...activeMembers].reverse().find(({ role }) => role === 'owner')?.id;
   const ids = activeMembers
-    .filter(({ role }) => role !== 'owner')
+    .filter(({ id }) => id !== preservedOwnerId)
     .slice(0, freezeCount)
     .map(({ id }) => id);
   if (ids.length === 0) return;
@@ -172,6 +175,44 @@ async function freezeMembersToLimitTx(tx: Tx, organizationId: string, activeLimi
       .set({ frozen: true, frozenAt: now, freezeRank: startingRank + index })
       .where(and(eq(schema.member.id, id), eq(schema.member.frozen, false)));
   }
+}
+
+async function freezeBranchesToLimitTx(
+  tx: Tx,
+  organizationId: string,
+  activeLimit: number,
+  now: Date,
+): Promise<void> {
+  if (activeLimit < 0) return;
+
+  const activeBranches = await tx
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, false)))
+    .orderBy(desc(schema.team.createdAt), desc(schema.team.id))
+    .for('update');
+  const ids = activeBranches
+    .slice(0, Math.max(0, activeBranches.length - activeLimit))
+    .map(({ id }) => id);
+  if (ids.length === 0) return;
+
+  const [rankRow] = await tx
+    .select({ rank: sql<number | null>`max(${schema.team.freezeRank})` })
+    .from(schema.team)
+    .where(eq(schema.team.organizationId, organizationId));
+  const startingRank = (rankRow?.rank ?? 0) + 1;
+
+  for (const [index, id] of ids.entries()) {
+    await tx
+      .update(schema.team)
+      .set({ frozen: true, frozenAt: now, freezeRank: startingRank + index })
+      .where(and(eq(schema.team.id, id), eq(schema.team.frozen, false)));
+  }
+
+  await tx
+    .update(schema.session)
+    .set({ activeTeamId: null })
+    .where(inArray(schema.session.activeTeamId, ids));
 }
 
 /**
@@ -211,5 +252,4 @@ export async function restoreMembersToLimit(organizationId: string, tier: PlanTi
     return ids;
   });
 }
-
 

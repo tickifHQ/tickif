@@ -189,7 +189,7 @@ export const subscriptionResponseSchema = z
     graceDaysRemaining: z.number().int().min(0).nullable(),
     /** Whole days left in the locked window before downgrade. Null unless state = 'locked'. */
     lockedDaysRemaining: z.number().int().min(0).nullable(),
-    /** Resources preserved-but-frozen while downgraded (currently seats; branches follow E-244). */
+    /** Resources preserved-but-frozen while downgraded. */
     frozenResources: z.array(frozenResourceSchema),
   })
   .meta({ id: 'SubscriptionResponse' });
