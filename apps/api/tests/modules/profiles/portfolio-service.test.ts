@@ -34,7 +34,7 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
 
 vi.mock('../../../src/modules/profiles/repository.js', () => ({
   profilesRepository: {
-    findByOrgId: vi.fn(),
+    findByTeamId: vi.fn(),
     updateProfile: vi.fn(),
     isOrganizationKycVerified: vi.fn(async () => true),
   },
@@ -64,7 +64,7 @@ vi.mock('@repo/storage', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService, missingRequiredFields } = await import(
+const { portfolioService, missingRequiredFields, resolveProfile } = await import(
   '../../../src/modules/profiles/portfolio-service.js'
 );
 const { portfolioRepository } = await import(
@@ -83,6 +83,8 @@ const { presignUpload, presignDownload, objectExists, deleteObject } = await imp
 const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: 'profile-1',
   orgId: 'org-1',
+  teamId: 'team-1',
+  slug: 'test-studio',
   userId: 'user-1',
   entityType: 'individual',
   displayName: 'Test Studio',
@@ -142,12 +144,12 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   ...over,
 });
 
-const caller = { userId: 'user-1', activeOrgId: 'org-1' };
+const caller = { userId: 'user-1', activeOrgId: 'org-1', activeTeamId: 'team-1' };
 
 /** Setup happy-path mocks so resolveProfile + getPortfolio work. */
 function setupResolveProfile(profile = makeProfile()) {
   vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
-  vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profile);
+  vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profile);
   return profile;
 }
 
@@ -162,6 +164,24 @@ function setupGetPortfolio(portfolio = makePortfolio()) {
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('resolveProfile', () => {
+  it('requires an active branch', async () => {
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
+
+    await expect(resolveProfile({ ...caller, activeTeamId: null })).rejects.toMatchObject({
+      status: 422,
+      message: 'No active branch selected',
+    });
+    expect(profilesRepository.findByTeamId).not.toHaveBeenCalled();
+  });
+
+  it('rejects a branch profile from another organization', async () => {
+    setupResolveProfile(makeProfile({ orgId: 'org-2' }));
+
+    await expect(resolveProfile(caller)).rejects.toMatchObject({ status: 403 });
+  });
+});
 
 // =============================================================================
 // updatePortfolio
@@ -286,7 +306,7 @@ describe('portfolioService.updatePortfolio', () => {
     expect(portfolioRepository.findOrCreate).not.toHaveBeenCalled();
   });
 
-  it('falls back to the org slug in portfolioUrl before a custom slug is chosen', async () => {
+  it('falls back to the branch profile slug before a custom slug is chosen', async () => {
     setupResolveProfile();
     setupGetPortfolio(makePortfolio({ portfolioSlug: null }));
     vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
@@ -295,7 +315,7 @@ describe('portfolioService.updatePortfolio', () => {
 
     const result = await portfolioService.updatePortfolio({ tagline: 'New tagline' }, caller);
 
-    expect(result.portfolioUrl).toBe('http://localhost:3000/d/anika-spaces-a1b2c3');
+    expect(result.portfolioUrl).toBe('http://localhost:3000/d/test-studio');
   });
 
   it('does not upsert the portfolio row when only profile fields change', async () => {

@@ -4,12 +4,14 @@ import {
   ORGANIZATION_CAPABILITY,
   ORGANIZATION_INVITATION_STATE,
   rbacEnabled,
+  branchLimit,
   seatLimit,
   organizationMemberRoleSchema,
   type OrganizationMemberRole,
   type OrganizationCapability,
   type OrganizationCapabilities,
   type OrganizationWorkspaceResponse,
+  type OrganizationBranchesResponse,
   type OrganizationInvitationState,
   type OwnershipTransferResponse,
 } from '@repo/contracts';
@@ -164,6 +166,10 @@ export const orgsService = {
     return orgsRepository.findSoleOrganizationForUser(userId);
   },
 
+  findDefaultActiveTeamForUser(userId: string, organizationId: string): Promise<string | null> {
+    return orgsRepository.findDefaultActiveTeamForUser(userId, organizationId);
+  },
+
   /** True for active Better Auth owner and admin memberships. */
   async isWriter(userId: string, organizationId: string): Promise<boolean> {
     const membership = await orgsRepository.findMembershipRole(userId, organizationId);
@@ -197,6 +203,46 @@ export const orgsService = {
     const activeLimit = seatLimit(plan.tier, plan.state);
     await orgsRepository.freezeMembersToLimit({ organizationId, activeLimit, now });
     await orgsRepository.restoreMembersToLimit({ organizationId, activeLimit });
+  },
+
+  async reconcileBranches(organizationId: string, now = new Date()): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+    const activeLimit = branchLimit(plan.tier, plan.state);
+    await orgsRepository.freezeBranchesToLimit({ organizationId, activeLimit, now });
+    await orgsRepository.restoreBranchesToLimit({ organizationId, activeLimit });
+  },
+
+  async listBranches(input: {
+    userId: string;
+    organizationId: string;
+    activeTeamId: string | null;
+  }): Promise<OrganizationBranchesResponse> {
+    if (!(await orgsRepository.hasMembership(input.userId, input.organizationId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
+    const [branches, plan] = await Promise.all([
+      orgsRepository.listActiveBranchesForUser(input.userId, input.organizationId),
+      orgsRepository.findOrganizationPlan(input.organizationId),
+    ]);
+    const members = await orgsRepository.listBranchMembers(branches.map(({ id }) => id));
+    return {
+      activeTeamId: input.activeTeamId,
+      branchUsage: await orgsRepository.countActiveBranches(input.organizationId),
+      branchLimit: branchLimit(plan.tier, plan.state),
+      branches: branches.map((branch) => ({
+        ...branch,
+        createdAt: branch.createdAt.toISOString(),
+        members: members
+          .filter((member) => member.teamId === branch.id)
+          .map((member) => ({
+            userId: member.userId,
+            name: member.name,
+            email: member.email,
+            image: member.image,
+            role: normalizeRole(member.role),
+          })),
+      })),
+    };
   },
 
   async getCurrentWorkspace(input: {

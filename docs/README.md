@@ -11,6 +11,7 @@ work down; the first two get you running, the rest are reference.
 | [database-and-migrations.md](./database-and-migrations.md) | You're changing the schema or running migrations. |
 | [runbooks/search.md](./runbooks/search.md) | You're provisioning Typesense credentials, bootstrapping collections, or diagnosing degraded search. |
 | [auth.md](./auth.md) | You're protecting a route, working on login, or touching RBAC. |
+| [branches.md](./branches.md) | You're working on Corporate branches, active-team context, or branch freeze/restore. |
 | [testing.md](./testing.md) | You're writing tests or practicing TDD (you should be). |
 | [conventions.md](./conventions.md) | Anytime — coding standards, env config, shared contracts. |
 | [troubleshooting.md](./troubleshooting.md) | Something broke, or you hit a pnpm/build oddity. |

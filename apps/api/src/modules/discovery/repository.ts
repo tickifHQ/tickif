@@ -232,7 +232,7 @@ export const discoveryRepository = {
         bhkSlug: schema.project.bhkSlug,
         budgetBandSlug: schema.project.budgetBandSlug,
         designerName: schema.designerProfile.displayName,
-        designerSlug: schema.organization.slug,
+        designerSlug: schema.designerProfile.slug,
         avgRating: schema.designerProfile.avgRating,
         reviewCount: schema.designerProfile.reviewCount,
         coverImageId: schema.project.coverImageId,

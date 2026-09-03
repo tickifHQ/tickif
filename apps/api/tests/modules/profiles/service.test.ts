@@ -5,8 +5,8 @@ import type { DesignerProfileRecord } from '../../../src/modules/profiles/reposi
 vi.mock('../../../src/modules/profiles/repository.js', () => {
   return {
     profilesRepository: {
-      findByOrgId: vi.fn(),
-      findByOrgIdWithOrg: vi.fn(),
+      findByTeamId: vi.fn(),
+      findByTeamIdWithOrg: vi.fn(),
       hasGoogleAccount: vi.fn(),
       countFootprintByKind: vi.fn(),
       hasProject: vi.fn(),
@@ -31,6 +31,8 @@ const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
   orgId: 'org-1',
+  teamId: 'team-1',
+  slug: 'test-studio',
   userId: 'user-1',
   entityType: 'individual',
   displayName: 'Test Studio',
@@ -58,6 +60,8 @@ const profileRow = (over: Partial<DesignerProfileRecord> = {}): DesignerProfileR
   ...over,
 });
 
+const completionInput = { userId: 'u1', orgId: 'org-1', teamId: 'team-1' };
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
@@ -68,10 +72,10 @@ describe('profilesService.getCompletion', () => {
   describe('steps', () => {
     it('returns all 4 steps', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(false);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps).toHaveLength(4);
       expect(result.steps.map((s) => s.key)).toEqual([
@@ -84,20 +88,20 @@ describe('profilesService.getCompletion', () => {
 
     it('marks signed-in-with-google as done when user has google account', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps.find((s) => s.key === 'signed-in-with-google')?.done).toBe(true);
     });
 
     it('marks org-created as done when orgId is provided', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(false);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps.find((s) => s.key === 'org-created')?.done).toBe(true);
     });
@@ -106,41 +110,56 @@ describe('profilesService.getCompletion', () => {
       await expect(
         profilesService.getCompletion({ userId: 'u1', orgId: null }),
       ).rejects.toMatchObject({ status: 422 });
-      expect(profilesRepository.findByOrgId).not.toHaveBeenCalled();
+      expect(profilesRepository.findByTeamId).not.toHaveBeenCalled();
+    });
+
+    it('requires an active branch instead of choosing an organization profile', async () => {
+      await expect(
+        profilesService.getCompletion({ userId: 'u1', orgId: 'org-1', teamId: null }),
+      ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+      expect(profilesRepository.findByTeamId).not.toHaveBeenCalled();
+    });
+
+    it('rejects a branch profile from another organization', async () => {
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow({ orgId: 'org-2' }));
+
+      await expect(profilesService.getCompletion(completionInput)).rejects.toMatchObject({
+        status: 403,
+      });
     });
 
     it('marks profile-completed when all required fields are filled', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profileRow());
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow());
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps.find((s) => s.key === 'profile-completed')?.done).toBe(true);
     });
 
     it('marks profile-completed as false when bio is missing', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profileRow({ bio: null }));
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow({ bio: null }));
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps.find((s) => s.key === 'profile-completed')?.done).toBe(false);
     });
 
     it('marks first-project-uploaded when profile has a project', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profileRow());
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow());
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(true);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.steps.find((s) => s.key === 'first-project-uploaded')?.done).toBe(true);
     });
@@ -151,29 +170,29 @@ describe('profilesService.getCompletion', () => {
       vi.mocked(orgsService.isMember).mockResolvedValue(false);
 
       await expect(
-        profilesService.getCompletion({ userId: 'u1', orgId: 'org-2' }),
+        profilesService.getCompletion({ ...completionInput, orgId: 'org-2' }),
       ).rejects.toMatchObject({ status: 403 });
-      expect(profilesRepository.findByOrgId).not.toHaveBeenCalled();
+      expect(profilesRepository.findByTeamId).not.toHaveBeenCalled();
     });
 
     it('returns 0 when org exists but no profile', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(null);
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(null);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.score).toBe(0);
     });
 
     it('returns 100 when all 6 required fields are filled', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profileRow());
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow());
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(true);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.score).toBe(100);
     });
@@ -181,14 +200,14 @@ describe('profilesService.getCompletion', () => {
     it('returns partial score when some fields are missing', async () => {
       // Missing: bio, logo → 4/6 filled = 67%
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(
         profileRow({ bio: null, logoImageId: null }),
       );
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       // 4 of 6 fields = 67%
       expect(result.score).toBe(67);
@@ -196,14 +215,14 @@ describe('profilesService.getCompletion', () => {
 
     it('includes missing field keys in the missing array', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(
         profileRow({ bio: null, logoImageId: null }),
       );
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(0); // no city, no scope
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(false);
 
-      const result = await profilesService.getCompletion({ userId: 'u1', orgId: 'org-1' });
+      const result = await profilesService.getCompletion(completionInput);
 
       expect(result.missing).toContain('bio');
       expect(result.missing).toContain('logo');
@@ -216,12 +235,12 @@ describe('profilesService.getCompletion', () => {
   describe('gating (isComplete)', () => {
     it('passes when score >= 60', async () => {
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(true);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(profileRow());
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow());
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(1);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(true);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(true);
 
-      const gate = await profilesService.isComplete({ userId: 'u1', orgId: 'org-1' });
+      const gate = await profilesService.isComplete(completionInput);
 
       expect(gate.pass).toBe(true);
       expect(gate.reason).toBeUndefined();
@@ -230,14 +249,14 @@ describe('profilesService.getCompletion', () => {
     it('fails with reason when score < 60', async () => {
       // Only displayName filled → 1/6 = 17%
       vi.mocked(profilesRepository.hasGoogleAccount).mockResolvedValue(false);
-      vi.mocked(profilesRepository.findByOrgId).mockResolvedValue(
+      vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(
         profileRow({ bio: null, logoImageId: null }),
       );
       vi.mocked(profilesRepository.countFootprintByKind).mockResolvedValue(0);
       vi.mocked(profilesRepository.hasContact).mockResolvedValue(false);
       vi.mocked(profilesRepository.hasProject).mockResolvedValue(false);
 
-      const gate = await profilesService.isComplete({ userId: 'u1', orgId: 'org-1' });
+      const gate = await profilesService.isComplete(completionInput);
 
       expect(gate.pass).toBe(false);
       expect(gate.reason).toContain('below the required 60%');
@@ -254,7 +273,7 @@ describe('profilesService.getCompletion', () => {
 
 describe('profilesService.getCurrentProfile', () => {
   it('allows any active organization member to read the workspace profile', async () => {
-    vi.mocked(profilesRepository.findByOrgIdWithOrg).mockResolvedValue({
+    vi.mocked(profilesRepository.findByTeamIdWithOrg).mockResolvedValue({
       profile: profileRow(),
       org: {
         id: 'org-1',
@@ -267,7 +286,7 @@ describe('profilesService.getCurrentProfile', () => {
     });
     vi.mocked(profilesRepository.getFootprint).mockResolvedValue([]);
 
-    const result = await profilesService.getCurrentProfile('user-1', 'org-1');
+    const result = await profilesService.getCurrentProfile('user-1', 'org-1', 'team-1');
 
     expect(orgsService.isMember).toHaveBeenCalledWith('user-1', 'org-1');
     expect(result.organization).toEqual({
@@ -283,6 +302,32 @@ describe('profilesService.getCurrentProfile', () => {
     await expect(profilesService.getCurrentProfile('user-1', 'org-2')).rejects.toMatchObject({
       status: 403,
     });
-    expect(profilesRepository.findByOrgIdWithOrg).not.toHaveBeenCalled();
+    expect(profilesRepository.findByTeamIdWithOrg).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing active branch instead of returning an arbitrary profile', async () => {
+    await expect(profilesService.getCurrentProfile('user-1', 'org-1', null)).rejects.toMatchObject({
+      status: 422,
+      message: 'No active branch selected',
+    });
+    expect(profilesRepository.findByTeamIdWithOrg).not.toHaveBeenCalled();
+  });
+
+  it('rejects an active branch from a different organization', async () => {
+    vi.mocked(profilesRepository.findByTeamIdWithOrg).mockResolvedValue({
+      profile: profileRow({ orgId: 'org-2' }),
+      org: {
+        id: 'org-2',
+        name: 'Other Studio',
+        slug: 'other-studio',
+        logo: null,
+        metadata: null,
+        createdAt: new Date('2026-01-01'),
+      },
+    });
+
+    await expect(
+      profilesService.getCurrentProfile('user-1', 'org-1', 'team-2'),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

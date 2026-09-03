@@ -117,7 +117,10 @@ export async function processWebhookEvent(
   }
 
   if (result.outcome === 'processed' || result.outcome === 'duplicate') {
-    await orgsService.reconcileMemberSeats(subscription.organizationId);
+    await Promise.all([
+      orgsService.reconcileMemberSeats(subscription.organizationId),
+      orgsService.reconcileBranches(subscription.organizationId),
+    ]);
   }
 
   if (result.outcome === 'processed') {
@@ -438,24 +441,24 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Queue a designer profile reindex when their subscription tier changes.
- * Resolves org → designer_profile, then inserts into the search outbox.
+ * Resolves every branch profile in the org, then inserts into the search outbox.
  */
 async function queueDesignerReindex(tx: Transaction, organizationId: string): Promise<void> {
-  const [profile] = await tx
+  const profiles = await tx
     .select({ id: schema.designerProfile.id })
     .from(schema.designerProfile)
-    .where(eq(schema.designerProfile.orgId, organizationId))
-    .limit(1);
+    .where(eq(schema.designerProfile.orgId, organizationId));
 
-  if (profile) {
-    await recordSearchProjectionEvents(tx, [
-      {
+  if (profiles.length > 0) {
+    await recordSearchProjectionEvents(
+      tx,
+      profiles.map((profile) => ({
         entityKind: 'designer',
         entityId: profile.id,
         operation: 'index',
         sourceUpdatedAt: new Date(),
-      },
-    ]);
+      })),
+    );
   }
 }
 

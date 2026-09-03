@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { and, db, eq, schema } from '@repo/db';
-import { makeDesigner, makeOrganization, makeProject } from '@repo/db/testing';
+import { makeDesigner, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { orgsService } from '../../../src/modules/orgs/service.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
@@ -60,6 +60,7 @@ function postApi(path: string, cookie: string, body?: Record<string, unknown>) {
 describe('organization invitation lifecycle', () => {
   it('uses seven-day expiry and replaces a pending email without duplicates', async () => {
     const organization = await makeOrganization({ slug: 'replace-invitation-studio' });
+    await makeTeam({ organizationId: organization.id });
     const owner = await makeMemberSession({
       organizationId: organization.id,
       phone: '+919800006001',
@@ -99,6 +100,7 @@ describe('organization invitation lifecycle', () => {
 
   it('persists declined and revoked states through Better Auth', async () => {
     const organization = await makeOrganization({ slug: 'decline-revoke-studio' });
+    await makeTeam({ organizationId: organization.id });
     const owner = await makeMemberSession({
       organizationId: organization.id,
       phone: '+919800006002',

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
-import { makeDesigner, makeLead, makeOrganization, makeProject } from '@repo/db/testing';
+import { makeDesigner, makeLead, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import {
   activateOrganization,
@@ -396,10 +396,19 @@ describe('GET /api/profiles/me/dashboard', () => {
       userId,
       displayName: 'Alpha Studio',
     });
+    const betaTeam = await makeTeam({ organizationId: orgB.id });
+    await db.insert(schema.teamMember).values({
+      id: `tm-beta-${userId}`,
+      teamId: betaTeam.id,
+      userId,
+      createdAt: new Date(),
+    });
     const [betaProfile] = await db
       .insert(schema.designerProfile)
       .values({
         orgId: orgB.id,
+        teamId: betaTeam.id,
+        slug: `beta-studio-${userId}`,
         displayName: 'Beta Studio',
         address: 'Indiranagar, Bangalore',
       })
@@ -411,14 +420,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       title: 'Beta Published',
     });
     await makeProject({ designerId: betaProfile!.id, status: 'draft', title: 'Beta Draft' });
-    await db
-      .update(schema.session)
-      .set({ activeOrganizationId: orgB.id })
-      .where(eq(schema.session.userId, userId));
-    const freshCookie = cookie
-      .split('; ')
-      .filter((c) => !c.startsWith('better-auth.session_data'))
-      .join('; ');
+    const freshCookie = await activateOrganization(cookie, orgB.id);
 
     const res = await request('GET', '/api/profiles/me/dashboard', { cookie: freshCookie });
 
@@ -433,7 +435,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       draft: 1,
     });
     expect(body.shareUrl).toBe(
-      new URL('/d/beta-studio', config.PUBLIC_WEB_URL).toString(),
+      new URL(`/d/${betaProfile!.slug}`, config.PUBLIC_WEB_URL).toString(),
     );
   });
 });
@@ -459,10 +461,11 @@ describe('GET /api/profiles/:id — public read', () => {
     expect(body).not.toHaveProperty('updatedAt');
   });
 
-  it('returns public projection by organization slug', async () => {
+  it('returns public projection by branch profile slug', async () => {
     const org = await makeOrganization({ name: 'Studio Noir', slug: 'studio-noir' });
     const designer = await makeDesigner({
       orgId: org.id,
+      slug: 'studio-noir',
       displayName: 'Studio Noir',
       status: 'active',
     });
@@ -561,6 +564,17 @@ describe('PATCH /api/profiles/me — update', () => {
       role: 'member',
       createdAt: new Date(),
     });
+    const [team] = await db
+      .select({ id: schema.designerProfile.teamId })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.orgId, orgId))
+      .limit(1);
+    await db.insert(schema.teamMember).values({
+      id: `tm-read-only-${userId}`,
+      teamId: team!.id,
+      userId,
+      createdAt: new Date(),
+    });
     const activeCookie = await activateOrganization(cookie, orgId);
 
     const res = await request('GET', '/api/profiles/me', { cookie: activeCookie });
@@ -568,6 +582,30 @@ describe('PATCH /api/profiles/me — update', () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.orgId).toBe(orgId);
+  });
+
+  it('returns 422 instead of choosing a random profile when no branch is active', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001024', 'designer');
+    const organization = await makeOrganization({ slug: 'multi-profile-no-team' });
+    await db.insert(schema.member).values({
+      id: `mem-no-team-${userId}`,
+      organizationId: organization.id,
+      userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    const firstTeam = await makeTeam({ organizationId: organization.id, name: 'First' });
+    const secondTeam = await makeTeam({ organizationId: organization.id, name: 'Second' });
+    await makeDesigner({ orgId: organization.id, teamId: firstTeam.id, slug: 'first-profile' });
+    await makeDesigner({ orgId: organization.id, teamId: secondTeam.id, slug: 'second-profile' });
+    const activeCookie = await activateOrganization(cookie, organization.id);
+
+    const res = await request('GET', '/api/profiles/me', { cookie: activeCookie });
+
+    expect(res.status).toBe(422);
+    expect(await json(res)).toMatchObject({
+      error: { message: 'No active branch selected' },
+    });
   });
 
   it('updates profile fields (partial — bio only)', async () => {

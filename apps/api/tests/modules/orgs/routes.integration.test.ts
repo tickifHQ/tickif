@@ -3,9 +3,13 @@ import { testClient } from 'hono/testing';
 import type { OrganizationWorkspaceResponse } from '@repo/contracts';
 import type { OrganizationMemberRole } from '@repo/contracts';
 import { and, db, eq, schema } from '@repo/db';
-import { makeOrganization, makeUser } from '@repo/db/testing';
+import { makeOrganization, makeProject, makeUser } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
-import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+import {
+  activateOrganization,
+  createRoleSession,
+  mergeResponseCookies,
+} from '../../helpers/auth.js';
 
 const client = testClient(app);
 
@@ -26,8 +30,40 @@ async function makeOrganizationSession(input: {
     .insert(schema.subscription)
     .values({ organizationId: input.organizationId, planTier: 'corporate' })
     .onConflictDoNothing();
+  const [existingTeam] = await db
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .where(eq(schema.team.organizationId, input.organizationId))
+    .limit(1);
+  const teamId = existingTeam?.id ?? `default-team-${input.organizationId}`;
+  if (!existingTeam) {
+    await db.insert(schema.team).values({
+      id: teamId,
+      organizationId: input.organizationId,
+      name: 'Default Branch',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    await db.insert(schema.designerProfile).values({
+      orgId: input.organizationId,
+      teamId,
+      userId,
+      displayName: 'Default Branch',
+      slug: `default-${input.organizationId}`,
+    });
+  }
+  await db
+    .insert(schema.teamMember)
+    .values({
+      id: `team-member-${teamId}-${userId}`,
+      teamId,
+      userId,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    })
+    .onConflictDoNothing();
   return {
     userId,
+    teamId,
     cookie: await activateOrganization(cookie, input.organizationId),
   };
 }
@@ -240,6 +276,15 @@ describe('organization management', () => {
       organizationId: organization.id,
       role: 'owner',
     });
+    const [profile] = await db
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.teamId, owner.teamId));
+    const project = await makeProject({
+      designerId: profile!.id,
+      title: 'Default Branch Project',
+      status: 'draft',
+    });
     const guest = await createRoleSession('+919800004010', 'visitor');
     const [guestUser] = await db
       .select({ email: schema.user.email })
@@ -273,13 +318,34 @@ describe('organization management', () => {
         ),
       );
     const [guestSession] = await db
-      .select({ activeOrganizationId: schema.session.activeOrganizationId })
+      .select({
+        activeOrganizationId: schema.session.activeOrganizationId,
+        activeTeamId: schema.session.activeTeamId,
+      })
       .from(schema.session)
       .where(eq(schema.session.userId, guest.userId));
+    const [teamMembership] = await db
+      .select({ teamId: schema.teamMember.teamId })
+      .from(schema.teamMember)
+      .where(
+        and(eq(schema.teamMember.userId, guest.userId), eq(schema.teamMember.teamId, owner.teamId)),
+      );
+    const acceptedCookie = mergeResponseCookies(guest.cookie, acceptResponse);
+    const projectsResponse = await app.request(
+      '/api/projects?status=all&page=1&limit=20&sort=-updatedAt',
+      { headers: { cookie: acceptedCookie } },
+    );
+    const projects = (await projectsResponse.json()) as { items: { id: string }[] };
 
     expect(acceptedUser).toEqual({ role: 'designer', status: 'active' });
     expect(membership?.role).toBe('member');
-    expect(guestSession?.activeOrganizationId).toBe(organization.id);
+    expect(teamMembership?.teamId).toBe(owner.teamId);
+    expect(guestSession).toEqual({
+      activeOrganizationId: organization.id,
+      activeTeamId: owner.teamId,
+    });
+    expect(projectsResponse.status).toBe(200);
+    expect(projects.items.map(({ id }) => id)).toContain(project.id);
   });
 
   it('lets an owner update a member role in the active organization', async () => {

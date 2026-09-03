@@ -29,7 +29,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
       deleteProject: vi.fn(),
-      findDesignerByOrgId: vi.fn(),
+      findDesignerByTeamId: vi.fn(),
       findOwnership: vi.fn(),
       taxonomyExists: vi.fn(),
       findTaxonomyTermBySlug: vi.fn(),
@@ -169,6 +169,7 @@ const caller = {
   userRole: 'designer',
   isBanned: false,
   activeOrgId: 'org_1',
+  activeTeamId: 'team_1',
 };
 
 beforeEach(() => {
@@ -193,6 +194,7 @@ describe('projectsService.list', () => {
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: 'org_1',
+      activeTeamId: 'team_1',
       statuses: ['draft', 'changes_requested', 'rejected'],
       q: 'bandra',
       limit: 20,
@@ -205,6 +207,16 @@ describe('projectsService.list', () => {
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('rejects listing without an active branch', async () => {
+    await expect(
+      projectsService.list(
+        { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
+        { ...caller, activeTeamId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(projectsRepository.list).not.toHaveBeenCalled();
   });
 
   it('surfaces only unresolved comments for changes-requested list rows', async () => {
@@ -292,6 +304,7 @@ describe('projectsService.portfolio', () => {
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: 'org_1',
+      activeTeamId: 'team_1',
       statuses: ['changes_requested'],
       limit: 12,
       offset: 0,
@@ -406,9 +419,10 @@ describe('projectsService.create', () => {
 
   it('uses the base slug when free', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -426,9 +440,10 @@ describe('projectsService.create', () => {
 
   it('appends a suffix when the slug already exists', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(row());
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -447,9 +462,10 @@ describe('projectsService.create', () => {
 
   it('retries slug creation when another draft wins the insert race', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft)
       .mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }))
@@ -468,9 +484,10 @@ describe('projectsService.create', () => {
 
   it('generates a title and room prefill when title is omitted', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.taxonomyExists).mockResolvedValue(true);
     vi.mocked(projectsRepository.propertySubtypeExists).mockResolvedValue(true);
@@ -560,7 +577,7 @@ describe('projectsService.create', () => {
   });
 
   it('requires the authenticated user to have a designer profile', async () => {
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue(null);
 
     await expect(projectsService.create({ title: 'New Project' }, caller)).rejects.toMatchObject({
       status: 403,
@@ -569,9 +586,10 @@ describe('projectsService.create', () => {
 
   it('creates in the active organization and rejects a missing active organization', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -584,7 +602,7 @@ describe('projectsService.create', () => {
       'org_1',
       'write_projects',
     );
-    expect(projectsRepository.findDesignerByOrgId).toHaveBeenCalledWith('org_1');
+    expect(projectsRepository.findDesignerByTeamId).toHaveBeenCalledWith('org_1', 'team_1');
     await expect(
       projectsService.create({ title: 'No Org Project' }, { ...caller, activeOrgId: null }),
     ).rejects.toMatchObject({ status: 422 });

@@ -24,7 +24,7 @@ import {
   designerProjectsResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
-import { setActiveOrganization } from '@repo/auth';
+import { setActiveOrganization, setActiveTeam } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
@@ -162,6 +162,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await profilesService.getCurrentProfile(
         user.id,
         session?.activeOrganizationId ?? null,
+        session?.activeTeamId ?? null,
       );
       return c.json(result, 200);
     },
@@ -171,7 +172,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       method: 'get',
       path: '/slug/{slug}',
       tags: ['Profiles'],
-      summary: 'Get a public profile by organization slug (active only)',
+      summary: 'Get a public branch profile by slug (active only)',
       request: { params: profileSlugParamSchema },
       responses: {
         200: {
@@ -220,6 +221,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     const result = await profilesService.getCompletion({
       userId: user.id,
       orgId: session?.activeOrganizationId ?? null,
+      teamId: session?.activeTeamId ?? null,
     });
     return c.json(result, 200);
   })
@@ -229,13 +231,14 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
     const result = await dashboardService.getProfileDashboard({
       userId: user.id,
       orgId: session?.activeOrganizationId ?? null,
+      teamId: session?.activeTeamId ?? null,
     });
     return c.json(result, 200);
   })
   .openapi(onboardRoute, async (c) => {
     const user = c.get('user')!;
     const input = c.req.valid('json');
-    const { data, created } = await profilesService.onboardDesigner(user.id, input);
+    const { data, created, activeTeamId } = await profilesService.onboardDesigner(user.id, input);
     const activeOrganizationResponse = await setActiveOrganization(
       c.req.raw.headers,
       data.organization.id,
@@ -244,6 +247,13 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       throw new Error('Failed to activate the organization after onboarding');
     }
     for (const cookie of activeOrganizationResponse.headers.getSetCookie()) {
+      c.header('Set-Cookie', cookie, { append: true });
+    }
+    const activeTeamResponse = await setActiveTeam(c.req.raw.headers, activeTeamId);
+    if (!activeTeamResponse.ok) {
+      throw new Error('Failed to activate the branch after onboarding');
+    }
+    for (const cookie of activeTeamResponse.headers.getSetCookie()) {
       c.header('Set-Cookie', cookie, { append: true });
     }
     return c.json(data, created ? 201 : 200);
@@ -292,6 +302,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
         user.id,
         session?.activeOrganizationId ?? null,
         input,
+        session?.activeTeamId ?? null,
       );
       return c.json(result, 200);
     },
@@ -321,6 +332,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await portfolioService.getPortfolio({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -357,6 +369,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await portfolioService.updatePortfolio(input, {
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -391,6 +404,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await portfolioService.checkSlugAvailability(slug, {
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -425,6 +439,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await portfolioService.createLogoUploadUrl(input, {
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 201);
     },
@@ -461,6 +476,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await portfolioService.commitLogoUpload({ objectKey }, {
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -488,6 +504,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       await portfolioService.deleteLogo({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.body(null, 204);
     },
@@ -518,6 +535,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await googleReviewsService.get({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -552,6 +570,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await googleReviewsService.connect(input, {
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 200);
     },
@@ -580,6 +599,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       const result = await googleReviewsService.refresh({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.json(result, 202);
     },
@@ -605,6 +625,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       await googleReviewsService.disconnect({
         userId: user.id,
         activeOrgId: session?.activeOrganizationId ?? null,
+        activeTeamId: session?.activeTeamId ?? null,
       });
       return c.body(null, 204);
     },

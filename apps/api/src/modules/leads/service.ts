@@ -23,6 +23,7 @@ export type Caller = {
   userId: string;
   isBanned: boolean;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
 };
 
 export type LeadCounts = {
@@ -89,14 +90,22 @@ function requireActiveOrganization(caller: Caller): string {
   return caller.activeOrgId;
 }
 
+function requireActiveTeam(caller: Caller): string {
+  const teamId = caller.activeTeamId;
+  if (!teamId) throw AppError.unprocessable('No active branch selected');
+  return teamId;
+}
+
 async function assertLeadInActiveOrganization(
   caller: Caller,
   organizationId: string,
+  teamId: string,
 ): Promise<void> {
   const activeOrganizationId = requireActiveOrganization(caller);
   if (organizationId !== activeOrganizationId) {
     throw AppError.notFound('Lead not found');
   }
+  if (teamId !== requireActiveTeam(caller)) throw AppError.notFound('Lead not found');
   await assertOrgMember(caller.userId, activeOrganizationId);
 }
 
@@ -116,12 +125,14 @@ export const leadsService = {
   async list(query: ListLeadsQuery, caller: Caller): Promise<ListLeadsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     await assertOrgMember(caller.userId, activeOrganizationId);
     const limit = query.limit;
     const page = query.page;
     const { items, total } = await leadsRepository.list({
       userId: caller.userId,
       activeOrgId: activeOrganizationId,
+      activeTeamId,
       status: listStatus(query.status),
       q: query.q,
       sortBy: query.sortBy,
@@ -143,22 +154,25 @@ export const leadsService = {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const row = await leadsRepository.findById(id);
     if (!row) throw AppError.notFound('Lead not found');
-    await assertLeadInActiveOrganization(caller, row.organizationId);
+    await assertLeadInActiveOrganization(caller, row.organizationId, row.teamId);
     return toDetail(row);
   },
 
   async counts(query: LeadCountsQuery, caller: Caller): Promise<LeadCountsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     await assertOrgMember(caller.userId, activeOrganizationId);
-    return toCounts(await leadsRepository.countByStatus(activeOrganizationId, query.q));
+    return toCounts(
+      await leadsRepository.countByStatus(activeOrganizationId, query.q, activeTeamId),
+    );
   },
 
   async update(id: string, input: UpdateLeadInput, caller: Caller): Promise<LeadDetailResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const existing = await leadsRepository.findById(id);
     if (!existing) throw AppError.notFound('Lead not found');
-    await assertLeadInActiveOrganization(caller, existing.organizationId);
+    await assertLeadInActiveOrganization(caller, existing.organizationId, existing.teamId);
 
     const row = await leadsRepository.update(id, input);
     if (!row) throw AppError.notFound('Lead not found');
@@ -168,24 +182,31 @@ export const leadsService = {
   async create(input: CreateLeadInput, caller: Caller): Promise<LeadDetailResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const organizationId = await resolveTargetOrganization(input, caller);
+    const teamId = requireActiveTeam(caller);
 
     if (input.budgetBandSlug && !(await leadsRepository.budgetBandExists(input.budgetBandSlug))) {
       throw AppError.unprocessable('Invalid budgetBandSlug');
     }
 
     if (input.referredProjectId) {
-      const projectOrgId = await leadsRepository.findProjectOrganization(input.referredProjectId);
-      if (!projectOrgId || projectOrgId !== organizationId) {
-        throw AppError.unprocessable('referredProjectId must belong to the organization');
+      const projectBranch = await leadsRepository.findProjectBranch(input.referredProjectId);
+      if (
+        !projectBranch ||
+        projectBranch.organizationId !== organizationId ||
+        projectBranch.teamId !== teamId
+      ) {
+        throw AppError.unprocessable('referredProjectId must belong to the active branch');
       }
     }
 
     const receivedAt = input.receivedAt ? new Date(input.receivedAt) : undefined;
-    return toDetail(await leadsRepository.create({ ...input, organizationId, receivedAt }));
+    return toDetail(
+      await leadsRepository.create({ ...input, organizationId, teamId, receivedAt }),
+    );
   },
 
-  async countForOrganization(organizationId: string): Promise<LeadCounts> {
-    const counts = toCounts(await leadsRepository.countByStatus(organizationId));
+  async countForOrganization(organizationId: string, teamId?: string): Promise<LeadCounts> {
+    const counts = toCounts(await leadsRepository.countByStatus(organizationId, undefined, teamId));
     return {
       total: counts.total,
       new: counts.new,

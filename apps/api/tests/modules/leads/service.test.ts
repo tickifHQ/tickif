@@ -12,7 +12,7 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
     findById: vi.fn(),
     update: vi.fn(),
     create: vi.fn(),
-    findProjectOrganization: vi.fn(),
+    findProjectBranch: vi.fn(),
     budgetBandExists: vi.fn(),
     countByStatus: vi.fn(),
   },
@@ -30,6 +30,7 @@ const caller = {
   userId: 'user_1',
   isBanned: false,
   activeOrgId: 'org_1',
+  activeTeamId: 'team_1',
 };
 
 const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord => ({
@@ -47,6 +48,7 @@ const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord =>
 const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRecord => ({
   ...leadListRow(),
   organizationId: 'org_1',
+  teamId: 'team_1',
   referredProjectId: '22222222-2222-4222-8222-222222222222',
   message: 'Need a renovation',
   notes: null,
@@ -73,6 +75,7 @@ describe('leadsService.list', () => {
     expect(leadsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: caller.activeOrgId,
+      activeTeamId: caller.activeTeamId,
       status: 'contacted',
       q: 'bandra',
       limit: 12,
@@ -91,6 +94,13 @@ describe('leadsService.list', () => {
     await expect(
       leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeOrgId: null }),
     ).rejects.toMatchObject({ status: 422 });
+    expect(leadsRepository.list).not.toHaveBeenCalled();
+  });
+
+  it('rejects listing without an active branch', async () => {
+    await expect(
+      leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeTeamId: null }),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
 });
@@ -134,7 +144,7 @@ describe('leadsService.counts', () => {
       closed: 2,
       spam: 0,
     });
-    expect(leadsRepository.countByStatus).toHaveBeenCalledWith('org_1', 'bandra');
+    expect(leadsRepository.countByStatus).toHaveBeenCalledWith('org_1', 'bandra', 'team_1');
   });
 
   it('rejects counts without an active organization', async () => {
@@ -171,7 +181,10 @@ describe('leadsService.create', () => {
   it('validates organization membership, budget taxonomy, and referred project org', async () => {
     vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(true);
-    vi.mocked(leadsRepository.findProjectOrganization).mockResolvedValue('org_1');
+    vi.mocked(leadsRepository.findProjectBranch).mockResolvedValue({
+      organizationId: 'org_1',
+      teamId: 'team_1',
+    });
     vi.mocked(leadsRepository.create).mockResolvedValue(leadDetailRow());
 
     const result = await leadsService.create(
@@ -188,6 +201,7 @@ describe('leadsService.create', () => {
     expect(leadsRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: 'org_1',
+        teamId: 'team_1',
         budgetBandSlug: 'premium',
       }),
     );

@@ -16,6 +16,7 @@ export type LeadDetailRecord = LeadListRecord &
   Pick<
     LeadRecord,
     | 'organizationId'
+    | 'teamId'
     | 'referredProjectId'
     | 'message'
     | 'notes'
@@ -32,6 +33,7 @@ export type LeadStatusCount = {
 export type ListLeadsParams = {
   userId: string;
   activeOrgId: string;
+  activeTeamId: string;
   status?: LeadStatus;
   q?: string;
   sortBy?: 'name' | 'receivedAt' | 'budget';
@@ -42,6 +44,7 @@ export type ListLeadsParams = {
 
 export type CreateLeadParams = Omit<CreateLeadInput, 'receivedAt'> & {
   organizationId: string;
+  teamId: string;
   receivedAt?: Date;
 };
 
@@ -49,6 +52,7 @@ function leadProjection() {
   return {
     id: schema.lead.id,
     organizationId: schema.lead.organizationId,
+    teamId: schema.lead.teamId,
     referredProjectId: schema.lead.referredProjectId,
     name: schema.lead.name,
     contactNumber: schema.lead.contactNumber,
@@ -88,6 +92,7 @@ export const leadsRepository = {
           and ${schema.member.userId} = ${params.userId}
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
+      eq(schema.lead.teamId, params.activeTeamId),
       params.status ? eq(schema.lead.status, params.status) : undefined,
       leadSearchFilter(params.q),
     ].filter((filter) => filter !== undefined);
@@ -157,6 +162,7 @@ export const leadsRepository = {
       .insert(schema.lead)
       .values({
         organizationId: input.organizationId,
+        teamId: input.teamId,
         referredProjectId: input.referredProjectId ?? null,
         name: input.name,
         contactNumber: input.contactNumber,
@@ -172,14 +178,19 @@ export const leadsRepository = {
     return created;
   },
 
-  async findProjectOrganization(projectId: string): Promise<string | null> {
+  async findProjectBranch(
+    projectId: string,
+  ): Promise<{ organizationId: string; teamId: string } | null> {
     const [row] = await db
-      .select({ organizationId: schema.designerProfile.orgId })
+      .select({
+        organizationId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
+      })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, projectId))
       .limit(1);
-    return row?.organizationId ?? null;
+    return row ?? null;
   },
 
   async budgetBandExists(slug: string): Promise<boolean> {
@@ -191,7 +202,11 @@ export const leadsRepository = {
     return !!row;
   },
 
-  async countByStatus(organizationId: string, q?: string): Promise<LeadStatusCount[]> {
+  async countByStatus(
+    organizationId: string,
+    q?: string,
+    teamId?: string,
+  ): Promise<LeadStatusCount[]> {
     const projection = {
       status: schema.lead.status,
       count: sql<number>`count(*)::int`,
@@ -201,7 +216,12 @@ export const leadsRepository = {
       return db
         .select(projection)
         .from(schema.lead)
-        .where(eq(schema.lead.organizationId, organizationId))
+        .where(
+          and(
+            eq(schema.lead.organizationId, organizationId),
+            teamId ? eq(schema.lead.teamId, teamId) : undefined,
+          ),
+        )
         .groupBy(schema.lead.status);
     }
 
@@ -209,7 +229,13 @@ export const leadsRepository = {
       .select(projection)
       .from(schema.lead)
       .leftJoin(schema.project, eq(schema.lead.referredProjectId, schema.project.id))
-      .where(and(eq(schema.lead.organizationId, organizationId), leadSearchFilter(q)))
+      .where(
+        and(
+          eq(schema.lead.organizationId, organizationId),
+          teamId ? eq(schema.lead.teamId, teamId) : undefined,
+          leadSearchFilter(q),
+        ),
+      )
       .groupBy(schema.lead.status);
   },
 };

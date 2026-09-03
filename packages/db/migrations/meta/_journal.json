@@ -316,6 +316,20 @@
       "when": 1788269972546,
       "tag": "0046_slippery_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1788290913289,
+      "tag": "0047_pale_sheva_callister",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788291043351,
+      "tag": "0048_chunky_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

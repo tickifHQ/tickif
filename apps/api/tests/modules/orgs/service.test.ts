@@ -19,6 +19,7 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
   orgsRepository: {
     hasMembership: vi.fn(),
     findSoleOrganizationForUser: vi.fn(),
+    findDefaultActiveTeamForUser: vi.fn(),
     findMembershipRole: vi.fn(),
     findWorkspaceMembership: vi.fn(),
     listMembers: vi.fn(),
@@ -27,6 +28,11 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
     countActiveMembers: vi.fn(),
     freezeMembersToLimit: vi.fn(),
     restoreMembersToLimit: vi.fn(),
+    listActiveBranchesForUser: vi.fn(),
+    listBranchMembers: vi.fn(),
+    countActiveBranches: vi.fn(),
+    freezeBranchesToLimit: vi.fn(),
+    restoreBranchesToLimit: vi.fn(),
     findPendingOwnershipTransfer: vi.fn(),
     findMemberById: vi.fn(),
     createOwnershipTransfer: vi.fn(),
@@ -73,6 +79,88 @@ describe('orgsService', () => {
     expect(orgsRepository.restoreMembersToLimit).toHaveBeenCalledWith({
       organizationId: 'org-1',
       activeLimit: 1,
+    });
+  });
+
+  it('reconciles frozen branches against the current entitlement limit', async () => {
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.freezeBranchesToLimit).mockResolvedValue(['team-3']);
+    vi.mocked(orgsRepository.restoreBranchesToLimit).mockResolvedValue([]);
+    const now = new Date('2026-09-01T00:00:00.000Z');
+
+    await orgsService.reconcileBranches('org-1', now);
+
+    expect(orgsRepository.freezeBranchesToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: -1,
+      now,
+    });
+    expect(orgsRepository.restoreBranchesToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: -1,
+    });
+  });
+
+  it('returns only the caller-visible active branches with branch members', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.countActiveBranches).mockResolvedValue(1);
+    vi.mocked(orgsRepository.listActiveBranchesForUser).mockResolvedValue([
+      {
+        id: 'team-1',
+        name: 'Bengaluru',
+        createdAt: new Date('2026-09-01T00:00:00.000Z'),
+        profileId: '22222222-2222-4222-8222-222222222222',
+        profileSlug: 'studio-bengaluru',
+        projectCount: 3,
+      },
+    ]);
+    vi.mocked(orgsRepository.listBranchMembers).mockResolvedValue([
+      {
+        teamId: 'team-1',
+        userId: 'user-1',
+        name: 'Aditya',
+        email: 'aditya@example.com',
+        image: null,
+        role: 'owner',
+      },
+    ]);
+
+    await expect(
+      orgsService.listBranches({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        activeTeamId: 'team-1',
+      }),
+    ).resolves.toEqual({
+      activeTeamId: 'team-1',
+      branchUsage: 1,
+      branchLimit: -1,
+      branches: [
+        {
+          id: 'team-1',
+          name: 'Bengaluru',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          profileId: '22222222-2222-4222-8222-222222222222',
+          profileSlug: 'studio-bengaluru',
+          projectCount: 3,
+          members: [
+            {
+              userId: 'user-1',
+              name: 'Aditya',
+              email: 'aditya@example.com',
+              image: null,
+              role: 'owner',
+            },
+          ],
+        },
+      ],
     });
   });
 

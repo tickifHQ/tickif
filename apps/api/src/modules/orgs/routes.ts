@@ -3,6 +3,7 @@ import {
   createOwnershipTransferSchema,
   errorResponseSchema,
   organizationWorkspaceResponseSchema,
+  organizationBranchesResponseSchema,
   ownershipTransferIdParamSchema,
   ownershipTransferResponseSchema,
 } from '@repo/contracts';
@@ -28,6 +29,24 @@ const currentWorkspaceRoute = createRoute({
     200: {
       description: 'Active organization members, roles, and pending invitations',
       content: { 'application/json': { schema: organizationWorkspaceResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller is not a member of the active organization'),
+    422: errorJson('No active organization selected'),
+  },
+});
+
+const listBranchesRoute = createRoute({
+  method: 'get',
+  path: '/branches',
+  tags: ['Organizations'],
+  summary: 'List active branches and branch-scoped members',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'Branches visible to the current organization member',
+      content: { 'application/json': { schema: organizationBranchesResponseSchema } },
     },
     401: errorJson('Unauthorized'),
     403: errorJson('Caller is not a member of the active organization'),
@@ -97,6 +116,20 @@ export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const result = await orgsService.getCurrentWorkspace({
       userId: user.id,
       activeOrgId: c.get('session')?.activeOrganizationId ?? null,
+    });
+    return c.json(result, 200);
+  })
+  .openapi(listBranchesRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+    if (!user) throw AppError.unauthorized();
+    if (!session?.activeOrganizationId) {
+      throw AppError.unprocessable('Select an active organization');
+    }
+    const result = await orgsService.listBranches({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+      activeTeamId: session.activeTeamId ?? null,
     });
     return c.json(result, 200);
   })

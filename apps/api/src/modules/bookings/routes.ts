@@ -29,6 +29,7 @@ function caller(user: AuthVariables['user'], session: AuthVariables['session']) 
     phoneNumberVerified: user.phoneNumberVerified === true,
     isBanned: !!user.banned && (!user.banExpires || user.banExpires > new Date()),
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
   };
 }
 

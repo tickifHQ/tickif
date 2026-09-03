@@ -114,15 +114,12 @@ async function countSeats(organizationId: string): Promise<number> {
   return result?.count ?? 0;
 }
 
-/** Count branches (designer profiles) for the organization. */
+/** Count operational (unfrozen) branches for the organization. */
 async function countBranches(organizationId: string): Promise<number> {
-  // A "branch" is a designer profile / studio under the organization.
-  // Currently 1:1 (unique constraint on orgId), but future E-244 may allow multiple.
-  // This intentionally counts profiles, NOT projects — projects are unlimited.
   const [result] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(schema.designerProfile)
-    .where(eq(schema.designerProfile.orgId, organizationId));
+    .from(schema.team)
+    .where(and(eq(schema.team.organizationId, organizationId), eq(schema.team.frozen, false)));
   return result?.count ?? 0;
 }
 

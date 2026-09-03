@@ -23,6 +23,7 @@ export type BookingCaller = {
   phoneNumberVerified: boolean;
   isBanned: boolean;
   activeOrgId: string | null;
+  activeTeamId: string | null;
 };
 
 function toResponse(row: BookingViewRecord): BookingResponse {
@@ -89,6 +90,13 @@ function requireActiveOrganization(caller: BookingCaller): string {
   return caller.activeOrgId;
 }
 
+function requireActiveTeam(caller: BookingCaller): string {
+  if (!caller.activeTeamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  return caller.activeTeamId;
+}
+
 /**
  * Guard the designer-side transitions on a booking the caller has already loaded.
  *
@@ -104,6 +112,9 @@ async function assertDesignerWriteAccess(
   if (!caller.activeOrgId) throw AppError.notFound('Booking not found');
   const organizationId = caller.activeOrgId;
   if (booking.organizationId !== organizationId) {
+    throw AppError.notFound('Booking not found');
+  }
+  if (!caller.activeTeamId || booking.designerTeamId !== caller.activeTeamId) {
     throw AppError.notFound('Booking not found');
   }
   if (!(await orgsService.isWriter(caller.userId, organizationId))) {
@@ -179,11 +190,13 @@ export const bookingsService = {
   ): Promise<ListBookingsResponse> {
     assertActiveCaller(caller);
     const organizationId = requireActiveOrganization(caller);
+    const activeTeamId = requireActiveTeam(caller);
     if (!(await orgsService.isMember(caller.userId, organizationId))) {
       throw AppError.forbidden();
     }
     const { items, total } = await bookingsRepository.list({
       organizationId,
+      designerTeamId: activeTeamId,
       status: statusFilter(query.status),
       limit: query.limit,
       offset: (query.page - 1) * query.limit,

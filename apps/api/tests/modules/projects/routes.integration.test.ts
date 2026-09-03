@@ -23,6 +23,7 @@ import {
   makeProjectRoom,
   makeReview,
   makeTaxonomy,
+  makeTeam,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
@@ -938,9 +939,21 @@ describe('GET /api/projects/portfolio', () => {
       role: 'owner',
       createdAt: new Date(),
     });
+    const secondTeam = await makeTeam({ organizationId: secondOrg.id });
+    await db.insert(schema.teamMember).values({
+      id: `tm-second-${userId}`,
+      teamId: secondTeam.id,
+      userId,
+      createdAt: new Date(),
+    });
     const [secondDesigner] = await db
       .insert(schema.designerProfile)
-      .values({ orgId: secondOrg.id, displayName: 'Second Studio' })
+      .values({
+        orgId: secondOrg.id,
+        teamId: secondTeam.id,
+        slug: `second-studio-${userId}`,
+        displayName: 'Second Studio',
+      })
       .returning();
     await makeProject({ designerId: designer.id, title: 'First Org Draft', status: 'draft' });
     await makeProject({
@@ -985,6 +998,12 @@ describe('POST /api/projects', () => {
       organizationId: selectedDesigner.orgId,
       userId,
       role: 'owner',
+      createdAt: new Date(),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `tm-selected-${userId}`,
+      teamId: selectedDesigner.teamId,
+      userId,
       createdAt: new Date(),
     });
     const selectedCookie = await activateOrganization(cookie, selectedDesigner.orgId);
@@ -1422,6 +1441,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       role: 'member',
       createdAt: new Date(),
     });
+    await db.insert(schema.teamMember).values({
+      id: `team-mem-${sameOrgMember.userId}`,
+      teamId: designer.teamId,
+      userId: sameOrgMember.userId,
+      createdAt: new Date(),
+    });
     const project = await makeProject({ designerId: designer.id, status: 'published' });
 
     const res = await app.request(`/api/projects/${project.id}/duplicate`, {
@@ -1492,6 +1517,12 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       organizationId: designer.orgId,
       userId: sameOrgMember.userId,
       role: 'member',
+      createdAt: new Date(),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `team-mem-${sameOrgMember.userId}`,
+      teamId: designer.teamId,
+      userId: sameOrgMember.userId,
       createdAt: new Date(),
     });
     const project = await makeProject({ designerId: designer.id, status: 'draft' });
