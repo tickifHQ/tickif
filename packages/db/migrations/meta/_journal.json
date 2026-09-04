@@ -393,6 +393,13 @@
       "when": 1788544145217,
       "tag": "0057_closed_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1788545708834,
+      "tag": "0058_bumpy_professor_monster",
+      "breakpoints": true
     }
   ]
 }
