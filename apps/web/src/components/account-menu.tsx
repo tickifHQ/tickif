@@ -15,6 +15,7 @@ import {
   DropdownMenuGroup,
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
+import { cn } from '@repo/ui/lib/utils';
 import { ChevronDown, Settings } from 'lucide-react';
 import Link from 'next/link';
 
@@ -74,11 +75,12 @@ export function AccountMenu({
         <button
           type="button"
           aria-label={`Open account menu for ${displayName}`}
-          className={
+          className={cn(
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             showLabel
               ? 'inline-flex cursor-pointer items-center gap-0 rounded-full border border-border bg-background p-1 text-sm leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground sm:gap-2 sm:pr-3'
-              : 'inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none'
-          }
+              : 'inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none',
+          )}
         >
           <Avatar className="size-8">
             <InitialsAvatar seed={resolvedAvatarSeed} fallbackSeed="Your name" alt="" size={32} />

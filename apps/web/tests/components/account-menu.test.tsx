@@ -96,18 +96,28 @@ describe('AccountMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Profile & settings' })).not.toBeInTheDocument();
   });
 
-  it('supports opening the designer menu and dismissing it with the keyboard', async () => {
-    mock.session = { user: { name: 'Alice', email: null } };
-    const user = userEvent.setup();
-    render(<AccountMenu showProfileSettings />);
-    const trigger = screen.getByRole('button', { name: /open account menu for alice/i });
-    trigger.focus();
-    await user.keyboard('{ArrowDown}');
-    expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveFocus();
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-  });
+  it.each([true, false])(
+    'shows tab focus and supports keyboard navigation with showLabel=%s',
+    async (showLabel) => {
+      mock.session = { user: { name: 'Alice', email: null } };
+      const user = userEvent.setup();
+      render(<AccountMenu showProfileSettings showLabel={showLabel} />);
+      const trigger = screen.getByRole('button', { name: /open account menu for alice/i });
+      await user.tab();
+      expect(trigger).toHaveFocus();
+      expect(trigger).toHaveClass(
+        'focus-visible:ring-2',
+        'focus-visible:ring-ring',
+        'focus-visible:ring-offset-2',
+        'focus-visible:ring-offset-background',
+      );
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    },
+  );
 
   it('still redirects to login even when signOut rejects', async () => {
     mock.session = { user: { name: 'Alice', email: null } };
