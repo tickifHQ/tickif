@@ -102,6 +102,11 @@ describe('corporate branch persistence', () => {
       name: 'Pune Lead',
       contactNumber: '+919800000002',
     });
+    const teammate = await makeUser({ email: 'branch-teammate@example.com' });
+    await db.insert(schema.teamMember).values([
+      { id: 'teammate-mumbai', teamId: firstTeam.id, userId: teammate.id },
+      { id: 'teammate-pune', teamId: secondTeam.id, userId: teammate.id },
+    ]);
 
     const projects = await projectsRepository.list({
       userId: user.id,
@@ -121,6 +126,27 @@ describe('corporate branch persistence', () => {
 
     expect(projects.items.map(({ title }) => title)).toEqual(['Mumbai Home']);
     expect(leads.items.map(({ name }) => name)).toEqual(['Mumbai Lead']);
+
+    const projectRollup = await projectsRepository.list({
+      userId: user.id,
+      activeOrgId: organization.id,
+      activeTeamId: null,
+      limit: 20,
+      offset: 0,
+      sort: 'title',
+    });
+    const leadRollup = await leadsRepository.list({
+      userId: user.id,
+      activeOrgId: organization.id,
+      activeTeamId: null,
+      limit: 20,
+      offset: 0,
+      sortBy: 'name',
+      sortOrder: 'asc',
+    });
+    expect(projectRollup.items.map(({ title }) => title)).toEqual(['Mumbai Home', 'Pune Home']);
+    expect(projectRollup.total).toBe(2);
+    expect(leadRollup.items.map(({ name }) => name)).toEqual(['Mumbai Lead', 'Pune Lead']);
   });
 
   it('creates branch profiles for Corporate and gives Hobby a tier error', async () => {
