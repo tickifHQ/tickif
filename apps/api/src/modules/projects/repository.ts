@@ -420,9 +420,12 @@ export const projectsRepository = {
           and ${schema.member.userId} = ${params.userId}
           and ${schema.member.frozen} = false
       )`,
-      params.activeTeamId
-        ? eq(schema.designerProfile.teamId, params.activeTeamId)
-        : undefined,
+      sql<boolean>`exists (
+        select 1 from ${schema.team}
+        where ${schema.team.id} = ${schema.designerProfile.teamId}
+          and ${schema.team.frozen} = false
+      )`,
+      params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,
       params.activeTeamId
         ? sql<boolean>`exists (
             select 1 from ${schema.teamMember}
@@ -505,6 +508,13 @@ export const projectsRepository = {
             where ${schema.member.organizationId} = ${schema.designerProfile.orgId}
               and ${schema.member.userId} = ${params.userId}
               and ${schema.member.frozen} = false
+          )`
+        : undefined,
+      params.activeOrgId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.team}
+            where ${schema.team.id} = ${schema.designerProfile.teamId}
+              and ${schema.team.frozen} = false
           )`
         : undefined,
       params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,

@@ -70,6 +70,7 @@ export async function removeBranchWithReassignment(input: {
         organizationId: schema.team.organizationId,
         frozen: schema.team.frozen,
         profileId: schema.designerProfile.id,
+        profileStatus: schema.designerProfile.status,
       })
       .from(schema.team)
       .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
@@ -91,7 +92,8 @@ export async function removeBranchWithReassignment(input: {
       !target ||
       source.id === target.id ||
       target.organizationId !== input.organizationId ||
-      target.frozen
+      target.frozen ||
+      target.profileStatus !== 'active'
     ) {
       return BRANCH_REMOVAL_RESULT.INVALID_TARGET;
     }
