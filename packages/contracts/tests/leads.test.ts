@@ -50,6 +50,9 @@ describe('lead contracts', () => {
   });
 
   it('validates status updates', () => {
+    expect(updateLeadSchema.safeParse({ assignedMemberId: 'member_1' }).success).toBe(true);
+    expect(updateLeadSchema.safeParse({ assignedMemberId: null }).success).toBe(true);
+    expect(updateLeadSchema.safeParse({ assignedMemberId: '' }).success).toBe(false);
     expect(updateLeadSchema.safeParse({ status: 'spam' }).success).toBe(true);
     expect(updateLeadSchema.safeParse({ notes: 'Call again on Friday.' }).success).toBe(true);
     expect(updateLeadSchema.safeParse({ notes: null }).success).toBe(true);

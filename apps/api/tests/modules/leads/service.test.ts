@@ -14,6 +14,7 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
     create: vi.fn(),
     findProjectBranch: vi.fn(),
     budgetBandExists: vi.fn(),
+    findActiveMemberIds: vi.fn(),
     countByStatus: vi.fn(),
   },
 }));
@@ -40,6 +41,7 @@ const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord =>
   referredProjectTitle: 'Bandra Apartment',
   contactNumber: '+919800000001',
   budgetBandSlug: 'premium',
+  assignedMemberId: null,
   status: 'new',
   receivedAt: new Date('2026-06-26T10:00:00.000Z'),
   ...overrides,
@@ -61,6 +63,7 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
+  vi.mocked(leadsRepository.findActiveMemberIds).mockResolvedValue(['member_1']);
 });
 
 describe('leadsService.list', () => {
@@ -103,6 +106,18 @@ describe('leadsService.list', () => {
     ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
+
+  it('filters assigned access by every active membership belonging to the caller', async () => {
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    vi.mocked(leadsRepository.findActiveMemberIds).mockResolvedValue(['member_1', 'member_1b']);
+    vi.mocked(leadsRepository.list).mockResolvedValue({ items: [], total: 0 });
+
+    await leadsService.list({ status: 'all', page: 1, limit: 12 }, caller);
+
+    expect(leadsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ assignedMemberIds: ['member_1', 'member_1b'] }),
+    );
+  });
 });
 
 describe('leadsService.getById', () => {
@@ -144,7 +159,12 @@ describe('leadsService.counts', () => {
       closed: 2,
       spam: 0,
     });
-    expect(leadsRepository.countByStatus).toHaveBeenCalledWith('org_1', 'bandra', 'team_1');
+    expect(leadsRepository.countByStatus).toHaveBeenCalledWith(
+      'org_1',
+      'bandra',
+      'team_1',
+      undefined,
+    );
   });
 
   it('rejects counts without an active organization', async () => {
@@ -167,12 +187,48 @@ describe('leadsService.update', () => {
       caller,
     );
 
-    expect(leadsRepository.update).toHaveBeenCalledWith(leadDetailRow().id, {
+    expect(leadsRepository.update).toHaveBeenCalledWith(leadDetailRow().id, 'org_1', {
       notes: 'Call again on Friday.',
     });
     expect(result).toMatchObject({
       message: 'Need a renovation',
       notes: 'Call again on Friday.',
+    });
+  });
+
+  it('allows full-access callers to assign an active member in the same organization', async () => {
+    const updated = leadDetailRow({ assignedMemberId: 'member_2' });
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(leadsRepository.update).mockResolvedValue(updated);
+
+    await expect(
+      leadsService.update(leadDetailRow().id, { assignedMemberId: 'member_2' }, caller),
+    ).resolves.toMatchObject({ assignedMemberId: 'member_2' });
+  });
+
+  it('rejects assignees that are not active members of the organization', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(leadsRepository.update).mockResolvedValue('invalid_assignee');
+
+    await expect(
+      leadsService.update(leadDetailRow().id, { assignedMemberId: 'member_2' }, caller),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('limits Members to assigned reads without granting lead mutations', async () => {
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'member_1' }),
+    );
+    await expect(
+      leadsService.update(leadDetailRow().id, { notes: 'Follow up' }, caller),
+    ).rejects.toMatchObject({ status: 403 });
+
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'member_2' }),
+    );
+    await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
+      status: 404,
     });
   });
 });

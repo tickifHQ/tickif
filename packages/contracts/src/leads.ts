@@ -36,6 +36,7 @@ export const leadListItemSchema = z
     referredProjectTitle: z.string().nullable(),
     contactNumber: z.string(),
     budgetBand: z.string().nullable(),
+    assignedMemberId: z.string().min(1).nullable(),
     status: leadStatus,
     receivedAt: z.string().datetime(),
   })
@@ -81,18 +82,25 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 
 export const updateLeadSchema = z
   .object({
+    assignedMemberId: z.string().min(1).nullable().optional(),
     status: leadStatus.optional(),
     notes: z
       .string()
       .trim()
       .max(2000)
       .nullable()
-      .optional()
-      .transform((value) => (value === '' ? null : value)),
+      .transform((value) => (value === '' ? null : value))
+      .optional(),
   })
-  .refine((input) => input.status !== undefined || input.notes !== undefined, {
-    message: 'At least one field is required',
-  })
+  .refine(
+    (input) =>
+      input.assignedMemberId !== undefined ||
+      input.status !== undefined ||
+      input.notes !== undefined,
+    {
+      message: 'At least one field is required',
+    },
+  )
   .meta({ id: 'UpdateLead' });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 

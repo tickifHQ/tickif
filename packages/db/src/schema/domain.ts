@@ -32,7 +32,7 @@ import {
   VERIFICATION_REVIEW_ACTION_VALUES,
   OWNERSHIP_TRANSFER_STATUS_VALUES,
 } from '@repo/contracts';
-import { user, organization, team } from './auth.js';
+import { user, organization, member, team } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -580,6 +580,9 @@ export const lead = pgTable(
     referredProjectId: uuid('referred_project_id').references(() => project.id, {
       onDelete: 'set null',
     }),
+    assignedMemberId: text('assigned_member_id').references(() => member.id, {
+      onDelete: 'set null',
+    }),
     name: text('name').notNull(),
     contactNumber: text('contact_number').notNull(),
     budgetBandSlug: text('budget_band_slug'),
@@ -595,6 +598,7 @@ export const lead = pgTable(
     index('lead_organization_idx').on(t.organizationId),
     index('lead_team_idx').on(t.teamId),
     index('lead_referred_project_idx').on(t.referredProjectId),
+    index('lead_assigned_member_idx').on(t.assignedMemberId),
     index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
     index('lead_team_status_received_idx').on(t.teamId, t.status, t.receivedAt),
   ],
