@@ -45,8 +45,22 @@ vi.mock('../../../src/modules/orgs/repository.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/orgs/branch-removal-repository.js', () => ({
+  BRANCH_REMOVAL_RESULT: {
+    REMOVED: 'removed',
+    NOT_FOUND: 'not_found',
+    FORBIDDEN: 'forbidden',
+    INVALID_TARGET: 'invalid_target',
+    FINAL_BRANCH: 'final_branch',
+    REVIEW_CONFLICT: 'review_conflict',
+  },
+  removeBranchWithReassignment: vi.fn(),
+}));
+
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { orgsRepository } = await import('../../../src/modules/orgs/repository.js');
+const { removeBranchWithReassignment } =
+  await import('../../../src/modules/orgs/branch-removal-repository.js');
 
 describe('orgsService', () => {
   beforeEach(() => {
@@ -60,6 +74,47 @@ describe('orgsService', () => {
     vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
 
     await expect(orgsService.isMember('user-1', 'org-1')).resolves.toBe(true);
+  });
+
+  it('returns the safe branch reassignment result', async () => {
+    vi.mocked(removeBranchWithReassignment).mockResolvedValue({
+      outcome: 'removed',
+      removedBranchId: 'branch-old',
+      targetBranchId: 'branch-new',
+      reassignedProjectCount: 3,
+    });
+
+    await expect(
+      orgsService.removeBranch({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        branchId: 'branch-old',
+        targetBranchId: 'branch-new',
+      }),
+    ).resolves.toEqual({
+      removedBranchId: 'branch-old',
+      targetBranchId: 'branch-new',
+      reassignedProjectCount: 3,
+    });
+  });
+
+  it.each([
+    ['not_found', 404],
+    ['forbidden', 403],
+    ['invalid_target', 422],
+    ['final_branch', 409],
+    ['review_conflict', 409],
+  ] as const)('maps branch removal %s to HTTP %s', async (outcome, status) => {
+    vi.mocked(removeBranchWithReassignment).mockResolvedValue(outcome);
+
+    await expect(
+      orgsService.removeBranch({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        branchId: 'branch-old',
+        targetBranchId: 'branch-new',
+      }),
+    ).rejects.toMatchObject({ status });
   });
 
   it('resolves an organization roll-up session without selecting a branch', async () => {
@@ -102,14 +157,19 @@ describe('orgsService', () => {
     ).rejects.toMatchObject({ status: 403 });
   });
 
-  it('repairs a stale organization session to personal context', async () => {
+  it('repairs a stale branch session to organization roll-up context', async () => {
     vi.mocked(orgsRepository.isValidOrganizationContext).mockResolvedValue(false);
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
 
     await expect(orgsService.resolveSessionContext('user-1', 'org-1', 'team-1')).resolves.toEqual({
-      kind: 'personal',
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
     });
     expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
-      kind: 'personal',
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
     });
   });
 

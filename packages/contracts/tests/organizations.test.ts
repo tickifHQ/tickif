@@ -8,9 +8,17 @@ import {
   placeOrganizationRetentionHoldSchema,
   requestOrganizationDeletionSchema,
   organizationWorkspaceResponseSchema,
+  removeOrganizationBranchSchema,
 } from '../src/organizations.js';
 
 describe('organization contracts', () => {
+  it('requires a branch reassignment target', () => {
+    expect(removeOrganizationBranchSchema.parse({ targetBranchId: 'branch-2' })).toEqual({
+      targetBranchId: 'branch-2',
+    });
+    expect(removeOrganizationBranchSchema.safeParse({}).success).toBe(false);
+  });
+
   it('supports personal, branch, and organization roll-up contexts', () => {
     expect(activeContextSchema.parse({ kind: 'personal' })).toEqual({ kind: 'personal' });
     expect(

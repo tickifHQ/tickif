@@ -396,3 +396,24 @@ export const organizationBranchesResponseSchema = z
   })
   .meta({ id: 'OrganizationBranchesResponse' });
 export type OrganizationBranchesResponse = z.infer<typeof organizationBranchesResponseSchema>;
+
+export const removeOrganizationBranchParamsSchema = z
+  .object({ branchId: z.string().min(1) })
+  .strict();
+
+export const removeOrganizationBranchSchema = z
+  .object({ targetBranchId: z.string().min(1) })
+  .strict()
+  .meta({ id: 'RemoveOrganizationBranch' });
+export type RemoveOrganizationBranchInput = z.infer<typeof removeOrganizationBranchSchema>;
+
+export const removeOrganizationBranchResponseSchema = z
+  .object({
+    removedBranchId: z.string().min(1),
+    targetBranchId: z.string().min(1),
+    reassignedProjectCount: z.number().int().min(0),
+  })
+  .meta({ id: 'RemoveOrganizationBranchResponse' });
+export type RemoveOrganizationBranchResponse = z.infer<
+  typeof removeOrganizationBranchResponseSchema
+>;

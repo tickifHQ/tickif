@@ -51,6 +51,14 @@ function createBranch(cookie: string, organizationId: string, name: string) {
   });
 }
 
+function removeBranch(cookie: string, branchId: string, targetBranchId: string) {
+  return app.request(`/api/orgs/branches/${branchId}`, {
+    method: 'DELETE',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ targetBranchId }),
+  });
+}
+
 describe('corporate branch persistence', () => {
   beforeEach(async () => {
     await truncateAll();
@@ -117,11 +125,7 @@ describe('corporate branch persistence', () => {
 
   it('creates branch profiles for Corporate and gives Hobby a tier error', async () => {
     const corporate = await makeOwnerSession('corporate');
-    const created = await createBranch(
-      corporate.cookie,
-      corporate.organization.id,
-      'Bengaluru',
-    );
+    const created = await createBranch(corporate.cookie, corporate.organization.id, 'Bengaluru');
     expect(created.status).toBe(200);
     const team = (await created.json()) as { id: string };
     const [profile] = await db
@@ -165,6 +169,99 @@ describe('corporate branch persistence', () => {
       .from(schema.project)
       .where(eq(schema.project.id, project.id));
     expect(persisted?.id).toBe(project.id);
+  });
+
+  it('removes a branch through the safe endpoint and reassigns its projects and leads', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const [target] = await db
+      .select({ id: schema.team.id, profileId: schema.designerProfile.id })
+      .from(schema.team)
+      .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(eq(schema.team.organizationId, corporate.organization.id))
+      .limit(1);
+    const created = await createBranch(corporate.cookie, corporate.organization.id, 'Pune');
+    const source = (await created.json()) as { id: string };
+    const [sourceProfile] = await db
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.teamId, source.id));
+    const project = await makeProject({ designerId: sourceProfile!.id, status: 'draft' });
+    const lead = await leadsRepository.create({
+      organizationId: corporate.organization.id,
+      teamId: source.id,
+      name: 'Pune Lead',
+      contactNumber: '+919800000003',
+    });
+
+    const response = await removeBranch(corporate.cookie, source.id, target!.id);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      removedBranchId: source.id,
+      targetBranchId: target!.id,
+      reassignedProjectCount: 1,
+    });
+    const [movedProject] = await db
+      .select({ designerId: schema.project.designerId })
+      .from(schema.project)
+      .where(eq(schema.project.id, project.id));
+    const [movedLead] = await db
+      .select({ teamId: schema.lead.teamId })
+      .from(schema.lead)
+      .where(eq(schema.lead.id, lead.id));
+    expect(movedProject?.designerId).toBe(target!.profileId);
+    expect(movedLead?.teamId).toBe(target!.id);
+    expect(await db.select().from(schema.team).where(eq(schema.team.id, source.id))).toHaveLength(
+      0,
+    );
+  });
+
+  it('does not remove the final organization branch', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const [onlyBranch] = await db
+      .select({ id: schema.team.id })
+      .from(schema.team)
+      .where(eq(schema.team.organizationId, corporate.organization.id));
+
+    const response = await removeBranch(corporate.cookie, onlyBranch!.id, 'missing-target');
+
+    expect(response.status).toBe(409);
+    expect(
+      await db.select().from(schema.team).where(eq(schema.team.id, onlyBranch!.id)),
+    ).toHaveLength(1);
+  });
+
+  it('rolls back removal when branch reviews would violate one-review-per-customer', async () => {
+    const corporate = await makeOwnerSession('corporate');
+    const [target] = await db
+      .select({ id: schema.team.id, profileId: schema.designerProfile.id })
+      .from(schema.team)
+      .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(eq(schema.team.organizationId, corporate.organization.id));
+    const created = await createBranch(corporate.cookie, corporate.organization.id, 'Pune');
+    const source = (await created.json()) as { id: string };
+    const [sourceProfile] = await db
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.teamId, source.id));
+    const customer = await makeUser({ email: 'branch-reviewer@example.com' });
+    await db.insert(schema.review).values([
+      { designerProfileId: target!.profileId, authorUserId: customer.id, rating: 5 },
+      { designerProfileId: sourceProfile!.id, authorUserId: customer.id, rating: 4 },
+    ]);
+
+    const response = await removeBranch(corporate.cookie, source.id, target!.id);
+
+    expect(response.status).toBe(409);
+    expect(await db.select().from(schema.team).where(eq(schema.team.id, source.id))).toHaveLength(
+      1,
+    );
+    expect(
+      await db
+        .select()
+        .from(schema.review)
+        .where(eq(schema.review.designerProfileId, sourceProfile!.id)),
+    ).toHaveLength(1);
   });
 
   it('freezes newest branches first and keeps published projects public', async () => {

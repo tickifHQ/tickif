@@ -8,6 +8,9 @@ import {
   errorResponseSchema,
   organizationWorkspaceResponseSchema,
   organizationBranchesResponseSchema,
+  removeOrganizationBranchParamsSchema,
+  removeOrganizationBranchResponseSchema,
+  removeOrganizationBranchSchema,
   ownershipTransferIdParamSchema,
   ownershipTransferResponseSchema,
 } from '@repo/contracts';
@@ -63,6 +66,33 @@ const listBranchesRoute = createRoute({
     502: errorJson('Context session update failed'),
     403: errorJson('Caller is not a member of the active organization'),
     422: errorJson('No active organization selected'),
+  },
+});
+
+const removeBranchRoute = createRoute({
+  method: 'delete',
+  path: '/branches/{branchId}',
+  tags: ['Organizations'],
+  summary: 'Remove a branch and reassign its operational data',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireOrganizationContext] as const,
+  request: {
+    params: removeOrganizationBranchParamsSchema,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: removeOrganizationBranchSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Branch removed and its projects reassigned',
+      content: { 'application/json': { schema: removeOrganizationBranchResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Only the active organization Owner can remove a branch'),
+    404: errorJson('Branch not found'),
+    409: errorJson('Final branch or review data conflict'),
+    422: errorJson('Invalid reassignment branch'),
   },
 });
 
@@ -182,9 +212,7 @@ const cancelTransferRoute = transferActionRoute('cancel');
 export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
-  .openapi(getContextRoute, async (c) =>
-    c.json({ context: await resolveActiveContext(c) }, 200),
-  )
+  .openapi(getContextRoute, async (c) => c.json({ context: await resolveActiveContext(c) }, 200))
   .openapi(setContextRoute, async (c) => {
     const user = c.get('user')!;
     const context = await orgsService.resolveContextSelection(user.id, c.req.valid('json'));
@@ -229,6 +257,21 @@ export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       userId: user.id,
       organizationId: session.activeOrganizationId,
       activeTeamId: session.activeTeamId ?? null,
+    });
+    return c.json(result, 200);
+  })
+  .openapi(removeBranchRoute, async (c) => {
+    const user = c.get('user');
+    const session = c.get('session');
+    if (!user) throw AppError.unauthorized();
+    if (!session?.activeOrganizationId) {
+      throw AppError.unprocessable('Select an active organization');
+    }
+    const result = await orgsService.removeBranch({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+      branchId: c.req.valid('param').branchId,
+      targetBranchId: c.req.valid('json').targetBranchId,
     });
     return c.json(result, 200);
   })

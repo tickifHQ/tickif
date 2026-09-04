@@ -16,6 +16,7 @@ import {
   type OwnershipTransferResponse,
   type ActiveContext,
   type SetActiveContext,
+  type RemoveOrganizationBranchResponse,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
 import { escapeHtml, sendEmail } from '@repo/auth/email';
@@ -27,6 +28,10 @@ import {
   type OwnershipTransferRecord,
   type DbTransaction,
 } from './repository.js';
+import {
+  BRANCH_REMOVAL_RESULT,
+  removeBranchWithReassignment,
+} from './branch-removal-repository.js';
 
 const WRITE_ROLES = new Set<OrganizationMemberRole>([
   ORGANIZATION_MEMBER_ROLE.OWNER,
@@ -211,10 +216,16 @@ export const orgsService = {
           teamId: activeTeamId,
         };
       }
-    } else if (await orgsRepository.hasMembership(userId, activeOrganizationId)) {
-      return { kind: 'organization', organizationId: activeOrganizationId, teamId: null };
     }
-
+    if (await orgsRepository.hasMembership(userId, activeOrganizationId)) {
+      const rollup = {
+        kind: 'organization' as const,
+        organizationId: activeOrganizationId,
+        teamId: null,
+      };
+      if (activeTeamId) await orgsRepository.saveContextPreference(userId, rollup);
+      return rollup;
+    }
     const personal = { kind: 'personal' } as const;
     await orgsRepository.saveContextPreference(userId, personal);
     return personal;
@@ -355,6 +366,38 @@ export const orgsService = {
           })),
       })),
     };
+  },
+
+  async removeBranch(input: {
+    userId: string;
+    organizationId: string;
+    branchId: string;
+    targetBranchId: string;
+  }): Promise<RemoveOrganizationBranchResponse> {
+    const result = await removeBranchWithReassignment(input);
+    if (typeof result !== 'string') {
+      return {
+        removedBranchId: result.removedBranchId,
+        targetBranchId: result.targetBranchId,
+        reassignedProjectCount: result.reassignedProjectCount,
+      };
+    }
+    switch (result) {
+      case BRANCH_REMOVAL_RESULT.NOT_FOUND:
+        throw AppError.notFound('Branch not found');
+      case BRANCH_REMOVAL_RESULT.FORBIDDEN:
+        throw AppError.forbidden('Only the active organization Owner can remove a branch');
+      case BRANCH_REMOVAL_RESULT.FINAL_BRANCH:
+        throw AppError.conflict('The final organization branch cannot be removed');
+      case BRANCH_REMOVAL_RESULT.REVIEW_CONFLICT:
+        throw AppError.conflict(
+          'The selected branches have reviews from the same customer and cannot be combined',
+        );
+      case BRANCH_REMOVAL_RESULT.INVALID_TARGET:
+        throw AppError.unprocessable(
+          'Select a different active branch from this organization as the reassignment target',
+        );
+    }
   },
 
   async getCurrentWorkspace(input: {
