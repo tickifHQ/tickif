@@ -19,8 +19,7 @@ type CurrentDesignerProfileResult =
   | { status: 'unauthenticated' | 'missing-active-organization' | 'forbidden' | 'unavailable' };
 
 export type ProfileCompletionResult =
-  | { ok: true; data: ProfileCompletionResponse }
-  | { ok: false; data: null; message: string };
+  { ok: true; data: ProfileCompletionResponse } | { ok: false; data: null; message: string };
 
 const fetchCurrentDesignerProfile = cache(async (): Promise<CurrentDesignerProfileResult> => {
   const cookie = await getRequestCookie();
@@ -51,7 +50,7 @@ export async function requireCurrentDesignerProfile(): Promise<CurrentProfileRes
   if (result.status !== 'ok') {
     if (result.status === 'unauthenticated') redirect('/login');
     if (result.status === 'missing-active-organization') redirect('/designer/select-studio');
-    if (result.status === 'forbidden') redirect('/unauthorized');
+    if (result.status === 'forbidden') redirect('/designer/manage-membership');
     throw new Error('Unable to load the active designer organization');
   }
   return result.data;
