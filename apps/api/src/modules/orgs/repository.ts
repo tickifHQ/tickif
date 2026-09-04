@@ -1,5 +1,14 @@
-import { and, asc, desc, eq, inArray, lt, lte, max, sql } from 'drizzle-orm';
-import { db, schema } from '@repo/db';
+import { and, asc, desc, eq, inArray, lte, max, sql } from 'drizzle-orm';
+import {
+  db,
+  schema,
+  expirePendingInvitations,
+  expirePendingOwnershipTransfers,
+  freezeMembersToLimitOnTx,
+  restoreMembersToLimitOnTx,
+  selectMemberIdsToFreeze,
+} from '@repo/db';
+import type { DbTransaction } from '@repo/db';
 import type { ActiveContext, OwnershipTransferStatus } from '@repo/contracts';
 
 export type OrganizationSummaryRecord = Pick<
@@ -18,24 +27,8 @@ export type OrganizationInvitationRecord = Pick<
   'id' | 'email' | 'role' | 'status' | 'createdAt' | 'expiresAt'
 >;
 
-type ActiveMemberFreezeCandidate = Pick<
-  typeof schema.member.$inferSelect,
-  'id' | 'role' | 'createdAt'
->;
-
-export function selectMemberIdsToFreeze(
-  activeMembersNewestFirst: readonly ActiveMemberFreezeCandidate[],
-  activeLimit: number,
-): string[] {
-  const freezeCount = Math.max(0, activeMembersNewestFirst.length - activeLimit);
-  const preservedOwnerId = [...activeMembersNewestFirst]
-    .reverse()
-    .find(({ role }) => role === 'owner')?.id;
-  return activeMembersNewestFirst
-    .filter(({ id }) => id !== preservedOwnerId)
-    .slice(0, freezeCount)
-    .map(({ id }) => id);
-}
+export { selectMemberIdsToFreeze };
+export type { DbTransaction };
 
 export type OwnershipTransferRecord = typeof schema.ownershipTransferRequest.$inferSelect;
 
@@ -191,8 +184,9 @@ export const orgsRepository = {
       .where(eq(schema.member.organizationId, organizationId));
   },
 
-  async findOrganizationPlan(organizationId: string) {
-    const [row] = await db
+  async findOrganizationPlan(organizationId: string, tx?: DbTransaction) {
+    const executor = tx ?? db;
+    const [row] = await executor
       .select({
         tier: schema.subscription.planTier,
         state: schema.subscription.subscriptionState,
@@ -345,84 +339,22 @@ export const orgsRepository = {
     organizationId: string;
     activeLimit: number;
     now: Date;
+    /** Run inside a caller-provided transaction (E-239 atomic restore). */
+    tx?: DbTransaction;
   }): Promise<string[]> {
     if (input.activeLimit < 0) return [];
-
-    return db.transaction(async (tx) => {
-      const activeMembers = await tx
-        .select({
-          id: schema.member.id,
-          role: schema.member.role,
-          createdAt: schema.member.createdAt,
-        })
-        .from(schema.member)
-        .where(
-          and(
-            eq(schema.member.organizationId, input.organizationId),
-            eq(schema.member.frozen, false),
-          ),
-        )
-        .orderBy(desc(schema.member.createdAt), desc(schema.member.id))
-        .for('update');
-      const ids = selectMemberIdsToFreeze(activeMembers, input.activeLimit);
-      if (ids.length === 0) return [];
-
-      const [rankRow] = await tx
-        .select({ rank: max(schema.member.freezeRank) })
-        .from(schema.member)
-        .where(eq(schema.member.organizationId, input.organizationId));
-      const startingRank = (rankRow?.rank ?? 0) + 1;
-      for (const [index, id] of ids.entries()) {
-        await tx
-          .update(schema.member)
-          .set({ frozen: true, frozenAt: input.now, freezeRank: startingRank + index })
-          .where(and(eq(schema.member.id, id), eq(schema.member.frozen, false)));
-      }
-      return ids;
-    });
+    const run = (tx: DbTransaction) => freezeMembersToLimitOnTx(tx, input);
+    return input.tx ? run(input.tx) : db.transaction(run);
   },
 
   async restoreMembersToLimit(input: {
     organizationId: string;
     activeLimit: number;
+    /** Run inside a caller-provided transaction (E-239 atomic restore). */
+    tx?: DbTransaction;
   }): Promise<string[]> {
-    return db.transaction(async (tx) => {
-      const [activeRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.member)
-        .where(
-          and(
-            eq(schema.member.organizationId, input.organizationId),
-            eq(schema.member.frozen, false),
-          ),
-        );
-      const capacity =
-        input.activeLimit < 0
-          ? Number.MAX_SAFE_INTEGER
-          : Math.max(0, input.activeLimit - (activeRow?.count ?? 0));
-      if (capacity === 0) return [];
-
-      const frozenMembers = await tx
-        .select({ id: schema.member.id })
-        .from(schema.member)
-        .where(
-          and(
-            eq(schema.member.organizationId, input.organizationId),
-            eq(schema.member.frozen, true),
-          ),
-        )
-        .orderBy(asc(schema.member.freezeRank), asc(schema.member.id))
-        .limit(capacity)
-        .for('update');
-      const ids = frozenMembers.map(({ id }) => id);
-      if (ids.length === 0) return [];
-
-      await tx
-        .update(schema.member)
-        .set({ frozen: false, frozenAt: null, freezeRank: null })
-        .where(inArray(schema.member.id, ids));
-      return ids;
-    });
+    const run = (tx: DbTransaction) => restoreMembersToLimitOnTx(tx, input);
+    return input.tx ? run(input.tx) : db.transaction(run);
   },
 
   async listInvitations(organizationId: string): Promise<OrganizationInvitationRecord[]> {
@@ -441,12 +373,8 @@ export const orgsRepository = {
   },
 
   async expireInvitations(now: Date): Promise<string[]> {
-    const rows = await db
-      .update(schema.invitation)
-      .set({ status: 'expired' })
-      .where(and(eq(schema.invitation.status, 'pending'), lt(schema.invitation.expiresAt, now)))
-      .returning({ id: schema.invitation.id });
-    return rows.map(({ id }) => id);
+    // Shared with the E-239 worker sweep via @repo/db so both run identical logic.
+    return expirePendingInvitations(now);
   },
 
   async findMemberById(organizationId: string, memberId: string) {
@@ -656,31 +584,7 @@ export const orgsRepository = {
   },
 
   async expireOwnershipTransfers(now: Date): Promise<string[]> {
-    return db.transaction(async (tx) => {
-      const rows = await tx
-        .update(schema.ownershipTransferRequest)
-        .set({ status: 'expired', resolvedAt: now, updatedAt: now })
-        .where(
-          and(
-            eq(schema.ownershipTransferRequest.status, 'pending'),
-            lt(schema.ownershipTransferRequest.expiresAt, now),
-          ),
-        )
-        .returning({
-          id: schema.ownershipTransferRequest.id,
-          initiatorUserId: schema.ownershipTransferRequest.initiatorUserId,
-        });
-      if (rows.length > 0) {
-        await tx.insert(schema.ownershipTransferAuditEvent).values(
-          rows.map((row) => ({
-            transferId: row.id,
-            status: 'expired' as const,
-            actorUserId: row.initiatorUserId,
-            createdAt: now,
-          })),
-        );
-      }
-      return rows.map(({ id }) => id);
-    });
+    // Shared with the E-239 worker sweep via @repo/db so both run identical logic.
+    return expirePendingOwnershipTransfers(now);
   },
 };

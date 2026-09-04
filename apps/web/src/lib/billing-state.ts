@@ -61,10 +61,20 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
             paymentMethodBrand: null,
           }
         : null,
-    graceDaysRemaining: null,
-    lockedDaysRemaining: null,
+    graceDaysRemaining: sub.graceDaysRemaining,
+    lockedDaysRemaining: sub.lockedDaysRemaining,
     lastPaymentFailedDate: null,
-    frozenResources: [],
-    lockedAccess: null,
+    frozenResources: sub.frozenResources.map((resource) => ({
+      label: resource.label,
+      quantity: resource.count,
+      recoverable: true,
+    })),
+    lockedAccess:
+      sub.lifecycleState === 'locked'
+        ? {
+            suspended: ['Team management', 'Branch dashboards', 'Discovery priority', 'Verified badge'],
+            available: ['Public portfolio', 'Published projects', 'Existing enquiries'],
+          }
+        : null,
   };
 }

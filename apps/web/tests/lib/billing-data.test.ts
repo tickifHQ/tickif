@@ -33,6 +33,9 @@ const subscription: SubscriptionResponse = {
   seatUsage: 7,
   branchUsage: 5,
   entitlements: resolveEntitlements('corporate', 'active'),
+  graceDaysRemaining: null,
+  lockedDaysRemaining: null,
+  frozenResources: [],
 };
 
 describe('getBillingState', () => {

@@ -9,6 +9,7 @@ import {
   scheduleBookingNotificationSweep,
   scheduleGoogleReviewsSweep,
   scheduleVerificationNotificationSweep,
+  scheduleBillingLifecycleSweep,
 } from '@repo/queue';
 import { searchWriteClient } from '@repo/search';
 import {
@@ -21,6 +22,7 @@ import {
   type GoogleReviewsSweepJob,
   type SearchIndexJob,
   type VerificationEmailQueueJob,
+  type BillingLifecycleSweepJob,
 } from './connection.js';
 import { processMedia } from './jobs/media-process.js';
 import { markFailed } from './media/repository.js';
@@ -38,6 +40,8 @@ import {
   processVerificationEmail,
   processVerificationNotificationSweep,
 } from './jobs/verification-notifications.js';
+import { processBillingLifecycleSweep } from './jobs/billing-lifecycle.js';
+import { closeEntitlementCache } from './billing-lifecycle/cache.js';
 
 /**
  * Worker process. Each queue gets a Worker; handlers live under ./jobs.
@@ -114,6 +118,26 @@ const searchIndexWorker = new Worker<SearchIndexJob>(QUEUES.searchIndex, process
   connection,
   concurrency: config.SEARCH_WORKER_CONCURRENCY,
 });
+
+// E-239 plan-lapse lifecycle sweep: advances grace→locked→downgraded on
+// config-driven windows and folds org-retention (invitation expiry) into the
+// same tick. Concurrency 1 — transitions are state-guarded, no need to parallelize.
+const billingLifecycleWorker = new Worker<BillingLifecycleSweepJob>(
+  QUEUES.billingLifecycle,
+  async () => {
+    const result = await processBillingLifecycleSweep();
+    console.log(
+      `[worker] billing-lifecycle sweep: locked ${result.lockedFromGrace}, downgraded ${result.downgradedFromLocked}, invitations-expired ${result.invitationsExpired}, transfers-expired ${result.transfersExpired}, failures ${result.graceFailures + result.downgradeFailures + result.orgExpiryFailures} (grace ${result.graceFailures}, downgrade ${result.downgradeFailures}, org-expiry ${result.orgExpiryFailures})`,
+    );
+  },
+  { connection, concurrency: 1 },
+);
+billingLifecycleWorker.on('failed', (job, err) =>
+  console.error(`[worker] billing-lifecycle failed job ${job?.id}:`, err),
+);
+void scheduleBillingLifecycleSweep(config.BILLING_LIFECYCLE_SWEEP_INTERVAL_MS).catch((err) =>
+  console.error('[worker] failed to register billing-lifecycle sweep:', err),
+);
 
 // Google reviews worker + periodic sweep — only when a Places API key is set.
 let googleReviewsWorker: Worker<GoogleReviewsRefreshJob | GoogleReviewsSweepJob> | undefined;
@@ -226,7 +250,7 @@ const health = createServer((req, res) => {
 health.listen(config.WORKER_HEALTH_PORT);
 
 console.log(
-  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}", "${QUEUES.searchIndex}", "${QUEUES.verificationEmail}"; health on :${config.WORKER_HEALTH_PORT}`,
+  `[worker] listening on queues "${QUEUES.media}", "${QUEUES.sms}", "${QUEUES.searchIndex}", "${QUEUES.verificationEmail}", "${QUEUES.billingLifecycle}"; health on :${config.WORKER_HEALTH_PORT}`,
 );
 
 async function shutdown(signal: string): Promise<void> {
@@ -243,8 +267,10 @@ async function shutdown(signal: string): Promise<void> {
       smsWorker.close(),
       searchIndexWorker.close(),
       verificationEmailWorker.close(),
+      billingLifecycleWorker.close(),
       googleReviewsWorker?.close(),
     ]);
+    await closeEntitlementCache();
     await closeQueues();
   } catch (err) {
     console.error('[worker] error during shutdown:', err);

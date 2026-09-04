@@ -30,6 +30,7 @@
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
+    "ioredis": "catalog:",
     "sharp": "catalog:",
     "typesense": "catalog:"
   },
