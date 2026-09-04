@@ -133,6 +133,7 @@ describe('DesignerProjectRowActions', () => {
         JSON.stringify({
           id: '11111111-1111-4111-8111-111111111111',
           designerId: '44444444-4444-4444-8444-444444444444',
+          responsibleMemberId: null,
           title: 'Warm Walnut Family Home',
           slug: 'warm-walnut-family-home',
           description: null,
@@ -168,6 +169,7 @@ describe('DesignerProjectRowActions', () => {
         JSON.stringify({
           id: '11111111-1111-4111-8111-111111111111',
           designerId: '44444444-4444-4444-8444-444444444444',
+          responsibleMemberId: null,
           title: 'Warm Walnut Family Home',
           slug: 'warm-walnut-family-home',
           description: null,

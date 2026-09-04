@@ -674,6 +674,7 @@ describe('projectsService.assignResponsibleMember', () => {
       organizationId: 'org_1',
       teamId: 'team_1',
       status: project.status,
+      archiveReason: null,
       ownerUserId: null,
     });
     vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue(project);
@@ -701,6 +702,7 @@ describe('projectsService.assignResponsibleMember', () => {
       organizationId: 'org_1',
       teamId: 'team_1',
       status: project.status,
+      archiveReason: null,
       ownerUserId: null,
     });
     vi.mocked(orgsService.canAssignProjectResponsibility).mockResolvedValue(false);
@@ -723,6 +725,7 @@ describe('projectsService.assignResponsibleMember', () => {
       organizationId: 'org_1',
       teamId: 'team_1',
       status: project.status,
+      archiveReason: null,
       ownerUserId: null,
     });
     vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue('invalid_member');
