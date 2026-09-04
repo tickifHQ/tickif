@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { and, db, eq, schema } from '@repo/db';
-import { makeOrganization, makeUser } from '@repo/db/testing';
+import { makeOrganization, makeTeam, makeUser } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 import type { OrganizationMemberRole } from '@repo/contracts';
@@ -164,6 +164,7 @@ describe('organization privilege boundaries', () => {
 
   it('admin can invite and change non-owner roles but cannot touch Owner', async () => {
     const organization = await makeOrganization({ slug: 'escalation-admin-studio' });
+    await makeTeam({ organizationId: organization.id });
     await makeOrganizationSession({
       phone: '+919810001004',
       organizationId: organization.id,
@@ -197,7 +198,7 @@ describe('organization privilege boundaries', () => {
       organizationId: organization.id,
     });
 
-    expect(invite.status).toBe(200);
+    expect(invite.status, await invite.clone().text()).toBe(200);
     expect(promote.status).toBe(200);
   });
 });
