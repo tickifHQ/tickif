@@ -264,6 +264,8 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByText(/Team access is suspended/i)).toBeInTheDocument();
     expect(screen.getByText(/Corporate plan is retained/i)).toBeInTheDocument();
     expect(screen.getByText(/reactivate 6 of Unlimited seats/i)).toBeInTheDocument();
+    expect(screen.getByText('6 of Unlimited seats used')).toBeInTheDocument();
+    expect(screen.queryByText('6 of 1 seats used')).not.toBeInTheDocument();
     expect(screen.queryByText(/Upgrade to Corporate/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Restore access/i })).toHaveAttribute(
@@ -297,6 +299,32 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByText(/Professional\+ plan is retained/i)).toBeInTheDocument();
     expect(screen.getByText(/reactivate 1 of 1 seats/i)).toBeInTheDocument();
     expect(screen.queryByText(/Corporate plan is retained/i)).not.toBeInTheDocument();
+  });
+
+  it('directs locked non-billing roles to the Owner instead of a denied billing page', () => {
+    render(
+      <DesignerTermsRoles
+        workspace={{
+          ...ownerWorkspace,
+          currentUserRole: 'admin',
+          rbacEnabled: false,
+          canManage: false,
+          subscriptionState: 'locked',
+          capabilities: {
+            ...ownerWorkspace.capabilities,
+            billing: false,
+            manageMembers: false,
+            changeMemberRoles: false,
+          },
+          invitations: [],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(/contact your organization Owner to restore billing/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Restore access/i })).not.toBeInTheDocument();
   });
 
   it('hides member management for billing admins, members, and viewers', () => {
@@ -336,6 +364,22 @@ describe('DesignerTermsRoles', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Upgrade to Corporate to unlock team management.',
+    );
+  });
+
+  it('maps a mid-session billing lock to recovery instead of an upgrade', async () => {
+    mocks.inviteMember.mockResolvedValue({
+      data: null,
+      error: { code: 'ORGANIZATION_BILLING_LOCKED', message: 'Restore billing' },
+    });
+    const user = userEvent.setup();
+    render(<DesignerTermsRoles workspace={ownerWorkspace} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Work email' }), 'locked@example.com');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Restore billing to unlock team management.',
     );
   });
 

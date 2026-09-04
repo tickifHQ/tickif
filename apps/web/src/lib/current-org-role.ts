@@ -34,7 +34,7 @@ export async function getCurrentOrgCapabilities(): Promise<OrganizationCapabilit
   return (await getCurrentOrgWorkspace())?.capabilities ?? null;
 }
 
-/** Billing is Owner-only until E-240 introduces billing_admin end-to-end. */
-export function hasBillingAccess(role: OrganizationMemberRole | null): boolean {
-  return role === 'owner';
+/** Billing access follows the live organization capability matrix. */
+export function hasBillingAccess(capabilities: OrganizationCapabilities | null): boolean {
+  return capabilities?.billing === true;
 }

@@ -13,7 +13,8 @@ const subscribeRoute = createRoute({
   path: '/subscribe',
   tags: ['Billing'],
   summary: 'Create a new Razorpay subscription for the active organization',
-  description: 'Resolves the Razorpay plan ID server-side from the target tier. Only org owners can subscribe.',
+  description:
+    'Resolves the Razorpay plan ID server-side from the target tier. Requires organization billing access.',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -46,7 +47,7 @@ const subscribeRoute = createRoute({
       },
     },
     401: { description: 'Unauthorized' },
-    403: { description: 'Caller is not the organization owner' },
+    403: { description: 'Caller lacks organization billing access' },
     409: { description: 'Organization already has an active subscription' },
     422: { description: 'Invalid tier or billing not configured' },
   },
@@ -57,7 +58,8 @@ const changePlanRoute = createRoute({
   path: '/change-plan',
   tags: ['Billing'],
   summary: 'Change the plan for an existing Razorpay subscription',
-  description: 'Resolves the target Razorpay plan ID server-side. Only org owners can change plans.',
+  description:
+    'Resolves the target Razorpay plan ID server-side. Requires organization billing access.',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: {
@@ -83,7 +85,7 @@ const changePlanRoute = createRoute({
       },
     },
     401: { description: 'Unauthorized' },
-    403: { description: 'Caller is not the organization owner' },
+    403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Invalid tier, same plan, or billing not configured' },
   },
@@ -114,7 +116,7 @@ const cancelRoute = createRoute({
       },
     },
     401: { description: 'Unauthorized' },
-    403: { description: 'Caller is not the organization owner' },
+    403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Already on Hobby' },
   },

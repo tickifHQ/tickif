@@ -527,6 +527,37 @@ describe('organization management', () => {
     });
   });
 
+  it('returns a billing recovery error when Corporate locks mid-session', async () => {
+    const organization = await makeOrganization({ slug: 'locked-invite-studio' });
+    const owner = await makeOrganizationSession({
+      phone: '+919800004016',
+      organizationId: organization.id,
+      role: 'owner',
+    });
+    await db
+      .update(schema.subscription)
+      .set({
+        planTier: 'corporate',
+        subscriptionState: 'locked',
+        graceStartedAt: new Date('2026-08-20T00:00:00.000Z'),
+        lockedAt: new Date('2026-08-27T00:00:00.000Z'),
+        preLapseTier: 'corporate',
+      })
+      .where(eq(schema.subscription.organizationId, organization.id));
+
+    const response = await postOrganizationAction('invite-member', owner.cookie, {
+      email: 'restore@example.com',
+      role: 'member',
+      organizationId: organization.id,
+    });
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'ORGANIZATION_BILLING_LOCKED',
+      message: expect.stringMatching(/Restore billing/i),
+    });
+  });
+
   it('does not allow direct ownership grants or owner demotion', async () => {
     const organization = await makeOrganization({ slug: 'ownership-transfer-studio' });
     const owner = await makeOrganizationSession({

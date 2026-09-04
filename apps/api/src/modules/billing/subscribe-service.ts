@@ -20,7 +20,7 @@ import { orgsService } from '../orgs/service.js';
  *
  * Security:
  * - Resolves Razorpay plan ID server-side (never trusts client-supplied plan IDs)
- * - Verifies caller is the organization owner before any billing mutation
+ * - Verifies the caller has the live organization billing capability
  * - Uses DB unique constraint on organization_id for idempotency
  *
  * Does NOT handle:
@@ -31,7 +31,7 @@ import { orgsService } from '../orgs/service.js';
 
 type Caller = { userId: string; activeOrgId: string | null };
 
-async function assertOrgOwner(caller: Caller): Promise<void> {
+async function assertOrgBillingAccess(caller: Caller): Promise<void> {
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization');
   }
@@ -68,7 +68,7 @@ export const subscribeService = {
     params: { targetTier: PlanTier },
   ): Promise<{ razorpaySubscriptionId: string; shortUrl: string | null }> {
     assertBillingConfigured();
-    await assertOrgOwner(caller);
+    await assertOrgBillingAccess(caller);
 
     if (!hasPaidPlan(params.targetTier)) {
       throw AppError.unprocessable('Cannot create a Razorpay subscription for Hobby tier');
@@ -194,14 +194,14 @@ export const subscribeService = {
    * Change plan for an existing paid subscription.
    *
    * The target Razorpay plan ID is resolved server-side.
-   * Only org owners can change plans.
+   * Only callers with organization billing access can change plans.
    */
   async changePlan(
     caller: Caller,
     params: { targetTier: PlanTier },
   ): Promise<{ razorpaySubscriptionId: string }> {
     assertBillingConfigured();
-    await assertOrgOwner(caller);
+    await assertOrgBillingAccess(caller);
 
     if (!hasPaidPlan(params.targetTier)) {
       throw AppError.unprocessable('Cannot change to Hobby via Razorpay. Use cancellation.');
@@ -266,13 +266,13 @@ export const subscribeService = {
    * The local planTier is NOT changed here — E-117 will process the
    * subscription.cancelled webhook and transition to active+hobby.
    *
-   * Only org owners can cancel.
+   * Only callers with organization billing access can cancel.
    */
   async cancelSubscription(
     caller: Caller,
   ): Promise<{ razorpaySubscriptionId: string; alreadyCancelled: boolean; currentPeriodEnd: string | null }> {
     assertBillingConfigured();
-    await assertOrgOwner(caller);
+    await assertOrgBillingAccess(caller);
 
     const [subscription] = await db
       .select()

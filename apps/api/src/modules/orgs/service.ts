@@ -110,6 +110,13 @@ async function transferResponse(
 async function requireCorporateOrganization(organizationId: string): Promise<void> {
   const plan = await orgsRepository.findOrganizationPlan(organizationId);
   if (!rbacEnabled(plan.tier, plan.state)) {
+    if (plan.state === 'locked') {
+      throw new AppError(
+        'ORGANIZATION_BILLING_LOCKED',
+        'Restore billing to manage organization membership',
+        402,
+      );
+    }
     throw new AppError(
       'ORGANIZATION_RBAC_REQUIRES_CORPORATE',
       'Upgrade to Corporate to manage organization membership',

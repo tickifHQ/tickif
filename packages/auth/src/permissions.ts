@@ -133,6 +133,9 @@ export function organizationCapabilitiesForRole(
   if (options.frozen) return NO_ORGANIZATION_CAPABILITIES;
 
   if (!options.rbacEnabled) {
+    if (role === ORGANIZATION_MEMBER_ROLE.BILLING_ADMIN) {
+      return { ...NO_ORGANIZATION_CAPABILITIES, billing: true };
+    }
     return role === ORGANIZATION_MEMBER_ROLE.OWNER
       ? {
           ...NO_ORGANIZATION_CAPABILITIES,

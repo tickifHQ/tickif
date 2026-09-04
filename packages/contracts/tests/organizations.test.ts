@@ -40,6 +40,8 @@ describe('organization contracts', () => {
         currentUserRole: 'owner',
         canManage: true,
         rbacEnabled: true,
+        planTier: 'corporate',
+        subscriptionState: 'active',
         seatUsage: 1,
         seatLimit: 10,
         capabilities: {

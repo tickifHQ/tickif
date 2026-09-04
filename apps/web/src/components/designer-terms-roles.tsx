@@ -72,22 +72,37 @@ const assignableRoles = [
 // Owner is intentionally absent: Admin must not be offered Owner, and ownership
 // changes only through the two-party transfer flow (E-243), never the role menu.
 const TIER_ERROR_CODE = 'ORGANIZATION_RBAC_REQUIRES_CORPORATE';
+const BILLING_LOCKED_ERROR_CODE = 'ORGANIZATION_BILLING_LOCKED';
 const UPGRADE_MESSAGE = 'Upgrade to Corporate to unlock team management.';
+const RESTORE_MESSAGE = 'Restore billing to unlock team management.';
 
-function isTierError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
-  if (candidate.code === TIER_ERROR_CODE) return true;
-  if (candidate.status === 402) return true;
-  return (
-    typeof candidate.message === 'string' &&
-    (candidate.message.includes(TIER_ERROR_CODE) ||
-      candidate.message.includes('Upgrade to Corporate'))
-  );
+function entitlementErrorCode(
+  error: unknown,
+): typeof TIER_ERROR_CODE | typeof BILLING_LOCKED_ERROR_CODE | null {
+  if (!error || typeof error !== 'object') return null;
+  const candidate = error as { code?: unknown; message?: unknown };
+  if (candidate.code === BILLING_LOCKED_ERROR_CODE) return BILLING_LOCKED_ERROR_CODE;
+  if (candidate.code === TIER_ERROR_CODE) return TIER_ERROR_CODE;
+  if (typeof candidate.message !== 'string') return null;
+  if (
+    candidate.message.includes(BILLING_LOCKED_ERROR_CODE) ||
+    candidate.message.includes('Restore billing')
+  ) {
+    return BILLING_LOCKED_ERROR_CODE;
+  }
+  if (
+    candidate.message.includes(TIER_ERROR_CODE) ||
+    candidate.message.includes('Upgrade to Corporate')
+  ) {
+    return TIER_ERROR_CODE;
+  }
+  return null;
 }
 
 function formatMutationError(fallback: string, error: unknown): string {
-  if (isTierError(error)) return UPGRADE_MESSAGE;
+  const entitlementCode = entitlementErrorCode(error);
+  if (entitlementCode === BILLING_LOCKED_ERROR_CODE) return RESTORE_MESSAGE;
+  if (entitlementCode === TIER_ERROR_CODE) return UPGRADE_MESSAGE;
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === 'string' && message.trim()) return message;
@@ -112,12 +127,14 @@ function UpgradePrompt({
   seatLimit: suspendedSeatLimit,
   planTier,
   subscriptionState,
+  canManageBilling,
 }: {
   organizationName: string;
   seatUsage: number;
   seatLimit: number;
   planTier: OrganizationWorkspaceResponse['planTier'];
   subscriptionState: OrganizationWorkspaceResponse['subscriptionState'];
+  canManageBilling: boolean;
 }) {
   if (subscriptionState === 'locked') {
     const restorableSeats = formatSeatLimit(seatLimit(planTier, 'active'));
@@ -129,9 +146,15 @@ function UpgradePrompt({
           {planTierLabels[planTier]} plan is retained. Restore billing to reactivate {seatUsage} of{' '}
           {restorableSeats} seats with no data lost.
         </p>
-        <Button type="button" size="compact" asChild>
-          <Link href="/designer/plan-billing">Restore access</Link>
-        </Button>
+        {canManageBilling ? (
+          <Button type="button" size="compact" asChild>
+            <Link href="/designer/plan-billing">Restore access</Link>
+          </Button>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Contact your organization Owner to restore billing.
+          </p>
+        )}
       </Card>
     );
   }
@@ -143,9 +166,15 @@ function UpgradePrompt({
         {formatSeatLimit(suspendedSeatLimit)} seats used. Upgrade to Corporate to invite teammates,
         assign roles, and manage seats.
       </p>
-      <Button type="button" size="compact" asChild>
-        <Link href="/designer/plan-billing">View Corporate plans</Link>
-      </Button>
+      {canManageBilling ? (
+        <Button type="button" size="compact" asChild>
+          <Link href="/designer/plan-billing">View Corporate plans</Link>
+        </Button>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Contact your organization Owner to change plans.
+        </p>
+      )}
     </Card>
   );
 }
@@ -195,6 +224,10 @@ function RoleBadge({ role }: { role: OrganizationMemberRole }) {
 }
 
 function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse }) {
+  const displayedSeatLimit =
+    workspace.subscriptionState === 'locked'
+      ? seatLimit(workspace.planTier, 'active')
+      : workspace.seatLimit;
   const now = Date.now();
   const expiringSoon = workspace.invitations.filter((invitation) => {
     const expiresAt = new Date(invitation.expiresAt).getTime();
@@ -211,7 +244,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
           Active members
         </p>
         <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
-          {workspace.seatUsage} of {formatSeatLimit(workspace.seatLimit)} seats used
+          {workspace.seatUsage} of {formatSeatLimit(displayedSeatLimit)} seats used
         </p>
       </Card>
 
@@ -568,6 +601,7 @@ export function DesignerTermsRoles({
             seatLimit={workspace.seatLimit}
             planTier={workspace.planTier}
             subscriptionState={workspace.subscriptionState}
+            canManageBilling={workspace.capabilities.billing}
           />
         ) : null}
 

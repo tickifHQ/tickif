@@ -343,10 +343,10 @@ describe('orgsService', () => {
     });
   });
 
-  it('surfaces a locked subscription state so the UI can prompt recovery', async () => {
+  it('surfaces a locked subscription and preserves Billing Admin recovery access', async () => {
     vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
       organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
-      role: 'owner',
+      role: 'billing_admin',
       frozen: false,
     });
     vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
@@ -363,6 +363,11 @@ describe('orgsService', () => {
       planTier: 'corporate',
       subscriptionState: 'locked',
       seatLimit: 1,
+      capabilities: expect.objectContaining({
+        billing: true,
+        manageMembers: false,
+        changeMemberRoles: false,
+      }),
     });
   });
 
