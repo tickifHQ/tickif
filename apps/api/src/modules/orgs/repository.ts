@@ -271,7 +271,12 @@ export const orgsRepository = {
         schema.taxonomy,
         eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
       )
-      .where(inArray(schema.designerProfileFootprint.profileId, profileIds))
+      .where(
+        and(
+          inArray(schema.designerProfileFootprint.profileId, profileIds),
+          inArray(schema.taxonomy.kind, ['city', 'locality']),
+        ),
+      )
       .orderBy(
         asc(schema.designerProfileFootprint.profileId),
         asc(schema.taxonomy.kind),
@@ -320,6 +325,9 @@ export const orgsRepository = {
   }): Promise<string[]> {
     if (input.activeLimit < 0) return [];
     const run = async (tx: DbTransaction) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`branch:${input.organizationId}`}, 0))`,
+      );
       const activeBranches = await tx
         .select({ id: schema.team.id })
         .from(schema.team)
@@ -358,6 +366,9 @@ export const orgsRepository = {
     tx?: DbTransaction;
   }): Promise<string[]> {
     const run = async (tx: DbTransaction) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`branch:${input.organizationId}`}, 0))`,
+      );
       const [activeRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.team)

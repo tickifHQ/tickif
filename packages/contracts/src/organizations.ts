@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { planTierSchema, subscriptionStateSchema } from './billing';
-import { taxonomyKindSchema } from './taxonomy';
 
 export const ACTIVE_CONTEXT_KIND = {
   PERSONAL: 'personal',
@@ -362,7 +361,7 @@ export const organizationBranchMemberSchema = z
 export const organizationBranchFootprintSchema = z
   .object({
     id: z.uuid(),
-    kind: taxonomyKindSchema,
+    kind: z.enum(['city', 'locality']),
     slug: z.string().min(1),
     label: z.string().min(1),
   })

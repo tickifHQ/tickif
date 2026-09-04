@@ -368,10 +368,11 @@ describe('corporate branch persistence', () => {
       createdAt: new Date(),
     });
     const city = await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
-    await db.insert(schema.designerProfileFootprint).values({
-      profileId: frozenProfile.id,
-      taxonomyId: city.id,
-    });
+    const scope = await makeTaxonomy({ kind: 'scope', slug: 'turnkey', label: 'Turnkey' });
+    await db.insert(schema.designerProfileFootprint).values([
+      { profileId: frozenProfile.id, taxonomyId: city.id },
+      { profileId: frozenProfile.id, taxonomyId: scope.id },
+    ]);
 
     const managerBranches = await orgsRepository.listBranchesForUser(
       owner.id,

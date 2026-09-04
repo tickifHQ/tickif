@@ -182,6 +182,19 @@ describe('leadsService.counts', () => {
 });
 
 describe('leadsService.update', () => {
+  it('keeps lead mutations branch-bound in organization roll-up context', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+
+    await expect(
+      leadsService.update(
+        leadDetailRow().id,
+        { notes: 'Follow up' },
+        { ...caller, activeTeamId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(leadsRepository.update).not.toHaveBeenCalled();
+  });
+
   it('persists designer notes separately from the homeowner message', async () => {
     const updated = leadDetailRow({ notes: 'Call again on Friday.' });
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
