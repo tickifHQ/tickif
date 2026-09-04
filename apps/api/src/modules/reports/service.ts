@@ -229,7 +229,17 @@ export const reportsService = {
       branchAccess,
     };
 
-    if (accessScope === ORGANIZATION_ACCESS_SCOPE.BILLING) {
+    const dataset =
+      accessScope === ORGANIZATION_ACCESS_SCOPE.BILLING
+        ? ('billing' as const)
+        : (input.query.dataset ?? 'engagement');
+    if (dataset === 'billing') {
+      if (
+        role !== ORGANIZATION_MEMBER_ROLE.OWNER &&
+        role !== ORGANIZATION_MEMBER_ROLE.BILLING_ADMIN
+      ) {
+        throw AppError.forbidden('Organization role does not allow billing analytics access');
+      }
       const currencies = await reportsRepository.getBillingAnalytics({
         orgId: input.orgId,
         from,
@@ -238,13 +248,22 @@ export const reportsService = {
       return {
         dataset: 'billing',
         window: { days: input.query.days, from: from.toISOString(), to: to.toISOString() },
-        access: {
-          ...accessBase,
-          role: ORGANIZATION_MEMBER_ROLE.BILLING_ADMIN,
-          roleScope: ORGANIZATION_ACCESS_SCOPE.BILLING,
-          readOnly: false,
-          engagementVisible: false,
-        },
+        access:
+          role === ORGANIZATION_MEMBER_ROLE.OWNER
+            ? {
+                ...accessBase,
+                role,
+                roleScope: ORGANIZATION_ACCESS_SCOPE.FULL,
+                readOnly: false,
+                engagementVisible: true,
+              }
+            : {
+                ...accessBase,
+                role,
+                roleScope: ORGANIZATION_ACCESS_SCOPE.BILLING,
+                readOnly: false,
+                engagementVisible: false,
+              },
         billing: {
           currencies,
           currentPeriodEnd: context.currentPeriodEnd?.toISOString() ?? null,

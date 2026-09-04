@@ -6,6 +6,17 @@ export const analyticsQuerySchema = z
   .object({
     days: z.coerce.number().int().min(7).max(90).default(30),
     branchId: z.string().min(1).optional(),
+    dataset: z.enum(['engagement', 'billing']).optional(),
+  })
+  .superRefine((query, ctx) => {
+    if (query.dataset === 'billing' && query.branchId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Billing analytics are only available at organization level',
+        path: ['branchId'],
+        input: query,
+      });
+    }
   })
   .meta({ id: 'AnalyticsQuery' });
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
@@ -176,9 +187,9 @@ const engagementAnalyticsAccessSchema = z
   ])
   .superRefine(validateAnalyticsAccess);
 
-const checkedBillingAnalyticsAccessSchema = billingAnalyticsAccessSchema.superRefine(
-  validateAnalyticsAccess,
-);
+const checkedBillingAnalyticsAccessSchema = z
+  .discriminatedUnion('role', [ownerAnalyticsAccessSchema, billingAnalyticsAccessSchema])
+  .superRefine(validateAnalyticsAccess);
 
 const billingCurrencyAnalyticsSchema = z.object({
   currency: z.string().min(3).max(3),

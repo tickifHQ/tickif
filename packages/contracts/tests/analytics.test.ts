@@ -12,6 +12,16 @@ describe('analytics contracts', () => {
     expect(analyticsQuerySchema.safeParse({ days: '91' }).success).toBe(false);
   });
 
+  it('accepts a billing dataset selector only at organization level', () => {
+    expect(analyticsQuerySchema.parse({ days: '7', dataset: 'billing' })).toEqual({
+      days: 7,
+      dataset: 'billing',
+    });
+    expect(analyticsQuerySchema.safeParse({ dataset: 'billing', branchId: 'team_1' }).success).toBe(
+      false,
+    );
+  });
+
   it('accepts real metrics including event-backed engagement', () => {
     expect(
       analyticsResponseSchema.safeParse({
@@ -137,9 +147,14 @@ describe('analytics contracts', () => {
     expect(
       analyticsResponseSchema.safeParse({
         ...billing,
-        access: { ...billing.access, role: 'owner', roleScope: 'full' },
+        access: {
+          ...billing.access,
+          role: 'owner',
+          roleScope: 'full',
+          engagementVisible: true,
+        },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       analyticsResponseSchema.safeParse({
         ...billing,

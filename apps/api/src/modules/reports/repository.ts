@@ -425,8 +425,8 @@ export const reportsRepository = {
       .where(
         and(
           eq(schema.subscription.organizationId, input.orgId),
-          gte(schema.paymentTransaction.createdAt, input.from),
-          lte(schema.paymentTransaction.createdAt, input.to),
+          gte(schema.paymentTransaction.occurredAt, input.from),
+          lte(schema.paymentTransaction.occurredAt, input.to),
         ),
       )
       .groupBy(schema.paymentTransaction.currency)

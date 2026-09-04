@@ -5,6 +5,7 @@ import { config } from '@repo/config';
 import {
   RAZORPAY_EVENT,
   SUBSCRIPTION_STATE,
+  razorpayPaymentCreatedAtSchema,
   type PlanTier,
   type RazorpayEvent,
   type SubscriptionState,
@@ -244,6 +245,10 @@ async function handleCharged(
   if (!razorpayPaymentId) {
     return { outcome: 'ignored', reason: 'No payment ID in charged event' };
   }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in charged event' };
+  }
 
   const amount = extractAmount(payload);
   const currency = extractCurrency(payload) ?? 'INR';
@@ -262,6 +267,7 @@ async function handleCharged(
         currency,
         status: paymentStatus,
         payload,
+        occurredAt,
         processedAt: new Date(),
       })
       .onConflictDoNothing({ target: schema.paymentTransaction.razorpayPaymentId })
@@ -339,6 +345,10 @@ async function handlePaymentFailed(
   if (!razorpayPaymentId) {
     return { outcome: 'ignored', reason: 'No payment ID in failed event' };
   }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in failed event' };
+  }
 
   const outcome = await recordFailedPayment({
     subscriptionId: subscription.id,
@@ -347,6 +357,7 @@ async function handlePaymentFailed(
     currency: extractCurrency(payload) ?? 'INR',
     razorpayStatus: extractRazorpayStatus(payload) ?? 'halted',
     payload,
+    occurredAt,
   });
 
   if (outcome === 'invalid_transition') {
@@ -520,6 +531,13 @@ function extractPaymentStatus(payload: Record<string, unknown>): string | null {
     (payload as { payload?: { payment?: { entity?: { status?: string } } } })?.payload?.payment
       ?.entity?.status ?? null
   );
+}
+
+function extractPaymentOccurredAt(payload: Record<string, unknown>): Date | null {
+  const value = (payload as { payload?: { payment?: { entity?: { created_at?: unknown } } } })
+    ?.payload?.payment?.entity?.created_at;
+  const parsed = razorpayPaymentCreatedAtSchema.safeParse(value);
+  return parsed.success ? new Date(parsed.data * 1000) : null;
 }
 
 function extractRazorpayStatus(payload: Record<string, unknown>): string | null {

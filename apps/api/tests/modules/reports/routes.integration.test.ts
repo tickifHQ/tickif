@@ -369,6 +369,90 @@ describe('GET /api/reports/analytics', () => {
     ).toEqual([]);
   });
 
+  it('lets an owner select billing totals without changing the default engagement view', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004027');
+    const [subscription] = await db
+      .insert(schema.subscription)
+      .values({ organizationId: designer.orgId, planTier: 'corporate' })
+      .returning();
+    await db.insert(schema.paymentTransaction).values({
+      subscriptionId: subscription!.id,
+      razorpayPaymentId: `pay-owner-${randomUUID()}`,
+      amount: 799900,
+      currency: 'INR',
+      status: 'captured',
+      payload: {},
+    });
+
+    const response = await app.request('/api/reports/analytics?days=7&dataset=billing', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed).toMatchObject({
+      dataset: 'billing',
+      access: { role: 'owner', roleScope: 'full', engagementVisible: true },
+      billing: { currencies: [{ currency: 'INR', capturedAmount: 799900 }] },
+    });
+  });
+
+  it('attributes a delayed failed webhook to the provider payment time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-20T06:30:00.000Z'));
+    const caller = await createRoleSession('+919800004028', 'designer');
+    const organization = await makeOrganization({ slug: `billing-delayed-${randomUUID()}` });
+    await db.insert(schema.member).values({
+      id: `member-billing-delayed-${randomUUID()}`,
+      organizationId: organization.id,
+      userId: caller.userId,
+      role: 'billing_admin',
+      createdAt: new Date(),
+    });
+    const razorpaySubscriptionId = `sub-delayed-${randomUUID()}`;
+    const [subscription] = await db
+      .insert(schema.subscription)
+      .values({
+        organizationId: organization.id,
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId,
+      })
+      .returning();
+    const paymentId = `pay-delayed-${randomUUID()}`;
+    const occurredAt = new Date('2026-08-01T08:00:00.000Z');
+    const result = await processWebhookEvent('payment.failed' as RazorpayEvent, {
+      event: 'payment.failed',
+      payload: {
+        subscription: { entity: { id: razorpaySubscriptionId, status: 'halted' } },
+        payment: {
+          entity: {
+            id: paymentId,
+            subscription_id: razorpaySubscriptionId,
+            amount: 799900,
+            currency: 'INR',
+            status: 'failed',
+            created_at: Math.floor(occurredAt.getTime() / 1000),
+          },
+        },
+      },
+    });
+    expect(result.outcome).toBe('processed');
+
+    const cookie = await activateOrganization(caller.cookie, organization.id);
+    const response = await app.request('/api/reports/analytics?days=7', {
+      headers: { cookie },
+    });
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed.billing?.currencies).toEqual([]);
+    const [payment] = await db
+      .select()
+      .from(schema.paymentTransaction)
+      .where(eq(schema.paymentTransaction.razorpayPaymentId, paymentId));
+    expect(payment).toMatchObject({ subscriptionId: subscription!.id, occurredAt });
+  });
+
   it('reports each distinct failed payment received through the webhook exactly once', async () => {
     const caller = await createRoleSession('+919800004026', 'designer');
     const organization = await makeOrganization({ slug: `billing-failed-${randomUUID()}` });
@@ -402,6 +486,7 @@ describe('GET /api/reports/analytics', () => {
             amount: 799900,
             currency: 'INR',
             status: 'failed',
+            created_at: Math.floor(Date.now() / 1000),
           },
         },
       },

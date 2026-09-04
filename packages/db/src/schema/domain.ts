@@ -1497,6 +1497,7 @@ export const paymentTransaction = pgTable(
     currency: text('currency').notNull().default('INR'),
     status: text('status').notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -1505,7 +1506,7 @@ export const paymentTransaction = pgTable(
       .notNull(),
   },
   (t) => [
-    index('payment_transaction_subscription_idx').on(t.subscriptionId),
+    index('payment_transaction_subscription_occurred_idx').on(t.subscriptionId, t.occurredAt),
     index('payment_transaction_status_idx').on(t.status),
     check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],

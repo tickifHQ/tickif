@@ -8,6 +8,7 @@ type FailedPaymentInput = {
   currency: string;
   razorpayStatus: string;
   payload: Record<string, unknown>;
+  occurredAt: Date;
 };
 
 export type FailedPaymentWriteResult = 'processed' | 'duplicate' | 'invalid_transition';
@@ -38,6 +39,7 @@ export async function recordFailedPayment(
         currency: input.currency,
         status: 'failed',
         payload: input.payload,
+        occurredAt: input.occurredAt,
         processedAt: new Date(),
       })
       .onConflictDoNothing({ target: schema.paymentTransaction.razorpayPaymentId })

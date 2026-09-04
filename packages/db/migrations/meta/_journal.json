@@ -400,6 +400,13 @@
       "when": 1788545708834,
       "tag": "0058_bumpy_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788535651914,
+      "tag": "0054_bizarre_rick_jones",
+      "breakpoints": true
     }
   ]
 }

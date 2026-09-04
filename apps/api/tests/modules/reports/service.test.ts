@@ -142,6 +142,38 @@ describe('reportsService.getAnalytics', () => {
     expect(reportsRepository.countProjectsByStatus).not.toHaveBeenCalled();
   });
 
+  it('returns billing totals when an owner selects the billing dataset', async () => {
+    vi.mocked(reportsRepository.listActiveProfiles).mockResolvedValue([]);
+
+    const result = await reportsService.getAnalytics({
+      ...input,
+      query: { days: 7, dataset: 'billing' },
+    });
+
+    expect(result).toMatchObject({
+      dataset: 'billing',
+      access: {
+        role: ORGANIZATION_MEMBER_ROLE.OWNER,
+        roleScope: ORGANIZATION_ACCESS_SCOPE.FULL,
+        engagementVisible: true,
+      },
+      billing: {
+        currencies: [{ currency: 'INR', capturedAmount: 299900, failedAmount: 799900 }],
+      },
+    });
+    expect(reportsRepository.getBillingAnalytics).toHaveBeenCalledOnce();
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+  });
+
+  it('rejects billing analytics for roles without billing access', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.ADMIN);
+
+    await expect(
+      reportsService.getAnalytics({ ...input, query: { days: 7, dataset: 'billing' } }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(reportsRepository.getBillingAnalytics).not.toHaveBeenCalled();
+  });
+
   it.each(['hobby', 'professional_plus'] as const)(
     'returns basic analytics and an upgrade marker for %s',
     async (tier) => {

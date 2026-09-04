@@ -65,6 +65,7 @@ function buildPayload(
     amount?: number;
     currency?: string;
     currentEnd?: number;
+    paymentCreatedAt?: number;
   },
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
@@ -90,6 +91,7 @@ function buildPayload(
         amount: opts.amount ?? 299900,
         currency: opts.currency ?? 'INR',
         subscription_id: opts.subscriptionId,
+        created_at: opts.paymentCreatedAt ?? Math.floor(Date.now() / 1000),
       },
     };
   }
@@ -261,6 +263,12 @@ describe('E-117: subscription.charged', () => {
     expect(txn!.currency).toBe('INR');
     expect(txn!.status).toBe('captured');
     expect(txn!.payload).toBeDefined();
+    expect(txn!.occurredAt).toEqual(
+      new Date(
+        (payload.payload as { payment: { entity: { created_at: number } } }).payment.entity
+          .created_at * 1000,
+      ),
+    );
     expect(txn!.processedAt).not.toBeNull();
   });
 

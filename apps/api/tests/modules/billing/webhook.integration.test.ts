@@ -43,6 +43,7 @@ function makeChargedPayload(overrides: {
   status?: string;
   planId?: string;
   notes?: Record<string, string>;
+  paymentCreatedAt?: number;
 }) {
   return {
     event: RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
@@ -63,6 +64,7 @@ function makeChargedPayload(overrides: {
           status: overrides.paymentStatus ?? 'captured',
           amount: overrides.amount ?? 299900,
           currency: 'INR',
+          created_at: overrides.paymentCreatedAt ?? Math.floor(Date.now() / 1000),
         },
       },
     },
@@ -78,6 +80,7 @@ function makeSubscriptionPayload(
     paymentId?: string;
     paymentStatus?: string;
     amount?: number;
+    paymentCreatedAt?: number;
   },
 ) {
   return {
@@ -98,6 +101,7 @@ function makeSubscriptionPayload(
                 id: extra.paymentId,
                 status: extra.paymentStatus ?? 'failed',
                 amount: extra.amount ?? 299900,
+                created_at: extra.paymentCreatedAt ?? Math.floor(Date.now() / 1000),
                 currency: 'INR',
                 subscription_id: subscriptionId,
               },
@@ -413,6 +417,26 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('subscription.charged', () => {
+    it('ignores a charged event without a valid provider payment timestamp', async () => {
+      await makeSubscription({
+        planTier: 'professional_plus',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_charged_invalid_timestamp',
+      });
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_charged_invalid_timestamp',
+        paymentId: 'pay_invalid_timestamp',
+      });
+      payload.payload.payment.entity.created_at = -1;
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+
+      expect(result).toEqual({
+        outcome: 'ignored',
+        reason: 'No valid payment timestamp in charged event',
+      });
+    });
+
     it('records payment and updates subscription period (normal renewal)', async () => {
       const sub = await makeSubscription({
         planTier: 'professional_plus',
