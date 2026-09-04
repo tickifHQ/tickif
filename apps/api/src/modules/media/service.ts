@@ -103,11 +103,17 @@ export const mediaService = {
       contentType: input.contentType,
     });
     if (!image) throw AppError.conflict('Project media is no longer editable');
-    const uploadUrl = await presignUpload({
-      key,
-      contentType: input.contentType,
-      contentLength: input.size,
-    });
+    let uploadUrl: string;
+    try {
+      uploadUrl = await presignUpload({
+        key,
+        contentType: input.contentType,
+        contentLength: input.size,
+      });
+    } catch (error) {
+      await mediaRepository.cancelProcessingReservation(image.id, key).catch(() => undefined);
+      throw error;
+    }
 
     return { imageId: image.id, uploadUrl, key };
   },

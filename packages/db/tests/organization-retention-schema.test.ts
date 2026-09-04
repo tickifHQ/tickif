@@ -9,6 +9,7 @@ import {
   organizationRetentionProfileSnapshot,
   organizationRetentionProjectSnapshot,
   organizationRetentionStatusEnum,
+  organizationUploadLease,
   projectTombstone,
 } from '../src/schema/index.js';
 
@@ -84,5 +85,13 @@ describe('organization retention schema', () => {
       'storage_object',
       'razorpay_subscription',
     ]);
+  });
+
+  it('indexes upload fences by organization and expiry', () => {
+    const config = getTableConfig(organizationUploadLease);
+    expect(config.foreignKeys).toHaveLength(1);
+    expect(config.indexes.map((tableIndex) => tableIndex.config.name)).toContain(
+      'organization_upload_lease_org_expiry_idx',
+    );
   });
 });

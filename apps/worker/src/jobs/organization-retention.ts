@@ -3,7 +3,6 @@ import { deleteObject, listObjectKeys } from '@repo/storage';
 import {
   appendPurgeStorageItems,
   archiveOrganization,
-  confirmProviderCleanup,
   finalizeOrganizationPurge,
   findOrganizationsDueForArchive,
   findOrganizationsDueForPurge,
@@ -13,6 +12,7 @@ import {
   markPurgeManifestItemDeleted,
   markPurgeManifestItemFailed,
   prepareOrganizationPurge,
+  runProviderCleanup,
   type PreparedOrganizationPurge,
 } from '../organization-retention/repository.js';
 import { cancelRazorpaySubscription } from '../organization-retention/razorpay.js';
@@ -73,6 +73,9 @@ async function purgeOrganization(organizationId: string, now: Date): Promise<boo
             listObjectKeys(`originals/${projectId}/`),
             listObjectKeys(`derivatives/${projectId}/`),
           ]),
+          ...prepared.profileIds.map((profileId) =>
+            listObjectKeys(`originals/logos/${profileId}/`),
+          ),
           listObjectKeys(`verification-documents/${prepared.organizationId}/`),
         ])
       ).flat();
@@ -102,8 +105,7 @@ export async function processOrganizationRetentionSweep(
   const providerCleanup = await findPendingProviderCleanup(RETENTION_BATCH_SIZE);
   for (const item of providerCleanup) {
     try {
-      await cancelRazorpaySubscription(item.razorpaySubscriptionId);
-      await confirmProviderCleanup(item, now);
+      await runProviderCleanup(item, now, cancelRazorpaySubscription);
     } catch (error) {
       failed += 1;
       await markPurgeManifestItemFailed(item.sequence, errorCode(error), now);

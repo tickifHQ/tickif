@@ -141,6 +141,7 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
+  ORGANIZATION_UPLOAD_SETTLE_SECONDS: z.coerce.number().int().positive().default(300),
   R2_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(3600),
   R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(60),
 

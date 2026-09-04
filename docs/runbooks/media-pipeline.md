@@ -108,10 +108,12 @@ Originals can be orphaned two ways, cleaned two ways:
 To audit orphans: list `originals/` and diff against `project_image.original_key`
 where `status != 'failed'`.
 
-Organization erasure is stricter. The retention worker waits through the upload URL
-expiry window, blocks against in-flight media leases, inventories the organization's
-original and derivative prefixes, deletes manifest items, then inventories them again
-before the database cascade. Provider failures leave the manifest retryable.
+Organization erasure is stricter. Upload URL issuance persists a lease for project
+originals, profile logos, and verification documents. The retention worker waits through
+the latest lease expiry plus `ORGANIZATION_UPLOAD_SETTLE_SECONDS`, blocks against in-flight
+media work, inventories every project, logo, and verification prefix, deletes manifest
+items, then inventories them again before the database cascade. Failures leave the
+manifest retryable.
 
 ## Worker memory sizing
 

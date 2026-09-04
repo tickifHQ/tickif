@@ -1,5 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { db, schema, eq, and, asc, sql } from '@repo/db';
+import { config } from '@repo/config';
 import type { UpdateImageMetadataInput } from '@repo/contracts';
 
 /**
@@ -83,7 +84,21 @@ export const mediaRepository = {
         })
         .returning();
       if (!row) throw new Error('insert returned no row');
+      await tx.insert(schema.organizationUploadLease).values({
+        resourceKey: input.originalKey,
+        organizationId: project.organizationId,
+        expiresAt: new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+      });
       return row;
+    });
+  },
+
+  async cancelProcessingReservation(imageId: string, resourceKey: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.projectImage).where(eq(schema.projectImage.id, imageId));
+      await tx
+        .delete(schema.organizationUploadLease)
+        .where(eq(schema.organizationUploadLease.resourceKey, resourceKey));
     });
   },
 

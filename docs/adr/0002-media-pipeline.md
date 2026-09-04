@@ -77,10 +77,11 @@ than once.
    - **Abandoned uploads** (URL minted, bytes never PUT or never committed) → swept only
      after database references are checked. Committed originals use the same prefix, so
      an age-only bucket rule would destroy live or recoverable media.
-   - **Organization purge** waits for issued upload URLs to expire, takes an exclusive
-     organization lifecycle lock against media processing, and scans each project prefix
-     twice before deleting database rows. A late PUT or derivative job cannot escape the
-     durable purge manifest.
+   - **Organization purge** records every project, logo, and verification upload URL in
+     `organization_upload_lease`. It waits for the latest URL to expire plus the configured
+     settling window, takes an exclusive lifecycle lock against media processing, and scans
+     every owned prefix twice before deleting database rows. A late PUT or derivative job
+     cannot escape the durable purge manifest.
 
 ## Consequences
 

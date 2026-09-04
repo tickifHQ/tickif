@@ -34,5 +34,6 @@ export {
   gte,
   desc,
   asc,
+  max,
   sql,
 } from 'drizzle-orm';

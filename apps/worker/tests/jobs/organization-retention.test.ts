@@ -15,7 +15,10 @@ vi.mock('../../src/organization-retention/repository.js', () => ({
   archiveOrganization: vi.fn(async () => false),
   findOrganizationsDueForPurge: vi.fn(async () => []),
   findPendingProviderCleanup: vi.fn(async () => []),
-  confirmProviderCleanup: vi.fn(async () => undefined),
+  runProviderCleanup: vi.fn(async (_item, _now, cancel) => {
+    await cancel(_item.razorpaySubscriptionId);
+    return true;
+  }),
   prepareOrganizationPurge: vi.fn(async () => null),
   appendPurgeStorageItems: vi.fn(async () => []),
   isStorageKeyReferencedOutsideOrganization: vi.fn(async () => false),
@@ -55,7 +58,11 @@ describe('organization retention lifecycle processor', () => {
     const result = await processOrganizationRetentionSweep(now);
 
     expect(razorpay.cancelRazorpaySubscription).toHaveBeenCalledWith('sub_paid');
-    expect(repository.confirmProviderCleanup).toHaveBeenCalledWith(item, now);
+    expect(repository.runProviderCleanup).toHaveBeenCalledWith(
+      item,
+      now,
+      razorpay.cancelRazorpaySubscription,
+    );
     expect(result).toEqual({ archived: 0, purged: 0, failed: 0 });
   });
 
@@ -69,7 +76,7 @@ describe('organization retention lifecycle processor', () => {
 
     const result = await processOrganizationRetentionSweep(now);
 
-    expect(repository.confirmProviderCleanup).not.toHaveBeenCalled();
+    expect(repository.runProviderCleanup).toHaveBeenCalledOnce();
     expect(repository.markPurgeManifestItemFailed).toHaveBeenCalledWith(10n, 'Error', now);
     expect(result).toEqual({ archived: 0, purged: 0, failed: 1 });
   });
@@ -116,7 +123,7 @@ describe('organization retention lifecycle processor', () => {
     expect(search.deleteSearchDocument).toHaveBeenCalledWith('designers', 'profile-1');
     expect(search.deleteSearchProjectsByDesigner).toHaveBeenCalledWith('profile-1');
     expect(repository.finalizeOrganizationPurge).toHaveBeenCalledOnce();
-    expect(storage.listObjectKeys).toHaveBeenCalledTimes(6);
+    expect(storage.listObjectKeys).toHaveBeenCalledTimes(8);
     expect(repository.appendPurgeStorageItems).toHaveBeenCalledTimes(2);
     expect(
       vi.mocked(repository.finalizeOrganizationPurge).mock.invocationCallOrder[0],

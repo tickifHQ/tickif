@@ -62,6 +62,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     findDocumentForOrganization: vi.fn(),
     commitDocument: vi.fn(),
     cancelPendingDocument: vi.fn(async () => 'state_changed'),
+    releaseUploadLease: vi.fn(async () => undefined),
     removeCommittedDocument: vi.fn(),
     submit: vi.fn(),
     listAdminQueue: vi.fn(),

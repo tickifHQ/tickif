@@ -6,6 +6,7 @@ import {
   inArray,
   isNull,
   lte,
+  max,
   or,
   schema,
   sql,
@@ -227,6 +228,13 @@ export async function findPendingProviderCleanup(limit: number): Promise<Provide
       schema.organizationPurgeManifest,
       eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
     )
+    .innerJoin(
+      schema.organizationRetention,
+      eq(
+        schema.organizationRetention.organizationId,
+        schema.organizationPurgeManifest.organizationId,
+      ),
+    )
     .where(
       and(
         eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
@@ -240,9 +248,43 @@ export async function findPendingProviderCleanup(limit: number): Promise<Provide
     .limit(limit);
 }
 
-export async function confirmProviderCleanup(item: ProviderCleanupItem, now: Date): Promise<void> {
-  await db.transaction(async (tx) => {
-    await lockOrganization(tx, item.organizationId);
+export async function runProviderCleanup(
+  item: ProviderCleanupItem,
+  now: Date,
+  cancel: (razorpaySubscriptionId: string) => Promise<void>,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${item.organizationId}`}, 0))`,
+    );
+    const [active] = await tx
+      .select({ sequence: schema.organizationPurgeManifestItem.sequence })
+      .from(schema.organizationPurgeManifestItem)
+      .innerJoin(
+        schema.organizationPurgeManifest,
+        eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+      )
+      .innerJoin(
+        schema.organizationRetention,
+        eq(
+          schema.organizationRetention.organizationId,
+          schema.organizationPurgeManifest.organizationId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.organizationPurgeManifestItem.sequence, item.sequence),
+          eq(schema.organizationPurgeManifest.organizationId, item.organizationId),
+          eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+          or(
+            eq(schema.organizationPurgeManifestItem.status, 'pending'),
+            eq(schema.organizationPurgeManifestItem.status, 'failed'),
+          ),
+        ),
+      )
+      .limit(1);
+    if (!active) return false;
+    await cancel(item.razorpaySubscriptionId);
     await tx
       .update(schema.subscription)
       .set({
@@ -268,6 +310,7 @@ export async function confirmProviderCleanup(item: ProviderCleanupItem, now: Dat
       .update(schema.organizationPurgeManifestItem)
       .set({ status: 'deleted', deletedAt: now, lastErrorCode: null, updatedAt: now })
       .where(eq(schema.organizationPurgeManifestItem.sequence, item.sequence));
+    return true;
   });
 }
 
@@ -343,19 +386,19 @@ export async function prepareOrganizationPurge(
             .select({
               originalKey: schema.projectImage.originalKey,
               derivatives: schema.projectImage.derivatives,
-              status: schema.projectImage.status,
-              createdAt: schema.projectImage.createdAt,
             })
             .from(schema.projectImage)
             .where(inArray(schema.projectImage.projectId, projectIds));
-    const storageScanNotBefore = images
-      .filter(({ status }) => status === 'processing')
-      .reduce<Date | null>((latest, image) => {
-        const expiresAt = new Date(
-          image.createdAt.getTime() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000,
-        );
-        return !latest || expiresAt > latest ? expiresAt : latest;
-      }, null);
+    const [latestUploadLease] = await tx
+      .select({ expiresAt: max(schema.organizationUploadLease.expiresAt) })
+      .from(schema.organizationUploadLease)
+      .where(eq(schema.organizationUploadLease.organizationId, organizationId));
+    const storageScanNotBefore = latestUploadLease?.expiresAt
+      ? new Date(
+          latestUploadLease.expiresAt.getTime() +
+            config.ORGANIZATION_UPLOAD_SETTLE_SECONDS * 1_000,
+        )
+      : null;
     const [application] = await tx
       .select({ id: schema.verificationApplication.id })
       .from(schema.verificationApplication)

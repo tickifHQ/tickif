@@ -527,11 +527,23 @@ export const portfolioService = {
     }
 
     const key = `originals/logos/${profile.id}/${randomUUID()}`;
-    const uploadUrl = await presignUpload({
+    const reserved = await portfolioRepository.reserveLogoUpload(
+      profile.id,
       key,
-      contentType: input.contentType,
-      contentLength: input.contentLength,
-    });
+      new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+    );
+    if (!reserved) throw AppError.conflict('Organization is no longer accepting uploads');
+    let uploadUrl: string;
+    try {
+      uploadUrl = await presignUpload({
+        key,
+        contentType: input.contentType,
+        contentLength: input.contentLength,
+      });
+    } catch (error) {
+      await portfolioRepository.releaseUploadLease(key).catch(() => undefined);
+      throw error;
+    }
 
     return { uploadUrl, key };
   },

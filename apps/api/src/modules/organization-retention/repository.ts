@@ -357,6 +357,14 @@ async function restoreSnapshots(
     actorUserId: input.actorUserId,
     occurredAt: input.now,
   });
+  await tx.execute(sql`
+    delete from organization_purge_manifest_item as item
+     using organization_purge_manifest as manifest
+     where item.manifest_id = manifest.id
+       and manifest.organization_id = ${input.organizationId}
+       and item.kind = 'razorpay_subscription'
+       and item.status in ('pending', 'failed')
+  `);
   await tx
     .delete(schema.organizationRetention)
     .where(eq(schema.organizationRetention.organizationId, input.organizationId));

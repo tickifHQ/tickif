@@ -172,6 +172,20 @@ export const organizationRetentionEvent = pgTable(
   ],
 );
 
+/** Presigned PUT fence retained until the URL and upload-settling window have elapsed. */
+export const organizationUploadLease = pgTable(
+  'organization_upload_lease',
+  {
+    resourceKey: text('resource_key').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index('organization_upload_lease_org_expiry_idx').on(t.organizationId, t.expiresAt)],
+);
+
 /** Durable header for an organization purge, retained after the organization row is gone. */
 export const organizationPurgeManifest = pgTable(
   'organization_purge_manifest',

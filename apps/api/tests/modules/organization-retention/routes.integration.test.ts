@@ -108,6 +108,24 @@ describe('organization retention routes', () => {
       })
       .returning();
 
+    const outstandingUpload = await request(
+      '/api/media/upload-url',
+      seeded.owner.cookie,
+      'POST',
+      {
+        projectId: draft!.id,
+        contentType: 'image/jpeg',
+        size: 1_024,
+      },
+    );
+    expect(outstandingUpload.status).toBe(201);
+    const outstandingBody = (await outstandingUpload.json()) as { key: string };
+    const [uploadLease] = await db
+      .select()
+      .from(schema.organizationUploadLease)
+      .where(eq(schema.organizationUploadLease.resourceKey, outstandingBody.key));
+    expect(uploadLease?.organizationId).toBe(seeded.organization.id);
+
     const deletion = await request('/api/orgs/retention/deletion', seeded.owner.cookie, 'POST', {
       confirmationSlug: seeded.organization.slug,
     });
@@ -131,7 +149,7 @@ describe('organization retention routes', () => {
       .select({ id: schema.projectImage.id })
       .from(schema.projectImage)
       .where(eq(schema.projectImage.projectId, draft!.id));
-    expect(images).toEqual([]);
+    expect(images).toHaveLength(1);
   });
 
   it('durably records paid subscription cancellation before freezing the organization', async () => {
@@ -165,6 +183,31 @@ describe('organization retention routes', () => {
       kind: 'razorpay_subscription',
       resourceKey: 'sub_retention_cleanup',
       status: 'pending',
+    });
+
+    const restore = await request('/api/orgs/retention/restore', seeded.owner.cookie, 'POST');
+    expect(restore.status).toBe(200);
+    const pendingAfterRestore = await db
+      .select({ sequence: schema.organizationPurgeManifestItem.sequence })
+      .from(schema.organizationPurgeManifestItem)
+      .innerJoin(
+        schema.organizationPurgeManifest,
+        eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+      )
+      .where(
+        and(
+          eq(schema.organizationPurgeManifest.organizationId, seeded.organization.id),
+          eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+        ),
+      );
+    expect(pendingAfterRestore).toEqual([]);
+    const [subscription] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, seeded.organization.id));
+    expect(subscription).toMatchObject({
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_retention_cleanup',
     });
   });
 

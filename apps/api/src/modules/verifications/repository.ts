@@ -16,6 +16,7 @@ import {
   type VerificationDocumentType,
 } from '@repo/contracts';
 import { and, asc, db, desc, eq, inArray, isNotNull, schema, sql } from '@repo/db';
+import { config } from '@repo/config';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 export type VerificationApplicationRecord = typeof schema.verificationApplication.$inferSelect;
@@ -266,6 +267,15 @@ export const verificationsRepository = {
     userId: string;
   }): Promise<VerificationDocumentVersionRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      const [candidate] = await tx
+        .select({ organizationId: schema.verificationApplication.organizationId })
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.id, input.applicationId))
+        .limit(1);
+      if (!candidate) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+      );
       // Every document mutation takes the application lock before any slot or
       // version lock so concurrent upload, commit, cancel, and remove paths use
       // one consistent lock order.
@@ -273,12 +283,19 @@ export const verificationsRepository = {
         .select({
           status: schema.verificationApplication.status,
           expiresAt: schema.verificationApplication.expiresAt,
+          organizationId: schema.verificationApplication.organizationId,
         })
         .from(schema.verificationApplication)
         .where(eq(schema.verificationApplication.id, input.applicationId))
         .for('update')
         .limit(1);
       if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, application.organizationId))
+        .limit(1);
+      if (retention) return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       if (!isApplicationEditable(application)) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
@@ -324,8 +341,24 @@ export const verificationsRepository = {
         })
         .returning();
       if (!created) throw new Error('Verification document version insert failed');
+      await tx.insert(schema.organizationUploadLease).values({
+        resourceKey: input.objectKey,
+        organizationId: application.organizationId,
+        expiresAt: new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+      });
       return created;
     });
+  },
+
+  async releaseUploadLease(resourceKey: string, organizationId: string): Promise<void> {
+    await db
+      .delete(schema.organizationUploadLease)
+      .where(
+        and(
+          eq(schema.organizationUploadLease.resourceKey, resourceKey),
+          eq(schema.organizationUploadLease.organizationId, organizationId),
+        ),
+      );
   },
 
   async findDocumentForOrganization(

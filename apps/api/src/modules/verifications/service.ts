@@ -317,6 +317,7 @@ export const verificationsService = {
       await verificationsRepository
         .cancelPendingDocument(documentVersionId, organizationId)
         .catch(() => undefined);
+      await verificationsRepository.releaseUploadLease(key, organizationId).catch(() => undefined);
       throw error;
     }
   },
