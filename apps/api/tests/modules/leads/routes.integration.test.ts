@@ -168,6 +168,26 @@ describe('GET /api/leads', () => {
         createdAt: new Date(),
       },
     ]);
+    await db.insert(schema.teamMember).values([
+      {
+        id: `team-member-${firstMemberSession.userId}`,
+        teamId: designer.teamId,
+        userId: firstMemberSession.userId,
+        createdAt: new Date(),
+      },
+      {
+        id: `team-member-${secondMemberSession.userId}`,
+        teamId: designer.teamId,
+        userId: secondMemberSession.userId,
+        createdAt: new Date(),
+      },
+      {
+        id: `team-member-${adminSession.userId}`,
+        teamId: designer.teamId,
+        userId: adminSession.userId,
+        createdAt: new Date(),
+      },
+    ]);
     const firstMemberCookie = await activateOrganization(firstMemberSession.cookie, designer.orgId);
     const secondMemberCookie = await activateOrganization(
       secondMemberSession.cookie,
