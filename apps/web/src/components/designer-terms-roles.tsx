@@ -734,7 +734,7 @@ export function DesignerTermsRoles({
           return;
         }
         setFeedback({ tone: 'success', message: 'You left the organisation.' });
-        router.refresh();
+        router.replace('/designer/select-studio');
       } catch {
         setFeedback({ tone: 'error', message: 'Could not leave the organisation.' });
       }
@@ -1002,63 +1002,61 @@ export function DesignerTermsRoles({
           </SectionCard>
         ) : null}
 
-        {workspace.rbacEnabled ? (
-          <SectionCard title="Leave organisation">
-            {isSoleOwner ? (
-              <Card className="space-y-2 p-5 shadow-none">
-                <p className="text-sm font-medium text-foreground">
-                  Transfer ownership or delete the organisation first
-                </p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  You are the sole Owner, so leaving now would orphan this studio. Nominate another
-                  Owner above before leaving.
-                </p>
-              </Card>
-            ) : confirmLeave ? (
-              <Card className="space-y-3 p-5 shadow-none">
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Leaving removes your studio access immediately. Published projects stay live.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="compact"
-                    variant="destructive"
-                    disabled={isPending}
-                    onClick={leaveOrganization}
-                  >
-                    {isPending ? <Loader2 className="animate-spin" /> : null}
-                    Confirm leave
-                  </Button>
-                  <Button
-                    type="button"
-                    size="compact"
-                    variant="neutral"
-                    disabled={isPending}
-                    onClick={() => setConfirmLeave(false)}
-                  >
-                    Keep my access
-                  </Button>
-                </div>
-              </Card>
-            ) : (
-              <Card className="space-y-3 p-5 shadow-none">
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Leaving removes your studio access immediately. Published projects stay live.
-                </p>
+        <SectionCard title="Leave organisation">
+          {isSoleOwner ? (
+            <Card className="space-y-2 p-5 shadow-none">
+              <p className="text-sm font-medium text-foreground">
+                Transfer ownership or delete the organisation first
+              </p>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                You are the sole Owner, so leaving now would orphan this studio. Nominate another
+                Owner above before leaving.
+              </p>
+            </Card>
+          ) : confirmLeave ? (
+            <Card className="space-y-3 p-5 shadow-none">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Leaving removes your studio access immediately. Published projects stay live.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="compact"
+                  variant="destructive"
+                  disabled={isPending}
+                  onClick={leaveOrganization}
+                >
+                  {isPending ? <Loader2 className="animate-spin" /> : null}
+                  Confirm leave
+                </Button>
                 <Button
                   type="button"
                   size="compact"
                   variant="neutral"
                   disabled={isPending}
-                  onClick={() => setConfirmLeave(true)}
+                  onClick={() => setConfirmLeave(false)}
                 >
-                  Leave organisation
+                  Keep my access
                 </Button>
-              </Card>
-            )}
-          </SectionCard>
-        ) : null}
+              </div>
+            </Card>
+          ) : (
+            <Card className="space-y-3 p-5 shadow-none">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Leaving removes your studio access immediately. Published projects stay live.
+              </p>
+              <Button
+                type="button"
+                size="compact"
+                variant="neutral"
+                disabled={isPending}
+                onClick={() => setConfirmLeave(true)}
+              >
+                Leave organisation
+              </Button>
+            </Card>
+          )}
+        </SectionCard>
       </div>
     </div>
   );

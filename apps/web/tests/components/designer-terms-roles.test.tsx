@@ -6,6 +6,7 @@ import { DesignerTermsRoles } from '../../src/components/designer-terms-roles';
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
+  replace: vi.fn(),
   inviteMember: vi.fn(),
   updateMemberRole: vi.fn(),
   cancelInvitation: vi.fn(),
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),
 }));
 
 vi.mock('../../src/lib/auth-client', () => ({
@@ -682,6 +683,8 @@ describe('DesignerTermsRoles', () => {
     await waitFor(() => {
       expect(mocks.leave).toHaveBeenCalledWith({ organizationId: 'org-1' });
     });
+    expect(mocks.replace).toHaveBeenCalledWith('/designer/select-studio');
+    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('You left the organisation.');
   });
 
@@ -750,11 +753,12 @@ describe('DesignerTermsRoles', () => {
     expect(screen.getByRole('status')).toHaveTextContent('previous Owner is now an Admin');
   });
 
-  it('hides leave and transfer surfaces below Corporate', () => {
+  it('keeps leave available below Corporate while hiding ownership transfer', () => {
     render(
       <DesignerTermsRoles
         workspace={{
           ...ownerWorkspace,
+          currentUserRole: 'member',
           rbacEnabled: false,
           canManage: false,
           seatUsage: 1,
@@ -772,7 +776,7 @@ describe('DesignerTermsRoles', () => {
     );
 
     expect(screen.getByText(/Corporate feature/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Leave organisation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave organisation' })).toBeInTheDocument();
     expect(screen.queryByText('Ownership transfer')).not.toBeInTheDocument();
   });
 
