@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
+  DesignerBranchesLoading,
   DesignerDashboardLoading,
   DesignerLeadsLoading,
   DesignerPlanBillingLoading,
@@ -17,6 +18,7 @@ const loadingPages = [
   { label: 'Loading profile settings', Component: DesignerProfileLoading },
   { label: 'Loading portfolio settings', Component: DesignerPortfolioLoading },
   { label: 'Loading team and roles', Component: DesignerTeamRolesLoading },
+  { label: 'Loading branches', Component: DesignerBranchesLoading },
   { label: 'Loading plan and billing', Component: DesignerPlanBillingLoading },
 ] as const;
 
