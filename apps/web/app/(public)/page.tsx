@@ -1,23 +1,28 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { listTaxonomyResponseSchema } from '@repo/contracts';
+import { redirect } from 'next/navigation';
+import { listTaxonomyResponseSchema, PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { HomeHero, type HomeShortcut } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
-import type { FeedFilterSuggestion } from '@/components/try-filter-card';
 import { getServerSession } from '@/lib/auth-guard';
 import {
   FEED_FACET_DEFINITIONS,
   FEED_FILTER_KEYS,
-  feedPageHref,
   parseFeedPage,
   parseFeedParams,
   parseFeedQuery,
   type FeedFilterState,
 } from '@/lib/feed-params';
+import {
+  budgetSuggestions,
+  canonicalFeedParams,
+  feedPageLink,
+  searchLabelMaps,
+} from '@/lib/feed-page-helpers';
 import {
   emptyHomeFeedPage,
   fetchHomeFeedPage,
@@ -97,54 +102,6 @@ function homeShortcuts(options: FeedFacetOptions): HomeShortcut[] {
   return shortcuts;
 }
 
-function budgetSuggestions(
-  options: FeedFacetOptions,
-  params: HomeSearchParams,
-  filters: FeedFilterState,
-): FeedFilterSuggestion[] {
-  const currentParams = canonicalParams(params, 1);
-  // A chip for the band that is already applied would only link to the current page.
-  const activeBands = new Set(filters.budgetBand);
-  const candidates = (options.budgetBand ?? []).filter((option) => !activeBands.has(option.slug));
-
-  return candidates.slice(0, 5).map((option) => ({
-    href: feedPageHref({ ...currentParams, budgetBand: option.slug }, 1),
-    label: option.label,
-  }));
-}
-
-function labelsBySlug(options: FeedFacetOptions, key: keyof FeedFacetOptions) {
-  return Object.fromEntries((options[key] ?? []).map((option) => [option.slug, option.label]));
-}
-
-function searchLabelMaps(
-  options: FeedFacetOptions,
-): Pick<
-  HomeFeedRequest,
-  'cityLabelsBySlug' | 'bhkLabelsBySlug' | 'budgetLabelsBySlug' | 'themeLabelsBySlug'
-> {
-  return {
-    cityLabelsBySlug: labelsBySlug(options, 'city'),
-    bhkLabelsBySlug: labelsBySlug(options, 'bhk'),
-    budgetLabelsBySlug: labelsBySlug(options, 'budgetBand'),
-    themeLabelsBySlug: labelsBySlug(options, 'theme'),
-  };
-}
-
-function canonicalParams(params: HomeSearchParams, page: number): HomeSearchParams {
-  const result: HomeSearchParams = {};
-  const query = parseFeedQuery(params.q);
-  if (query) result.q = query;
-
-  const filters = parseFeedParams(params);
-  for (const key of FEED_FILTER_KEYS) {
-    if (filters[key].length > 0) result[key] = filters[key].join(',');
-  }
-  if (page > 1) result.page = String(page);
-
-  return result;
-}
-
 export async function generateMetadata({
   searchParams = Promise.resolve({}),
 }: HomePageProps = {}): Promise<Metadata> {
@@ -152,7 +109,7 @@ export async function generateMetadata({
   const page = parseFeedPage(params.page);
   return {
     alternates: {
-      canonical: feedPageHref(canonicalParams(params, page), page),
+      canonical: feedPageLink(params, page),
     },
   };
 }
@@ -193,15 +150,19 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     ...baseRequest,
     ...labelMaps,
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions, params, filters);
-  const paginationParams = canonicalParams(params, 1);
+  const filterSuggestions = budgetSuggestions(taxonomyOptions, params);
+  const paginationParams = canonicalFeedParams(params, 1);
 
-  const previousHref = page > 1 ? feedPageHref(canonicalParams(params, page - 1), page - 1) : null;
-  const nextHref = initialPage.hasMore
-    ? feedPageHref(canonicalParams(params, page + 1), page + 1)
-    : null;
+  const previousHref = page > 1 ? feedPageLink(params, page - 1) : null;
+  const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1) : null;
 
+  // Designers keep a dedicated personal home: visiting the public root sends
+  // them to My Tickif instead of rendering the visitor homepage.
   if (session) {
+    const parsedRole = platformRoleSchema.safeParse(session.user.role);
+    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+      redirect('/home');
+    }
     return (
       <div className="bg-background">
         {previousHref ? <link rel="prev" href={previousHref} /> : null}

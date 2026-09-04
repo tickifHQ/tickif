@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
   isPending: false,
   error: null as Error | null,
   setActive: vi.fn(),
-  router: { refresh: vi.fn() },
+  router: { refresh: vi.fn(), push: vi.fn() },
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -43,6 +43,7 @@ describe('DesignerOrganizationSwitcher', () => {
     mock.setActive.mockReset();
     mock.setActive.mockResolvedValue({ ok: true });
     mock.router.refresh.mockReset();
+    mock.router.push.mockReset();
   });
 
   it('lists only the memberships returned by the auth organization API', async () => {
@@ -188,5 +189,42 @@ describe('DesignerOrganizationSwitcher', () => {
 
     expect(mock.router.refresh).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch organization');
+  });
+
+  it('opens the organisation creation flow from the switcher', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('menuitem', { name: /Create an organisation/i }));
+
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/new-organization');
+  });
+
+  it('offers creation instead of a dead end for users with zero orgs', async () => {
+    const previous = mock.organizations;
+    mock.organizations = [];
+    try {
+      const user = userEvent.setup();
+      render(
+        <DesignerOrganizationSwitcher
+          activeOrganizationId={null}
+          studioName="Asha Rao"
+          studioLocation="Mumbai"
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+      expect(screen.queryByText(/No organization memberships found/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Create an organisation/i })).toBeInTheDocument();
+    } finally {
+      mock.organizations = previous;
+    }
   });
 });

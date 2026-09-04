@@ -14,6 +14,16 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: mock.getServerSession,
   rolePassesCheck: mock.rolePassesCheck,
+  activeContextForSession: (session: {
+    session: { activeOrganizationId?: string | null; activeTeamId?: string | null };
+  }) =>
+    session.session.activeOrganizationId && session.session.activeTeamId
+      ? {
+          kind: 'organization',
+          organizationId: session.session.activeOrganizationId,
+          teamId: session.session.activeTeamId,
+        }
+      : { kind: 'personal' },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -91,13 +101,37 @@ describe('LoginPage', () => {
 
   it('continues an authenticated designer to designer onboarding on the server', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u2', name: 'Designer', email: 'designer@test.com', role: 'designer' },
+      user: {
+        id: 'u2',
+        name: 'Designer',
+        email: 'designer@test.com',
+        role: 'designer',
+        status: 'pending',
+      },
       session: { id: 's2', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');
 
     await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
       'NEXT_REDIRECT:/designer/onboarding',
+    );
+  });
+
+  it('sends an onboarded designer in personal context to My Tickif', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u2',
+        name: 'Designer',
+        email: 'designer@test.com',
+        role: 'designer',
+        status: 'active',
+      },
+      session: { id: 's2', token: 'token', expiresAt: new Date().toISOString() },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+
+    await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
+      'NEXT_REDIRECT:/home',
     );
   });
 
@@ -108,7 +142,9 @@ describe('LoginPage', () => {
     });
     const { default: Page } = await import('../../../app/login/page');
 
-    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT:/');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/home',
+    );
   });
 
   it('returns an authenticated visitor to a safe next path', async () => {

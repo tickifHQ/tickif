@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
 
 const mock = vi.hoisted(() => ({
   redirect: vi.fn().mockImplementation(() => {
@@ -17,12 +16,6 @@ vi.mock('@/lib/auth-guard', () => ({
   rolePassesCheck: vi.fn(),
 }));
 
-vi.mock('@/components/designer-organization-switcher', () => ({
-  DesignerOrganizationSwitcher: () => (
-    <div data-testid="designer-organization-switcher">Organization switcher</div>
-  ),
-}));
-
 import { rolePassesCheck } from '@/lib/auth-guard';
 
 describe('DesignerSelectStudioPage', () => {
@@ -30,7 +23,7 @@ describe('DesignerSelectStudioPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders studio selection for a designer without an active organization', async () => {
+  it('redirects a designer without an active organization to My Tickif', async () => {
     mock.getServerSession.mockResolvedValue({
       session: {
         id: 's1',
@@ -46,12 +39,8 @@ describe('DesignerSelectStudioPage', () => {
 
     const { default: Page } =
       await import('../../../../app/(protected)/designer/select-studio/page');
-    const page = await Page();
-    render(page);
-
-    expect(screen.getByRole('heading', { name: 'Choose your studio' })).toBeInTheDocument();
-    expect(screen.getByTestId('designer-organization-switcher')).toBeInTheDocument();
-    expect(mock.redirect).not.toHaveBeenCalled();
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/home');
   });
 
   it('redirects a designer with an active organization to the dashboard', async () => {

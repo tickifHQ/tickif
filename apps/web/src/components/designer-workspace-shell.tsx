@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useState, useTransition, type ComponentType, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
+import { DesignerBranchSelector } from '@/components/designer-branch-selector';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
@@ -202,7 +203,7 @@ function SidebarContent({
               <span>Contact support</span>
             </Link>
             <Link
-              href="/"
+              href="/home"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
@@ -219,6 +220,7 @@ function SidebarContent({
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
             />
+            <DesignerBranchSelector organizationId={activeOrganizationId} />
           </div>
         </div>
       </div>

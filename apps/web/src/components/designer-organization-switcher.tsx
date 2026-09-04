@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { InitialsAvatar } from '@/components/initials-avatar';
@@ -144,10 +144,23 @@ export function DesignerOrganizationSwitcher({
             );
           })
         ) : (
-          <div role="alert" className="px-2 py-2 text-sm text-destructive">
-            No organization memberships found.
-          </div>
+          <p className="px-2 py-2 text-sm leading-relaxed text-muted-foreground">
+            No studios yet. Start with My Tickif above, or create your first organisation below.
+          </p>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={isBusy}
+          className="cursor-pointer data-[disabled]:cursor-not-allowed"
+          onSelect={(event) => {
+            event.preventDefault();
+            setOpen(false);
+            router.push('/designer/new-organization');
+          }}
+        >
+          <Plus className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">Create an organisation</span>
+        </DropdownMenuItem>
         {switchError ? (
           <div
             role="alert"
