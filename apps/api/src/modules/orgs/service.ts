@@ -171,6 +171,11 @@ export const orgsService = {
     selection: SetActiveContext,
   ): Promise<ActiveContext> {
     if (selection.kind === 'personal') return selection;
+    if (selection.teamId === null) {
+      const valid = await orgsRepository.hasMembership(userId, selection.organizationId);
+      if (!valid) throw AppError.forbidden('Organization context is unavailable');
+      return { kind: 'organization', organizationId: selection.organizationId, teamId: null };
+    }
     const teamId =
       selection.teamId ??
       (await orgsRepository.findDefaultActiveTeamForUser(userId, selection.organizationId));
@@ -196,20 +201,18 @@ export const orgsService = {
       return { kind: 'personal' };
     }
 
-    const teamId =
-      activeTeamId ??
-      (await orgsRepository.findDefaultActiveTeamForUser(userId, activeOrganizationId));
-    if (
-      teamId &&
-      (await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, teamId))
-    ) {
-      const context = {
-        kind: 'organization' as const,
-        organizationId: activeOrganizationId,
-        teamId,
-      };
-      if (!activeTeamId) await orgsRepository.saveContextPreference(userId, context);
-      return context;
+    if (activeTeamId) {
+      if (
+        await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, activeTeamId)
+      ) {
+        return {
+          kind: 'organization',
+          organizationId: activeOrganizationId,
+          teamId: activeTeamId,
+        };
+      }
+    } else if (await orgsRepository.hasMembership(userId, activeOrganizationId)) {
+      return { kind: 'organization', organizationId: activeOrganizationId, teamId: null };
     }
 
     const personal = { kind: 'personal' } as const;
@@ -304,17 +307,42 @@ export const orgsService = {
     if (!(await orgsRepository.hasMembership(input.userId, input.organizationId))) {
       throw AppError.forbidden('Organization membership required');
     }
-    const [branches, plan] = await Promise.all([
-      orgsRepository.listActiveBranchesForUser(input.userId, input.organizationId),
+    const [membership, plan] = await Promise.all([
+      orgsRepository.findMembershipRole(input.userId, input.organizationId),
       orgsRepository.findOrganizationPlan(input.organizationId),
     ]);
-    const members = await orgsRepository.listBranchMembers(branches.map(({ id }) => id));
+    const branches = await orgsRepository.listBranchesForUser(
+      input.userId,
+      input.organizationId,
+      hasWriteRole(membership?.role ?? null, membership?.frozen ?? false),
+    );
+    const profileIds = branches.map(({ profileId }) => profileId);
+    const teamIds = branches.map(({ id }) => id);
+    const [members, footprints, branchUsage] = await Promise.all([
+      orgsRepository.listBranchMembers(teamIds),
+      orgsRepository.listBranchFootprints(profileIds),
+      orgsRepository.countActiveBranches(input.organizationId),
+    ]);
+    const footprintsByProfileId = new Map<string, typeof footprints>();
+    for (const footprint of footprints) {
+      const existing = footprintsByProfileId.get(footprint.profileId) ?? [];
+      existing.push(footprint);
+      footprintsByProfileId.set(footprint.profileId, existing);
+    }
     return {
       activeTeamId: input.activeTeamId,
-      branchUsage: await orgsRepository.countActiveBranches(input.organizationId),
+      branchUsage,
       branchLimit: branchLimit(plan.tier, plan.state),
       branches: branches.map((branch) => ({
         ...branch,
+        averageRating: Number(branch.averageRating) || 0,
+        footprint: (footprintsByProfileId.get(branch.profileId) ?? []).map((entry) => ({
+          id: entry.id,
+          kind: entry.kind,
+          slug: entry.slug,
+          label: entry.label,
+        })),
+        frozenAt: branch.frozenAt?.toISOString() ?? null,
         createdAt: branch.createdAt.toISOString(),
         members: members
           .filter((member) => member.teamId === branch.id)

@@ -241,7 +241,7 @@ describe('RBAC guards (integration, E-87)', () => {
     expect(await response.json()).toEqual({ activeOrganizationId: null });
   });
 
-  it('selects a remaining active branch when reconciliation cleared the session branch', async () => {
+  it('preserves organization roll-up when reconciliation clears the session branch', async () => {
     const app = sampleApp();
     const designer = await createRoleSession('+919800000065', 'designer');
     const organizationId = await seedOrgWithMember(designer.userId);
@@ -269,13 +269,13 @@ describe('RBAC guards (integration, E-87)', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       activeOrganizationId: organizationId,
-      activeTeamId: teamId,
+      activeTeamId: null,
     });
     const [session] = await db
       .select({ activeTeamId: schema.session.activeTeamId })
       .from(schema.session)
       .where(eq(schema.session.userId, designer.userId));
-    expect(session?.activeTeamId).toBe(teamId);
+    expect(session?.activeTeamId).toBeNull();
   });
 
   /**

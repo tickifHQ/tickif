@@ -11,7 +11,7 @@ import {
 } from '../src/organizations.js';
 
 describe('organization contracts', () => {
-  it('requires a complete organization and branch pair outside personal context', () => {
+  it('supports personal, branch, and organization roll-up contexts', () => {
     expect(activeContextSchema.parse({ kind: 'personal' })).toEqual({ kind: 'personal' });
     expect(
       activeContextSchema.parse({
@@ -20,6 +20,13 @@ describe('organization contracts', () => {
         teamId: 'team-1',
       }),
     ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: 'team-1' });
+    expect(
+      activeContextSchema.parse({
+        kind: 'organization',
+        organizationId: 'org-1',
+        teamId: null,
+      }),
+    ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: null });
     expect(
       activeContextSchema.safeParse({ kind: 'organization', organizationId: 'org-1' }).success,
     ).toBe(false);
@@ -103,7 +110,21 @@ describe('organization contracts', () => {
           name: 'Mumbai',
           profileId: '11111111-1111-4111-8111-111111111111',
           profileSlug: 'mumbai-studio',
+          profileStatus: 'active',
           projectCount: 0,
+          averageRating: 4.5,
+          reviewCount: 8,
+          footprint: [
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              kind: 'city',
+              slug: 'mumbai',
+              label: 'Mumbai',
+            },
+          ],
+          frozen: true,
+          frozenAt: '2026-08-04T00:00:00.000Z',
+          freezeRank: 1,
           createdAt: '2026-08-05T00:00:00.000Z',
           members: [
             {

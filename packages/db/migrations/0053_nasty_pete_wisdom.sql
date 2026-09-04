@@ -1,0 +1,2 @@
+ALTER TABLE "user_context_preference" DROP CONSTRAINT "user_context_preference_shape_check";--> statement-breakpoint
+ALTER TABLE "user_context_preference" ADD CONSTRAINT "user_context_preference_shape_check" CHECK (("user_context_preference"."context_kind" = 'personal' and "user_context_preference"."organization_id" is null and "user_context_preference"."team_id" is null) or ("user_context_preference"."context_kind" = 'organization' and "user_context_preference"."organization_id" is not null));
