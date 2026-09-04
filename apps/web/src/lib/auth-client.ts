@@ -8,6 +8,6 @@ export const authClient = createAuthClient({
   plugins: [
     phoneNumberClient(),
     emailOTPClient(),
-    organizationClient({ ac: orgAc, roles: orgRoles }),
+    organizationClient({ ac: orgAc, roles: orgRoles, teams: { enabled: true } }),
   ],
 });

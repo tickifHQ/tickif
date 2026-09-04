@@ -127,7 +127,7 @@ function formatMutationError(fallback: string, error: unknown): string {
   return fallback;
 }
 
-function formatSeatLimit(limit: number): string {
+export function formatSeatLimit(limit: number): string {
   if (!Number.isFinite(limit) || limit < 0) return 'Unlimited';
   return String(limit);
 }
@@ -229,7 +229,7 @@ function daysUntil(value: string) {
   return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
 }
 
-function RoleBadge({ role }: { role: OrganizationMemberRole }) {
+export function RoleBadge({ role }: { role: OrganizationMemberRole }) {
   return (
     <Badge
       shape="square"
