@@ -71,7 +71,7 @@ describe('GET /api/leads', () => {
 
     const res = await client.api.leads.$get({ query: {} }, { headers: { cookie } });
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(403);
   });
 
   it('returns an org-scoped lead page with filters, search, and pagination', async () => {
@@ -272,6 +272,53 @@ describe('GET /api/leads', () => {
       .from(schema.lead)
       .where(eq(schema.lead.id, assignedElsewhere.id));
     expect(retainedAssignment?.assignedMemberId).toBe(secondMemberId);
+  });
+
+  it('revokes every lead operation when the active branch membership is removed', async () => {
+    const { designer } = await makeDesignerSession('+919800003019');
+    await db.insert(schema.subscription).values({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+    });
+    const memberSession = await createRoleSession('+919800003020', 'designer');
+    const memberId = `mem-${memberSession.userId}`;
+    await db.insert(schema.member).values({
+      id: memberId,
+      organizationId: designer.orgId,
+      userId: memberSession.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `team-member-${memberSession.userId}`,
+      teamId: designer.teamId,
+      userId: memberSession.userId,
+      createdAt: new Date(),
+    });
+    const memberCookie = await activateOrganization(memberSession.cookie, designer.orgId);
+    const assigned = await makeLead({
+      organizationId: designer.orgId,
+      teamId: designer.teamId,
+      assignedMemberId: memberId,
+      name: 'Revoked Branch Lead',
+    });
+
+    await db.delete(schema.teamMember).where(eq(schema.teamMember.userId, memberSession.userId));
+
+    const responses = [
+      await client.api.leads.$get({ query: {} }, { headers: { cookie: memberCookie } }),
+      await app.request('/api/leads/counts', { headers: { cookie: memberCookie } }),
+      await app.request(`/api/leads/${assigned.id}`, { headers: { cookie: memberCookie } }),
+      await requestJson(`/api/leads/${assigned.id}`, 'PATCH', memberCookie, {
+        notes: 'Must not persist',
+      }),
+      await requestJson('/api/leads', 'POST', memberCookie, {
+        name: 'Must not create',
+        contactNumber: '+919800003199',
+      }),
+    ];
+
+    expect(responses.map(({ status }) => status)).toEqual([403, 403, 403, 403, 403]);
   });
 });
 
