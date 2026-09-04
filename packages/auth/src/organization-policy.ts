@@ -20,6 +20,11 @@ export const ORGANIZATION_ENTITLEMENT_ERROR = {
   message: 'Upgrade to Corporate to manage organization roles and members',
 } as const;
 
+export const ORGANIZATION_BILLING_LOCKED_ERROR = {
+  code: 'ORGANIZATION_BILLING_LOCKED',
+  message: 'Restore billing to manage organization roles and members',
+} as const;
+
 export const BRANCH_ENTITLEMENT_ERROR = {
   code: 'BRANCHES_REQUIRE_CORPORATE',
   message: 'Upgrade to Corporate to create additional branches',
@@ -43,9 +48,13 @@ export async function organizationRbacEnabled(organizationId: string): Promise<b
 }
 
 export async function requireOrganizationRbac(organizationId: string): Promise<void> {
-  if (!(await organizationRbacEnabled(organizationId))) {
-    throw new APIError('PAYMENT_REQUIRED', ORGANIZATION_ENTITLEMENT_ERROR);
-  }
+  const plan = await organizationPlan(organizationId);
+  if (rbacEnabled(plan.tier, plan.state)) return;
+
+  throw new APIError(
+    'PAYMENT_REQUIRED',
+    plan.state === 'locked' ? ORGANIZATION_BILLING_LOCKED_ERROR : ORGANIZATION_ENTITLEMENT_ERROR,
+  );
 }
 
 export async function organizationMembershipLimit(organizationId: string): Promise<number> {

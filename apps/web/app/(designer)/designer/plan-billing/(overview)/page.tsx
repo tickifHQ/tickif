@@ -2,7 +2,7 @@ import dynamic from 'next/dynamic';
 import { BillingAccessDenied } from '@/components/billing-access-denied';
 import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 import { getBillingState } from '@/lib/billing-data';
-import { getCurrentOrgRole, hasBillingAccess } from '@/lib/current-org-role';
+import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-role';
 import { requireAuth } from '@/lib/auth-guard';
 
 export const metadata = {
@@ -19,8 +19,8 @@ const BillingDevSwitcher =
 export default async function DesignerPlanBillingPage() {
   await requireAuth({ requiredRole: 'designer' });
 
-  const orgRole = await getCurrentOrgRole();
-  if (!hasBillingAccess(orgRole)) {
+  const orgCapabilities = await getCurrentOrgCapabilities();
+  if (!hasBillingAccess(orgCapabilities)) {
     return <BillingAccessDenied />;
   }
 

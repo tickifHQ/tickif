@@ -177,6 +177,20 @@ describe('organization role matrix', () => {
     }
   });
 
+  it('preserves only billing recovery access for Billing Admin while RBAC is suspended', () => {
+    const billingAdmin = organizationCapabilitiesForRole('billing_admin', {
+      rbacEnabled: false,
+      frozen: false,
+    });
+    const admin = organizationCapabilitiesForRole('admin', {
+      rbacEnabled: false,
+      frozen: false,
+    });
+
+    expect(billingAdmin).toEqual({ ...admin, billing: true });
+    expect(admin.billing).toBe(false);
+  });
+
   for (const role of ORGANIZATION_MEMBER_ROLE_VALUES) {
     it.todo(`${role} archive integration waits for E-253 archived project state`);
   }

@@ -283,6 +283,8 @@ describe('orgsService', () => {
       currentUserRole: 'owner',
       canManage: true,
       rbacEnabled: true,
+      planTier: 'corporate',
+      subscriptionState: 'active',
       seatUsage: 2,
       seatLimit: -1,
       capabilities: {
@@ -338,6 +340,34 @@ describe('orgsService', () => {
         },
       ],
       ownershipTransfer: null,
+    });
+  });
+
+  it('surfaces a locked subscription and preserves Billing Admin recovery access', async () => {
+    vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
+      organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
+      role: 'billing_admin',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'locked',
+    });
+    vi.mocked(orgsRepository.countActiveMembers).mockResolvedValue(6);
+    vi.mocked(orgsRepository.listMembers).mockResolvedValue([]);
+
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
+    ).resolves.toMatchObject({
+      rbacEnabled: false,
+      planTier: 'corporate',
+      subscriptionState: 'locked',
+      seatLimit: 1,
+      capabilities: expect.objectContaining({
+        billing: true,
+        manageMembers: false,
+        changeMemberRoles: false,
+      }),
     });
   });
 

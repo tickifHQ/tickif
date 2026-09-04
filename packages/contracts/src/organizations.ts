@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { planTierSchema, subscriptionStateSchema } from './billing';
 
 export const ACTIVE_CONTEXT_KIND = {
   PERSONAL: 'personal',
@@ -246,6 +247,8 @@ export const organizationWorkspaceResponseSchema = z
     currentUserRole: organizationMemberRoleSchema,
     canManage: z.boolean(),
     rbacEnabled: z.boolean(),
+    planTier: planTierSchema,
+    subscriptionState: subscriptionStateSchema,
     seatUsage: z.number().int().min(0),
     seatLimit: z.number().int(),
     capabilities: organizationCapabilitiesSchema,
