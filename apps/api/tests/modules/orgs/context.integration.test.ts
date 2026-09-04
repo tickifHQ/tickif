@@ -124,7 +124,7 @@ describe('personal and organization context', () => {
     await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
   });
 
-  it('revalidates an active session and repairs a later-frozen context to personal', async () => {
+  it('revalidates an active session and repairs a later-frozen branch to organization roll-up', async () => {
     const account = await createOrganizationContext('+919800004204');
     expect(
       (
@@ -144,7 +144,13 @@ describe('personal and organization context', () => {
       headers: { cookie: account.cookie },
     });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
+      },
+    });
 
     const [session] = await db
       .select({
@@ -153,14 +159,14 @@ describe('personal and organization context', () => {
       })
       .from(schema.session)
       .where(eq(schema.session.userId, account.userId));
-    expect(session).toEqual({ organizationId: null, teamId: null });
+    expect(session).toEqual({ organizationId: account.organization.id, teamId: null });
     const [preference] = await db
       .select()
       .from(schema.userContextPreference)
       .where(eq(schema.userContextPreference.userId, account.userId));
     expect(preference).toMatchObject({
-      contextKind: 'personal',
-      organizationId: null,
+      contextKind: 'organization',
+      organizationId: account.organization.id,
       teamId: null,
     });
   });
