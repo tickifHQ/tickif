@@ -159,8 +159,8 @@ administration permissions. A regular `admin` cannot create, promote, ban, remov
 or reset another account through `/api/auth/admin/*`.
 
 Both privileged role names remain in Better Auth's `adminRoles` option. That option
-also tells Better Auth which accounts are protected admin targets. Actual endpoint
-permissions come from the role statements in `packages/auth/src/permissions.ts`.
+also tells Better Auth which accounts are protected impersonation targets. Actual
+endpoint permissions come from the role statements in `packages/auth/src/permissions.ts`.
 
 See [the admin access runbook](./runbooks/admin-access.md) before creating the first
 superadmin or recovering a deployment with no accessible superadmin.

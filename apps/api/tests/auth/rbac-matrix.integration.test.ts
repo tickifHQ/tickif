@@ -400,6 +400,9 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     const impersonateTarget = await postAdminRequest(admin.cookie, 'impersonate-user', {
       userId: target.userId,
     });
+    const getTarget = await adminRequest(admin.cookie, `get-user?id=${target.userId}`, {
+      method: 'GET',
+    });
     const listUsers = await adminRequest(admin.cookie, 'list-users?limit=1', { method: 'GET' });
     const listSessions = await postAdminRequest(admin.cookie, 'list-user-sessions', {
       userId: target.userId,
@@ -425,6 +428,7 @@ describe('RBAC matrix: escalation attempts (E-89)', () => {
     expect(removeTarget.status).toBe(403);
     expect(replacePassword.status).toBe(403);
     expect(impersonateTarget.status).toBe(403);
+    expect(getTarget.status).toBe(403);
     expect(listUsers.status).toBe(403);
     expect(listSessions.status).toBe(403);
     expect(revokeSession.status).toBe(403);
