@@ -72,6 +72,43 @@ describe('AccountMenu', () => {
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('places the designer profile link immediately before sign out and closes on selection', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    const user = userEvent.setup();
+    render(<AccountMenu showLabel showProfileSettings />);
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
+
+    const items = screen.getAllByRole('menuitem');
+    const profile = screen.getByRole('menuitem', { name: 'Profile & settings' });
+    expect(profile).toHaveAttribute('href', '/designer/profile');
+    expect(profile.querySelector('svg')).toHaveClass('lucide-settings');
+    expect(items).toEqual([profile, screen.getByRole('menuitem', { name: 'Sign out' })]);
+    await user.click(profile);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(mock.signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not expose designer settings in other account menus', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Profile & settings' })).not.toBeInTheDocument();
+  });
+
+  it('supports opening the designer menu and dismissing it with the keyboard', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    const user = userEvent.setup();
+    render(<AccountMenu showProfileSettings />);
+    const trigger = screen.getByRole('button', { name: /open account menu for alice/i });
+    trigger.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it('still redirects to login even when signOut rejects', async () => {
     mock.session = { user: { name: 'Alice', email: null } };
     mock.signOut.mockRejectedValue(new Error('Network error'));

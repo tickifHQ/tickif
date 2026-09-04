@@ -12,17 +12,20 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuItem,
+  DropdownMenuGroup,
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export function AccountMenu({
   showLabel = false,
   avatarSeed,
+  showProfileSettings = false,
 }: {
   showLabel?: boolean;
   avatarSeed?: string;
+  showProfileSettings?: boolean;
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
@@ -96,9 +99,23 @@ export function AccountMenu({
           {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleSignOut} variant="destructive" className="cursor-pointer">
-          Sign out
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          {showProfileSettings ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/designer/profile">
+                <Settings aria-hidden="true" />
+                Profile &amp; settings
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            onSelect={handleSignOut}
+            variant="destructive"
+            className="cursor-pointer"
+          >
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

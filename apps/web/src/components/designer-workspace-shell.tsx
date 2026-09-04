@@ -54,6 +54,11 @@ const growItems: NavItem[] = [
   },
   { label: 'Team & Roles', href: '/designer/terms-roles', icon: UsersRound },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
+];
+
+const headerItems: NavItem[] = [
+  ...studioItems,
+  ...growItems,
   { label: 'Profile & settings', href: '/designer/profile', icon: Settings },
 ];
 
@@ -135,9 +140,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
     );
   }
 
-  const navigationItem = [...studioItems, ...growItems].find((item) =>
-    isItemActive(pathname, item.href),
-  );
+  const navigationItem = headerItems.find((item) => isItemActive(pathname, item.href));
 
   if (navigationItem?.href) {
     const Icon = navigationItem.headerIcon ?? navigationItem.icon;
@@ -359,7 +362,7 @@ export function DesignerWorkspaceShell({
                   </Link>
                 </Button>
               ) : null}
-              <AccountMenu showLabel avatarSeed={studioName} />
+              <AccountMenu showLabel showProfileSettings avatarSeed={studioName} />
             </div>
           </header>
           <section className="min-h-0 flex-1 overflow-hidden rounded-b-3xl border-x border-b border-border/80 bg-background shadow-sm">
