@@ -195,7 +195,7 @@ export const leadsService = {
       await leadsRepository.countByStatus(
         activeOrganizationId,
         query.q,
-        activeTeamId,
+        activeTeamId ?? undefined,
         access.scope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED ? access.memberIds : undefined,
       ),
     );
@@ -239,9 +239,7 @@ export const leadsService = {
     }
 
     const receivedAt = input.receivedAt ? new Date(input.receivedAt) : undefined;
-    return toDetail(
-      await leadsRepository.create({ ...input, organizationId, teamId, receivedAt }),
-    );
+    return toDetail(await leadsRepository.create({ ...input, organizationId, teamId, receivedAt }));
   },
 
   async countForOrganization(organizationId: string, teamId?: string): Promise<LeadCounts> {
