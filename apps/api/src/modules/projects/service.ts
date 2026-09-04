@@ -1572,7 +1572,11 @@ export const projectsService = {
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
     if (
-      !(await orgsService.canAssignProjectResponsibility(caller.userId, ownership.organizationId))
+      !(await orgsService.hasCapability(
+        caller.userId,
+        ownership.organizationId,
+        ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+      ))
     ) {
       throw AppError.forbidden('Only organization owners and admins can assign projects');
     }

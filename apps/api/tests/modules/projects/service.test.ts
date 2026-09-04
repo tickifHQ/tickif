@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
   ProjectFeedItemRecord,
@@ -76,7 +77,6 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
     isMember: vi.fn(),
     hasCapability: vi.fn(),
     isWriter: vi.fn(),
-    canAssignProjectResponsibility: vi.fn(),
   },
 }));
 
@@ -187,7 +187,6 @@ beforeEach(() => {
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
   vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
   vi.mocked(orgsService.isWriter).mockResolvedValue(true);
-  vi.mocked(orgsService.canAssignProjectResponsibility).mockResolvedValue(true);
 });
 
 describe('projectsService.list', () => {
@@ -694,7 +693,7 @@ describe('projectsService.assignResponsibleMember', () => {
     expect(result.responsibleMemberId).toBe('member_2');
   });
 
-  it('rejects members and viewers from assigning project responsibility', async () => {
+  it('rejects assignment when retention-aware project capabilities freeze writes', async () => {
     const project = row();
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: project.id,
@@ -705,7 +704,7 @@ describe('projectsService.assignResponsibleMember', () => {
       archiveReason: null,
       ownerUserId: null,
     });
-    vi.mocked(orgsService.canAssignProjectResponsibility).mockResolvedValue(false);
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
 
     await expect(
       projectsService.assignResponsibleMember(
@@ -714,6 +713,11 @@ describe('projectsService.assignResponsibleMember', () => {
         caller,
       ),
     ).rejects.toMatchObject({ status: 403 });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+    );
     expect(projectsRepository.assignResponsibleMember).not.toHaveBeenCalled();
   });
 
