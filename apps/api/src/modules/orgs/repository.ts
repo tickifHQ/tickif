@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lte, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, lte, max, sql } from 'drizzle-orm';
 import {
   db,
   schema,
@@ -223,27 +223,61 @@ export const orgsRepository = {
     return row?.count ?? 0;
   },
 
-  async listActiveBranchesForUser(userId: string, organizationId: string) {
+  async listBranchesForUser(userId: string, organizationId: string, includeAll: boolean) {
+    const assignedBranch = db
+      .select({ id: schema.teamMember.id })
+      .from(schema.teamMember)
+      .where(
+        and(eq(schema.teamMember.teamId, schema.team.id), eq(schema.teamMember.userId, userId)),
+      );
     return db
       .select({
         id: schema.team.id,
         name: schema.team.name,
         createdAt: schema.team.createdAt,
+        frozen: schema.team.frozen,
+        frozenAt: schema.team.frozenAt,
+        freezeRank: schema.team.freezeRank,
         profileId: schema.designerProfile.id,
         profileSlug: schema.designerProfile.slug,
+        profileStatus: schema.designerProfile.status,
         projectCount: schema.designerProfile.projectCount,
+        averageRating: schema.designerProfile.avgRating,
+        reviewCount: schema.designerProfile.reviewCount,
       })
       .from(schema.team)
-      .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
       .innerJoin(schema.designerProfile, eq(schema.designerProfile.teamId, schema.team.id))
       .where(
         and(
           eq(schema.team.organizationId, organizationId),
-          eq(schema.teamMember.userId, userId),
-          eq(schema.team.frozen, false),
+          includeAll ? undefined : exists(assignedBranch),
         ),
       )
       .orderBy(asc(schema.team.createdAt), asc(schema.team.id));
+  },
+
+  async listBranchFootprints(profileIds: string[]) {
+    if (profileIds.length === 0) return [];
+    return db
+      .select({
+        profileId: schema.designerProfileFootprint.profileId,
+        id: schema.taxonomy.id,
+        kind: schema.taxonomy.kind,
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+      })
+      .from(schema.designerProfileFootprint)
+      .innerJoin(
+        schema.taxonomy,
+        eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id),
+      )
+      .where(inArray(schema.designerProfileFootprint.profileId, profileIds))
+      .orderBy(
+        asc(schema.designerProfileFootprint.profileId),
+        asc(schema.taxonomy.kind),
+        asc(schema.taxonomy.sortOrder),
+        asc(schema.taxonomy.label),
+      );
   },
 
   async listBranchMembers(teamIds: string[]) {

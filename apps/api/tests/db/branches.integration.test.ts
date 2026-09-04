@@ -5,6 +5,7 @@ import {
   makeOrganization,
   makeProject,
   makeTeam,
+  makeTaxonomy,
   makeUser,
   truncateAll,
 } from '@repo/db/testing';
@@ -220,5 +221,89 @@ describe('corporate branch persistence', () => {
       activeLimit: -1,
     });
     expect(restored).toEqual([newest.id, middle.id]);
+  });
+
+  it('returns frozen branch profile summaries to managers and assigned branches to members', async () => {
+    const owner = await makeUser({ email: 'owner@example.com' });
+    const member = await makeUser({ email: 'member@example.com' });
+    const organization = await makeOrganization();
+    await db.insert(schema.member).values([
+      {
+        id: 'owner-member',
+        organizationId: organization.id,
+        userId: owner.id,
+        role: 'owner',
+        createdAt: new Date(),
+      },
+      {
+        id: 'regular-member',
+        organizationId: organization.id,
+        userId: member.id,
+        role: 'member',
+        createdAt: new Date(),
+      },
+    ]);
+    const activeTeam = await makeTeam({ organizationId: organization.id, name: 'Mumbai' });
+    const frozenTeam = await makeTeam({
+      organizationId: organization.id,
+      name: 'Pune',
+      frozen: true,
+      frozenAt: new Date('2026-09-01T00:00:00.000Z'),
+      freezeRank: 1,
+    });
+    await makeDesigner({
+      orgId: organization.id,
+      teamId: activeTeam.id,
+      slug: 'mumbai-studio',
+    });
+    const frozenProfile = await makeDesigner({
+      orgId: organization.id,
+      teamId: frozenTeam.id,
+      slug: 'pune-studio',
+      status: 'active',
+      avgRating: '4.50',
+      reviewCount: 8,
+    });
+    await db.insert(schema.teamMember).values({
+      id: 'member-frozen-branch',
+      teamId: frozenTeam.id,
+      userId: member.id,
+      createdAt: new Date(),
+    });
+    const city = await makeTaxonomy({ kind: 'city', slug: 'pune', label: 'Pune' });
+    await db.insert(schema.designerProfileFootprint).values({
+      profileId: frozenProfile.id,
+      taxonomyId: city.id,
+    });
+
+    const managerBranches = await orgsRepository.listBranchesForUser(
+      owner.id,
+      organization.id,
+      true,
+    );
+    const memberBranches = await orgsRepository.listBranchesForUser(
+      member.id,
+      organization.id,
+      false,
+    );
+    const footprint = await orgsRepository.listBranchFootprints([frozenProfile.id]);
+
+    expect(managerBranches.map(({ name }) => name)).toEqual(['Mumbai', 'Pune']);
+    expect(memberBranches).toHaveLength(1);
+    expect(memberBranches[0]).toMatchObject({
+      name: 'Pune',
+      frozen: true,
+      profileStatus: 'active',
+      averageRating: '4.50',
+      reviewCount: 8,
+    });
+    expect(footprint).toEqual([
+      expect.objectContaining({
+        profileId: frozenProfile.id,
+        kind: 'city',
+        slug: 'pune',
+        label: 'Pune',
+      }),
+    ]);
   });
 });
