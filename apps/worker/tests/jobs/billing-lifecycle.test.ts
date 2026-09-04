@@ -8,6 +8,7 @@ const repository = vi.hoisted(() => ({
 }));
 const cache = vi.hoisted(() => ({ invalidateEntitlementCache: vi.fn() }));
 const sharedDb = vi.hoisted(() => ({ sweepOrgExpirations: vi.fn() }));
+const retention = vi.hoisted(() => ({ processOrganizationRetentionSweep: vi.fn() }));
 
 vi.mock('@repo/config', () => ({
   config: {
@@ -18,6 +19,7 @@ vi.mock('@repo/config', () => ({
 vi.mock('@repo/db', () => ({ sweepOrgExpirations: sharedDb.sweepOrgExpirations }));
 vi.mock('../../src/billing-lifecycle/repository.js', () => repository);
 vi.mock('../../src/billing-lifecycle/cache.js', () => cache);
+vi.mock('../../src/jobs/organization-retention.js', () => retention);
 
 const { processBillingLifecycleSweep } = await import('../../src/jobs/billing-lifecycle.js');
 
@@ -48,6 +50,9 @@ describe('processBillingLifecycleSweep failure reporting', () => {
       .mockResolvedValueOnce(true);
     cache.invalidateEntitlementCache.mockResolvedValue(undefined);
     sharedDb.sweepOrgExpirations.mockRejectedValue(new Error('org expiry failed'));
+    retention.processOrganizationRetentionSweep.mockRejectedValue(
+      new Error('organization retention failed'),
+    );
 
     await expect(
       processBillingLifecycleSweep(new Date('2026-09-04T00:00:00.000Z')),
@@ -59,10 +64,14 @@ describe('processBillingLifecycleSweep failure reporting', () => {
       graceFailures: 1,
       downgradeFailures: 1,
       orgExpiryFailures: 1,
+      organizationsArchived: 0,
+      organizationsPurged: 0,
+      organizationRetentionFailures: 1,
     });
     expect(repository.transitionGraceToLocked).toHaveBeenCalledTimes(2);
     expect(repository.transitionLockedToDowngraded).toHaveBeenCalledTimes(2);
     expect(cache.invalidateEntitlementCache).toHaveBeenCalledWith('org-grace-success');
     expect(cache.invalidateEntitlementCache).toHaveBeenCalledWith('org-downgrade-success');
+    expect(retention.processOrganizationRetentionSweep).toHaveBeenCalledOnce();
   });
 });
