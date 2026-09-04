@@ -148,6 +148,21 @@ export const portfolioRepository = {
       await tx.execute(
         sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
       );
+      const [current] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .innerJoin(
+          schema.organization,
+          eq(schema.organization.id, schema.designerProfile.orgId),
+        )
+        .where(
+          and(
+            eq(schema.designerProfile.id, profileId),
+            eq(schema.designerProfile.orgId, candidate.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!current) return false;
       const [retention] = await tx
         .select({ organizationId: schema.organizationRetention.organizationId })
         .from(schema.organizationRetention)

@@ -50,7 +50,7 @@ export const organizationPurgeManifestStatusEnum = pgEnum('organization_purge_ma
 
 export const organizationPurgeManifestItemStatusEnum = pgEnum(
   'organization_purge_manifest_item_status',
-  ['pending', 'deleted', 'failed'],
+  ['pending', 'processing', 'deleted', 'failed'],
 );
 
 export const organizationPurgeManifestItemKindEnum = pgEnum(
@@ -222,6 +222,8 @@ export const organizationPurgeManifestItem = pgTable(
     resourceKey: text('resource_key').notNull(),
     status: organizationPurgeManifestItemStatusEnum('status').default('pending').notNull(),
     attemptCount: integer('attempt_count').default(0).notNull(),
+    claimToken: uuid('claim_token'),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
     lastErrorCode: text('last_error_code'),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -236,6 +238,10 @@ export const organizationPurgeManifestItem = pgTable(
     index('organization_purge_manifest_item_status_sequence_idx').on(t.status, t.sequence),
     index('organization_purge_manifest_item_manifest_idx').on(t.manifestId),
     check('organization_purge_manifest_item_attempt_count_check', sql`${t.attemptCount} >= 0`),
+    check(
+      'organization_purge_manifest_item_claim_check',
+      sql`(${t.status}::text = 'processing' and ${t.claimToken} is not null and ${t.claimedAt} is not null) or (${t.status}::text <> 'processing' and ${t.claimToken} is null and ${t.claimedAt} is null)`,
+    ),
   ],
 );
 

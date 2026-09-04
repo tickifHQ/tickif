@@ -370,6 +370,29 @@ async function restoreSnapshots(
     .where(eq(schema.organizationRetention.organizationId, input.organizationId));
 }
 
+async function hasAmbiguousProviderCleanup(
+  tx: Transaction,
+  organizationId: string,
+): Promise<boolean> {
+  const [item] = await tx
+    .select({ sequence: schema.organizationPurgeManifestItem.sequence })
+    .from(schema.organizationPurgeManifestItem)
+    .innerJoin(
+      schema.organizationPurgeManifest,
+      eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+    )
+    .where(
+      and(
+        eq(schema.organizationPurgeManifest.organizationId, organizationId),
+        eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+        ne(schema.organizationPurgeManifestItem.status, 'deleted'),
+        sql`${schema.organizationPurgeManifestItem.attemptCount} > 0`,
+      ),
+    )
+    .limit(1);
+  return item !== undefined;
+}
+
 export const organizationRetentionRepository = {
   async findByOrganization(
     organizationId: string,
@@ -449,6 +472,9 @@ export const organizationRetentionRepository = {
         input.allowArchived &&
         (retention.status === 'deletion_requested' || retention.status === 'archived');
       if (!ownerCanRestore && !adminCanRestore) return { outcome: 'not_recoverable' };
+      if (await hasAmbiguousProviderCleanup(tx, input.organizationId)) {
+        return { outcome: 'not_recoverable' };
+      }
       const revision = retention.revision + 1;
       await restoreSnapshots(tx, {
         organizationId: input.organizationId,

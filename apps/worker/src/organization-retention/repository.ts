@@ -27,6 +27,7 @@ export type ProviderCleanupItem = {
   sequence: bigint;
   organizationId: string;
   razorpaySubscriptionId: string;
+  claimToken: string;
 };
 
 export type PreparedOrganizationPurge = {
@@ -216,7 +217,15 @@ export async function findOrganizationsDueForPurge(
     .limit(limit);
 }
 
-export async function findPendingProviderCleanup(limit: number): Promise<ProviderCleanupItem[]> {
+const PROVIDER_CLEANUP_CLAIM_TIMEOUT_MS = 15 * 60 * 1_000;
+
+type ProviderCleanupCandidate = Omit<ProviderCleanupItem, 'claimToken'>;
+
+async function findProviderCleanupCandidates(
+  now: Date,
+  limit: number,
+): Promise<ProviderCleanupCandidate[]> {
+  const staleBefore = new Date(now.getTime() - PROVIDER_CLEANUP_CLAIM_TIMEOUT_MS);
   return db
     .select({
       sequence: schema.organizationPurgeManifestItem.sequence,
@@ -241,6 +250,10 @@ export async function findPendingProviderCleanup(limit: number): Promise<Provide
         or(
           eq(schema.organizationPurgeManifestItem.status, 'pending'),
           eq(schema.organizationPurgeManifestItem.status, 'failed'),
+          and(
+            eq(schema.organizationPurgeManifestItem.status, 'processing'),
+            lte(schema.organizationPurgeManifestItem.claimedAt, staleBefore),
+          ),
         ),
       ),
     )
@@ -248,11 +261,111 @@ export async function findPendingProviderCleanup(limit: number): Promise<Provide
     .limit(limit);
 }
 
+async function claimProviderCleanupCandidate(
+  candidate: ProviderCleanupCandidate,
+  now: Date,
+): Promise<ProviderCleanupItem | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+    );
+    const staleBefore = new Date(now.getTime() - PROVIDER_CLEANUP_CLAIM_TIMEOUT_MS);
+    const [active] = await tx
+      .select({ sequence: schema.organizationPurgeManifestItem.sequence })
+      .from(schema.organizationPurgeManifestItem)
+      .innerJoin(
+        schema.organizationPurgeManifest,
+        eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+      )
+      .innerJoin(
+        schema.organizationRetention,
+        eq(
+          schema.organizationRetention.organizationId,
+          schema.organizationPurgeManifest.organizationId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.organizationPurgeManifestItem.sequence, candidate.sequence),
+          eq(schema.organizationPurgeManifest.organizationId, candidate.organizationId),
+          eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+          or(
+            eq(schema.organizationPurgeManifestItem.status, 'pending'),
+            eq(schema.organizationPurgeManifestItem.status, 'failed'),
+            and(
+              eq(schema.organizationPurgeManifestItem.status, 'processing'),
+              lte(schema.organizationPurgeManifestItem.claimedAt, staleBefore),
+            ),
+          ),
+        ),
+      )
+      .for('update')
+      .limit(1);
+    if (!active) return null;
+
+    const claimToken = crypto.randomUUID();
+    await tx
+      .update(schema.organizationPurgeManifestItem)
+      .set({
+        status: 'processing',
+        claimToken,
+        claimedAt: now,
+        attemptCount: sql`${schema.organizationPurgeManifestItem.attemptCount} + 1`,
+        lastErrorCode: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.organizationPurgeManifestItem.sequence, candidate.sequence));
+    return { ...candidate, claimToken };
+  });
+}
+
+/** Claim provider work durably before any irreversible network request starts. */
+export async function claimPendingProviderCleanup(
+  now: Date,
+  limit: number,
+): Promise<ProviderCleanupItem[]> {
+  const candidates = await findProviderCleanupCandidates(now, limit);
+  const claimed = await Promise.all(
+    candidates.map((candidate) => claimProviderCleanupCandidate(candidate, now)),
+  );
+  return claimed.filter((item): item is ProviderCleanupItem => item !== null);
+}
+
+async function isProviderCleanupClaimActive(item: ProviderCleanupItem): Promise<boolean> {
+  const [active] = await db
+    .select({ sequence: schema.organizationPurgeManifestItem.sequence })
+    .from(schema.organizationPurgeManifestItem)
+    .innerJoin(
+      schema.organizationPurgeManifest,
+      eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+    )
+    .innerJoin(
+      schema.organizationRetention,
+      eq(
+        schema.organizationRetention.organizationId,
+        schema.organizationPurgeManifest.organizationId,
+      ),
+    )
+    .where(
+      and(
+        eq(schema.organizationPurgeManifestItem.sequence, item.sequence),
+        eq(schema.organizationPurgeManifest.organizationId, item.organizationId),
+        eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+        eq(schema.organizationPurgeManifestItem.status, 'processing'),
+        eq(schema.organizationPurgeManifestItem.claimToken, item.claimToken),
+      ),
+    )
+    .limit(1);
+  return active !== undefined;
+}
+
 export async function runProviderCleanup(
   item: ProviderCleanupItem,
   now: Date,
   cancel: (razorpaySubscriptionId: string) => Promise<void>,
 ): Promise<boolean> {
+  if (!(await isProviderCleanupClaimActive(item))) return false;
+  await cancel(item.razorpaySubscriptionId);
   return db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${item.organizationId}`}, 0))`,
@@ -276,15 +389,13 @@ export async function runProviderCleanup(
           eq(schema.organizationPurgeManifestItem.sequence, item.sequence),
           eq(schema.organizationPurgeManifest.organizationId, item.organizationId),
           eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
-          or(
-            eq(schema.organizationPurgeManifestItem.status, 'pending'),
-            eq(schema.organizationPurgeManifestItem.status, 'failed'),
-          ),
+          eq(schema.organizationPurgeManifestItem.status, 'processing'),
+          eq(schema.organizationPurgeManifestItem.claimToken, item.claimToken),
         ),
       )
+      .for('update')
       .limit(1);
     if (!active) return false;
-    await cancel(item.razorpaySubscriptionId);
     await tx
       .update(schema.subscription)
       .set({
@@ -308,10 +419,40 @@ export async function runProviderCleanup(
       );
     await tx
       .update(schema.organizationPurgeManifestItem)
-      .set({ status: 'deleted', deletedAt: now, lastErrorCode: null, updatedAt: now })
-      .where(eq(schema.organizationPurgeManifestItem.sequence, item.sequence));
+      .set({
+        status: 'deleted',
+        claimToken: null,
+        claimedAt: null,
+        deletedAt: now,
+        lastErrorCode: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(schema.organizationPurgeManifestItem.sequence, item.sequence),
+          eq(schema.organizationPurgeManifestItem.claimToken, item.claimToken),
+        ),
+      );
     return true;
   });
+}
+
+/** Preserve the claim after an ambiguous provider failure so restore cannot race it. */
+export async function markProviderCleanupAttemptFailed(
+  item: ProviderCleanupItem,
+  errorCode: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(schema.organizationPurgeManifestItem)
+    .set({ lastErrorCode: errorCode, updatedAt: now })
+    .where(
+      and(
+        eq(schema.organizationPurgeManifestItem.sequence, item.sequence),
+        eq(schema.organizationPurgeManifestItem.status, 'processing'),
+        eq(schema.organizationPurgeManifestItem.claimToken, item.claimToken),
+      ),
+    );
 }
 
 function uniqueStorageKeys(input: {
@@ -557,7 +698,14 @@ export async function appendPurgeStorageItems(
 export async function markPurgeManifestItemDeleted(sequence: bigint, now: Date): Promise<void> {
   await db
     .update(schema.organizationPurgeManifestItem)
-    .set({ status: 'deleted', deletedAt: now, lastErrorCode: null, updatedAt: now })
+    .set({
+      status: 'deleted',
+      claimToken: null,
+      claimedAt: null,
+      deletedAt: now,
+      lastErrorCode: null,
+      updatedAt: now,
+    })
     .where(eq(schema.organizationPurgeManifestItem.sequence, sequence));
 }
 
@@ -645,6 +793,7 @@ export async function finalizeOrganizationPurge(
           eq(schema.organizationPurgeManifestItem.manifestId, prepared.manifestId),
           or(
             eq(schema.organizationPurgeManifestItem.status, 'pending'),
+            eq(schema.organizationPurgeManifestItem.status, 'processing'),
             eq(schema.organizationPurgeManifestItem.status, 'failed'),
           ),
         ),

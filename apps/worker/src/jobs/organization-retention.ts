@@ -3,11 +3,12 @@ import { deleteObject, listObjectKeys } from '@repo/storage';
 import {
   appendPurgeStorageItems,
   archiveOrganization,
+  claimPendingProviderCleanup,
   finalizeOrganizationPurge,
   findOrganizationsDueForArchive,
   findOrganizationsDueForPurge,
-  findPendingProviderCleanup,
   isStorageKeyReferencedOutsideOrganization,
+  markProviderCleanupAttemptFailed,
   markOrganizationPurgeFailed,
   markPurgeManifestItemDeleted,
   markPurgeManifestItemFailed,
@@ -102,13 +103,13 @@ export async function processOrganizationRetentionSweep(
   let purged = 0;
   let failed = 0;
 
-  const providerCleanup = await findPendingProviderCleanup(RETENTION_BATCH_SIZE);
+  const providerCleanup = await claimPendingProviderCleanup(now, RETENTION_BATCH_SIZE);
   for (const item of providerCleanup) {
     try {
       await runProviderCleanup(item, now, cancelRazorpaySubscription);
     } catch (error) {
       failed += 1;
-      await markPurgeManifestItemFailed(item.sequence, errorCode(error), now);
+      await markProviderCleanupAttemptFailed(item, errorCode(error), now);
       console.error('[worker] Razorpay subscription cleanup failed:', error);
     }
   }

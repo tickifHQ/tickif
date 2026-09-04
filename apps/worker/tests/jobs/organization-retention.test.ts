@@ -14,7 +14,7 @@ vi.mock('../../src/organization-retention/repository.js', () => ({
   findOrganizationsDueForArchive: vi.fn(async () => []),
   archiveOrganization: vi.fn(async () => false),
   findOrganizationsDueForPurge: vi.fn(async () => []),
-  findPendingProviderCleanup: vi.fn(async () => []),
+  claimPendingProviderCleanup: vi.fn(async () => []),
   runProviderCleanup: vi.fn(async (_item, _now, cancel) => {
     await cancel(_item.razorpaySubscriptionId);
     return true;
@@ -24,6 +24,7 @@ vi.mock('../../src/organization-retention/repository.js', () => ({
   isStorageKeyReferencedOutsideOrganization: vi.fn(async () => false),
   markPurgeManifestItemDeleted: vi.fn(async () => undefined),
   markPurgeManifestItemFailed: vi.fn(async () => undefined),
+  markProviderCleanupAttemptFailed: vi.fn(async () => undefined),
   markOrganizationPurgeFailed: vi.fn(async () => undefined),
   finalizeOrganizationPurge: vi.fn(async () => false),
 }));
@@ -52,8 +53,9 @@ describe('organization retention lifecycle processor', () => {
       sequence: 10n,
       organizationId: 'org-1',
       razorpaySubscriptionId: 'sub_paid',
+      claimToken: '00000000-0000-4000-8000-000000000010',
     };
-    vi.mocked(repository.findPendingProviderCleanup).mockResolvedValue([item]);
+    vi.mocked(repository.claimPendingProviderCleanup).mockResolvedValue([item]);
 
     const result = await processOrganizationRetentionSweep(now);
 
@@ -67,8 +69,13 @@ describe('organization retention lifecycle processor', () => {
   });
 
   it('keeps provider cleanup retryable when Razorpay cancellation fails', async () => {
-    vi.mocked(repository.findPendingProviderCleanup).mockResolvedValue([
-      { sequence: 10n, organizationId: 'org-1', razorpaySubscriptionId: 'sub_paid' },
+    vi.mocked(repository.claimPendingProviderCleanup).mockResolvedValue([
+      {
+        sequence: 10n,
+        organizationId: 'org-1',
+        razorpaySubscriptionId: 'sub_paid',
+        claimToken: '00000000-0000-4000-8000-000000000010',
+      },
     ]);
     vi.mocked(razorpay.cancelRazorpaySubscription).mockRejectedValueOnce(
       new Error('Razorpay unavailable'),
@@ -77,7 +84,11 @@ describe('organization retention lifecycle processor', () => {
     const result = await processOrganizationRetentionSweep(now);
 
     expect(repository.runProviderCleanup).toHaveBeenCalledOnce();
-    expect(repository.markPurgeManifestItemFailed).toHaveBeenCalledWith(10n, 'Error', now);
+    expect(repository.markProviderCleanupAttemptFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ sequence: 10n }),
+      'Error',
+      now,
+    );
     expect(result).toEqual({ archived: 0, purged: 0, failed: 1 });
   });
 

@@ -53,4 +53,20 @@ describe('Razorpay retention cleanup', () => {
       'cancellation returned active',
     );
   });
+
+  it('reconciles provider state before retrying an ambiguously completed cancellation', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'active' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('not-json', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }));
+
+    await expect(cancelRazorpaySubscription('sub_ambiguous')).rejects.toThrow();
+    await expect(cancelRazorpaySubscription('sub_ambiguous')).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST'),
+    ).toHaveLength(1);
+  });
 });

@@ -211,6 +211,57 @@ describe('organization retention routes', () => {
     });
   });
 
+  it('blocks restoration after provider cancellation may have started', async () => {
+    const seeded = await seedPublishedOrganization();
+    await db.insert(schema.subscription).values({
+      organizationId: seeded.organization.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_cleanup_in_flight',
+      razorpayStatus: 'active',
+    });
+    expect(
+      (
+        await request('/api/orgs/retention/deletion', seeded.owner.cookie, 'POST', {
+          confirmationSlug: seeded.organization.slug,
+        })
+      ).status,
+    ).toBe(200);
+    const claimToken = '00000000-0000-4000-8000-000000000250';
+    await db
+      .update(schema.organizationPurgeManifestItem)
+      .set({
+        status: 'processing',
+        attemptCount: 1,
+        claimToken,
+        claimedAt: new Date('2026-09-04T16:00:00.000Z'),
+      })
+      .where(eq(schema.organizationPurgeManifestItem.resourceKey, 'sub_cleanup_in_flight'));
+
+    const restore = await request('/api/orgs/retention/restore', seeded.owner.cookie, 'POST');
+
+    expect(restore.status).toBe(409);
+    const [retention, subscription, cleanup] = await Promise.all([
+      organizationRetentionRepository.findByOrganization(seeded.organization.id),
+      db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.organizationId, seeded.organization.id))
+        .then(([row]) => row),
+      db
+        .select()
+        .from(schema.organizationPurgeManifestItem)
+        .where(eq(schema.organizationPurgeManifestItem.resourceKey, 'sub_cleanup_in_flight'))
+        .then(([row]) => row),
+    ]);
+    expect(retention).toMatchObject({ status: 'deletion_requested' });
+    expect(subscription).toMatchObject({
+      planTier: 'professional_plus',
+      razorpaySubscriptionId: 'sub_cleanup_in_flight',
+    });
+    expect(cleanup).toMatchObject({ status: 'processing', claimToken });
+  });
+
   it('rejects ownership acceptance after permanent erasure wins the organization lock', async () => {
     const seeded = await seedPublishedOrganization();
     const target = await organizationSession({
