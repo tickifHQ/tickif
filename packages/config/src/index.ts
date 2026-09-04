@@ -204,6 +204,11 @@ const envSchema = z.object({
   // How often the billing lifecycle sweep runs (ms). Day-granularity windows
   // tolerate an hourly cadence.
   BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+
+  // Organization closure and retention windows (E-250). A closure remains
+  // owner-recoverable while delisted, then admin-recoverable while archived.
+  ORGANIZATION_DELIST_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  ORGANIZATION_ARCHIVE_RETENTION_DAYS: z.coerce.number().int().min(1).default(365),
 });
 
 /**

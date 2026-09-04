@@ -701,8 +701,8 @@ export const publicProjectPageResponseSchema = z.union([
 export type PublicProjectPageResponse = z.infer<typeof publicProjectPageResponseSchema>;
 
 /** Compatibility alias for existing slug-route consumers. */
-export const publicProjectBySlugResponseSchema = publicProjectDetailResponseSchema;
-export type PublicProjectBySlugResponse = PublicProjectDetailResponse;
+export const publicProjectBySlugResponseSchema = publicProjectPageResponseSchema;
+export type PublicProjectBySlugResponse = PublicProjectPageResponse;
 
 /**
  * Feed-compatible project context embedded in the public image-detail response.

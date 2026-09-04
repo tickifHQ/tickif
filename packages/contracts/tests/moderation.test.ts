@@ -22,6 +22,9 @@ describe('moderation contracts', () => {
       'archive',
       'restore',
       'delete',
+      'organization_delist',
+      'organization_archive',
+      'organization_restore',
     ]);
   });
 
@@ -33,6 +36,9 @@ describe('moderation contracts', () => {
       'archive',
       'restore',
       'delete',
+      'organization_delist',
+      'organization_archive',
+      'organization_restore',
     ]);
     // Retention keys off "not self-service", so an unclassified new action must default to
     // being treated as a reviewer verdict rather than silently becoming deletable.
