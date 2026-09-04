@@ -1,5 +1,5 @@
 {
-  "id": "cd6a4e34-3371-4ea4-815f-ebac03a05f54",
+  "id": "6511fc28-9a02-4ad9-8521-8bdd2ceda838",
   "prevId": "12f94486-39d6-431b-b8f0-136d5098fd3a",
   "version": "7",
   "dialect": "postgresql",
@@ -3560,6 +3560,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
         "processed_at": {
           "name": "processed_at",
           "type": "timestamp with time zone",
@@ -3582,11 +3589,17 @@
         }
       },
       "indexes": {
-        "payment_transaction_subscription_idx": {
-          "name": "payment_transaction_subscription_idx",
+        "payment_transaction_subscription_occurred_idx": {
+          "name": "payment_transaction_subscription_occurred_idx",
           "columns": [
             {
               "expression": "subscription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
