@@ -377,6 +377,8 @@ describe('E-117: payment.failed', () => {
     const payload = buildPayload('payment.failed', {
       subscriptionId: sub.razorpaySubscriptionId!,
       status: 'halted',
+      paymentId: `pay_failed_${Date.now()}`,
+      paymentStatus: 'failed',
     });
 
     const result = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);
@@ -399,6 +401,8 @@ describe('E-117: payment.failed', () => {
 
     const payload = buildPayload('payment.failed', {
       subscriptionId: sub.razorpaySubscriptionId!,
+      paymentId: `pay_failed_invalid_${Date.now()}`,
+      paymentStatus: 'failed',
     });
 
     const result = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);

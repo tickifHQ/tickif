@@ -12,6 +12,7 @@ import {
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
+import { recordFailedPayment } from './webhook-repository.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -334,26 +335,27 @@ async function handlePaymentFailed(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  if (currentState !== SUBSCRIPTION_STATE.ACTIVE) {
-    return {
-      outcome: 'invalid_transition',
-      reason: `Cannot transition from ${currentState} to payment_failed`,
-    };
+  const razorpayPaymentId = extractPaymentId(payload);
+  if (!razorpayPaymentId) {
+    return { outcome: 'ignored', reason: 'No payment ID in failed event' };
   }
 
-  const razorpayStatus = extractRazorpayStatus(payload) ?? 'halted';
+  const outcome = await recordFailedPayment({
+    subscriptionId: subscription.id,
+    razorpayPaymentId,
+    amount: extractAmount(payload),
+    currency: extractCurrency(payload) ?? 'INR',
+    razorpayStatus: extractRazorpayStatus(payload) ?? 'halted',
+    payload,
+  });
 
-  await db
-    .update(schema.subscription)
-    .set({
-      subscriptionState: SUBSCRIPTION_STATE.PAYMENT_FAILED,
-      razorpayStatus,
-    })
-    .where(eq(schema.subscription.id, subscription.id));
-
-  return { outcome: 'processed' };
+  if (outcome === 'invalid_transition') {
+    return {
+      outcome: 'invalid_transition',
+      reason: `Cannot transition from ${subscription.subscriptionState} to payment_failed`,
+    };
+  }
+  return { outcome };
 }
 
 /**

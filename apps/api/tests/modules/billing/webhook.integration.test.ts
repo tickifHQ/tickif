@@ -72,7 +72,13 @@ function makeChargedPayload(overrides: {
 function makeSubscriptionPayload(
   event: string,
   subscriptionId: string,
-  extra?: { status?: string; notes?: Record<string, string> },
+  extra?: {
+    status?: string;
+    notes?: Record<string, string>;
+    paymentId?: string;
+    paymentStatus?: string;
+    amount?: number;
+  },
 ) {
   return {
     event,
@@ -85,6 +91,19 @@ function makeSubscriptionPayload(
           current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
         },
       },
+      ...(extra?.paymentId
+        ? {
+            payment: {
+              entity: {
+                id: extra.paymentId,
+                status: extra.paymentStatus ?? 'failed',
+                amount: extra.amount ?? 299900,
+                currency: 'INR',
+                subscription_id: subscriptionId,
+              },
+            },
+          }
+        : {}),
     },
   };
 }
@@ -816,6 +835,7 @@ describe('E-117: webhook event processing', () => {
 
       const payload = makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_fail_1', {
         status: 'halted',
+        paymentId: 'pay_fail_1',
       });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);
@@ -836,7 +856,9 @@ describe('E-117: webhook event processing', () => {
         razorpaySubscriptionId: 'sub_fail_invalid',
       });
 
-      const payload = makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_fail_invalid');
+      const payload = makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_fail_invalid', {
+        paymentId: 'pay_fail_invalid',
+      });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);
       expect(result.outcome).toBe('invalid_transition');
@@ -1076,6 +1098,7 @@ describe('E-117: webhook event processing', () => {
       const payload = makeSubscriptionPayload(
         RAZORPAY_EVENT.PAYMENT_FAILED,
         'sub_new_fail_after_reactivation',
+        { paymentId: 'pay_new_fail_after_reactivation' },
       );
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);

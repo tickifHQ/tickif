@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { analyticsResponseSchema } from '@repo/contracts';
+import { analyticsResponseSchema, type RazorpayEvent } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeLead, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
+import { processWebhookEvent } from '../../../src/modules/billing/webhook-service.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
 afterEach(() => {
@@ -366,6 +367,68 @@ describe('GET /api/reports/analytics', () => {
         .from(schema.designerProfile)
         .where(eq(schema.designerProfile.orgId, organization.id)),
     ).toEqual([]);
+  });
+
+  it('reports a failed payment received through the webhook exactly once', async () => {
+    const caller = await createRoleSession('+919800004026', 'designer');
+    const organization = await makeOrganization({ slug: `billing-failed-${randomUUID()}` });
+    await db.insert(schema.member).values({
+      id: `member-billing-failed-${randomUUID()}`,
+      organizationId: organization.id,
+      userId: caller.userId,
+      role: 'billing_admin',
+      createdAt: new Date(),
+    });
+    const razorpaySubscriptionId = `sub-failed-${randomUUID()}`;
+    await db.insert(schema.subscription).values({
+      organizationId: organization.id,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      razorpaySubscriptionId,
+      razorpayStatus: 'active',
+    });
+    const paymentId = `pay-failed-${randomUUID()}`;
+    const payload = {
+      event: 'payment.failed',
+      payload: {
+        subscription: { entity: { id: razorpaySubscriptionId, status: 'halted' } },
+        payment: {
+          entity: {
+            id: paymentId,
+            subscription_id: razorpaySubscriptionId,
+            amount: 799900,
+            currency: 'INR',
+            status: 'failed',
+          },
+        },
+      },
+    };
+
+    const first = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);
+    const replay = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);
+    expect(first.outcome).toBe('processed');
+    expect(replay.outcome).toBe('duplicate');
+
+    const cookie = await activateOrganization(caller.cookie, organization.id);
+    const response = await app.request('/api/reports/analytics?days=7', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = analyticsResponseSchema.parse(await response.json());
+    expect(parsed.billing?.currencies).toEqual([
+      expect.objectContaining({
+        currency: 'INR',
+        failedAmount: 799900,
+        failedTransactions: 1,
+      }),
+    ]);
+    expect(
+      await db
+        .select({ id: schema.paymentTransaction.id })
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.razorpayPaymentId, paymentId)),
+    ).toHaveLength(1);
   });
 
   it('excludes frozen branches without deleting their analytics history', async () => {
