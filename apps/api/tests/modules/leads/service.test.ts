@@ -100,11 +100,17 @@ describe('leadsService.list', () => {
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
 
-  it('rejects listing without an active branch', async () => {
-    await expect(
-      leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeTeamId: null }),
-    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
-    expect(leadsRepository.list).not.toHaveBeenCalled();
+  it('lists the organization roll-up without an active branch', async () => {
+    vi.mocked(leadsRepository.list).mockResolvedValue({ items: [], total: 0 });
+
+    await leadsService.list(
+      { status: 'all', page: 1, limit: 12 },
+      { ...caller, activeTeamId: null },
+    );
+
+    expect(leadsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ activeOrgId: 'org_1', activeTeamId: null }),
+    );
   });
 
   it('filters assigned access by every active membership belonging to the caller', async () => {

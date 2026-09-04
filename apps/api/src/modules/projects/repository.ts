@@ -127,7 +127,7 @@ const emptyUploadImageCounts: UploadImageCounts = {
 export type ListProjectsParams = {
   userId: string;
   activeOrgId: string;
-  activeTeamId: string;
+  activeTeamId: string | null;
   statuses?: ProjectStatus[];
   q?: string;
   limit: number;
@@ -413,10 +413,23 @@ export const projectsRepository = {
   ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
     const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
-      eq(schema.member.userId, params.userId),
       eq(schema.designerProfile.orgId, params.activeOrgId),
-      eq(schema.designerProfile.teamId, params.activeTeamId),
-      eq(schema.teamMember.userId, params.userId),
+      sql<boolean>`exists (
+        select 1 from ${schema.member}
+        where ${schema.member.organizationId} = ${schema.designerProfile.orgId}
+          and ${schema.member.userId} = ${params.userId}
+          and ${schema.member.frozen} = false
+      )`,
+      params.activeTeamId
+        ? eq(schema.designerProfile.teamId, params.activeTeamId)
+        : undefined,
+      params.activeTeamId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.teamMember}
+            where ${schema.teamMember.teamId} = ${schema.designerProfile.teamId}
+              and ${schema.teamMember.userId} = ${params.userId}
+          )`
+        : undefined,
       params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
       searchPattern
         ? or(
@@ -465,8 +478,6 @@ export const projectsRepository = {
         })
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
-        .innerJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
         .where(where)
         .orderBy(orderBy)
         .limit(params.limit)
@@ -475,8 +486,6 @@ export const projectsRepository = {
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
-        .innerJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
         .where(where),
     ]);
 
@@ -489,10 +498,23 @@ export const projectsRepository = {
     activeTeamId?: string | null;
   }): Promise<ProjectStatusCountRecord[]> {
     const filters = [
-      eq(schema.member.userId, params.userId),
       params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+      params.activeOrgId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.member}
+            where ${schema.member.organizationId} = ${schema.designerProfile.orgId}
+              and ${schema.member.userId} = ${params.userId}
+              and ${schema.member.frozen} = false
+          )`
+        : undefined,
       params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,
-      params.activeTeamId ? eq(schema.teamMember.userId, params.userId) : undefined,
+      params.activeTeamId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.teamMember}
+            where ${schema.teamMember.teamId} = ${schema.designerProfile.teamId}
+              and ${schema.teamMember.userId} = ${params.userId}
+          )`
+        : undefined,
     ].filter((filter) => filter !== undefined);
 
     return db
@@ -502,8 +524,6 @@ export const projectsRepository = {
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
-      .leftJoin(schema.teamMember, eq(schema.designerProfile.teamId, schema.teamMember.teamId))
       .where(and(...filters))
       .groupBy(schema.project.status);
   },

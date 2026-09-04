@@ -742,7 +742,7 @@ async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promis
   if (caller.userRole === 'superadmin') return;
   if (
     caller.activeOrgId === ownership.organizationId &&
-    (!ownership.teamId || requireActiveTeam(caller) === ownership.teamId) &&
+    (!caller.activeTeamId || !ownership.teamId || caller.activeTeamId === ownership.teamId) &&
     (await orgsService.isMember(caller.userId, ownership.organizationId))
   ) {
     return;
@@ -1327,7 +1327,7 @@ export const projectsService = {
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
-    const activeTeamId = requireActiveTeam(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
@@ -1368,7 +1368,7 @@ export const projectsService = {
   ): Promise<PortfolioProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
-    const activeTeamId = requireActiveTeam(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }

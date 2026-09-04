@@ -34,7 +34,7 @@ export type LeadStatusCount = {
 export type ListLeadsParams = {
   userId: string;
   activeOrgId: string;
-  activeTeamId: string;
+  activeTeamId: string | null;
   assignedMemberIds?: string[];
   status?: LeadStatus;
   q?: string;
@@ -95,9 +95,10 @@ export const leadsRepository = {
         select 1 from ${schema.member}
         where ${schema.member.organizationId} = ${schema.lead.organizationId}
           and ${schema.member.userId} = ${params.userId}
+          and ${schema.member.frozen} = false
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
-      eq(schema.lead.teamId, params.activeTeamId),
+      params.activeTeamId ? eq(schema.lead.teamId, params.activeTeamId) : undefined,
       params.assignedMemberIds
         ? inArray(schema.lead.assignedMemberId, params.assignedMemberIds)
         : undefined,

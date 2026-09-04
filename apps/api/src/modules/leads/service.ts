@@ -121,7 +121,9 @@ async function assertLeadAccess(
   if (lead.organizationId !== activeOrganizationId) {
     throw AppError.notFound('Lead not found');
   }
-  if (lead.teamId !== requireActiveTeam(caller)) throw AppError.notFound('Lead not found');
+  if (caller.activeTeamId && lead.teamId !== caller.activeTeamId) {
+    throw AppError.notFound('Lead not found');
+  }
   const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
   if (
     access.scope === ORGANIZATION_ACCESS_SCOPE.ASSIGNED &&
@@ -148,7 +150,7 @@ export const leadsService = {
   async list(query: ListLeadsQuery, caller: Caller): Promise<ListLeadsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
-    const activeTeamId = requireActiveTeam(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
     const limit = query.limit;
     const page = query.page;
@@ -187,7 +189,7 @@ export const leadsService = {
   async counts(query: LeadCountsQuery, caller: Caller): Promise<LeadCountsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrganizationId = requireActiveOrganization(caller);
-    const activeTeamId = requireActiveTeam(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     const access = await resolveLeadAccess(caller.userId, activeOrganizationId);
     return toCounts(
       await leadsRepository.countByStatus(
