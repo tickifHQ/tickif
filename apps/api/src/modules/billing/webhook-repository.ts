@@ -13,7 +13,7 @@ type FailedPaymentInput = {
 export type FailedPaymentWriteResult = 'processed' | 'duplicate' | 'invalid_transition';
 
 /**
- * Records a failed payment and advances the subscription under one row lock.
+ * Records a failed payment and advances an active subscription under one row lock.
  * The payment ID remains the idempotency key when Razorpay retries the event.
  */
 export async function recordFailedPayment(
@@ -28,15 +28,6 @@ export async function recordFailedPayment(
       .for('update');
 
     if (!subscription) return 'invalid_transition';
-
-    if (subscription.subscriptionState !== SUBSCRIPTION_STATE.ACTIVE) {
-      const [existingPayment] = await tx
-        .select({ id: schema.paymentTransaction.id })
-        .from(schema.paymentTransaction)
-        .where(eq(schema.paymentTransaction.razorpayPaymentId, input.razorpayPaymentId))
-        .limit(1);
-      return existingPayment ? 'duplicate' : 'invalid_transition';
-    }
 
     const [inserted] = await tx
       .insert(schema.paymentTransaction)
@@ -53,6 +44,10 @@ export async function recordFailedPayment(
       .returning({ id: schema.paymentTransaction.id });
 
     if (!inserted) return 'duplicate';
+
+    if (subscription.subscriptionState !== SUBSCRIPTION_STATE.ACTIVE) {
+      return 'invalid_transition';
+    }
 
     await tx
       .update(schema.subscription)

@@ -369,7 +369,7 @@ describe('GET /api/reports/analytics', () => {
     ).toEqual([]);
   });
 
-  it('reports a failed payment received through the webhook exactly once', async () => {
+  it('reports each distinct failed payment received through the webhook exactly once', async () => {
     const caller = await createRoleSession('+919800004026', 'designer');
     const organization = await makeOrganization({ slug: `billing-failed-${randomUUID()}` });
     await db.insert(schema.member).values({
@@ -380,13 +380,16 @@ describe('GET /api/reports/analytics', () => {
       createdAt: new Date(),
     });
     const razorpaySubscriptionId = `sub-failed-${randomUUID()}`;
-    await db.insert(schema.subscription).values({
-      organizationId: organization.id,
-      planTier: 'corporate',
-      subscriptionState: 'active',
-      razorpaySubscriptionId,
-      razorpayStatus: 'active',
-    });
+    const [subscription] = await db
+      .insert(schema.subscription)
+      .values({
+        organizationId: organization.id,
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId,
+        razorpayStatus: 'active',
+      })
+      .returning();
     const paymentId = `pay-failed-${randomUUID()}`;
     const payload = {
       event: 'payment.failed',
@@ -406,8 +409,21 @@ describe('GET /api/reports/analytics', () => {
 
     const first = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);
     const replay = await processWebhookEvent('payment.failed' as RazorpayEvent, payload);
+    const distinctRetry = await processWebhookEvent('payment.failed' as RazorpayEvent, {
+      ...payload,
+      payload: {
+        ...payload.payload,
+        payment: {
+          entity: {
+            ...payload.payload.payment.entity,
+            id: `pay-failed-retry-${randomUUID()}`,
+          },
+        },
+      },
+    });
     expect(first.outcome).toBe('processed');
     expect(replay.outcome).toBe('duplicate');
+    expect(distinctRetry.outcome).toBe('invalid_transition');
 
     const cookie = await activateOrganization(caller.cookie, organization.id);
     const response = await app.request('/api/reports/analytics?days=7', {
@@ -419,16 +435,16 @@ describe('GET /api/reports/analytics', () => {
     expect(parsed.billing?.currencies).toEqual([
       expect.objectContaining({
         currency: 'INR',
-        failedAmount: 799900,
-        failedTransactions: 1,
+        failedAmount: 1599800,
+        failedTransactions: 2,
       }),
     ]);
     expect(
       await db
         .select({ id: schema.paymentTransaction.id })
         .from(schema.paymentTransaction)
-        .where(eq(schema.paymentTransaction.razorpayPaymentId, paymentId)),
-    ).toHaveLength(1);
+        .where(eq(schema.paymentTransaction.subscriptionId, subscription!.id)),
+    ).toHaveLength(2);
   });
 
   it('excludes frozen branches without deleting their analytics history', async () => {
