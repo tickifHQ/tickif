@@ -39,6 +39,7 @@ vi.mock('@repo/storage', () => ({
 }));
 vi.mock('../../src/media/repository.js', () => ({
   getImageForProcessing: vi.fn(),
+  withMediaProcessingLease: vi.fn(),
   markReady: vi.fn(async () => true),
   refreshReadyDerivatives: vi.fn(async () => true),
   markFailed: vi.fn(async () => {}),
@@ -88,9 +89,22 @@ beforeEach(() => {
   config.MEDIA_DEDUP_ACTION = 'reject';
   repoMock.markReady.mockResolvedValue(true);
   repoMock.refreshReadyDerivatives.mockResolvedValue(true);
+  repoMock.withMediaProcessingLease.mockImplementation(async (imageId, task) => {
+    const image = await repoMock.getImageForProcessing(imageId);
+    return image ? task(image) : null;
+  });
 });
 
 describe('processMedia', () => {
+  it('holds the organization media lease for the complete object-processing callback', async () => {
+    repoMock.getImageForProcessing.mockResolvedValue(processing);
+    getObjectMock.mockResolvedValue(jpeg);
+
+    await processMedia(job('img-1'));
+
+    expect(repoMock.withMediaProcessingLease).toHaveBeenCalledOnce();
+    expect(putObjectMock).toHaveBeenCalled();
+  });
   it('skips when the image row is gone', async () => {
     repoMock.getImageForProcessing.mockResolvedValue(null);
     expect(await processMedia(job('img-1'))).toEqual({ ok: true, skipped: 'missing' });

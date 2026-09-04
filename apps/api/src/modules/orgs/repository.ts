@@ -39,6 +39,7 @@ export const OWNERSHIP_TRANSFER_RESULT = {
   FORBIDDEN: 'forbidden',
   INVALID_TARGET: 'invalid_target',
   OWNER_STATE_CHANGED: 'owner_state_changed',
+  RETENTION_ACTIVE: 'retention_active',
 } as const;
 
 export const orgsRepository = {
@@ -540,11 +541,18 @@ export const orgsRepository = {
             : 'cancelled';
       let ownerStateChanged = false;
       if (input.action === 'accept') {
-        await tx
+        const [organization] = await tx
           .select({ id: schema.organization.id })
           .from(schema.organization)
           .where(eq(schema.organization.id, request.organizationId))
           .for('update');
+        if (!organization) return OWNERSHIP_TRANSFER_RESULT.NOT_FOUND;
+        const [retention] = await tx
+          .select({ organizationId: schema.organizationRetention.organizationId })
+          .from(schema.organizationRetention)
+          .where(eq(schema.organizationRetention.organizationId, request.organizationId))
+          .limit(1);
+        if (retention) return OWNERSHIP_TRANSFER_RESULT.RETENTION_ACTIVE;
         const memberships = await tx
           .select({
             id: schema.member.id,

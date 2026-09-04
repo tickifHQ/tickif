@@ -24,6 +24,12 @@ import { projectFeedFilterClauses } from './feed-filters.repository.js';
  * It exposes a framework-free record type and typed methods over the schema.
  */
 export type ProjectRecord = typeof schema.project.$inferSelect;
+export class ProjectSlugUnavailableError extends Error {
+  constructor() {
+    super('Project slug is already reserved');
+    this.name = 'ProjectSlugUnavailableError';
+  }
+}
 export type ProjectRoomRecord = typeof schema.projectRoom.$inferSelect;
 type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
 export type TaxonomyTermRecord = Pick<
@@ -658,9 +664,19 @@ export const projectsRepository = {
     designerId: string,
     slug: string,
   ): Promise<ProjectRecord> {
-    const [row] = await db
-      .insert(schema.project)
-      .values({
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`project-slug:${slug}`}, 0))`,
+      );
+      const [tombstone] = await tx
+        .select({ id: schema.projectTombstone.projectId })
+        .from(schema.projectTombstone)
+        .where(eq(schema.projectTombstone.projectSlug, slug))
+        .limit(1);
+      if (tombstone) throw new ProjectSlugUnavailableError();
+      const [row] = await tx
+        .insert(schema.project)
+        .values({
         designerId,
         title: input.title,
         slug,
@@ -677,10 +693,11 @@ export const projectsRepository = {
         completedMonth: input.completedMonth ?? null,
         durationMonths: input.durationMonths ?? null,
         metadata: input.metadata ?? {},
-      })
-      .returning();
-    if (!row) throw new Error('insert returned no row');
-    return row;
+        })
+        .returning();
+      if (!row) throw new Error('insert returned no row');
+      return row;
+    });
   },
 
   async duplicateProject(params: DuplicateProjectParams): Promise<{
@@ -689,6 +706,15 @@ export const projectsRepository = {
   }> {
     return db.transaction(async (tx) => {
       const now = new Date();
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`project-slug:${params.slug}`}, 0))`,
+      );
+      const [tombstone] = await tx
+        .select({ id: schema.projectTombstone.projectId })
+        .from(schema.projectTombstone)
+        .where(eq(schema.projectTombstone.projectSlug, params.slug))
+        .limit(1);
+      if (tombstone) throw new ProjectSlugUnavailableError();
       const [project] = await tx
         .insert(schema.project)
         .values({

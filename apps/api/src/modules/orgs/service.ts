@@ -504,6 +504,9 @@ export const orgsService = {
     if (result === OWNERSHIP_TRANSFER_RESULT.OWNER_STATE_CHANGED) {
       throw AppError.conflict('Organization ownership changed');
     }
+    if (result === OWNERSHIP_TRANSFER_RESULT.RETENTION_ACTIVE) {
+      throw AppError.conflict('Ownership cannot change while organization retention is active');
+    }
     if (result === OWNERSHIP_TRANSFER_RESULT.INVALID_TARGET) {
       throw AppError.conflict('Transfer target is no longer an eligible member');
     }

@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import { db, schema, eq, and, asc } from '@repo/db';
+import { db, schema, eq, and, asc, sql } from '@repo/db';
 import type { UpdateImageMetadataInput } from '@repo/contracts';
 
 /**
@@ -43,17 +43,48 @@ export const mediaRepository = {
     projectId: string;
     originalKey: string;
     contentType: string;
-  }): Promise<ProjectImageRecord> {
-    const [row] = await db
-      .insert(schema.projectImage)
-      .values({
-        projectId: input.projectId,
-        originalKey: input.originalKey,
-        contentType: input.contentType,
-      })
-      .returning();
-    if (!row) throw new Error('insert returned no row');
-    return row;
+  }): Promise<ProjectImageRecord | null> {
+    return db.transaction(async (tx) => {
+      const [candidate] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.designerProfile.id, schema.project.designerId))
+        .where(eq(schema.project.id, input.projectId))
+        .limit(1);
+      if (!candidate) return null;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+      );
+      const [project] = await tx
+        .select({
+          status: schema.project.status,
+          organizationId: schema.designerProfile.orgId,
+        })
+        .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.designerProfile.id, schema.project.designerId))
+        .where(eq(schema.project.id, input.projectId))
+        .for('update', { of: schema.project })
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status)) {
+        return null;
+      }
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, project.organizationId))
+        .limit(1);
+      if (retention) return null;
+      const [row] = await tx
+        .insert(schema.projectImage)
+        .values({
+          projectId: input.projectId,
+          originalKey: input.originalKey,
+          contentType: input.contentType,
+        })
+        .returning();
+      if (!row) throw new Error('insert returned no row');
+      return row;
+    });
   },
 
   /** Image joined to its owning user (via project → designer). Null when the image is missing. */

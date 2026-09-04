@@ -47,6 +47,7 @@ import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
 import {
+  ProjectSlugUnavailableError,
   projectsRepository,
   type ProjectCoverImageRecord,
   type ProjectFeedItemRecord,
@@ -1015,7 +1016,7 @@ async function createDraftWithUniqueSlug(
     try {
       return await projectsRepository.createDraft(input, designerId, slug);
     } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+      if (!(isUniqueViolation(error) || error instanceof ProjectSlugUnavailableError)) throw error;
     }
   }
   return projectsRepository.createDraft(input, designerId, `${base}-${Date.now().toString(36)}`);
@@ -1033,7 +1034,7 @@ async function duplicateWithUniqueSlug(
     try {
       return await projectsRepository.duplicateProject({ source, title, slug });
     } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+      if (!(isUniqueViolation(error) || error instanceof ProjectSlugUnavailableError)) throw error;
     }
   }
   return projectsRepository.duplicateProject({

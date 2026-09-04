@@ -55,7 +55,7 @@ export const organizationPurgeManifestItemStatusEnum = pgEnum(
 
 export const organizationPurgeManifestItemKindEnum = pgEnum(
   'organization_purge_manifest_item_kind',
-  ['storage_object'],
+  ['storage_object', 'razorpay_subscription'],
 );
 
 /**

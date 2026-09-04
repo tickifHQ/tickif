@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   organizationPurgeManifest,
   organizationPurgeManifestItem,
+  organizationPurgeManifestItemKindEnum,
   organizationRetention,
   organizationRetentionEvent,
   organizationRetentionProfileSnapshot,
@@ -76,5 +77,12 @@ describe('organization retention schema', () => {
         'organization_purge_manifest_item_manifest_idx',
       ]),
     );
+  });
+
+  it('keeps provider cancellation in the same durable retry manifest', () => {
+    expect(organizationPurgeManifestItemKindEnum.enumValues).toEqual([
+      'storage_object',
+      'razorpay_subscription',
+    ]);
   });
 });

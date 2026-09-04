@@ -11,6 +11,7 @@ import {
   sql,
   type DB,
 } from '@repo/db';
+import { config } from '@repo/config';
 
 type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
 
@@ -21,12 +22,19 @@ export type PurgeManifestItem = {
   resourceKey: string;
 };
 
+export type ProviderCleanupItem = {
+  sequence: bigint;
+  organizationId: string;
+  razorpaySubscriptionId: string;
+};
+
 export type PreparedOrganizationPurge = {
   manifestId: string;
   organizationId: string;
   projectIds: string[];
   profileIds: string[];
   items: PurgeManifestItem[];
+  storageScanNotBefore: Date | null;
 };
 
 async function lockOrganization(tx: Transaction, organizationId: string): Promise<void> {
@@ -207,6 +215,62 @@ export async function findOrganizationsDueForPurge(
     .limit(limit);
 }
 
+export async function findPendingProviderCleanup(limit: number): Promise<ProviderCleanupItem[]> {
+  return db
+    .select({
+      sequence: schema.organizationPurgeManifestItem.sequence,
+      organizationId: schema.organizationPurgeManifest.organizationId,
+      razorpaySubscriptionId: schema.organizationPurgeManifestItem.resourceKey,
+    })
+    .from(schema.organizationPurgeManifestItem)
+    .innerJoin(
+      schema.organizationPurgeManifest,
+      eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+    )
+    .where(
+      and(
+        eq(schema.organizationPurgeManifestItem.kind, 'razorpay_subscription'),
+        or(
+          eq(schema.organizationPurgeManifestItem.status, 'pending'),
+          eq(schema.organizationPurgeManifestItem.status, 'failed'),
+        ),
+      ),
+    )
+    .orderBy(asc(schema.organizationPurgeManifestItem.sequence))
+    .limit(limit);
+}
+
+export async function confirmProviderCleanup(item: ProviderCleanupItem, now: Date): Promise<void> {
+  await db.transaction(async (tx) => {
+    await lockOrganization(tx, item.organizationId);
+    await tx
+      .update(schema.subscription)
+      .set({
+        planTier: 'hobby',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: null,
+        razorpayStatus: 'cancelled',
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: null,
+        graceStartedAt: null,
+        lockedAt: null,
+        downgradedAt: null,
+        preLapseTier: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(schema.subscription.organizationId, item.organizationId),
+          eq(schema.subscription.razorpaySubscriptionId, item.razorpaySubscriptionId),
+        ),
+      );
+    await tx
+      .update(schema.organizationPurgeManifestItem)
+      .set({ status: 'deleted', deletedAt: now, lastErrorCode: null, updatedAt: now })
+      .where(eq(schema.organizationPurgeManifestItem.sequence, item.sequence));
+  });
+}
+
 function uniqueStorageKeys(input: {
   profileLogoKeys: Array<string | null>;
   images: Array<{
@@ -279,9 +343,19 @@ export async function prepareOrganizationPurge(
             .select({
               originalKey: schema.projectImage.originalKey,
               derivatives: schema.projectImage.derivatives,
+              status: schema.projectImage.status,
+              createdAt: schema.projectImage.createdAt,
             })
             .from(schema.projectImage)
             .where(inArray(schema.projectImage.projectId, projectIds));
+    const storageScanNotBefore = images
+      .filter(({ status }) => status === 'processing')
+      .reduce<Date | null>((latest, image) => {
+        const expiresAt = new Date(
+          image.createdAt.getTime() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000,
+        );
+        return !latest || expiresAt > latest ? expiresAt : latest;
+      }, null);
     const [application] = await tx
       .select({ id: schema.verificationApplication.id })
       .from(schema.verificationApplication)
@@ -379,6 +453,7 @@ export async function prepareOrganizationPurge(
       .where(
         and(
           eq(schema.organizationPurgeManifestItem.manifestId, manifest.id),
+          eq(schema.organizationPurgeManifestItem.kind, 'storage_object'),
           or(
             eq(schema.organizationPurgeManifestItem.status, 'pending'),
             eq(schema.organizationPurgeManifestItem.status, 'failed'),
@@ -387,8 +462,53 @@ export async function prepareOrganizationPurge(
       )
       .orderBy(asc(schema.organizationPurgeManifestItem.sequence));
 
-    return { manifestId: manifest.id, organizationId, projectIds, profileIds, items };
+    return {
+      manifestId: manifest.id,
+      organizationId,
+      projectIds,
+      profileIds,
+      items,
+      storageScanNotBefore,
+    };
   });
+}
+
+export async function appendPurgeStorageItems(
+  manifestId: string,
+  resourceKeys: string[],
+  now: Date,
+): Promise<PurgeManifestItem[]> {
+  if (resourceKeys.length > 0) {
+    await db
+      .insert(schema.organizationPurgeManifestItem)
+      .values(
+        [...new Set(resourceKeys)].map((resourceKey) => ({
+          manifestId,
+          kind: 'storage_object' as const,
+          resourceKey,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+  return db
+    .select({
+      sequence: schema.organizationPurgeManifestItem.sequence,
+      resourceKey: schema.organizationPurgeManifestItem.resourceKey,
+    })
+    .from(schema.organizationPurgeManifestItem)
+    .where(
+      and(
+        eq(schema.organizationPurgeManifestItem.manifestId, manifestId),
+        eq(schema.organizationPurgeManifestItem.kind, 'storage_object'),
+        or(
+          eq(schema.organizationPurgeManifestItem.status, 'pending'),
+          eq(schema.organizationPurgeManifestItem.status, 'failed'),
+        ),
+      ),
+    )
+    .orderBy(asc(schema.organizationPurgeManifestItem.sequence));
 }
 
 export async function markPurgeManifestItemDeleted(sequence: bigint, now: Date): Promise<void> {
@@ -504,6 +624,11 @@ export async function finalizeOrganizationPurge(
     const projectIds = projects.map(({ id }) => id);
 
     if (projects.length > 0) {
+      for (const slug of projects.map(({ slug }) => slug).sort()) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`project-slug:${slug}`}, 0))`,
+        );
+      }
       await tx
         .insert(schema.projectTombstone)
         .values(

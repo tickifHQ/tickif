@@ -3,6 +3,14 @@ import { and, db, eq, schema } from '@repo/db';
 import { makeOrganization } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { organizationRetentionRepository } from '../../../src/modules/organization-retention/repository.js';
+import {
+  ProjectSlugUnavailableError,
+  projectsRepository,
+} from '../../../src/modules/projects/repository.js';
+import {
+  orgsRepository,
+  OWNERSHIP_TRANSFER_RESULT,
+} from '../../../src/modules/orgs/repository.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
 
 async function organizationSession(input: {
@@ -88,6 +96,121 @@ async function seedPublishedOrganization() {
 }
 
 describe('organization retention routes', () => {
+  it('keeps private projects private while retaining their exact state', async () => {
+    const seeded = await seedPublishedOrganization();
+    const [draft] = await db
+      .insert(schema.project)
+      .values({
+        designerId: seeded.profile.id,
+        title: 'Private Client Home',
+        slug: 'private-client-home',
+        status: 'draft',
+      })
+      .returning();
+
+    const deletion = await request('/api/orgs/retention/deletion', seeded.owner.cookie, 'POST', {
+      confirmationSlug: seeded.organization.slug,
+    });
+
+    expect(deletion.status).toBe(200);
+    const [retainedDraft] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, draft!.id));
+    expect(retainedDraft).toMatchObject({ status: 'draft', archiveReason: null });
+    expect((await app.request(`/api/projects/public/${draft!.id}`)).status).toBe(404);
+    expect((await app.request(`/api/projects/slug/${draft!.slug}`)).status).toBe(404);
+
+    const upload = await request('/api/media/upload-url', seeded.owner.cookie, 'POST', {
+      projectId: draft!.id,
+      contentType: 'image/jpeg',
+      size: 1_024,
+    });
+    expect(upload.status).toBe(409);
+    const images = await db
+      .select({ id: schema.projectImage.id })
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, draft!.id));
+    expect(images).toEqual([]);
+  });
+
+  it('durably records paid subscription cancellation before freezing the organization', async () => {
+    const seeded = await seedPublishedOrganization();
+    await db.insert(schema.subscription).values({
+      organizationId: seeded.organization.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_retention_cleanup',
+      razorpayStatus: 'active',
+    });
+
+    const deletion = await request('/api/orgs/retention/deletion', seeded.owner.cookie, 'POST', {
+      confirmationSlug: seeded.organization.slug,
+    });
+
+    expect(deletion.status).toBe(200);
+    const [cleanup] = await db
+      .select({
+        kind: schema.organizationPurgeManifestItem.kind,
+        resourceKey: schema.organizationPurgeManifestItem.resourceKey,
+        status: schema.organizationPurgeManifestItem.status,
+      })
+      .from(schema.organizationPurgeManifestItem)
+      .innerJoin(
+        schema.organizationPurgeManifest,
+        eq(schema.organizationPurgeManifest.id, schema.organizationPurgeManifestItem.manifestId),
+      )
+      .where(eq(schema.organizationPurgeManifest.organizationId, seeded.organization.id));
+    expect(cleanup).toEqual({
+      kind: 'razorpay_subscription',
+      resourceKey: 'sub_retention_cleanup',
+      status: 'pending',
+    });
+  });
+
+  it('rejects ownership acceptance after permanent erasure wins the organization lock', async () => {
+    const seeded = await seedPublishedOrganization();
+    const target = await organizationSession({
+      phone: '+919800025099',
+      role: 'member',
+      organizationId: seeded.organization.id,
+    });
+    const [targetMember] = await db
+      .select()
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.organizationId, seeded.organization.id),
+          eq(schema.member.userId, target.userId),
+        ),
+      );
+    const [transfer] = await db
+      .insert(schema.ownershipTransferRequest)
+      .values({
+        organizationId: seeded.organization.id,
+        initiatorUserId: seeded.owner.userId,
+        targetUserId: target.userId,
+        targetMemberId: targetMember!.id,
+        expiresAt: new Date('2026-09-20T00:00:00.000Z'),
+      })
+      .returning();
+    await organizationRetentionRepository.requestPermanentErasure({
+      organizationId: seeded.organization.id,
+      userId: seeded.owner.userId,
+      confirmationSlug: seeded.organization.slug,
+      now: new Date('2026-09-04T12:00:00.000Z'),
+    });
+
+    const result = await orgsRepository.resolveOwnershipTransfer({
+      id: transfer!.id,
+      actorUserId: target.userId,
+      action: 'accept',
+      now: new Date('2026-09-04T12:01:00.000Z'),
+    });
+
+    expect(result).toBe(OWNERSHIP_TRANSFER_RESULT.RETENTION_ACTIVE);
+  });
+
   it('delists without deleting data and restores the exact public state', async () => {
     const seeded = await seedPublishedOrganization();
 
@@ -338,5 +461,23 @@ describe('organization retention routes', () => {
     ]);
     expect(byId.status).toBe(410);
     expect(bySlug.status).toBe(410);
+  });
+
+  it('reserves a purged slug against later project creation', async () => {
+    const seeded = await seedPublishedOrganization();
+    await db.insert(schema.projectTombstone).values({
+      projectId: '22222222-2222-4222-8222-222222222222',
+      projectSlug: 'never-reuse-this-home',
+      organizationId: 'purged-org',
+      purgedAt: new Date('2026-09-04T12:00:00.000Z'),
+    });
+
+    await expect(
+      projectsRepository.createDraft(
+        { title: 'Never Reuse This Home' },
+        seeded.profile.id,
+        'never-reuse-this-home',
+      ),
+    ).rejects.toBeInstanceOf(ProjectSlugUnavailableError);
   });
 });

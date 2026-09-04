@@ -52,6 +52,7 @@ async function organizationAccess(
       ),
     )
     .where(eq(schema.organization.id, organizationId))
+    .for('update', { of: schema.organization })
     .limit(1);
   if (!row) return null;
   return { slug: row.slug, owner: row.role === 'owner' && row.frozen === false };
@@ -127,6 +128,7 @@ async function captureAndDelist(
       .set({ status: 'suspended', projectCount: 0, updatedAt: input.now })
       .where(inArray(schema.designerProfile.id, profileIds));
   }
+  const publishedProjects = projects.filter(({ status }) => status === 'published');
   if (projects.length > 0) {
     await tx.insert(schema.organizationRetentionProjectSnapshot).values(
       projects.map((project) => ({
@@ -139,26 +141,28 @@ async function captureAndDelist(
         capturedAt: input.now,
       })),
     );
-    await tx
-      .update(schema.project)
-      .set({ status: 'delisted', archiveReason: 'organization_retention', updatedAt: input.now })
-      .where(
-        inArray(
-          schema.project.id,
-          projects.map(({ id }) => id),
-        ),
+    if (publishedProjects.length > 0) {
+      await tx
+        .update(schema.project)
+        .set({ status: 'delisted', archiveReason: 'organization_retention', updatedAt: input.now })
+        .where(
+          inArray(
+            schema.project.id,
+            publishedProjects.map(({ id }) => id),
+          ),
+        );
+      await tx.insert(schema.projectModerationEvent).values(
+        publishedProjects.map((project) => ({
+          projectId: project.id,
+          actorUserId: input.userId,
+          action: 'organization_delist' as const,
+          fromStatus: project.status,
+          toStatus: 'delisted' as const,
+          reasonCode: 'organization_retention',
+          createdAt: input.now,
+        })),
       );
-    await tx.insert(schema.projectModerationEvent).values(
-      projects.map((project) => ({
-        projectId: project.id,
-        actorUserId: input.userId,
-        action: 'organization_delist' as const,
-        fromStatus: project.status,
-        toStatus: 'delisted' as const,
-        reasonCode: 'organization_retention',
-        createdAt: input.now,
-      })),
-    );
+    }
   }
 
   await recordSearchProjectionEvents(tx, [
@@ -168,7 +172,7 @@ async function captureAndDelist(
       operation: 'delete' as const,
       sourceUpdatedAt: input.now,
     })),
-    ...projects.map((project) => ({
+    ...publishedProjects.map((project) => ({
       entityKind: 'project' as const,
       entityId: project.id,
       operation: 'delete' as const,
@@ -220,6 +224,39 @@ async function beginDeletion(
       updatedAt: input.now,
     })
     .returning();
+  const [subscription] = await tx
+    .select({ razorpaySubscriptionId: schema.subscription.razorpaySubscriptionId })
+    .from(schema.subscription)
+    .where(eq(schema.subscription.organizationId, input.organizationId))
+    .limit(1);
+  if (subscription?.razorpaySubscriptionId) {
+    const [manifest] = await tx
+      .insert(schema.organizationPurgeManifest)
+      .values({
+        organizationId: input.organizationId,
+        organizationSlug: access.slug,
+        status: 'pending',
+        trigger: 'owner',
+        requestedByUserId: input.userId,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .onConflictDoUpdate({
+        target: schema.organizationPurgeManifest.organizationId,
+        set: { updatedAt: input.now },
+      })
+      .returning({ id: schema.organizationPurgeManifest.id });
+    await tx
+      .insert(schema.organizationPurgeManifestItem)
+      .values({
+        manifestId: manifest!.id,
+        kind: 'razorpay_subscription',
+        resourceKey: subscription.razorpaySubscriptionId,
+        createdAt: input.now,
+        updatedAt: input.now,
+      })
+      .onConflictDoNothing();
+  }
   await captureAndDelist(tx, { ...input, revision });
   return { outcome: 'updated', retention: retention! };
 }

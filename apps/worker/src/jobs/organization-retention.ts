@@ -1,10 +1,13 @@
 import { deleteSearchDocument, deleteSearchProjectsByDesigner } from '@repo/search';
-import { deleteObject } from '@repo/storage';
+import { deleteObject, listObjectKeys } from '@repo/storage';
 import {
+  appendPurgeStorageItems,
   archiveOrganization,
+  confirmProviderCleanup,
   finalizeOrganizationPurge,
   findOrganizationsDueForArchive,
   findOrganizationsDueForPurge,
+  findPendingProviderCleanup,
   isStorageKeyReferencedOutsideOrganization,
   markOrganizationPurgeFailed,
   markPurgeManifestItemDeleted,
@@ -12,6 +15,7 @@ import {
   prepareOrganizationPurge,
   type PreparedOrganizationPurge,
 } from '../organization-retention/repository.js';
+import { cancelRazorpaySubscription } from '../organization-retention/razorpay.js';
 
 const RETENTION_BATCH_SIZE = 50;
 
@@ -60,8 +64,25 @@ async function deleteSearchDocuments(prepared: PreparedOrganizationPurge): Promi
 async function purgeOrganization(organizationId: string, now: Date): Promise<boolean> {
   const prepared = await prepareOrganizationPurge(organizationId, now);
   if (!prepared) return false;
+  if (prepared.storageScanNotBefore && prepared.storageScanNotBefore > now) return false;
   try {
+    const scanStorage = async () => {
+      const keys = (
+        await Promise.all([
+          ...prepared.projectIds.flatMap((projectId) => [
+            listObjectKeys(`originals/${projectId}/`),
+            listObjectKeys(`derivatives/${projectId}/`),
+          ]),
+          listObjectKeys(`verification-documents/${prepared.organizationId}/`),
+        ])
+      ).flat();
+      return appendPurgeStorageItems(prepared.manifestId, keys, now);
+    };
     await deleteStorageItems(prepared, now);
+    await deleteStorageItems({ ...prepared, items: await scanStorage() }, now);
+    // Re-scan after deletion. This catches writes that completed while the first
+    // inventory was being read, while the media lease prevents any later writes.
+    await deleteStorageItems({ ...prepared, items: await scanStorage() }, now);
     await deleteSearchDocuments(prepared);
     return finalizeOrganizationPurge(prepared, now);
   } catch (error) {
@@ -77,6 +98,18 @@ export async function processOrganizationRetentionSweep(
   let archived = 0;
   let purged = 0;
   let failed = 0;
+
+  const providerCleanup = await findPendingProviderCleanup(RETENTION_BATCH_SIZE);
+  for (const item of providerCleanup) {
+    try {
+      await cancelRazorpaySubscription(item.razorpaySubscriptionId);
+      await confirmProviderCleanup(item, now);
+    } catch (error) {
+      failed += 1;
+      await markPurgeManifestItemFailed(item.sequence, errorCode(error), now);
+      console.error('[worker] Razorpay subscription cleanup failed:', error);
+    }
+  }
 
   const archiveCandidates = await findOrganizationsDueForArchive(now, RETENTION_BATCH_SIZE);
   for (const candidate of archiveCandidates) {
