@@ -262,7 +262,7 @@ export const orgsRepository = {
       .select({
         profileId: schema.designerProfileFootprint.profileId,
         id: schema.taxonomy.id,
-        kind: schema.taxonomy.kind,
+        kind: sql<'city' | 'locality'>`${schema.taxonomy.kind}`,
         slug: schema.taxonomy.slug,
         label: schema.taxonomy.label,
       })
