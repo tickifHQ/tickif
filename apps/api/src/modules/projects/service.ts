@@ -1571,21 +1571,27 @@ export const projectsService = {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertAccess(ownership, caller);
-    if (
-      !(await orgsService.hasCapability(
-        caller.userId,
-        ownership.organizationId,
-        ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
-      ))
-    ) {
-      throw AppError.forbidden('Only organization owners and admins can assign projects');
-    }
-
-    const outcome = await projectsRepository.assignResponsibleMember({
-      projectId,
-      organizationId: ownership.organizationId,
-      responsibleMemberId: input.responsibleMemberId,
-    });
+    const outcome = await projectsRepository.withOrganizationLifecycleReadLock(
+      ownership.organizationId,
+      async (tx) => {
+        if (
+          !(await orgsService.hasCapability(
+            caller.userId,
+            ownership.organizationId,
+            ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+            tx,
+          ))
+        ) {
+          throw AppError.forbidden('Only organization owners and admins can assign projects');
+        }
+        return projectsRepository.assignResponsibleMember({
+          projectId,
+          organizationId: ownership.organizationId,
+          responsibleMemberId: input.responsibleMemberId,
+          tx,
+        });
+      },
+    );
     if (outcome === 'invalid_member') {
       throw AppError.unprocessable(
         'Responsible member must be an active member of this organization',

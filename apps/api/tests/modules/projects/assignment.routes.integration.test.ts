@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { db, eq, schema } from '@repo/db';
+import { db, eq, schema, sql } from '@repo/db';
 import { makeDesigner, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
@@ -143,5 +143,54 @@ describe('PATCH /api/projects/:id/responsible-member', () => {
       body: JSON.stringify({ responsibleMemberId: 'locked-admin' }),
     });
     expect(response.status).toBe(403);
+  });
+
+  it('serializes assignment with a concurrent retention request and rechecks capability', async () => {
+    const { ownerCookie, designer, project } = await setupOrganization();
+    await addMember({
+      phone: '+919800007007',
+      organizationId: designer.orgId,
+      teamId: designer.teamId,
+      id: 'retention-assignee',
+    });
+
+    let assignmentSettled = false;
+    let assignmentPromise: Promise<Response> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`organization-retention:${designer.orgId}`}, 0))`,
+      );
+      assignmentPromise = Promise.resolve(
+        app.request(`/api/projects/${project.id}/responsible-member`, {
+          method: 'PATCH',
+          headers: { cookie: ownerCookie, 'content-type': 'application/json' },
+          body: JSON.stringify({ responsibleMemberId: 'retention-assignee' }),
+        }),
+      ).finally(() => {
+        assignmentSettled = true;
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(assignmentSettled).toBe(false);
+      const requestedAt = new Date('2026-09-04T00:00:00.000Z');
+      await tx.insert(schema.organizationRetention).values({
+        organizationId: designer.orgId,
+        status: 'deletion_requested',
+        requestedByUserId: designer.userId!,
+        requestedAt,
+        archiveDueAt: new Date('2026-09-05T00:00:00.000Z'),
+        hardDeleteDueAt: new Date('2026-12-04T00:00:00.000Z'),
+        delistWindowDays: 1,
+        archiveWindowDays: 90,
+      });
+    });
+
+    const response = await assignmentPromise!;
+    expect(response.status).toBe(403);
+    const [unchanged] = await db
+      .select({ responsibleMemberId: schema.project.responsibleMemberId })
+      .from(schema.project)
+      .where(eq(schema.project.id, project.id));
+    expect(unchanged?.responsibleMemberId).toBeNull();
   });
 });

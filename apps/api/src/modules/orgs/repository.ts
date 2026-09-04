@@ -43,8 +43,12 @@ export const OWNERSHIP_TRANSFER_RESULT = {
 } as const;
 
 export const orgsRepository = {
-  async hasActiveRetention(organizationId: string): Promise<boolean> {
-    const [row] = await db
+  async hasActiveRetention(
+    organizationId: string,
+    tx?: DbTransaction,
+  ): Promise<boolean> {
+    const executor = tx ?? db;
+    const [row] = await executor
       .select({ organizationId: schema.organizationRetention.organizationId })
       .from(schema.organizationRetention)
       .where(eq(schema.organizationRetention.organizationId, organizationId))
@@ -140,8 +144,10 @@ export const orgsRepository = {
   async findMembershipRole(
     userId: string,
     organizationId: string,
+    tx?: DbTransaction,
   ): Promise<{ role: string; frozen: boolean } | null> {
-    const [row] = await db
+    const executor = tx ?? db;
+    const [row] = await executor
       .select({ role: schema.member.role, frozen: schema.member.frozen })
       .from(schema.member)
       .where(

@@ -1,6 +1,7 @@
 import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
+import type { DbTransaction } from '@repo/db';
 import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type {
   CreateProjectInput,
@@ -395,6 +396,18 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
+  async withOrganizationLifecycleReadLock<T>(
+    organizationId: string,
+    run: (tx: DbTransaction) => Promise<T>,
+  ): Promise<T> {
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${organizationId}`}, 0))`,
+      );
+      return run(tx);
+    });
+  },
+
   async list(
     params: ListProjectsParams,
   ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
@@ -851,8 +864,10 @@ export const projectsRepository = {
     projectId: string;
     organizationId: string;
     responsibleMemberId: string | null;
+    tx?: DbTransaction;
   }): Promise<ProjectRecord | 'invalid_member' | null> {
-    const [row] = await db
+    const executor = input.tx ?? db;
+    const [row] = await executor
       .update(schema.project)
       .set({ responsibleMemberId: input.responsibleMemberId, updatedAt: new Date() })
       .where(
@@ -860,7 +875,7 @@ export const projectsRepository = {
           eq(schema.project.id, input.projectId),
           input.responsibleMemberId
             ? exists(
-                db
+                executor
                   .select({ id: schema.member.id })
                   .from(schema.member)
                   .where(

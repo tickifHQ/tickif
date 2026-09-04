@@ -10,6 +10,10 @@ import type {
   ProjectRoomRecord,
 } from '../../../src/modules/projects/repository.js';
 
+const { lifecycleTransaction } = vi.hoisted(() => ({
+  lifecycleTransaction: { kind: 'organization-lifecycle-transaction' } as const,
+}));
+
 vi.mock('@repo/storage', () => ({
   deleteObject: vi.fn(async () => undefined),
   presignDownload: vi.fn(async ({ key }: { key: string }) => `https://signed.example/${key}`),
@@ -31,6 +35,12 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
+      withOrganizationLifecycleReadLock: vi.fn(
+        async (
+          _organizationId: string,
+          run: (tx: typeof lifecycleTransaction) => Promise<unknown>,
+        ) => run(lifecycleTransaction),
+      ),
       assignResponsibleMember: vi.fn(),
       deleteProject: vi.fn(),
       findDesignerByTeamId: vi.fn(),
@@ -685,10 +695,15 @@ describe('projectsService.assignResponsibleMember', () => {
       caller,
     );
 
+    expect(projectsRepository.withOrganizationLifecycleReadLock).toHaveBeenCalledWith(
+      'org_1',
+      expect.any(Function),
+    );
     expect(projectsRepository.assignResponsibleMember).toHaveBeenCalledWith({
       projectId: project.id,
       organizationId: 'org_1',
       responsibleMemberId: 'member_2',
+      tx: lifecycleTransaction,
     });
     expect(result.responsibleMemberId).toBe('member_2');
   });
@@ -713,10 +728,15 @@ describe('projectsService.assignResponsibleMember', () => {
         caller,
       ),
     ).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.withOrganizationLifecycleReadLock).toHaveBeenCalledWith(
+      'org_1',
+      expect.any(Function),
+    );
     expect(orgsService.hasCapability).toHaveBeenCalledWith(
       caller.userId,
       'org_1',
       ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+      lifecycleTransaction,
     );
     expect(projectsRepository.assignResponsibleMember).not.toHaveBeenCalled();
   });
