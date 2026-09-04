@@ -375,6 +375,7 @@ export const organizationBranchSchema = z
     profileSlug: z.string().min(1),
     profileStatus: z.enum(['draft', 'active', 'suspended']),
     projectCount: z.number().int().min(0),
+    memberCount: z.number().int().min(0),
     averageRating: z.number().min(0).max(5),
     reviewCount: z.number().int().min(0),
     footprint: z.array(organizationBranchFootprintSchema),

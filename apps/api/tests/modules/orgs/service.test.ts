@@ -292,6 +292,7 @@ describe('orgsService', () => {
           profileSlug: 'studio-bengaluru',
           profileStatus: 'active',
           projectCount: 3,
+          memberCount: 1,
           averageRating: 4.5,
           reviewCount: 8,
           footprint: [

@@ -120,6 +120,7 @@ describe('organization contracts', () => {
           profileSlug: 'mumbai-studio',
           profileStatus: 'active',
           projectCount: 0,
+          memberCount: 1,
           averageRating: 4.5,
           reviewCount: 8,
           footprint: [

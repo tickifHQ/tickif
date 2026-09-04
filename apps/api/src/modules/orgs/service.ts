@@ -344,27 +344,29 @@ export const orgsService = {
       activeTeamId: input.activeTeamId,
       branchUsage,
       branchLimit: branchLimit(plan.tier, plan.state),
-      branches: branches.map((branch) => ({
-        ...branch,
-        averageRating: Number(branch.averageRating) || 0,
-        footprint: (footprintsByProfileId.get(branch.profileId) ?? []).map((entry) => ({
-          id: entry.id,
-          kind: entry.kind,
-          slug: entry.slug,
-          label: entry.label,
-        })),
-        frozenAt: branch.frozenAt?.toISOString() ?? null,
-        createdAt: branch.createdAt.toISOString(),
-        members: members
-          .filter((member) => member.teamId === branch.id)
-          .map((member) => ({
+      branches: branches.map((branch) => {
+        const branchMembers = members.filter((member) => member.teamId === branch.id);
+        return {
+          ...branch,
+          memberCount: branchMembers.length,
+          averageRating: Number(branch.averageRating) || 0,
+          footprint: (footprintsByProfileId.get(branch.profileId) ?? []).map((entry) => ({
+            id: entry.id,
+            kind: entry.kind,
+            slug: entry.slug,
+            label: entry.label,
+          })),
+          frozenAt: branch.frozenAt?.toISOString() ?? null,
+          createdAt: branch.createdAt.toISOString(),
+          members: branchMembers.map((member) => ({
             userId: member.userId,
             name: member.name,
             email: member.email,
             image: member.image,
             role: normalizeRole(member.role),
           })),
-      })),
+        };
+      }),
     };
   },
 
