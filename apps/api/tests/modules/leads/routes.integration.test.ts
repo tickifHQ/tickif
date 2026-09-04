@@ -275,7 +275,11 @@ describe('GET /api/leads', () => {
   });
 
   it('revokes every lead operation when the active branch membership is removed', async () => {
-    const { designer } = await makeDesignerSession('+919800003019');
+    const {
+      cookie: ownerCookie,
+      userId: ownerUserId,
+      designer,
+    } = await makeDesignerSession('+919800003019');
     await db.insert(schema.subscription).values({
       organizationId: designer.orgId,
       planTier: 'corporate',
@@ -303,22 +307,42 @@ describe('GET /api/leads', () => {
       name: 'Revoked Branch Lead',
     });
 
+    const allowedUpdate = await requestJson(`/api/leads/${assigned.id}`, 'PATCH', ownerCookie, {
+      notes: 'Allowed before revocation',
+    });
+    const allowedCreate = await requestJson('/api/leads', 'POST', ownerCookie, {
+      name: 'Allowed Before Revocation',
+      contactNumber: '+919800003198',
+    });
+    expect([allowedUpdate.status, allowedCreate.status]).toEqual([200, 201]);
+
     await db.delete(schema.teamMember).where(eq(schema.teamMember.userId, memberSession.userId));
+    await db.delete(schema.teamMember).where(eq(schema.teamMember.userId, ownerUserId));
 
     const responses = [
       await client.api.leads.$get({ query: {} }, { headers: { cookie: memberCookie } }),
       await app.request('/api/leads/counts', { headers: { cookie: memberCookie } }),
       await app.request(`/api/leads/${assigned.id}`, { headers: { cookie: memberCookie } }),
-      await requestJson(`/api/leads/${assigned.id}`, 'PATCH', memberCookie, {
+      await requestJson(`/api/leads/${assigned.id}`, 'PATCH', ownerCookie, {
         notes: 'Must not persist',
       }),
-      await requestJson('/api/leads', 'POST', memberCookie, {
+      await requestJson('/api/leads', 'POST', ownerCookie, {
         name: 'Must not create',
         contactNumber: '+919800003199',
       }),
     ];
 
     expect(responses.map(({ status }) => status)).toEqual([403, 403, 403, 403, 403]);
+    const [unchanged] = await db
+      .select({ notes: schema.lead.notes })
+      .from(schema.lead)
+      .where(eq(schema.lead.id, assigned.id));
+    const forbiddenCreates = await db
+      .select({ id: schema.lead.id })
+      .from(schema.lead)
+      .where(eq(schema.lead.name, 'Must not create'));
+    expect(unchanged?.notes).toBe('Allowed before revocation');
+    expect(forbiddenCreates).toHaveLength(0);
   });
 });
 
