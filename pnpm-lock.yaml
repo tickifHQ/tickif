@@ -530,6 +530,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)
       tsx:
         specifier: 'catalog:'
         version: 4.22.4

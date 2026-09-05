@@ -1,11 +1,12 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { config } from '@repo/config';
 import { db, desc, eq, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
 
-const apiUrl = config.NEXT_PUBLIC_API_URL;
-const webOrigin = 'http://localhost:3000';
+const apiUrl = stackApiUrl;
+const webOrigin = stackWebUrl;
 const otpResponseSchema = /^\d{4,8}/;
 
 function assertLocalTestEnvironment() {

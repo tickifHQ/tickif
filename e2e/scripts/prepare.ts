@@ -16,15 +16,19 @@ export async function prepareStack() {
   try {
     const exists = await connection.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
     if (!exists.rowCount) await connection.query(`CREATE DATABASE "${name}"`);
-  } finally { await connection.end(); }
+  } finally {
+    await connection.end();
+  }
   await migrateTestDb(config.DATABASE_URL);
   await assertTestDb();
   await seedTaxonomy();
   await bootstrapSearch();
   const storage = r2Client();
-  try { await storage.send(new HeadBucketCommand({ Bucket: config.R2_BUCKET })); }
-  catch (error) {
-    if (!(error instanceof S3ServiceException) || error.$metadata.httpStatusCode !== 404) throw error;
+  try {
+    await storage.send(new HeadBucketCommand({ Bucket: config.R2_BUCKET }));
+  } catch (error) {
+    if (!(error instanceof S3ServiceException) || error.$metadata.httpStatusCode !== 404)
+      throw error;
     await storage.send(new CreateBucketCommand({ Bucket: config.R2_BUCKET }));
   }
   console.log('[e2e] Isolated database, taxonomy, search and private storage are ready.');

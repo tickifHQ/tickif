@@ -1,3 +1,4 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, test } from '@playwright/test';
@@ -8,7 +9,7 @@ import {
   verificationApiUrl,
 } from '../lib/verification-fixtures';
 
-test('designer uploads, admin requests corrections, resubmission is approved and expired approval is renewed', async ({
+test('verification lifecycle: rejected documents are resubmitted, approved and renewed', async ({
   browser,
 }, testInfo) => {
   test.setTimeout(180_000);
@@ -47,7 +48,7 @@ test('designer uploads, admin requests corrections, resubmission is approved and
     const selectedContext = await designerContext.request.put(
       `${verificationApiUrl}/api/orgs/context`,
       {
-        headers: { origin: 'http://localhost:3000' },
+        headers: { origin: stackWebUrl },
         data: { kind: 'organization', organizationId: fixture.organization.id },
       },
     );
@@ -56,14 +57,14 @@ test('designer uploads, admin requests corrections, resubmission is approved and
       'Designer selects their studio through the real context API',
     ).toBeTruthy();
     await signInVerificationUser(adminContext, fixture.admin.phoneNumber);
-    await designer.goto('http://localhost:3000/designer/verification');
+    await designer.goto(`${stackWebUrl}/designer/verification`);
     await expect(designer.getByRole('heading', { name: 'Get Verified' })).toBeVisible();
     await designer.locator('#business-document').setInputFiles(document);
     await designer.getByRole('button', { name: 'Submit for verification', exact: true }).click();
     await expect.poll(async () => (await readState()).status).toBe('pending');
     const applicationId = (await readState()).applicationId;
 
-    await admin.goto('http://localhost:3000/verifications');
+    await admin.goto(`${stackWebUrl}/verifications`);
     await expect(admin).toHaveTitle('Profile verification · Tickif');
     await openApplication();
     const popupPromise = admin.waitForEvent('popup');
@@ -94,6 +95,7 @@ test('designer uploads, admin requests corrections, resubmission is approved and
     await designer.locator('#business-document').setInputFiles(document);
     await designer.getByRole('button', { name: 'Resubmit for verification', exact: true }).click();
     await expect.poll(async () => (await readState()).attempt).toBe(2);
+    await expect.poll(async () => (await readState()).status).toBe('pending');
     await admin.getByRole('tab', { name: /Re-review/ }).click();
     await openApplication();
     await expect(

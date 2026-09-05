@@ -8,7 +8,7 @@ import {
   signInProjectAdmin,
 } from '../lib/project-moderation-fixtures';
 
-test('admin paginates, claims, comments, resolves and completes project moderation decisions', async ({
+test('project moderation lifecycle: admin paginates, claims, comments, resolves and completes decisions', async ({
   page,
   context,
 }, testInfo) => {

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+
 import { apiUrl, webUrl, environment } from '../lib/environment.js';
 
 // Preparation completes before the API/web readiness probes can hit an unmigrated schema.
@@ -33,11 +33,11 @@ function start(args: string[], cwd: string, extra: NodeJS.ProcessEnv = {}) {
   return child;
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => shutdown());
-const tsxLoader = pathToFileURL(require.resolve('tsx')).href;
-start(['--import', tsxLoader, 'scripts/start-api.ts'], resolve('.'), {
+
+start(['dist/start-api.js'], resolve('.'), {
   PORT: new URL(apiUrl).port,
 });
-start(['--import', tsxLoader, 'scripts/start-worker.ts'], resolve('.'));
+start(['dist/start-worker.js'], resolve('.'));
 const nextRequire = createRequire(resolve('../apps/web/package.json'));
 start(
   [nextRequire.resolve('next/dist/bin/next'), 'dev', '--port', new URL(webUrl).port],
