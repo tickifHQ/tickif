@@ -354,8 +354,8 @@ function BranchUpgradePrompt() {
           <div>
             <h2 className="text-sm font-medium text-foreground">Branch-level analytics</h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Per-branch breakdowns and the org roll-up are a Corporate feature. Upgrade to unlock
-              them.
+              Basic organization analytics remain available. Upgrade to Corporate for per-branch
+              breakdowns and branch filtering.
             </p>
           </div>
         </div>
@@ -407,7 +407,7 @@ function FrozenBranchesNote({ branches }: { branches: { branchId: string; name: 
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         {branches.map((branch) => branch.name).join(', ')} {branches.length === 1 ? 'is' : 'are'}{' '}
         frozen — data retained, restores on re-upgrade. Frozen branches are excluded from the
-        figures above without losing history.
+        analytics figures without losing history.
       </p>
     </Card>
   );
@@ -441,13 +441,16 @@ function BillingRevenueView({
 }) {
   return (
     <div className="p-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl leading-tight font-medium tracking-tight text-foreground">
-          Billing analytics
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Revenue only. Engagement metrics are not part of this view.
-        </p>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-2xl leading-tight font-medium tracking-tight text-foreground">
+            Billing analytics
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Revenue only. Engagement metrics are not part of this view.
+          </p>
+        </div>
+        <AnalyticsDateRangeControl {...analytics.window} />
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

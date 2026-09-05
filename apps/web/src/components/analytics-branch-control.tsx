@@ -31,7 +31,11 @@ export function AnalyticsBranchControl() {
         if (!response.ok || cancelled) return;
         const parsed = organizationBranchesResponseSchema.safeParse(await response.json());
         if (!parsed.success || cancelled) return;
-        setBranches(parsed.data.branches.map((branch) => ({ id: branch.id, name: branch.name })));
+        setBranches(
+          parsed.data.branches
+            .filter((branch) => !branch.frozen)
+            .map((branch) => ({ id: branch.id, name: branch.name })),
+        );
       } catch {
         if (!cancelled) setBranches([]);
       }

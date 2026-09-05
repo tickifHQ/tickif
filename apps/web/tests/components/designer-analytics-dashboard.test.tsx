@@ -325,6 +325,7 @@ describe('DesignerAnalyticsDashboard', () => {
     );
 
     expect(screen.getByText(/Branch-level analytics/i)).toBeInTheDocument();
+    expect(screen.getByText(/Basic organization analytics remain available/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
       'href',
       '/designer/plan-billing',
@@ -403,6 +404,32 @@ describe('DesignerAnalyticsDashboard', () => {
 
     expect(screen.getByText(/Showing your projects only/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Analytics' })).toBeInTheDocument();
+  });
+
+  it('renders the full analytics layout for an admin', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: {
+            role: 'admin',
+            roleScope: 'full',
+            tier: 'corporate',
+            lifecycleState: 'active',
+            tierScope: 'branch',
+            level: 'organization',
+            branchId: null,
+            branchAccess: 'available',
+            readOnly: false,
+            engagementVisible: true,
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: /branch breakdown/i })).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
   it('hides the roll-up breakdown once a branch is selected', () => {
@@ -502,6 +529,7 @@ describe('DesignerAnalyticsDashboard', () => {
 
     expect(screen.getByRole('heading', { name: /Billing analytics/i })).toBeInTheDocument();
     expect(screen.getByText(/Revenue only/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Analytics period: last 7 days/i })).toBeInTheDocument();
     expect(screen.queryByText('Enquiries received')).not.toBeInTheDocument();
     expect(screen.queryByText('Top converting projects')).not.toBeInTheDocument();
   });

@@ -111,4 +111,29 @@ describe('AnalyticsBranchControl', () => {
       }),
     ).toBeInTheDocument();
   });
+
+  it('does not offer frozen branches that analytics cannot select', async () => {
+    mocks.branchesGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...structuredClone(branchesPayload),
+        branches: [
+          ...structuredClone(branchesPayload.branches),
+          {
+            ...structuredClone(branchesPayload.branches[1]),
+            id: 'team-frozen',
+            name: 'Powai',
+            frozen: true,
+            frozenAt: '2026-08-20T00:00:00.000Z',
+            freezeRank: 1,
+          },
+        ],
+      }),
+    });
+
+    render(<AnalyticsBranchControl />);
+
+    const select = await screen.findByRole('combobox', { name: 'Branch' });
+    expect(within(select).queryByRole('option', { name: 'Powai' })).not.toBeInTheDocument();
+  });
 });
