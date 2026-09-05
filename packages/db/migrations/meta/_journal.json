@@ -407,6 +407,13 @@
       "when": 1788608469126,
       "tag": "0059_flashy_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788613080937,
+      "tag": "0060_light_rattler",
+      "breakpoints": true
     }
   ]
 }

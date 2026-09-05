@@ -9,6 +9,11 @@ vi.mock('../../src/lib/public-portfolio-api', () => ({
   fetchDesignerProjects,
 }));
 
+// Gallery tests exercise pagination/filtering; likes have their own interaction suite.
+vi.mock('../../src/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button type="button">Like project</button>,
+}));
+
 const PROFILE_ID = '22222222-2222-4222-8222-222222222222';
 
 function renderGallery(
