@@ -1,29 +1,44 @@
+import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test, type BrowserContext } from '@playwright/test';
-import { config } from '../../packages/config/src/index';
-import { db, eq, schema } from '../../packages/db/src/index';
-import {
-  assertTestDb,
-  makeDesigner,
-  makeOrganization,
-  makeUser,
-} from '../../packages/db/src/testing';
+import { config } from '@repo/config';
+import { db, desc, eq, schema } from '@repo/db';
+import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
 
 const apiUrl = config.NEXT_PUBLIC_API_URL;
-const syntheticPhone = '+919800010099';
+const webOrigin = 'http://localhost:3000';
 const otpResponseSchema = /^\d{4,8}/;
 
-async function signIn(context: BrowserContext) {
+function assertLocalTestEnvironment() {
+  const database = new URL(config.DATABASE_URL);
+  const api = new URL(apiUrl);
+  if (
+    !['localhost', '127.0.0.1'].includes(database.hostname) ||
+    !['localhost', '127.0.0.1'].includes(api.hostname) ||
+    !database.pathname.endsWith('_test') ||
+    config.DATABASE_URL !== config.DATABASE_URL_TEST
+  ) {
+    throw new Error(
+      'Personal settings E2E requires a local API and matching local database URLs ending in _test.',
+    );
+  }
+}
+
+async function signIn(context: BrowserContext, syntheticPhone: string) {
   const sent = await context.request.post(`${apiUrl}/api/auth/phone-number/send-otp`, {
+    headers: { origin: webOrigin },
     data: { phoneNumber: syntheticPhone },
   });
   expect(sent.ok()).toBeTruthy();
   const [row] = await db
     .select()
     .from(schema.verification)
-    .where(eq(schema.verification.identifier, syntheticPhone));
+    .where(eq(schema.verification.identifier, syntheticPhone))
+    .orderBy(desc(schema.verification.createdAt))
+    .limit(1);
   const code = row?.value.match(otpResponseSchema)?.[0];
   expect(code).toBeTruthy();
   const verified = await context.request.post(`${apiUrl}/api/auth/phone-number/verify`, {
+    headers: { origin: webOrigin },
     data: { phoneNumber: syntheticPhone, code },
   });
   expect(verified.ok()).toBeTruthy();
@@ -33,13 +48,18 @@ test.describe('personal settings with persisted accounts', () => {
   test.describe.configure({ mode: 'serial' });
   let userId: string;
   let organizationId: string;
+  let syntheticEmail: string;
+  let syntheticPhone: string;
 
   test.beforeEach(async () => {
-    // This spec must never seed or delete in a non-test database.
+    assertLocalTestEnvironment();
     await assertTestDb();
+    const suffix = randomUUID();
+    syntheticEmail = `settings-person-${suffix}@example.test`;
+    syntheticPhone = `+9197${randomInt(10_000_000, 100_000_000)}`;
     const user = await makeUser({
       name: 'Settings Person',
-      email: 'settings-person@example.test',
+      email: syntheticEmail,
       phoneNumber: syntheticPhone,
       phoneNumberVerified: true,
       role: 'designer',
@@ -62,7 +82,7 @@ test.describe('personal settings with persisted accounts', () => {
     page,
     context,
   }, testInfo) => {
-    await signIn(context);
+    await signIn(context, syntheticPhone);
     await page.goto('/home');
     await page.getByRole('button', { name: /Open account menu/ }).click();
     await page.getByRole('menuitem', { name: 'Personal settings' }).click();
@@ -71,7 +91,7 @@ test.describe('personal settings with persisted accounts', () => {
     await expect(
       page.getByRole('heading', { name: 'Personal settings', exact: true }),
     ).toBeVisible();
-    await expect(page.getByText('settings-person@example.test (Verified)')).toBeVisible();
+    await expect(page.getByText(`${syntheticEmail} (Verified)`)).toBeVisible();
     await page.getByLabel('Display name').fill('Updated Person');
     await page.getByLabel('Personal address (optional)').fill('Bandra West, Mumbai');
     await page.getByLabel('WhatsApp number (optional)').fill('+919876543210');
