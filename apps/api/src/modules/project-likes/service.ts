@@ -1,4 +1,8 @@
-import type { ProjectLikeState, ProjectLikesStateQuery, ProjectLikesStateResponse } from '@repo/contracts';
+import type {
+  ProjectLikeState,
+  ProjectLikesStateQuery,
+  ProjectLikesStateResponse,
+} from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { projectLikesRepository } from './repository.js';
 
@@ -9,7 +13,10 @@ export const projectLikesService = {
     return state;
   },
 
-  async state(userId: string | null, query: ProjectLikesStateQuery): Promise<ProjectLikesStateResponse> {
+  async state(
+    userId: string | null,
+    query: ProjectLikesStateQuery,
+  ): Promise<ProjectLikesStateResponse> {
     const ids = Array.isArray(query.projectIds) ? query.projectIds : [query.projectIds];
     return { projects: await projectLikesRepository.state(userId, [...new Set(ids)]) };
   },

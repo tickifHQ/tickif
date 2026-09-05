@@ -12,13 +12,17 @@ const stateColumns = (userId: string | null) => ({
 export const projectLikesRepository = {
   async state(userId: string | null, projectIds: string[]) {
     if (projectIds.length === 0) return [];
-    return db.select(stateColumns(userId)).from(schema.project)
+    return db
+      .select(stateColumns(userId))
+      .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .where(and(
-        inArray(schema.project.id, projectIds),
-        eq(schema.project.status, 'published'),
-        eq(schema.designerProfile.status, 'active'),
-      ));
+      .where(
+        and(
+          inArray(schema.project.id, projectIds),
+          eq(schema.project.status, 'published'),
+          eq(schema.designerProfile.status, 'active'),
+        ),
+      );
   },
 
   async setLiked(userId: string, projectId: string, liked: boolean) {
@@ -39,13 +43,17 @@ export const projectLikesRepository = {
       if (liked) {
         await tx.insert(schema.projectLike).values({ userId, projectId }).onConflictDoNothing();
       } else {
-        await tx.delete(schema.projectLike).where(and(
-          eq(schema.projectLike.userId, userId), eq(schema.projectLike.projectId, projectId),
-        ));
+        await tx
+          .delete(schema.projectLike)
+          .where(
+            and(eq(schema.projectLike.userId, userId), eq(schema.projectLike.projectId, projectId)),
+          );
       }
       // Read after the mutation in this transaction, never increment a cached
       // counter. Unique rows make retries idempotent and prevent count drift.
-      const [state] = await tx.select(stateColumns(userId)).from(schema.project)
+      const [state] = await tx
+        .select(stateColumns(userId))
+        .from(schema.project)
         .where(eq(schema.project.id, projectId));
       return state ?? null;
     });
