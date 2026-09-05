@@ -39,7 +39,7 @@ test('designer uploads, admin requests corrections, resubmission is approved and
       .click();
   const screenshot = async (name: string) => {
     const path = join(tmpdir(), `tickif-kyc-${testInfo.workerIndex}-${name}.png`);
-    await admin.screenshot({ path, fullPage: false });
+    await admin.screenshot({ path, fullPage: false, animations: 'disabled' });
     await testInfo.attach(name, { path, contentType: 'image/png' });
   };
   try {
@@ -119,6 +119,14 @@ test('designer uploads, admin requests corrections, resubmission is approved and
     await expect(admin.getByRole('button', { name: 'Revoke approval' })).toHaveCount(0);
     await screenshot('expired-desktop');
     await admin.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() =>
+        admin
+          .locator('[data-slot="dialog-content"]')
+          .first()
+          .evaluate((element) => element.scrollWidth - element.clientWidth),
+      )
+      .toBeLessThanOrEqual(1);
     await screenshot('expired-mobile');
     await admin.getByRole('button', { name: 'Close', exact: true }).first().click();
     await designer.reload();

@@ -399,7 +399,7 @@ function ReviewDetail({
 
   return (
     <>
-      <DialogHeader className="border-b px-6 py-5 pr-14">
+      <DialogHeader className="min-w-0 border-b px-6 py-5 pr-14 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
@@ -418,7 +418,7 @@ function ReviewDetail({
         </div>
       </DialogHeader>
 
-      <div className="space-y-8 px-6 py-6">
+      <div className="min-w-0 space-y-8 px-6 py-6">
         {application.status === 'expired' ? (
           <div className="rounded-lg border bg-muted/35 p-4 text-sm" role="status">
             Approval expired {formatDate(application.expiresAt)}. The verified badge is inactive.
@@ -453,7 +453,7 @@ function ReviewDetail({
             <div className="rounded-lg border p-4">
               <div className="flex items-start gap-3">
                 <Building2 className="mt-0.5 size-4 text-primary" aria-hidden="true" />
-                <div>
+                <div className="min-w-0 break-words">
                   <p className="text-xs text-muted-foreground">Organization</p>
                   <p className="mt-1 text-sm font-medium">{application.organizationName}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -984,7 +984,7 @@ export function AdminVerificationQueue({
 
       <Dialog open={selectedApplicationId !== null} onOpenChange={(open) => !open && closeDetail()}>
         <DialogContent
-          className="left-auto right-0 top-0 h-dvh max-h-none w-full max-w-3xl translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0"
+          className="left-auto right-0 top-0 h-dvh max-h-none w-full max-w-3xl translate-x-0 translate-y-0 grid-cols-1 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-3xl"
           overlayClassName="bg-foreground/30"
         >
           <DialogTitle className="sr-only">Profile verification review</DialogTitle>
