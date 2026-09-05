@@ -27,6 +27,9 @@ import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
+import { PaymentHistory } from '@/components/payment-history';
+import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
+import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import type { SubscriptionResponse } from '@repo/contracts';
 
 interface DesignerPlanBillingProps {
@@ -44,8 +47,6 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-const BILLING_CTA_PENDING = 'Coming soon — billing integration pending';
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
   try {
@@ -62,7 +63,9 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-function lifecycleCta(state: BillingState): { label: string; kind: 'subscribe' | 'payment' } | null {
+function lifecycleCta(
+  state: BillingState,
+): { label: string; kind: 'subscribe' | 'payment' } | null {
   switch (state.lifecycle) {
     case 'active':
       return { label: 'Manage Subscription', kind: 'subscribe' };
@@ -89,7 +92,11 @@ function isImpaired(lifecycle: BillingState['lifecycle']): boolean {
 function CurrentPlanCard({
   billing,
   onSubscribe,
+  onPayment,
+  paymentBusy,
 }: {
+  onPayment?: () => void;
+  paymentBusy?: boolean;
   billing: BillingState;
   onSubscribe: (targetTier?: PlanTier) => void;
 }) {
@@ -101,7 +108,7 @@ function CurrentPlanCard({
     <Card radius="2xl">
       <div className="flex flex-col gap-5 p-8 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-stretch gap-5">
-          <span className="flex w-36 shrink-0 items-center justify-center self-stretch rounded-2xl bg-primary/10 text-primary">
+          <span className="flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-primary/10 text-primary sm:w-36">
             <Crown className="size-9" />
           </span>
           <div>
@@ -111,28 +118,20 @@ function CurrentPlanCard({
               {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
                 <Badge variant="secondary">Free</Badge>
               )}
-              {billing.lifecycle === 'locked' && (
-                <Badge variant="destructive">Locked</Badge>
-              )}
-              {billing.lifecycle === 'downgraded' && (
-                <Badge variant="warning">Downgraded</Badge>
-              )}
+              {billing.lifecycle === 'locked' && <Badge variant="destructive">Locked</Badge>}
+              {billing.lifecycle === 'downgraded' && <Badge variant="warning">Downgraded</Badge>}
               {billing.lifecycle === 'downgraded' && billing.preLapseTier && (
                 <span className="text-sm font-normal text-muted-foreground">
                   from {PLAN_TIER_LABELS[billing.preLapseTier]}
                 </span>
               )}
-              {billing.lifecycle === 'grace' && (
-                <Badge variant="warning">Payment Due</Badge>
-              )}
+              {billing.lifecycle === 'grace' && <Badge variant="warning">Payment Due</Badge>}
               {billing.lifecycle === 'payment_failed' && (
                 <Badge variant="destructive">Payment Failed</Badge>
               )}
             </div>
             <p className="mt-2 text-sm text-foreground">
-              <span className="font-semibold">
-                ₹{price.toLocaleString('en-IN')} / month
-              </span>
+              <span className="font-semibold">₹{price.toLocaleString('en-IN')} / month</span>
               {billing.usage.seats.limit != null && (
                 <>
                   <span className="mx-2">·</span>
@@ -160,7 +159,8 @@ function CurrentPlanCard({
             )}
             {billing.subscriptionId && (
               <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                Subscription ID: <span className="font-mono">{billing.subscriptionId}</span>
+                Subscription ID:{' '}
+                <span className="break-all font-mono">{billing.subscriptionId}</span>
                 <CopyLinkButton
                   value={billing.subscriptionId}
                   variant="ghost"
@@ -176,9 +176,13 @@ function CurrentPlanCard({
           <Button
             variant="outline"
             className="shrink-0"
-            disabled={cta.kind === 'payment'}
-            title={cta.kind === 'payment' ? BILLING_CTA_PENDING : undefined}
-            onClick={cta.kind === 'subscribe' ? () => onSubscribe() : undefined}
+            disabled={paymentBusy}
+            onClick={
+              cta.kind === 'payment' ||
+              (billing.lifecycle === 'locked' && billing.razorpayStatus === 'halted')
+                ? onPayment
+                : () => onSubscribe()
+            }
           >
             {cta.label}
           </Button>
@@ -223,9 +227,7 @@ function UsageMetricCard({
             )}
             <div className="mt-1">
               <span className="text-2xl font-semibold text-foreground">{current}</span>
-              {limit != null && (
-                <span className="text-base text-muted-foreground"> / {limit}</span>
-              )}
+              {limit != null && <span className="text-base text-muted-foreground"> / {limit}</span>}
               {limit === null && (
                 <span className="text-base text-muted-foreground"> (unlimited)</span>
               )}
@@ -290,7 +292,15 @@ function UsageSummary({ billing }: { billing: BillingState }) {
 
 // ─── Billing Summary ─────────────────────────────────────────────────────────
 
-function BillingSummary({ billing }: { billing: BillingState }) {
+function BillingSummary({
+  billing,
+  onPayment,
+  paymentBusy,
+}: {
+  billing: BillingState;
+  onPayment: () => void;
+  paymentBusy: boolean;
+}) {
   if (!billing.billing) return null;
   if (isImpaired(billing.lifecycle)) return null;
 
@@ -325,7 +335,7 @@ function BillingSummary({ billing }: { billing: BillingState }) {
                 </div>
               </div>
             )}
-            <Button variant="outline" size="sm" disabled title={BILLING_CTA_PENDING}>
+            <Button variant="outline" size="sm" disabled={paymentBusy} onClick={onPayment}>
               Update Payment Method
             </Button>
           </div>
@@ -379,10 +389,7 @@ function UpgradeCard({
       label: 'Professional+',
       price: PLAN_TIER_PRICES.professional_plus,
       description: 'Stand out with a verified badge and get discovered faster by homeowners.',
-      benefits: [
-        'Verified-business badge',
-        'Search & discovery ranking priority',
-      ],
+      benefits: ['Verified-business badge', 'Search & discovery ranking priority'],
     });
     cards.push({
       tier: 'corporate',
@@ -707,21 +714,27 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
   const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [initialTargetTier, setInitialTargetTier] = useState<PlanTier | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
   // Called on mount (SSR hydration catch-up) and after checkout flow completes.
   const refreshBilling = useCallback(async () => {
     try {
+      setRefreshError(null);
       await api.api.billing.subscription.refresh.$get();
       const response = await api.api.billing.subscription.$get();
       if (response.ok) {
         const data = (await response.json()) as SubscriptionResponse;
         setBilling(mapSubscriptionToBillingState(data));
+      } else {
+        setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
       }
     } catch {
-      // Non-fatal — keep the current data
+      setRefreshError('Billing could not be refreshed. Displaying the last loaded information.');
     }
   }, []);
+
+  const payment = usePaymentMethod(billing.tier, refreshBilling);
 
   // Reconcile on mount so the client sees the latest state after SSR.
   useEffect(() => {
@@ -730,6 +743,10 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
 
   const openSubscribe = useCallback(
     (tier?: PlanTier) => {
+      if (billing.razorpayStatus === 'halted') {
+        payment.open();
+        return;
+      }
       const recoveryTier =
         billing.lifecycle === 'downgraded'
           ? billing.preLapseTier
@@ -739,7 +756,7 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
       setInitialTargetTier(tier ?? recoveryTier);
       setSubscribeOpen(true);
     },
-    [billing.lifecycle, billing.preLapseTier, billing.tier],
+    [billing.lifecycle, billing.preLapseTier, billing.tier, billing.razorpayStatus, payment],
   );
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
@@ -774,10 +791,26 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
         </div>
       )}
 
+      {(payment.message || refreshError) && (
+        <Alert className="mt-6">
+          <AlertDescription>
+            <p>{payment.message ?? refreshError}</p>
+            <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
+              Refresh billing
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Main content */}
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="space-y-6">
-          <CurrentPlanCard billing={billing} onSubscribe={openSubscribe} />
+        <div className="min-w-0 space-y-6">
+          <CurrentPlanCard
+            billing={billing}
+            onSubscribe={openSubscribe}
+            onPayment={payment.open}
+            paymentBusy={payment.busy}
+          />
           <UsageSummary billing={billing} />
 
           {billing.lifecycle === 'locked' && billing.lockedAccess && (
@@ -785,13 +818,11 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
           )}
 
           {billing.lifecycle === 'downgraded' && billing.frozenResources.length > 0 && (
-            <FrozenResourcesCard
-              resources={billing.frozenResources}
-              onSubscribe={openSubscribe}
-            />
+            <FrozenResourcesCard resources={billing.frozenResources} onSubscribe={openSubscribe} />
           )}
 
-          <BillingSummary billing={billing} />
+          <BillingSummary billing={billing} onPayment={payment.open} paymentBusy={payment.busy} />
+          <PaymentHistory />
 
           <PlanIncludesCard
             tier={billing.tier}
@@ -810,9 +841,7 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
                     <CreditCard className="size-4 text-warning-foreground" />
                   </span>
                   <h2 className="text-base font-bold text-warning-foreground">
-                    {billing.lifecycle === 'payment_failed'
-                      ? 'Payment Failed'
-                      : 'Payment Due Soon'}
+                    {billing.lifecycle === 'payment_failed' ? 'Payment Failed' : 'Payment Due Soon'}
                   </h2>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
@@ -828,8 +857,8 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
                   variant="outline"
                   size="sm"
                   className="mt-4 w-full border-warning text-warning-foreground hover:bg-warning/20"
-                  disabled
-                  title={BILLING_CTA_PENDING}
+                  disabled={payment.busy}
+                  onClick={payment.open}
                 >
                   {billing.lifecycle === 'payment_failed'
                     ? 'Update Payment Method'

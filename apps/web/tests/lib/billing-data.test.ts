@@ -51,6 +51,16 @@ describe('getBillingState', () => {
     );
   });
 
+  it.each([401, 403, 500, 503])('does not fabricate a Hobby plan after HTTP %s', async (status) => {
+    mocks.getSubscription.mockResolvedValue(new Response(null, { status }));
+    await expect(getBillingState()).resolves.toBeNull();
+  });
+
+  it('preserves unavailable state after a network failure', async () => {
+    mocks.getSubscription.mockRejectedValue(new Error('offline'));
+    await expect(getBillingState()).resolves.toBeNull();
+  });
+
   it('forwards the incoming cookie to protected billing endpoints', async () => {
     await expect(getBillingState()).resolves.toMatchObject({ tier: 'corporate' });
 
