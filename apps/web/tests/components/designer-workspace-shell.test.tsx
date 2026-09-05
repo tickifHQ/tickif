@@ -135,7 +135,10 @@ describe('DesignerWorkspaceShell', () => {
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.queryByRole('link', { name: /consultations/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /consultations/i })).toHaveAttribute(
+      'href',
+      '/designer/consultations',
+    );
     expect(screen.getAllByRole('link', { name: /^reviews$/i })[0]).toHaveAttribute(
       'href',
       '/designer/reviews',

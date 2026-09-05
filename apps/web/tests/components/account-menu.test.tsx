@@ -38,6 +38,7 @@ describe('AccountMenu', () => {
       const user = userEvent.setup();
       render(<AccountMenu />);
       await user.click(screen.getByRole('button', { name: /open account menu/i }));
+      expect(screen.getByRole('menuitem', { name: 'My consultations' })).toHaveAttribute('href', '/home/consultations');
       expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
         'href',
         '/home/settings',
@@ -54,6 +55,7 @@ describe('AccountMenu', () => {
     render(<AccountMenu showProfileSettings />);
     await user.click(screen.getByRole('button', { name: /open account menu/i }));
     expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveAttribute(
       'href',
       '/designer/profile',

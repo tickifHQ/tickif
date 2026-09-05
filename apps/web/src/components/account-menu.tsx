@@ -102,7 +102,13 @@ export function AccountMenu({
           {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
+          <DropdownMenuGroup>
+          {(personalRole === 'visitor' || personalRole === 'designer') &&
+          !session.session.activeOrganizationId ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/home/consultations">My consultations</Link>
+            </DropdownMenuItem>
+          ) : null}
           {(personalRole === 'visitor' || personalRole === 'designer') &&
           !session.session.activeOrganizationId ? (
             <DropdownMenuItem asChild className="cursor-pointer">
