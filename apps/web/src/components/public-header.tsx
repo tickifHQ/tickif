@@ -51,6 +51,7 @@ export function PublicHeader({
           )}
         </div>
       </div>
+      <PublicNavigation mobile />
     </header>
   );
 }

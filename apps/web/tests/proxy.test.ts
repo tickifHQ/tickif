@@ -3,6 +3,12 @@ import { NextRequest } from 'next/server';
 import { isPublicPath, proxy } from '../proxy';
 
 describe('isPublicPath', () => {
+  it('allows the directory without exposing similarly prefixed workspace routes', () => {
+    expect(isPublicPath('/designers')).toBe(true);
+    expect(isPublicPath('/designers/')).toBe(true);
+    expect(isPublicPath('/designers-private')).toBe(false);
+    expect(isPublicPath('/designer/dashboard')).toBe(false);
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
   });

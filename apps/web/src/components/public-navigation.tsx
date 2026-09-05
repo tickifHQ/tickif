@@ -8,21 +8,28 @@ type PublicNavigationItem = { href: string; label: string } | { href?: never; la
 
 const navigationItems = [
   { href: '/', label: 'Explore' },
-  { label: 'Designers' },
+  { href: '/designers', label: 'Designers' },
   { label: 'Cost Calculator' },
   { href: '/enquiries', label: 'Your Enquiries' },
   { label: 'For you' },
 ] as const satisfies ReadonlyArray<PublicNavigationItem>;
+const mobileNavigationItems = navigationItems.slice(0, 2);
 
 const itemClassName =
   'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors';
 
-export function PublicNavigation() {
+export function PublicNavigation({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
+  const items = mobile ? mobileNavigationItems : navigationItems;
 
   return (
-    <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-      {navigationItems.map((item) => {
+    <nav
+      aria-label={mobile ? 'Mobile primary' : 'Primary'}
+      className={
+        mobile ? 'flex items-center gap-2 px-5 pb-3 md:hidden' : 'hidden items-center gap-1 md:flex'
+      }
+    >
+      {items.map((item) => {
         if (!('href' in item)) {
           return (
             // Spans are not focusable, so unavailable items are skipped when tabbing.

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { api } from '@/lib/api';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
+const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers']);
 
 /**
  * Route trees anonymous visitors may enter.
@@ -19,8 +19,11 @@ const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
 const PUBLIC_PATH_PREFIXES = ['/d/', '/projects/', '/image/'] as const;
 
 export function isPublicPath(pathname: string): boolean {
+  const normalizedPathname =
+    pathname.length > 1 && pathname.endsWith('/') ? pathname.replace(/\/+$/, '') : pathname;
   return (
-    PUBLIC_PATHS.has(pathname) || PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+    PUBLIC_PATHS.has(normalizedPathname) ||
+    PUBLIC_PATH_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix))
   );
 }
 
