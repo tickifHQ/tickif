@@ -79,13 +79,13 @@ jobs:
       BETTER_AUTH_SECRET: ci-dummy-secret-0123456789
       BETTER_AUTH_URL: http://localhost:3001
       POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
+      POSTGRES_PORT: '5432'
       POSTGRES_USER: tickif
       POSTGRES_PASSWORD: tickif
       POSTGRES_DB: tickif
       DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_test
       REDIS_HOST: localhost
-      REDIS_PORT: "6379"
+      REDIS_PORT: '6379'
       TYPESENSE_HOST: http://localhost:8108
       TYPESENSE_API_KEY: ci-typesense-api-key
       # The CI Typesense instance is bootstrapped with only the admin key below, so a distinct
@@ -97,7 +97,7 @@ jobs:
       R2_ACCESS_KEY_ID: minioadmin
       R2_SECRET_ACCESS_KEY: minioadmin
       R2_BUCKET: test-bucket
-      TURBO_TELEMETRY_DISABLED: "1"
+      TURBO_TELEMETRY_DISABLED: '1'
 
     services:
       postgres:
@@ -222,3 +222,63 @@ jobs:
           # (e.g. a new 0001_*.sql / meta snapshot) still fails the gate.
           git add --intent-to-add packages/db/migrations
           git diff --exit-code packages/db/migrations
+
+  publish-images:
+    name: publish / ${{ matrix.name }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci, security]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            dockerfile: apps/web/Dockerfile
+          - name: worker
+            dockerfile: apps/worker/Dockerfile
+          - name: operations
+            dockerfile: infra/staging/Dockerfile.operations
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate staging build-time URL
+        env:
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+        run: test -n "$STAGING_HOST"
+
+      - name: Resolve lowercase image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push immutable image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://${{ vars.STAGING_HOST }}
+            NEXT_PUBLIC_WEB_URL=https://${{ vars.STAGING_HOST }}
+            NEXT_PUBLIC_SCROLL_GATE_LIMIT=${{ vars.STAGING_SCROLL_GATE_LIMIT || '5' }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: mode=max
+          sbom: true

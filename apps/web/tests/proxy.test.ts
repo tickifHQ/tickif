@@ -12,6 +12,9 @@ describe('isPublicPath', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
+  it('allows the process-only container health endpoint', () => {
+    expect(isPublicPath('/health')).toBe(true);
+  });
 
   it('allows public designer profile routes', () => {
     expect(isPublicPath('/d/anika-spaces')).toBe(true);
