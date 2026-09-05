@@ -203,7 +203,7 @@ function SidebarContent({
               <span>Contact support</span>
             </Link>
             <Link
-              href="/home"
+              href="/"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
@@ -220,7 +220,10 @@ function SidebarContent({
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
             />
-            <DesignerBranchSelector organizationId={activeOrganizationId} />
+            <DesignerBranchSelector
+              key={activeOrganizationId}
+              organizationId={activeOrganizationId}
+            />
           </div>
         </div>
       </div>

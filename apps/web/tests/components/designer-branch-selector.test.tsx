@@ -101,4 +101,26 @@ describe('DesignerBranchSelector', () => {
     });
     expect(mocks.refresh).toHaveBeenCalled();
   });
+
+  it('clears branches from the previous organization while the next context loads', async () => {
+    const { rerender } = render(<DesignerBranchSelector organizationId="org-1" />);
+    expect(await screen.findByRole('button', { name: 'Switch branch' })).toHaveTextContent(
+      'Andheri',
+    );
+
+    let resolveNext!: (value: { ok: boolean; json: () => Promise<typeof branchesPayload> }) => void;
+    mocks.branchesGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNext = resolve;
+      }),
+    );
+    rerender(<DesignerBranchSelector organizationId="org-2" />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Switch branch' })).not.toBeInTheDocument();
+    });
+
+    resolveNext({ ok: true, json: async () => structuredClone(branchesPayload) });
+    expect(await screen.findByRole('button', { name: 'Switch branch' })).toBeInTheDocument();
+  });
 });

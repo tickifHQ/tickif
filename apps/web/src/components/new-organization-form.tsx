@@ -33,13 +33,9 @@ export function NewOrganizationForm({
       throw new Error('Could not create the organisation. Please try again.');
     }
 
-    const selected = await api.api.orgs.context.$put({
-      json: { kind: 'organization', organizationId: parsed.data.organization.id },
-    });
-    if (!selected.ok) {
-      throw new Error('Organisation created, but it could not be selected. Please try again.');
-    }
-
+    // The create endpoint selects and persists the new organization context in
+    // the same request. Repeating that mutation here adds a failure path where
+    // retrying the form would create a duplicate organization.
     router.refresh();
     return { data: parsed.data, created: created.status === 201 };
   }

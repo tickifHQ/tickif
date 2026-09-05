@@ -26,7 +26,11 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: () =>
-    Promise.resolve({ user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' } }),
+    Promise.resolve({
+      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
+      session: { activeOrganizationId: null, activeTeamId: null },
+    }),
+  activeContextForSession: () => ({ kind: 'personal' }),
 }));
 
 vi.mock('@/lib/home-feed', () => ({
@@ -54,7 +58,12 @@ vi.mock('@/components/project-feed', () => ({
 }));
 
 vi.mock('@/components/public-header', () => ({
-  PublicHeader: () => <div data-testid="public-header">header</div>,
+  PublicHeader: ({ contextSwitcher }: { contextSwitcher?: React.ReactNode }) => (
+    <div data-testid="public-header">
+      header
+      {contextSwitcher}
+    </div>
+  ),
 }));
 
 import PersonalHomePage from '../../../app/(protected)/home/page';
@@ -68,9 +77,10 @@ describe('PersonalHomePage', () => {
     render(await PersonalHomePage());
 
     expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
-    expect(screen.getByText('My Tickif')).toBeInTheDocument();
+    expect(screen.getAllByText('My Tickif')).not.toHaveLength(0);
     expect(screen.getByTestId('project-feed')).toBeInTheDocument();
     expect(screen.getByTestId('public-header')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch context' })).toBeInTheDocument();
     expect(screen.queryByText(/Analytics/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Team & Roles/i)).not.toBeInTheDocument();
   });

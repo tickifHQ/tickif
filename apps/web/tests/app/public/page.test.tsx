@@ -17,6 +17,12 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: mock.getServerSession,
+  activeContextForSession: (session: {
+    session: { activeOrganizationId?: string | null; activeTeamId?: string | null };
+  }) =>
+    session.session.activeOrganizationId && session.session.activeTeamId
+      ? { kind: 'organization' }
+      : { kind: 'personal' },
 }));
 
 vi.mock('next/link', () => ({
@@ -44,12 +50,35 @@ describe('PublicHomePage', () => {
   it('sends designers to their personal home instead of the visitor page', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
-      session: { id: 's1', token: 't', expiresAt: new Date().toISOString() },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
     });
 
     await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       'NEXT_REDIRECT:/home',
     );
+  });
+
+  it('lets an organization-context designer browse the public discovery page', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: 'org-1',
+        activeTeamId: 'team-1',
+      },
+    });
+
+    render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByRole('heading', { name: 'Explore home projects' })).toBeInTheDocument();
   });
 
   it('still renders the visitor homepage for signed-out users', async () => {

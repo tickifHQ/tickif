@@ -135,6 +135,30 @@ describe('LoginPage', () => {
     );
   });
 
+  it('restores an onboarded designer organization context', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u2',
+        name: 'Designer',
+        email: 'designer@test.com',
+        role: 'designer',
+        status: 'active',
+      },
+      session: {
+        id: 's2',
+        token: 'token',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: 'org-1',
+        activeTeamId: 'team-1',
+      },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/designer/dashboard',
+    );
+  });
+
   it('keeps the existing home redirect for an authenticated visitor', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u3', name: 'Visitor', email: 'visitor@test.com', role: 'visitor' },

@@ -33,8 +33,9 @@ export function DesignerBranchSelector({ organizationId }: { organizationId: str
   const isBusy = switchingId !== null;
 
   useEffect(() => {
+    setBranches(null);
+    setSwitchError(null);
     if (!organizationId) {
-      setBranches(null);
       return;
     }
     let cancelled = false;

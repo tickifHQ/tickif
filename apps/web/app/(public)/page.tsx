@@ -8,7 +8,7 @@ import { TrustStrip } from '@/components/trust-strip';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
-import { getServerSession } from '@/lib/auth-guard';
+import { activeContextForSession, getServerSession } from '@/lib/auth-guard';
 import {
   FEED_FACET_DEFINITIONS,
   FEED_FILTER_KEYS,
@@ -123,7 +123,15 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
   const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
 
-  const sessionPromise = getServerSession();
+  const session = await getServerSession();
+  if (session) {
+    const parsedRole = platformRoleSchema.safeParse(session.user.role);
+    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+      const context = activeContextForSession(session);
+      if (context.kind === 'personal') redirect('/home');
+    }
+  }
+
   const taxonomyOptionsPromise = fetchTaxonomyOptions();
   // One request per feed, always at the real page size: `hasMore` and the
   // rel=prev/next hints have to describe the 24-per-page scheme the links use.
@@ -133,14 +141,11 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       })
     : fetchFeedSafely(baseRequest, page);
   const featuredPagePromise = isDefaultFeed
-    ? sessionPromise.then((session) =>
-        session
-          ? emptyHomeFeedPage(1)
-          : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1),
-      )
+    ? session
+      ? Promise.resolve(emptyHomeFeedPage(1))
+      : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
     : Promise.resolve(emptyHomeFeedPage(1));
-  const [session, taxonomyOptions, initialPage, featuredPage] = await Promise.all([
-    sessionPromise,
+  const [taxonomyOptions, initialPage, featuredPage] = await Promise.all([
     taxonomyOptionsPromise,
     initialPagePromise,
     featuredPagePromise,
@@ -156,13 +161,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const previousHref = page > 1 ? feedPageLink(params, page - 1) : null;
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1) : null;
 
-  // Designers keep a dedicated personal home: visiting the public root sends
-  // them to My Tickif instead of rendering the visitor homepage.
   if (session) {
-    const parsedRole = platformRoleSchema.safeParse(session.user.role);
-    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      redirect('/home');
-    }
     return (
       <div className="bg-background">
         {previousHref ? <link rel="prev" href={previousHref} /> : null}

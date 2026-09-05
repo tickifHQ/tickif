@@ -64,7 +64,7 @@ describe('NewOrganizationForm', () => {
     mocks.selectContext.mockResolvedValue({ ok: true });
   });
 
-  it('creates the organisation then selects it before landing', async () => {
+  it('uses the context selected by the organization creation endpoint', async () => {
     const user = userEvent.setup();
     render(<NewOrganizationForm signedInName="Asha" signedInAs="a@x.com" />);
 
@@ -73,11 +73,9 @@ describe('NewOrganizationForm', () => {
     await waitFor(() => {
       expect(mocks.createOrganization).toHaveBeenCalled();
     });
+    expect(mocks.selectContext).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(mocks.selectContext).toHaveBeenCalledWith({
-        json: { kind: 'organization', organizationId: 'org-2' },
-      });
+      expect(mocks.refresh).toHaveBeenCalled();
     });
-    expect(mocks.refresh).toHaveBeenCalled();
   });
 });

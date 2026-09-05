@@ -56,7 +56,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
 
     const items = screen.getAllByRole('menuitem');
     expect(items[0]).toHaveTextContent('My Tickif');
@@ -74,7 +74,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /My Tickif/i }));
 
     expect(mock.setActive).toHaveBeenCalledWith({ json: { kind: 'personal' } });
@@ -91,7 +91,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(mock.setActive).toHaveBeenCalledWith({
@@ -117,7 +117,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    const trigger = screen.getByRole('button', { name: 'Switch context' });
     await user.click(trigger);
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
@@ -151,7 +151,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(onSwitchSuccess).toHaveBeenCalledWith('org-2');
@@ -168,7 +168,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    const trigger = screen.getByRole('button', { name: 'Switch context' });
     expect(trigger).toBeDisabled();
     expect(trigger).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByText('Loading Studio One workspace')).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(mock.router.refresh).not.toHaveBeenCalled();
@@ -203,7 +203,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(mock.router.refresh).not.toHaveBeenCalled();
@@ -220,7 +220,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Create an organisation/i }));
 
     expect(mock.router.push).toHaveBeenCalledWith('/designer/new-organization');
@@ -239,11 +239,31 @@ describe('DesignerOrganizationSwitcher', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+      await user.click(screen.getByRole('button', { name: 'Switch context' }));
       expect(screen.queryByText(/No organization memberships found/i)).not.toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Create an organisation/i })).toBeInTheDocument();
     } finally {
       mock.organizations = previous;
     }
+  });
+
+  it('opens the selected organization workspace from personal context', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId={null}
+        studioName="Asha Rao"
+        studioLocation="My Tickif"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
+    await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
+
+    expect(mock.setActive).toHaveBeenCalledWith({
+      json: { kind: 'organization', organizationId: 'org-2' },
+    });
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/dashboard');
+    expect(mock.router.refresh).not.toHaveBeenCalled();
   });
 });

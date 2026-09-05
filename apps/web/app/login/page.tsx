@@ -50,8 +50,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
       typeof (session.user as { status?: unknown }).status === 'string'
         ? ((session.user as { status?: string }).status ?? null)
         : null;
-    if (context.kind === 'personal' && accountStatus !== 'pending') {
-      redirect('/home');
+    if (accountStatus !== 'pending') {
+      redirect(context.kind === 'organization' ? '/designer/dashboard' : '/home');
     }
     redirect(initialMode === 'designer' ? '/designer/onboarding' : '/');
   }
