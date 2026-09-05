@@ -78,3 +78,11 @@ export const razorpayEventSchema = z
   .enum(RAZORPAY_EVENT_VALUES)
   .meta({ id: 'RazorpayEvent' });
 export type RazorpayEvent = z.infer<typeof razorpayEventSchema>;
+
+/** Razorpay payment entity creation time in Unix seconds. */
+export const razorpayPaymentCreatedAtSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(8_640_000_000_000)
+  .meta({ id: 'RazorpayPaymentCreatedAt' });

@@ -1,9 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppError } from '../../../src/lib/errors.js';
+import {
+  ORGANIZATION_ACCESS_SCOPE,
+  ORGANIZATION_CAPABILITY,
+  ORGANIZATION_MEMBER_ROLE,
+  type OrganizationMemberRole,
+} from '@repo/contracts';
 
 vi.mock('../../../src/modules/reports/repository.js', () => ({
   reportsRepository: {
-    findProfileContext: vi.fn(),
+    findAccessContext: vi.fn(),
+    listActiveProfiles: vi.fn(),
+    listFrozenBranches: vi.fn(),
     countProjectsByStatus: vi.fn(),
     countLeadsByStatus: vi.fn(),
     countProjectsCreatedByDay: vi.fn(),
@@ -11,26 +18,53 @@ vi.mock('../../../src/modules/reports/repository.js', () => ({
     countViewsByDay: vi.fn(),
     findTopConvertingProjects: vi.fn(),
     countAcquisitionSources: vi.fn(),
+    getBillingAnalytics: vi.fn(),
+    getBranchBreakdown: vi.fn(),
+  },
+}));
+
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    hasCapability: vi.fn(),
   },
 }));
 
 const { reportsService } = await import('../../../src/modules/reports/service.js');
 const { reportsRepository } = await import('../../../src/modules/reports/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 
-const input = {
-  userId: 'user_1',
-  orgId: 'org_1',
-  query: { days: 7 },
-};
+const input = { userId: 'user_1', orgId: 'org_1', query: { days: 7 } };
+const profiles = [
+  { profileId: '11111111-1111-4111-8111-111111111111', teamId: 'team_1', teamName: 'Mumbai' },
+  { profileId: '22222222-2222-4222-8222-222222222222', teamId: 'team_2', teamName: 'Pune' },
+];
+
+function mockRole(
+  role: OrganizationMemberRole,
+  overrides: Partial<{
+    frozen: boolean;
+    tier: 'hobby' | 'professional_plus' | 'corporate';
+    lifecycleState: 'active' | 'payment_failed' | 'grace' | 'locked' | 'downgraded';
+  }> = {},
+) {
+  vi.mocked(reportsRepository.findAccessContext).mockResolvedValue({
+    memberId: 'member_1',
+    role,
+    frozen: overrides.frozen ?? false,
+    tier: overrides.tier ?? 'corporate',
+    lifecycleState: overrides.lifecycleState ?? 'active',
+    currentPeriodEnd: new Date('2026-09-01T00:00:00.000Z'),
+  });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-08-07T12:30:00.000Z'));
-  vi.mocked(reportsRepository.findProfileContext).mockResolvedValue({
-    profileId: '11111111-1111-4111-8111-111111111111',
-    orgId: 'org_1',
-  });
+  mockRole(ORGANIZATION_MEMBER_ROLE.OWNER);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
+  vi.mocked(reportsRepository.listActiveProfiles).mockResolvedValue(profiles);
+  vi.mocked(reportsRepository.listFrozenBranches).mockResolvedValue([]);
   vi.mocked(reportsRepository.countProjectsByStatus).mockResolvedValue([]);
   vi.mocked(reportsRepository.countLeadsByStatus).mockResolvedValue([]);
   vi.mocked(reportsRepository.countProjectsCreatedByDay).mockResolvedValue([]);
@@ -38,193 +72,172 @@ beforeEach(() => {
   vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([]);
   vi.mocked(reportsRepository.findTopConvertingProjects).mockResolvedValue([]);
   vi.mocked(reportsRepository.countAcquisitionSources).mockResolvedValue([]);
+  vi.mocked(reportsRepository.getBranchBreakdown).mockResolvedValue([]);
+  vi.mocked(reportsRepository.getBillingAnalytics).mockResolvedValue([
+    {
+      currency: 'INR',
+      capturedAmount: 299900,
+      failedAmount: 799900,
+      transactionCount: 2,
+      capturedTransactions: 1,
+      failedTransactions: 1,
+    },
+  ]);
 });
 
-afterAll(() => {
-  vi.useRealTimers();
-});
+afterAll(() => vi.useRealTimers());
 
 describe('reportsService.getAnalytics', () => {
-  it('returns fixed status buckets and fills missing activity days', async () => {
-    vi.mocked(reportsRepository.countProjectsByStatus).mockResolvedValue([
-      { status: 'draft', count: 2 },
-      { status: 'published', count: 3 },
-      { status: 'changes_requested', count: 1 },
-    ]);
-    vi.mocked(reportsRepository.countLeadsByStatus)
-      .mockResolvedValueOnce([
-        { status: 'new', count: 4 },
-        { status: 'contacted', count: 2 },
-        { status: 'closed', count: 1 },
-      ])
-      .mockResolvedValueOnce([
-        { status: 'new', count: 2 },
-        { status: 'contacted', count: 1 },
-      ]);
-    vi.mocked(reportsRepository.countProjectsCreatedByDay).mockResolvedValue([
-      { date: '2026-08-02', count: 1 },
-      { date: '2026-08-07', count: 2 },
-    ]);
-    vi.mocked(reportsRepository.countLeadsReceivedByDay).mockResolvedValue([
-      { date: '2026-08-04', count: 3 },
-    ]);
-    vi.mocked(reportsRepository.countViewsByDay)
-      .mockResolvedValueOnce([
-        { type: 'project_view', date: '2026-08-04', count: 5 },
-        { type: 'profile_view', date: '2026-08-07', count: 2 },
-      ])
-      .mockResolvedValueOnce([
-        { type: 'project_view', date: '2026-07-28', count: 4 },
-        { type: 'profile_view', date: '2026-07-29', count: 1 },
-      ]);
-    vi.mocked(reportsRepository.findTopConvertingProjects).mockResolvedValue([
-      {
-        projectId: '22222222-2222-4222-8222-222222222222',
-        title: 'Warm apartment',
-        citySlug: 'chennai',
-        localitySlug: 'velachery',
-        views: 5,
-        enquiries: 2,
-        conversions: 1,
-      },
-    ]);
-    vi.mocked(reportsRepository.countAcquisitionSources).mockResolvedValue([
-      { source: 'enquiry', enquiries: 2, conversions: 1 },
-    ]);
-
+  it.each([
+    [ORGANIZATION_MEMBER_ROLE.OWNER, ORGANIZATION_ACCESS_SCOPE.FULL, false],
+    [ORGANIZATION_MEMBER_ROLE.ADMIN, ORGANIZATION_ACCESS_SCOPE.FULL, false],
+    [ORGANIZATION_MEMBER_ROLE.VIEWER, ORGANIZATION_ACCESS_SCOPE.ORGANIZATION, true],
+  ] as const)('returns the %s analytics view', async (role, expectedScope, readOnly) => {
+    mockRole(role);
     const result = await reportsService.getAnalytics(input);
-
-    expect(result.window).toEqual({
-      days: 7,
-      from: '2026-07-31T18:30:00.000Z',
-      to: '2026-08-07T12:30:00.000Z',
-    });
-    expect(result.projects).toEqual({
-      total: 6,
-      draft: 2,
-      submitted: 0,
-      inReview: 0,
-      published: 3,
-      rejected: 0,
-      changesRequested: 1,
-    });
-    expect(result.leads).toEqual({
-      total: 7,
-      new: 4,
-      contacted: 2,
-      closed: 1,
-      spam: 0,
-    });
-    expect(result.engagement).toEqual({ projectViews: 5, profileViews: 2 });
-    expect(result.previousPeriod).toEqual({
-      projectViews: 4,
-      enquiries: 3,
-      viewToEnquiryRate: 75,
-      responseRate: (1 / 3) * 100,
-    });
-    expect(result.activity).toHaveLength(7);
-    expect(result.activity[0]).toEqual({
-      date: '2026-08-01',
-      projectsCreated: 0,
-      leadsReceived: 0,
-      projectViews: 0,
-      profileViews: 0,
-    });
-    expect(result.activity[3]).toEqual({
-      date: '2026-08-04',
-      projectsCreated: 0,
-      leadsReceived: 3,
-      projectViews: 5,
-      profileViews: 0,
-    });
-    expect(result.activity[6]).toEqual({
-      date: '2026-08-07',
-      projectsCreated: 2,
-      leadsReceived: 0,
-      projectViews: 0,
-      profileViews: 2,
-    });
-    expect(result.topConvertingProjects).toEqual([
-      expect.objectContaining({ title: 'Warm apartment', conversions: 1 }),
-    ]);
-    expect(result.acquisitionSources).toEqual([
-      { source: 'enquiry', enquiries: 2, conversions: 1 },
-    ]);
-    expect(result.deferredMetrics).toEqual([]);
+    expect(result.access).toMatchObject({ role, roleScope: expectedScope, readOnly });
+    expect(result.billing).toBeNull();
+    expect(reportsRepository.countProjectsByStatus).toHaveBeenCalled();
+    expect(reportsRepository.getBranchBreakdown).toHaveBeenCalledTimes(
+      expectedScope === ORGANIZATION_ACCESS_SCOPE.FULL ? 1 : 0,
+    );
   });
 
-  it('scopes every aggregate to the resolved active organization profile', async () => {
-    await reportsService.getAnalytics(input);
-
-    expect(reportsRepository.findProfileContext).toHaveBeenCalledWith({
-      userId: 'user_1',
+  it('filters every project-derived metric for a member and excludes profile views', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.MEMBER);
+    vi.mocked(reportsRepository.countViewsByDay).mockResolvedValue([
+      { type: 'project_view', date: '2026-08-07', count: 3 },
+    ]);
+    const result = await reportsService.getAnalytics(input);
+    const scope = {
       orgId: 'org_1',
+      profileIds: profiles.map(({ profileId }) => profileId),
+      teamIds: profiles.map(({ teamId }) => teamId),
+      responsibleMemberId: 'member_1',
+    };
+    expect(reportsRepository.countProjectsByStatus).toHaveBeenCalledWith(scope);
+    for (const method of [
+      reportsRepository.countLeadsByStatus,
+      reportsRepository.countProjectsCreatedByDay,
+      reportsRepository.countLeadsReceivedByDay,
+      reportsRepository.countViewsByDay,
+      reportsRepository.findTopConvertingProjects,
+      reportsRepository.countAcquisitionSources,
+    ]) {
+      expect(method).toHaveBeenCalledWith(expect.objectContaining({ scope }));
+    }
+    expect(result.access.roleScope).toBe(ORGANIZATION_ACCESS_SCOPE.OWN);
+    expect(result.engagement).toEqual({ projectViews: 3, profileViews: 0 });
+    expect(result.activity.every(({ profileViews }) => profileViews === 0)).toBe(true);
+    expect(result.branches).toEqual([]);
+  });
+
+  it('returns payment-derived data for a billing admin without designer profiles', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.BILLING_ADMIN);
+    vi.mocked(reportsRepository.listActiveProfiles).mockResolvedValue([]);
+    const result = await reportsService.getAnalytics(input);
+    expect(result.access).toMatchObject({
+      roleScope: ORGANIZATION_ACCESS_SCOPE.BILLING,
+      engagementVisible: false,
     });
-    expect(reportsRepository.countProjectsByStatus).toHaveBeenCalledWith(
-      '11111111-1111-4111-8111-111111111111',
+    expect(result.billing?.currencies).toEqual([
+      expect.objectContaining({ currency: 'INR', capturedAmount: 299900, failedAmount: 799900 }),
+    ]);
+    expect(result.projects.total).toBe(0);
+    expect(result.leads.total).toBe(0);
+    expect(result.engagement).toEqual({ projectViews: 0, profileViews: 0 });
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+    expect(reportsRepository.listFrozenBranches).not.toHaveBeenCalled();
+    expect(reportsRepository.countProjectsByStatus).not.toHaveBeenCalled();
+  });
+
+  it('returns billing totals when an owner selects the billing dataset', async () => {
+    vi.mocked(reportsRepository.listActiveProfiles).mockResolvedValue([]);
+
+    const result = await reportsService.getAnalytics({
+      ...input,
+      query: { days: 7, dataset: 'billing' },
+    });
+
+    expect(result).toMatchObject({
+      dataset: 'billing',
+      access: {
+        role: ORGANIZATION_MEMBER_ROLE.OWNER,
+        roleScope: ORGANIZATION_ACCESS_SCOPE.FULL,
+        engagementVisible: true,
+      },
+      billing: {
+        currencies: [{ currency: 'INR', capturedAmount: 299900, failedAmount: 799900 }],
+      },
+    });
+    expect(reportsRepository.getBillingAnalytics).toHaveBeenCalledOnce();
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+  });
+
+  it('rejects billing analytics for roles without billing access', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.ADMIN);
+
+    await expect(
+      reportsService.getAnalytics({ ...input, query: { days: 7, dataset: 'billing' } }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(reportsRepository.getBillingAnalytics).not.toHaveBeenCalled();
+  });
+
+  it.each(['hobby', 'professional_plus'] as const)(
+    'returns basic analytics and an upgrade marker for %s',
+    async (tier) => {
+      mockRole(ORGANIZATION_MEMBER_ROLE.OWNER, { tier });
+      const result = await reportsService.getAnalytics(input);
+      expect(result.access).toMatchObject({ tierScope: 'basic', branchAccess: 'upgrade_required' });
+      expect(result.branches).toEqual([]);
+    },
+  );
+
+  it('keeps basic analytics while locked and suspends a requested branch view', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.OWNER, { lifecycleState: 'locked' });
+    const basic = await reportsService.getAnalytics(input);
+    expect(basic.access).toMatchObject({ tierScope: 'basic', branchAccess: 'suspended' });
+    await expect(
+      reportsService.getAnalytics({ ...input, query: { days: 7, branchId: 'team_1' } }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('scopes a Corporate branch view to one active branch', async () => {
+    const result = await reportsService.getAnalytics({
+      ...input,
+      query: { days: 7, branchId: 'team_2' },
+    });
+    expect(result.access).toMatchObject({ level: 'branch', branchId: 'team_2' });
+    expect(reportsRepository.countProjectsByStatus).toHaveBeenCalledWith({
+      orgId: 'org_1',
+      profileIds: ['22222222-2222-4222-8222-222222222222'],
+      teamIds: ['team_2'],
+    });
+  });
+
+  it('rejects frozen organization members before reading analytics data', async () => {
+    mockRole(ORGANIZATION_MEMBER_ROLE.MEMBER, { frozen: true });
+    await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+  });
+
+  it('rejects analytics while organization retention disables every capability', async () => {
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
+
+    await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      'user_1',
+      'org_1',
+      ORGANIZATION_CAPABILITY.READ_ANALYTICS,
     );
-    expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(1, {
-      orgId: 'org_1',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countProjectsCreatedByDay).toHaveBeenCalledWith({
-      profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countLeadsReceivedByDay).toHaveBeenCalledWith({
-      orgId: 'org_1',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(1, {
-      profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countLeadsByStatus).toHaveBeenNthCalledWith(2, {
-      orgId: 'org_1',
-      from: new Date('2026-07-24T18:30:00.000Z'),
-      to: new Date('2026-07-31T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countViewsByDay).toHaveBeenNthCalledWith(2, {
-      profileId: '11111111-1111-4111-8111-111111111111',
-      from: new Date('2026-07-24T18:30:00.000Z'),
-      to: new Date('2026-07-31T12:30:00.000Z'),
-    });
-    expect(reportsRepository.findTopConvertingProjects).toHaveBeenCalledWith({
-      profileId: '11111111-1111-4111-8111-111111111111',
-      orgId: 'org_1',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-    expect(reportsRepository.countAcquisitionSources).toHaveBeenCalledWith({
-      orgId: 'org_1',
-      from: new Date('2026-07-31T18:30:00.000Z'),
-      to: new Date('2026-08-07T12:30:00.000Z'),
-    });
-
-    const currentWindowMs =
-      new Date('2026-08-07T12:30:00.000Z').getTime() -
-      new Date('2026-07-31T18:30:00.000Z').getTime();
-    const previousWindowMs =
-      new Date('2026-07-31T12:30:00.000Z').getTime() -
-      new Date('2026-07-24T18:30:00.000Z').getTime();
-    expect(previousWindowMs).toBe(currentWindowMs);
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+    expect(reportsRepository.getBillingAnalytics).not.toHaveBeenCalled();
   });
 
   it('rejects requests without an active organization before querying', async () => {
     await expect(reportsService.getAnalytics({ ...input, orgId: null })).rejects.toMatchObject({
       status: 422,
     });
-    expect(reportsRepository.findProfileContext).not.toHaveBeenCalled();
-  });
-
-  it('requires a designer profile in the active organization', async () => {
-    vi.mocked(reportsRepository.findProfileContext).mockResolvedValue(null);
-
-    await expect(reportsService.getAnalytics(input)).rejects.toBeInstanceOf(AppError);
-    await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
+    expect(reportsRepository.findAccessContext).not.toHaveBeenCalled();
   });
 });

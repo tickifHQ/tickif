@@ -393,6 +393,13 @@
       "when": 1788544145217,
       "tag": "0057_closed_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1788545899128,
+      "tag": "0058_bent_loners",
+      "breakpoints": true
     }
   ]
 }

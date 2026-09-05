@@ -1,6 +1,7 @@
-import { ilike, inArray, type SQL } from 'drizzle-orm';
+import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
+import type { DbTransaction } from '@repo/db';
 import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type {
   CreateProjectInput,
@@ -395,6 +396,18 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
+  async withOrganizationLifecycleReadLock<T>(
+    organizationId: string,
+    run: (tx: DbTransaction) => Promise<T>,
+  ): Promise<T> {
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${organizationId}`}, 0))`,
+      );
+      return run(tx);
+    });
+  },
+
   async list(
     params: ListProjectsParams,
   ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
@@ -845,6 +858,40 @@ export const projectsRepository = {
       .where(eq(schema.project.id, id))
       .returning();
     return row ?? null;
+  },
+
+  async assignResponsibleMember(input: {
+    projectId: string;
+    organizationId: string;
+    responsibleMemberId: string | null;
+    tx?: DbTransaction;
+  }): Promise<ProjectRecord | 'invalid_member' | null> {
+    const executor = input.tx ?? db;
+    const [row] = await executor
+      .update(schema.project)
+      .set({ responsibleMemberId: input.responsibleMemberId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.project.id, input.projectId),
+          input.responsibleMemberId
+            ? exists(
+                executor
+                  .select({ id: schema.member.id })
+                  .from(schema.member)
+                  .where(
+                    and(
+                      eq(schema.member.id, input.responsibleMemberId),
+                      eq(schema.member.organizationId, input.organizationId),
+                      eq(schema.member.frozen, false),
+                    ),
+                  ),
+              )
+            : undefined,
+        ),
+      )
+      .returning();
+    if (row) return row;
+    return input.responsibleMemberId ? 'invalid_member' : null;
   },
 
   async submitWithUploadCounts(

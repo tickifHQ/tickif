@@ -1,4 +1,5 @@
 import type {
+  AssignProjectResponsibleMemberInput,
   CreateProjectInput,
   CreateProjectRoomInput,
   DeleteProjectImageResponse,
@@ -99,6 +100,7 @@ function toResponse(
   return {
     id: row.id,
     designerId: row.designerId,
+    responsibleMemberId: row.responsibleMemberId,
     title: row.title,
     slug: row.slug,
     description: row.description,
@@ -1559,6 +1561,44 @@ export const projectsService = {
     if (!row) throw AppError.notFound('Project not found');
     const rooms = await prefillRoomsIfEmpty(row);
     return toDetailResponse(row, rooms);
+  },
+
+  async assignResponsibleMember(
+    projectId: string,
+    input: AssignProjectResponsibleMemberInput,
+    caller: Caller,
+  ): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+    const outcome = await projectsRepository.withOrganizationLifecycleReadLock(
+      ownership.organizationId,
+      async (tx) => {
+        if (
+          !(await orgsService.hasCapability(
+            caller.userId,
+            ownership.organizationId,
+            ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+            tx,
+          ))
+        ) {
+          throw AppError.forbidden('Only organization owners and admins can assign projects');
+        }
+        return projectsRepository.assignResponsibleMember({
+          projectId,
+          organizationId: ownership.organizationId,
+          responsibleMemberId: input.responsibleMemberId,
+          tx,
+        });
+      },
+    );
+    if (outcome === 'invalid_member') {
+      throw AppError.unprocessable(
+        'Responsible member must be an active member of this organization',
+      );
+    }
+    if (!outcome) throw AppError.notFound('Project not found');
+    return toDetailResponse(outcome, await projectsRepository.listRooms(projectId));
   },
 
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {

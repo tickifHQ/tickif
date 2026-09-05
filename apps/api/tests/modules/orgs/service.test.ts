@@ -233,7 +233,6 @@ describe('orgsService', () => {
       manageMembers: false,
     });
   });
-
   it('rejects workspace reads without an active organization', async () => {
     await expect(
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: null }),

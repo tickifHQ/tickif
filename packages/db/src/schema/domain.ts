@@ -368,6 +368,10 @@ export const project = pgTable(
     designerId: uuid('designer_id')
       .notNull()
       .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    // Internal responsibility only. Public project ownership remains with the organization.
+    responsibleMemberId: text('responsible_member_id').references(() => member.id, {
+      onDelete: 'set null',
+    }),
     title: text('title').notNull(),
     slug: text('slug').notNull().unique(),
     description: text('description'),
@@ -404,6 +408,7 @@ export const project = pgTable(
   (t) => [
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
+    index('project_responsible_member_idx').on(t.responsibleMemberId),
     index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
     index('project_published_budget_recommendation_idx')
@@ -1492,6 +1497,7 @@ export const paymentTransaction = pgTable(
     currency: text('currency').notNull().default('INR'),
     status: text('status').notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -1500,7 +1506,7 @@ export const paymentTransaction = pgTable(
       .notNull(),
   },
   (t) => [
-    index('payment_transaction_subscription_idx').on(t.subscriptionId),
+    index('payment_transaction_subscription_occurred_idx').on(t.subscriptionId, t.occurredAt),
     index('payment_transaction_status_idx').on(t.status),
     check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],

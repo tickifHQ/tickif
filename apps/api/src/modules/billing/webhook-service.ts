@@ -5,6 +5,7 @@ import { config } from '@repo/config';
 import {
   RAZORPAY_EVENT,
   SUBSCRIPTION_STATE,
+  razorpayPaymentCreatedAtSchema,
   type PlanTier,
   type RazorpayEvent,
   type SubscriptionState,
@@ -12,6 +13,7 @@ import {
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
+import { recordFailedPayment } from './webhook-repository.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -243,6 +245,10 @@ async function handleCharged(
   if (!razorpayPaymentId) {
     return { outcome: 'ignored', reason: 'No payment ID in charged event' };
   }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in charged event' };
+  }
 
   const amount = extractAmount(payload);
   const currency = extractCurrency(payload) ?? 'INR';
@@ -261,6 +267,7 @@ async function handleCharged(
         currency,
         status: paymentStatus,
         payload,
+        occurredAt,
         processedAt: new Date(),
       })
       .onConflictDoNothing({ target: schema.paymentTransaction.razorpayPaymentId })
@@ -334,26 +341,32 @@ async function handlePaymentFailed(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  if (currentState !== SUBSCRIPTION_STATE.ACTIVE) {
-    return {
-      outcome: 'invalid_transition',
-      reason: `Cannot transition from ${currentState} to payment_failed`,
-    };
+  const razorpayPaymentId = extractPaymentId(payload);
+  if (!razorpayPaymentId) {
+    return { outcome: 'ignored', reason: 'No payment ID in failed event' };
+  }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in failed event' };
   }
 
-  const razorpayStatus = extractRazorpayStatus(payload) ?? 'halted';
+  const outcome = await recordFailedPayment({
+    subscriptionId: subscription.id,
+    razorpayPaymentId,
+    amount: extractAmount(payload),
+    currency: extractCurrency(payload) ?? 'INR',
+    razorpayStatus: extractRazorpayStatus(payload) ?? 'halted',
+    payload,
+    occurredAt,
+  });
 
-  await db
-    .update(schema.subscription)
-    .set({
-      subscriptionState: SUBSCRIPTION_STATE.PAYMENT_FAILED,
-      razorpayStatus,
-    })
-    .where(eq(schema.subscription.id, subscription.id));
-
-  return { outcome: 'processed' };
+  if (outcome === 'invalid_transition') {
+    return {
+      outcome: 'invalid_transition',
+      reason: `Cannot transition from ${subscription.subscriptionState} to payment_failed`,
+    };
+  }
+  return { outcome };
 }
 
 /**
@@ -518,6 +531,13 @@ function extractPaymentStatus(payload: Record<string, unknown>): string | null {
     (payload as { payload?: { payment?: { entity?: { status?: string } } } })?.payload?.payment
       ?.entity?.status ?? null
   );
+}
+
+function extractPaymentOccurredAt(payload: Record<string, unknown>): Date | null {
+  const value = (payload as { payload?: { payment?: { entity?: { created_at?: unknown } } } })
+    ?.payload?.payment?.entity?.created_at;
+  const parsed = razorpayPaymentCreatedAtSchema.safeParse(value);
+  return parsed.success ? new Date(parsed.data * 1000) : null;
 }
 
 function extractRazorpayStatus(payload: Record<string, unknown>): string | null {

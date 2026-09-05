@@ -243,13 +243,12 @@ export const orgsService = {
   async getCapabilities(
     userId: string,
     organizationId: string,
+    tx?: DbTransaction,
   ): Promise<OrganizationCapabilities | null> {
-    const [membership, retained] = await Promise.all([
-      orgsRepository.findMembershipRole(userId, organizationId),
-      orgsRepository.hasActiveRetention(organizationId),
-    ]);
+    const membership = await orgsRepository.findMembershipRole(userId, organizationId, tx);
     if (!membership) return null;
-    const plan = await orgsRepository.findOrganizationPlan(organizationId);
+    const retained = await orgsRepository.hasActiveRetention(organizationId, tx);
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
     return organizationCapabilitiesForRole(normalizeRole(membership.role), {
       rbacEnabled: rbacEnabled(plan.tier, plan.state),
       frozen: membership.frozen || retained,
@@ -260,8 +259,9 @@ export const orgsService = {
     userId: string,
     organizationId: string,
     capability: OrganizationCapability,
+    tx?: DbTransaction,
   ): Promise<boolean> {
-    const capabilities = await orgsService.getCapabilities(userId, organizationId);
+    const capabilities = await orgsService.getCapabilities(userId, organizationId, tx);
     return capabilities ? allowsCapability(capabilities, capability) : false;
   },
 

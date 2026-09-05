@@ -13,13 +13,13 @@ const analyticsRoute = createRoute({
   method: 'get',
   path: '/analytics',
   tags: ['Reports'],
-  summary: 'Get analytics for the active designer organization',
+  summary: 'Get role- and tier-scoped analytics for the active organization',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { query: analyticsQuerySchema },
   responses: {
     200: {
-      description: 'Org-scoped project, lead, and activity metrics',
+      description: 'Role-scoped engagement or billing metrics with tier and branch access metadata',
       content: { 'application/json': { schema: analyticsResponseSchema } },
     },
     401: {
@@ -27,7 +27,15 @@ const analyticsRoute = createRoute({
       content: { 'application/json': { schema: errorResponseSchema } },
     },
     403: {
-      description: 'No designer profile for the active organization',
+      description: 'Membership or analytics scope does not allow this view',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    402: {
+      description: 'Branch analytics require Corporate',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    404: {
+      description: 'Requested active branch not found',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
     422: {
