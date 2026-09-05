@@ -37,7 +37,7 @@ test('visitor likes persist across project and portfolio views independently of 
   });
   const path = `/projects/${project.id}`;
   const projectActions = page.getByRole('complementary', {
-    name: 'Synthetic Likes Studio',
+    name: 'Synthetic Likes Studio project designer',
     exact: true,
   });
   const runtimeErrors: string[] = [];
