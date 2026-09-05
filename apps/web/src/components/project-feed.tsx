@@ -7,7 +7,7 @@ import { Button } from '@repo/ui/components/button';
 import { FeedPagination } from '@/components/feed-pagination';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { TryFilterCard, type FeedFilterSuggestion } from '@/components/try-filter-card';
-import { feedPageHref, MAX_HOME_FEED_PAGE } from '@/lib/feed-params';
+import { feedPageHref, FEED_FILTER_KEYS, MAX_HOME_FEED_PAGE } from '@/lib/feed-params';
 import { fetchHomeFeedPage, type HomeFeedPage, type HomeFeedRequest } from '@/lib/home-feed';
 
 const TRY_FILTER_INDEX = 13;
@@ -60,7 +60,21 @@ function relaxedFilterMessage(filters: string[]): string {
 }
 
 /** SSR-first masonry feed that appends subsequent API pages as the sentinel enters view. */
-export function ProjectFeed({
+export function ProjectFeed(props: ProjectFeedProps) {
+  // RSC refreshes can send equivalent objects with new identities. Keep appended
+  // pages for the same search, and isolate pending requests when navigation
+  // changes the query, filters, sort, or starting page. A material server-data
+  // refresh also starts a new feed instead of keeping outdated cards.
+  const feedKey = JSON.stringify([
+    props.request.query,
+    props.request.sort ?? 'recent',
+    ...FEED_FILTER_KEYS.map((key) => props.request.filters[key]),
+    props.initialPage,
+  ]);
+  return <ProjectFeedResults key={feedKey} {...props} />;
+}
+
+function ProjectFeedResults({
   initialPage,
   request,
   infinite = true,
@@ -94,13 +108,6 @@ export function ProjectFeed({
       : initialPage.fallback === 'relaxed'
         ? relaxedFilterMessage(initialPage.relaxedFilters)
         : '';
-
-  useEffect(() => {
-    setRenderedPages([{ items: initialPage.items, page: initialPage.page }]);
-    setPage(initialPage.page);
-    setHasMore(initialPage.hasMore);
-    setLoadError(null);
-  }, [initialPage]);
 
   const loadNextPage = useCallback(async () => {
     if (!canLoadMore || loadingRef.current) return;

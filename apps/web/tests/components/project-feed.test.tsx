@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoveryCard } from '@repo/contracts';
 
@@ -12,6 +12,7 @@ vi.mock('@/lib/home-feed', () => ({
 
 import { ProjectFeed } from '../../src/components/project-feed';
 import { MAX_HOME_FEED_PAGE, type FeedFilterState } from '../../src/lib/feed-params';
+import type { HomeFeedPage } from '../../src/lib/home-feed';
 
 const filters: FeedFilterState = {
   city: [],
@@ -44,7 +45,7 @@ function card(id: string, title: string): DiscoveryCard {
 
 describe('ProjectFeed', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     Object.defineProperty(globalThis, 'IntersectionObserver', {
       configurable: true,
       value: class {
@@ -60,6 +61,121 @@ describe('ProjectFeed', () => {
         thresholds = [];
       },
     });
+  });
+
+  it('keeps all 26 cards after equivalent server props arrive following page two', async () => {
+    const initialPage: HomeFeedPage = {
+      items: Array.from({ length: 24 }, (_, index) => card(`project-${index}`, `Project ${index}`)),
+      page: 1,
+      hasMore: true,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      ...initialPage,
+      items: [card('project-24', 'Project 24'), card('project-25', 'Project 25')],
+      page: 2,
+      hasMore: false,
+    });
+    const request = { filters, query: 'home' };
+    const { rerender } = render(<ProjectFeed initialPage={initialPage} request={request} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(26));
+
+    rerender(<ProjectFeed initialPage={structuredClone(initialPage)} request={{ ...request }} />);
+
+    expect(screen.getAllByRole('article')).toHaveLength(26);
+    expect(screen.queryByRole('button', { name: 'Load more projects' })).not.toBeInTheDocument();
+  });
+
+  it.each(['query', 'sort', 'page', 'refresh'] as const)(
+    'resets appended pages when %s changes',
+    async (change) => {
+      const initialPage: HomeFeedPage = {
+        items: [card('project-1', 'First Project')],
+        page: 1,
+        hasMore: true,
+        facetDistribution: {},
+        fallback: 'none',
+        relaxedFilters: [],
+      };
+      const request = { filters, query: 'home', sort: 'recent' as const };
+      mock.fetchHomeFeedPage.mockResolvedValue({
+        ...initialPage,
+        items: [card('project-2', 'Second Project')],
+        page: 2,
+        hasMore: false,
+      });
+      const { rerender } = render(<ProjectFeed initialPage={initialPage} request={request} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+      await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+
+      rerender(
+        <ProjectFeed
+          initialPage={{
+            ...initialPage,
+            ...(change === 'page' ? { page: 3 } : {}),
+            ...(change === 'refresh' ? { items: [card('updated-1', 'Updated Project')] } : {}),
+          }}
+          request={{
+            ...request,
+            ...(change === 'query' ? { query: 'new home' } : {}),
+            ...(change === 'sort' ? { sort: 'featured' as const } : {}),
+          }}
+        />,
+      );
+
+      expect(screen.getAllByRole('article')).toHaveLength(1);
+      expect(screen.queryByText('Second Project')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(change === 'refresh' ? 'Updated Project' : 'First Project'),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('lets a new filtered feed paginate while ignoring the previous feed response', async () => {
+    const initialPage: HomeFeedPage = {
+      items: [card('old-1', 'Old first')],
+      page: 1,
+      hasMore: true,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    let resolveOld!: (page: HomeFeedPage) => void;
+    mock.fetchHomeFeedPage.mockReturnValueOnce(
+      new Promise<HomeFeedPage>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const { rerender } = render(
+      <ProjectFeed initialPage={initialPage} request={{ filters, query: 'home' }} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+
+    const newRequest = { filters: { ...filters, city: ['pune'] }, query: 'home' };
+    rerender(
+      <ProjectFeed
+        initialPage={{ ...initialPage, items: [card('new-1', 'New first')] }}
+        request={newRequest}
+      />,
+    );
+    mock.fetchHomeFeedPage.mockResolvedValueOnce({
+      ...initialPage,
+      items: [card('new-2', 'New second')],
+      page: 2,
+      hasMore: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    await waitFor(() => expect(screen.getByText('New second')).toBeInTheDocument());
+    expect(mock.fetchHomeFeedPage).toHaveBeenLastCalledWith(newRequest, 2);
+
+    await act(async () =>
+      resolveOld({ ...initialPage, items: [card('old-2', 'Old second')], page: 2 }),
+    );
+    expect(screen.queryByText('Old second')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(2);
   });
 
   it('appends the next page without rewriting the current URL', async () => {
