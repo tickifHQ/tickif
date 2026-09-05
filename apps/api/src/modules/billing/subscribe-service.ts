@@ -72,18 +72,32 @@ export const subscribeService = {
   ): Promise<{ razorpaySubscriptionId: string; shortUrl: string | null }> {
     assertBillingConfigured();
     await assertOrgBillingAccess(caller);
-    return withBillingUpdate(caller.activeOrgId!, async (repository) => {
-      const subscription = await repository.find(caller.activeOrgId!);
-      if (!subscription?.razorpaySubscriptionId)
-        throw AppError.notFound('No subscription to update. Choose a paid plan.');
-      const remote = await fetchSubscription(subscription.razorpaySubscriptionId);
-      if (!['active', 'pending', 'halted'].includes(remote.status)) {
+    const organizationId = caller.activeOrgId!;
+    const snapshot = await subscribeRepository.find(organizationId);
+    if (!snapshot?.razorpaySubscriptionId) {
+      throw AppError.notFound('No subscription to update. Choose a paid plan.');
+    }
+
+    const providerId = snapshot.razorpaySubscriptionId;
+    // Provider I/O must not hold the organization transaction lock. Re-check the
+    // provider identity under the lock before returning checkout details so a
+    // replacement that races this request cannot reopen an obsolete mandate.
+    const remote = await fetchSubscription(providerId);
+    if (!['active', 'pending', 'halted'].includes(remote.status)) {
+      throw AppError.conflict(
+        'This subscription cannot update its payment method. Refresh billing and choose a plan if it has ended.',
+      );
+    }
+
+    return subscribeRepository.withOrganizationLock(organizationId, async (repository) => {
+      const current = await repository.find(organizationId);
+      if (current?.razorpaySubscriptionId !== providerId) {
         throw AppError.conflict(
-          'This subscription cannot update its payment method. Refresh billing and choose a plan if it has ended.',
+          'The subscription changed while payment recovery was loading. Refresh billing and try again.',
         );
       }
       return {
-        razorpaySubscriptionId: subscription.razorpaySubscriptionId,
+        razorpaySubscriptionId: providerId,
         shortUrl: remote.short_url,
       };
     });
@@ -430,26 +444,38 @@ export const subscribeService = {
         razorpayStatus: subscription?.razorpayStatus ?? null,
       };
     }
+
+    const snapshot = await subscribeRepository.find(caller.activeOrgId);
+    if (!snapshot?.razorpaySubscriptionId) {
+      return { reconciled: false, razorpayStatus: null };
+    }
+
+    // If credentials aren't configured, skip gracefully.
+    if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
+      return { reconciled: false, razorpayStatus: snapshot.razorpayStatus };
+    }
+
+    const providerId = snapshot.razorpaySubscriptionId;
+    let rzpSub: Awaited<ReturnType<typeof fetchSubscription>>;
+    try {
+      // Keep the provider round trip outside the exclusive DB lock so a slow
+      // refresh cannot block webhook and lifecycle writes for this organization.
+      rzpSub = await fetchSubscription(providerId);
+    } catch {
+      // Razorpay API failure — return current local state, don't corrupt DB.
+      return { reconciled: false, razorpayStatus: snapshot.razorpayStatus };
+    }
+
     const result = await subscribeRepository.withOrganizationLock(
       caller.activeOrgId,
       async (repository) => {
         const subscription = await repository.find(caller.activeOrgId!);
 
-        if (!subscription?.razorpaySubscriptionId) {
-          return { reconciled: false, razorpayStatus: null };
-        }
-
-        // If credentials aren't configured, skip gracefully
-        if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
-          return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
-        }
-
-        let rzpSub;
-        try {
-          rzpSub = await fetchSubscription(subscription.razorpaySubscriptionId);
-        } catch {
-          // Razorpay API failure — return current local state, don't corrupt DB
-          return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
+        if (subscription?.razorpaySubscriptionId !== providerId) {
+          return {
+            reconciled: false,
+            razorpayStatus: subscription?.razorpayStatus ?? null,
+          };
         }
 
         const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
