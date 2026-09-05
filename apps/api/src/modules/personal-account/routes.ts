@@ -14,7 +14,7 @@ const errorJson = (description: string) => ({
   content: { 'application/json': { schema: errorResponseSchema } },
 });
 const common = {
-  path: '/me',
+  path: '/me' as const,
   tags: ['Personal account'],
   security: [{ cookieAuth: [] }],
   middleware: [requirePersonalContext] as const,
