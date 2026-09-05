@@ -64,6 +64,17 @@ describe('PublicHeader', () => {
     expect(screen.getByText('Your Enquiries')).toHaveAttribute('aria-current', 'page');
   });
 
+  it('marks the current directory in both desktop and mobile navigation', () => {
+    pathname = '/designers';
+    render(<PublicHeader />);
+
+    for (const name of ['Primary', 'Mobile primary']) {
+      const item = within(screen.getByRole('navigation', { name })).getByText('Designers');
+      expect(item).toHaveAttribute('aria-current', 'page');
+      expect(item.closest('a')).toBeNull();
+    }
+  });
+
   it('treats nested enquiry routes as the current Your Enquiries item', () => {
     pathname = '/enquiries/abc';
     render(<PublicHeader />);

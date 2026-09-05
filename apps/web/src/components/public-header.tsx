@@ -51,14 +51,7 @@ export function PublicHeader({
           )}
         </div>
       </div>
-      <nav aria-label="Mobile primary" className="flex items-center gap-2 px-5 pb-3 md:hidden">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/">Explore</Link>
-        </Button>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/designers">Designers</Link>
-        </Button>
-      </nav>
+      <PublicNavigation mobile />
     </header>
   );
 }

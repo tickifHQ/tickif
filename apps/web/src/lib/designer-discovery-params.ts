@@ -27,7 +27,9 @@ export function facetValues(value: string | string[] | undefined): string[] {
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0 && entry.length <= 80),
     ),
-  ].slice(0, 20);
+  ]
+    .sort()
+    .slice(0, 20);
 }
 
 /** Normalize URL input with the same constraints as the public search API. */

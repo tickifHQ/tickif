@@ -27,8 +27,6 @@ export async function fetchDesignerFacetOptions(): Promise<DesignerFacetOptions>
   };
   await Promise.all(
     DESIGNER_FACETS.map(async ({ key, kind }) => {
-      // Locality is currently search-only; its options come from the search facets.
-      if (kind === 'locality') return;
       try {
         const response = await api.api.taxonomy.terms.$get(
           { query: { kind } },

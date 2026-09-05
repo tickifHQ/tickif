@@ -15,6 +15,10 @@ const documents: DesignerSearchDocument[] = [];
 let profile: Awaited<ReturnType<typeof makeDesigner>> | undefined;
 
 test.describe('public designer discovery', () => {
+  // These journeys intentionally share one precisely sized Typesense fixture.
+  // Keep them in one worker so fullyParallel does not create overlapping copies.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeAll(async () => {
     const database = new URL(config.DATABASE_URL);
     if (
