@@ -701,7 +701,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     { lifecycle: 'locked' as const, tier: 'corporate' as const },
     { lifecycle: 'downgraded' as const, tier: 'hobby' as const },
   ])(
-    'allows an explicit recovery checkout from $lifecycle after Razorpay is halted',
+    'preserves the existing halted mandate during $lifecycle recovery',
     async ({ lifecycle, tier }) => {
       const { user, org } = await makeOrgWithOwner();
       const now = new Date();
@@ -737,18 +737,15 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
         created_at: Math.floor(Date.now() / 1000),
       });
 
-      const result = await subscribeService.createSubscription(
-        { userId: user.id, activeOrgId: org.id },
-        { targetTier: 'corporate' },
-      );
-
-      expect(result.razorpaySubscriptionId).toBe(`sub_${lifecycle}_recovery`);
-      const [recovering] = await db
-        .select()
-        .from(schema.subscription)
-        .where(eq(schema.subscription.organizationId, org.id));
-      expect(recovering!.subscriptionState).toBe(lifecycle);
-      expect(recovering!.razorpayStatus).toBe('created');
+      await expect(
+        subscribeService.createSubscription(
+          { userId: user.id, activeOrgId: org.id },
+          { targetTier: 'corporate' },
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(mockCreateSubscription).not.toHaveBeenCalled();
+      const result = await subscribeService.paymentMethod({ userId: user.id, activeOrgId: org.id });
+      expect(result.razorpaySubscriptionId).toBe(`sub_${lifecycle}_old`);
     },
   );
 
