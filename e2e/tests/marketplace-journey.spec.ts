@@ -157,7 +157,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(designer.getByRole('img', { name: /\(Ready\)$/ })).toHaveCount(3);
     await designer
       .getByRole('img', { name: /\(Ready\)$/ })
-      .first()
+      .last()
       .scrollIntoViewIfNeeded();
     await designer.screenshot({ path: testInfo.outputPath('rendered-worker-derivatives.png') });
     await designer.getByRole('button', { name: 'Preview & Submit Project' }).click();
@@ -270,7 +270,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(
       projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
-    await visitor
+    await projectActions
       .getByRole('button', { name: `Enquire about ${project.title}`, exact: true })
       .click();
     const enquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
@@ -291,7 +291,12 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await designer
       .getByRole('button', { name: `More actions for Journey Visitor ${suffix}` })
       .click();
-    await designer.getByRole('menuitem', { name: 'Contacted', exact: true }).click();
+    const leadUpdated = designer.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' && response.url().includes('/api/leads/'),
+    );
+    await designer.getByRole('menuitem', { name: 'Mark as contacted', exact: true }).click();
+    expect((await leadUpdated).ok()).toBeTruthy();
     await designer.reload();
     await expect(
       designer.getByRole('row').filter({ hasText: `Journey Visitor ${suffix}` }),
@@ -303,7 +308,12 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await designer.goto('/designer/plan-billing');
     await expect(designer.getByText('Hobby', { exact: true }).first()).toBeVisible();
   } finally {
-    await Promise.all([designerContext.close(), visitorContext.close(), adminContext.close()]);
+    // A timed-out browser may already be closed; still remove this journey's fixtures.
+    await Promise.allSettled([
+      designerContext.close(),
+      visitorContext.close(),
+      adminContext.close(),
+    ]);
     await assertTestDb();
     if (projectId) {
       await db
