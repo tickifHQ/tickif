@@ -42,7 +42,7 @@ onlyBuiltDependencies:
 # Reference in package.json as "catalog:".
 catalog:
   # Language / tooling
-  typescript: ^5.9.2
+  typescript: ^6.0.3
   tsx: ^4.20.3
   '@types/node': 26.4.0
   eslint-config-prettier: ^10.1.8
