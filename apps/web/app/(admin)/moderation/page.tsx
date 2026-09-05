@@ -29,11 +29,11 @@ export default async function AdminModerationPage({
 } = {}) {
   const session = await requireAuth({ requiredRole: 'admin' });
   const params = (await searchParams) ?? {};
-  const parsed = adminModerationQueueQuerySchema.safeParse({
-    status: params.status,
-    page: params.page,
-  });
-  const { status, page } = parsed.success ? parsed.data : { status: 'submitted' as const, page: 1 };
+  const parsedStatus = adminModerationQueueQuerySchema.shape.status.safeParse(params.status);
+  const parsedPage = adminModerationQueueQuerySchema.shape.page.safeParse(params.page);
+  const status = parsedStatus.success ? parsedStatus.data : 'submitted';
+  const page = parsedPage.success ? parsedPage.data : 1;
+  const queryNeedsNormalization = !parsedStatus.success || !parsedPage.success;
   const cookie = (await headers()).get('cookie');
 
   let queue = { ...emptyQueue, page };
@@ -67,8 +67,9 @@ export default async function AdminModerationPage({
     error = 'Your admin session could not be found. Please sign in again.';
   }
 
-  if (!error && page > Math.max(1, queue.totalPages)) {
-    redirect(`/moderation?status=${status}&page=${Math.max(1, queue.totalPages)}`);
+  const lastPage = Math.max(1, queue.totalPages);
+  if (!error && (queryNeedsNormalization || page > lastPage)) {
+    redirect(`/moderation?status=${status}&page=${Math.min(page, lastPage)}`);
   }
 
   return (

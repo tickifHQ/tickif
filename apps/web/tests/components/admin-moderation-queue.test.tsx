@@ -271,6 +271,26 @@ describe('AdminModerationQueue', () => {
     expect(mocks.push).toHaveBeenCalledWith('/moderation?status=published&page=1');
   });
 
+  it('clears a cancelled refresh when navigation starts', async () => {
+    const user = userEvent.setup();
+    mocks.fetchQueue.mockImplementation(() => new Promise(() => undefined));
+    render(
+      <AdminModerationQueue
+        initialQueue={{ ...queue, total: 21, totalPages: 2 }}
+        currentUserId="admin-1"
+        currentUserRole="admin"
+        initialError="The queue could not be loaded."
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Refresh queue' }));
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: /Published/ }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/moderation?status=published&page=1');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  });
+
   it('keeps deep-linked tab and page, and corrects a page emptied by a decision', async () => {
     const user = userEvent.setup();
     mocks.fetchDetail.mockResolvedValue(detail({ status: 'in_review', reviewedBy: 'admin-1' }));
