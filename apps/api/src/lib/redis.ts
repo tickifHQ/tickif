@@ -94,6 +94,26 @@ export async function invalidateEntitlementCache(organizationId: string): Promis
 }
 
 /**
+ * Acquire a short lease before polling the billing provider for an organization.
+ * Redis outages fail open so reconciliation remains available; the database row
+ * lock still serializes provider-backed mutations in that degraded mode.
+ */
+export async function acquireBillingRefreshLease(
+  organizationId: string,
+  ttlSeconds = 30,
+): Promise<boolean> {
+  const redis = getClient();
+  if (!redis) return true;
+  try {
+    return (
+      (await redis.set(`billing-refresh:${organizationId}`, '1', 'EX', ttlSeconds, 'NX')) === 'OK'
+    );
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Close the Redis connection gracefully (for shutdown).
  */
 export async function closeRedisCache(): Promise<void> {

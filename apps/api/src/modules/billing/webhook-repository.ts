@@ -1,8 +1,9 @@
-import { db, eq, schema } from '@repo/db';
+import { and, db, eq, schema } from '@repo/db';
 import { SUBSCRIPTION_STATE } from '@repo/contracts';
 
 type FailedPaymentInput = {
   subscriptionId: string;
+  razorpaySubscriptionId: string;
   razorpayPaymentId: string;
   amount: number;
   currency: string;
@@ -11,7 +12,8 @@ type FailedPaymentInput = {
   occurredAt: Date;
 };
 
-export type FailedPaymentWriteResult = 'processed' | 'duplicate' | 'invalid_transition';
+export type FailedPaymentWriteResult =
+  'processed' | 'duplicate' | 'invalid_transition' | 'not_current';
 
 /**
  * Records a failed payment and advances an active subscription under one row lock.
@@ -24,11 +26,16 @@ export async function recordFailedPayment(
     const [subscription] = await tx
       .select({ subscriptionState: schema.subscription.subscriptionState })
       .from(schema.subscription)
-      .where(eq(schema.subscription.id, input.subscriptionId))
+      .where(
+        and(
+          eq(schema.subscription.id, input.subscriptionId),
+          eq(schema.subscription.razorpaySubscriptionId, input.razorpaySubscriptionId),
+        ),
+      )
       .limit(1)
       .for('update');
 
-    if (!subscription) return 'invalid_transition';
+    if (!subscription) return 'not_current';
 
     const [inserted] = await tx
       .insert(schema.paymentTransaction)

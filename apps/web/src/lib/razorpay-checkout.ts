@@ -10,18 +10,35 @@ declare global {
   }
 }
 
+let razorpayScriptPromise: Promise<void> | null = null;
+
 function loadRazorpayScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
+  if (window.Razorpay) return Promise.resolve();
+  if (razorpayScriptPromise) return razorpayScriptPromise;
+
+  const pending = new Promise<void>((resolve, reject) => {
     if (window.Razorpay) {
       resolve();
       return;
     }
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Razorpay Checkout'));
+    script.onload = () => {
+      if (window.Razorpay) resolve();
+      else reject(new Error('Razorpay Checkout did not initialize'));
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('Failed to load Razorpay Checkout'));
+    };
     document.head.appendChild(script);
+  }).catch((error: unknown) => {
+    razorpayScriptPromise = null;
+    throw error;
   });
+
+  razorpayScriptPromise = pending;
+  return pending;
 }
 
 export async function openRazorpayCheckout(params: {
@@ -50,6 +67,7 @@ export async function openRazorpayCheckout(params: {
   if (params.prefill.email) prefill.email = params.prefill.email;
   if (params.prefill.contact) prefill.contact = params.prefill.contact;
 
+  let completed = false;
   const rzp = new window.Razorpay({
     key: params.keyId,
     subscription_id: params.subscriptionId,
@@ -58,6 +76,8 @@ export async function openRazorpayCheckout(params: {
     description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
     ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
     handler: (response: Record<string, string>) => {
+      if (completed) return;
+      completed = true;
       params.onSuccess({
         razorpay_payment_id: response.razorpay_payment_id ?? '',
         razorpay_subscription_id: response.razorpay_subscription_id ?? '',
@@ -66,6 +86,8 @@ export async function openRazorpayCheckout(params: {
     },
     modal: {
       ondismiss: () => {
+        if (completed) return;
+        completed = true;
         params.onDismiss();
       },
     },
