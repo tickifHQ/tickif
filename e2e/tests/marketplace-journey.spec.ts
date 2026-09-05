@@ -95,6 +95,8 @@ test('designer onboarding and media processing connects to visitor onboarding an
     expect(roomResponse.ok(), await roomResponse.text()).toBeTruthy();
     const room = projectRoomSchema.parse(await roomResponse.json());
     await designer.goto(`/designer/projects/${project.id}/edit`);
+    await expect(designer.locator(`input[value="${project.title}"]`)).toBeVisible();
+    await expect(designer.getByRole('button', { name: 'Toggle Living room', exact: true })).toBeVisible();
     await designer
       .locator('input[type="file"]')
       .first()
@@ -138,6 +140,11 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .where(eq(schema.projectImage.projectId, project.id));
     objectKeys.push(...originals.map((image) => image.key));
     await designer.reload();
+    await expect(designer.locator(`input[value="${project.title}"]`)).toBeVisible();
+    await expect(designer.getByRole('img', { name: /\(Ready\)$/, includeHidden: true })).toHaveCount(3);
+    if (!(await designer.getByRole('img', { name: /\(Ready\)$/ }).first().isVisible())) {
+      await designer.getByRole('button', { name: 'Toggle Living room', exact: true }).click();
+    }
     await expect(designer.getByRole('img', { name: /\(Ready\)$/ })).toHaveCount(3);
     await designer
       .getByRole('img', { name: /\(Ready\)$/ })
