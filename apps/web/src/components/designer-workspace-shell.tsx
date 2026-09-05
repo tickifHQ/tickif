@@ -42,6 +42,7 @@ const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: LayoutDashboard },
   { label: 'Projects', href: '/designer/projects', icon: Layers },
   { label: 'Leads', href: '/designer/leads', icon: FileUser },
+  { label: 'Reviews', href: '/designer/reviews', icon: MessageSquareMore },
   { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 

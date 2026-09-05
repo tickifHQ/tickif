@@ -4,6 +4,7 @@ import type {
   ListPublishedReviewsQuery,
   ReviewModerationAction,
   ReviewStatus,
+  OrganizationReviewsQuery,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
@@ -36,6 +37,7 @@ export type CreateReviewParams = {
   bookingId?: string | null;
   rating: number;
   body?: string | null;
+  sessionId?: string;
 };
 
 export type CreateReviewResult =
@@ -45,6 +47,7 @@ export type CreateReviewResult =
   | { kind: 'self_review' }
   | { kind: 'invalid_project' }
   | { kind: 'invalid_booking' }
+  | { kind: 'forbidden' }
   | { kind: 'duplicate' };
 
 export type TransitionReviewParams = {
@@ -60,6 +63,8 @@ export type TransitionReviewParams = {
   requiredWriter?: {
     organizationId: string;
     userId: string;
+    teamId?: string | null;
+    sessionId?: string;
   };
 };
 
@@ -67,13 +72,107 @@ export type UpdateReviewResult =
   | { kind: 'updated'; review: ReviewViewRecord }
   | { kind: 'conflict' }
   | { kind: 'phone_unverified' }
-  | { kind: 'self_review' };
+  | { kind: 'self_review' }
+  | { kind: 'forbidden' };
 
 export type TransitionReviewResult =
   { kind: 'updated'; review: ReviewViewRecord } | { kind: 'conflict' } | { kind: 'forbidden' };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Handle = typeof db | Tx;
+
+// Keep lifecycle timestamps on one database clock, including after row-lock waits.
+// A host clock a few milliseconds behind Postgres must not violate timestamp ordering.
+const reviewWriteTime = sql`greatest(statement_timestamp(), ${schema.review.createdAt}, ${schema.review.updatedAt}, ${schema.review.publishedAt}, ${schema.review.disputedAt}, ${schema.review.moderatedAt})`;
+
+export type ReviewParticipantScope = {
+  userId: string;
+  activeOrgId: string | null;
+  activeTeamId?: string | null;
+  sessionId?: string;
+};
+
+async function sessionMatches(tx: Tx, scope: ReviewParticipantScope): Promise<boolean> {
+  if (!scope.sessionId) return true; // Internal callers already provide their trusted scope.
+  const [session] = await tx
+    .select({
+      orgId: schema.session.activeOrganizationId,
+      teamId: schema.session.activeTeamId,
+      expiresAt: schema.session.expiresAt,
+    })
+    .from(schema.session)
+    .where(and(eq(schema.session.id, scope.sessionId), eq(schema.session.userId, scope.userId)))
+    .for('update');
+  return (
+    !!session &&
+    session.expiresAt > new Date() &&
+    (session.orgId ?? null) === scope.activeOrgId &&
+    (scope.activeTeamId === undefined || (session.teamId ?? null) === scope.activeTeamId)
+  );
+}
+
+async function eligibleAccount(tx: Tx, userId: string) {
+  const [account] = await tx
+    .select({
+      role: schema.user.role,
+      status: schema.user.status,
+      banned: schema.user.banned,
+      banExpires: schema.user.banExpires,
+      phoneNumberVerified: schema.user.phoneNumberVerified,
+    })
+    .from(schema.user)
+    .where(eq(schema.user.id, userId))
+    .for('update');
+  return account &&
+    ['visitor', 'designer'].includes(account.role) &&
+    ['pending', 'active'].includes(account.status) &&
+    !(account.banned && (!account.banExpires || account.banExpires > new Date()))
+    ? account
+    : null;
+}
+
+async function organizationWriter(
+  tx: Tx,
+  organizationId: string,
+  userId: string,
+): Promise<boolean> {
+  const [membership] = await tx
+    .select({ role: schema.member.role, frozen: schema.member.frozen })
+    .from(schema.member)
+    .where(and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, userId)))
+    .for('update');
+  const [retention] = await tx
+    .select({ id: schema.organizationRetention.organizationId })
+    .from(schema.organizationRetention)
+    .where(eq(schema.organizationRetention.organizationId, organizationId));
+  return (
+    !!membership && !membership.frozen && !retention && ['owner', 'admin'].includes(membership.role)
+  );
+}
+
+async function participantFeedback(tx: Tx, reviewId: string) {
+  const events = await tx
+    .select({
+      action: schema.reviewModerationEvent.action,
+      note: schema.reviewModerationEvent.note,
+      createdAt: schema.reviewModerationEvent.createdAt,
+    })
+    .from(schema.reviewModerationEvent)
+    .where(
+      and(
+        eq(schema.reviewModerationEvent.reviewId, reviewId),
+        sql`${schema.reviewModerationEvent.action} in ('dispute', 'resolve_publish', 'remove')`,
+      ),
+    )
+    .orderBy(desc(schema.reviewModerationEvent.createdAt), desc(schema.reviewModerationEvent.id));
+  const disputeIndex = events.findIndex((event) => event.action === 'dispute');
+  const dispute = events[disputeIndex] ?? null;
+  const resolution =
+    disputeIndex > 0
+      ? (events.slice(0, disputeIndex).find((event) => event.action !== 'dispute') ?? null)
+      : null;
+  return { dispute, resolution };
+}
 
 function reviewProjection() {
   return {
@@ -194,6 +293,75 @@ async function aggregatePublished(
 }
 
 export const reviewsRepository = {
+  async findOwn(designerProfileId: string, scope: ReviewParticipantScope) {
+    return db.transaction(async (tx) => {
+      if (scope.activeOrgId || !(await sessionMatches(tx, scope)))
+        return { kind: 'forbidden' } as const;
+      const account = await eligibleAccount(tx, scope.userId);
+      if (!account) return { kind: 'forbidden' } as const;
+      const [review] = await reviewViewQuery(tx)
+        .where(
+          and(
+            eq(schema.review.designerProfileId, designerProfileId),
+            eq(schema.review.authorUserId, scope.userId),
+          ),
+        )
+        .limit(1);
+      return {
+        kind: 'ok',
+        item: review ? { review, feedback: await participantFeedback(tx, review.id) } : null,
+        phoneVerified: account.phoneNumberVerified === true,
+      } as const;
+    });
+  },
+
+  async listOrganization(query: OrganizationReviewsQuery, scope: ReviewParticipantScope) {
+    return db.transaction(async (tx) => {
+      if (
+        !scope.activeOrgId ||
+        !(await sessionMatches(tx, scope)) ||
+        !(await eligibleAccount(tx, scope.userId))
+      )
+        return { kind: 'forbidden' } as const;
+      const [profile] = await tx
+        .select({ orgId: schema.designerProfile.orgId, teamId: schema.designerProfile.teamId })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, query.designerProfileId));
+      if (
+        !profile ||
+        profile.orgId !== scope.activeOrgId ||
+        (scope.activeTeamId && scope.activeTeamId !== profile.teamId) ||
+        !(await organizationWriter(tx, scope.activeOrgId, scope.userId))
+      )
+        return { kind: 'forbidden' } as const;
+      const [branch] = await tx
+        .select({ frozen: schema.team.frozen })
+        .from(schema.team)
+        .where(eq(schema.team.id, profile.teamId));
+      if (!branch || branch.frozen) return { kind: 'forbidden' } as const;
+      const where = and(
+        eq(schema.review.designerProfileId, query.designerProfileId),
+        sql`${schema.review.status} in ('published', 'disputed', 'removed')`,
+        query.status ? eq(schema.review.status, query.status) : undefined,
+      );
+      const reviews = await reviewViewQuery(tx)
+        .where(where)
+        .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
+        .limit(query.limit)
+        .offset((query.page - 1) * query.limit);
+      const [count] = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(schema.review)
+        .where(where);
+      const items = await Promise.all(
+        reviews.map(async (review) => ({
+          review,
+          feedback: await participantFeedback(tx, review.id),
+        })),
+      );
+      return { kind: 'ok', items, total: count?.value ?? 0 } as const;
+    });
+  },
   async findAdminDetail(id: string) {
     return db.transaction(
       async (tx) => {
@@ -237,12 +405,16 @@ export const reviewsRepository = {
 
   async create(params: CreateReviewParams): Promise<CreateReviewResult> {
     const result = await db.transaction(async (tx) => {
-      const [author] = await tx
-        .select({ phoneNumberVerified: schema.user.phoneNumberVerified })
-        .from(schema.user)
-        .where(eq(schema.user.id, params.authorUserId))
-        .limit(1)
-        .for('update');
+      if (
+        !(await sessionMatches(tx, {
+          userId: params.authorUserId,
+          activeOrgId: null,
+          sessionId: params.sessionId,
+        }))
+      )
+        return { kind: 'forbidden' } as const;
+      const author = await eligibleAccount(tx, params.authorUserId);
+      if (!author) return { kind: 'forbidden' } as const;
       if (author?.phoneNumberVerified !== true) return { kind: 'phone_unverified' } as const;
 
       const [designer] = await tx
@@ -357,15 +529,19 @@ export const reviewsRepository = {
     expectedRevision: number;
     rating?: number;
     body?: string | null;
+    sessionId?: string;
   }): Promise<UpdateReviewResult> {
     return db.transaction(async (tx) => {
-      const now = new Date();
-      const [author] = await tx
-        .select({ phoneNumberVerified: schema.user.phoneNumberVerified })
-        .from(schema.user)
-        .where(eq(schema.user.id, params.authorUserId))
-        .limit(1)
-        .for('update');
+      if (
+        !(await sessionMatches(tx, {
+          userId: params.authorUserId,
+          activeOrgId: null,
+          sessionId: params.sessionId,
+        }))
+      )
+        return { kind: 'forbidden' } as const;
+      const author = await eligibleAccount(tx, params.authorUserId);
+      if (!author) return { kind: 'forbidden' } as const;
       if (author?.phoneNumberVerified !== true) {
         return { kind: 'phone_unverified' } as const;
       }
@@ -427,10 +603,10 @@ export const reviewsRepository = {
           disputedAt: null,
           moderatedAt: null,
           moderationRevision: sql`${schema.review.moderationRevision} + 1`,
-          updatedAt: now,
+          updatedAt: reviewWriteTime,
         })
         .where(and(...stateConditions))
-        .returning({ id: schema.review.id });
+        .returning({ id: schema.review.id, updatedAt: schema.review.updatedAt });
       if (!updated) return { kind: 'conflict' } as const;
 
       await tx.insert(schema.reviewModerationEvent).values({
@@ -439,10 +615,11 @@ export const reviewsRepository = {
         action: 'edit',
         fromStatus: params.fromStatus,
         toStatus: 'pending',
+        createdAt: sql`statement_timestamp()`,
       });
 
       if (params.fromStatus === 'published') {
-        await recomputeDesignerAggregate(tx, params.designerProfileId, now);
+        await recomputeDesignerAggregate(tx, params.designerProfileId, updated.updatedAt);
       }
       const review = await findByIdWith(tx, updated.id);
       if (!review) throw new Error('updated review not found');
@@ -452,12 +629,23 @@ export const reviewsRepository = {
 
   async transition(params: TransitionReviewParams): Promise<TransitionReviewResult> {
     return db.transaction(async (tx) => {
-      const now = new Date();
+      if (
+        params.requiredWriter &&
+        (!(await sessionMatches(tx, {
+          userId: params.actorUserId,
+          activeOrgId: params.requiredWriter.organizationId,
+          activeTeamId: params.requiredWriter.teamId,
+          sessionId: params.requiredWriter.sessionId,
+        })) ||
+          !(await eligibleAccount(tx, params.actorUserId)))
+      )
+        return { kind: 'forbidden' } as const;
       const enteringPublished = params.toStatus === 'published';
       const [designer] = await tx
         .select({
           id: schema.designerProfile.id,
           orgId: schema.designerProfile.orgId,
+          teamId: schema.designerProfile.teamId,
         })
         .from(schema.designerProfile)
         .where(eq(schema.designerProfile.id, params.designerProfileId))
@@ -465,7 +653,10 @@ export const reviewsRepository = {
       if (!designer) return { kind: 'conflict' } as const;
 
       if (params.requiredWriter) {
-        if (designer.orgId !== params.requiredWriter.organizationId) {
+        if (
+          designer.orgId !== params.requiredWriter.organizationId ||
+          (params.requiredWriter.teamId && params.requiredWriter.teamId !== designer.teamId)
+        ) {
           return { kind: 'forbidden' } as const;
         }
         await tx
@@ -473,21 +664,13 @@ export const reviewsRepository = {
           .from(schema.organization)
           .where(eq(schema.organization.id, designer.orgId))
           .for('update');
-        const [membership] = await tx
-          .select({ role: schema.member.role })
-          .from(schema.member)
-          .where(
-            and(
-              eq(schema.member.organizationId, designer.orgId),
-              eq(schema.member.userId, params.requiredWriter.userId),
-            ),
-          )
-          .limit(1)
-          .for('update');
-        const canWrite = membership?.role
-          .split(',')
-          .some((role) => role.trim() === 'owner' || role.trim() === 'admin');
-        if (!canWrite) return { kind: 'forbidden' } as const;
+        if (!(await organizationWriter(tx, designer.orgId, params.requiredWriter.userId)))
+          return { kind: 'forbidden' } as const;
+        const [branch] = await tx
+          .select({ frozen: schema.team.frozen })
+          .from(schema.team)
+          .where(eq(schema.team.id, designer.teamId));
+        if (!branch || branch.frozen) return { kind: 'forbidden' } as const;
       }
 
       const [updated] = await tx
@@ -496,19 +679,19 @@ export const reviewsRepository = {
           status: params.toStatus,
           publishedAt:
             params.toStatus === 'published'
-              ? sql`coalesce(${schema.review.publishedAt}, ${now})`
+              ? sql`coalesce(${schema.review.publishedAt}, ${reviewWriteTime})`
               : params.toStatus === 'rejected'
                 ? null
                 : undefined,
           disputedAt:
             params.toStatus === 'disputed'
-              ? now
+              ? reviewWriteTime
               : params.toStatus === 'published' || params.toStatus === 'rejected'
                 ? null
                 : undefined,
-          moderatedAt: params.action === 'dispute' ? undefined : now,
+          moderatedAt: params.action === 'dispute' ? undefined : reviewWriteTime,
           moderationRevision: sql`${schema.review.moderationRevision} + 1`,
-          updatedAt: now,
+          updatedAt: reviewWriteTime,
         })
         .where(
           and(
@@ -517,7 +700,7 @@ export const reviewsRepository = {
             eq(schema.review.moderationRevision, params.expectedRevision),
           ),
         )
-        .returning({ id: schema.review.id });
+        .returning({ id: schema.review.id, updatedAt: schema.review.updatedAt });
       if (!updated) return { kind: 'conflict' } as const;
 
       await tx.insert(schema.reviewModerationEvent).values({
@@ -528,10 +711,11 @@ export const reviewsRepository = {
         toStatus: params.toStatus,
         note: params.note ?? null,
         reasonCode: params.reasonCode ?? null,
+        createdAt: sql`statement_timestamp()`,
       });
 
       if ((params.fromStatus === 'published') !== enteringPublished) {
-        await recomputeDesignerAggregate(tx, params.designerProfileId, now);
+        await recomputeDesignerAggregate(tx, params.designerProfileId, updated.updatedAt);
       }
       const review = await findByIdWith(tx, updated.id);
       if (!review) throw new Error('transitioned review not found');
