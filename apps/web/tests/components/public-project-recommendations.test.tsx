@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PublicProjectRecommendations } from '../../src/components/public-project-recommendations';
 import { makePublicProject, makeRecommendationProject } from '../fixtures/public-project';
+
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
 
 describe('PublicProjectRecommendations', () => {
   it('renders the three sourced recommendation groups and their existing routes', () => {

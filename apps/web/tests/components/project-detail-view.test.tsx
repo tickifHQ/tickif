@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicProjectGalleryImage, PublicProjectDesigner, PublicImageDetailProject } from '@repo/contracts';
 import { ImageDetailView } from '../../src/components/image-detail-view';
 
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+
 const push = vi.fn();
 
 vi.mock('next/navigation', () => ({

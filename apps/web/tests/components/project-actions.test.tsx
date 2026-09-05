@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+
 const mocks = vi.hoisted(() => ({
   session: null as { user: { id: string } } | null,
   getSavedState: vi.fn(),
