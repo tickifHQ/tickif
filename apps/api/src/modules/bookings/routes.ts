@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
   bookingIdParamSchema,
+  bookingMutationQuerySchema,
   bookingResponseSchema,
   cancelBookingSchema,
   confirmBookingSchema,
@@ -10,7 +11,7 @@ import {
   listBookingsResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireResolvedAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { bookingsService } from './service.js';
@@ -24,6 +25,8 @@ function caller(user: AuthVariables['user'], session: AuthVariables['session']) 
   if (!user) throw AppError.unauthorized();
   return {
     userId: user.id,
+    role: user.role,
+    status: user.status,
     name: user.name,
     phoneNumber: user.phoneNumber ?? null,
     phoneNumberVerified: user.phoneNumberVerified === true,
@@ -39,7 +42,7 @@ const createBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Request a consultation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     body: {
       content: { 'application/json': { schema: createBookingSchema } },
@@ -64,7 +67,7 @@ const listMineRoute = createRoute({
   tags: ['Bookings'],
   summary: 'List consultations requested by the caller',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: { query: listBookingsQuerySchema },
   responses: {
     200: {
@@ -82,7 +85,7 @@ const listInboxRoute = createRoute({
   tags: ['Bookings'],
   summary: 'List consultations for the active designer organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: { query: listBookingsQuerySchema },
   responses: {
     200: {
@@ -101,9 +104,10 @@ const confirmBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Confirm one of the requested consultation slots',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     params: bookingIdParamSchema,
+    query: bookingMutationQuerySchema,
     body: {
       content: { 'application/json': { schema: confirmBookingSchema } },
     },
@@ -127,8 +131,8 @@ const completeBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Mark a confirmed consultation complete',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
-  request: { params: bookingIdParamSchema },
+  middleware: [requireResolvedAuth] as const,
+  request: { params: bookingIdParamSchema, query: bookingMutationQuerySchema },
   responses: {
     200: {
       description: 'Completed consultation',
@@ -147,9 +151,10 @@ const cancelBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Cancel an open consultation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     params: bookingIdParamSchema,
+    query: bookingMutationQuerySchema,
     body: {
       content: { 'application/json': { schema: cancelBookingSchema } },
     },
@@ -182,6 +187,7 @@ export const bookingsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('query'),
       caller(c.get('user'), c.get('session')),
     );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   })
   .openapi(listInboxRoute, async (c) => {
@@ -189,6 +195,7 @@ export const bookingsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       c.req.valid('query'),
       caller(c.get('user'), c.get('session')),
     );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   })
   .openapi(confirmBookingRoute, async (c) => {
@@ -197,7 +204,9 @@ export const bookingsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),
+      c.req.valid('query').expectedStatus,
     );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   })
   .openapi(completeBookingRoute, async (c) => {
@@ -205,7 +214,9 @@ export const bookingsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const result = await bookingsService.complete(
       id,
       caller(c.get('user'), c.get('session')),
+      c.req.valid('query').expectedStatus,
     );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   })
   .openapi(cancelBookingRoute, async (c) => {
@@ -214,7 +225,9 @@ export const bookingsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),
+      c.req.valid('query').expectedStatus,
     );
+    c.header('Cache-Control', 'private, no-store');
     return c.json(result, 200);
   });
 

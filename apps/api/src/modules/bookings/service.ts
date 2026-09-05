@@ -24,6 +24,8 @@ export type BookingCaller = {
   isBanned: boolean;
   activeOrgId: string | null;
   activeTeamId: string | null;
+  role?: string | null;
+  status?: string | null;
 };
 
 function toResponse(row: BookingViewRecord): BookingResponse {
@@ -81,6 +83,19 @@ function statusFilter(status: ListBookingsQuery['status']): BookingStatus | unde
 
 function assertActiveCaller(caller: BookingCaller): void {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
+  if (caller.role !== undefined && caller.role !== 'visitor' && caller.role !== 'designer')
+    throw AppError.forbidden('A personal or designer account is required');
+  if (caller.status !== undefined && caller.status !== 'pending' && caller.status !== 'active')
+    throw AppError.forbidden('Account unavailable');
+}
+
+function assertPersonalCaller(caller: BookingCaller): void {
+  if (caller.activeOrgId) throw AppError.forbidden('Switch to your personal account to continue');
+}
+
+function assertExpectedStatus(booking: BookingViewRecord, expectedStatus?: BookingStatus): void {
+  if (expectedStatus && booking.status !== expectedStatus)
+    throw AppError.conflict('Booking changed; refresh and try again');
 }
 
 function requireActiveOrganization(caller: BookingCaller): string {
@@ -126,9 +141,7 @@ function slotsMatch(left: BookingSlot, right: BookingSlot): boolean {
   return left.date === right.date && left.window === right.window;
 }
 
-async function transitionOrConflict(
-  params: TransitionBookingParams,
-): Promise<BookingResponse> {
+async function transitionOrConflict(params: TransitionBookingParams): Promise<BookingResponse> {
   const transitioned = await bookingsRepository.transition(params);
   if (!transitioned) {
     throw AppError.conflict('Booking changed; refresh and try again');
@@ -139,6 +152,7 @@ async function transitionOrConflict(
 export const bookingsService = {
   async create(input: CreateBookingInput, caller: BookingCaller): Promise<BookingResponse> {
     assertActiveCaller(caller);
+    assertPersonalCaller(caller);
     if (!caller.phoneNumber || !caller.phoneNumberVerified) {
       throw AppError.unprocessable('A verified phone number is required to book a consultation');
     }
@@ -156,19 +170,21 @@ export const bookingsService = {
       case 'designer_not_notifiable':
         throw AppError.unprocessable('Designer is not configured to receive consultations');
       case 'invalid_project':
-        throw AppError.unprocessable('referredProjectId must be a published project by the designer');
+        throw AppError.unprocessable(
+          'referredProjectId must be a published project by the designer',
+        );
       case 'open_limit_reached':
         throw AppError.conflict('You already have three open consultations with this designer');
+      case 'own_studio':
+        throw AppError.forbidden('You cannot book a consultation with your own studio');
       case 'created':
         return toResponse(result.booking);
     }
   },
 
-  async listMine(
-    query: ListBookingsQuery,
-    caller: BookingCaller,
-  ): Promise<ListBookingsResponse> {
+  async listMine(query: ListBookingsQuery, caller: BookingCaller): Promise<ListBookingsResponse> {
     assertActiveCaller(caller);
+    assertPersonalCaller(caller);
     const { items, total } = await bookingsRepository.list({
       requesterId: caller.userId,
       status: statusFilter(query.status),
@@ -184,10 +200,7 @@ export const bookingsService = {
     };
   },
 
-  async listInbox(
-    query: ListBookingsQuery,
-    caller: BookingCaller,
-  ): Promise<ListBookingsResponse> {
+  async listInbox(query: ListBookingsQuery, caller: BookingCaller): Promise<ListBookingsResponse> {
     assertActiveCaller(caller);
     const organizationId = requireActiveOrganization(caller);
     const activeTeamId = requireActiveTeam(caller);
@@ -214,11 +227,13 @@ export const bookingsService = {
     id: string,
     input: ConfirmBookingInput,
     caller: BookingCaller,
+    expectedStatus?: BookingStatus,
   ): Promise<BookingResponse> {
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
     if (!booking) throw AppError.notFound('Booking not found');
     await assertDesignerWriteAccess(booking, caller);
+    assertExpectedStatus(booking, expectedStatus);
     if (booking.status !== 'requested') {
       throw AppError.conflict('Only requested consultations can be confirmed');
     }
@@ -233,11 +248,16 @@ export const bookingsService = {
     });
   },
 
-  async complete(id: string, caller: BookingCaller): Promise<BookingResponse> {
+  async complete(
+    id: string,
+    caller: BookingCaller,
+    expectedStatus?: BookingStatus,
+  ): Promise<BookingResponse> {
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
     if (!booking) throw AppError.notFound('Booking not found');
     await assertDesignerWriteAccess(booking, caller);
+    assertExpectedStatus(booking, expectedStatus);
     if (booking.status !== 'confirmed') {
       throw AppError.conflict('Only confirmed consultations can be completed');
     }
@@ -252,6 +272,7 @@ export const bookingsService = {
     id: string,
     input: CancelBookingInput,
     caller: BookingCaller,
+    expectedStatus?: BookingStatus,
   ): Promise<BookingResponse> {
     assertActiveCaller(caller);
     const booking = await bookingsRepository.findById(id);
@@ -260,7 +281,8 @@ export const bookingsService = {
     const cancelledBy = booking.requesterId === caller.userId ? 'requester' : 'designer';
     if (cancelledBy === 'designer') {
       await assertDesignerWriteAccess(booking, caller);
-    }
+    } else assertPersonalCaller(caller);
+    assertExpectedStatus(booking, expectedStatus);
 
     if (booking.status !== 'requested' && booking.status !== 'confirmed') {
       throw AppError.conflict('Completed or cancelled consultations cannot be cancelled');

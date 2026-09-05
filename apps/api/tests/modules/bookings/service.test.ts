@@ -21,6 +21,17 @@ const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const slot = { date: '2026-08-10', window: 'morning' } as const;
 const secondSlot = { date: '2026-08-11', window: 'afternoon' } as const;
 
+describe('rendered booking status protection', () => {
+  it('does not cancel a newly confirmed booking from an old requested view', async () => {
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(
+      row({ status: 'confirmed', confirmedSlot: slot }),
+    );
+    await expect(
+      bookingsService.cancel('booking', { reason: 'Changed plans' }, caller, 'requested'),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+});
+
 const caller = {
   userId: 'requester_1',
   name: 'Priya Shah',
@@ -139,6 +150,17 @@ describe('bookingsService.create', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
+  it('treats booking your own studio as an authorization failure', async () => {
+    vi.mocked(bookingsRepository.createWithLead).mockResolvedValue({ kind: 'own_studio' });
+
+    await expect(
+      bookingsService.create(
+        { designerProfileId: row().designerProfileId, preferredSlots: [slot] },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
   it('rejects designers without a notification destination', async () => {
     vi.mocked(bookingsRepository.createWithLead).mockResolvedValue({
       kind: 'designer_not_notifiable',
@@ -178,10 +200,7 @@ describe('bookingsService listing', () => {
     vi.mocked(orgsService.isMember).mockResolvedValue(false);
 
     await expect(
-      bookingsService.listInbox(
-        { status: 'all', page: 1, limit: 12 },
-        designerCaller,
-      ),
+      bookingsService.listInbox({ status: 'all', page: 1, limit: 12 }, designerCaller),
     ).rejects.toMatchObject({ status: 403 });
     expect(bookingsRepository.list).not.toHaveBeenCalled();
   });
@@ -189,10 +208,7 @@ describe('bookingsService listing', () => {
   it('scopes the designer inbox to the active branch', async () => {
     vi.mocked(bookingsRepository.list).mockResolvedValue({ items: [row()], total: 1 });
 
-    await bookingsService.listInbox(
-      { status: 'all', page: 1, limit: 12 },
-      designerCaller,
-    );
+    await bookingsService.listInbox({ status: 'all', page: 1, limit: 12 }, designerCaller);
 
     expect(bookingsRepository.list).toHaveBeenCalledWith({
       organizationId: designerCaller.activeOrgId,
@@ -330,9 +346,7 @@ describe('bookingsService transitions', () => {
   });
 
   it('hides bookings belonging to another branch from designer mutations', async () => {
-    vi.mocked(bookingsRepository.findById).mockResolvedValue(
-      row({ designerTeamId: 'team_2' }),
-    );
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(row({ designerTeamId: 'team_2' }));
 
     await expect(
       bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller),
@@ -401,14 +415,14 @@ describe('bookingsService designer slug resolution', () => {
       row({ designerPortfolioSlug: 'studio-one-interiors' }),
     );
     vi.mocked(bookingsRepository.transition).mockResolvedValue(
-      row({ designerPortfolioSlug: 'studio-one-interiors', status: 'confirmed', confirmedSlot: slot }),
+      row({
+        designerPortfolioSlug: 'studio-one-interiors',
+        status: 'confirmed',
+        confirmedSlot: slot,
+      }),
     );
 
-    const result = await bookingsService.confirm(
-      row().id,
-      { confirmedSlot: slot },
-      designerCaller,
-    );
+    const result = await bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller);
 
     expect(result.designerProfile.slug).toBe('studio-one-interiors');
   });
@@ -419,11 +433,7 @@ describe('bookingsService designer slug resolution', () => {
       row({ status: 'confirmed', confirmedSlot: slot }),
     );
 
-    const result = await bookingsService.confirm(
-      row().id,
-      { confirmedSlot: slot },
-      designerCaller,
-    );
+    const result = await bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller);
 
     expect(result.designerProfile.slug).toBe('studio-one');
   });

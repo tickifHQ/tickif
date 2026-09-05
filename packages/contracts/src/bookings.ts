@@ -128,6 +128,12 @@ export const listBookingsQuerySchema = z
   .meta({ id: 'ListBookingsQuery' });
 export type ListBookingsQuery = z.infer<typeof listBookingsQuerySchema>;
 
+/** UI callers send the state they rendered; legacy API clients retain status-CAS behavior. */
+export const bookingMutationQuerySchema = z
+  .object({ expectedStatus: bookingStatusSchema.optional() })
+  .strict()
+  .meta({ id: 'BookingMutationQuery' });
+
 const bookingOrganizationSchema = z.object({
   id: z.string(),
   name: z.string(),

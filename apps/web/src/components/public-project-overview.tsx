@@ -8,6 +8,7 @@ import { cn } from '@repo/ui/lib/utils';
 import { ArrowLeft, CalendarDays, MessageSquare, Star, UserRound } from 'lucide-react';
 import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
+import { BookingCta } from '@/components/booking-cta';
 import { ProjectActions } from '@/components/project-actions';
 import { ProjectHeroCarousel } from '@/components/project-hero-carousel';
 import { PublicProjectRecommendations } from '@/components/public-project-recommendations';
@@ -211,6 +212,14 @@ function DesignerCard({
             </Button>
           ) : null}
         </CardFooter>
+        <div className="pt-3">
+          <BookingCta
+            designerProfileId={designer.id}
+            designerName={designer.displayName}
+            referredProjectId={project.id}
+            loginHref={loginHref}
+          />
+        </div>
       </Card>
       <Separator />
       <ProjectActions projectId={project.id} loginHref={loginHref} canonicalUrl={canonicalUrl} />

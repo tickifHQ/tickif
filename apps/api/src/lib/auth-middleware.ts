@@ -209,6 +209,16 @@ export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   await next();
 };
 
+/** Guard authenticated routes that also consume personal/organization/branch session scope. */
+export const requireResolvedAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (
+  c,
+  next,
+) => {
+  await getFreshActiveUser(c);
+  await resolveActiveContext(c);
+  await next();
+};
+
 export function requireContext(
   kind: ActiveContext['kind'],
 ): MiddlewareHandler<{ Variables: AuthVariables }> {
