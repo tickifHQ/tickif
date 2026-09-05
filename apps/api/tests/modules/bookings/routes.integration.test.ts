@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { bookingResponseSchema, listBookingsResponseSchema } from '@repo/contracts';
 import { and, db, eq, schema, sql } from '@repo/db';
 import { makeConsultationBooking, makeDesigner, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
@@ -47,8 +48,9 @@ describe('consultation participant boundaries', () => {
       { confirmedSlot: slot },
     );
     expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(new Date(body.confirmedAt).getTime()).toBeGreaterThanOrEqual(future.getTime());
+    const body = bookingResponseSchema.parse(await response.json());
+    expect(body.confirmedAt).not.toBeNull();
+    expect(Date.parse(body.confirmedAt ?? '')).toBeGreaterThanOrEqual(future.getTime());
   });
   it('rejects stale cancellation without changing a confirmed consultation', async () => {
     const { designer, cookie: ownerCookie } = await makeDesignerSession('+919800009101');
@@ -104,7 +106,7 @@ describe('consultation participant boundaries', () => {
     expect(mine.headers.get('cache-control')).toBe('private, no-store');
     const stranger = await createRoleSession('+919800009105', 'visitor');
     const strangerMine = await requestJson('/api/bookings/mine', 'GET', stranger.cookie);
-    expect((await strangerMine.json()).items).toHaveLength(0);
+    expect(listBookingsResponseSchema.parse(await strangerMine.json()).items).toHaveLength(0);
     expect((await requestJson('/api/bookings/mine', 'GET', ownerCookie)).status).toBe(403);
     const admin = await createRoleSession('+919800009106', 'admin');
     expect((await requestJson('/api/bookings/mine', 'GET', admin.cookie)).status).toBe(403);
@@ -119,7 +121,9 @@ describe('consultation participant boundaries', () => {
       preferredSlots: [slot],
     });
     expect(response.status).toBe(422);
-    expect((await response.json()).error.message).toContain('own studio');
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('own studio') },
+    });
   });
 });
 
