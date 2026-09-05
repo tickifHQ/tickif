@@ -187,8 +187,7 @@ export const adminReviewDetailResponseSchema = z
   .meta({ id: 'AdminReviewDetail' });
 export type AdminReviewDetailResponse = z.infer<typeof adminReviewDetailResponseSchema>;
 
-export const reviewMutationQuerySchema = z
-  .object({ expectedRevision: z.coerce.number().int().nonnegative() })
+export const reviewMutationQuerySchema = adminReviewDecisionQuerySchema
   .strict()
   .meta({ id: 'ReviewMutationQuery' });
 export const ownReviewQuerySchema = z
