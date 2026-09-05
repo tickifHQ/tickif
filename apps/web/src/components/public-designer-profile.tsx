@@ -1005,7 +1005,13 @@ function ConsultationSection({ portfolio, view }: SectionProps) {
   );
 }
 
-export function PublicDesignerProfile({ portfolio }: { portfolio: PublicPortfolioResponse }) {
+export function PublicDesignerProfile({
+  portfolio,
+  tickifReviews,
+}: {
+  portfolio: PublicPortfolioResponse;
+  tickifReviews?: ReactNode;
+}) {
   const projects = portfolio.projects.projects;
   const canonical = new URL(portfolio.canonicalUrl);
   const hero = heroProject(projects);
@@ -1039,6 +1045,7 @@ export function PublicDesignerProfile({ portfolio }: { portfolio: PublicPortfoli
         <PortfolioSection {...props} />
         {portfolio.sections.featuredTestimonial ? <StorySection {...props} /> : null}
         {portfolio.sections.reviews ? <ReviewsSection {...props} /> : null}
+        {tickifReviews}
         <StudioDetailsSection {...props} />
         {portfolio.sections.shareBlock ? <ShareSection {...props} /> : null}
         <ConsultationSection {...props} />

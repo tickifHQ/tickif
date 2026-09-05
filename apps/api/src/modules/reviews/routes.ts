@@ -8,9 +8,18 @@ import {
   reviewIdParamSchema,
   reviewResponseSchema,
   updateReviewSchema,
+  reviewMutationQuerySchema,
+  ownReviewQuerySchema,
+  ownReviewResponseSchema,
+  organizationReviewsQuerySchema,
+  organizationReviewsResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAnyRole, requireAuth } from '../../lib/auth-middleware.js';
+import {
+  requireAnyRole,
+  requirePersonalContext,
+  requireOrganizationContext,
+} from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { reviewsService } from './service.js';
@@ -26,6 +35,8 @@ function caller(user: AuthVariables['user'], session: AuthVariables['session']) 
     userId: user.id,
     phoneNumberVerified: user.phoneNumberVerified === true,
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
+    sessionId: session?.id,
   };
 }
 
@@ -49,7 +60,7 @@ const createReviewRoute = createRoute({
   tags: ['Reviews'],
   summary: 'Submit a review for moderation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requirePersonalContext] as const,
   request: {
     body: {
       content: { 'application/json': { schema: createReviewSchema } },
@@ -74,9 +85,10 @@ const updateReviewRoute = createRoute({
   tags: ['Reviews'],
   summary: 'Edit an eligible review and return it to moderation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requirePersonalContext] as const,
   request: {
     params: reviewIdParamSchema,
+    query: reviewMutationQuerySchema,
     body: {
       content: { 'application/json': { schema: updateReviewSchema } },
     },
@@ -100,9 +112,10 @@ const disputeReviewRoute = createRoute({
   tags: ['Reviews'],
   summary: 'Dispute a published review for the active designer organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth, requireAnyRole(['designer'])] as const,
+  middleware: [requireOrganizationContext, requireAnyRole(['designer'])] as const,
   request: {
     params: reviewIdParamSchema,
+    query: reviewMutationQuerySchema,
     body: {
       content: { 'application/json': { schema: disputeReviewSchema } },
     },
@@ -120,9 +133,64 @@ const disputeReviewRoute = createRoute({
   },
 });
 
+const ownRoute = createRoute({
+  method: 'get',
+  path: '/mine',
+  tags: ['Reviews'],
+  summary: 'Read your own review, including moderation status',
+  security: [{ cookieAuth: [] }],
+  middleware: [requirePersonalContext] as const,
+  request: { query: ownReviewQuerySchema },
+  responses: {
+    200: {
+      description: 'Your review',
+      content: { 'application/json': { schema: ownReviewResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Personal account required'),
+  },
+});
+const organizationRoute = createRoute({
+  method: 'get',
+  path: '/organization',
+  tags: ['Reviews'],
+  summary: 'Read reviews for your active designer organization and branch',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireOrganizationContext, requireAnyRole(['designer'])] as const,
+  request: { query: organizationReviewsQuerySchema },
+  responses: {
+    200: {
+      description: 'Organization review page',
+      content: { 'application/json': { schema: organizationReviewsResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Owner or admin access required'),
+  },
+});
+
 export const reviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
+  .openapi(ownRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await reviewsService.getOwn(
+        c.req.valid('query').designerProfileId,
+        caller(c.get('user'), c.get('session')),
+      ),
+      200,
+    );
+  })
+  .openapi(organizationRoute, async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json(
+      await reviewsService.listOrganization(
+        c.req.valid('query'),
+        caller(c.get('user'), c.get('session')),
+      ),
+      200,
+    );
+  })
   .openapi(listPublishedRoute, async (c) => {
     const result = await reviewsService.listPublished(c.req.valid('query'));
     return c.json(result, 200);
@@ -140,6 +208,7 @@ export const reviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),
+      c.req.valid('query').expectedRevision,
     );
     return c.json(result, 200);
   })
@@ -149,6 +218,7 @@ export const reviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),
+      c.req.valid('query').expectedRevision,
     );
     return c.json(result, 200);
   });

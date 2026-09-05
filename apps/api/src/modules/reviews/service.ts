@@ -12,6 +12,10 @@ import type {
   ReviewResponse,
   ReviewStatus,
   UpdateReviewInput,
+  ParticipantReview,
+  OwnReviewResponse,
+  OrganizationReviewsQuery,
+  OrganizationReviewsResponse,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -26,6 +30,8 @@ export type ReviewCaller = {
   userId: string;
   phoneNumberVerified: boolean;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
+  sessionId?: string;
 };
 
 export type AdminReviewCaller = {
@@ -66,6 +72,34 @@ function reviewTransitionError(): AppError {
   return AppError.invalidTransition('Review status changed or transition is not allowed');
 }
 
+type ParticipantRecord = NonNullable<
+  Extract<Awaited<ReturnType<typeof reviewsRepository.findOwn>>, { kind: 'ok' }>['item']
+>;
+function toParticipant(item: ParticipantRecord, canEdit: boolean): ParticipantReview {
+  const { review, feedback } = item;
+  const editableUntil = review.publishedAt
+    ? new Date(review.publishedAt.getTime() + PUBLISHED_EDIT_WINDOW_MS)
+    : null;
+  return {
+    review: toResponse(review),
+    canEdit:
+      canEdit &&
+      (review.status === 'pending' ||
+        (review.status === 'published' && !!editableUntil && editableUntil.getTime() > Date.now())),
+    editableUntil: review.status === 'published' ? (editableUntil?.toISOString() ?? null) : null,
+    dispute: feedback.dispute
+      ? { note: feedback.dispute.note, createdAt: feedback.dispute.createdAt.toISOString() }
+      : null,
+    resolution: feedback.resolution
+      ? {
+          decision: feedback.resolution.action === 'resolve_publish' ? 'publish' : 'remove',
+          note: feedback.resolution.note,
+          createdAt: feedback.resolution.createdAt.toISOString(),
+        }
+      : null,
+  };
+}
+
 async function transitionOrConflict(params: TransitionReviewParams): Promise<ReviewResponse> {
   const result = await reviewsRepository.transition(params);
   if (result.kind === 'conflict') throw reviewTransitionError();
@@ -95,6 +129,27 @@ function transitionParams(
 }
 
 export const reviewsService = {
+  async getOwn(designerProfileId: string, caller: ReviewCaller): Promise<OwnReviewResponse> {
+    const result = await reviewsRepository.findOwn(designerProfileId, caller);
+    if (result.kind === 'forbidden')
+      throw AppError.forbidden('Switch to your personal account to read your review');
+    return { item: result.item ? toParticipant(result.item, result.phoneVerified) : null };
+  },
+  async listOrganization(
+    query: OrganizationReviewsQuery,
+    caller: ReviewCaller,
+  ): Promise<OrganizationReviewsResponse> {
+    const result = await reviewsRepository.listOrganization(query, caller);
+    if (result.kind === 'forbidden')
+      throw AppError.forbidden('Active organization owner or admin access is required');
+    return {
+      items: result.items.map((item) => toParticipant(item, false)),
+      total: result.total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.ceil(result.total / query.limit),
+    };
+  },
   async getAdminDetail(id: string): Promise<AdminReviewDetailResponse> {
     const detail = await reviewsRepository.findAdminDetail(id);
     if (!detail) throw AppError.notFound('Review not found');
@@ -111,13 +166,18 @@ export const reviewsService = {
     if (!caller.phoneNumberVerified) {
       throw AppError.unprocessable('A verified phone number is required to submit a review');
     }
+    if (caller.activeOrgId)
+      throw AppError.forbidden('Switch to your personal account to write a review');
 
     const result = await reviewsRepository.create({
       ...input,
       authorUserId: caller.userId,
+      sessionId: caller.sessionId,
     });
 
     switch (result.kind) {
+      case 'forbidden':
+        throw AppError.forbidden('Personal account review access is not permitted');
       case 'designer_not_found':
         throw AppError.notFound('Designer profile not found');
       case 'phone_unverified':
@@ -141,7 +201,10 @@ export const reviewsService = {
     id: string,
     input: UpdateReviewInput,
     caller: ReviewCaller,
+    expectedRevision?: number,
   ): Promise<ReviewResponse> {
+    if (caller.activeOrgId)
+      throw AppError.forbidden('Switch to your personal account to edit a review');
     if (!caller.phoneNumberVerified) {
       throw AppError.unprocessable('A verified phone number is required to edit a review');
     }
@@ -149,6 +212,8 @@ export const reviewsService = {
     if (!review || review.authorUserId !== caller.userId) {
       throw AppError.notFound('Review not found');
     }
+    if (expectedRevision !== undefined && expectedRevision !== review.moderationRevision)
+      throw reviewTransitionError();
     if (review.status !== 'pending' && review.status !== 'published') {
       throw reviewTransitionError();
     }
@@ -166,10 +231,13 @@ export const reviewsService = {
       fromStatus: review.status,
       expectedRevision: review.moderationRevision,
       ...input,
+      sessionId: caller.sessionId,
     });
     if (updated.kind === 'phone_unverified') {
       throw AppError.unprocessable('A verified phone number is required to edit a review');
     }
+    if (updated.kind === 'forbidden')
+      throw AppError.forbidden('Personal account review access is not permitted');
     if (updated.kind === 'self_review') {
       throw AppError.forbidden('Members cannot review their own designer organization');
     }
@@ -194,12 +262,15 @@ export const reviewsService = {
     id: string,
     input: DisputeReviewInput,
     caller: ReviewCaller,
+    expectedRevision?: number,
   ): Promise<ReviewResponse> {
     const review = await reviewsRepository.findById(id);
     if (!review || !caller.activeOrgId || review.designerOrgId !== caller.activeOrgId) {
       throw AppError.notFound('Review not found');
     }
     if (review.status !== 'published') throw reviewTransitionError();
+    if (expectedRevision !== undefined && expectedRevision !== review.moderationRevision)
+      throw reviewTransitionError();
 
     return transitionOrConflict({
       id: review.id,
@@ -213,6 +284,8 @@ export const reviewsService = {
       requiredWriter: {
         organizationId: caller.activeOrgId,
         userId: caller.userId,
+        teamId: caller.activeTeamId,
+        sessionId: caller.sessionId,
       },
     });
   },
