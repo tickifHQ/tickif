@@ -25,7 +25,17 @@ describe('PublicHeader', () => {
     expect(within(nav).getByText('Explore').closest('a')).toBeNull();
     expect(within(nav).getByText('Explore')).toHaveAttribute('aria-current', 'page');
 
-    for (const label of ['Designers', 'Cost Calculator', 'For you']) {
+    expect(within(nav).getByRole('link', { name: 'Designers' })).toHaveAttribute(
+      'href',
+      '/designers',
+    );
+    expect(
+      within(screen.getByRole('navigation', { name: 'Mobile primary' })).getByRole('link', {
+        name: 'Designers',
+      }),
+    ).toHaveAttribute('href', '/designers');
+
+    for (const label of ['Cost Calculator', 'For you']) {
       const item = within(nav).getByText(label);
 
       expect(item.closest('a')).toBeNull();
@@ -45,7 +55,11 @@ describe('PublicHeader', () => {
     pathname = '/enquiries';
     render(<PublicHeader />);
 
-    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/');
+    expect(
+      within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', {
+        name: 'Explore',
+      }),
+    ).toHaveAttribute('href', '/');
     expect(screen.getByText('Your Enquiries').closest('a')).toBeNull();
     expect(screen.getByText('Your Enquiries')).toHaveAttribute('aria-current', 'page');
   });
@@ -54,7 +68,11 @@ describe('PublicHeader', () => {
     pathname = '/enquiries/abc';
     render(<PublicHeader />);
 
-    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/');
+    expect(
+      within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', {
+        name: 'Explore',
+      }),
+    ).toHaveAttribute('href', '/');
     expect(screen.getByText('Your Enquiries').closest('a')).toBeNull();
     expect(screen.getByText('Your Enquiries')).toHaveAttribute('aria-current', 'page');
   });
