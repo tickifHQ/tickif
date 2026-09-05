@@ -16,11 +16,15 @@ describe('project likes service', () => {
   });
   it.each([true, false])('does not expose unavailable projects when liked=%s', async (liked) => {
     vi.mocked(projectLikesRepository.setLiked).mockResolvedValue(null);
-    await expect(projectLikesService.setLiked('visitor', projectId, liked)).rejects.toMatchObject({ status: 404 });
+    await expect(projectLikesService.setLiked('visitor', projectId, liked)).rejects.toMatchObject({
+      status: 404,
+    });
   });
   it('normalizes and deduplicates the bounded batch and permits public counts', async () => {
     vi.mocked(projectLikesRepository.state).mockResolvedValue([]);
-    await expect(projectLikesService.state(null, { projectIds: projectId })).resolves.toEqual({ projects: [] });
+    await expect(projectLikesService.state(null, { projectIds: projectId })).resolves.toEqual({
+      projects: [],
+    });
     expect(projectLikesRepository.state).toHaveBeenLastCalledWith(null, [projectId]);
     await projectLikesService.state('visitor', { projectIds: [projectId, projectId] });
     expect(projectLikesRepository.state).toHaveBeenLastCalledWith('visitor', [projectId]);

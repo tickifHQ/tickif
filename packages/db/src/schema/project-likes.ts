@@ -6,8 +6,12 @@ import { project } from './domain.js';
 export const projectLike = pgTable(
   'project_like',
   {
-    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-    projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [
