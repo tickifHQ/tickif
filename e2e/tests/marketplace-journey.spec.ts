@@ -178,6 +178,18 @@ test('designer onboarding and media processing connects to visitor onboarding an
       )
       .toBe('published');
 
+    // New profiles remain private until the required portfolio hero is complete.
+    await designer.goto('/designer/portfolio');
+    await designer.getByPlaceholder('A short tagline for your portfolio').fill('Thoughtful homes for everyday living');
+    await designer.getByPlaceholder('Tell visitors about your design philosophy...').fill('We design practical, welcoming homes around the people who live in them.');
+    const logoCommit = designer.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me/portfolio/logo/commit'));
+    await designer.locator('input[type="file"]').setInputFiles(resolve('../apps/web/public/images/home-hero/bright-kitchen-living-room.jpg'));
+    expect((await logoCommit).ok()).toBeTruthy();
+    await designer.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect.poll(async () => (await db.select().from(schema.designerProfile).where(eq(schema.designerProfile.id, onboarded.profile.id)))[0]?.status).toBe('active');
+    const [activeProfile] = await db.select().from(schema.designerProfile).where(eq(schema.designerProfile.id, onboarded.profile.id));
+    if (activeProfile?.logoImageId) objectKeys.push(activeProfile.logoImageId);
+
     await visitor.goto('/login');
     await visitor.getByPlaceholder('9123456789').fill(visitorPhone.slice(3));
     await visitor.getByRole('button', { name: 'Get OTP', exact: true }).click();
