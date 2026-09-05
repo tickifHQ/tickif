@@ -68,15 +68,23 @@ test.describe('homepage search feed', () => {
 
     const nextPageResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
-      return url.pathname === '/api/search' && url.searchParams.get('page') === '2';
+      return (
+        url.pathname === '/api/search' &&
+        url.searchParams.get('q') === SEARCH_TERM &&
+        url.searchParams.get('page') === '2'
+      );
     });
     await search.getByRole('button', { name: 'Explore' }).click();
     await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
     await expect(page.getByRole('heading', { name: `Results for “${SEARCH_TERM}”` })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await nextPageResponse;
+    const response = await nextPageResponse;
+    expect(response.ok()).toBeTruthy();
+    const result = await response.json();
+    expect(result.hits).toHaveLength(PROJECT_COUNT - 24);
     await expect(page.getByRole('article')).toHaveCount(PROJECT_COUNT);
+    await expect(page.locator('[data-feed-page="2"]')).toHaveCount(PROJECT_COUNT - 24);
     await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
   });
 
