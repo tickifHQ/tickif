@@ -89,6 +89,52 @@ describe('ProjectFeed', () => {
     expect(screen.queryByRole('button', { name: 'Load more projects' })).not.toBeInTheDocument();
   });
 
+  it('keeps appended cards when presigned image URLs rotate during a server refresh', async () => {
+    const initialCard = {
+      ...card('project-1', 'First Project'),
+      coverImageUrl:
+        'https://storage.example.com/projects/first.webp?X-Amz-Date=20260905T000000Z&X-Amz-Signature=old',
+    };
+    const initialPage: HomeFeedPage = {
+      items: [initialCard],
+      page: 1,
+      hasMore: true,
+      facetDistribution: { citySlug: { mumbai: 1 }, themes: { modern: 1 } },
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      ...initialPage,
+      items: [card('project-2', 'Second Project')],
+      page: 2,
+      hasMore: false,
+    });
+    const request = { filters, query: 'home' };
+    const { rerender } = render(<ProjectFeed initialPage={initialPage} request={request} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+
+    const refreshedImageUrl =
+      'https://storage.example.com/projects/first.webp?X-Amz-Date=20260905T010000Z&X-Amz-Signature=new';
+    rerender(
+      <ProjectFeed
+        initialPage={{
+          ...initialPage,
+          items: [{ ...initialCard, coverImageUrl: refreshedImageUrl }],
+          // Search engines do not guarantee object-key order for facet counts.
+          facetDistribution: { themes: { modern: 1 }, citySlug: { mumbai: 1 } },
+        }}
+        request={{ ...request }}
+      />,
+    );
+
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.getByRole('img', { name: 'First Project' })).toHaveAttribute(
+      'src',
+      refreshedImageUrl,
+    );
+  });
+
   it.each(['query', 'sort', 'page', 'refresh'] as const)(
     'resets appended pages when %s changes',
     async (change) => {

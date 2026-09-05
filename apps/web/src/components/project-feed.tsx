@@ -59,6 +59,33 @@ function relaxedFilterMessage(filters: string[]): string {
   return `We broadened your results by relaxing ${labels.join(', ')}.`;
 }
 
+function stableCoverImageUrl(value: string | null): string | null {
+  if (!value) return value;
+
+  try {
+    const url = new URL(value);
+    for (const key of [...url.searchParams.keys()]) {
+      if (key.toLowerCase().startsWith('x-amz-')) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function initialFeedKey(initialPage: HomeFeedPage): string {
+  return JSON.stringify([
+    initialPage.page,
+    initialPage.hasMore,
+    initialPage.items.map(({ coverImageUrl, ...item }) => [
+      item,
+      stableCoverImageUrl(coverImageUrl),
+    ]),
+  ]);
+}
+
 /** SSR-first masonry feed that appends subsequent API pages as the sentinel enters view. */
 export function ProjectFeed(props: ProjectFeedProps) {
   // RSC refreshes can send equivalent objects with new identities. Keep appended
@@ -68,8 +95,8 @@ export function ProjectFeed(props: ProjectFeedProps) {
   const feedKey = JSON.stringify([
     props.request.query,
     props.request.sort ?? 'recent',
-    ...FEED_FILTER_KEYS.map((key) => props.request.filters[key]),
-    props.initialPage,
+    ...FEED_FILTER_KEYS.map((key) => [...props.request.filters[key]].sort()),
+    initialFeedKey(props.initialPage),
   ]);
   return <ProjectFeedResults key={feedKey} {...props} />;
 }
@@ -82,9 +109,7 @@ function ProjectFeedResults({
   filterSuggestions = [],
   paginationParams,
 }: ProjectFeedProps) {
-  const [renderedPages, setRenderedPages] = useState<RenderedFeedPage[]>([
-    { items: initialPage.items, page: initialPage.page },
-  ]);
+  const [appendedPages, setAppendedPages] = useState<RenderedFeedPage[]>([]);
   const [page, setPage] = useState(initialPage.page);
   const [hasMore, setHasMore] = useState(initialPage.hasMore);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +117,12 @@ function ProjectFeedResults({
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const canLoadMore = infinite && hasMore && page < MAX_HOME_FEED_PAGE;
+  // The server-owned first page stays fresh when its presigned image URLs rotate;
+  // only subsequent client-fetched pages live in state.
+  const renderedPages: RenderedFeedPage[] = [
+    { items: initialPage.items, page: initialPage.page },
+    ...appendedPages,
+  ];
   // `page` tracks the newest page already appended, so "Next page" never links at
   // something the visitor is already looking at.
   const previousHref =
@@ -120,9 +151,11 @@ function ProjectFeedResults({
       const nextPage = page + 1;
       const result = await fetchHomeFeedPage(request, nextPage);
 
-      setRenderedPages((currentPages) => {
+      setAppendedPages((currentPages) => {
         const seen = new Set(
-          currentPages.flatMap((currentPage) => currentPage.items.map((item) => item.id)),
+          [initialPage, ...currentPages].flatMap((currentPage) =>
+            currentPage.items.map((item) => item.id),
+          ),
         );
         const nextItems = result.items.filter((item) => !seen.has(item.id));
         return nextItems.length > 0
@@ -137,7 +170,7 @@ function ProjectFeedResults({
       loadingRef.current = false;
       setIsLoading(false);
     }
-  }, [canLoadMore, page, request]);
+  }, [canLoadMore, initialPage, page, request]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
