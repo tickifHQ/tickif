@@ -45,6 +45,7 @@ describe('reviews schema', () => {
       'review_author_user_idx',
       'review_project_idx',
       'review_designer_published_idx',
+      'review_designer_status_updated_idx',
       'review_status_updated_idx',
     ]);
   });

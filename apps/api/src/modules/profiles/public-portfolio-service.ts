@@ -70,8 +70,7 @@ function sectionsOf(portfolio: PortfolioRecord | null): PublicPortfolioSections 
     reviews: portfolio.showTickifReviews || portfolio.showGoogleReviews,
     socialLinks: portfolio.showSocialLinks,
     shareBlock: portfolio.showShareBlock,
-    overallRating:
-      portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
+    overallRating: portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
     tickifBadge: portfolio.showTickifBadge,
   };
 }
@@ -129,32 +128,25 @@ export const publicPortfolioService = {
 
     const sections = sectionsOf(portfolio);
 
-    const [
-      logoUrl,
-      googleRow,
-      tickif,
-      cities,
-      projects,
-      startingBudget,
-      testimonial,
-    ] = await Promise.all([
-      presignProfileLogo(profile),
-      googleReviewsRepository.findByProfileId(profile.id),
-      reviewsService.listPublished({
-        designerProfileId: profile.id,
-        page: 1,
-        limit: 50,
-      }),
-      portfolioRepository.findCityLabels(profile.id),
-      // The profile was already loaded and status-checked above.
-      projectsService.designerProjects(
-        profile.id,
-        { page: 1, limit: INITIAL_PROJECT_LIMIT },
-        { skipDesignerCheck: true },
-      ),
-      projectsService.designerStartingBudget(profile.id),
-      resolveTestimonial(profile.id, portfolio, sections),
-    ]);
+    const [logoUrl, googleRow, tickif, cities, projects, startingBudget, testimonial] =
+      await Promise.all([
+        presignProfileLogo(profile),
+        googleReviewsRepository.findByProfileId(profile.id),
+        reviewsService.listPublished({
+          designerProfileId: profile.id,
+          page: 1,
+          limit: 50,
+        }),
+        portfolioRepository.findCityLabels(profile.id),
+        // The profile was already loaded and status-checked above.
+        projectsService.designerProjects(
+          profile.id,
+          { page: 1, limit: INITIAL_PROJECT_LIMIT },
+          { skipDesignerCheck: true },
+        ),
+        projectsService.designerStartingBudget(profile.id),
+        resolveTestimonial(profile.id, portfolio, sections),
+      ]);
 
     // `readState` applies the Places ToS read-time guard: content older than the
     // 30-day window is withheld and the row reads `stale`, so nothing expired
@@ -173,15 +165,13 @@ export const publicPortfolioService = {
     const tickifReviews = tickifSettings.showReviews
       ? tickif.items.filter(
           (review) =>
-            !tickifSettings.showPositiveReviewsOnly ||
-            review.rating >= POSITIVE_REVIEW_MIN_RATING,
+            !tickifSettings.showPositiveReviewsOnly || review.rating >= POSITIVE_REVIEW_MIN_RATING,
         )
       : [];
     const googleReviews = googleSettings.showReviews
       ? (google?.reviews ?? []).filter(
           (review) =>
-            !googleSettings.showPositiveReviewsOnly ||
-            review.rating >= POSITIVE_REVIEW_MIN_RATING,
+            !googleSettings.showPositiveReviewsOnly || review.rating >= POSITIVE_REVIEW_MIN_RATING,
         )
       : [];
     const googleRating = google?.summary.rating ?? null;
@@ -245,7 +235,7 @@ export const publicPortfolioService = {
           author: review.author.name,
           avatarUrl: review.author.avatarUrl,
           rating: review.rating,
-          relativeTime: relativeReviewTime(review.publishedAt ?? review.createdAt),
+          relativeTime: relativeReviewTime(review.publishedAt),
           text: review.body,
           verifiedConsultation: review.verifiedConsultation,
           source: 'tickif' as const,

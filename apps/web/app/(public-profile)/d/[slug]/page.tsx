@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { cache } from 'react';
+import { cache, Suspense } from 'react';
+import { createReviewSchema, listPublishedReviewsQuerySchema } from '@repo/contracts';
+import { TickifReviewsSection } from '@/components/tickif-reviews-section';
 import { PublicDesignerProfile } from '@/components/public-designer-profile';
 import { fetchPublicPortfolio } from '@/lib/public-portfolio-api';
 import { strapline, studioLocation, studioType } from '@/lib/public-portfolio-view';
 
 type PublicDesignerProfilePageProps = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ bookingId?: string; reviewsPage?: string }>;
 };
 
 /**
@@ -72,11 +75,38 @@ export async function generateMetadata({
 
 export default async function PublicDesignerProfilePage({
   params,
+  searchParams,
 }: PublicDesignerProfilePageProps) {
   const { slug } = await params;
   // `generateMetadata` already ran the gate; this is a cache hit that also
   // re-narrows the type for the render.
   const portfolio = await resolvePortfolio(slug);
 
-  return <PublicDesignerProfile portfolio={portfolio} />;
+  const query = await searchParams;
+  const booking = createReviewSchema.shape.bookingId.safeParse(query?.bookingId);
+  const pagination = listPublishedReviewsQuerySchema.safeParse({
+    designerProfileId: portfolio.profileId,
+    page: query?.reviewsPage,
+  });
+  return (
+    <PublicDesignerProfile
+      portfolio={portfolio}
+      tickifReviews={
+        <Suspense
+          fallback={
+            <p role="status" className="p-5">
+              Loading Tickif reviews…
+            </p>
+          }
+        >
+          <TickifReviewsSection
+            designerProfileId={portfolio.profileId}
+            slug={slug}
+            bookingId={booking.success ? (booking.data ?? undefined) : undefined}
+            page={pagination.success ? pagination.data.page : 1}
+          />
+        </Suspense>
+      }
+    />
+  );
 }

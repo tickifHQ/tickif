@@ -4,13 +4,30 @@ import {
   adminReviewsQuerySchema,
   createReviewSchema,
   listPublishedReviewsQuerySchema,
+  publishedReviewSchema,
   resolveReviewDisputeSchema,
   updateReviewSchema,
+  reviewMutationQuerySchema,
 } from '../src/reviews.js';
 
 const PROFILE_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('review contracts', () => {
+  it('requires exact integer revisions for participant edits and disputes', () => {
+    for (const expectedRevision of ['', ' ', '1.5', '-1', true, '1e2', undefined]) {
+      expect(reviewMutationQuerySchema.safeParse({ expectedRevision }).success).toBe(false);
+    }
+    expect(reviewMutationQuerySchema.parse({ expectedRevision: '2' })).toEqual({
+      expectedRevision: 2,
+    });
+    expect(
+      createReviewSchema.safeParse({
+        designerProfileId: PROFILE_ID,
+        rating: 5,
+        authorUserId: 'another-user',
+      }).success,
+    ).toBe(false);
+  });
   it('requires a nonnegative revision for admin decisions', () => {
     expect(adminReviewDecisionQuerySchema.safeParse({}).success).toBe(false);
     expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '' }).success).toBe(false);
@@ -115,5 +132,30 @@ describe('review contracts', () => {
       limit: 20,
     });
     expect(adminReviewsQuerySchema.safeParse({ status: 'draft' }).success).toBe(false);
+  });
+
+  it('keeps internal author, booking, and moderation identifiers out of public reviews', () => {
+    const publicReview = {
+      id: '22222222-2222-4222-8222-222222222222',
+      author: { name: 'Reviewer', avatarUrl: null },
+      project: null,
+      verifiedConsultation: true,
+      rating: 5,
+      body: null,
+      publishedAt: '2026-09-05T12:00:00.000Z',
+    };
+    expect(publishedReviewSchema.parse(publicReview)).toEqual(publicReview);
+    expect(
+      publishedReviewSchema.safeParse({
+        ...publicReview,
+        bookingId: '33333333-3333-4333-8333-333333333333',
+      }).success,
+    ).toBe(false);
+    expect(
+      publishedReviewSchema.safeParse({
+        ...publicReview,
+        author: { ...publicReview.author, id: 'internal-user-id' },
+      }).success,
+    ).toBe(false);
   });
 });

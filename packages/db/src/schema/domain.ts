@@ -858,6 +858,9 @@ export const review = pgTable(
     index('review_designer_published_idx')
       .on(t.designerProfileId, t.publishedAt, t.id)
       .where(sql`${t.status} = 'published'`),
+    index('review_designer_status_updated_idx')
+      .on(t.designerProfileId, t.status, t.updatedAt, t.id)
+      .where(sql`${t.status} in ('published', 'disputed', 'removed')`),
     index('review_status_updated_idx').on(t.status, t.updatedAt, t.id),
   ],
 );

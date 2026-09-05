@@ -26,6 +26,7 @@ export const createReviewSchema = z
     rating: z.number().int().min(1).max(5),
     body: reviewBodySchema.optional(),
   })
+  .strict()
   .meta({ id: 'CreateReview' });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 
@@ -34,6 +35,7 @@ export const updateReviewSchema = z
     rating: z.number().int().min(1).max(5).optional(),
     body: reviewBodySchema.optional(),
   })
+  .strict()
   .refine((input) => Object.keys(input).length > 0, {
     message: 'At least one review field is required',
   })
@@ -44,6 +46,7 @@ export const disputeReviewSchema = z
   .object({
     note: z.string().trim().min(1).max(2000),
   })
+  .strict()
   .meta({ id: 'DisputeReview' });
 export type DisputeReviewInput = z.infer<typeof disputeReviewSchema>;
 
@@ -98,6 +101,23 @@ export const reviewResponseSchema = z
   .meta({ id: 'Review' });
 export type ReviewResponse = z.infer<typeof reviewResponseSchema>;
 
+/** Public review display data. Internal user, booking, and moderation identifiers stay private. */
+export const publishedReviewSchema = reviewResponseSchema
+  .pick({
+    id: true,
+    project: true,
+    verifiedConsultation: true,
+    rating: true,
+    body: true,
+  })
+  .extend({
+    author: reviewResponseSchema.shape.author.omit({ id: true }).strict(),
+    publishedAt: z.string().datetime(),
+  })
+  .strict()
+  .meta({ id: 'PublishedReview' });
+export type PublishedReview = z.infer<typeof publishedReviewSchema>;
+
 export const listPublishedReviewsQuerySchema = z
   .object({
     designerProfileId: z.uuid(),
@@ -120,7 +140,7 @@ export type ReviewHistogram = z.infer<typeof reviewHistogramSchema>;
 
 export const publishedReviewsResponseSchema = z
   .object({
-    items: z.array(reviewResponseSchema),
+    items: z.array(publishedReviewSchema),
     histogram: reviewHistogramSchema,
     averageRating: z.number().min(0).max(5),
     reviewCount: z.number().int().nonnegative(),
@@ -183,3 +203,51 @@ export const adminReviewDetailResponseSchema = z
   })
   .meta({ id: 'AdminReviewDetail' });
 export type AdminReviewDetailResponse = z.infer<typeof adminReviewDetailResponseSchema>;
+
+export const reviewMutationQuerySchema = adminReviewDecisionQuerySchema
+  .strict()
+  .meta({ id: 'ReviewMutationQuery' });
+export const ownReviewQuerySchema = z
+  .object({ designerProfileId: z.uuid() })
+  .strict()
+  .meta({ id: 'OwnReviewQuery' });
+export const organizationReviewsQuerySchema = listPublishedReviewsQuerySchema
+  .extend({ status: reviewStatusSchema.optional() })
+  .strict()
+  .meta({ id: 'OrganizationReviewsQuery' });
+export type OrganizationReviewsQuery = z.infer<typeof organizationReviewsQuerySchema>;
+
+/** Participant feedback only. Full moderation history and moderator identities stay admin-only. */
+export const participantReviewSchema = z
+  .object({
+    review: reviewResponseSchema,
+    canEdit: z.boolean(),
+    editableUntil: z.string().datetime().nullable(),
+    dispute: z.object({ note: z.string().nullable(), createdAt: z.string().datetime() }).nullable(),
+    resolution: z
+      .object({
+        decision: z.enum(['publish', 'remove']),
+        note: z.string().nullable(),
+        createdAt: z.string().datetime(),
+      })
+      .nullable(),
+  })
+  .strict()
+  .meta({ id: 'ParticipantReview' });
+export type ParticipantReview = z.infer<typeof participantReviewSchema>;
+export const ownReviewResponseSchema = z
+  .object({ item: participantReviewSchema.nullable() })
+  .strict()
+  .meta({ id: 'OwnReviewResponse' });
+export type OwnReviewResponse = z.infer<typeof ownReviewResponseSchema>;
+export const organizationReviewsResponseSchema = z
+  .object({
+    items: z.array(participantReviewSchema),
+    page: z.number().int().positive(),
+    limit: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  })
+  .strict()
+  .meta({ id: 'OrganizationReviewsResponse' });
+export type OrganizationReviewsResponse = z.infer<typeof organizationReviewsResponseSchema>;

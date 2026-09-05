@@ -1,0 +1,1 @@
+CREATE INDEX "review_designer_status_updated_idx" ON "review" USING btree ("designer_profile_id","status","updated_at","id") WHERE "review"."status" in ('published', 'disputed', 'removed');
