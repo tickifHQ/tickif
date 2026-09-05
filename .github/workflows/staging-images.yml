@@ -1,0 +1,41 @@
+name: Staging images
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - '**/Dockerfile'
+      - '.dockerignore'
+      - 'apps/web/next.config.ts'
+      - 'apps/worker/src/staging*/**'
+      - 'apps/worker/src/staging-prepare.ts'
+      - 'packages/config/**'
+      - '.github/workflows/staging-images.yml'
+concurrency:
+  group: staging-images-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  images-and-swarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build all release images without runtime secrets
+        env:
+          REGISTRY: localhost:5000/tickif
+          STAGING_DOMAIN: staging.example.com
+        run: bash deploy/build.sh
+      - name: Test release on the disposable runner Swarm
+        run: bash deploy/test-swarm.sh
+      - name: Service diagnostics
+        if: failure()
+        run: |
+          docker service ls || true
+          docker service ps tickif-staging_prepare --no-trunc || true
+          docker service logs tickif-staging_prepare --tail 100 || true
+          docker service logs tickif-staging_worker --tail 50 || true
+          docker service logs tickif-staging_api --tail 50 || true
+      - name: Remove disposable runner stack
+        if: always()
+        run: docker stack rm tickif-staging || true

@@ -1,0 +1,178 @@
+# Docker Swarm uses the legacy Compose 3 format. Build images before deployment.
+version: '3.8'
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  CONFIG_SECRETS_FILE: /run/secrets/app_credentials
+  POSTGRES_HOST: postgres
+  POSTGRES_USER: tickif
+  POSTGRES_DB: tickif_staging
+  TYPESENSE_HOST: http://typesense:8108
+  TYPESENSE_COLLECTION_PREFIX: tickif_staging
+  BETTER_AUTH_URL: https://${STAGING_DOMAIN:?Set STAGING_DOMAIN}
+  NEXT_PUBLIC_API_URL: https://${STAGING_DOMAIN}
+  PUBLIC_WEB_URL: https://${STAGING_DOMAIN}
+  TRUSTED_ORIGINS: https://${STAGING_DOMAIN}
+  SMS_PROVIDER: novu
+  NOVU_OTP_WORKFLOW_ID: ${NOVU_OTP_WORKFLOW_ID:?Set NOVU_OTP_WORKFLOW_ID}
+  NOVU_BOOKING_WORKFLOW_ID: ${NOVU_BOOKING_WORKFLOW_ID:?Set NOVU_BOOKING_WORKFLOW_ID}
+  EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?Set R2_ACCOUNT_ID}
+  R2_BUCKET: ${R2_BUCKET:?Set R2_BUCKET}
+  RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?Set Razorpay test key ID}
+  RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: ${RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS:?Set plan ID}
+  RAZORPAY_PLAN_ID_CORPORATE: ${RAZORPAY_PLAN_ID_CORPORATE:?Set plan ID}
+
+x-placement: &placement
+  constraints: [node.role == manager, node.labels.tickif.staging == true]
+
+x-app-deploy: &app-deploy
+  replicas: 0
+  placement: *placement
+  restart_policy: { condition: on-failure, delay: 5s }
+  update_config: { parallelism: 1, order: stop-first, failure_action: pause, monitor: 30s }
+  rollback_config: { parallelism: 1, order: stop-first }
+  resources:
+    limits: { memory: 1G }
+    reservations: { memory: 256M }
+
+services:
+  edge:
+    image: caddy:2.10-alpine
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    ports:
+      - { target: 80, published: 80, protocol: tcp, mode: host }
+      - { target: 443, published: 443, protocol: tcp, mode: host }
+    networks: [frontend]
+    volumes: [caddy_data:/data, caddy_config:/config]
+    deploy: *app-deploy
+
+  web:
+    image: ${WEB_IMAGE:?Set immutable WEB_IMAGE}
+    networks: [frontend]
+    deploy: *app-deploy
+
+  api:
+    image: ${API_IMAGE:?Set immutable API_IMAGE}
+    environment:
+      <<: *app-environment
+      PORT: '3001'
+    secrets:
+      - { source: app_credentials, target: app_credentials, uid: '1001', mode: 0400 }
+    networks: [frontend, backend]
+    stop_grace_period: 30s
+    deploy: *app-deploy
+
+  worker:
+    image: ${WORKER_IMAGE:?Set immutable WORKER_IMAGE}
+    environment:
+      <<: *app-environment
+      WORKER_HEALTH_PORT: '3002'
+      MEDIA_WORKER_CONCURRENCY: '2'
+      SEARCH_WORKER_CONCURRENCY: '2'
+    secrets:
+      - { source: app_credentials, target: app_credentials, uid: '1001', mode: 0400 }
+    networks: [backend]
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:3002/readyz]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    deploy: *app-deploy
+
+  prepare:
+    image: ${WORKER_IMAGE}
+    command: [pnpm, --filter, '@repo/worker', exec, tsx, src/staging-prepare.ts]
+    environment: *app-environment
+    secrets:
+      - { source: app_credentials, target: app_credentials, uid: '1001', mode: 0400 }
+    networks: [backend]
+    healthcheck: { disable: true }
+    deploy:
+      <<: *app-deploy
+      restart_policy: { condition: none }
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tickif
+      POSTGRES_DB: tickif_staging
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    networks: [backend]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD, pg_isready, -U, tickif, -d, tickif_staging]
+      interval: 10s
+      retries: 6
+    deploy:
+      replicas: 1
+      placement: *placement
+      resources:
+        limits: { memory: 2G }
+
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, /run/secrets/redis_config]
+    secrets: [redis_config]
+    networks: [backend]
+    volumes: [redis_data:/data]
+    deploy:
+      replicas: 1
+      placement: *placement
+      resources:
+        limits: { memory: 1G }
+
+  typesense:
+    image: typesense/typesense:30.2
+    command: [--config=/run/secrets/typesense_config]
+    secrets: [typesense_config]
+    networks: [backend]
+    volumes: [typesense_data:/data]
+    deploy:
+      replicas: 1
+      placement: *placement
+      resources:
+        limits: { memory: 2G }
+
+networks:
+  frontend:
+    driver: overlay
+    driver_opts: { encrypted: '' }
+  backend:
+    driver: overlay
+    driver_opts: { encrypted: '' }
+
+volumes:
+  postgres_data:
+  redis_data:
+  typesense_data:
+  caddy_data:
+  caddy_config:
+
+configs:
+  caddyfile:
+    name: tickif_staging_caddy_${CADDY_CONFIG_VERSION:-v1}
+    file: ./Caddyfile
+
+secrets:
+  app_credentials:
+    external: true
+    name: ${APP_SECRET:?Set versioned APP_SECRET}
+  postgres_password:
+    external: true
+    name: ${POSTGRES_SECRET:?Set versioned POSTGRES_SECRET}
+  redis_config:
+    external: true
+    name: ${REDIS_SECRET:?Set versioned REDIS_SECRET}
+  typesense_config:
+    external: true
+    name: ${TYPESENSE_SECRET:?Set versioned TYPESENSE_SECRET}
