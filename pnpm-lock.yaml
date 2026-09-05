@@ -512,6 +512,9 @@ importers:
       '@repo/search':
         specifier: workspace:*
         version: link:../packages/search
+      '@repo/storage':
+        specifier: workspace:*
+        version: link:../packages/storage
 
   packages/auth:
     dependencies:
