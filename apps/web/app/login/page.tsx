@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { LoginCard } from '@/components/login-card';
-import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
+import { activeContextForSession, getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
 type LoginPageProps = {
@@ -39,6 +39,20 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
   }
 
   if (session) {
+    // Restored-context routing: personal and zero-org users land on their
+    // personal home. Profiles still onboarding keep the onboarding flow, which
+    // is detected through the pending account status on the session user.
+    const context = activeContextForSession(session);
+    const accountStatus =
+      typeof session.user === 'object' &&
+      session.user !== null &&
+      'status' in session.user &&
+      typeof (session.user as { status?: unknown }).status === 'string'
+        ? ((session.user as { status?: string }).status ?? null)
+        : null;
+    if (accountStatus !== 'pending') {
+      redirect(context.kind === 'organization' ? '/designer/dashboard' : '/home');
+    }
     redirect(initialMode === 'designer' ? '/designer/onboarding' : '/');
   }
 

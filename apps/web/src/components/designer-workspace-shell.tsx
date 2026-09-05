@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useState, useTransition, type ComponentType, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AccountMenu } from '@/components/account-menu';
+import { DesignerBranchSelector } from '@/components/designer-branch-selector';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
@@ -221,6 +222,10 @@ function SidebarContent({
               studioLocation={studioLocation}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
+            />
+            <DesignerBranchSelector
+              key={activeOrganizationId}
+              organizationId={activeOrganizationId}
             />
           </div>
         </div>
