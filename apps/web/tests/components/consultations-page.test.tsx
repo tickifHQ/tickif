@@ -61,7 +61,7 @@ describe('consultation pages', () => {
       'href',
       '/home/consultations?status=confirmed&page=3',
     );
-    expect(screen.getByRole('link', { name: 'requested', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'requested' })).toHaveAttribute(
       'href',
       '/home/consultations?status=requested&page=1',
     );

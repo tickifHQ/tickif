@@ -31,6 +31,7 @@ export function BookingCta({
 }) {
   const { data: session, isPending } = authClient.useSession();
   const [open, setOpen] = useState(false);
+  const userRole = session && 'role' in session.user ? session.user.role : null;
   return (
     <>
       <Button variant="outline" disabled={isPending} onClick={() => setOpen(true)}>
@@ -49,7 +50,7 @@ export function BookingCta({
             </Button>
           ) : session.session.activeOrganizationId ? (
             <p>Switch to My Tickif using the workspace menu to book a personal consultation.</p>
-          ) : session.user.role !== 'visitor' && session.user.role !== 'designer' ? (
+          ) : userRole !== 'visitor' && userRole !== 'designer' ? (
             <p>A personal or designer account is required to book.</p>
           ) : !session.user.phoneNumberVerified ? (
             <p>Verify your phone number before requesting a consultation.</p>
@@ -143,6 +144,7 @@ export function BookingForm({
             />
             <SelectField
               label={`Time window ${index + 1}`}
+              placeholder="Select a time window"
               value={slot.window}
               onValueChange={(window) => {
                 const parsed =
