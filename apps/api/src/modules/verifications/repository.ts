@@ -8,7 +8,6 @@ import {
   VERIFICATION_NOTIFICATION_EVENT,
   VERIFICATION_REVIEW_ACTION,
   type AdminVerificationQueueQuery,
-  type AdminVerificationQueueResponse,
   type AdminVerificationQueueTab,
   type RejectVerificationInput,
   type RevokeVerificationInput,
@@ -44,7 +43,7 @@ export type AdminVerificationRecord = VerificationContextRecord & {
   organizationName: string;
 };
 
-function adminQueuePredicate(tab: AdminVerificationQueueTab) {
+function adminQueuePredicate(tab: AdminVerificationQueueTab, now: Date) {
   if (tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW) {
     return and(
       eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING),
@@ -58,14 +57,23 @@ function adminQueuePredicate(tab: AdminVerificationQueueTab) {
     );
   }
   if (tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED) {
-    return eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED);
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED),
+      sql`(${schema.verificationApplication.expiresAt} is null or ${schema.verificationApplication.expiresAt} > ${now})`,
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.EXPIRED) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED),
+      sql`${schema.verificationApplication.expiresAt} <= ${now}`,
+    );
   }
   return eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.REJECTED);
 }
 
 function isAdminQueueStatus(
   status: VerificationApplicationStatus,
-): status is AdminVerificationQueueResponse['items'][number]['status'] {
+): status is Exclude<VerificationApplicationStatus, 'draft'> {
   return status !== VERIFICATION_APPLICATION_STATUS.DRAFT;
 }
 
@@ -686,22 +694,26 @@ export const verificationsRepository = {
     });
   },
 
-  async listAdminQueue(query: AdminVerificationQueueQuery): Promise<{
+  async listAdminQueue(
+    query: AdminVerificationQueueQuery,
+    now = new Date(),
+  ): Promise<{
     items: Array<{
       id: string;
       organizationId: string;
       organizationName: string;
       designerName: string;
       attempt: number;
-      status: AdminVerificationQueueResponse['items'][number]['status'];
+      status: Exclude<VerificationApplicationStatus, 'draft'>;
       submittedAt: Date;
       reviewedAt: Date | null;
+      expiresAt: Date | null;
       documentCount: number;
     }>;
     total: number;
   }> {
     const queuePredicate = and(
-      adminQueuePredicate(query.tab),
+      adminQueuePredicate(query.tab, now),
       isNotNull(schema.verificationApplication.submittedAt),
       sql`exists (
         select 1 from ${schema.designerProfile}
@@ -753,6 +765,7 @@ export const verificationsRepository = {
           status: schema.verificationApplication.status,
           submittedAt: schema.verificationApplication.submittedAt,
           reviewedAt: schema.verificationApplication.reviewedAt,
+          expiresAt: schema.verificationApplication.expiresAt,
           documentCount: sql<number>`coalesce(${currentDocuments.count}, 0)::int`,
         })
         .from(schema.verificationApplication)
@@ -1058,11 +1071,14 @@ export const verificationsRepository = {
     });
   },
 
-  async revokeApproval(input: {
-    applicationId: string;
-    reviewerId: string;
-    revocation: RevokeVerificationInput;
-  }): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
+  async revokeApproval(
+    input: {
+      applicationId: string;
+      reviewerId: string;
+      revocation: RevokeVerificationInput;
+    },
+    now = new Date(),
+  ): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
       const [application] = await tx
         .select()
@@ -1071,11 +1087,14 @@ export const verificationsRepository = {
         .for('update')
         .limit(1);
       if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
-      if (application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED) {
+      if (
+        application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED ||
+        (application.expiresAt !== null && application.expiresAt <= now)
+      ) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
 
-      const revokedAt = new Date();
+      const revokedAt = now;
       const nextAttempt = application.attempt + 1;
       const [updated] = await tx
         .update(schema.verificationApplication)

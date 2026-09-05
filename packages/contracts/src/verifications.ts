@@ -7,6 +7,7 @@ export const ADMIN_VERIFICATION_QUEUE_TAB = {
   RE_REVIEW: 're_review',
   ACCEPTED: 'accepted',
   CHANGES_REQUESTED: 'changes_requested',
+  EXPIRED: 'expired',
 } as const;
 
 export const ADMIN_VERIFICATION_QUEUE_TAB_VALUES = [
@@ -14,6 +15,7 @@ export const ADMIN_VERIFICATION_QUEUE_TAB_VALUES = [
   ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
   ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
   ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED,
+  ADMIN_VERIFICATION_QUEUE_TAB.EXPIRED,
 ] as const;
 
 export const adminVerificationQueueTabSchema = z
@@ -255,10 +257,12 @@ export const adminVerificationQueueItemSchema = z
       VERIFICATION_APPLICATION_STATUS.PENDING,
       VERIFICATION_APPLICATION_STATUS.VERIFIED,
       VERIFICATION_APPLICATION_STATUS.REJECTED,
+      VERIFICATION_EFFECTIVE_STATUS.EXPIRED,
     ]),
     submittedAt: z.string().datetime(),
     reviewedAt: z.string().datetime().nullable(),
     documentCount: z.number().int().nonnegative(),
+    expiresAt: z.string().datetime().nullable(),
   })
   .meta({ id: 'AdminVerificationQueueItem' });
 
@@ -284,7 +288,7 @@ export const adminVerificationDetailResponseSchema = z
       ownerName: z.string().min(1),
       ownerEmail: z.email(),
       ownerPhone: z.string().nullable(),
-      status: verificationApplicationStatusSchema,
+      status: verificationEffectiveStatusSchema,
       attempt: z.number().int().positive(),
       submittedAt: z.string().datetime().nullable(),
       reviewedAt: z.string().datetime().nullable(),

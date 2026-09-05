@@ -55,6 +55,7 @@ const queue: AdminVerificationQueueResponse = {
       submittedAt: '2026-09-01T10:00:00.000Z',
       reviewedAt: null,
       documentCount: 2,
+      expiresAt: null,
     },
   ],
   page: 1,

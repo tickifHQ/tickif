@@ -47,14 +47,14 @@ describe('AdminVerificationsPage', () => {
     render(await Page());
 
     expect(mock.requireAuth).toHaveBeenCalledWith({ requiredRole: 'admin' });
-    expect(mock.fetchQueue).toHaveBeenCalledTimes(4);
-    for (const tab of ['new', 're_review', 'accepted', 'changes_requested']) {
+    expect(mock.fetchQueue).toHaveBeenCalledTimes(5);
+    for (const tab of ['new', 're_review', 'accepted', 'changes_requested', 'expired']) {
       expect(mock.fetchQueue).toHaveBeenCalledWith(tab, 1, {
         headers: { cookie: 'session=valid' },
       });
     }
     expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent(
-      'loaded {"new":2,"re_review":3,"accepted":4,"changes_requested":5}',
+      'loaded {"new":2,"re_review":3,"accepted":4,"changes_requested":5,"expired":0}',
     );
   });
 

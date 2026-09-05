@@ -98,11 +98,14 @@ async function assertPersonalIdentityOwner(
   }
 }
 
-function effectiveStatus(application: VerificationApplicationRecord) {
+function effectiveStatus<Status extends VerificationApplicationRecord['status']>(
+  application: { status: Status; expiresAt: Date | null },
+  now = new Date(),
+): Status | typeof VERIFICATION_EFFECTIVE_STATUS.EXPIRED {
   if (
     application.status === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
     application.expiresAt &&
-    application.expiresAt <= new Date()
+    application.expiresAt <= now
   ) {
     return VERIFICATION_EFFECTIVE_STATUS.EXPIRED;
   }
@@ -183,10 +186,11 @@ async function stateForContext(
     .reverse()
     .find((event) => event.action === VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED);
   const canEditIdentity = context.ownerUserId === callerUserId;
+  const now = new Date();
   return {
     applicationId: context.application.id,
-    status: effectiveStatus(context.application),
-    applicationEditable: isApplicationEditable(context.application),
+    status: effectiveStatus(context.application, now),
+    applicationEditable: isApplicationEditable(context.application, now),
     attempt: context.application.attempt,
     identity: {
       ownerName: context.ownerName,
@@ -238,7 +242,7 @@ function adminDetail(
       ownerName: context.ownerName,
       ownerEmail: context.ownerEmail,
       ownerPhone: context.ownerPhone,
-      status: context.application.status,
+      status: effectiveStatus(context.application),
       attempt: context.application.attempt,
       submittedAt: context.application.submittedAt?.toISOString() ?? null,
       reviewedAt: context.application.reviewedAt?.toISOString() ?? null,
@@ -431,12 +435,15 @@ export const verificationsService = {
   },
 
   async listAdmin(query: AdminVerificationQueueQuery) {
-    const { items, total } = await verificationsRepository.listAdminQueue(query);
+    const now = new Date();
+    const { items, total } = await verificationsRepository.listAdminQueue(query, now);
     return {
       items: items.map((item) => ({
         ...item,
         submittedAt: item.submittedAt.toISOString(),
         reviewedAt: item.reviewedAt?.toISOString() ?? null,
+        expiresAt: item.expiresAt?.toISOString() ?? null,
+        status: effectiveStatus(item, now),
       })),
       page: query.page,
       limit: query.limit,
