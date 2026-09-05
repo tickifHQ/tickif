@@ -2,7 +2,7 @@ import type { SubscriptionResponse } from '@repo/contracts';
 import type { BillingState } from './billing-types';
 import { PLAN_TIER_PRICES } from './billing-types';
 
-/** Hobby defaults when no subscription exists or the API is unavailable. */
+/** Hobby defaults for fixtures; API failure must never imply a free plan. */
 export const HOBBY_DEFAULT: BillingState = {
   lifecycle: 'active',
   tier: 'hobby',
@@ -34,7 +34,7 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
     cancellationScheduled: sub.cancellationScheduled,
     preLapseTier: sub.preLapseTier,
     renewalDate: sub.currentPeriodEnd,
-    subscriptionId: sub.razorpayStatus ? `sub_${sub.tier}` : null,
+    subscriptionId: sub.razorpaySubscriptionId ?? null,
     usage: {
       seats: {
         label: 'Team Seats',
@@ -72,7 +72,12 @@ export function mapSubscriptionToBillingState(sub: SubscriptionResponse): Billin
     lockedAccess:
       sub.lifecycleState === 'locked'
         ? {
-            suspended: ['Team management', 'Branch dashboards', 'Discovery priority', 'Verified badge'],
+            suspended: [
+              'Team management',
+              'Branch dashboards',
+              'Discovery priority',
+              'Verified badge',
+            ],
             available: ['Public portfolio', 'Published projects', 'Existing enquiries'],
           }
         : null,
