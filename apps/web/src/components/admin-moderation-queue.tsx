@@ -404,7 +404,7 @@ function ReviewDetail({
 
   return (
     <>
-      <DialogHeader className="border-b px-6 py-5 pr-14">
+      <DialogHeader className="min-w-0 border-b px-6 py-5 pr-14 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -421,7 +421,7 @@ function ReviewDetail({
         </div>
       </DialogHeader>
 
-      <div className="space-y-8 px-6 py-6">
+      <div className="min-w-0 space-y-8 px-6 py-6">
         {blockedByOtherAdmin ? (
           <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -1011,7 +1011,7 @@ export function AdminModerationQueue({
 
       <Dialog open={selectedProjectId !== null} onOpenChange={(open) => !open && closeDetail()}>
         <DialogContent
-          className="left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-2xl translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-2xl"
+          className="left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-2xl translate-x-0 translate-y-0 grid-cols-1 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-2xl"
           overlayClassName="bg-foreground/30"
         >
           <DialogTitle className="sr-only">Project review</DialogTitle>
