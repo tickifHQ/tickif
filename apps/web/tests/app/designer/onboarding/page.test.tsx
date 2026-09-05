@@ -81,7 +81,7 @@ describe('DesignerOnboardingPage', () => {
     expect(mock.redirect).not.toHaveBeenCalled();
   });
 
-  it('routes an admin without an active organization to moderation', async () => {
+  it('routes an admin without an active organization to the admin dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       session: {
         id: 's1',
@@ -97,6 +97,6 @@ describe('DesignerOnboardingPage', () => {
 
     const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/moderation');
+    expect(mock.redirect).toHaveBeenCalledWith('/dashboard');
   });
 });

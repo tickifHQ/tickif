@@ -7,6 +7,7 @@ import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
 import { PLAN_MAP } from '@/lib/plan-config';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
+import { usePaymentMethod } from './use-payment-method';
 
 /**
  * E-120 Subscribe page client component.
@@ -48,6 +49,8 @@ export function SubscribePage() {
     }
   }, []);
 
+  const payment = usePaymentMethod(subscription?.tier ?? 'hobby', fetchSubscription);
+
   useEffect(() => {
     void fetchSubscription();
   }, [fetchSubscription]);
@@ -64,7 +67,9 @@ export function SubscribePage() {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <AlertTriangle className="size-8 text-destructive" />
-        <p className="mt-3 text-sm text-muted-foreground">{error ?? 'Unable to load subscription'}</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {error ?? 'Unable to load subscription'}
+        </p>
         <Button variant="outline" className="mt-4" onClick={() => void fetchSubscription()}>
           Retry
         </Button>
@@ -80,9 +85,7 @@ export function SubscribePage() {
       {/* Current plan summary */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">Subscription</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your plan and billing.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Manage your plan and billing.</p>
 
         <div className="mt-4 rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
@@ -94,7 +97,8 @@ export function SubscribePage() {
           </div>
           {subscription.currentPeriodEnd && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Current period ends: {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
+              Current period ends:{' '}
+              {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}
             </p>
           )}
         </div>
@@ -104,15 +108,38 @@ export function SubscribePage() {
       </div>
 
       {/* Plan selection / upgrade button */}
-      <Button onClick={() => setDialogOpen(true)} disabled={lifecycleState === 'locked'}>
-        {tier === 'hobby' ? 'Upgrade Plan' : 'Change Plan'}
+      <Button
+        onClick={() => {
+          if (
+            subscription.razorpayStatus === 'halted' ||
+            lifecycleState === 'payment_failed' ||
+            lifecycleState === 'grace'
+          )
+            payment.open();
+          else setDialogOpen(true);
+        }}
+        disabled={payment.busy}
+      >
+        {subscription.razorpayStatus === 'halted' ||
+        lifecycleState === 'payment_failed' ||
+        lifecycleState === 'grace'
+          ? 'Update Payment Method'
+          : tier === 'hobby'
+            ? 'Upgrade Plan'
+            : 'Change Plan'}
       </Button>
+      {payment.message && (
+        <p role="status" className="mt-3 text-sm">
+          {payment.message}
+        </p>
+      )}
 
       <p className="mt-2 text-xs text-muted-foreground">
         For billing history and lifecycle details, visit{' '}
         <a href="/designer/plan-billing" className="text-primary underline">
           Plan &amp; Billing
-        </a>.
+        </a>
+        .
       </p>
 
       {/* Checkout dialog */}
@@ -121,6 +148,9 @@ export function SubscribePage() {
         onOpenChange={setDialogOpen}
         currentTier={tier}
         lifecycleState={lifecycleState}
+        cancellationScheduled={subscription.cancellationScheduled ?? false}
+        currentPeriodEnd={subscription.currentPeriodEnd}
+        restoreTier={subscription.preLapseTier}
         onSubscriptionChange={fetchSubscription}
       />
     </div>
@@ -141,30 +171,35 @@ function LifecycleBadge({ state }: { state: SubscriptionState }) {
   const { label, className } = config[state];
 
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
-      {label}
-    </span>
+    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>{label}</span>
   );
 }
 
 function LifecycleNotice({ state }: { state: SubscriptionState }) {
   if (state === 'active') return null;
 
-  const notices: Record<Exclude<SubscriptionState, 'active'>, { message: string; severity: 'warning' | 'error' }> = {
+  const notices: Record<
+    Exclude<SubscriptionState, 'active'>,
+    { message: string; severity: 'warning' | 'error' }
+  > = {
     payment_failed: {
-      message: 'Your last payment failed. Please update your payment method to avoid service interruption.',
+      message:
+        'Your last payment failed. Please update your payment method to avoid service interruption.',
       severity: 'warning',
     },
     grace: {
-      message: 'Your subscription is in a grace period. Payment is overdue — please resolve to avoid suspension.',
+      message:
+        'Your subscription is in a grace period. Payment is overdue — please resolve to avoid suspension.',
       severity: 'warning',
     },
     locked: {
-      message: 'Your subscription is suspended due to non-payment. Paid features are unavailable. Contact support or resolve the payment to reactivate.',
+      message:
+        'Your subscription is suspended due to non-payment. Paid features are unavailable. Contact support or resolve the payment to reactivate.',
       severity: 'error',
     },
     downgraded: {
-      message: 'Your subscription has been downgraded to Hobby. Contact support to reactivate your previous plan.',
+      message:
+        'Your subscription has been downgraded to Hobby. Contact support to reactivate your previous plan.',
       severity: 'error',
     },
   };
@@ -172,7 +207,10 @@ function LifecycleNotice({ state }: { state: SubscriptionState }) {
   const notice = notices[state as Exclude<SubscriptionState, 'active'>];
   if (!notice) return null;
 
-  const borderClass = notice.severity === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-yellow-300/50 bg-yellow-50';
+  const borderClass =
+    notice.severity === 'error'
+      ? 'border-destructive/30 bg-destructive/5'
+      : 'border-yellow-300/50 bg-yellow-50';
   const textClass = notice.severity === 'error' ? 'text-destructive' : 'text-yellow-800';
 
   return (

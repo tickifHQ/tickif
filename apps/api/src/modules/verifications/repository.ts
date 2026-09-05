@@ -1,16 +1,21 @@
 import {
+  ADMIN_VERIFICATION_QUEUE_TAB,
   BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+  MIN_VERIFICATION_PUBLISHED_PROJECTS,
   ORGANIZATION_MEMBER_ROLE,
   VERIFICATION_APPLICATION_STATUS,
   VERIFICATION_DOCUMENT_STATUS,
   VERIFICATION_NOTIFICATION_EVENT,
   VERIFICATION_REVIEW_ACTION,
   type AdminVerificationQueueQuery,
+  type AdminVerificationQueueTab,
   type RejectVerificationInput,
+  type RevokeVerificationInput,
   type VerificationApplicationStatus,
   type VerificationDocumentType,
 } from '@repo/contracts';
-import { and, asc, db, desc, eq, inArray, schema, sql } from '@repo/db';
+import { and, asc, db, desc, eq, inArray, isNotNull, schema, sql } from '@repo/db';
+import { config } from '@repo/config';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 export type VerificationApplicationRecord = typeof schema.verificationApplication.$inferSelect;
@@ -38,6 +43,40 @@ export type AdminVerificationRecord = VerificationContextRecord & {
   organizationName: string;
 };
 
+function adminQueuePredicate(tab: AdminVerificationQueueTab, now: Date) {
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING),
+      eq(schema.verificationApplication.attempt, 1),
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING),
+      sql`${schema.verificationApplication.attempt} > 1`,
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED),
+      sql`(${schema.verificationApplication.expiresAt} is null or ${schema.verificationApplication.expiresAt} > ${now})`,
+    );
+  }
+  if (tab === ADMIN_VERIFICATION_QUEUE_TAB.EXPIRED) {
+    return and(
+      eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED),
+      sql`${schema.verificationApplication.expiresAt} <= ${now}`,
+    );
+  }
+  return eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.REJECTED);
+}
+
+function isAdminQueueStatus(
+  status: VerificationApplicationStatus,
+): status is Exclude<VerificationApplicationStatus, 'draft'> {
+  return status !== VERIFICATION_APPLICATION_STATUS.DRAFT;
+}
+
 export function isApplicationEditable(
   application: Pick<VerificationApplicationRecord, 'status' | 'expiresAt'>,
   now = new Date(),
@@ -56,6 +95,7 @@ export const VERIFICATION_MUTATION_RESULT = {
   STATE_CHANGED: 'state_changed',
   DOCUMENT_NOT_FOUND: 'document_not_found',
   INVALID_DOCUMENTS: 'invalid_documents',
+  INELIGIBLE: 'ineligible',
 } as const;
 
 type VerificationMutationFailure =
@@ -98,11 +138,27 @@ async function findOwner(organizationId: string) {
   return owner ?? null;
 }
 
-async function publishedProjectCount(profileId: string): Promise<number> {
+async function findPrimaryProfile(organizationId: string) {
+  const [profile] = await db
+    .select({
+      id: schema.designerProfile.id,
+      displayName: schema.designerProfile.displayName,
+    })
+    .from(schema.designerProfile)
+    .where(eq(schema.designerProfile.orgId, organizationId))
+    .orderBy(asc(schema.designerProfile.createdAt), asc(schema.designerProfile.id))
+    .limit(1);
+  return profile ?? null;
+}
+
+async function publishedProjectCount(organizationId: string): Promise<number> {
   const [row] = await db
     .select({ value: sql<number>`count(*)::int` })
     .from(schema.project)
-    .where(and(eq(schema.project.designerId, profileId), eq(schema.project.status, 'published')));
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(eq(schema.designerProfile.orgId, organizationId), eq(schema.project.status, 'published')),
+    );
   return row?.value ?? 0;
 }
 
@@ -110,15 +166,7 @@ async function contextForApplication(
   application: VerificationApplicationRecord,
 ): Promise<VerificationContextRecord | null> {
   const [profile, owner] = await Promise.all([
-    db
-      .select({
-        id: schema.designerProfile.id,
-        displayName: schema.designerProfile.displayName,
-      })
-      .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.orgId, application.organizationId))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
+    findPrimaryProfile(application.organizationId),
     findOwner(application.organizationId),
   ]);
   if (!profile || !owner) return null;
@@ -131,7 +179,7 @@ async function contextForApplication(
     ownerEmail: owner.email,
     ownerPhone: owner.phone,
     ownerPhoneVerified: owner.phoneVerified === true,
-    publishedProjectCount: await publishedProjectCount(profile.id),
+    publishedProjectCount: await publishedProjectCount(application.organizationId),
   };
 }
 
@@ -227,6 +275,15 @@ export const verificationsRepository = {
     userId: string;
   }): Promise<VerificationDocumentVersionRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
+      const [candidate] = await tx
+        .select({ organizationId: schema.verificationApplication.organizationId })
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.id, input.applicationId))
+        .limit(1);
+      if (!candidate) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+      );
       // Every document mutation takes the application lock before any slot or
       // version lock so concurrent upload, commit, cancel, and remove paths use
       // one consistent lock order.
@@ -234,12 +291,19 @@ export const verificationsRepository = {
         .select({
           status: schema.verificationApplication.status,
           expiresAt: schema.verificationApplication.expiresAt,
+          organizationId: schema.verificationApplication.organizationId,
         })
         .from(schema.verificationApplication)
         .where(eq(schema.verificationApplication.id, input.applicationId))
         .for('update')
         .limit(1);
       if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, application.organizationId))
+        .limit(1);
+      if (retention) return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       if (!isApplicationEditable(application)) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
@@ -285,8 +349,24 @@ export const verificationsRepository = {
         })
         .returning();
       if (!created) throw new Error('Verification document version insert failed');
+      await tx.insert(schema.organizationUploadLease).values({
+        resourceKey: input.objectKey,
+        organizationId: application.organizationId,
+        expiresAt: new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+      });
       return created;
     });
+  },
+
+  async releaseUploadLease(resourceKey: string, organizationId: string): Promise<void> {
+    await db
+      .delete(schema.organizationUploadLease)
+      .where(
+        and(
+          eq(schema.organizationUploadLease.resourceKey, resourceKey),
+          eq(schema.organizationUploadLease.organizationId, organizationId),
+        ),
+      );
   },
 
   async findDocumentForOrganization(
@@ -502,6 +582,7 @@ export const verificationsRepository = {
         .select({ id: schema.designerProfile.id })
         .from(schema.designerProfile)
         .where(eq(schema.designerProfile.orgId, application.organizationId))
+        .orderBy(asc(schema.designerProfile.createdAt), asc(schema.designerProfile.id))
         .limit(1);
       const [owner] = await tx
         .select({
@@ -528,8 +609,12 @@ export const verificationsRepository = {
       const [projectCount] = await tx
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
+        .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .where(
-          and(eq(schema.project.designerId, profile.id), eq(schema.project.status, 'published')),
+          and(
+            eq(schema.designerProfile.orgId, application.organizationId),
+            eq(schema.project.status, 'published'),
+          ),
         );
       const currentDocuments = await tx
         .select({
@@ -555,13 +640,21 @@ export const verificationsRepository = {
       const hasIncompleteDocument = currentDocuments.some(
         (document) => document.status === VERIFICATION_DOCUMENT_STATUS.PENDING_UPLOAD,
       );
+      const hasRejectedDocument = currentDocuments.some(
+        (document) => document.status === VERIFICATION_DOCUMENT_STATUS.REJECTED,
+      );
       const hasCurrentBusinessDocument = currentDocuments.some(
         (document) =>
           businessTypes.has(document.type) &&
           (document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
             document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED),
       );
-      if (hasIncompleteDocument || !hasCurrentBusinessDocument || (projectCount?.value ?? 0) < 3) {
+      if (
+        hasIncompleteDocument ||
+        hasRejectedDocument ||
+        !hasCurrentBusinessDocument ||
+        (projectCount?.value ?? 0) < MIN_VERIFICATION_PUBLISHED_PROJECTS
+      ) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
       }
       const nextAttempt =
@@ -601,18 +694,32 @@ export const verificationsRepository = {
     });
   },
 
-  async listPending(query: AdminVerificationQueueQuery): Promise<{
+  async listAdminQueue(
+    query: AdminVerificationQueueQuery,
+    now = new Date(),
+  ): Promise<{
     items: Array<{
       id: string;
       organizationId: string;
       organizationName: string;
       designerName: string;
       attempt: number;
+      status: Exclude<VerificationApplicationStatus, 'draft'>;
       submittedAt: Date;
+      reviewedAt: Date | null;
+      expiresAt: Date | null;
       documentCount: number;
     }>;
     total: number;
   }> {
+    const queuePredicate = and(
+      adminQueuePredicate(query.tab, now),
+      isNotNull(schema.verificationApplication.submittedAt),
+      sql`exists (
+        select 1 from ${schema.designerProfile}
+        where ${schema.designerProfile.orgId} = ${schema.verificationApplication.organizationId}
+      )`,
+    );
     const currentDocuments = db
       .select({
         applicationId: schema.verificationDocumentSlot.applicationId,
@@ -630,6 +737,7 @@ export const verificationsRepository = {
           inArray(schema.verificationDocumentVersion.status, [
             VERIFICATION_DOCUMENT_STATUS.UPLOADED,
             VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+            VERIFICATION_DOCUMENT_STATUS.REJECTED,
           ]),
           sql`not exists (
             select 1 from verification_document_version newer
@@ -646,9 +754,18 @@ export const verificationsRepository = {
           id: schema.verificationApplication.id,
           organizationId: schema.verificationApplication.organizationId,
           organizationName: schema.organization.name,
-          designerName: schema.designerProfile.displayName,
+          designerName: sql<string>`(
+            select ${schema.designerProfile.displayName}
+            from ${schema.designerProfile}
+            where ${schema.designerProfile.orgId} = ${schema.verificationApplication.organizationId}
+            order by ${schema.designerProfile.createdAt}, ${schema.designerProfile.id}
+            limit 1
+          )`,
           attempt: schema.verificationApplication.attempt,
+          status: schema.verificationApplication.status,
           submittedAt: schema.verificationApplication.submittedAt,
+          reviewedAt: schema.verificationApplication.reviewedAt,
+          expiresAt: schema.verificationApplication.expiresAt,
           documentCount: sql<number>`coalesce(${currentDocuments.count}, 0)::int`,
         })
         .from(schema.verificationApplication)
@@ -656,29 +773,37 @@ export const verificationsRepository = {
           schema.organization,
           eq(schema.verificationApplication.organizationId, schema.organization.id),
         )
-        .innerJoin(
-          schema.designerProfile,
-          eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
-        )
         .leftJoin(
           currentDocuments,
           eq(schema.verificationApplication.id, currentDocuments.applicationId),
         )
-        .where(eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING))
+        .where(queuePredicate)
         .orderBy(
-          asc(schema.verificationApplication.submittedAt),
-          asc(schema.verificationApplication.id),
+          query.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ||
+            query.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
+            ? asc(schema.verificationApplication.submittedAt)
+            : desc(schema.verificationApplication.reviewedAt),
+          query.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ||
+            query.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW
+            ? asc(schema.verificationApplication.id)
+            : desc(schema.verificationApplication.id),
         )
         .limit(query.limit)
         .offset((query.page - 1) * query.limit),
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.verificationApplication)
-        .where(eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.PENDING)),
+        .innerJoin(
+          schema.organization,
+          eq(schema.verificationApplication.organizationId, schema.organization.id),
+        )
+        .where(queuePredicate),
     ]);
     return {
       items: items.flatMap((item) =>
-        item.submittedAt ? [{ ...item, submittedAt: item.submittedAt }] : [],
+        item.submittedAt && isAdminQueueStatus(item.status)
+          ? [{ ...item, submittedAt: item.submittedAt, status: item.status }]
+          : [],
       ),
       total: count?.value ?? 0,
     };
@@ -689,31 +814,39 @@ export const verificationsRepository = {
       .select({
         application: schema.verificationApplication,
         organizationName: schema.organization.name,
-        designerProfileId: schema.designerProfile.id,
-        designerName: schema.designerProfile.displayName,
       })
       .from(schema.verificationApplication)
       .innerJoin(
         schema.organization,
         eq(schema.verificationApplication.organizationId, schema.organization.id),
       )
-      .innerJoin(
-        schema.designerProfile,
-        eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
+      .where(
+        and(
+          eq(schema.verificationApplication.id, applicationId),
+          inArray(schema.verificationApplication.status, [
+            VERIFICATION_APPLICATION_STATUS.PENDING,
+            VERIFICATION_APPLICATION_STATUS.VERIFIED,
+            VERIFICATION_APPLICATION_STATUS.REJECTED,
+          ]),
+        ),
       )
-      .where(eq(schema.verificationApplication.id, applicationId))
       .limit(1);
     if (!row) return null;
-    const owner = await findOwner(row.application.organizationId);
-    if (!owner) return null;
+    const [owner, profile] = await Promise.all([
+      findOwner(row.application.organizationId),
+      findPrimaryProfile(row.application.organizationId),
+    ]);
+    if (!owner || !profile) return null;
     return {
       ...row,
+      designerProfileId: profile.id,
+      designerName: profile.displayName,
       ownerUserId: owner.id,
       ownerName: owner.name,
       ownerEmail: owner.email,
       ownerPhone: owner.phone,
       ownerPhoneVerified: owner.phoneVerified === true,
-      publishedProjectCount: await publishedProjectCount(row.designerProfileId),
+      publishedProjectCount: await publishedProjectCount(row.application.organizationId),
     };
   },
 
@@ -733,7 +866,11 @@ export const verificationsRepository = {
       }
 
       const documentRows = await tx
-        .select({ id: schema.verificationDocumentVersion.id })
+        .select({
+          id: schema.verificationDocumentVersion.id,
+          type: schema.verificationDocumentSlot.type,
+          status: schema.verificationDocumentVersion.status,
+        })
         .from(schema.verificationDocumentVersion)
         .innerJoin(
           schema.verificationDocumentSlot,
@@ -742,10 +879,6 @@ export const verificationsRepository = {
         .where(
           and(
             eq(schema.verificationDocumentSlot.applicationId, application.id),
-            inArray(schema.verificationDocumentVersion.status, [
-              VERIFICATION_DOCUMENT_STATUS.UPLOADED,
-              VERIFICATION_DOCUMENT_STATUS.VERIFIED,
-            ]),
             sql`not exists (
               select 1 from verification_document_version newer
               where newer.slot_id = ${schema.verificationDocumentVersion.slotId}
@@ -753,11 +886,19 @@ export const verificationsRepository = {
             )`,
           ),
         );
-      const currentIds = documentRows.map((row) => row.id);
+      const activeDocuments = documentRows.filter(
+        (document) => document.status !== VERIFICATION_DOCUMENT_STATUS.REMOVED,
+      );
+      const reviewableDocuments = activeDocuments.filter(
+        (document) =>
+          document.status === VERIFICATION_DOCUMENT_STATUS.UPLOADED ||
+          document.status === VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+      );
+      const currentIds = reviewableDocuments.map((row) => row.id);
       if (currentIds.length === 0) return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
 
-      const requestedRejectedIds = input.rejection?.rejectedDocumentVersionIds;
-      const rejectedIds = input.decision === 'reject' ? (requestedRejectedIds ?? currentIds) : [];
+      const rejectedIds =
+        input.decision === 'reject' ? input.rejection.rejectedDocumentVersionIds : [];
       if (rejectedIds.some((id) => !currentIds.includes(id))) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
       }
@@ -766,6 +907,62 @@ export const verificationsRepository = {
       const approved = input.decision === 'approve';
       if (!approved && rejectedIds.length === 0) {
         return VERIFICATION_MUTATION_RESULT.INVALID_DOCUMENTS;
+      }
+      if (approved) {
+        const [profile] = await tx
+          .select({ id: schema.designerProfile.id })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.orgId, application.organizationId))
+          .limit(1);
+        const [owner] = await tx
+          .select({
+            name: schema.user.name,
+            phone: schema.user.phoneNumber,
+            phoneVerified: schema.user.phoneNumberVerified,
+          })
+          .from(schema.member)
+          .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+          .where(
+            and(eq(schema.member.organizationId, application.organizationId), ownerRolePredicate()),
+          )
+          .orderBy(asc(schema.member.createdAt), asc(schema.member.id))
+          .limit(1);
+        if (
+          !profile ||
+          !owner ||
+          !owner.phone ||
+          owner.phoneVerified !== true ||
+          owner.name.trim().length < 2 ||
+          activeDocuments.some(
+            (document) =>
+              document.status !== VERIFICATION_DOCUMENT_STATUS.UPLOADED &&
+              document.status !== VERIFICATION_DOCUMENT_STATUS.VERIFIED,
+          )
+        ) {
+          return VERIFICATION_MUTATION_RESULT.INELIGIBLE;
+        }
+        const [projectCount] = await tx
+          .select({ value: sql<number>`count(*)::int` })
+          .from(schema.project)
+          .innerJoin(
+            schema.designerProfile,
+            eq(schema.project.designerId, schema.designerProfile.id),
+          )
+          .where(
+            and(
+              eq(schema.designerProfile.orgId, application.organizationId),
+              eq(schema.project.status, 'published'),
+            ),
+          );
+        const businessTypes = new Set<VerificationDocumentType>(
+          BUSINESS_VERIFICATION_DOCUMENT_TYPES,
+        );
+        if (
+          (projectCount?.value ?? 0) < MIN_VERIFICATION_PUBLISHED_PROJECTS ||
+          !reviewableDocuments.some((document) => businessTypes.has(document.type))
+        ) {
+          return VERIFICATION_MUTATION_RESULT.INELIGIBLE;
+        }
       }
       const nextStatus = approved
         ? VERIFICATION_APPLICATION_STATUS.VERIFIED
@@ -855,20 +1052,113 @@ export const verificationsRepository = {
         })
         .onConflictDoNothing();
 
-      const [profile] = await tx
+      const profiles = await tx
         .select({ id: schema.designerProfile.id })
         .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.orgId, application.organizationId))
-        .limit(1);
-      if (profile) {
-        await recordSearchProjectionEvents(tx, [
-          {
+        .where(eq(schema.designerProfile.orgId, application.organizationId));
+      if (profiles.length > 0) {
+        await recordSearchProjectionEvents(
+          tx,
+          profiles.map((profile) => ({
             entityKind: 'designer',
             entityId: profile.id,
             operation: 'index',
             sourceUpdatedAt: reviewedAt,
-          },
-        ]);
+          })),
+        );
+      }
+      return updated;
+    });
+  },
+
+  async revokeApproval(
+    input: {
+      applicationId: string;
+      reviewerId: string;
+      revocation: RevokeVerificationInput;
+    },
+    now = new Date(),
+  ): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
+    return db.transaction(async (tx) => {
+      const [application] = await tx
+        .select()
+        .from(schema.verificationApplication)
+        .where(eq(schema.verificationApplication.id, input.applicationId))
+        .for('update')
+        .limit(1);
+      if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
+      if (
+        application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED ||
+        (application.expiresAt !== null && application.expiresAt <= now)
+      ) {
+        return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
+      }
+
+      const revokedAt = now;
+      const nextAttempt = application.attempt + 1;
+      const [updated] = await tx
+        .update(schema.verificationApplication)
+        .set({
+          status: VERIFICATION_APPLICATION_STATUS.PENDING,
+          attempt: nextAttempt,
+          submittedAt: revokedAt,
+          reviewedAt: null,
+          reviewedByUserId: null,
+          approvedAt: null,
+          expiresAt: null,
+          updatedAt: revokedAt,
+        })
+        .where(eq(schema.verificationApplication.id, application.id))
+        .returning();
+      if (!updated) throw new Error('Verification approval revocation failed');
+
+      await tx.insert(schema.verificationReviewEvent).values({
+        applicationId: application.id,
+        attempt: nextAttempt,
+        action: VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
+        actorUserId: input.reviewerId,
+        fromStatus: application.status,
+        toStatus: VERIFICATION_APPLICATION_STATUS.PENDING,
+        note: input.revocation.note,
+        rejectedDocumentVersionIds: [],
+      });
+
+      const [owner] = await tx
+        .select({
+          userId: schema.member.userId,
+          email: schema.user.email,
+        })
+        .from(schema.member)
+        .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+        .where(
+          and(eq(schema.member.organizationId, application.organizationId), ownerRolePredicate()),
+        )
+        .orderBy(asc(schema.member.createdAt), asc(schema.member.id))
+        .limit(1);
+      if (!owner) throw new Error('Verification organization owner not found');
+      await tx.insert(schema.verificationNotificationOutbox).values({
+        applicationId: application.id,
+        attempt: nextAttempt,
+        eventType: VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED,
+        recipientUserId: owner.userId,
+        recipientEmail: owner.email,
+        note: input.revocation.note,
+      });
+
+      const profiles = await tx
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.orgId, application.organizationId));
+      if (profiles.length > 0) {
+        await recordSearchProjectionEvents(
+          tx,
+          profiles.map((profile) => ({
+            entityKind: 'designer',
+            entityId: profile.id,
+            operation: 'index',
+            sourceUpdatedAt: revokedAt,
+          })),
+        );
       }
       return updated;
     });

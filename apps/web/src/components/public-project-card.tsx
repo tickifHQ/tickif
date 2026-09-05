@@ -5,6 +5,7 @@ import { Badge } from '@repo/ui/components/badge';
 import { cn } from '@repo/ui/lib/utils';
 import { Star } from 'lucide-react';
 import { formatCompactBudgetLabel } from '@/lib/format-budget-label';
+import { ProjectLikeButton } from '@/components/project-like-button';
 
 /**
  * Project summary used by public designer profiles.
@@ -112,6 +113,9 @@ export function PublicProjectCard({
           </div>
         </div>
       </Link>
+      <div className="mt-3">
+        <ProjectLikeButton projectId={project.id} loginHref={`/login?callbackURL=${encodeURIComponent(href)}`} />
+      </div>
     </article>
   );
 }

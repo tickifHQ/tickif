@@ -19,6 +19,8 @@ export function nodePreset(overrides = {}) {
     test: {
       globals: true,
       environment: 'node',
+      // Turbo also runs packages in parallel. Bound each package's CPU/memory use.
+      maxWorkers: 2,
       include: ['tests/**/*.test.ts'],
       coverage: {
         provider: 'v8',
@@ -27,8 +29,40 @@ export function nodePreset(overrides = {}) {
         exclude: ['src/**/index.ts', 'src/**/*.d.ts'],
       },
       ...overrides,
+      env: { ...testEnv(), ...overrides.env },
     },
   });
+}
+
+/** Synthetic credentials for test runners only; application validation stays strict. */
+export function testEnv() {
+  return {
+    NODE_ENV: 'test',
+    BETTER_AUTH_SECRET: 'tickif-test-only-auth-secret-0000000000000000',
+    BETTER_AUTH_URL: 'http://localhost:3000',
+  };
+}
+
+/**
+ * Vitest globalSetup runs outside test workers, before test.env is applied.
+ * Install the project's environment before dynamically importing DB/auth modules.
+ * Return a teardown that restores the runner's original environment.
+ */
+export function installTestEnv(environment) {
+  if (environment.NODE_ENV !== 'test') throw new Error('Expected a test environment');
+  const previous = Object.fromEntries(
+    Object.keys(environment).map((key) => [key, process.env[key]]),
+  );
+  for (const [key, value] of Object.entries(environment)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  return () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
 }
 
 /** Load the repo-root `.env` (walking up from cwd) so *_TEST vars are available. */
@@ -91,7 +125,7 @@ export function testRedisUrl() {
  */
 export function integrationEnv() {
   return {
-    NODE_ENV: 'test',
+    ...testEnv(),
     DATABASE_URL: testDatabaseUrl(),
     REDIS_URL: testRedisUrl(),
   };

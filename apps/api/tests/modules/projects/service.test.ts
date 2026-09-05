@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { AppError } from '../../../src/lib/errors.js';
 import type {
   ProjectFeedItemRecord,
@@ -9,6 +10,10 @@ import type {
   ProjectRoomRecord,
 } from '../../../src/modules/projects/repository.js';
 
+const { lifecycleTransaction } = vi.hoisted(() => ({
+  lifecycleTransaction: { kind: 'organization-lifecycle-transaction' } as const,
+}));
+
 vi.mock('@repo/storage', () => ({
   deleteObject: vi.fn(async () => undefined),
   presignDownload: vi.fn(async ({ key }: { key: string }) => `https://signed.example/${key}`),
@@ -17,7 +22,9 @@ vi.mock('@repo/storage', () => ({
 // Replace the Drizzle-backed repository with a fake. This is what makes the
 // service unit-testable with NO database — the payoff of the layering rule.
 vi.mock('../../../src/modules/projects/repository.js', () => {
+  class ProjectSlugUnavailableError extends Error {}
   return {
+    ProjectSlugUnavailableError,
     projectsRepository: {
       list: vi.fn(),
       countByStatus: vi.fn(),
@@ -28,8 +35,15 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
       updateDraft: vi.fn(),
+      withOrganizationLifecycleReadLock: vi.fn(
+        async (
+          _organizationId: string,
+          run: (tx: typeof lifecycleTransaction) => Promise<unknown>,
+        ) => run(lifecycleTransaction),
+      ),
+      assignResponsibleMember: vi.fn(),
       deleteProject: vi.fn(),
-      findDesignerByOrgId: vi.fn(),
+      findDesignerByTeamId: vi.fn(),
       findOwnership: vi.fn(),
       taxonomyExists: vi.fn(),
       findTaxonomyTermBySlug: vi.fn(),
@@ -71,6 +85,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
     isMember: vi.fn(),
+    hasCapability: vi.fn(),
     isWriter: vi.fn(),
   },
 }));
@@ -85,10 +100,12 @@ const { deleteObject } = await import('@repo/storage');
 const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   id: '11111111-1111-4111-8111-111111111111',
   designerId: '22222222-2222-4222-8222-222222222222',
+  responsibleMemberId: null,
   title: 'Sunlit Bandra Apartment',
   slug: 'sunlit-bandra-apartment',
   description: null,
   status: 'published',
+  archiveReason: null,
   propertyTypeSlug: null,
   propertySubtypeSlug: null,
   scopeSlug: null,
@@ -169,6 +186,7 @@ const caller = {
   userRole: 'designer',
   isBanned: false,
   activeOrgId: 'org_1',
+  activeTeamId: 'team_1',
 };
 
 beforeEach(() => {
@@ -177,6 +195,7 @@ beforeEach(() => {
   vi.mocked(projectsRepository.listReviewComments).mockResolvedValue([]);
   vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);
   vi.mocked(orgsService.isMember).mockResolvedValue(true);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
   vi.mocked(orgsService.isWriter).mockResolvedValue(true);
 });
 
@@ -193,6 +212,7 @@ describe('projectsService.list', () => {
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: 'org_1',
+      activeTeamId: 'team_1',
       statuses: ['draft', 'changes_requested', 'rejected'],
       q: 'bandra',
       limit: 20,
@@ -205,6 +225,20 @@ describe('projectsService.list', () => {
     expect(result.items[0]).toMatchObject({ slug: 'sunlit-bandra-apartment', status: 'published' });
     // Date is serialized to an ISO string at the boundary.
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('lists the organization roll-up without an active branch', async () => {
+    vi.mocked(projectsRepository.list).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
+
+    await projectsService.list(
+      { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
+      { ...caller, activeTeamId: null },
+    );
+
+    expect(projectsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ activeOrgId: 'org_1', activeTeamId: null }),
+    );
   });
 
   it('surfaces only unresolved comments for changes-requested list rows', async () => {
@@ -292,6 +326,7 @@ describe('projectsService.portfolio', () => {
     expect(projectsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: 'org_1',
+      activeTeamId: 'team_1',
       statuses: ['changes_requested'],
       limit: 12,
       offset: 0,
@@ -304,6 +339,9 @@ describe('projectsService.portfolio', () => {
       published: 1,
       changesRequested: 3,
       rejected: 1,
+      archived: 0,
+      delisted: 0,
+      deleted: 0,
     });
     expect(result.items[0]).toMatchObject({
       status: 'changes_requested',
@@ -401,14 +439,15 @@ describe('projectsService.create', () => {
         { ...caller, userRole: 'visitor', activeOrgId: null },
       ),
     ).rejects.toMatchObject({ status: 403 });
-    expect(orgsService.isWriter).not.toHaveBeenCalled();
+    expect(orgsService.hasCapability).not.toHaveBeenCalled();
   });
 
   it('uses the base slug when free', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -426,9 +465,10 @@ describe('projectsService.create', () => {
 
   it('appends a suffix when the slug already exists', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(row());
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -447,9 +487,10 @@ describe('projectsService.create', () => {
 
   it('retries slug creation when another draft wins the insert race', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft)
       .mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }))
@@ -468,9 +509,10 @@ describe('projectsService.create', () => {
 
   it('generates a title and room prefill when title is omitted', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.taxonomyExists).mockResolvedValue(true);
     vi.mocked(projectsRepository.propertySubtypeExists).mockResolvedValue(true);
@@ -560,7 +602,7 @@ describe('projectsService.create', () => {
   });
 
   it('requires the authenticated user to have a designer profile', async () => {
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue(null);
 
     await expect(projectsService.create({ title: 'New Project' }, caller)).rejects.toMatchObject({
       status: 403,
@@ -569,9 +611,10 @@ describe('projectsService.create', () => {
 
   it('creates in the active organization and rejects a missing active organization', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
-    vi.mocked(projectsRepository.findDesignerByOrgId).mockResolvedValue({
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
       id: '22222222-2222-4222-8222-222222222222',
       orgId: 'org_1',
+      teamId: 'team_1',
     });
     vi.mocked(projectsRepository.createDraft).mockImplementation(
       async (_input, _designerId, slug) => row({ slug }),
@@ -579,8 +622,12 @@ describe('projectsService.create', () => {
 
     await projectsService.create({ title: 'Active Org Project' }, caller);
 
-    expect(orgsService.isWriter).toHaveBeenCalledWith(caller.userId, 'org_1');
-    expect(projectsRepository.findDesignerByOrgId).toHaveBeenCalledWith('org_1');
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'write_projects',
+    );
+    expect(projectsRepository.findDesignerByTeamId).toHaveBeenCalledWith('org_1', 'team_1');
     await expect(
       projectsService.create({ title: 'No Org Project' }, { ...caller, activeOrgId: null }),
     ).rejects.toMatchObject({ status: 422 });
@@ -592,7 +639,9 @@ describe('projectsService.update', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'changes_requested',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'changes_requested' }));
@@ -615,7 +664,9 @@ describe('projectsService.update', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
@@ -627,12 +678,104 @@ describe('projectsService.update', () => {
   });
 });
 
+describe('projectsService.assignResponsibleMember', () => {
+  it('lets an organization owner or admin assign an active same-organization member', async () => {
+    const project = row({ responsibleMemberId: 'member_2' });
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      archiveReason: null,
+      ownerUserId: null,
+    });
+    vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue(project);
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    const result = await projectsService.assignResponsibleMember(
+      project.id,
+      { responsibleMemberId: 'member_2' },
+      caller,
+    );
+
+    expect(projectsRepository.withOrganizationLifecycleReadLock).toHaveBeenCalledWith(
+      'org_1',
+      expect.any(Function),
+    );
+    expect(projectsRepository.assignResponsibleMember).toHaveBeenCalledWith({
+      projectId: project.id,
+      organizationId: 'org_1',
+      responsibleMemberId: 'member_2',
+      tx: lifecycleTransaction,
+    });
+    expect(result.responsibleMemberId).toBe('member_2');
+  });
+
+  it('rejects assignment when retention-aware project capabilities freeze writes', async () => {
+    const project = row();
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      archiveReason: null,
+      ownerUserId: null,
+    });
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
+
+    await expect(
+      projectsService.assignResponsibleMember(
+        project.id,
+        { responsibleMemberId: 'member_2' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.withOrganizationLifecycleReadLock).toHaveBeenCalledWith(
+      'org_1',
+      expect.any(Function),
+    );
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+      lifecycleTransaction,
+    );
+    expect(projectsRepository.assignResponsibleMember).not.toHaveBeenCalled();
+  });
+
+  it('rejects a removed, frozen, or cross-organization assignee', async () => {
+    const project = row();
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: project.id,
+      designerId: project.designerId,
+      organizationId: 'org_1',
+      teamId: 'team_1',
+      status: project.status,
+      archiveReason: null,
+      ownerUserId: null,
+    });
+    vi.mocked(projectsRepository.assignResponsibleMember).mockResolvedValue('invalid_member');
+
+    await expect(
+      projectsService.assignResponsibleMember(
+        project.id,
+        { responsibleMemberId: 'member_bad' },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+});
+
 describe('projectsService.reorderRooms', () => {
   it('rejects room reorder payloads that reference another project', async () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.reorderRooms).mockResolvedValue(null);
@@ -652,7 +795,9 @@ describe('projectsService.linkImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findImage).mockResolvedValue(null);
@@ -669,7 +814,9 @@ describe('projectsService.deleteImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
@@ -688,7 +835,9 @@ describe('projectsService.deleteImage', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.deleteImage).mockResolvedValue(deletedImageRow());
@@ -708,12 +857,165 @@ describe('projectsService.deleteImage', () => {
   });
 });
 
+describe('projectsService project lifecycle', () => {
+  it('archives a published project through the archive capability', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'published',
+      archiveReason: null,
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'archived' }));
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    await expect(projectsService.archive(row().id, caller)).resolves.toMatchObject({
+      id: row().id,
+      status: 'archived',
+    });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'archive_projects',
+    );
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'published',
+      toStatus: 'archived',
+      actorUserId: caller.userId,
+      action: 'archive',
+      patch: { archiveReason: 'manual' },
+    });
+  });
+
+  it('restores an archived project as a draft', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      archiveReason: null,
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'draft' }));
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    await expect(projectsService.restore(row().id, caller)).resolves.toMatchObject({
+      status: 'draft',
+    });
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'archived',
+      toStatus: 'draft',
+      actorUserId: caller.userId,
+      action: 'restore',
+      patch: {
+        archiveReason: null,
+        publishedAt: null,
+        featuredAt: null,
+      },
+    });
+  });
+
+  it('does not restore a project managed by organization retention', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.restore(row().id, caller)).rejects.toMatchObject({ status: 409 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
+  it('marks a published project deleted without removing its audit row', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'published',
+      archiveReason: null,
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.transition).mockResolvedValue(row({ status: 'deleted' }));
+
+    await expect(projectsService.delete(row().id, caller)).resolves.toEqual({
+      id: row().id,
+      deleted: true,
+    });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      caller.userId,
+      'org_1',
+      'delete_projects',
+    );
+    expect(projectsRepository.transition).toHaveBeenCalledWith({
+      id: row().id,
+      fromStatus: 'published',
+      toStatus: 'deleted',
+      actorUserId: caller.userId,
+      action: 'delete',
+    });
+  });
+
+  it('does not delete a project managed by organization retention', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.delete(row().id, caller)).rejects.toMatchObject({ status: 409 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
+  it('rejects delete when the organization role lacks delete permission', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'draft',
+      archiveReason: null,
+      ownerUserId: 'another-user',
+    });
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
+
+    await expect(projectsService.delete(row().id, caller)).rejects.toMatchObject({ status: 403 });
+    expect(projectsRepository.transition).not.toHaveBeenCalled();
+  });
+
+  it.each(['deleted', 'delisted'] as const)('does not duplicate a %s project', async (status) => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status,
+      archiveReason: null,
+      ownerUserId: caller.userId,
+    });
+
+    await expect(projectsService.duplicate(row().id, caller)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(projectsRepository.findById).not.toHaveBeenCalled();
+    expect(projectsRepository.duplicateProject).not.toHaveBeenCalled();
+  });
+});
+
 describe('projectsService.getCompleteness', () => {
   it('reports missing dashboard upload requirements', async () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: row().id,
       designerId: row().designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(row({ status: 'draft' }));
@@ -758,7 +1060,9 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: complete.id,
       designerId: complete.designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);
@@ -791,7 +1095,9 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: requestedChanges.id,
       designerId: requestedChanges.designerId,
+      organizationId: 'org_1',
       status: 'changes_requested',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(requestedChanges);
@@ -831,7 +1137,9 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: rejected.id,
       designerId: rejected.designerId,
+      organizationId: 'org_1',
       status: 'rejected',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(rejected);
@@ -868,7 +1176,9 @@ describe('projectsService.submit', () => {
     vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
       projectId: complete.id,
       designerId: complete.designerId,
+      organizationId: 'org_1',
       status: 'draft',
+      archiveReason: null,
       ownerUserId: caller.userId,
     });
     vi.mocked(projectsRepository.findById).mockResolvedValue(complete);

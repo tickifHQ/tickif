@@ -1,5 +1,21 @@
-import { pgTable, pgEnum, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
-import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES, type AccountStatus } from '@repo/contracts';
+import { sql } from 'drizzle-orm';
+import {
+  pgTable,
+  pgEnum,
+  text,
+  timestamp,
+  boolean,
+  index,
+  uniqueIndex,
+  integer,
+  check,
+} from 'drizzle-orm/pg-core';
+import {
+  PLATFORM_ROLE,
+  PLATFORM_ROLE_VALUES,
+  type AccountStatus,
+  type OrganizationMemberRole,
+} from '@repo/contracts';
 
 /**
  * better-auth tables (the committed source of truth).
@@ -11,7 +27,8 @@ import { PLATFORM_ROLE, PLATFORM_ROLE_VALUES, type AccountStatus } from '@repo/c
  * Plugin fields included:
  *   - phoneNumber plugin  -> user.phoneNumber / user.phoneNumberVerified
  *   - admin plugin        -> user.role / banned / banReason / banExpires, session.impersonatedBy
- *   - organization plugin -> session.activeOrganizationId + organization/member/invitation
+ *   - organization plugin -> organization/member/invitation + team/teamMember
+ *                            + session active organization/team context
  *
  * App-owned extension: user.status (registered as a better-auth additionalField in
  * packages/auth/src/index.ts so it rides on the session user).
@@ -69,6 +86,7 @@ export const session = pgTable(
     impersonatedBy: text('impersonated_by'),
     // organization plugin
     activeOrganizationId: text('active_organization_id'),
+    activeTeamId: text('active_team_id'),
   },
   (t) => [index('session_userId_idx').on(t.userId)],
 );
@@ -123,6 +141,82 @@ export const organization = pgTable('organization', {
   metadata: text('metadata'),
 });
 
+/** Better Auth team. Tickif exposes a team as a billing organization's branch. */
+export const team = pgTable(
+  'team',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    frozen: boolean('frozen').default(false).notNull(),
+    frozenAt: timestamp('frozen_at'),
+    freezeRank: integer('freeze_rank'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index('team_organizationId_idx').on(t.organizationId),
+    index('team_organizationId_frozen_idx').on(t.organizationId, t.frozen),
+    uniqueIndex('team_organizationId_name_uniq').on(t.organizationId, sql`lower(${t.name})`),
+    check(
+      'team_freeze_state_check',
+      sql`(${t.frozen} = false and ${t.frozenAt} is null and ${t.freezeRank} is null) or (${t.frozen} = true and ${t.frozenAt} is not null and ${t.freezeRank} > 0)`,
+    ),
+  ],
+);
+
+/** Better Auth team membership. Organization membership remains the billing/role boundary. */
+export const teamMember = pgTable(
+  'team_member',
+  {
+    id: text('id').primaryKey(),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => team.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('teamMember_teamId_idx').on(t.teamId),
+    index('teamMember_userId_idx').on(t.userId),
+    uniqueIndex('teamMember_teamId_userId_uniq').on(t.teamId, t.userId),
+  ],
+);
+
+/** Last valid personal/org/branch scope restored when a new session starts. */
+export const userContextPreference = pgTable(
+  'user_context_preference',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    contextKind: text('context_kind').$type<'personal' | 'organization'>().notNull(),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
+    teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index('user_context_preference_organizationId_idx').on(t.organizationId),
+    index('user_context_preference_teamId_idx').on(t.teamId),
+    check(
+      'user_context_preference_shape_check',
+      sql`(${t.contextKind} = 'personal' and ${t.organizationId} is null and ${t.teamId} is null) or (${t.contextKind} = 'organization' and ${t.organizationId} is not null)`,
+    ),
+  ],
+);
+
 export const member = pgTable(
   'member',
   {
@@ -133,12 +227,27 @@ export const member = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    role: text('role').default('member').notNull(),
+    role: text('role').$type<OrganizationMemberRole>().default('member').notNull(),
+    frozen: boolean('frozen').default(false).notNull(),
+    frozenAt: timestamp('frozen_at'),
+    freezeRank: integer('freeze_rank'),
     createdAt: timestamp('created_at').notNull(),
   },
   (t) => [
     index('member_organizationId_idx').on(t.organizationId),
     index('member_userId_idx').on(t.userId),
+    index('member_organizationId_frozen_idx').on(t.organizationId, t.frozen),
+    uniqueIndex('member_one_owner_per_organization_uniq')
+      .on(t.organizationId)
+      .where(sql`${t.role} = 'owner'`),
+    check(
+      'member_role_check',
+      sql`${t.role} in ('owner', 'admin', 'billing_admin', 'member', 'viewer')`,
+    ),
+    check(
+      'member_freeze_state_check',
+      sql`(${t.frozen} = false and ${t.frozenAt} is null and ${t.freezeRank} is null) or (${t.frozen} = true and ${t.frozenAt} is not null and ${t.freezeRank} > 0)`,
+    ),
   ],
 );
 
@@ -157,10 +266,16 @@ export const invitation = pgTable(
     inviterId: text('inviter_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    // Better Auth may encode multiple invited team ids as a comma-separated value.
+    teamId: text('team_id'),
   },
   (t) => [
     index('invitation_organizationId_idx').on(t.organizationId),
     index('invitation_inviterId_idx').on(t.inviterId),
     index('invitation_email_idx').on(t.email),
+    index('invitation_teamId_idx').on(t.teamId),
+    uniqueIndex('invitation_pending_organization_email_uniq')
+      .on(t.organizationId, sql`lower(${t.email})`)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );

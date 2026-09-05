@@ -135,6 +135,7 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByLabelText(/address/i)).toHaveValue('Bandra West, Mumbai');
     expect(screen.getByLabelText(/whatsapp \/ phone/i)).toHaveValue('9876543210');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://mahi.example.com');
+    expect(screen.queryByLabelText(/google business url/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/firm type/i)).toHaveValue('Private Limited');
     expect(screen.getByRole('button', { name: /cities: mumbai/i })).toBeInTheDocument();
     expect(
@@ -192,17 +193,13 @@ describe('DesignerProfileEditor', () => {
     );
 
     const website = screen.getByLabelText(/website/i);
-    const googleBusiness = screen.getByLabelText(/google business url/i);
     await user.clear(website);
     await user.type(website, 'mahi2.example.com');
-    await user.clear(googleBusiness);
-    await user.type(googleBusiness, 'g.page/mahi-two');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
       expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
         websiteUrl: 'https://mahi2.example.com',
-        googleBusinessUrl: 'https://g.page/mahi-two',
       });
     });
   });
@@ -225,6 +222,61 @@ describe('DesignerProfileEditor', () => {
 
     expect(await screen.findByText(/enter a valid url/i)).toBeInTheDocument();
     expect(mock.updateDesignerProfile).not.toHaveBeenCalled();
+  });
+
+  it('wires the remaining contact, social, company, and footprint fields without touching the stored business URL', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    const changes = [
+      ['Display name', 'Updated Studio'],
+      ['Bio', 'Updated studio bio.'],
+      ['Address', 'Pune, Maharashtra'],
+      ['WhatsApp / phone', '9123456789'],
+      ['Website', 'updated.example.com'],
+      ['Instagram', '@updatedstudio'],
+      ['LinkedIn', '/company/updatedstudio'],
+      ['YouTube', '@updatedstudio'],
+      ['Firm type', 'LLP'],
+      ['Founded year', '2022'],
+      ['Staff count', '20'],
+    ] as const;
+    for (const [label, value] of changes) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    await user.click(screen.getByRole('button', { name: /services: full home interiors/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Full Home Interiors' }));
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: /design themes: modern/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Modern' }));
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(mock.updateDesignerProfile).toHaveBeenCalledWith({
+        displayName: 'Updated Studio',
+        bio: 'Updated studio bio.',
+        address: 'Pune, Maharashtra',
+        phone: '+919123456789',
+        websiteUrl: 'https://updated.example.com',
+        instagramHandle: '@updatedstudio',
+        linkedinHandle: '/company/updatedstudio',
+        youtubeHandle: '@updatedstudio',
+        firmType: 'LLP',
+        foundedYear: 2022,
+        staffCount: 20,
+        scopeIds: [],
+        themeIds: [],
+      });
+    });
+    expect(mock.updateDesignerProfile.mock.calls[0]?.[0]).not.toHaveProperty('googleBusinessUrl');
   });
 
   it('surfaces API and taxonomy failures without discarding the form', async () => {
@@ -453,9 +505,7 @@ describe('DesignerProfileEditor', () => {
       resolveUpdate?.(ownerProfile({ displayName: 'Mahi Design Co.' }));
     });
 
-    expect(screen.getByLabelText(/bio/i)).toHaveValue(
-      'Warm, practical homes. In-flight edit.',
-    );
+    expect(screen.getByLabelText(/bio/i)).toHaveValue('Warm, practical homes. In-flight edit.');
     expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
   });
 

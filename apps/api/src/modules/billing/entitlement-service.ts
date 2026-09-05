@@ -1,12 +1,14 @@
-import { eq, sql, and } from 'drizzle-orm';
-import { db, schema } from '@repo/db';
 import {
   type PlanTier,
   type SubscriptionState,
+  type FrozenResource,
   resolveEntitlements,
   type SubscriptionResponse,
 } from '@repo/contracts';
+import { config } from '@repo/config';
 import { getCachedEntitlement, setCachedEntitlement } from '../../lib/redis.js';
+import { entitlementRepository } from './entitlement-repository.js';
+import { daysRemaining } from './lifecycle-time.js';
 
 /**
  * E-119 Entitlement Service.
@@ -32,11 +34,16 @@ type Caller = { userId: string; activeOrgId: string | null };
 const HOBBY_DEFAULT: SubscriptionResponse = {
   tier: 'hobby',
   lifecycleState: 'active',
+  preLapseTier: null,
   razorpayStatus: null,
   currentPeriodEnd: null,
+  cancellationScheduled: false,
   seatUsage: 0,
   branchUsage: 0,
   entitlements: resolveEntitlements('hobby', 'active', false),
+  graceDaysRemaining: null,
+  lockedDaysRemaining: null,
+  frozenResources: [],
 };
 
 export const entitlementService = {
@@ -64,11 +71,7 @@ export const entitlementService = {
     }
 
     // Cache miss — query DB
-    const [subscription] = await db
-      .select()
-      .from(schema.subscription)
-      .where(eq(schema.subscription.organizationId, caller.activeOrgId))
-      .limit(1);
+    const subscription = await entitlementRepository.findSubscription(caller.activeOrgId);
 
     if (!subscription) {
       return HOBBY_DEFAULT;
@@ -79,16 +82,31 @@ export const entitlementService = {
 
     // Resolve isVerified from the org's verification application.
     // An org is verified when their application status is 'verified' and not expired.
-    const isVerified = await checkOrgVerified(caller.activeOrgId);
+    const isVerified = await entitlementRepository.isOrganizationVerified(caller.activeOrgId);
 
+    const now = new Date();
     const response: SubscriptionResponse = {
       tier,
       lifecycleState: state,
+      preLapseTier: subscription.preLapseTier as PlanTier | null,
       razorpayStatus: subscription.razorpayStatus,
+      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
-      seatUsage: await countSeats(caller.activeOrgId),
-      branchUsage: await countBranches(caller.activeOrgId),
+      cancellationScheduled: subscription.cancelAtPeriodEnd && tier !== 'hobby',
+      seatUsage: await entitlementRepository.countSeats(caller.activeOrgId),
+      branchUsage: await entitlementRepository.countBranches(caller.activeOrgId),
       entitlements: resolveEntitlements(tier, state, isVerified),
+      // E-239 lapse counters — derived from lapse timestamps + config windows.
+      graceDaysRemaining:
+        state === 'grace'
+          ? daysRemaining(subscription.graceStartedAt, config.BILLING_GRACE_PERIOD_DAYS, now)
+          : null,
+      lockedDaysRemaining:
+        state === 'locked'
+          ? daysRemaining(subscription.lockedAt, config.BILLING_LOCKED_PERIOD_DAYS, now)
+          : null,
+      // Frozen resources are only relevant once downgraded.
+      frozenResources: state === 'downgraded' ? await frozenResourcesFor(caller.activeOrgId) : [],
     };
 
     // Cache the response
@@ -98,46 +116,20 @@ export const entitlementService = {
   },
 };
 
-
-// ─── Usage Count Helpers ─────────────────────────────────────────────────────
-
-/** Count active members (seats) for the organization. */
-async function countSeats(organizationId: string): Promise<number> {
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.member)
-    .where(eq(schema.member.organizationId, organizationId));
-  return result?.count ?? 0;
-}
-
-/** Count branches (designer profiles) for the organization. */
-async function countBranches(organizationId: string): Promise<number> {
-  // A "branch" is a designer profile / studio under the organization.
-  // Currently 1:1 (unique constraint on orgId), but future E-244 may allow multiple.
-  // This intentionally counts profiles, NOT projects — projects are unlimited.
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.designerProfile)
-    .where(eq(schema.designerProfile.orgId, organizationId));
-  return result?.count ?? 0;
-}
-
-
 /**
- * Check whether the organization has a verified (and non-expired) verification application.
- * Returns true only when status = 'verified' AND expiresAt is in the future.
+ * Resources preserved but frozen while downgraded.
  */
-async function checkOrgVerified(organizationId: string): Promise<boolean> {
-  const [app] = await db
-    .select({ status: schema.verificationApplication.status })
-    .from(schema.verificationApplication)
-    .where(
-      and(
-        eq(schema.verificationApplication.organizationId, organizationId),
-        eq(schema.verificationApplication.status, 'verified'),
-        sql`${schema.verificationApplication.expiresAt} > NOW()`,
-      ),
-    )
-    .limit(1);
-  return !!app;
+async function frozenResourcesFor(organizationId: string): Promise<FrozenResource[]> {
+  const [frozenSeats, frozenBranches] = await Promise.all([
+    entitlementRepository.countFrozenSeats(organizationId),
+    entitlementRepository.countFrozenBranches(organizationId),
+  ]);
+  const resources: FrozenResource[] = [];
+  if (frozenSeats > 0) {
+    resources.push({ kind: 'seat', label: 'Team Seats', count: frozenSeats });
+  }
+  if (frozenBranches > 0) {
+    resources.push({ kind: 'branch', label: 'Branches', count: frozenBranches });
+  }
+  return resources;
 }

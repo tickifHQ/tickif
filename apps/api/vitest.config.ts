@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { integrationEnv } from '@repo/vitest-config/node';
+import { integrationEnv, testEnv } from '@repo/vitest-config/node';
 
 /**
  * Two projects:
@@ -19,6 +19,8 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
+          maxWorkers: 2,
+          env: testEnv(),
           globals: true,
           environment: 'node',
           include: ['tests/**/*.test.ts'],
@@ -30,6 +32,10 @@ export default defineConfig({
           name: 'integration',
           fileParallelism: false,
           maxWorkers: 1,
+          // Integration hooks truncate and reseed the shared API test database. Under the
+          // bounded root gate they can still exceed Vitest's 10s default on loaded runners.
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
           globals: true,
           environment: 'node',
           include: ['tests/**/*.integration.test.ts'],

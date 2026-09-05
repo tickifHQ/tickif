@@ -120,6 +120,11 @@ const envSchema = z.object({
   // web app's NEXT_PUBLIC_WEB_URL default so client- and server-built links
   // resolve to the same origin in every environment.
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  OWNERSHIP_TRANSFER_EXPIRY_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(7 * 24 * 60 * 60),
 
   // SMS provider. Selection is explicit; credentials and workflows are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
@@ -136,6 +141,7 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
+  ORGANIZATION_UPLOAD_SETTLE_SECONDS: z.coerce.number().int().positive().default(300),
   R2_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(3600),
   R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(60),
 
@@ -190,6 +196,20 @@ const envSchema = z.object({
   RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: z.string().min(1).optional(),
   RAZORPAY_PLAN_ID_CORPORATE: z.string().min(1).optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+
+  // Plan-lapse lifecycle windows (E-239). Config-driven because the locked window
+  // is provisional (E-255). Days a subscription stays in `grace` before `locked`,
+  // and in `locked` before `downgraded`. The lifecycle sweep reads these.
+  BILLING_GRACE_PERIOD_DAYS: z.coerce.number().int().min(1).default(7),
+  BILLING_LOCKED_PERIOD_DAYS: z.coerce.number().int().min(1).default(30),
+  // How often the billing lifecycle sweep runs (ms). Day-granularity windows
+  // tolerate an hourly cadence.
+  BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+
+  // Organization closure and retention windows (E-250). A closure remains
+  // owner-recoverable while delisted, then admin-recoverable while archived.
+  ORGANIZATION_DELIST_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  ORGANIZATION_ARCHIVE_RETENTION_DAYS: z.coerce.number().int().min(1).default(365),
 });
 
 /**

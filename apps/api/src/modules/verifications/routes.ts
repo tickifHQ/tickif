@@ -7,6 +7,7 @@ import {
   adminVerificationQueueResponseSchema,
   errorResponseSchema,
   rejectVerificationSchema,
+  revokeVerificationSchema,
   verificationApplicationIdParamSchema,
   verificationDocumentDownloadResponseSchema,
   verificationDocumentUploadResponseSchema,
@@ -175,13 +176,13 @@ const listAdminRoute = createRoute({
   method: 'get',
   path: '/',
   tags: ['Admin Verification'],
-  summary: 'List pending verification applications in FIFO order',
+  summary: 'List verification applications by review lifecycle tab',
   security: [{ cookieAuth: [] }],
   middleware: adminMiddleware,
   request: { query: adminVerificationQueueQuerySchema },
   responses: {
     200: {
-      description: 'Pending verification queue',
+      description: 'Filtered verification review queue',
       content: { 'application/json': { schema: adminVerificationQueueResponseSchema } },
     },
     401: errorJson('Unauthorized'),
@@ -248,7 +249,7 @@ const approveAdminRoute = createRoute({
     403: errorJson('Admin role required'),
     404: errorJson('Verification application not found'),
     409: errorJson('Verification state changed'),
-    422: errorJson('Verification has no reviewable documents'),
+    422: errorJson('Reviewable documents and current eligibility are required'),
   },
 });
 
@@ -276,6 +277,30 @@ const rejectAdminRoute = createRoute({
   },
 });
 
+const revokeAdminRoute = createRoute({
+  method: 'post',
+  path: '/{id}/revoke',
+  tags: ['Admin Verification'],
+  summary: 'Revoke an approved verification and return it to re-review',
+  security: [{ cookieAuth: [] }],
+  middleware: adminMiddleware,
+  request: {
+    params: verificationApplicationIdParamSchema,
+    body: { content: { 'application/json': { schema: revokeVerificationSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Verification returned to re-review',
+      content: { 'application/json': { schema: adminVerificationDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Admin role required'),
+    404: errorJson('Verification application not found'),
+    409: errorJson('Verification state changed'),
+    422: errorJson('A revocation reason is required'),
+  },
+});
+
 export const adminVerificationsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   defaultHook: validationHook,
 })
@@ -298,6 +323,16 @@ export const adminVerificationsRoutes = new OpenAPIHono<{ Variables: AuthVariabl
   .openapi(rejectAdminRoute, async (c) =>
     c.json(
       await verificationsService.reject(
+        c.req.valid('param').id,
+        adminId(c.get('user')),
+        c.req.valid('json'),
+      ),
+      200,
+    ),
+  )
+  .openapi(revokeAdminRoute, async (c) =>
+    c.json(
+      await verificationsService.revokeApproval(
         c.req.valid('param').id,
         adminId(c.get('user')),
         c.req.valid('json'),

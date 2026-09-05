@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
-import { makeSubscription } from '@repo/db/testing';
+import { makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 import { RAZORPAY_EVENT } from '@repo/contracts';
 
 // Mock @repo/config to provide Razorpay plan IDs for the plan_id reverse-lookup tests.
@@ -15,12 +15,14 @@ vi.mock('@repo/config', async (importOriginal) => {
       ...actual.config,
       RAZORPAY_KEY_ID: actual.config.RAZORPAY_KEY_ID || 'rzp_test_ci_mock',
       RAZORPAY_KEY_SECRET: actual.config.RAZORPAY_KEY_SECRET || 'ci_mock_secret',
-      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: actual.config.RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS || 'plan_test_professional_plus',
+      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS:
+        actual.config.RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS || 'plan_test_professional_plus',
       RAZORPAY_PLAN_ID_CORPORATE: actual.config.RAZORPAY_PLAN_ID_CORPORATE || 'plan_test_corporate',
     },
   };
 });
 import { processWebhookEvent } from '../../../src/modules/billing/webhook-service.js';
+import { orgsService } from '../../../src/modules/orgs/service.js';
 
 /**
  * E-117 Webhook integration tests.
@@ -35,11 +37,13 @@ import { processWebhookEvent } from '../../../src/modules/billing/webhook-servic
 function makeChargedPayload(overrides: {
   subscriptionId: string;
   paymentId?: string;
+  paymentStatus?: string;
   amount?: number;
   currentEnd?: number;
   status?: string;
   planId?: string;
   notes?: Record<string, string>;
+  paymentCreatedAt?: number;
 }) {
   return {
     event: RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
@@ -55,9 +59,12 @@ function makeChargedPayload(overrides: {
       },
       payment: {
         entity: {
-          id: overrides.paymentId ?? `pay_test_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          id:
+            overrides.paymentId ?? `pay_test_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          status: overrides.paymentStatus ?? 'captured',
           amount: overrides.amount ?? 299900,
           currency: 'INR',
+          created_at: overrides.paymentCreatedAt ?? Math.floor(Date.now() / 1000),
         },
       },
     },
@@ -67,7 +74,14 @@ function makeChargedPayload(overrides: {
 function makeSubscriptionPayload(
   event: string,
   subscriptionId: string,
-  extra?: { status?: string; notes?: Record<string, string> },
+  extra?: {
+    status?: string;
+    notes?: Record<string, string>;
+    paymentId?: string;
+    paymentStatus?: string;
+    amount?: number;
+    paymentCreatedAt?: number;
+  },
 ) {
   return {
     event,
@@ -80,8 +94,63 @@ function makeSubscriptionPayload(
           current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
         },
       },
+      ...(extra?.paymentId
+        ? {
+            payment: {
+              entity: {
+                id: extra.paymentId,
+                status: extra.paymentStatus ?? 'failed',
+                amount: extra.amount ?? 299900,
+                created_at: extra.paymentCreatedAt ?? Math.floor(Date.now() / 1000),
+                currency: 'INR',
+                subscription_id: subscriptionId,
+              },
+            },
+          }
+        : {}),
     },
   };
+}
+
+async function addOrganizationMembers(
+  organizationId: string,
+  prefix: string,
+  options: { frozen?: boolean } = {},
+) {
+  const users = await Promise.all([
+    makeUser({ email: `${prefix}-owner@example.com` }),
+    makeUser({ email: `${prefix}-member-1@example.com` }),
+    makeUser({ email: `${prefix}-member-2@example.com` }),
+  ]);
+  await db.insert(schema.member).values([
+    {
+      id: `${prefix}-owner`,
+      organizationId,
+      userId: users[0]!.id,
+      role: 'owner',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    },
+    {
+      id: `${prefix}-member-1`,
+      organizationId,
+      userId: users[1]!.id,
+      role: 'member',
+      frozen: options.frozen ?? false,
+      frozenAt: options.frozen ? new Date('2026-08-20T00:00:00.000Z') : null,
+      freezeRank: options.frozen ? 1 : null,
+      createdAt: new Date('2026-08-02T00:00:00.000Z'),
+    },
+    {
+      id: `${prefix}-member-2`,
+      organizationId,
+      userId: users[2]!.id,
+      role: 'member',
+      frozen: options.frozen ?? false,
+      frozenAt: options.frozen ? new Date('2026-08-20T00:00:00.000Z') : null,
+      freezeRank: options.frozen ? 2 : null,
+      createdAt: new Date('2026-08-03T00:00:00.000Z'),
+    },
+  ]);
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -99,7 +168,10 @@ describe('E-117: webhook event processing', () => {
       const payload = makeSubscriptionPayload(
         RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
         'sub_activate_1',
-        { status: 'active', notes: { tier: 'professional_plus', organizationId: sub.organizationId } },
+        {
+          status: 'active',
+          notes: { tier: 'professional_plus', organizationId: sub.organizationId },
+        },
       );
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED, payload);
@@ -180,6 +252,44 @@ describe('E-117: webhook event processing', () => {
         .where(eq(schema.subscription.id, sub.id));
       expect(updated!.planTier).toBe('corporate');
       expect(updated!.razorpayStatus).toBe('active');
+    });
+
+    it('restores frozen seats and branches when Corporate activates', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_activate_restore_members',
+        razorpayStatus: 'created',
+      });
+      await addOrganizationMembers(sub.organizationId, 'activate-restore', { frozen: true });
+      await makeTeam({
+        organizationId: sub.organizationId,
+        frozen: true,
+        frozenAt: new Date('2026-08-20T00:00:00.000Z'),
+        freezeRank: 1,
+      });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+        makeSubscriptionPayload(
+          RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED,
+          'sub_activate_restore_members',
+          { status: 'active', notes: { tier: 'corporate' } },
+        ),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      expect(members).toHaveLength(3);
+      expect(members.every(({ frozen }) => !frozen)).toBe(true);
+      const branches = await db
+        .select({ frozen: schema.team.frozen })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, sub.organizationId));
+      expect(branches.every(({ frozen }) => !frozen)).toBe(true);
     });
 
     it('rejects activation when target tier cannot be determined', async () => {
@@ -307,6 +417,26 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('subscription.charged', () => {
+    it('ignores a charged event without a valid provider payment timestamp', async () => {
+      await makeSubscription({
+        planTier: 'professional_plus',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_charged_invalid_timestamp',
+      });
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_charged_invalid_timestamp',
+        paymentId: 'pay_invalid_timestamp',
+      });
+      payload.payload.payment.entity.created_at = -1;
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+
+      expect(result).toEqual({
+        outcome: 'ignored',
+        reason: 'No valid payment timestamp in charged event',
+      });
+    });
+
     it('records payment and updates subscription period (normal renewal)', async () => {
       const sub = await makeSubscription({
         planTier: 'professional_plus',
@@ -330,6 +460,7 @@ describe('E-117: webhook event processing', () => {
         .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_charge_1'));
       expect(payment).toBeDefined();
       expect(payment!.amount).toBe(299900);
+      expect(payment!.status).toBe('captured');
       expect(payment!.subscriptionId).toBe(sub.id);
       expect(payment!.payload).toBeDefined();
 
@@ -497,6 +628,45 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.preLapseTier).toBeNull();
     });
 
+    it('reactivates a downgraded organization and restores seats and branches', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        preLapseTier: 'corporate',
+        subscriptionState: 'downgraded',
+        razorpaySubscriptionId: 'sub_downgraded_restore_resources',
+        razorpayStatus: 'authenticated',
+      });
+      await addOrganizationMembers(sub.organizationId, 'downgraded-restore', { frozen: true });
+      await makeTeam({
+        organizationId: sub.organizationId,
+        frozen: true,
+        frozenAt: new Date('2026-08-20T00:00:00.000Z'),
+        freezeRank: 1,
+      });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
+        makeChargedPayload({
+          subscriptionId: 'sub_downgraded_restore_resources',
+          paymentId: 'pay_restore_downgraded_resources',
+          amount: 799900,
+          planId: 'plan_test_corporate',
+        }),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      const branches = await db
+        .select({ frozen: schema.team.frozen })
+        .from(schema.team)
+        .where(eq(schema.team.organizationId, sub.organizationId));
+      expect(members.every(({ frozen }) => !frozen)).toBe(true);
+      expect(branches.every(({ frozen }) => !frozen)).toBe(true);
+    });
+
     it('duplicate payment returns duplicate — no second row', async () => {
       await makeSubscription({
         planTier: 'professional_plus',
@@ -540,6 +710,115 @@ describe('E-117: webhook event processing', () => {
       expect(result.outcome).toBe('ignored');
     });
 
+    it('atomically restores a downgraded replacement subscription and its frozen seats', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        preLapseTier: 'corporate',
+        subscriptionState: 'downgraded',
+        razorpaySubscriptionId: 'sub_downgraded_replacement_charge',
+        razorpayStatus: 'created',
+      });
+      await addOrganizationMembers(sub.organizationId, 'downgraded-replacement', {
+        frozen: true,
+      });
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_CHARGED,
+        makeChargedPayload({
+          subscriptionId: 'sub_downgraded_replacement_charge',
+          paymentId: 'pay_downgraded_replacement_charge',
+          amount: 799900,
+          planId: 'plan_test_corporate',
+        }),
+      );
+
+      expect(result.outcome).toBe('processed');
+
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated).toMatchObject({
+        subscriptionState: 'active',
+        planTier: 'corporate',
+        preLapseTier: null,
+        downgradedAt: null,
+      });
+
+      const members = await db
+        .select({ frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      expect(members).toHaveLength(3);
+      expect(members.every(({ frozen }) => !frozen)).toBe(true);
+    });
+
+    it('rolls back the tier and payment when atomic seat restoration fails, then retries', async () => {
+      const sub = await makeSubscription({
+        planTier: 'hobby',
+        preLapseTier: 'corporate',
+        subscriptionState: 'downgraded',
+        razorpaySubscriptionId: 'sub_atomic_restore_rollback',
+        razorpayStatus: 'created',
+      });
+      await addOrganizationMembers(sub.organizationId, 'atomic-restore-rollback', {
+        frozen: true,
+      });
+
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_atomic_restore_rollback',
+        paymentId: 'pay_atomic_restore_rollback',
+        amount: 799900,
+        planId: 'plan_test_corporate',
+      });
+      const reconcileSpy = vi
+        .spyOn(orgsService, 'reconcileMemberSeats')
+        .mockRejectedValueOnce(new Error('injected seat reconciliation failure'));
+
+      await expect(
+        processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload),
+      ).rejects.toThrow('injected seat reconciliation failure');
+
+      const [rolledBack] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(rolledBack).toMatchObject({
+        subscriptionState: 'downgraded',
+        planTier: 'hobby',
+        preLapseTier: 'corporate',
+      });
+      expect(rolledBack!.downgradedAt).not.toBeNull();
+
+      const rolledBackPayments = await db
+        .select()
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_atomic_restore_rollback'));
+      expect(rolledBackPayments).toHaveLength(0);
+
+      const retryResult = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+      expect(retryResult.outcome).toBe('processed');
+      expect(reconcileSpy).toHaveBeenCalledTimes(2);
+      reconcileSpy.mockRestore();
+
+      const [retried] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(retried).toMatchObject({
+        subscriptionState: 'active',
+        planTier: 'corporate',
+        preLapseTier: null,
+        downgradedAt: null,
+      });
+
+      const retriedPayments = await db
+        .select()
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_atomic_restore_rollback'));
+      expect(retriedPayments).toHaveLength(1);
+    });
+
     it('persists raw payload in payment_transaction', async () => {
       await makeSubscription({
         planTier: 'professional_plus',
@@ -578,11 +857,10 @@ describe('E-117: webhook event processing', () => {
         razorpaySubscriptionId: 'sub_fail_1',
       });
 
-      const payload = makeSubscriptionPayload(
-        RAZORPAY_EVENT.PAYMENT_FAILED,
-        'sub_fail_1',
-        { status: 'halted' },
-      );
+      const payload = makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_fail_1', {
+        status: 'halted',
+        paymentId: 'pay_fail_1',
+      });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);
       expect(result.outcome).toBe('processed');
@@ -602,10 +880,9 @@ describe('E-117: webhook event processing', () => {
         razorpaySubscriptionId: 'sub_fail_invalid',
       });
 
-      const payload = makeSubscriptionPayload(
-        RAZORPAY_EVENT.PAYMENT_FAILED,
-        'sub_fail_invalid',
-      );
+      const payload = makeSubscriptionPayload(RAZORPAY_EVENT.PAYMENT_FAILED, 'sub_fail_invalid', {
+        paymentId: 'pay_fail_invalid',
+      });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);
       expect(result.outcome).toBe('invalid_transition');
@@ -620,11 +897,9 @@ describe('E-117: webhook event processing', () => {
         razorpaySubscriptionId: 'sub_halt_1',
       });
 
-      const payload = makeSubscriptionPayload(
-        RAZORPAY_EVENT.SUBSCRIPTION_HALTED,
-        'sub_halt_1',
-        { status: 'halted' },
-      );
+      const payload = makeSubscriptionPayload(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, 'sub_halt_1', {
+        status: 'halted',
+      });
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_HALTED, payload);
       expect(result.outcome).toBe('processed');
@@ -656,6 +931,32 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('subscription.cancelled', () => {
+    it('freezes excess seats when Corporate downgrades to Hobby', async () => {
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_cancel_freeze_members',
+      });
+      await addOrganizationMembers(sub.organizationId, 'cancel-freeze');
+
+      const result = await processWebhookEvent(
+        RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+        makeSubscriptionPayload(
+          RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
+          'sub_cancel_freeze_members',
+          { status: 'cancelled' },
+        ),
+      );
+
+      expect(result.outcome).toBe('processed');
+      const members = await db
+        .select({ role: schema.member.role, frozen: schema.member.frozen })
+        .from(schema.member)
+        .where(eq(schema.member.organizationId, sub.organizationId));
+      expect(members.filter(({ frozen }) => frozen)).toHaveLength(2);
+      expect(members.find(({ role }) => role === 'owner')?.frozen).toBe(false);
+    });
+
     it('from active → sets hobby + clears fields', async () => {
       const sub = await makeSubscription({
         planTier: 'corporate',
@@ -791,6 +1092,37 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('out-of-order events', () => {
+    it('records an older charge without regressing the current period or plan', async () => {
+      const currentPeriodEnd = new Date('2026-11-01T00:00:00.000Z');
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_out_of_order_charge',
+        currentPeriodEnd,
+      });
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_out_of_order_charge',
+        paymentId: 'pay_out_of_order_charge',
+        planId: 'plan_test_professional_plus',
+        currentEnd: Math.floor(new Date('2026-10-01T00:00:00.000Z').getTime() / 1000),
+        paymentCreatedAt: Math.floor(new Date('2026-09-01T00:00:00.000Z').getTime() / 1000),
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+
+      expect(result.outcome).toBe('processed');
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated).toMatchObject({ planTier: 'corporate', currentPeriodEnd });
+      const payments = await db
+        .select()
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_out_of_order_charge'));
+      expect(payments).toHaveLength(1);
+    });
+
     it('stale halted after reactivation is rejected', async () => {
       // Org was in grace, charged reactivated them back to active
       await makeSubscription({
@@ -821,6 +1153,7 @@ describe('E-117: webhook event processing', () => {
       const payload = makeSubscriptionPayload(
         RAZORPAY_EVENT.PAYMENT_FAILED,
         'sub_new_fail_after_reactivation',
+        { paymentId: 'pay_new_fail_after_reactivation' },
       );
 
       const result = await processWebhookEvent(RAZORPAY_EVENT.PAYMENT_FAILED, payload);

@@ -4,6 +4,7 @@ vi.mock('../../../src/modules/media/repository.js', () => ({
   mediaRepository: {
     findProjectOwner: vi.fn(),
     createProcessing: vi.fn(),
+    cancelProcessingReservation: vi.fn(),
     findImageWithOwner: vi.fn(),
     listByProject: vi.fn(),
     roomBelongsToProject: vi.fn(),

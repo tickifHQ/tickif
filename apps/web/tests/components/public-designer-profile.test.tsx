@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+
 const mocks = vi.hoisted(() => ({
   session: null as {
     user: { id: string; email: string; phoneNumber: string | null };
@@ -159,6 +161,32 @@ describe('PublicDesignerProfile', () => {
     expect(within(container).queryByAltText('New on Tickif')).not.toBeInTheDocument();
     expect(within(container).queryByAltText('Established studio')).not.toBeInTheDocument();
     expect(within(container).queryByAltText('Projects published')).not.toBeInTheDocument();
+  });
+
+  it('never presents the studio as verified before current KYC approval', () => {
+    const { container } = render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({
+          badges: ['new', 'projects-published'],
+          isKycVerified: false,
+          sections: {
+            ...makePublicPortfolio().sections,
+            tickifBadge: true,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Verified studio')).not.toBeInTheDocument();
+    expect(screen.queryByText('KYC verified')).not.toBeInTheDocument();
+    expect(within(container).queryByAltText('Identity verified')).not.toBeInTheDocument();
+  });
+
+  it('shows studio verification marks after current KYC approval', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getAllByLabelText('Verified studio')).toHaveLength(4);
+    expect(screen.getByText('KYC verified')).toBeInTheDocument();
   });
 
   it('renders the reviews the API returned, once to assistive technology', () => {

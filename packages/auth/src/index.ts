@@ -1,12 +1,22 @@
 import { betterAuth } from 'better-auth';
+import { APIError, createAuthMiddleware, getAuthoritativeSessionFromCtx } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { phoneNumber, admin, organization, emailOTP } from 'better-auth/plugins';
+import crypto from 'node:crypto';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
-import { ac, roles } from './permissions.js';
-import { sendEmail } from './email.js';
+import { ac, orgAc, orgRoles, roles } from './permissions.js';
+import {
+  organizationMembershipLimit,
+  organizationBranchLimit,
+  requireActiveOrganizationMember,
+  requireOrganizationMember,
+  requireOrganizationRbac,
+  validateOrganizationRoleChange,
+} from './organization-policy.js';
+import { escapeHtml, sendEmail } from './email.js';
 
 assertProductionEmailConfig();
 
@@ -30,19 +40,318 @@ const socialProviders = googleEnabled
   ? { google: { clientId: googleClientId, clientSecret: googleClientSecret } }
   : undefined;
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return entities[character] ?? character;
+const ACTIVE_MEMBER_ORGANIZATION_MUTATIONS = new Set([
+  '/organization/update',
+  '/organization/invite-member',
+  '/organization/cancel-invitation',
+  '/organization/remove-member',
+  '/organization/update-member-role',
+]);
+
+const ACTIVE_MEMBER_ORGANIZATION_READS = new Set([
+  '/organization/get-full-organization',
+  '/organization/get-active-member',
+  '/organization/list-members',
+  '/organization/list-invitations',
+  '/organization/get-active-member-role',
+]);
+
+const LIFECYCLE_ORGANIZATION_MUTATIONS = new Set([
+  '/organization/leave',
+  '/organization/remove-member',
+  '/organization/accept-invitation',
+  '/organization/reject-invitation',
+  '/organization/cancel-invitation',
+]);
+
+const TEAM_CONTEXT_MUTATIONS = new Set([
+  '/organization/set-active',
+  '/organization/set-active-team',
+]);
+
+async function preferredContextForNewSession(userId: string): Promise<{
+  activeOrganizationId: string | null;
+  activeTeamId: string | null;
+}> {
+  const [preference] = await db
+    .select({
+      kind: schema.userContextPreference.contextKind,
+      organizationId: schema.userContextPreference.organizationId,
+      teamId: schema.userContextPreference.teamId,
+    })
+    .from(schema.userContextPreference)
+    .where(eq(schema.userContextPreference.userId, userId))
+    .limit(1);
+
+  if (preference?.kind === 'organization' && preference.organizationId) {
+    const [validMembership] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.member.organizationId, preference.organizationId),
+          eq(schema.member.frozen, false),
+        ),
+      )
+      .limit(1);
+    if (validMembership && !preference.teamId) {
+      return {
+        activeOrganizationId: preference.organizationId,
+        activeTeamId: null,
+      };
+    }
+
+    if (validMembership && preference.teamId) {
+      const [validTeam] = await db
+        .select({ id: schema.teamMember.id })
+        .from(schema.teamMember)
+        .innerJoin(
+          schema.team,
+          and(
+            eq(schema.team.id, preference.teamId),
+            eq(schema.team.organizationId, preference.organizationId),
+            eq(schema.team.frozen, false),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.teamMember.teamId, preference.teamId),
+            eq(schema.teamMember.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (validTeam) {
+        return {
+          activeOrganizationId: preference.organizationId,
+          activeTeamId: preference.teamId,
+        };
+      }
+    }
+
+    if (validMembership) {
+      await db
+        .update(schema.userContextPreference)
+        .set({ teamId: null })
+        .where(eq(schema.userContextPreference.userId, userId));
+      return {
+        activeOrganizationId: preference.organizationId,
+        activeTeamId: null,
+      };
+    }
+
+    await db
+      .update(schema.userContextPreference)
+      .set({ contextKind: 'personal', organizationId: null, teamId: null })
+      .where(eq(schema.userContextPreference.userId, userId));
+  }
+
+  return { activeOrganizationId: null, activeTeamId: null };
+}
+
+function bodyString(body: unknown, key: string): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const value = Reflect.get(body, key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function branchSlug(name: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'branch';
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+async function availableBranchSlug(name: string): Promise<string> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = branchSlug(name);
+    const [profile, organization] = await Promise.all([
+      db
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.slug, candidate))
+        .limit(1),
+      db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.slug, candidate))
+        .limit(1),
+    ]);
+    if (!profile[0] && !organization[0]) return candidate;
+  }
+  throw new APIError('CONFLICT', {
+    code: 'BRANCH_SLUG_CONFLICT',
+    message: 'Could not allocate a unique branch slug',
   });
 }
 
+async function activeInvitationTeamIds(input: {
+  organizationId: string;
+  teamId?: string | null;
+  teamIds?: unknown;
+}): Promise<string[]> {
+  const requestedIds = Array.isArray(input.teamIds)
+    ? input.teamIds.filter((teamId): teamId is string => typeof teamId === 'string' && !!teamId)
+    : (input.teamId?.split(',').filter(Boolean) ?? []);
+  if (requestedIds.length === 0) {
+    const [team] = await db
+      .select({ id: schema.team.id })
+      .from(schema.team)
+      .where(
+        and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)),
+      )
+      .orderBy(schema.team.createdAt, schema.team.id)
+      .limit(1);
+    if (!team) {
+      throw new APIError('BAD_REQUEST', {
+        code: 'ACTIVE_BRANCH_REQUIRED',
+        message: 'The organization has no active branch',
+      });
+    }
+    return [team.id];
+  }
+
+  const teams = await db
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .where(
+      and(
+        inArray(schema.team.id, requestedIds),
+        eq(schema.team.organizationId, input.organizationId),
+        eq(schema.team.frozen, false),
+      ),
+    );
+  if (teams.length !== new Set(requestedIds).size) {
+    throw new APIError('FORBIDDEN', {
+      code: 'BRANCH_INACTIVE',
+      message: 'Branch is inactive',
+    });
+  }
+  return requestedIds;
+}
+
+async function requireActiveTeam(teamId: string): Promise<void> {
+  const [row] = await db
+    .select({ frozen: schema.team.frozen })
+    .from(schema.team)
+    .where(eq(schema.team.id, teamId))
+    .limit(1);
+  if (!row || row.frozen) {
+    throw new APIError('FORBIDDEN', {
+      code: 'BRANCH_INACTIVE',
+      message: 'Branch is inactive',
+    });
+  }
+}
+
+async function protectedMutationOrganizationId(
+  path: string,
+  body: unknown,
+  activeOrganizationId: string | null | undefined,
+): Promise<string | undefined> {
+  const invitationId = bodyString(body, 'invitationId');
+  if (!invitationId) {
+    return bodyString(body, 'organizationId') ?? activeOrganizationId ?? undefined;
+  }
+
+  const [invitation] = await db
+    .select({ organizationId: schema.invitation.organizationId })
+    .from(schema.invitation)
+    .where(eq(schema.invitation.id, invitationId))
+    .limit(1);
+  return invitation?.organizationId;
+}
+
+async function protectedReadOrganizationId(
+  query: unknown,
+  activeOrganizationId: string | null | undefined,
+): Promise<string | undefined> {
+  const organizationId = bodyString(query, 'organizationId');
+  const organizationSlug = bodyString(query, 'organizationSlug');
+  if (organizationId && organizationSlug) {
+    throw new APIError('BAD_REQUEST', {
+      code: 'AMBIGUOUS_ORGANIZATION_SELECTOR',
+      message: 'Provide either organizationId or organizationSlug, not both',
+    });
+  }
+  if (organizationId) return organizationId;
+  if (!organizationSlug) return activeOrganizationId ?? undefined;
+  const [organization] = await db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .where(eq(schema.organization.slug, organizationSlug))
+    .limit(1);
+  return organization?.id;
+}
+
+async function requireOrganizationNotRetained(organizationId: string): Promise<void> {
+  const [retention] = await db
+    .select({ status: schema.organizationRetention.status })
+    .from(schema.organizationRetention)
+    .where(eq(schema.organizationRetention.organizationId, organizationId))
+    .limit(1);
+  if (retention) {
+    throw new APIError('FORBIDDEN', {
+      code: 'ORGANIZATION_RETENTION_ACTIVE',
+      message: 'Organization changes are disabled while deletion or retention is active',
+    });
+  }
+}
+
+async function cancelPendingTransfersForParticipant(input: {
+  organizationId: string;
+  participantUserId: string;
+  actorUserId: string;
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    const cancelledAt = new Date();
+    const cancelled = await tx
+      .update(schema.ownershipTransferRequest)
+      .set({ status: 'cancelled', resolvedAt: cancelledAt, updatedAt: cancelledAt })
+      .where(
+        and(
+          eq(schema.ownershipTransferRequest.organizationId, input.organizationId),
+          eq(schema.ownershipTransferRequest.status, 'pending'),
+          or(
+            eq(schema.ownershipTransferRequest.targetUserId, input.participantUserId),
+            eq(schema.ownershipTransferRequest.initiatorUserId, input.participantUserId),
+          ),
+        ),
+      )
+      .returning({ id: schema.ownershipTransferRequest.id });
+    if (cancelled.length > 0) {
+      await tx.insert(schema.ownershipTransferAuditEvent).values(
+        cancelled.map(({ id }) => ({
+          transferId: id,
+          status: 'cancelled' as const,
+          actorUserId: input.actorUserId,
+          createdAt: cancelledAt,
+        })),
+      );
+    }
+  });
+}
+
+async function removedMember(body: unknown, organizationId: string) {
+  const memberIdOrEmail = bodyString(body, 'memberIdOrEmail');
+  if (!memberIdOrEmail) return undefined;
+  const [member] = await db
+    .select({ userId: schema.member.userId, role: schema.member.role })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+    .where(
+      and(
+        eq(schema.member.organizationId, organizationId),
+        or(eq(schema.member.id, memberIdOrEmail), eq(schema.user.email, memberIdOrEmail)),
+      ),
+    )
+    .limit(1);
+  return member;
+}
 export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   baseURL: config.BETTER_AUTH_URL,
@@ -51,6 +360,123 @@ export const auth = betterAuth({
   // Driven by TRUSTED_ORIGINS env var — no hardcoded URLs.
   // Dev: "http://localhost:3000". Prod same-origin: leave empty.
   trustedOrigins: config.TRUSTED_ORIGINS,
+
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => ({
+          data: { ...session, ...(await preferredContextForNewSession(session.userId)) },
+        }),
+      },
+    },
+  },
+
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      const isProtectedRead = ACTIVE_MEMBER_ORGANIZATION_READS.has(ctx.path);
+      const requiresActiveMembership =
+        isProtectedRead || ACTIVE_MEMBER_ORGANIZATION_MUTATIONS.has(ctx.path);
+      const isLifecycleMutation = LIFECYCLE_ORGANIZATION_MUTATIONS.has(ctx.path);
+      const isTeamContextMutation = TEAM_CONTEXT_MUTATIONS.has(ctx.path);
+      if (!requiresActiveMembership && !isLifecycleMutation && !isTeamContextMutation) return;
+
+      const session = await getAuthoritativeSessionFromCtx(ctx);
+      if (!session) throw new APIError('UNAUTHORIZED');
+      if (ctx.path === '/organization/set-active') {
+        const organizationId = bodyString(ctx.body, 'organizationId');
+        if (!organizationId) {
+          await db
+            .update(schema.session)
+            .set({ activeTeamId: null })
+            .where(eq(schema.session.id, session.session.id));
+          return;
+        }
+        const [activeTeam] = await db
+          .select({ id: schema.team.id })
+          .from(schema.team)
+          .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
+          .where(
+            and(
+              eq(schema.team.organizationId, organizationId),
+              eq(schema.teamMember.userId, session.user.id),
+              eq(schema.team.frozen, false),
+            ),
+          )
+          .orderBy(schema.team.createdAt, schema.team.id)
+          .limit(1);
+        await db
+          .update(schema.session)
+          .set({ activeTeamId: activeTeam?.id ?? null })
+          .where(eq(schema.session.id, session.session.id));
+        return;
+      }
+      if (ctx.path === '/organization/set-active-team') {
+        const teamId = bodyString(ctx.body, 'teamId');
+        if (!teamId) return;
+        const [target] = await db
+          .select({ organizationId: schema.team.organizationId, frozen: schema.team.frozen })
+          .from(schema.team)
+          .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
+          .where(and(eq(schema.team.id, teamId), eq(schema.teamMember.userId, session.user.id)))
+          .limit(1);
+        if (!target || target.frozen) {
+          throw new APIError('FORBIDDEN', {
+            code: 'BRANCH_INACTIVE',
+            message: 'Branch is inactive',
+          });
+        }
+        await requireActiveOrganizationMember(session.user.id, target.organizationId);
+        return;
+      }
+      const organizationId = isProtectedRead
+        ? await protectedReadOrganizationId(ctx.query, session.session.activeOrganizationId)
+        : await protectedMutationOrganizationId(
+            ctx.path,
+            ctx.body,
+            session.session.activeOrganizationId,
+          );
+      if (!organizationId) return;
+
+      if (!isProtectedRead && !isTeamContextMutation) {
+        await requireOrganizationNotRetained(organizationId);
+      }
+
+      if (ctx.path !== '/organization/leave') {
+        if (isLifecycleMutation) await requireOrganizationRbac(organizationId);
+      }
+      const actorRole = requiresActiveMembership
+        ? await requireActiveOrganizationMember(session.user.id, organizationId)
+        : ctx.path === '/organization/leave'
+          ? (await requireOrganizationMember(session.user.id, organizationId)).role
+          : undefined;
+      if (ctx.path === '/organization/leave') {
+        if (actorRole === 'owner') {
+          throw new APIError('BAD_REQUEST', {
+            code: 'SOLE_OWNER_CANNOT_LEAVE',
+            message: 'Transfer ownership or delete the organization before leaving',
+          });
+        }
+        await cancelPendingTransfersForParticipant({
+          organizationId,
+          participantUserId: session.user.id,
+          actorUserId: session.user.id,
+        });
+      }
+      if (
+        ctx.path === '/organization/remove-member' &&
+        (actorRole === 'owner' || actorRole === 'admin')
+      ) {
+        const target = await removedMember(ctx.body, organizationId);
+        if (target && target.role !== 'owner') {
+          await cancelPendingTransfersForParticipant({
+            organizationId,
+            participantUserId: target.userId,
+            actorUserId: session.user.id,
+          });
+        }
+      }
+    }),
+  },
 
   // ─── Session management ───────────────────────────────────────────────────
   // Rolling refresh: session lives 7 days; after 1 day of activity the expiry
@@ -141,9 +567,9 @@ export const auth = betterAuth({
     // Platform RBAC: 4 roles (visitor/designer/admin/superadmin) live on user.role.
     // defaultRole keeps better-auth writing only our values; ac/roles define the four
     // roles so adminRoles validates at startup (rules/auth.md: adminRoles entries MUST
-    // exist in roles). admin and superadmin both pass the /admin/* permission checks.
-    // set-role still does no role-value validation upstream — the user_role pgEnum is
-    // the write backstop (pinned by set-role.integration.test.ts).
+    // exist in roles). Both privileged roles enter the Tickif admin console, but only
+    // superadmin has Better Auth user/session administration permissions. Keeping both
+    // names here also makes Better Auth treat both as protected impersonation targets.
     admin({
       defaultRole: PLATFORM_ROLE.VISITOR,
       ac,
@@ -155,7 +581,36 @@ export const auth = betterAuth({
       // flow. Generic create/delete endpoints would allow profile-less orgs or
       // destructive deletion outside that workflow.
       allowUserToCreateOrganization: false,
+      organizationLimit: Number.MAX_SAFE_INTEGER,
       disableOrganizationDeletion: true,
+      ac: orgAc,
+      roles: orgRoles,
+      creatorRole: 'owner',
+      invitationExpiresIn: 7 * 24 * 60 * 60,
+      cancelPendingInvitationsOnReInvite: true,
+      membershipLimit: async (_user, organization) => organizationMembershipLimit(organization.id),
+      teams: {
+        enabled: true,
+        defaultTeam: { enabled: true },
+        maximumTeams: ({ organizationId }) => organizationBranchLimit(organizationId),
+        allowRemovingAllTeams: false,
+      },
+      schema: {
+        member: {
+          additionalFields: {
+            frozen: { type: 'boolean', required: false, defaultValue: false, input: false },
+            frozenAt: { type: 'date', required: false, input: false },
+            freezeRank: { type: 'number', required: false, input: false },
+          },
+        },
+        team: {
+          additionalFields: {
+            frozen: { type: 'boolean', required: false, defaultValue: false, input: false },
+            frozenAt: { type: 'date', required: false, input: false },
+            freezeRank: { type: 'number', required: false, input: false },
+          },
+        },
+      },
       sendInvitationEmail: async ({ id, email, organization, inviter }) => {
         const invitationUrl = new URL(
           `/invitations/${encodeURIComponent(id)}`,
@@ -168,23 +623,156 @@ export const auth = betterAuth({
             <h2>Join ${escapeHtml(organization.name)} on Tickif</h2>
             <p>${escapeHtml(inviter.user.name)} invited you to join their studio workspace.</p>
             <p><a href="${invitationUrl.toString()}">Accept invitation</a></p>
-            <p>This invitation expires in 48 hours.</p>
+            <p>This invitation expires in 7 days.</p>
             <p>Tickif</p>
           `,
         });
       },
       organizationHooks: {
-        afterAcceptInvitation: async ({ user }) => {
+        beforeCreateTeam: async ({ team, user }) => {
+          if (user) await requireActiveOrganizationMember(user.id, team.organizationId);
+        },
+        afterCreateTeam: async ({ team, user, organization }) => {
+          try {
+            const slug = await availableBranchSlug(team.name);
+            await db.transaction(async (tx) => {
+              if (user) {
+                await tx
+                  .insert(schema.teamMember)
+                  .values({
+                    id: crypto.randomUUID(),
+                    teamId: team.id,
+                    userId: user.id,
+                    createdAt: new Date(),
+                  })
+                  .onConflictDoNothing();
+              }
+              await tx.insert(schema.designerProfile).values({
+                orgId: organization.id,
+                teamId: team.id,
+                userId: user?.id ?? null,
+                displayName: team.name,
+                slug,
+                entityType: 'company',
+              });
+            });
+          } catch (error) {
+            await db.delete(schema.team).where(eq(schema.team.id, team.id));
+            throw error;
+          }
+        },
+        beforeUpdateTeam: async ({ team, user }) => {
+          await requireActiveOrganizationMember(user.id, team.organizationId);
+          if (team.frozen) {
+            throw new APIError('FORBIDDEN', {
+              code: 'BRANCH_INACTIVE',
+              message: 'Branch is inactive',
+            });
+          }
+        },
+        afterUpdateTeam: async ({ team }) => {
+          if (!team) return;
           await db
-            .update(schema.user)
-            .set({ role: 'designer', status: 'active', updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.user.id, user.id),
-                or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
-                inArray(schema.user.status, ['pending', 'active']),
-              ),
-            );
+            .update(schema.designerProfile)
+            .set({ displayName: team.name, updatedAt: new Date() })
+            .where(eq(schema.designerProfile.teamId, team.id));
+        },
+        beforeDeleteTeam: async ({ team, user }) => {
+          if (user) await requireActiveOrganizationMember(user.id, team.organizationId);
+          if (team.frozen) {
+            throw new APIError('FORBIDDEN', {
+              code: 'BRANCH_INACTIVE',
+              message: 'Branch is inactive',
+            });
+          }
+          throw new APIError('BAD_REQUEST', {
+            code: 'BRANCH_DELETE_NOT_ALLOWED',
+            message: 'Branch deletion is disabled because it would delete branch projects',
+          });
+        },
+        beforeAddTeamMember: async ({ team }) => {
+          await requireActiveTeam(team.id);
+        },
+        beforeRemoveTeamMember: async ({ team }) => {
+          await requireActiveTeam(team.id);
+        },
+        beforeCreateInvitation: async ({ invitation, inviter }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+          await requireActiveOrganizationMember(inviter.id, invitation.organizationId);
+          const role = await validateOrganizationRoleChange({
+            organizationId: invitation.organizationId,
+            newRole: invitation.role,
+          });
+          if (role === 'owner') {
+            throw new APIError('BAD_REQUEST', {
+              code: 'OWNER_INVITATION_NOT_ALLOWED',
+              message: 'Ownership must be transferred through an accepted transfer request',
+            });
+          }
+          const teamIds = await activeInvitationTeamIds(invitation);
+          if (!invitation.teamId) return { data: { teamIds } };
+        },
+        beforeUpdateMemberRole: async ({ member, newRole }) => {
+          const role = await validateOrganizationRoleChange({
+            organizationId: member.organizationId,
+            newRole,
+          });
+          if (role === 'owner' || member.role === 'owner') {
+            throw new APIError('BAD_REQUEST', {
+              code: 'OWNER_TRANSFER_REQUIRED',
+              message: 'Ownership changes require an accepted transfer request',
+            });
+          }
+        },
+        beforeAcceptInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+          await activeInvitationTeamIds(invitation);
+        },
+        beforeRejectInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+        },
+        beforeCancelInvitation: async ({ invitation }) => {
+          await requireOrganizationRbac(invitation.organizationId);
+        },
+        afterRejectInvitation: async ({ invitation, organization }) => {
+          const [inviter] = await db
+            .select({ email: schema.user.email, name: schema.user.name })
+            .from(schema.user)
+            .where(eq(schema.user.id, invitation.inviterId))
+            .limit(1);
+          if (!inviter) return;
+          await sendEmail({
+            to: inviter.email,
+            subject: `Invitation to ${organization.name} declined`,
+            idempotencyKey: `organization-invitation-declined-${invitation.id}`,
+            html: `<p>${escapeHtml(invitation.email)} declined the invitation to ${escapeHtml(organization.name)}.</p>`,
+          });
+        },
+        afterAcceptInvitation: async ({ invitation, user }) => {
+          const teamIds = await activeInvitationTeamIds(invitation);
+          await db.transaction(async (tx) => {
+            await tx
+              .insert(schema.teamMember)
+              .values(
+                teamIds.map((teamId) => ({
+                  id: crypto.randomUUID(),
+                  teamId,
+                  userId: user.id,
+                  createdAt: new Date(),
+                })),
+              )
+              .onConflictDoNothing();
+            await tx
+              .update(schema.user)
+              .set({ role: 'designer', status: 'active', updatedAt: new Date() })
+              .where(
+                and(
+                  eq(schema.user.id, user.id),
+                  or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
+                  inArray(schema.user.status, ['pending', 'active']),
+                ),
+              );
+          });
         },
       },
     }),
@@ -220,6 +808,8 @@ export const auth = betterAuth({
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
 export type { PlatformRole } from './permissions.js';
+export { organizationCapabilitiesForRole } from './permissions.js';
+export { organizationMembershipLimit } from './organization-policy.js';
 
 /**
  * Resolve the current better-auth session (user + session) from request headers, keeping
@@ -262,10 +852,15 @@ export async function getSession(headers: Headers, opts?: { disableCookieCache?:
  * Select an authenticated user's active organization through better-auth so
  * membership is validated and both the session row and session cookie agree.
  */
-export function setActiveOrganization(headers: Headers, organizationId: string) {
+export function setActiveOrganization(headers: Headers, organizationId: string | null) {
   return auth.api.setActiveOrganization({
     headers,
     body: { organizationId },
     asResponse: true,
   });
+}
+
+/** Select an authenticated user's active branch through Better Auth. */
+export function setActiveTeam(headers: Headers, teamId: string | null) {
+  return auth.api.setActiveTeam({ headers, body: { teamId }, asResponse: true });
 }

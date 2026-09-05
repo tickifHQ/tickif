@@ -103,6 +103,7 @@ const portfolioProjects: PortfolioProjectsResponse = {
       city: 'Chennai',
       locality: 'OMR',
       status: 'published',
+      archiveReason: null,
       statusGroup: 'published',
       rejectionReasonCode: null,
       moderationNote: null,
@@ -120,6 +121,9 @@ const portfolioProjects: PortfolioProjectsResponse = {
     published: 1,
     changesRequested: 0,
     rejected: 0,
+    archived: 0,
+    delisted: 0,
+    deleted: 0,
   },
   page: 1,
   total: 1,
@@ -183,7 +187,7 @@ describe('DesignerPortfolioSettings', () => {
     });
     await renderSettings();
 
-    const notice = await screen.findByRole('status');
+    const notice = await screen.findByRole('status', { name: 'Portfolio visibility' });
     expect(notice).toHaveTextContent("Your portfolio isn't public yet.");
     expect(notice).toHaveTextContent('a logo and a bio');
   });
@@ -191,7 +195,7 @@ describe('DesignerPortfolioSettings', () => {
   it('drops the visibility notice once every required field is filled', async () => {
     await renderSettings();
 
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Portfolio visibility' })).not.toBeInTheDocument();
   });
 
   it('uses the shared Tip callout in portfolio customizations', async () => {
@@ -462,9 +466,7 @@ describe('DesignerPortfolioSettings', () => {
     });
     await renderSettings();
 
-    await userEvent.click(
-      screen.getByRole('heading', { name: 'Reviews' }).closest('button')!,
-    );
+    await userEvent.click(screen.getByRole('heading', { name: 'Reviews' }).closest('button')!);
     const ratingRow = screen
       .getByText('Show overall ratings on your profile')
       .closest<HTMLElement>('div.flex');
@@ -739,7 +741,7 @@ describe('DesignerPortfolioSettings', () => {
       render(<DesignerPortfolioSettings />);
 
       // Wait for initial load — should show the "not public" notice
-      const notice = await screen.findByRole('status');
+      const notice = await screen.findByRole('status', { name: 'Portfolio visibility' });
       expect(notice).toHaveTextContent("Your portfolio isn't public yet");
 
       // Act: trigger logo upload via file input
@@ -754,7 +756,9 @@ describe('DesignerPortfolioSettings', () => {
       // Assert: after upload, the component should have refreshed portfolio state
       // and the "not public" notice should be gone (missingRequiredFields is now [])
       await waitFor(() => {
-        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole('status', { name: 'Portfolio visibility' }),
+        ).not.toBeInTheDocument();
       });
     });
 

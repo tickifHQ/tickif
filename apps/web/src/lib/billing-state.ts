@@ -1,0 +1,85 @@
+import type { SubscriptionResponse } from '@repo/contracts';
+import type { BillingState } from './billing-types';
+import { PLAN_TIER_PRICES } from './billing-types';
+
+/** Hobby defaults for fixtures; API failure must never imply a free plan. */
+export const HOBBY_DEFAULT: BillingState = {
+  lifecycle: 'active',
+  tier: 'hobby',
+  razorpayStatus: null,
+  cancellationScheduled: false,
+  preLapseTier: null,
+  renewalDate: null,
+  subscriptionId: null,
+  usage: {
+    seats: { label: 'Team Seats', current: 0, limit: 1, unit: 'seats' },
+    branches: { label: 'Branches', current: 0, limit: 1, unit: 'branches' },
+  },
+  billing: null,
+  graceDaysRemaining: null,
+  lockedDaysRemaining: null,
+  lastPaymentFailedDate: null,
+  frozenResources: [],
+  lockedAccess: null,
+};
+
+/** Keep server rendering and client reconciliation on the same complete view model. */
+export function mapSubscriptionToBillingState(sub: SubscriptionResponse): BillingState {
+  const price = PLAN_TIER_PRICES[sub.tier];
+
+  return {
+    lifecycle: sub.lifecycleState,
+    tier: sub.tier,
+    razorpayStatus: sub.razorpayStatus,
+    cancellationScheduled: sub.cancellationScheduled,
+    preLapseTier: sub.preLapseTier,
+    renewalDate: sub.currentPeriodEnd,
+    subscriptionId: sub.razorpaySubscriptionId ?? null,
+    usage: {
+      seats: {
+        label: 'Team Seats',
+        current: sub.seatUsage,
+        limit: sub.entitlements.seatLimit === -1 ? null : sub.entitlements.seatLimit,
+        unit: 'seats',
+      },
+      branches: {
+        label: 'Branches',
+        current: sub.branchUsage,
+        limit: sub.entitlements.branchLimit === -1 ? null : sub.entitlements.branchLimit,
+        unit: 'branches',
+      },
+    },
+    billing:
+      sub.tier !== 'hobby'
+        ? {
+            nextBillingDate: sub.currentPeriodEnd,
+            billingCycle: 'monthly',
+            planAmount: price,
+            tax: 0,
+            total: price,
+            paymentMethodLast4: null,
+            paymentMethodBrand: null,
+          }
+        : null,
+    graceDaysRemaining: sub.graceDaysRemaining,
+    lockedDaysRemaining: sub.lockedDaysRemaining,
+    lastPaymentFailedDate: null,
+    frozenResources: sub.frozenResources.map((resource) => ({
+      label: resource.label,
+      quantity: resource.count,
+      recoverable: true,
+    })),
+    lockedAccess:
+      sub.lifecycleState === 'locked'
+        ? {
+            suspended: [
+              'Team management',
+              'Branch dashboards',
+              'Discovery priority',
+              'Verified badge',
+            ],
+            available: ['Public portfolio', 'Published projects', 'Existing enquiries'],
+          }
+        : null,
+  };
+}

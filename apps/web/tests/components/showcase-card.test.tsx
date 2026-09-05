@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/contracts';
 import { PublicProjectCard } from '../../src/components/public-project-card';
 import { ShowcaseCard } from '../../src/components/showcase-card';
+
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
 
 const feedProject: FeedProject = {
   id: '11111111-1111-4111-8111-111111111111',

@@ -383,17 +383,20 @@ describe('HomePage', () => {
     });
 
     const pagePromise = HomePage({ searchParams: Promise.resolve({ q: 'warm kitchen' }) });
-    await Promise.resolve();
-    const searchStartedBeforeTaxonomy = (fetch as ReturnType<typeof vi.fn>).mock.calls.some(
-      ([input]) => String(input).includes('/api/search?'),
-    );
-
-    for (const resolveTaxonomy of taxonomyResolvers) {
-      resolveTaxonomy(response({ terms: [] }));
+    try {
+      await vi.waitFor(() => {
+        expect(
+          (fetch as ReturnType<typeof vi.fn>).mock.calls.some(([input]) =>
+            String(input).includes('/api/search?'),
+          ),
+        ).toBe(true);
+      });
+    } finally {
+      for (const resolveTaxonomy of taxonomyResolvers) {
+        resolveTaxonomy(response({ terms: [] }));
+      }
     }
     await pagePromise;
-
-    expect(searchStartedBeforeTaxonomy).toBe(true);
   });
 
   it('preserves the current search and filters in budget suggestion links', async () => {

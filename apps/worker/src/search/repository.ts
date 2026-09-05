@@ -50,7 +50,7 @@ export async function findProjectSearchSource(
         featuredAt: schema.project.featuredAt,
       },
       designer: {
-        slug: schema.organization.slug,
+        slug: schema.designerProfile.slug,
         displayName: schema.designerProfile.displayName,
         avgRating: schema.designerProfile.avgRating,
         reviewCount: schema.designerProfile.reviewCount,
@@ -123,7 +123,7 @@ export async function findDesignerSearchSource(
   const [profile] = await db
     .select({
       id: schema.designerProfile.id,
-      slug: schema.organization.slug,
+      slug: schema.designerProfile.slug,
       displayName: schema.designerProfile.displayName,
       bio: schema.designerProfile.bio,
       entityType: schema.designerProfile.entityType,

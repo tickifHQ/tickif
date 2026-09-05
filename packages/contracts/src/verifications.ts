@@ -1,5 +1,28 @@
 import { z } from 'zod';
 
+export const MIN_VERIFICATION_PUBLISHED_PROJECTS = 3;
+
+export const ADMIN_VERIFICATION_QUEUE_TAB = {
+  NEW: 'new',
+  RE_REVIEW: 're_review',
+  ACCEPTED: 'accepted',
+  CHANGES_REQUESTED: 'changes_requested',
+  EXPIRED: 'expired',
+} as const;
+
+export const ADMIN_VERIFICATION_QUEUE_TAB_VALUES = [
+  ADMIN_VERIFICATION_QUEUE_TAB.NEW,
+  ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW,
+  ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED,
+  ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED,
+  ADMIN_VERIFICATION_QUEUE_TAB.EXPIRED,
+] as const;
+
+export const adminVerificationQueueTabSchema = z
+  .enum(ADMIN_VERIFICATION_QUEUE_TAB_VALUES)
+  .meta({ id: 'AdminVerificationQueueTab' });
+export type AdminVerificationQueueTab = z.infer<typeof adminVerificationQueueTabSchema>;
+
 export const VERIFICATION_APPLICATION_STATUS = {
   DRAFT: 'draft',
   PENDING: 'pending',
@@ -93,6 +116,7 @@ export const VERIFICATION_REVIEW_ACTION = {
   RESUBMITTED: 'resubmitted',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+  APPROVAL_REVOKED: 'approval_revoked',
 } as const;
 
 export const VERIFICATION_REVIEW_ACTION_VALUES = [
@@ -100,16 +124,19 @@ export const VERIFICATION_REVIEW_ACTION_VALUES = [
   VERIFICATION_REVIEW_ACTION.RESUBMITTED,
   VERIFICATION_REVIEW_ACTION.APPROVED,
   VERIFICATION_REVIEW_ACTION.REJECTED,
+  VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED,
 ] as const;
 
 export const VERIFICATION_NOTIFICATION_EVENT = {
   APPROVED: 'verification_approved',
   CHANGES_REQUESTED: 'verification_changes_requested',
+  APPROVAL_REVOKED: 'verification_approval_revoked',
 } as const;
 
 export const VERIFICATION_NOTIFICATION_EVENT_VALUES = [
   VERIFICATION_NOTIFICATION_EVENT.APPROVED,
   VERIFICATION_NOTIFICATION_EVENT.CHANGES_REQUESTED,
+  VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED,
 ] as const;
 
 export const VERIFICATION_DOCUMENT_CONTENT_TYPE_VALUES = [
@@ -208,6 +235,7 @@ export type VerificationStateResponse = z.infer<typeof verificationStateResponse
 
 export const adminVerificationQueueQuerySchema = z
   .object({
+    tab: adminVerificationQueueTabSchema.default(ADMIN_VERIFICATION_QUEUE_TAB.NEW),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
   })
@@ -225,8 +253,16 @@ export const adminVerificationQueueItemSchema = z
     organizationName: z.string().min(1),
     designerName: z.string().min(1),
     attempt: z.number().int().positive(),
+    status: z.enum([
+      VERIFICATION_APPLICATION_STATUS.PENDING,
+      VERIFICATION_APPLICATION_STATUS.VERIFIED,
+      VERIFICATION_APPLICATION_STATUS.REJECTED,
+      VERIFICATION_EFFECTIVE_STATUS.EXPIRED,
+    ]),
     submittedAt: z.string().datetime(),
+    reviewedAt: z.string().datetime().nullable(),
     documentCount: z.number().int().nonnegative(),
+    expiresAt: z.string().datetime().nullable(),
   })
   .meta({ id: 'AdminVerificationQueueItem' });
 
@@ -237,6 +273,7 @@ export const adminVerificationQueueResponseSchema = z
     limit: z.number().int().positive(),
     total: z.number().int().nonnegative(),
     totalPages: z.number().int().nonnegative(),
+    tab: adminVerificationQueueTabSchema,
   })
   .meta({ id: 'AdminVerificationQueueResponse' });
 export type AdminVerificationQueueResponse = z.infer<typeof adminVerificationQueueResponseSchema>;
@@ -251,12 +288,19 @@ export const adminVerificationDetailResponseSchema = z
       ownerName: z.string().min(1),
       ownerEmail: z.email(),
       ownerPhone: z.string().nullable(),
-      status: verificationApplicationStatusSchema,
+      status: verificationEffectiveStatusSchema,
       attempt: z.number().int().positive(),
       submittedAt: z.string().datetime().nullable(),
       reviewedAt: z.string().datetime().nullable(),
       approvedAt: z.string().datetime().nullable(),
       expiresAt: z.string().datetime().nullable(),
+    }),
+    eligibility: z.object({
+      phoneVerified: eligibilityCriterionSchema,
+      publishedProjects: eligibilityCriterionSchema.extend({
+        current: z.number().int().nonnegative(),
+        required: z.number().int().positive(),
+      }),
     }),
     documents: z.array(verificationDocumentSchema),
     history: z.array(verificationReviewEventSchema),
@@ -267,10 +311,15 @@ export type AdminVerificationDetailResponse = z.infer<typeof adminVerificationDe
 export const rejectVerificationSchema = z
   .object({
     note: z.string().trim().min(1).max(2_000),
-    rejectedDocumentVersionIds: z.array(z.uuid()).max(20).optional(),
+    rejectedDocumentVersionIds: z.array(z.uuid()).min(1).max(20),
   })
   .meta({ id: 'RejectVerification' });
 export type RejectVerificationInput = z.infer<typeof rejectVerificationSchema>;
+
+export const revokeVerificationSchema = z
+  .object({ note: z.string().trim().min(1).max(2_000) })
+  .meta({ id: 'RevokeVerification' });
+export type RevokeVerificationInput = z.infer<typeof revokeVerificationSchema>;
 
 export const verificationDocumentDownloadResponseSchema = z
   .object({ downloadUrl: z.url() })

@@ -51,6 +51,10 @@ export type FrozenResource = {
 export type BillingState = {
   lifecycle: BillingLifecycleState;
   tier: PlanTier;
+  /** Razorpay's raw subscription status (e.g., 'active', 'cancelled', 'created'). */
+  razorpayStatus: string | null;
+  /** Whether the subscription is scheduled for cancellation at the end of the current period. */
+  cancellationScheduled: boolean;
   /**
    * Paid tier frozen at lapse. Required when `lifecycle === 'downgraded'`
    * (`plan_tier` is Hobby; restoration reads this).

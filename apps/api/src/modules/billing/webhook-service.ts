@@ -1,16 +1,19 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import { config } from '@repo/config';
 import {
   RAZORPAY_EVENT,
   SUBSCRIPTION_STATE,
+  razorpayPaymentCreatedAtSchema,
   type PlanTier,
   type RazorpayEvent,
   type SubscriptionState,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
+import { recordFailedPayment } from './webhook-repository.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -27,10 +30,8 @@ import { invalidateEntitlementCache } from '../../lib/redis.js';
  * - Deferred. Billing notifications depend on E-238's billing_admin role for complete
  *   recipient resolution. Owner-only notifications can be added independently later.
  *
- * Resource freeze/unfreeze:
- * - Deferred to E-239/E-240. No branch/seat freeze infrastructure exists yet.
- *   E-117 restores planTier from preLapseTier on reactivation — that IS the
- *   entitlement restoration (E-119 reads planTier for access decisions).
+ * Member seats are reconciled after every successful or duplicate event. Retrying
+ * a webhook after reconciliation fails therefore repairs the membership state.
  */
 
 // ─── Signature Verification ──────────────────────────────────────────────────
@@ -61,7 +62,7 @@ export function verifyWebhookSignature(
 type SubscriptionRecord = typeof schema.subscription.$inferSelect;
 
 export type WebhookResult =
-  | { outcome: 'processed' }
+  | { outcome: 'processed'; resourcesReconciled?: boolean }
   | { outcome: 'duplicate' }
   | { outcome: 'ignored'; reason: string }
   | { outcome: 'invalid_transition'; reason: string };
@@ -89,36 +90,47 @@ export async function processWebhookEvent(
     .limit(1);
 
   if (!subscription) {
-    return { outcome: 'ignored', reason: `Subscription ${razorpaySubscriptionId} not found locally` };
+    return {
+      outcome: 'ignored',
+      reason: `Subscription ${razorpaySubscriptionId} not found locally`,
+    };
   }
 
   let result: WebhookResult;
 
   switch (event) {
     case RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED:
-      result = await handleActivated(subscription, payload);
+      result = await handleActivated(subscription, payload, razorpaySubscriptionId);
       break;
     case RAZORPAY_EVENT.SUBSCRIPTION_CHARGED:
-      result = await handleCharged(subscription, payload);
+      result = await handleCharged(subscription, payload, razorpaySubscriptionId);
       break;
     case RAZORPAY_EVENT.PAYMENT_FAILED:
-      result = await handlePaymentFailed(subscription, payload);
+      result = await handlePaymentFailed(subscription, payload, razorpaySubscriptionId);
       break;
     case RAZORPAY_EVENT.SUBSCRIPTION_HALTED:
-      result = await handleHalted(subscription, payload);
+      result = await handleHalted(subscription, payload, razorpaySubscriptionId);
       break;
     case RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED:
-      result = await handleCancelled(subscription, payload);
+      result = await handleCancelled(subscription, payload, razorpaySubscriptionId);
       break;
     case RAZORPAY_EVENT.SUBSCRIPTION_PENDING:
-      result = await handlePending(subscription, payload);
+      result = await handlePending(subscription, payload, razorpaySubscriptionId);
       break;
     default:
       return { outcome: 'ignored', reason: `Unhandled event: ${event}` };
   }
 
-  // Invalidate entitlement cache after any successful state/tier change.
-  // This ensures the next entitlement read reflects the webhook-driven update.
+  // A reactivation reconciles seats and branches in its state-change transaction.
+  // Other processed and duplicate events converge both resource types here.
+  const alreadyReconciled = result.outcome === 'processed' && result.resourcesReconciled === true;
+  if ((result.outcome === 'processed' || result.outcome === 'duplicate') && !alreadyReconciled) {
+    await Promise.all([
+      orgsService.reconcileMemberSeats(subscription.organizationId),
+      orgsService.reconcileBranches(subscription.organizationId),
+    ]);
+  }
+
   if (result.outcome === 'processed') {
     await invalidateEntitlementCache(subscription.organizationId);
   }
@@ -136,8 +148,8 @@ export async function processWebhookEvent(
 async function handleActivated(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
 
   // Determine the target tier. During E-116 checkout, planTier stays 'hobby' until
@@ -146,27 +158,59 @@ async function handleActivated(
   // notes.tier (set at creation, may be stale after plan changes).
   //
   // Priority: plan_id config lookup (authoritative) → notes.tier (fallback) → payment amount → reject
-  const targetTier = inferTierFromPlanId(payload) ?? extractTargetTier(payload) ?? inferTierFromPlan(payload);
+  const targetTier =
+    inferTierFromPlanId(payload) ?? extractTargetTier(payload) ?? inferTierFromPlan(payload);
 
   if (!targetTier) {
     // Cannot determine the paid tier — refuse to activate blindly.
     // This prevents an accidentally staying on hobby or wrong tier assignment.
     return {
       outcome: 'ignored',
-      reason: 'Cannot determine target tier from activation payload (no notes.tier, plan_id, or payment amount)',
+      reason:
+        'Cannot determine target tier from activation payload (no notes.tier, plan_id, or payment amount)',
     };
   }
 
-  // If already active with the correct tier, this is a duplicate/replay
-  if (currentState === SUBSCRIPTION_STATE.ACTIVE && subscription.planTier === targetTier) {
-    return { outcome: 'duplicate' };
-  }
-
   return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(schema.subscription)
+      .where(
+        and(
+          eq(schema.subscription.id, subscription.id),
+          eq(schema.subscription.razorpaySubscriptionId, razorpaySubscriptionId),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    if (!current) {
+      return { outcome: 'ignored', reason: 'Subscription is no longer current' };
+    }
+
+    const currentState = current.subscriptionState as SubscriptionState;
+    // A downgraded organization must explicitly start a replacement checkout.
+    // The subscribe flow replaces the old halted ID and records created/authenticated;
+    // a delayed charge for the old halted subscription must remain ignored.
+    if (
+      currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+      current.razorpayStatus !== 'created' &&
+      current.razorpayStatus !== 'authenticated'
+    ) {
+      return {
+        outcome: 'ignored',
+        reason: 'Subscription is downgraded; explicit recovery checkout required',
+      };
+    }
+
+    if (currentState === SUBSCRIPTION_STATE.ACTIVE && current.planTier === targetTier) {
+      return { outcome: 'duplicate' };
+    }
+
     const updates: Partial<typeof schema.subscription.$inferInsert> = {
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
       planTier: targetTier,
       razorpayStatus,
+      cancelAtPeriodEnd: false,
       // Clear any lapse fields (handles reactivation from lapse states)
       graceStartedAt: null,
       lockedAt: null,
@@ -174,17 +218,18 @@ async function handleActivated(
       preLapseTier: null,
     };
 
-    await tx
-      .update(schema.subscription)
-      .set(updates)
-      .where(eq(schema.subscription.id, subscription.id));
+    await tx.update(schema.subscription).set(updates).where(eq(schema.subscription.id, current.id));
 
     // Queue reindex if tier changed
-    if (targetTier && targetTier !== subscription.planTier) {
-      await queueDesignerReindex(tx, subscription.organizationId);
+    if (targetTier !== current.planTier) {
+      await queueDesignerReindex(tx, current.organizationId);
     }
 
-    return { outcome: 'processed' as const };
+    // Keep activation, seat restoration, and branch restoration atomic. If any
+    // resource reconciliation fails, the activation rolls back for a safe retry.
+    await orgsService.reconcileMemberSeats(current.organizationId, new Date(), tx);
+    await orgsService.reconcileBranches(current.organizationId, new Date(), tx);
+    return { outcome: 'processed' as const, resourcesReconciled: true };
   });
 }
 
@@ -204,35 +249,62 @@ async function handleActivated(
 async function handleCharged(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  // Cannot reactivate from downgraded via payment alone (requires explicit action)
-  if (currentState === SUBSCRIPTION_STATE.DOWNGRADED) {
-    return { outcome: 'ignored', reason: 'Subscription is downgraded; charge ignored' };
-  }
-
   const razorpayPaymentId = extractPaymentId(payload);
   if (!razorpayPaymentId) {
     return { outcome: 'ignored', reason: 'No payment ID in charged event' };
+  }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in charged event' };
   }
 
   const amount = extractAmount(payload);
   const currency = extractCurrency(payload) ?? 'INR';
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
-  const currentPeriodEnd = extractCurrentPeriodEnd(payload) ?? new Date();
+  const paymentStatus = extractPaymentStatus(payload) ?? 'captured';
+  const currentPeriodEnd = extractCurrentPeriodEnd(payload);
 
   return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(schema.subscription)
+      .where(
+        and(
+          eq(schema.subscription.id, subscription.id),
+          eq(schema.subscription.razorpaySubscriptionId, razorpaySubscriptionId),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    if (!current) {
+      return { outcome: 'ignored', reason: 'Subscription is no longer current' };
+    }
+
+    const currentState = current.subscriptionState as SubscriptionState;
+    if (
+      currentState === SUBSCRIPTION_STATE.DOWNGRADED &&
+      current.razorpayStatus !== 'created' &&
+      current.razorpayStatus !== 'authenticated'
+    ) {
+      return {
+        outcome: 'ignored',
+        reason: 'Subscription is downgraded; explicit recovery checkout required',
+      };
+    }
+
     // Idempotent insert: UNIQUE on razorpay_payment_id prevents double-processing.
     const [inserted] = await tx
       .insert(schema.paymentTransaction)
       .values({
-        subscriptionId: subscription.id,
+        subscriptionId: current.id,
         razorpayPaymentId,
         amount,
         currency,
-        status: razorpayStatus,
+        status: paymentStatus,
         payload,
+        occurredAt,
         processedAt: new Date(),
       })
       .onConflictDoNothing({ target: schema.paymentTransaction.razorpayPaymentId })
@@ -242,21 +314,33 @@ async function handleCharged(
       return { outcome: 'duplicate' as const };
     }
 
+    // Razorpay may retry older charged events after a newer cycle has already
+    // committed. Keep the payment history entry, but never move entitlement or
+    // plan state backwards using an older billing period.
+    if (
+      currentPeriodEnd &&
+      current.currentPeriodEnd &&
+      currentPeriodEnd < current.currentPeriodEnd
+    ) {
+      return { outcome: 'processed' as const };
+    }
+
     // Build subscription updates based on current state
     const isReactivation =
       currentState === SUBSCRIPTION_STATE.PAYMENT_FAILED ||
       currentState === SUBSCRIPTION_STATE.GRACE ||
-      currentState === SUBSCRIPTION_STATE.LOCKED;
+      currentState === SUBSCRIPTION_STATE.LOCKED ||
+      currentState === SUBSCRIPTION_STATE.DOWNGRADED;
 
     const updates: Partial<typeof schema.subscription.$inferInsert> = {
       subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
       razorpayStatus,
-      currentPeriodEnd,
+      ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
     };
 
     if (isReactivation) {
       // Restore pre-lapse tier and clear all lapse fields
-      updates.planTier = (subscription.preLapseTier as PlanTier) ?? (subscription.planTier as PlanTier);
+      updates.planTier = (current.preLapseTier as PlanTier) ?? (current.planTier as PlanTier);
       updates.graceStartedAt = null;
       updates.lockedAt = null;
       updates.downgradedAt = null;
@@ -270,19 +354,24 @@ async function handleCharged(
     const chargedTier = isReactivation
       ? inferTierFromPlanId(payload)
       : (inferTierFromPlanId(payload) ?? inferTierFromPlan(payload));
-    const currentTier = (updates.planTier ?? subscription.planTier) as PlanTier;
+    const currentTier = (updates.planTier ?? current.planTier) as PlanTier;
     if (chargedTier && chargedTier !== currentTier) {
       updates.planTier = chargedTier;
     }
 
-    await tx
-      .update(schema.subscription)
-      .set(updates)
-      .where(eq(schema.subscription.id, subscription.id));
+    await tx.update(schema.subscription).set(updates).where(eq(schema.subscription.id, current.id));
 
-    const nextTier = (updates.planTier ?? subscription.planTier) as PlanTier;
-    if (nextTier !== subscription.planTier) {
-      await queueDesignerReindex(tx, subscription.organizationId);
+    const nextTier = (updates.planTier ?? current.planTier) as PlanTier;
+    if (nextTier !== current.planTier) {
+      await queueDesignerReindex(tx, current.organizationId);
+    }
+
+    // Restore both resource types inside the subscription transaction. If either
+    // reconciliation fails, the webhook can retry the rolled-back state change.
+    if (isReactivation) {
+      await orgsService.reconcileMemberSeats(current.organizationId, new Date(), tx);
+      await orgsService.reconcileBranches(current.organizationId, new Date(), tx);
+      return { outcome: 'processed' as const, resourcesReconciled: true };
     }
 
     return { outcome: 'processed' as const };
@@ -296,27 +385,38 @@ async function handleCharged(
 async function handlePaymentFailed(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  if (currentState !== SUBSCRIPTION_STATE.ACTIVE) {
-    return {
-      outcome: 'invalid_transition',
-      reason: `Cannot transition from ${currentState} to payment_failed`,
-    };
+  const razorpayPaymentId = extractPaymentId(payload);
+  if (!razorpayPaymentId) {
+    return { outcome: 'ignored', reason: 'No payment ID in failed event' };
+  }
+  const occurredAt = extractPaymentOccurredAt(payload);
+  if (!occurredAt) {
+    return { outcome: 'ignored', reason: 'No valid payment timestamp in failed event' };
   }
 
-  const razorpayStatus = extractRazorpayStatus(payload) ?? 'halted';
+  const outcome = await recordFailedPayment({
+    subscriptionId: subscription.id,
+    razorpaySubscriptionId,
+    razorpayPaymentId,
+    amount: extractAmount(payload),
+    currency: extractCurrency(payload) ?? 'INR',
+    razorpayStatus: extractRazorpayStatus(payload) ?? 'halted',
+    payload,
+    occurredAt,
+  });
 
-  await db
-    .update(schema.subscription)
-    .set({
-      subscriptionState: SUBSCRIPTION_STATE.PAYMENT_FAILED,
-      razorpayStatus,
-    })
-    .where(eq(schema.subscription.id, subscription.id));
-
-  return { outcome: 'processed' };
+  if (outcome === 'not_current') {
+    return { outcome: 'ignored', reason: 'Subscription is no longer current' };
+  }
+  if (outcome === 'invalid_transition') {
+    return {
+      outcome: 'invalid_transition',
+      reason: `Cannot transition from ${subscription.subscriptionState} to payment_failed`,
+    };
+  }
+  return { outcome };
 }
 
 /**
@@ -327,29 +427,44 @@ async function handlePaymentFailed(
 async function handleHalted(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
-    return {
-      outcome: 'invalid_transition',
-      reason: `Cannot transition from ${currentState} to grace`,
-    };
-  }
-
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'halted';
 
-  await db
-    .update(schema.subscription)
-    .set({
-      subscriptionState: SUBSCRIPTION_STATE.GRACE,
-      graceStartedAt: new Date(),
-      preLapseTier: subscription.planTier as PlanTier,
-      razorpayStatus,
-    })
-    .where(eq(schema.subscription.id, subscription.id));
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(schema.subscription)
+      .where(
+        and(
+          eq(schema.subscription.id, subscription.id),
+          eq(schema.subscription.razorpaySubscriptionId, razorpaySubscriptionId),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    if (!current) return { outcome: 'ignored', reason: 'Subscription is no longer current' };
 
-  return { outcome: 'processed' };
+    const currentState = current.subscriptionState as SubscriptionState;
+    if (currentState !== SUBSCRIPTION_STATE.PAYMENT_FAILED) {
+      return {
+        outcome: 'invalid_transition',
+        reason: `Cannot transition from ${currentState} to grace`,
+      };
+    }
+
+    await tx
+      .update(schema.subscription)
+      .set({
+        subscriptionState: SUBSCRIPTION_STATE.GRACE,
+        graceStartedAt: new Date(),
+        preLapseTier: current.planTier as PlanTier,
+        razorpayStatus,
+      })
+      .where(eq(schema.subscription.id, current.id));
+
+    return { outcome: 'processed' };
+  });
 }
 
 /**
@@ -361,15 +476,26 @@ async function handleHalted(
 async function handleCancelled(
   subscription: SubscriptionRecord,
   _payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
-  const currentState = subscription.subscriptionState as SubscriptionState;
-
-  if (currentState === SUBSCRIPTION_STATE.DOWNGRADED) {
-    return { outcome: 'ignored', reason: 'Subscription is downgraded; cancellation ignored' };
-  }
-
   return db.transaction(async (tx) => {
-    const previousTier = subscription.planTier as PlanTier;
+    const [current] = await tx
+      .select()
+      .from(schema.subscription)
+      .where(
+        and(
+          eq(schema.subscription.id, subscription.id),
+          eq(schema.subscription.razorpaySubscriptionId, razorpaySubscriptionId),
+        ),
+      )
+      .limit(1)
+      .for('update');
+    if (!current) return { outcome: 'ignored', reason: 'Subscription is no longer current' };
+    if (current.subscriptionState === SUBSCRIPTION_STATE.DOWNGRADED) {
+      return { outcome: 'ignored', reason: 'Subscription is downgraded; cancellation ignored' };
+    }
+
+    const previousTier = current.planTier as PlanTier;
 
     await tx
       .update(schema.subscription)
@@ -378,17 +504,18 @@ async function handleCancelled(
         subscriptionState: SUBSCRIPTION_STATE.ACTIVE,
         razorpaySubscriptionId: null,
         razorpayStatus: null,
+        cancelAtPeriodEnd: false,
         currentPeriodEnd: null,
         graceStartedAt: null,
         lockedAt: null,
         downgradedAt: null,
         preLapseTier: null,
       })
-      .where(eq(schema.subscription.id, subscription.id));
+      .where(eq(schema.subscription.id, current.id));
 
     // Queue reindex if tier actually changed (cancellation from a paid tier)
     if (previousTier !== 'hobby') {
-      await queueDesignerReindex(tx, subscription.organizationId);
+      await queueDesignerReindex(tx, current.organizationId);
     }
 
     return { outcome: 'processed' as const };
@@ -402,15 +529,24 @@ async function handleCancelled(
 async function handlePending(
   subscription: SubscriptionRecord,
   payload: Record<string, unknown>,
+  razorpaySubscriptionId: string,
 ): Promise<WebhookResult> {
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'pending';
 
-  await db
+  const updated = await db
     .update(schema.subscription)
     .set({ razorpayStatus })
-    .where(eq(schema.subscription.id, subscription.id));
+    .where(
+      and(
+        eq(schema.subscription.id, subscription.id),
+        eq(schema.subscription.razorpaySubscriptionId, razorpaySubscriptionId),
+      ),
+    )
+    .returning({ id: schema.subscription.id });
 
-  return { outcome: 'processed' };
+  return updated.length > 0
+    ? { outcome: 'processed' }
+    : { outcome: 'ignored', reason: 'Subscription is no longer current' };
 }
 
 // ─── Search Reindex ──────────────────────────────────────────────────────────
@@ -419,24 +555,24 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Queue a designer profile reindex when their subscription tier changes.
- * Resolves org → designer_profile, then inserts into the search outbox.
+ * Resolves every branch profile in the org, then inserts into the search outbox.
  */
 async function queueDesignerReindex(tx: Transaction, organizationId: string): Promise<void> {
-  const [profile] = await tx
+  const profiles = await tx
     .select({ id: schema.designerProfile.id })
     .from(schema.designerProfile)
-    .where(eq(schema.designerProfile.orgId, organizationId))
-    .limit(1);
+    .where(eq(schema.designerProfile.orgId, organizationId));
 
-  if (profile) {
-    await recordSearchProjectionEvents(tx, [
-      {
+  if (profiles.length > 0) {
+    await recordSearchProjectionEvents(
+      tx,
+      profiles.map((profile) => ({
         entityKind: 'designer',
         entityId: profile.id,
         operation: 'index',
         sourceUpdatedAt: new Date(),
-      },
-    ]);
+      })),
+    );
   }
 }
 
@@ -463,8 +599,8 @@ function extractPaymentId(payload: Record<string, unknown>): string | null {
 }
 
 function extractAmount(payload: Record<string, unknown>): number {
-  const amount = (payload as { payload?: { payment?: { entity?: { amount?: number } } } })
-    ?.payload?.payment?.entity?.amount;
+  const amount = (payload as { payload?: { payment?: { entity?: { amount?: number } } } })?.payload
+    ?.payment?.entity?.amount;
   return typeof amount === 'number' ? amount : 0;
 }
 
@@ -475,6 +611,20 @@ function extractCurrency(payload: Record<string, unknown>): string | null {
   );
 }
 
+function extractPaymentStatus(payload: Record<string, unknown>): string | null {
+  return (
+    (payload as { payload?: { payment?: { entity?: { status?: string } } } })?.payload?.payment
+      ?.entity?.status ?? null
+  );
+}
+
+function extractPaymentOccurredAt(payload: Record<string, unknown>): Date | null {
+  const value = (payload as { payload?: { payment?: { entity?: { created_at?: unknown } } } })
+    ?.payload?.payment?.entity?.created_at;
+  const parsed = razorpayPaymentCreatedAtSchema.safeParse(value);
+  return parsed.success ? new Date(parsed.data * 1000) : null;
+}
+
 function extractRazorpayStatus(payload: Record<string, unknown>): string | null {
   return (
     (payload as { payload?: { subscription?: { entity?: { status?: string } } } })?.payload
@@ -483,9 +633,8 @@ function extractRazorpayStatus(payload: Record<string, unknown>): string | null 
 }
 
 function extractCurrentPeriodEnd(payload: Record<string, unknown>): Date | null {
-  const end = (
-    payload as { payload?: { subscription?: { entity?: { current_end?: number } } } }
-  )?.payload?.subscription?.entity?.current_end;
+  const end = (payload as { payload?: { subscription?: { entity?: { current_end?: number } } } })
+    ?.payload?.subscription?.entity?.current_end;
   if (typeof end === 'number') return new Date(end * 1000); // Razorpay uses Unix seconds
   return null;
 }
@@ -509,9 +658,8 @@ function extractTargetTier(payload: Record<string, unknown>): PlanTier | null {
  * This is more reliable than notes when Razorpay echoes the plan_id in the payload.
  */
 function inferTierFromPlanId(payload: Record<string, unknown>): PlanTier | null {
-  const planId = (
-    payload as { payload?: { subscription?: { entity?: { plan_id?: string } } } }
-  )?.payload?.subscription?.entity?.plan_id;
+  const planId = (payload as { payload?: { subscription?: { entity?: { plan_id?: string } } } })
+    ?.payload?.subscription?.entity?.plan_id;
   if (!planId) return null;
 
   // Reverse-lookup: which tier has this plan_id in our config?

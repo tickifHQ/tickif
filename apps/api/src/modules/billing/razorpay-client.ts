@@ -110,12 +110,68 @@ export type RazorpaySubscription = {
   current_start: number | null;
   current_end: number | null;
   short_url: string | null;
+  notes?: Record<string, string>;
+  /** True when Razorpay will cancel the subscription after the current cycle. */
+  cancel_at_cycle_end?: boolean;
+  /** Unix timestamp when cancellation was scheduled (cancel_at_cycle_end). Null if not cancelled. */
+  cancelled_at?: number | null;
+  /** Unix timestamp when subscription ended. Null if still active/scheduled. */
+  ended_at?: number | null;
   created_at: number;
 };
 
 export type RazorpayError = {
   error: { code: string; description: string; source: string; step: string; reason: string };
 };
+
+type RazorpayOperation =
+  | 'createPlan'
+  | 'createSubscription'
+  | 'updateSubscription'
+  | 'cancelSubscription'
+  | 'fetchSubscription';
+
+async function requestRazorpay<T>(
+  operation: RazorpayOperation,
+  path: string,
+  init: RequestInit,
+): Promise<T> {
+  const { keyId, keySecret } = getCredentials();
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: authHeaders(keyId, keySecret),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.name : 'NetworkError';
+    throw AppError.badGateway(`Razorpay ${operation} failed: provider unavailable`, {
+      source: 'razorpay',
+      reason,
+    });
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw AppError.badGateway(`Razorpay ${operation} failed: invalid provider response`, {
+      source: 'razorpay',
+      status: response.status,
+    });
+  }
+
+  if (!response.ok) {
+    const providerError = payload as Partial<RazorpayError>;
+    throw AppError.badGateway(
+      `Razorpay ${operation} failed: ${providerError.error?.description ?? response.statusText}`,
+      { razorpayCode: providerError.error?.code, source: 'razorpay' },
+    );
+  }
+
+  return payload as T;
+}
 
 // ─── API Operations ──────────────────────────────────────────────────────────
 
@@ -130,10 +186,8 @@ export async function createPlan(params: {
   period: 'monthly' | 'yearly';
   interval?: number;
 }): Promise<RazorpayPlan> {
-  const { keyId, keySecret } = getCredentials();
-  const response = await fetch(`${baseUrl()}/plans`, {
+  return requestRazorpay<RazorpayPlan>('createPlan', '/plans', {
     method: 'POST',
-    headers: authHeaders(keyId, keySecret),
     body: JSON.stringify({
       period: params.period,
       interval: params.interval ?? 1,
@@ -144,16 +198,6 @@ export async function createPlan(params: {
       },
     }),
   });
-
-  if (!response.ok) {
-    const error = (await response.json()) as RazorpayError;
-    throw AppError.badGateway(
-      `Razorpay createPlan failed: ${error.error?.description ?? response.statusText}`,
-      { razorpayCode: error.error?.code, source: 'razorpay' },
-    );
-  }
-
-  return (await response.json()) as RazorpayPlan;
 }
 
 /**
@@ -165,26 +209,14 @@ export async function createSubscription(params: {
   totalCount?: number;
   notes?: Record<string, string>;
 }): Promise<RazorpaySubscription> {
-  const { keyId, keySecret } = getCredentials();
-  const response = await fetch(`${baseUrl()}/subscriptions`, {
+  return requestRazorpay<RazorpaySubscription>('createSubscription', '/subscriptions', {
     method: 'POST',
-    headers: authHeaders(keyId, keySecret),
     body: JSON.stringify({
       plan_id: params.planId,
       total_count: params.totalCount ?? 120, // ~10 years monthly
       notes: params.notes ?? {},
     }),
   });
-
-  if (!response.ok) {
-    const error = (await response.json()) as RazorpayError;
-    throw AppError.badGateway(
-      `Razorpay createSubscription failed: ${error.error?.description ?? response.statusText}`,
-      { razorpayCode: error.error?.code, source: 'razorpay' },
-    );
-  }
-
-  return (await response.json()) as RazorpaySubscription;
 }
 
 /**
@@ -197,25 +229,17 @@ export async function updateSubscription(params: {
   /** When the plan change takes effect. 'cycle_end' defers to the next billing cycle. */
   scheduleChangeAt?: 'now' | 'cycle_end';
 }): Promise<RazorpaySubscription> {
-  const { keyId, keySecret } = getCredentials();
-  const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}`, {
-    method: 'PATCH',
-    headers: authHeaders(keyId, keySecret),
-    body: JSON.stringify({
-      plan_id: params.planId,
-      schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
-    }),
-  });
-
-  if (!response.ok) {
-    const error = (await response.json()) as RazorpayError;
-    throw AppError.badGateway(
-      `Razorpay updateSubscription failed: ${error.error?.description ?? response.statusText}`,
-      { razorpayCode: error.error?.code, source: 'razorpay' },
-    );
-  }
-
-  return (await response.json()) as RazorpaySubscription;
+  return requestRazorpay<RazorpaySubscription>(
+    'updateSubscription',
+    `/subscriptions/${encodeURIComponent(params.subscriptionId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        plan_id: params.planId,
+        schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
+      }),
+    },
+  );
 }
 
 /**
@@ -227,24 +251,28 @@ export async function cancelSubscription(params: {
   subscriptionId: string;
   cancelAtCycleEnd?: boolean;
 }): Promise<RazorpaySubscription> {
-  const { keyId, keySecret } = getCredentials();
-  const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}/cancel`, {
-    method: 'POST',
-    headers: authHeaders(keyId, keySecret),
-    body: JSON.stringify({
-      cancel_at_cycle_end: params.cancelAtCycleEnd ?? true,
-    }),
-  });
+  return requestRazorpay<RazorpaySubscription>(
+    'cancelSubscription',
+    `/subscriptions/${encodeURIComponent(params.subscriptionId)}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        cancel_at_cycle_end: params.cancelAtCycleEnd ?? true,
+      }),
+    },
+  );
+}
 
-  if (!response.ok) {
-    const error = (await response.json()) as RazorpayError;
-    throw AppError.badGateway(
-      `Razorpay cancelSubscription failed: ${error.error?.description ?? response.statusText}`,
-      { razorpayCode: error.error?.code, source: 'razorpay' },
-    );
-  }
-
-  return (await response.json()) as RazorpaySubscription;
+/**
+ * Fetch a subscription's live state from Razorpay.
+ * Used for reconciliation when webhooks may have been missed.
+ */
+export async function fetchSubscription(subscriptionId: string): Promise<RazorpaySubscription> {
+  return requestRazorpay<RazorpaySubscription>(
+    'fetchSubscription',
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { method: 'GET' },
+  );
 }
 
 /**
@@ -257,6 +285,7 @@ export async function verifyConnectivity(): Promise<boolean> {
     const response = await fetch(`${baseUrl()}/plans?count=1`, {
       method: 'GET',
       headers: authHeaders(keyId, keySecret),
+      signal: AbortSignal.timeout(15_000),
     });
     return response.ok;
   } catch {

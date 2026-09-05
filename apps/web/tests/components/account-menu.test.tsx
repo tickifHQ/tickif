@@ -5,7 +5,10 @@ import { AccountMenu } from '../../src/components/account-menu';
 
 const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
-  session: null as { user: { name: string; email: string | null } } | null,
+  session: null as {
+    user: { name: string; email: string | null; role?: string };
+    session?: { activeOrganizationId?: string | null };
+  } | null,
   isPending: false,
   router: {
     refresh: vi.fn(),
@@ -25,6 +28,37 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('AccountMenu', () => {
+  it.each(['visitor', 'designer'])(
+    'offers personal settings for %s in personal context',
+    async (role) => {
+      mock.session = {
+        user: { name: 'Alice', email: null, role },
+        session: { activeOrganizationId: null },
+      };
+      const user = userEvent.setup();
+      render(<AccountMenu />);
+      await user.click(screen.getByRole('button', { name: /open account menu/i }));
+      expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
+        'href',
+        '/home/settings',
+      );
+    },
+  );
+
+  it('keeps organization settings separate from personal settings', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'designer' },
+      session: { activeOrganizationId: 'org' },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu showProfileSettings />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveAttribute(
+      'href',
+      '/designer/profile',
+    );
+  });
   beforeEach(() => {
     mock.session = null;
     mock.isPending = false;
@@ -71,6 +105,53 @@ describe('AccountMenu', () => {
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
+
+  it('places the designer profile link immediately before sign out and closes on selection', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    const user = userEvent.setup();
+    render(<AccountMenu showLabel showProfileSettings />);
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
+
+    const items = screen.getAllByRole('menuitem');
+    const profile = screen.getByRole('menuitem', { name: 'Profile & settings' });
+    expect(profile).toHaveAttribute('href', '/designer/profile');
+    expect(profile.querySelector('svg')).toHaveClass('lucide-settings');
+    expect(items).toEqual([profile, screen.getByRole('menuitem', { name: 'Sign out' })]);
+    await user.click(profile);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(mock.signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not expose designer settings in other account menus', async () => {
+    mock.session = { user: { name: 'Alice', email: null } };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Profile & settings' })).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])(
+    'shows tab focus and supports keyboard navigation with showLabel=%s',
+    async (showLabel) => {
+      mock.session = { user: { name: 'Alice', email: null } };
+      const user = userEvent.setup();
+      render(<AccountMenu showProfileSettings showLabel={showLabel} />);
+      const trigger = screen.getByRole('button', { name: /open account menu for alice/i });
+      await user.tab();
+      expect(trigger).toHaveFocus();
+      expect(trigger).toHaveClass(
+        'focus-visible:ring-2',
+        'focus-visible:ring-ring',
+        'focus-visible:ring-offset-2',
+        'focus-visible:ring-offset-background',
+      );
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    },
+  );
 
   it('still redirects to login even when signOut rejects', async () => {
     mock.session = { user: { name: 'Alice', email: null } };

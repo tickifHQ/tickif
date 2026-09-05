@@ -12,14 +12,15 @@ vi.mock('../../../src/modules/leads/repository.js', () => ({
     findById: vi.fn(),
     update: vi.fn(),
     create: vi.fn(),
-    findProjectOrganization: vi.fn(),
+    findProjectBranch: vi.fn(),
     budgetBandExists: vi.fn(),
+    findActiveMemberIds: vi.fn(),
     countByStatus: vi.fn(),
   },
 }));
 
 vi.mock('../../../src/modules/orgs/service.js', () => ({
-  orgsService: { isMember: vi.fn() },
+  orgsService: { getCapabilities: vi.fn() },
 }));
 
 const { leadsService } = await import('../../../src/modules/leads/service.js');
@@ -30,6 +31,7 @@ const caller = {
   userId: 'user_1',
   isBanned: false,
   activeOrgId: 'org_1',
+  activeTeamId: 'team_1',
 };
 
 const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord => ({
@@ -39,6 +41,7 @@ const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord =>
   referredProjectTitle: 'Bandra Apartment',
   contactNumber: '+919800000001',
   budgetBandSlug: 'premium',
+  assignedMemberId: null,
   status: 'new',
   receivedAt: new Date('2026-06-26T10:00:00.000Z'),
   ...overrides,
@@ -47,6 +50,7 @@ const leadListRow = (overrides: Partial<LeadListRecord> = {}): LeadListRecord =>
 const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRecord => ({
   ...leadListRow(),
   organizationId: 'org_1',
+  teamId: 'team_1',
   referredProjectId: '22222222-2222-4222-8222-222222222222',
   message: 'Need a renovation',
   notes: null,
@@ -58,7 +62,8 @@ const leadDetailRow = (overrides: Partial<LeadDetailRecord> = {}): LeadDetailRec
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(orgsService.isMember).mockResolvedValue(true);
+  vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
+  vi.mocked(leadsRepository.findActiveMemberIds).mockResolvedValue(['member_1']);
 });
 
 describe('leadsService.list', () => {
@@ -73,6 +78,7 @@ describe('leadsService.list', () => {
     expect(leadsRepository.list).toHaveBeenCalledWith({
       userId: caller.userId,
       activeOrgId: caller.activeOrgId,
+      activeTeamId: caller.activeTeamId,
       status: 'contacted',
       q: 'bandra',
       limit: 12,
@@ -93,12 +99,37 @@ describe('leadsService.list', () => {
     ).rejects.toMatchObject({ status: 422 });
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
+
+  it('lists the organization roll-up without an active branch', async () => {
+    vi.mocked(leadsRepository.list).mockResolvedValue({ items: [], total: 0 });
+
+    await leadsService.list(
+      { status: 'all', page: 1, limit: 12 },
+      { ...caller, activeTeamId: null },
+    );
+
+    expect(leadsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ activeOrgId: 'org_1', activeTeamId: null }),
+    );
+  });
+
+  it('filters assigned access by every active membership belonging to the caller', async () => {
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    vi.mocked(leadsRepository.findActiveMemberIds).mockResolvedValue(['member_1', 'member_1b']);
+    vi.mocked(leadsRepository.list).mockResolvedValue({ items: [], total: 0 });
+
+    await leadsService.list({ status: 'all', page: 1, limit: 12 }, caller);
+
+    expect(leadsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ assignedMemberIds: ['member_1', 'member_1b'] }),
+    );
+  });
 });
 
 describe('leadsService.getById', () => {
   it('requires organization membership for lead reads', async () => {
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
-    vi.mocked(orgsService.isMember).mockResolvedValue(false);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue(null);
 
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toBeInstanceOf(AppError);
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
@@ -114,7 +145,7 @@ describe('leadsService.getById', () => {
     await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
       status: 404,
     });
-    expect(orgsService.isMember).not.toHaveBeenCalled();
+    expect(orgsService.getCapabilities).not.toHaveBeenCalled();
   });
 });
 
@@ -134,7 +165,12 @@ describe('leadsService.counts', () => {
       closed: 2,
       spam: 0,
     });
-    expect(leadsRepository.countByStatus).toHaveBeenCalledWith('org_1', 'bandra');
+    expect(leadsRepository.countByStatus).toHaveBeenCalledWith(
+      'org_1',
+      'bandra',
+      'team_1',
+      undefined,
+    );
   });
 
   it('rejects counts without an active organization', async () => {
@@ -146,6 +182,19 @@ describe('leadsService.counts', () => {
 });
 
 describe('leadsService.update', () => {
+  it('keeps lead mutations branch-bound in organization roll-up context', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+
+    await expect(
+      leadsService.update(
+        leadDetailRow().id,
+        { notes: 'Follow up' },
+        { ...caller, activeTeamId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(leadsRepository.update).not.toHaveBeenCalled();
+  });
+
   it('persists designer notes separately from the homeowner message', async () => {
     const updated = leadDetailRow({ notes: 'Call again on Friday.' });
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
@@ -157,7 +206,7 @@ describe('leadsService.update', () => {
       caller,
     );
 
-    expect(leadsRepository.update).toHaveBeenCalledWith(leadDetailRow().id, {
+    expect(leadsRepository.update).toHaveBeenCalledWith(leadDetailRow().id, 'org_1', {
       notes: 'Call again on Friday.',
     });
     expect(result).toMatchObject({
@@ -165,13 +214,52 @@ describe('leadsService.update', () => {
       notes: 'Call again on Friday.',
     });
   });
+
+  it('allows full-access callers to assign an active member in the same organization', async () => {
+    const updated = leadDetailRow({ assignedMemberId: 'member_2' });
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(leadsRepository.update).mockResolvedValue(updated);
+
+    await expect(
+      leadsService.update(leadDetailRow().id, { assignedMemberId: 'member_2' }, caller),
+    ).resolves.toMatchObject({ assignedMemberId: 'member_2' });
+  });
+
+  it('rejects assignees that are not active members of the organization', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+    vi.mocked(leadsRepository.update).mockResolvedValue('invalid_assignee');
+
+    await expect(
+      leadsService.update(leadDetailRow().id, { assignedMemberId: 'member_2' }, caller),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('limits Members to assigned reads without granting lead mutations', async () => {
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'assigned' } as never);
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'member_1' }),
+    );
+    await expect(
+      leadsService.update(leadDetailRow().id, { notes: 'Follow up' }, caller),
+    ).rejects.toMatchObject({ status: 403 });
+
+    vi.mocked(leadsRepository.findById).mockResolvedValue(
+      leadDetailRow({ assignedMemberId: 'member_2' }),
+    );
+    await expect(leadsService.getById(leadDetailRow().id, caller)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
 });
 
 describe('leadsService.create', () => {
   it('validates organization membership, budget taxonomy, and referred project org', async () => {
-    vi.mocked(orgsService.isMember).mockResolvedValue(true);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(true);
-    vi.mocked(leadsRepository.findProjectOrganization).mockResolvedValue('org_1');
+    vi.mocked(leadsRepository.findProjectBranch).mockResolvedValue({
+      organizationId: 'org_1',
+      teamId: 'team_1',
+    });
     vi.mocked(leadsRepository.create).mockResolvedValue(leadDetailRow());
 
     const result = await leadsService.create(
@@ -188,13 +276,14 @@ describe('leadsService.create', () => {
     expect(leadsRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: 'org_1',
+        teamId: 'team_1',
         budgetBandSlug: 'premium',
       }),
     );
   });
 
   it('rejects invalid budget bands', async () => {
-    vi.mocked(orgsService.isMember).mockResolvedValue(true);
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({ leadScope: 'full' } as never);
     vi.mocked(leadsRepository.budgetBandExists).mockResolvedValue(false);
 
     await expect(

@@ -1,10 +1,8 @@
-import { ilike, inArray, type SQL } from 'drizzle-orm';
+import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
-import {
-  SELF_SERVICE_MODERATION_ACTIONS,
-  VERIFICATION_APPLICATION_STATUS,
-} from '@repo/contracts';
+import type { DbTransaction } from '@repo/db';
+import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -27,6 +25,12 @@ import { projectFeedFilterClauses } from './feed-filters.repository.js';
  * It exposes a framework-free record type and typed methods over the schema.
  */
 export type ProjectRecord = typeof schema.project.$inferSelect;
+export class ProjectSlugUnavailableError extends Error {
+  constructor() {
+    super('Project slug is already reserved');
+    this.name = 'ProjectSlugUnavailableError';
+  }
+}
 export type ProjectRoomRecord = typeof schema.projectRoom.$inferSelect;
 type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
 export type TaxonomyTermRecord = Pick<
@@ -45,8 +49,20 @@ export type ProjectImageDeletionRecord = Pick<
 export type ProjectOwnership = {
   projectId: string;
   designerId: string;
+  organizationId: string;
+  teamId?: string;
   status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
   ownerUserId: string | null;
+};
+
+export type PublicProjectLifecycleRecord = {
+  id: string;
+  title: string;
+  status: ProjectStatus;
+  archiveReason: ProjectRecord['archiveReason'];
+  designerDisplayName: string;
+  designerOrgSlug: string;
 };
 
 export type UploadImageCounts = {
@@ -73,6 +89,7 @@ export type ProjectTransitionPatch = Partial<
     | 'rejectionReasonCode'
     | 'moderationNote'
     | 'featuredAt'
+    | 'archiveReason'
   >
 >;
 
@@ -110,6 +127,7 @@ const emptyUploadImageCounts: UploadImageCounts = {
 export type ListProjectsParams = {
   userId: string;
   activeOrgId: string;
+  activeTeamId: string | null;
   statuses?: ProjectStatus[];
   q?: string;
   limit: number;
@@ -127,6 +145,7 @@ export type ProjectListItemRecord = Pick<
   | 'citySlug'
   | 'localitySlug'
   | 'status'
+  | 'archiveReason'
   | 'rejectionReasonCode'
   | 'moderationNote'
   | 'coverImageId'
@@ -338,7 +357,7 @@ const publicProjectReadColumns = {
   designerId: schema.designerProfile.id,
   designerStatus: schema.designerProfile.status,
   designerDisplayName: schema.designerProfile.displayName,
-  designerOrgSlug: schema.organization.slug,
+  designerOrgSlug: schema.designerProfile.slug,
   designerAvgRating: schema.designerProfile.avgRating,
   designerReviewCount: schema.designerProfile.reviewCount,
   designerEntityType: schema.designerProfile.entityType,
@@ -377,13 +396,43 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
+  async withOrganizationLifecycleReadLock<T>(
+    organizationId: string,
+    run: (tx: DbTransaction) => Promise<T>,
+  ): Promise<T> {
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${organizationId}`}, 0))`,
+      );
+      return run(tx);
+    });
+  },
+
   async list(
     params: ListProjectsParams,
   ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
     const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
-      eq(schema.member.userId, params.userId),
       eq(schema.designerProfile.orgId, params.activeOrgId),
+      sql<boolean>`exists (
+        select 1 from ${schema.member}
+        where ${schema.member.organizationId} = ${schema.designerProfile.orgId}
+          and ${schema.member.userId} = ${params.userId}
+          and ${schema.member.frozen} = false
+      )`,
+      sql<boolean>`exists (
+        select 1 from ${schema.team}
+        where ${schema.team.id} = ${schema.designerProfile.teamId}
+          and ${schema.team.frozen} = false
+      )`,
+      params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,
+      params.activeTeamId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.teamMember}
+            where ${schema.teamMember.teamId} = ${schema.designerProfile.teamId}
+              and ${schema.teamMember.userId} = ${params.userId}
+          )`
+        : undefined,
       params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
       searchPattern
         ? or(
@@ -423,6 +472,7 @@ export const projectsRepository = {
           citySlug: schema.project.citySlug,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
+          archiveReason: schema.project.archiveReason,
           rejectionReasonCode: schema.project.rejectionReasonCode,
           moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
@@ -431,7 +481,6 @@ export const projectsRepository = {
         })
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
         .where(where)
         .orderBy(orderBy)
         .limit(params.limit)
@@ -440,7 +489,6 @@ export const projectsRepository = {
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
         .where(where),
     ]);
 
@@ -450,10 +498,33 @@ export const projectsRepository = {
   async countByStatus(params: {
     userId: string;
     activeOrgId?: string | null;
+    activeTeamId?: string | null;
   }): Promise<ProjectStatusCountRecord[]> {
     const filters = [
-      eq(schema.member.userId, params.userId),
       params.activeOrgId ? eq(schema.designerProfile.orgId, params.activeOrgId) : undefined,
+      params.activeOrgId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.member}
+            where ${schema.member.organizationId} = ${schema.designerProfile.orgId}
+              and ${schema.member.userId} = ${params.userId}
+              and ${schema.member.frozen} = false
+          )`
+        : undefined,
+      params.activeOrgId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.team}
+            where ${schema.team.id} = ${schema.designerProfile.teamId}
+              and ${schema.team.frozen} = false
+          )`
+        : undefined,
+      params.activeTeamId ? eq(schema.designerProfile.teamId, params.activeTeamId) : undefined,
+      params.activeTeamId
+        ? sql<boolean>`exists (
+            select 1 from ${schema.teamMember}
+            where ${schema.teamMember.teamId} = ${schema.designerProfile.teamId}
+              and ${schema.teamMember.userId} = ${params.userId}
+          )`
+        : undefined,
     ].filter((filter) => filter !== undefined);
 
     return db
@@ -463,7 +534,6 @@ export const projectsRepository = {
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .innerJoin(schema.member, eq(schema.designerProfile.orgId, schema.member.organizationId))
       .where(and(...filters))
       .groupBy(schema.project.status);
   },
@@ -637,9 +707,19 @@ export const projectsRepository = {
     designerId: string,
     slug: string,
   ): Promise<ProjectRecord> {
-    const [row] = await db
-      .insert(schema.project)
-      .values({
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`project-slug:${slug}`}, 0))`,
+      );
+      const [tombstone] = await tx
+        .select({ id: schema.projectTombstone.projectId })
+        .from(schema.projectTombstone)
+        .where(eq(schema.projectTombstone.projectSlug, slug))
+        .limit(1);
+      if (tombstone) throw new ProjectSlugUnavailableError();
+      const [row] = await tx
+        .insert(schema.project)
+        .values({
         designerId,
         title: input.title,
         slug,
@@ -656,10 +736,11 @@ export const projectsRepository = {
         completedMonth: input.completedMonth ?? null,
         durationMonths: input.durationMonths ?? null,
         metadata: input.metadata ?? {},
-      })
-      .returning();
-    if (!row) throw new Error('insert returned no row');
-    return row;
+        })
+        .returning();
+      if (!row) throw new Error('insert returned no row');
+      return row;
+    });
   },
 
   async duplicateProject(params: DuplicateProjectParams): Promise<{
@@ -668,6 +749,15 @@ export const projectsRepository = {
   }> {
     return db.transaction(async (tx) => {
       const now = new Date();
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`project-slug:${params.slug}`}, 0))`,
+      );
+      const [tombstone] = await tx
+        .select({ id: schema.projectTombstone.projectId })
+        .from(schema.projectTombstone)
+        .where(eq(schema.projectTombstone.projectSlug, params.slug))
+        .limit(1);
+      if (tombstone) throw new ProjectSlugUnavailableError();
       const [project] = await tx
         .insert(schema.project)
         .values({
@@ -798,6 +888,40 @@ export const projectsRepository = {
       .where(eq(schema.project.id, id))
       .returning();
     return row ?? null;
+  },
+
+  async assignResponsibleMember(input: {
+    projectId: string;
+    organizationId: string;
+    responsibleMemberId: string | null;
+    tx?: DbTransaction;
+  }): Promise<ProjectRecord | 'invalid_member' | null> {
+    const executor = input.tx ?? db;
+    const [row] = await executor
+      .update(schema.project)
+      .set({ responsibleMemberId: input.responsibleMemberId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.project.id, input.projectId),
+          input.responsibleMemberId
+            ? exists(
+                executor
+                  .select({ id: schema.member.id })
+                  .from(schema.member)
+                  .where(
+                    and(
+                      eq(schema.member.id, input.responsibleMemberId),
+                      eq(schema.member.organizationId, input.organizationId),
+                      eq(schema.member.frozen, false),
+                    ),
+                  ),
+              )
+            : undefined,
+        ),
+      )
+      .returning();
+    if (row) return row;
+    return input.responsibleMemberId ? 'invalid_member' : null;
   },
 
   async submitWithUploadCounts(
@@ -1046,59 +1170,34 @@ export const projectsRepository = {
     };
   },
 
-  async deleteProject(id: string): Promise<'deleted' | 'moderated' | 'missing'> {
-    return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ id: schema.project.id })
-        .from(schema.project)
-        .where(eq(schema.project.id, id))
-        .for('update')
-        .limit(1);
-      if (!project) return 'missing';
-
-      // Only a reviewer verdict is worth retaining. A project the designer submitted and then
-      // withdrew has history but no verdict, and blocking on that stranded such drafts
-      // permanently — nothing could ever clear them.
-      const [reviewedEvent] = await tx
-        .select({ id: schema.projectModerationEvent.id })
-        .from(schema.projectModerationEvent)
-        .where(
-          and(
-            eq(schema.projectModerationEvent.projectId, id),
-            notInArray(schema.projectModerationEvent.action, [...SELF_SERVICE_MODERATION_ACTIONS]),
-          ),
-        )
-        .limit(1);
-      const [reviewComment] = await tx
-        .select({ id: schema.projectReviewComment.id })
-        .from(schema.projectReviewComment)
-        .where(eq(schema.projectReviewComment.projectId, id))
-        .limit(1);
-      if (reviewedEvent || reviewComment) return 'moderated';
-
-      // project_id is ON DELETE RESTRICT on purpose, so a moderated project stays undeletable
-      // even if the check above ever regresses. Self-service rows must therefore go explicitly.
-      await tx
-        .delete(schema.projectModerationEvent)
-        .where(eq(schema.projectModerationEvent.projectId, id));
-      await tx.delete(schema.project).where(eq(schema.project.id, id));
-      await recordSearchProjectionEvents(tx, [
-        {
-          entityKind: 'project',
-          entityId: id,
-          operation: 'delete',
-          sourceUpdatedAt: new Date(),
-        },
-      ]);
-      return 'deleted';
-    });
-  },
-
   async findDesignerByOrgId(orgId: string): Promise<{ id: string; orgId: string } | null> {
     const [row] = await db
       .select({ id: schema.designerProfile.id, orgId: schema.designerProfile.orgId })
       .from(schema.designerProfile)
       .where(eq(schema.designerProfile.orgId, orgId))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async findDesignerByTeamId(
+    orgId: string,
+    teamId: string,
+  ): Promise<{ id: string; orgId: string; teamId: string } | null> {
+    const [row] = await db
+      .select({
+        id: schema.designerProfile.id,
+        orgId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
+      })
+      .from(schema.designerProfile)
+      .innerJoin(schema.team, eq(schema.designerProfile.teamId, schema.team.id))
+      .where(
+        and(
+          eq(schema.designerProfile.orgId, orgId),
+          eq(schema.designerProfile.teamId, teamId),
+          eq(schema.team.frozen, false),
+        ),
+      )
       .limit(1);
     return row ?? null;
   },
@@ -1117,7 +1216,10 @@ export const projectsRepository = {
       .select({
         projectId: schema.project.id,
         designerId: schema.project.designerId,
+        organizationId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
         status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
         ownerUserId: schema.designerProfile.userId,
       })
       .from(schema.project)
@@ -1532,6 +1634,64 @@ export const projectsRepository = {
         isKycVerified: row.designerIsKycVerified,
       },
     };
+  },
+
+  /** Minimal retained identity used to distinguish private, delisted, and gone URLs. */
+  async findPublicProjectLifecycleById(id: string): Promise<PublicProjectLifecycleRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.project.id,
+        title: schema.project.title,
+        status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.project.id, id))
+      .limit(1);
+
+    return row ?? null;
+  },
+
+  async findPublicProjectLifecycleBySlug(
+    slug: string,
+  ): Promise<PublicProjectLifecycleRecord | null> {
+    const [row] = await db
+      .select({
+        id: schema.project.id,
+        title: schema.project.title,
+        status: schema.project.status,
+        archiveReason: schema.project.archiveReason,
+        designerDisplayName: schema.designerProfile.displayName,
+        designerOrgSlug: schema.organization.slug,
+      })
+      .from(schema.project)
+      .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+      .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+      .where(eq(schema.project.slug, slug))
+      .limit(1);
+    return row ?? null;
+  },
+
+  async isProjectTombstonedById(id: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.projectTombstone.projectId })
+      .from(schema.projectTombstone)
+      .where(eq(schema.projectTombstone.projectId, id))
+      .limit(1);
+    return !!row;
+  },
+
+  async isProjectTombstonedBySlug(slug: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: schema.projectTombstone.projectId })
+      .from(schema.projectTombstone)
+      .where(eq(schema.projectTombstone.projectSlug, slug))
+      .limit(1);
+    return !!row;
   },
 
   /**

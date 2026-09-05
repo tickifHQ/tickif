@@ -21,12 +21,13 @@ vi.mock('../../../src/modules/billing/subscribe-service.js', () => ({
   subscribeService: {
     createSubscription: vi.fn(),
     changePlan: vi.fn(),
+    paymentMethod: vi.fn(),
+    payments: vi.fn(),
   },
 }));
 
 vi.mock('../../../src/modules/orgs/service.js', () => ({
   orgsService: {
-    findSoleOrganizationForUser: vi.fn().mockResolvedValue(null),
     isMember: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -34,9 +35,44 @@ vi.mock('../../../src/modules/orgs/service.js', () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { getSession } = await import('@repo/auth');
 const { app } = await import('../../../src/app.js');
-const { subscribeService } = await import(
-  '../../../src/modules/billing/subscribe-service.js'
-);
+const { subscribeService } = await import('../../../src/modules/billing/subscribe-service.js');
+
+describe('billing management routes', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('guards payment-method and payment history without a session', async () => {
+    mockUnauthed();
+    expect((await post('/payment-method')).status).toBe(401);
+    expect((await app.request('/api/billing/payments')).status).toBe(401);
+    expect(subscribeService.paymentMethod).not.toHaveBeenCalled();
+    expect(subscribeService.payments).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid payment pagination before reading history', async () => {
+    mockAuthed();
+    expect(
+      (
+        await app.request('/api/billing/payments?offset=-1&limit=500', {
+          headers: { cookie: 'better-auth.session_token=mock-token' },
+        })
+      ).status,
+    ).toBe(400);
+    expect(subscribeService.payments).not.toHaveBeenCalled();
+  });
+
+  it('uses only the active session organization for history', async () => {
+    mockAuthed();
+    vi.mocked(subscribeService.payments).mockResolvedValue({ items: [], nextOffset: null });
+    const response = await app.request('/api/billing/payments?offset=20&limit=20', {
+      headers: { cookie: 'better-auth.session_token=mock-token' },
+    });
+    expect(response.status).toBe(200);
+    expect(subscribeService.payments).toHaveBeenCalledWith(
+      { userId: 'user-owner', activeOrgId: 'org-1' },
+      { offset: 20, limit: 20 },
+    );
+  });
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

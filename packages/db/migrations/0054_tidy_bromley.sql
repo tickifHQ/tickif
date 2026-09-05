@@ -1,0 +1,1 @@
+ALTER TYPE "public"."organization_purge_manifest_item_kind" ADD VALUE 'razorpay_subscription';

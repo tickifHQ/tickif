@@ -1,9 +1,11 @@
-import { db, schema, eq, and, desc, sql } from '@repo/db';
+import { db, schema, eq, and, sql } from '@repo/db';
 
 export type DashboardProfileContext = {
   profileId: string;
   orgId: string;
   orgSlug: string;
+  teamId: string;
+  profileSlug: string;
   portfolioSlug: string | null;
 };
 
@@ -16,12 +18,15 @@ export const dashboardRepository = {
   async findProfileContext(input: {
     userId: string;
     orgId: string;
+    teamId?: string | null;
   }): Promise<DashboardProfileContext | null> {
     const [row] = await db
       .select({
         profileId: schema.designerProfile.id,
         orgId: schema.designerProfile.orgId,
         orgSlug: schema.organization.slug,
+        teamId: schema.designerProfile.teamId,
+        profileSlug: schema.designerProfile.slug,
         portfolioSlug: schema.designerPortfolio.portfolioSlug,
       })
       .from(schema.designerProfile)
@@ -32,9 +37,12 @@ export const dashboardRepository = {
         eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
       )
       .where(
-        and(eq(schema.member.userId, input.userId), eq(schema.designerProfile.orgId, input.orgId)),
+        and(
+          eq(schema.member.userId, input.userId),
+          eq(schema.designerProfile.orgId, input.orgId),
+          input.teamId ? eq(schema.designerProfile.teamId, input.teamId) : undefined,
+        ),
       )
-      .orderBy(desc(schema.designerProfile.updatedAt))
       .limit(1);
 
     return row ?? null;

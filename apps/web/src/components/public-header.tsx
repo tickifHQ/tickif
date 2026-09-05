@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
@@ -8,9 +9,11 @@ import { PublicNavigation } from '@/components/public-navigation';
 
 /** Public discovery header from the Figma home frame. Admin/designer chrome stays on the shared SiteNav. */
 export function PublicHeader({
+  contextSwitcher,
   isAuthenticated = false,
   userRole = null,
 }: {
+  contextSwitcher?: ReactNode;
   isAuthenticated?: boolean;
   userRole?: string | null;
 }) {
@@ -27,12 +30,15 @@ export function PublicHeader({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
-            <Link href={listYourWorkHref}>
-              <ListChevronsUpDown className="size-4" aria-hidden />
-              List your work
-            </Link>
-          </Button>
+          {contextSwitcher}
+          {contextSwitcher ? null : (
+            <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
+              <Link href={listYourWorkHref}>
+                <ListChevronsUpDown className="size-4" aria-hidden />
+                List your work
+              </Link>
+            </Button>
+          )}
           {isAuthenticated ? (
             <AccountMenu />
           ) : (
@@ -45,6 +51,7 @@ export function PublicHeader({
           )}
         </div>
       </div>
+      <PublicNavigation mobile />
     </header>
   );
 }

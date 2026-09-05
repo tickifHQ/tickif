@@ -1,8 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { isPublicPath, proxy } from '../proxy';
 
 describe('isPublicPath', () => {
+  it('allows the directory without exposing similarly prefixed workspace routes', () => {
+    expect(isPublicPath('/designers')).toBe(true);
+    expect(isPublicPath('/designers/')).toBe(true);
+    expect(isPublicPath('/designers-private')).toBe(false);
+    expect(isPublicPath('/designer/dashboard')).toBe(false);
+  });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('allows public designer profile routes', () => {
     expect(isPublicPath('/d/anika-spaces')).toBe(true);
   });
@@ -32,13 +42,36 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/onboarding')).toBe(false);
   });
 
-  it('preserves the protected path and query when redirecting to login', () => {
-    const response = proxy(new NextRequest('http://localhost:3000/enquiries?status=open&page=2'));
+  it('preserves the protected path and query when redirecting to login', async () => {
+    const response = await proxy(
+      new NextRequest('http://localhost:3000/enquiries?status=open&page=2'),
+    );
     const location = response.headers.get('location');
 
     expect(response.status).toBe(307);
     if (!location) throw new Error('Expected proxy to provide a login redirect location.');
     expect(new URL(location).pathname).toBe('/login');
     expect(new URL(location).searchParams.get('callbackURL')).toBe('/enquiries?status=open&page=2');
+  });
+
+  it('returns 410 at the public Next.js URL when the API marks a project deleted', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 410 }));
+
+    const response = await proxy(
+      new NextRequest('http://localhost:3000/projects/77777777-7777-4777-8777-777777777777'),
+    );
+
+    expect(response.status).toBe(410);
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
+  });
+
+  it('continues to the page for public project URLs that are not permanently gone', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+
+    const response = await proxy(
+      new NextRequest('http://localhost:3000/projects/11111111-1111-4111-8111-111111111111'),
+    );
+
+    expect(response.headers.get('x-middleware-next')).toBe('1');
   });
 });

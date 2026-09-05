@@ -18,10 +18,11 @@ export type VisitorCaller = {
 };
 
 function assertEligibleVisitor(caller: VisitorCaller): void {
-  // This self-service API is visitor-only by design; superadmin does not bypass the role gate.
   const hasActiveLifecycle =
     caller.status === ACCOUNT_STATUS.PENDING || caller.status === ACCOUNT_STATUS.ACTIVE;
-  if (caller.isBanned || caller.role !== PLATFORM_ROLE.VISITOR || !hasActiveLifecycle) {
+  const hasPersonalProfileRole =
+    caller.role === PLATFORM_ROLE.VISITOR || caller.role === PLATFORM_ROLE.DESIGNER;
+  if (caller.isBanned || !hasPersonalProfileRole || !hasActiveLifecycle) {
     throw AppError.forbidden('Visitor profile access is not permitted');
   }
 }

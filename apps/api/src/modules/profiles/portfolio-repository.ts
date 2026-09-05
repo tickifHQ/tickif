@@ -74,7 +74,7 @@ type Handle = typeof db | Tx;
  * Is `slug` free for `excludeProfileId` to claim?
  *
  * `findPublicBySlug` resolves `/d/{slug}` against `designer_portfolio.portfolio_slug`
- * **or** `organization.slug`, so the two share one namespace and both have to be
+ * **or** `designer_profile.slug`, so the two share one namespace and both have to be
  * checked here. Checking only the portfolio table would let a designer claim another
  * org's slug and, because the resolver ranks a `portfolio_slug` match first, serve
  * their own portfolio at that org's established public URL — or 404 it outright by
@@ -102,6 +102,17 @@ async function slugAvailable(
     .limit(1);
   if (portfolioHit) return false;
 
+  const profileConditions = [eq(schema.designerProfile.slug, slug)];
+  if (excludeProfileId) {
+    profileConditions.push(sql`${schema.designerProfile.id} != ${excludeProfileId}`);
+  }
+  const [profileHit] = await handle
+    .select({ id: schema.designerProfile.id })
+    .from(schema.designerProfile)
+    .where(and(...profileConditions))
+    .limit(1);
+  if (profileHit) return false;
+
   // A designer's own org slug stays claimable: it already resolves to them, so
   // typing it into the custom-slug field should not report a conflict with itself.
   const orgConditions = [eq(schema.organization.slug, slug)];
@@ -122,6 +133,57 @@ async function slugAvailable(
 }
 
 export const portfolioRepository = {
+  async reserveLogoUpload(
+    profileId: string,
+    resourceKey: string,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      const [candidate] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, profileId))
+        .limit(1);
+      if (!candidate) return false;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+      );
+      const [current] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .innerJoin(
+          schema.organization,
+          eq(schema.organization.id, schema.designerProfile.orgId),
+        )
+        .where(
+          and(
+            eq(schema.designerProfile.id, profileId),
+            eq(schema.designerProfile.orgId, candidate.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!current) return false;
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, candidate.organizationId))
+        .limit(1);
+      if (retention) return false;
+      await tx.insert(schema.organizationUploadLease).values({
+        resourceKey,
+        organizationId: candidate.organizationId,
+        expiresAt,
+      });
+      return true;
+    });
+  },
+
+  async releaseUploadLease(resourceKey: string): Promise<void> {
+    await db
+      .delete(schema.organizationUploadLease)
+      .where(eq(schema.organizationUploadLease.resourceKey, resourceKey));
+  },
+
   /** Find portfolio by designer profile ID. */
   async findByProfileId(profileId: string): Promise<PortfolioRecord | null> {
     const [row] = await db
@@ -162,7 +224,7 @@ export const portfolioRepository = {
     const [row] = await db
       .select({
         profile: schema.designerProfile,
-        orgSlug: schema.organization.slug,
+        orgSlug: schema.designerProfile.slug,
         portfolio: schema.designerPortfolio,
         isKycVerified: sql<boolean>`exists (
           select 1 from ${schema.verificationApplication}
@@ -179,7 +241,10 @@ export const portfolioRepository = {
       )
       .where(
         and(
-          or(eq(schema.designerPortfolio.portfolioSlug, slug), eq(schema.organization.slug, slug)),
+          or(
+            eq(schema.designerPortfolio.portfolioSlug, slug),
+            eq(schema.designerProfile.slug, slug),
+          ),
           eq(schema.designerProfile.status, 'active'),
           sql`coalesce(${schema.designerPortfolio.publicLinkEnabled}, true)`,
         ),

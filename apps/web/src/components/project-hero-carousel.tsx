@@ -48,7 +48,7 @@ export function ProjectHeroCarousel({
       <div
         role="img"
         aria-label={`${projectTitle} images unavailable`}
-        className="grid aspect-[16/7] min-h-72 place-items-center rounded-xl bg-muted text-sm text-muted-foreground"
+        className="grid aspect-[16/7] min-h-72 w-full place-items-center rounded-xl bg-muted text-sm text-muted-foreground"
       >
         Project images are unavailable
       </div>

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
+  assignProjectResponsibleMemberSchema,
   createProjectRoomSchema,
   createProjectSchema,
   deleteProjectImageResponseSchema,
@@ -20,7 +21,7 @@ import {
   projectDetailResponseSchema,
   publicImageDetailParamSchema,
   publicImageDetailResponseSchema,
-  publicProjectDetailResponseSchema,
+  publicProjectPageResponseSchema,
   projectImageAttachmentSchema,
   projectImageIdParamSchema,
   projectIdParamSchema,
@@ -78,6 +79,7 @@ function caller(user: AuthVariables['user'], session?: AuthVariables['session'])
     userRole: user.role ?? '',
     isBanned,
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
   };
 }
 
@@ -147,9 +149,22 @@ const publicProjectByIdRoute = createRoute({
     200: {
       description:
         'Published project read model with rooms, gallery, designer, and recommendations',
-      content: { 'application/json': { schema: publicProjectDetailResponseSchema } },
+      content: { 'application/json': { schema: publicProjectPageResponseSchema } },
     },
     404: errorJson('Project not found or not published'),
+    410: errorJson('Project permanently deleted'),
+  },
+});
+
+const publicProjectStatusRoute = createRoute({
+  method: 'head',
+  path: '/public/{id}',
+  tags: ['Projects'],
+  summary: 'Check whether a retained public project URL is permanently gone',
+  request: { params: projectIdParamSchema },
+  responses: {
+    204: { description: 'The project URL is not permanently gone' },
+    410: errorJson('Project permanently deleted'),
   },
 });
 
@@ -202,11 +217,36 @@ const updateProjectRoute = createRoute({
   },
 });
 
+const assignResponsibleMemberRoute = createRoute({
+  method: 'patch',
+  path: '/{id}/responsible-member',
+  tags: ['Projects'],
+  summary: 'Assign an active organization member to a project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    params: projectIdParamSchema,
+    body: {
+      content: { 'application/json': { schema: assignProjectResponsibleMemberSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Updated project responsibility',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Organization owner or admin access required'),
+    404: errorJson('Project not found'),
+    422: errorJson('Responsible member must be active in this organization'),
+  },
+});
+
 const deleteProjectRoute = createRoute({
   method: 'delete',
   path: '/{id}',
   tags: ['Projects'],
-  summary: 'Delete an owned editable project',
+  summary: 'Mark an owned project deleted while retaining its audit data',
   security: [{ cookieAuth: [] }],
   middleware: [requireAuth] as const,
   request: { params: projectIdParamSchema },
@@ -218,7 +258,47 @@ const deleteProjectRoute = createRoute({
     401: errorJson('Unauthorized'),
     403: errorJson('Caller cannot delete this project'),
     404: errorJson('Project not found'),
-    409: errorJson('Only draft or changes-requested projects can be deleted'),
+    409: errorJson('Project is already deleted or governed by organization retention'),
+  },
+});
+
+const archiveProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/archive',
+  tags: ['Projects'],
+  summary: 'Archive an owned draft or published project',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Archived project',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot archive this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Only draft or published projects can be archived'),
+  },
+});
+
+const restoreProjectRoute = createRoute({
+  method: 'post',
+  path: '/{id}/restore',
+  tags: ['Projects'],
+  summary: 'Restore an archived project to draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: { params: projectIdParamSchema },
+  responses: {
+    200: {
+      description: 'Restored project draft',
+      content: { 'application/json': { schema: projectDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Caller cannot restore this project'),
+    404: errorJson('Project not found'),
+    409: errorJson('Project is not archived'),
   },
 });
 
@@ -526,6 +606,7 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
           content: { 'application/json': { schema: galleryResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
+        410: errorJson('Project permanently deleted'),
       },
     }),
     async (c) => {
@@ -572,10 +653,19 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     );
     return c.json(result, 200);
   })
+  .openapi(publicProjectStatusRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    await projectsService.assertPublicProjectNotDeleted(id);
+    c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return c.body(null, 204);
+  })
   .openapi(publicProjectByIdRoute, async (c) => {
     const { id } = c.req.valid('param');
     const result = await projectsService.getPublicById(id);
     c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    if ('availability' in result && result.availability === 'unavailable') {
+      c.header('X-Robots-Tag', 'noindex');
+    }
     return c.json(result, 200);
   })
   .openapi(getRoute, async (c) => {
@@ -597,6 +687,25 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(updateProjectRoute, async (c) => {
     const { id } = c.req.valid('param');
     const project = await projectsService.update(
+      id,
+      c.req.valid('json'),
+      caller(c.get('user'), c.get('session')),
+    );
+    return c.json(project, 200);
+  })
+  .openapi(archiveProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.archive(id, caller(c.get('user'), c.get('session')));
+    return c.json(result, 200);
+  })
+  .openapi(restoreProjectRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const result = await projectsService.restore(id, caller(c.get('user'), c.get('session')));
+    return c.json(result, 200);
+  })
+  .openapi(assignResponsibleMemberRoute, async (c) => {
+    const { id } = c.req.valid('param');
+    const project = await projectsService.assignResponsibleMember(
       id,
       c.req.valid('json'),
       caller(c.get('user'), c.get('session')),
@@ -689,17 +798,23 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   })
   .openapi(withdrawRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.withdraw(id, caller(c.get('user')));
+    const result = await projectsService.withdraw(id, caller(c.get('user'), c.get('session')));
     return c.json(result, 200);
   })
   .openapi(moderationHistoryRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.moderationHistory(id, caller(c.get('user')));
+    const result = await projectsService.moderationHistory(
+      id,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   .openapi(reviewCommentsRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await projectsService.reviewComments(id, caller(c.get('user')));
+    const result = await projectsService.reviewComments(
+      id,
+      caller(c.get('user'), c.get('session')),
+    );
     return c.json(result, 200);
   })
   // --- Public read endpoints (E-195) ---
@@ -717,12 +832,16 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
           content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
+        410: errorJson('Project permanently deleted'),
       },
     }),
     async (c) => {
       const { slug } = c.req.valid('param');
-      const result = await projectsService.getPublicBySlug(slug);
+      const result = await projectsService.getPublicPageBySlug(slug);
       c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      if ('availability' in result && result.availability === 'unavailable') {
+        c.header('X-Robots-Tag', 'noindex');
+      }
       return c.json(result, 200);
     },
   );

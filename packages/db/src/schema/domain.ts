@@ -30,8 +30,9 @@ import {
   VERIFICATION_DOCUMENT_TYPE_VALUES,
   VERIFICATION_NOTIFICATION_EVENT_VALUES,
   VERIFICATION_REVIEW_ACTION_VALUES,
+  OWNERSHIP_TRANSFER_STATUS_VALUES,
 } from '@repo/contracts';
-import { user, organization } from './auth.js';
+import { user, organization, member, team } from './auth.js';
 
 /**
  * Domain schema — first vertical slice.
@@ -50,11 +51,79 @@ export const projectStatusEnum = pgEnum('project_status', [
   'published',
   'rejected',
   'changes_requested',
+  'archived',
+  'delisted',
+  'deleted',
+]);
+
+export const projectArchiveReasonEnum = pgEnum('project_archive_reason', [
+  'manual',
+  'organization_retention',
 ]);
 
 export const interactionEventTypeEnum = pgEnum(
   'interaction_event_type',
   INTERACTION_EVENT_TYPE_VALUES,
+);
+
+export const ownershipTransferStatusEnum = pgEnum(
+  'ownership_transfer_status',
+  OWNERSHIP_TRANSFER_STATUS_VALUES,
+);
+
+export const ownershipTransferRequest = pgTable(
+  'ownership_transfer_request',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    initiatorUserId: text('initiator_user_id').references(() => user.id, { onDelete: 'set null' }),
+    targetUserId: text('target_user_id').references(() => user.id, { onDelete: 'set null' }),
+    targetMemberId: text('target_member_id').notNull(),
+    status: ownershipTransferStatusEnum('status').default('pending').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex('ownership_transfer_pending_organization_uniq')
+      .on(t.organizationId)
+      .where(sql`${t.status} = 'pending'`),
+    index('ownership_transfer_target_status_idx').on(t.targetUserId, t.status),
+    index('ownership_transfer_expiry_idx')
+      .on(t.expiresAt)
+      .where(sql`${t.status} = 'pending'`),
+    check(
+      'ownership_transfer_distinct_parties_check',
+      sql`${t.initiatorUserId} <> ${t.targetUserId}`,
+    ),
+    check(
+      'ownership_transfer_resolution_check',
+      sql`(${t.status} = 'pending' and ${t.resolvedAt} is null) or (${t.status} <> 'pending' and ${t.resolvedAt} is not null)`,
+    ),
+  ],
+);
+
+export const ownershipTransferAuditEvent = pgTable(
+  'ownership_transfer_audit_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transferId: uuid('transfer_id')
+      .notNull()
+      .references(() => ownershipTransferRequest.id, { onDelete: 'cascade' }),
+    status: ownershipTransferStatusEnum('status').notNull(),
+    actorUserId: text('actor_user_id').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('ownership_transfer_audit_status_uniq').on(t.transferId, t.status),
+    index('ownership_transfer_audit_transfer_idx').on(t.transferId, t.createdAt),
+  ],
 );
 
 export const moderationActionEnum = pgEnum('moderation_action', [
@@ -67,6 +136,12 @@ export const moderationActionEnum = pgEnum('moderation_action', [
   'reject',
   'unpublish',
   'metadata_corrected',
+  'archive',
+  'restore',
+  'delete',
+  'organization_delist',
+  'organization_archive',
+  'organization_restore',
 ]);
 
 export const projectReviewCommentStatusEnum = pgEnum('project_review_comment_status', [
@@ -216,15 +291,20 @@ export const designerProfile = pgTable(
   'designer_profile',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Owning organization (unique — 1 profile per org)
+    // Billing/verification owner. Multiple branch profiles may share an organization.
     orgId: text('org_id')
       .notNull()
-      .unique()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    // Operational branch boundary. Exactly one public profile belongs to each team.
+    teamId: text('team_id')
+      .notNull()
+      .unique()
+      .references(() => team.id, { onDelete: 'cascade' }),
     // Creator/audit trail (not the ownership key)
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     entityType: entityTypeEnum('entity_type').notNull().default('individual'),
     displayName: text('display_name').notNull(),
+    slug: text('slug').notNull().unique(),
     bio: text('bio'),
     logoImageId: text('logo_image_id'), // R2 media key (FK deferred to media epic)
     status: profileStatusEnum('status').notNull().default('draft'),
@@ -252,10 +332,9 @@ export const designerProfile = pgTable(
   },
   (t) => [
     index('designer_profile_org_idx').on(t.orgId),
+    index('designer_profile_team_idx').on(t.teamId),
     index('designer_profile_status_idx').on(t.status),
-    uniqueIndex('designer_profile_user_id_unique')
-      .on(t.userId)
-      .where(sql`${t.userId} IS NOT NULL`),
+    index('designer_profile_user_idx').on(t.userId),
     // Paired with `project_title_trgm_idx` — the discovery feed's degraded text search
     // ORs the designer's display name into the same `ILIKE '%q%'` predicate.
     index('designer_profile_display_name_trgm_idx').using('gin', t.displayName.op('gin_trgm_ops')),
@@ -289,10 +368,15 @@ export const project = pgTable(
     designerId: uuid('designer_id')
       .notNull()
       .references(() => designerProfile.id, { onDelete: 'cascade' }),
+    // Internal responsibility only. Public project ownership remains with the organization.
+    responsibleMemberId: text('responsible_member_id').references(() => member.id, {
+      onDelete: 'set null',
+    }),
     title: text('title').notNull(),
     slug: text('slug').notNull().unique(),
     description: text('description'),
     status: projectStatusEnum('status').default('draft').notNull(),
+    archiveReason: projectArchiveReasonEnum('archive_reason'),
     // Project upload drafts store taxonomy slugs denormalized for ergonomic edits;
     // services validate slugs on write while profile footprint remains FK-backed for search.
     propertyTypeSlug: text('property_type_slug'),
@@ -324,6 +408,7 @@ export const project = pgTable(
   (t) => [
     index('project_status_idx').on(t.status),
     index('project_designer_idx').on(t.designerId),
+    index('project_responsible_member_idx').on(t.responsibleMemberId),
     index('project_designer_status_updated_idx').on(t.designerId, t.status, t.updatedAt),
     index('project_city_idx').on(t.citySlug),
     index('project_published_budget_recommendation_idx')
@@ -497,7 +582,13 @@ export const lead = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => team.id, { onDelete: 'cascade' }),
     referredProjectId: uuid('referred_project_id').references(() => project.id, {
+      onDelete: 'set null',
+    }),
+    assignedMemberId: text('assigned_member_id').references(() => member.id, {
       onDelete: 'set null',
     }),
     name: text('name').notNull(),
@@ -513,8 +604,11 @@ export const lead = pgTable(
   },
   (t) => [
     index('lead_organization_idx').on(t.organizationId),
+    index('lead_team_idx').on(t.teamId),
     index('lead_referred_project_idx').on(t.referredProjectId),
+    index('lead_assigned_member_idx').on(t.assignedMemberId),
     index('lead_org_status_received_idx').on(t.organizationId, t.status, t.receivedAt),
+    index('lead_team_status_received_idx').on(t.teamId, t.status, t.receivedAt),
   ],
 );
 
@@ -894,6 +988,12 @@ export const verificationApplication = pgTable(
     index('verification_application_verified_expiry_idx')
       .on(t.expiresAt, t.id)
       .where(sql`${t.status} = 'verified'`),
+    index('verification_application_verified_review_queue_idx')
+      .on(t.reviewedAt, t.id)
+      .where(sql`${t.status} = 'verified'`),
+    index('verification_application_rejected_review_queue_idx')
+      .on(t.reviewedAt, t.id)
+      .where(sql`${t.status} = 'rejected'`),
     index('verification_application_reviewer_idx').on(t.reviewedByUserId),
   ],
 );
@@ -1288,6 +1388,7 @@ export const subscription = pgTable(
     subscriptionState: subscriptionStateEnum('subscription_state').notNull().default('active'),
     razorpaySubscriptionId: text('razorpay_subscription_id').unique(),
     razorpayStatus: text('razorpay_status'),
+    cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     graceStartedAt: timestamp('grace_started_at', { withTimezone: true }),
     lockedAt: timestamp('locked_at', { withTimezone: true }),
@@ -1396,6 +1497,7 @@ export const paymentTransaction = pgTable(
     currency: text('currency').notNull().default('INR'),
     status: text('status').notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -1404,7 +1506,7 @@ export const paymentTransaction = pgTable(
       .notNull(),
   },
   (t) => [
-    index('payment_transaction_subscription_idx').on(t.subscriptionId),
+    index('payment_transaction_subscription_occurred_idx').on(t.subscriptionId, t.occurredAt),
     index('payment_transaction_status_idx').on(t.status),
     check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],

@@ -27,13 +27,7 @@ export type FeedFacetKey =
   | 'themes';
 
 type FeedTaxonomyKind =
-  | 'city'
-  | 'bhk'
-  | 'property_type'
-  | 'scope'
-  | 'budget_band'
-  | 'room'
-  | 'theme';
+  'city' | 'bhk' | 'property_type' | 'scope' | 'budget_band' | 'room' | 'theme';
 
 export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   key: FeedFilterKey;
@@ -169,6 +163,7 @@ export function parseFeedQuery(value: string | string[] | undefined): string {
 export function feedPageHref(
   input: Record<string, string | string[] | undefined>,
   page: number,
+  base = '/',
 ): string {
   const params = new URLSearchParams();
 
@@ -181,7 +176,7 @@ export function feedPageHref(
 
   if (page > 1) params.set('page', String(page));
   const query = params.toString();
-  return query ? `/?${query}` : '/';
+  return query ? `${base}?${query}` : base;
 }
 
 /** Return whether a query key belongs to the public feed filter set. */

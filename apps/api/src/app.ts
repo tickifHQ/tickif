@@ -23,11 +23,17 @@ import { orgsRoutes } from './modules/orgs/routes.js';
 import { enquiriesRoutes } from './modules/enquiries/routes.js';
 import { interactionsRoutes } from './modules/interactions/routes.js';
 import { savedProjectsRoutes } from './modules/saved-projects/routes.js';
+import { projectLikesRoutes } from './modules/project-likes/routes.js';
 import { visitorsRoutes } from './modules/visitors/routes.js';
+import { personalAccountRoutes } from './modules/personal-account/routes.js';
 import { adminVerificationsRoutes, verificationsRoutes } from './modules/verifications/routes.js';
 import { subscribeRoutes } from './modules/billing/subscribe-routes.js';
 import { webhookRoutes } from './modules/billing/webhook-routes.js';
 import { entitlementRoutes } from './modules/billing/entitlement-routes.js';
+import {
+  adminOrganizationRetentionRoutes,
+  organizationRetentionRoutes,
+} from './modules/organization-retention/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -69,6 +75,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
   .route('/api/admin/verifications', adminVerificationsRoutes)
   .route('/api/admin/reviews', adminReviewsRoutes)
   .route('/api/admin/projects', adminProjectsRoutes)
@@ -82,11 +89,14 @@ export const app = base
   .route('/api/leads', leadsRoutes)
   .route('/api/bookings', bookingsRoutes)
   .route('/api/orgs', orgsRoutes)
+  .route('/api/orgs/retention', organizationRetentionRoutes)
   .route('/api/reports', reportsRoutes)
   .route('/api/enquiries', enquiriesRoutes)
   .route('/api/interactions', interactionsRoutes)
   .route('/api/saved-projects', savedProjectsRoutes)
+  .route('/api/project-likes', projectLikesRoutes)
   .route('/api/visitors', visitorsRoutes)
+  .route('/api/personal-account', personalAccountRoutes)
   .route('/api/verifications', verificationsRoutes)
   .route('/api/discovery', discoveryRoutes)
   .route('/api/search', searchRoutes)

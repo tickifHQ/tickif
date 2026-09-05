@@ -4,14 +4,14 @@ import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
-import { getCurrentOrgRole, hasBillingAccess } from '@/lib/current-org-role';
+import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-role';
 
 /** Designer workspace chrome. Requires role: designer, admin, or superadmin. */
 export default async function DesignerLayout({ children }: { children: ReactNode }) {
   const session = await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
-  const [profile, orgRole] = await Promise.all([
+  const [profile, orgCapabilities] = await Promise.all([
     requireCurrentDesignerProfile(),
-    getCurrentOrgRole(),
+    getCurrentOrgCapabilities(),
   ]);
   const studioName = profile.displayName.trim() || session.user.name?.trim() || 'Your studio';
   const studioLocation =
@@ -22,7 +22,7 @@ export default async function DesignerLayout({ children }: { children: ReactNode
       activeOrganizationId={profile.organization.id}
       studioName={studioName}
       studioLocation={studioLocation}
-      isOwner={hasBillingAccess(orgRole)}
+      isOwner={hasBillingAccess(orgCapabilities)}
     >
       <ProtectedBfcacheGuard />
       {children}

@@ -8,6 +8,7 @@ import { dashboardRepository, type ProjectStatusCount } from './repository.js';
 type OverviewInput = {
   userId: string;
   orgId: string | null;
+  teamId?: string | null;
 };
 
 function countProjectBucket(
@@ -27,15 +28,20 @@ export const dashboardService = {
     const profile = await dashboardRepository.findProfileContext({
       userId: input.userId,
       orgId: input.orgId,
+      teamId: input.teamId,
     });
     if (!profile) {
       throw AppError.forbidden('Designer profile required');
     }
 
     const [completion, counts, leadCounts] = await Promise.all([
-      profilesService.getCompletion({ userId: input.userId, orgId: profile.orgId }),
+      profilesService.getCompletion({
+        userId: input.userId,
+        orgId: profile.orgId,
+        teamId: profile.teamId,
+      }),
       dashboardRepository.countProjectsByStatus(profile.profileId),
-      leadsService.countForOrganization(profile.orgId),
+      leadsService.countForOrganization(profile.orgId, profile.teamId),
     ]);
 
     const published = countProjectBucket(counts, ['published']);
@@ -57,7 +63,7 @@ export const dashboardService = {
         total: leadCounts.total,
         new: leadCounts.new,
       },
-      shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.orgSlug),
+      shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
     };
   },
 };

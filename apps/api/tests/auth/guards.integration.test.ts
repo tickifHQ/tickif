@@ -44,6 +44,12 @@ function sampleApp() {
   app.get('/session-org', requireRole('designer'), (c) =>
     c.json({ activeOrganizationId: c.get('session')?.activeOrganizationId ?? null }),
   );
+  app.get('/session-context', requireRole('designer'), (c) =>
+    c.json({
+      activeOrganizationId: c.get('session')?.activeOrganizationId ?? null,
+      activeTeamId: c.get('session')?.activeTeamId ?? null,
+    }),
+  );
   app.get(
     '/projects/:id/manage',
     requireOwnership(async (c) => {
@@ -184,7 +190,7 @@ describe('RBAC guards (integration, E-87)', () => {
     expect((await get(app, `/org-resources/${orgA}/manage`, outsider.cookie)).status).toBe(403);
   });
 
-  it('activates the sole organization for a legacy session with no active organization', async () => {
+  it('keeps a sole organization member in personal context until they select it', async () => {
     const app = sampleApp();
     const designer = await createRoleSession('+919800000060', 'designer');
     const organizationId = await seedOrgWithMember(designer.userId);
@@ -199,15 +205,15 @@ describe('RBAC guards (integration, E-87)', () => {
     const response = await get(app, '/session-org', designer.cookie);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ activeOrganizationId: organizationId });
+    expect(await response.json()).toEqual({ activeOrganizationId: null });
     const repairedCookie = mergeResponseCookies(designer.cookie, response);
     const repairedSession = await getSession(new Headers({ cookie: repairedCookie }));
-    expect(repairedSession?.session.activeOrganizationId).toBe(organizationId);
+    expect(repairedSession?.session.activeOrganizationId).toBeNull();
     const [session] = await db
       .select({ activeOrganizationId: schema.session.activeOrganizationId })
       .from(schema.session)
       .where(eq(schema.session.userId, designer.userId));
-    expect(session?.activeOrganizationId).toBe(organizationId);
+    expect(session?.activeOrganizationId).toBeNull();
   });
 
   it('does not guess an active organization for a multi-org legacy session', async () => {
@@ -233,6 +239,43 @@ describe('RBAC guards (integration, E-87)', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ activeOrganizationId: null });
+  });
+
+  it('preserves organization roll-up when reconciliation clears the session branch', async () => {
+    const app = sampleApp();
+    const designer = await createRoleSession('+919800000065', 'designer');
+    const organizationId = await seedOrgWithMember(designer.userId);
+    const teamId = `remaining-team-${designer.userId}`;
+    await db.insert(schema.team).values({
+      id: teamId,
+      organizationId,
+      name: 'Remaining Branch',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `remaining-team-member-${designer.userId}`,
+      teamId,
+      userId: designer.userId,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: organizationId, activeTeamId: null })
+      .where(eq(schema.session.userId, designer.userId));
+
+    const response = await get(app, '/session-context', designer.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      activeOrganizationId: organizationId,
+      activeTeamId: null,
+    });
+    const [session] = await db
+      .select({ activeTeamId: schema.session.activeTeamId })
+      .from(schema.session)
+      .where(eq(schema.session.userId, designer.userId));
+    expect(session?.activeTeamId).toBeNull();
   });
 
   /**

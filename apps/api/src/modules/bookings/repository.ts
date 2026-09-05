@@ -6,6 +6,7 @@ export type BookingRecord = typeof schema.consultationBooking.$inferSelect;
 export type BookingSlotRecord = BookingRecord['preferredSlots'][number];
 
 export type BookingViewRecord = BookingRecord & {
+  designerTeamId: string;
   organizationName: string;
   organizationSlug: string;
   requesterName: string;
@@ -37,6 +38,7 @@ export type CreateBookingResult =
 export type ListBookingsParams = {
   requesterId?: string;
   organizationId?: string;
+  designerTeamId?: string;
   status?: BookingStatus;
   limit: number;
   offset: number;
@@ -56,6 +58,7 @@ function bookingProjection() {
   return {
     id: schema.consultationBooking.id,
     organizationId: schema.consultationBooking.organizationId,
+    designerTeamId: schema.designerProfile.teamId,
     designerProfileId: schema.consultationBooking.designerProfileId,
     requesterId: schema.consultationBooking.requesterId,
     referredProjectId: schema.consultationBooking.referredProjectId,
@@ -73,7 +76,7 @@ function bookingProjection() {
     createdAt: schema.consultationBooking.createdAt,
     updatedAt: schema.consultationBooking.updatedAt,
     organizationName: schema.organization.name,
-    organizationSlug: schema.organization.slug,
+    organizationSlug: schema.designerProfile.slug,
     requesterName: schema.user.name,
     requesterEmail: schema.user.email,
     requesterPhoneNumber: schema.user.phoneNumber,
@@ -127,6 +130,9 @@ export const bookingsRepository = {
       params.organizationId
         ? eq(schema.consultationBooking.organizationId, params.organizationId)
         : undefined,
+      params.designerTeamId
+        ? eq(schema.designerProfile.teamId, params.designerTeamId)
+        : undefined,
       params.status ? eq(schema.consultationBooking.status, params.status) : undefined,
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
@@ -143,6 +149,10 @@ export const bookingsRepository = {
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.consultationBooking)
+        .innerJoin(
+          schema.designerProfile,
+          eq(schema.consultationBooking.designerProfileId, schema.designerProfile.id),
+        )
         .where(where),
     ]);
 
@@ -155,6 +165,7 @@ export const bookingsRepository = {
         .select({
           id: schema.designerProfile.id,
           organizationId: schema.designerProfile.orgId,
+          teamId: schema.designerProfile.teamId,
           displayName: schema.designerProfile.displayName,
           phoneNumber: sql<string | null>`coalesce(
             nullif(btrim(${schema.designerProfile.phone}), ''),
@@ -219,6 +230,7 @@ export const bookingsRepository = {
 
       await tx.insert(schema.lead).values({
         organizationId: designer.organizationId,
+        teamId: designer.teamId,
         referredProjectId: params.referredProjectId ?? null,
         name: params.requesterName,
         contactNumber: params.requesterPhoneNumber,

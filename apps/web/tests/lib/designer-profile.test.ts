@@ -21,9 +21,8 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-const { getProfileCompletion, requireCurrentDesignerProfile } = await import(
-  '../../src/lib/designer-profile'
-);
+const { getProfileCompletion, requireCurrentDesignerProfile } =
+  await import('../../src/lib/designer-profile');
 
 describe('requireCurrentDesignerProfile', () => {
   beforeEach(() => {
@@ -50,11 +49,11 @@ describe('requireCurrentDesignerProfile', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/designer/select-studio');
   });
 
-  it('keeps genuine profile authorization failures on the unauthorized page', async () => {
+  it('routes inactive memberships to the leave-only recovery page', async () => {
     mock.getProfile.mockResolvedValue({ ok: false, status: 403 });
 
     await expect(requireCurrentDesignerProfile()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
+    expect(mock.redirect).toHaveBeenCalledWith('/designer/manage-membership');
   });
 
   it('surfaces service failures instead of misreporting them as authorization failures', async () => {
@@ -68,9 +67,7 @@ describe('requireCurrentDesignerProfile', () => {
 
   it('loads and validates profile completion through the shared server helper', async () => {
     const completion = { steps: [], score: 75, missing: ['Publish a project'] };
-    mock.getCompletion.mockResolvedValue(
-      new Response(JSON.stringify(completion), { status: 200 }),
-    );
+    mock.getCompletion.mockResolvedValue(new Response(JSON.stringify(completion), { status: 200 }));
 
     await expect(getProfileCompletion()).resolves.toEqual({ ok: true, data: completion });
     expect(mock.getCompletion).toHaveBeenCalledWith(

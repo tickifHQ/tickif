@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
   isPending: false,
   error: null as Error | null,
   setActive: vi.fn(),
-  router: { refresh: vi.fn() },
+  router: { refresh: vi.fn(), push: vi.fn() },
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -21,8 +21,11 @@ vi.mock('@/lib/auth-client', () => ({
       isPending: mock.isPending,
       error: mock.error,
     }),
-    organization: { setActive: mock.setActive },
   },
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: { api: { orgs: { context: { $put: mock.setActive } } } },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -38,11 +41,12 @@ describe('DesignerOrganizationSwitcher', () => {
     mock.isPending = false;
     mock.error = null;
     mock.setActive.mockReset();
-    mock.setActive.mockResolvedValue({ data: mock.organizations[1], error: null });
+    mock.setActive.mockResolvedValue({ ok: true });
     mock.router.refresh.mockReset();
+    mock.router.push.mockReset();
   });
 
-  it('lists only the memberships returned by the auth organization API', async () => {
+  it('lists My Tickif before the memberships returned by the auth organization API', async () => {
     const user = userEvent.setup();
     render(
       <DesignerOrganizationSwitcher
@@ -52,10 +56,29 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
 
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveTextContent('My Tickif');
     expect(screen.getByRole('menuitem', { name: /Studio One.*Current/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Studio Two/i })).toBeInTheDocument();
+  });
+
+  it('switches to My Tickif and opens the personal workspace', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
+    await user.click(screen.getByRole('menuitem', { name: /My Tickif/i }));
+
+    expect(mock.setActive).toHaveBeenCalledWith({ json: { kind: 'personal' } });
+    expect(mock.router.push).toHaveBeenCalledWith('/home');
   });
 
   it('switches to another membership and refreshes server-rendered org data', async () => {
@@ -68,17 +91,17 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
-    expect(mock.setActive).toHaveBeenCalledWith({ organizationId: 'org-2' });
+    expect(mock.setActive).toHaveBeenCalledWith({
+      json: { kind: 'organization', organizationId: 'org-2' },
+    });
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('shows a busy state and blocks repeated switches while the request is pending', async () => {
-    let resolveSwitch:
-      | ((value: { data: (typeof mock.organizations)[number]; error: null }) => void)
-      | undefined;
+    let resolveSwitch: ((value: { ok: boolean }) => void) | undefined;
     mock.setActive.mockReturnValue(
       new Promise((resolve) => {
         resolveSwitch = resolve;
@@ -94,7 +117,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    const trigger = screen.getByRole('button', { name: 'Switch context' });
     await user.click(trigger);
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
@@ -108,7 +131,7 @@ describe('DesignerOrganizationSwitcher', () => {
     );
 
     await act(async () => {
-      resolveSwitch?.({ data: mock.organizations[1]!, error: null });
+      resolveSwitch?.({ ok: true });
     });
     await waitFor(() => {
       expect(mock.router.refresh).toHaveBeenCalledTimes(1);
@@ -128,7 +151,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(onSwitchSuccess).toHaveBeenCalledWith('org-2');
@@ -145,14 +168,14 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    const trigger = screen.getByRole('button', { name: 'Switch organization' });
+    const trigger = screen.getByRole('button', { name: 'Switch context' });
     expect(trigger).toBeDisabled();
     expect(trigger).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByText('Loading Studio One workspace')).toBeInTheDocument();
   });
 
   it('does not refresh or hide an error when switching fails', async () => {
-    mock.setActive.mockResolvedValue({ data: null, error: { message: 'Not a member' } });
+    mock.setActive.mockResolvedValue({ ok: false });
     const user = userEvent.setup();
     render(
       <DesignerOrganizationSwitcher
@@ -162,7 +185,7 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(mock.router.refresh).not.toHaveBeenCalled();
@@ -180,10 +203,67 @@ describe('DesignerOrganizationSwitcher', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
     await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
 
     expect(mock.router.refresh).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch organization');
+  });
+
+  it('opens the organisation creation flow from the switcher', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
+    await user.click(screen.getByRole('menuitem', { name: /Create an organisation/i }));
+
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/new-organization');
+  });
+
+  it('offers creation instead of a dead end for users with zero orgs', async () => {
+    const previous = mock.organizations;
+    mock.organizations = [];
+    try {
+      const user = userEvent.setup();
+      render(
+        <DesignerOrganizationSwitcher
+          activeOrganizationId={null}
+          studioName="Asha Rao"
+          studioLocation="Mumbai"
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Switch context' }));
+      expect(screen.queryByText(/No organization memberships found/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Create an organisation/i })).toBeInTheDocument();
+    } finally {
+      mock.organizations = previous;
+    }
+  });
+
+  it('opens the selected organization workspace from personal context', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId={null}
+        studioName="Asha Rao"
+        studioLocation="My Tickif"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch context' }));
+    await user.click(screen.getByRole('menuitem', { name: /Studio Two/i }));
+
+    expect(mock.setActive).toHaveBeenCalledWith({
+      json: { kind: 'organization', organizationId: 'org-2' },
+    });
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/dashboard');
+    expect(mock.router.refresh).not.toHaveBeenCalled();
   });
 });

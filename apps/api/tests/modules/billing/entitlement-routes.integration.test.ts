@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { db, schema } from '@repo/db';
-import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
+import { makeOrganization, makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 
 // Mock Redis to avoid requiring a live Redis connection in CI integration tests.
 // The service falls through to DB when Redis returns null (cache miss).
@@ -187,6 +187,43 @@ describe('E-119: entitlement service integration', () => {
     expect(result.entitlements.rankingTier).toBe(0);
   });
 
+  it('reports frozen seats and branches for a downgraded organization', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await makeSubscription({
+      organizationId: org.id,
+      planTier: 'hobby',
+      preLapseTier: 'corporate',
+      subscriptionState: 'downgraded',
+    });
+    const frozenUser = await makeUser();
+    await db.insert(schema.member).values({
+      id: `mbr_frozen_${Date.now()}`,
+      organizationId: org.id,
+      userId: frozenUser.id,
+      role: 'member',
+      frozen: true,
+      frozenAt: new Date(),
+      freezeRank: 1,
+      createdAt: new Date(),
+    });
+    await makeTeam({
+      organizationId: org.id,
+      frozen: true,
+      frozenAt: new Date(),
+      freezeRank: 1,
+    });
+
+    const result = await entitlementService.getSubscription({
+      userId: user.id,
+      activeOrgId: org.id,
+    });
+
+    expect(result.frozenResources).toEqual([
+      { kind: 'seat', label: 'Team Seats', count: 1 },
+      { kind: 'branch', label: 'Branches', count: 1 },
+    ]);
+  });
+
   it('includes currentPeriodEnd and razorpayStatus from subscription', async () => {
     const { user, org } = await makeOrgWithOwner();
     const periodEnd = new Date('2026-09-25T00:00:00Z');
@@ -206,5 +243,26 @@ describe('E-119: entitlement service integration', () => {
 
     expect(result.razorpayStatus).toBe('active');
     expect(result.currentPeriodEnd).toBe('2026-09-25T00:00:00.000Z');
+    expect(result.cancellationScheduled).toBe(false);
+  });
+
+  it('exposes cycle-end cancellation separately from Razorpay active status', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_cancel_at_period_end',
+      razorpayStatus: 'active',
+      cancelAtPeriodEnd: true,
+    });
+
+    const result = await entitlementService.getSubscription({
+      userId: user.id,
+      activeOrgId: org.id,
+    });
+
+    expect(result.razorpayStatus).toBe('active');
+    expect(result.cancellationScheduled).toBe(true);
   });
 });

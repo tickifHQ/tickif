@@ -4,14 +4,20 @@ import type {
   AdminModerationQueueResponse,
   ModerationNoteInput,
   RejectProjectInput,
+  CreateProjectReviewCommentInput,
+  UpdateProjectReviewCommentInput,
 } from '@repo/contracts';
 import {
   adminModerationDetailResponseSchema,
   adminModerationQueueResponseSchema,
+  projectReviewCommentSchema,
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 
 type ServerRequestInit = { headers: { cookie: string } };
+
+export const ADMIN_MODERATION_QUEUE_TABS = ['submitted', 'in_review', 'published'] as const;
+export type AdminModerationQueueTab = (typeof ADMIN_MODERATION_QUEUE_TABS)[number];
 
 function parseDetail(payload: unknown): AdminModerationDetailResponse {
   const parsed = adminModerationDetailResponseSchema.safeParse(payload);
@@ -20,11 +26,12 @@ function parseDetail(payload: unknown): AdminModerationDetailResponse {
 }
 
 export async function fetchAdminModerationQueue(
-  status: 'submitted' | 'in_review' | 'published',
+  status: AdminModerationQueueTab,
+  page = 1,
   requestInit?: ServerRequestInit,
 ): Promise<AdminModerationQueueResponse> {
   const response = await api.api.admin.projects.$get(
-    { query: { status, sort: 'oldest', page: '1', limit: '20' } },
+    { query: { status, sort: 'oldest', page: String(page), limit: '20' } },
     requestInit,
   );
   if (!response.ok) throw new Error('Could not load the moderation queue.');
@@ -32,6 +39,39 @@ export async function fetchAdminModerationQueue(
   const parsed = adminModerationQueueResponseSchema.safeParse(await response.json());
   if (!parsed.success) throw new Error('The moderation queue response was invalid.');
   return parsed.data;
+}
+
+function parseComment(payload: unknown) {
+  const parsed = projectReviewCommentSchema.safeParse(payload);
+  if (!parsed.success) throw new Error('The review comment response was invalid.');
+  return parsed.data;
+}
+
+export async function createAdminReviewComment(
+  projectId: string,
+  input: CreateProjectReviewCommentInput,
+) {
+  const response = await api.api.admin.projects[':id']['review-comments'].$post({
+    param: { id: projectId },
+    json: input,
+  });
+  if (!response.ok)
+    throw new Error('Could not add the review comment. Refresh the review and try again.');
+  return parseComment(await response.json());
+}
+
+export async function updateAdminReviewComment(
+  projectId: string,
+  commentId: string,
+  input: UpdateProjectReviewCommentInput,
+) {
+  const response = await api.api.admin.projects[':id']['review-comments'][':commentId'].$patch({
+    param: { id: projectId, commentId },
+    json: input,
+  });
+  if (!response.ok)
+    throw new Error('Could not update the review comment. Refresh the review and try again.');
+  return parseComment(await response.json());
 }
 
 export async function fetchAdminModerationDetail(projectId: string) {

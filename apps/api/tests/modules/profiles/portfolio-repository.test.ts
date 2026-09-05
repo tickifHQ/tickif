@@ -215,7 +215,7 @@ describe('portfolioRepository', () => {
       const result = await portfolioRepository.isSlugAvailable('genuinely-free');
 
       expect(result).toBe(true);
-      expect(limit).toHaveBeenCalledTimes(2);
+      expect(limit).toHaveBeenCalledTimes(3);
     });
   });
 

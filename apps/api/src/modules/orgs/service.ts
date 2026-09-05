@@ -1,52 +1,405 @@
 import {
   ORGANIZATION_MEMBER_ROLE,
+  ORGANIZATION_ACCESS_SCOPE,
+  ORGANIZATION_CAPABILITY,
+  ORGANIZATION_INVITATION_STATE,
+  rbacEnabled,
+  branchLimit,
+  seatLimit,
   organizationMemberRoleSchema,
   type OrganizationMemberRole,
+  type OrganizationCapability,
+  type OrganizationCapabilities,
   type OrganizationWorkspaceResponse,
+  type OrganizationBranchesResponse,
+  type OrganizationInvitationState,
+  type OwnershipTransferResponse,
+  type ActiveContext,
+  type SetActiveContext,
+  type RemoveOrganizationBranchResponse,
 } from '@repo/contracts';
+import { organizationCapabilitiesForRole } from '@repo/auth';
+import { escapeHtml, sendEmail } from '@repo/auth/email';
+import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
-import { orgsRepository } from './repository.js';
+import {
+  orgsRepository,
+  OWNERSHIP_TRANSFER_RESULT,
+  type OwnershipTransferRecord,
+  type DbTransaction,
+} from './repository.js';
+import {
+  BRANCH_REMOVAL_RESULT,
+  removeBranchWithReassignment,
+} from './branch-removal-repository.js';
 
 const WRITE_ROLES = new Set<OrganizationMemberRole>([
   ORGANIZATION_MEMBER_ROLE.OWNER,
   ORGANIZATION_MEMBER_ROLE.ADMIN,
 ]);
 
-function hasWriteRole(role: string | null): boolean {
-  if (!role) return false;
-  return role.split(',').some((candidate) => {
-    const parsed = organizationMemberRoleSchema.safeParse(candidate.trim());
-    return parsed.success && WRITE_ROLES.has(parsed.data);
-  });
+function hasWriteRole(role: string | null, frozen = false): boolean {
+  if (!role || frozen) return false;
+  const parsed = organizationMemberRoleSchema.safeParse(role);
+  return parsed.success && WRITE_ROLES.has(parsed.data);
 }
 
 function normalizeRole(role: string | null): OrganizationMemberRole {
-  const roles = new Set((role ?? '').split(',').map((candidate) => candidate.trim()));
-  if (roles.has(ORGANIZATION_MEMBER_ROLE.OWNER)) return ORGANIZATION_MEMBER_ROLE.OWNER;
-  if (roles.has(ORGANIZATION_MEMBER_ROLE.ADMIN)) return ORGANIZATION_MEMBER_ROLE.ADMIN;
-  return ORGANIZATION_MEMBER_ROLE.MEMBER;
+  const parsed = organizationMemberRoleSchema.safeParse(role);
+  return parsed.success ? parsed.data : ORGANIZATION_MEMBER_ROLE.MEMBER;
+}
+
+function invitationState(status: string): OrganizationInvitationState {
+  switch (status) {
+    case 'pending':
+      return ORGANIZATION_INVITATION_STATE.PENDING;
+    case 'accepted':
+      return ORGANIZATION_INVITATION_STATE.ACTIVE;
+    case 'rejected':
+      return ORGANIZATION_INVITATION_STATE.DECLINED;
+    case 'expired':
+      return ORGANIZATION_INVITATION_STATE.EXPIRED;
+    default:
+      return ORGANIZATION_INVITATION_STATE.REVOKED;
+  }
+}
+
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const candidate = error as { code?: unknown; constraint?: unknown; cause?: unknown };
+  if (candidate.code === '23505' && candidate.constraint === constraint) return true;
+  return isUniqueViolation(candidate.cause, constraint);
+}
+
+async function sendOwnershipEmailBestEffort(
+  message: Parameters<typeof sendEmail>[0],
+): Promise<void> {
+  try {
+    await sendEmail(message);
+  } catch {
+    console.error('[organizations] Ownership transfer email delivery failed');
+  }
+}
+
+async function transferResponse(
+  request: OwnershipTransferRecord,
+): Promise<OwnershipTransferResponse | null> {
+  if (!request.initiatorUserId || !request.targetUserId) return null;
+  const [initiator, target] = await Promise.all([
+    orgsRepository.findUser(request.initiatorUserId),
+    orgsRepository.findMemberById(request.organizationId, request.targetMemberId),
+  ]);
+  if (!initiator || !target || target.userId !== request.targetUserId) return null;
+  return {
+    id: request.id,
+    organizationId: request.organizationId,
+    status: request.status,
+    initiator: {
+      userId: initiator.id,
+      name: initiator.name,
+      email: initiator.email,
+    },
+    target: {
+      memberId: target.id,
+      userId: target.userId,
+      name: target.name,
+      email: target.email,
+      role: normalizeRole(target.role),
+    },
+    expiresAt: request.expiresAt.toISOString(),
+    createdAt: request.createdAt.toISOString(),
+    resolvedAt: request.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+async function requireCorporateOrganization(organizationId: string): Promise<void> {
+  const plan = await orgsRepository.findOrganizationPlan(organizationId);
+  if (!rbacEnabled(plan.tier, plan.state)) {
+    if (plan.state === 'locked') {
+      throw new AppError(
+        'ORGANIZATION_BILLING_LOCKED',
+        'Restore billing to manage organization membership',
+        402,
+      );
+    }
+    throw new AppError(
+      'ORGANIZATION_RBAC_REQUIRES_CORPORATE',
+      'Upgrade to Corporate to manage organization membership',
+      402,
+    );
+  }
 }
 
 const roleOrder: Record<OrganizationMemberRole, number> = {
   [ORGANIZATION_MEMBER_ROLE.OWNER]: 0,
   [ORGANIZATION_MEMBER_ROLE.ADMIN]: 1,
-  [ORGANIZATION_MEMBER_ROLE.MEMBER]: 2,
+  [ORGANIZATION_MEMBER_ROLE.BILLING_ADMIN]: 2,
+  [ORGANIZATION_MEMBER_ROLE.MEMBER]: 3,
+  [ORGANIZATION_MEMBER_ROLE.VIEWER]: 4,
 };
 
+function allowsCapability(
+  capabilities: OrganizationCapabilities,
+  capability: OrganizationCapability,
+): boolean {
+  switch (capability) {
+    case ORGANIZATION_CAPABILITY.BILLING:
+      return capabilities.billing;
+    case ORGANIZATION_CAPABILITY.MANAGE_MEMBERS:
+      return capabilities.manageMembers;
+    case ORGANIZATION_CAPABILITY.CHANGE_MEMBER_ROLES:
+      return capabilities.changeMemberRoles;
+    case ORGANIZATION_CAPABILITY.TRANSFER_OWNERSHIP:
+      return capabilities.transferOwnership;
+    case ORGANIZATION_CAPABILITY.WRITE_PROJECTS:
+      return capabilities.writeProjects;
+    case ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS:
+      return capabilities.submitProjects;
+    case ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS:
+      return capabilities.archiveProjects;
+    case ORGANIZATION_CAPABILITY.DELETE_PROJECTS:
+      return capabilities.deleteProjects;
+    case ORGANIZATION_CAPABILITY.READ_LEADS:
+      return capabilities.leadScope !== ORGANIZATION_ACCESS_SCOPE.NONE;
+    case ORGANIZATION_CAPABILITY.READ_ANALYTICS:
+      return capabilities.analyticsScope !== ORGANIZATION_ACCESS_SCOPE.NONE;
+    case ORGANIZATION_CAPABILITY.EDIT_ORGANIZATION:
+      return capabilities.editOrganization;
+    case ORGANIZATION_CAPABILITY.MANAGE_VERIFICATION:
+      return capabilities.manageVerification;
+  }
+}
+
 export const orgsService = {
+  async resolveContextSelection(
+    userId: string,
+    selection: SetActiveContext,
+  ): Promise<ActiveContext> {
+    if (selection.kind === 'personal') return selection;
+    if (selection.teamId === null) {
+      const valid = await orgsRepository.hasMembership(userId, selection.organizationId);
+      if (!valid) throw AppError.forbidden('Organization context is unavailable');
+      return { kind: 'organization', organizationId: selection.organizationId, teamId: null };
+    }
+    const teamId =
+      selection.teamId ??
+      (await orgsRepository.findDefaultActiveTeamForUser(userId, selection.organizationId));
+    if (!teamId) throw AppError.forbidden('Organization context is unavailable');
+    const valid = await orgsRepository.isValidOrganizationContext(
+      userId,
+      selection.organizationId,
+      teamId,
+    );
+    if (!valid) throw AppError.forbidden('Organization context is unavailable');
+    return { kind: 'organization', organizationId: selection.organizationId, teamId };
+  },
+
+  async resolveSessionContext(
+    userId: string,
+    activeOrganizationId: string | null,
+    activeTeamId: string | null,
+  ): Promise<ActiveContext> {
+    if (!activeOrganizationId) {
+      if (activeTeamId) {
+        await orgsRepository.saveContextPreference(userId, { kind: 'personal' });
+      }
+      return { kind: 'personal' };
+    }
+
+    if (activeTeamId) {
+      if (
+        await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, activeTeamId)
+      ) {
+        return {
+          kind: 'organization',
+          organizationId: activeOrganizationId,
+          teamId: activeTeamId,
+        };
+      }
+    }
+    if (await orgsRepository.hasMembership(userId, activeOrganizationId)) {
+      const rollup = {
+        kind: 'organization' as const,
+        organizationId: activeOrganizationId,
+        teamId: null,
+      };
+      if (activeTeamId) await orgsRepository.saveContextPreference(userId, rollup);
+      return rollup;
+    }
+    const personal = { kind: 'personal' } as const;
+    await orgsRepository.saveContextPreference(userId, personal);
+    return personal;
+  },
+
+  async saveContextPreference(userId: string, context: ActiveContext): Promise<void> {
+    await orgsRepository.saveContextPreference(userId, context);
+  },
+
   /** True when the user has any membership role in the organization. */
   isMember(userId: string, organizationId: string): Promise<boolean> {
     return orgsRepository.hasMembership(userId, organizationId);
   },
 
-  /** Resolve a legacy session only when membership is unambiguous. */
-  findSoleOrganizationForUser(userId: string): Promise<string | null> {
-    return orgsRepository.findSoleOrganizationForUser(userId);
+  findDefaultActiveTeamForUser(userId: string, organizationId: string): Promise<string | null> {
+    return orgsRepository.findDefaultActiveTeamForUser(userId, organizationId);
   },
 
-  /** True for Better Auth owner/admin roles, including comma-joined multi-role values. */
+  /** True for active Better Auth owner and admin memberships. */
   async isWriter(userId: string, organizationId: string): Promise<boolean> {
-    return hasWriteRole(await orgsRepository.findMembershipRole(userId, organizationId));
+    const [membership, retained] = await Promise.all([
+      orgsRepository.findMembershipRole(userId, organizationId),
+      orgsRepository.hasActiveRetention(organizationId),
+    ]);
+    if (retained) return false;
+    return hasWriteRole(membership?.role ?? null, membership?.frozen ?? false);
+  },
+
+  async getCapabilities(
+    userId: string,
+    organizationId: string,
+    tx?: DbTransaction,
+  ): Promise<OrganizationCapabilities | null> {
+    const membership = await orgsRepository.findMembershipRole(userId, organizationId, tx);
+    if (!membership) return null;
+    const retained = await orgsRepository.hasActiveRetention(organizationId, tx);
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
+    return organizationCapabilitiesForRole(normalizeRole(membership.role), {
+      rbacEnabled: rbacEnabled(plan.tier, plan.state),
+      frozen: membership.frozen || retained,
+    });
+  },
+
+  async hasCapability(
+    userId: string,
+    organizationId: string,
+    capability: OrganizationCapability,
+    tx?: DbTransaction,
+  ): Promise<boolean> {
+    const capabilities = await orgsService.getCapabilities(userId, organizationId, tx);
+    return capabilities ? allowsCapability(capabilities, capability) : false;
+  },
+
+  /**
+   * Reconcile frozen seats against the current plan's seat limit: freeze
+   * over-limit members, then restore any that now fit.
+   *
+   * When `tx` is provided (E-239 reactivation), the freeze+restore run inside the
+   * caller's transaction so tier restoration and seat restoration commit
+   * atomically — a successful charge can never leave paid-tier + frozen seats.
+   * Idempotent: converges on every call, so a redelivered webhook is safe.
+   */
+  async reconcileMemberSeats(
+    organizationId: string,
+    now = new Date(),
+    tx?: DbTransaction,
+  ): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
+    const activeLimit = seatLimit(plan.tier, plan.state);
+    await orgsRepository.freezeMembersToLimit({ organizationId, activeLimit, now, tx });
+    await orgsRepository.restoreMembersToLimit({ organizationId, activeLimit, tx });
+  },
+
+  async reconcileBranches(
+    organizationId: string,
+    now = new Date(),
+    tx?: DbTransaction,
+  ): Promise<void> {
+    const plan = await orgsRepository.findOrganizationPlan(organizationId, tx);
+    const activeLimit = branchLimit(plan.tier, plan.state);
+    await orgsRepository.freezeBranchesToLimit({ organizationId, activeLimit, now, tx });
+    await orgsRepository.restoreBranchesToLimit({ organizationId, activeLimit, tx });
+  },
+
+  async listBranches(input: {
+    userId: string;
+    organizationId: string;
+    activeTeamId: string | null;
+  }): Promise<OrganizationBranchesResponse> {
+    if (!(await orgsRepository.hasMembership(input.userId, input.organizationId))) {
+      throw AppError.forbidden('Organization membership required');
+    }
+    const [membership, plan] = await Promise.all([
+      orgsRepository.findMembershipRole(input.userId, input.organizationId),
+      orgsRepository.findOrganizationPlan(input.organizationId),
+    ]);
+    const branches = await orgsRepository.listBranchesForUser(
+      input.userId,
+      input.organizationId,
+      hasWriteRole(membership?.role ?? null, membership?.frozen ?? false),
+    );
+    const profileIds = branches.map(({ profileId }) => profileId);
+    const teamIds = branches.map(({ id }) => id);
+    const [members, footprints, branchUsage] = await Promise.all([
+      orgsRepository.listBranchMembers(teamIds),
+      orgsRepository.listBranchFootprints(profileIds),
+      orgsRepository.countActiveBranches(input.organizationId),
+    ]);
+    const footprintsByProfileId = new Map<string, typeof footprints>();
+    for (const footprint of footprints) {
+      const existing = footprintsByProfileId.get(footprint.profileId) ?? [];
+      existing.push(footprint);
+      footprintsByProfileId.set(footprint.profileId, existing);
+    }
+    return {
+      activeTeamId: input.activeTeamId,
+      branchUsage,
+      branchLimit: branchLimit(plan.tier, plan.state),
+      branches: branches.map((branch) => {
+        const branchMembers = members.filter((member) => member.teamId === branch.id);
+        return {
+          ...branch,
+          memberCount: branchMembers.length,
+          averageRating: Number(branch.averageRating) || 0,
+          footprint: (footprintsByProfileId.get(branch.profileId) ?? []).map((entry) => ({
+            id: entry.id,
+            kind: entry.kind,
+            slug: entry.slug,
+            label: entry.label,
+          })),
+          frozenAt: branch.frozenAt?.toISOString() ?? null,
+          createdAt: branch.createdAt.toISOString(),
+          members: branchMembers.map((member) => ({
+            userId: member.userId,
+            name: member.name,
+            email: member.email,
+            image: member.image,
+            role: normalizeRole(member.role),
+          })),
+        };
+      }),
+    };
+  },
+
+  async removeBranch(input: {
+    userId: string;
+    organizationId: string;
+    branchId: string;
+    targetBranchId: string;
+  }): Promise<RemoveOrganizationBranchResponse> {
+    const result = await removeBranchWithReassignment(input);
+    if (typeof result !== 'string') {
+      return {
+        removedBranchId: result.removedBranchId,
+        targetBranchId: result.targetBranchId,
+        reassignedProjectCount: result.reassignedProjectCount,
+      };
+    }
+    switch (result) {
+      case BRANCH_REMOVAL_RESULT.NOT_FOUND:
+        throw AppError.notFound('Branch not found');
+      case BRANCH_REMOVAL_RESULT.FORBIDDEN:
+        throw AppError.forbidden('Only the active organization Owner can remove a branch');
+      case BRANCH_REMOVAL_RESULT.FINAL_BRANCH:
+        throw AppError.conflict('The final organization branch cannot be removed');
+      case BRANCH_REMOVAL_RESULT.REVIEW_CONFLICT:
+        throw AppError.conflict(
+          'The selected branches have reviews from the same customer and cannot be combined',
+        );
+      case BRANCH_REMOVAL_RESULT.INVALID_TARGET:
+        throw AppError.unprocessable(
+          'Select a different active branch from this organization as the reassignment target',
+        );
+    }
   },
 
   async getCurrentWorkspace(input: {
@@ -64,13 +417,38 @@ export const orgsService = {
     if (!membership) {
       throw AppError.forbidden('You are not a member of the active organization');
     }
+    if (membership.frozen) {
+      throw AppError.forbidden('Organization membership is inactive');
+    }
 
     const currentUserRole = normalizeRole(membership.role);
-    const canManage = hasWriteRole(membership.role);
-    const [memberRecords, invitationRecords] = await Promise.all([
-      orgsRepository.listMembers(input.activeOrgId),
-      canManage ? orgsRepository.listPendingInvitations(input.activeOrgId) : Promise.resolve([]),
-    ]);
+    const plan = await orgsRepository.findOrganizationPlan(input.activeOrgId);
+    const organizationRbacEnabled = rbacEnabled(plan.tier, plan.state);
+    const capabilities = organizationCapabilitiesForRole(currentUserRole, {
+      rbacEnabled: organizationRbacEnabled,
+      frozen: false,
+    });
+    const canManage = capabilities.manageMembers;
+    const [memberRecords, invitationRecords, seatUsage, pendingTransfer, retained] =
+      await Promise.all([
+        orgsRepository.listMembers(input.activeOrgId),
+        canManage ? orgsRepository.listInvitations(input.activeOrgId) : Promise.resolve([]),
+        orgsRepository.countActiveMembers(input.activeOrgId),
+        orgsRepository.findPendingOwnershipTransfer(input.activeOrgId),
+        orgsRepository.hasActiveRetention(input.activeOrgId),
+      ]);
+    const effectiveCapabilities = retained
+      ? organizationCapabilitiesForRole(currentUserRole, {
+          rbacEnabled: organizationRbacEnabled,
+          frozen: true,
+        })
+      : capabilities;
+    const visibleTransfer =
+      pendingTransfer &&
+      (pendingTransfer.initiatorUserId === input.userId ||
+        pendingTransfer.targetUserId === input.userId)
+        ? await transferResponse(pendingTransfer)
+        : null;
 
     const members = memberRecords
       .map((member) => ({
@@ -80,6 +458,9 @@ export const orgsService = {
         email: member.email,
         image: member.image,
         role: normalizeRole(member.role),
+        frozen: member.frozen,
+        frozenAt: member.frozenAt?.toISOString() ?? null,
+        freezeRank: member.freezeRank,
         joinedAt: member.createdAt.toISOString(),
         isCurrentUser: member.userId === input.userId,
       }))
@@ -91,15 +472,153 @@ export const orgsService = {
     return {
       organization: membership.organization,
       currentUserRole,
-      canManage,
+      canManage: effectiveCapabilities.manageMembers,
+      rbacEnabled: organizationRbacEnabled,
+      planTier: plan.tier,
+      subscriptionState: plan.state,
+      seatUsage,
+      seatLimit: seatLimit(plan.tier, plan.state),
+      capabilities: effectiveCapabilities,
       members,
       invitations: invitationRecords.map((invitation) => ({
         id: invitation.id,
         email: invitation.email,
         role: normalizeRole(invitation.role),
+        state: invitationState(invitation.status),
         createdAt: invitation.createdAt.toISOString(),
         expiresAt: invitation.expiresAt.toISOString(),
       })),
+      ownershipTransfer: visibleTransfer,
     };
+  },
+
+  async createOwnershipTransfer(input: {
+    userId: string;
+    organizationId: string;
+    targetMemberId: string;
+    now?: Date;
+  }): Promise<OwnershipTransferResponse> {
+    await requireCorporateOrganization(input.organizationId);
+    if (
+      !(await orgsService.hasCapability(
+        input.userId,
+        input.organizationId,
+        ORGANIZATION_CAPABILITY.TRANSFER_OWNERSHIP,
+      ))
+    ) {
+      throw AppError.forbidden('Only the active organization Owner can transfer ownership');
+    }
+    const target = await orgsRepository.findMemberById(input.organizationId, input.targetMemberId);
+    if (
+      !target ||
+      target.frozen ||
+      (target.role !== ORGANIZATION_MEMBER_ROLE.ADMIN &&
+        target.role !== ORGANIZATION_MEMBER_ROLE.MEMBER)
+    ) {
+      throw AppError.unprocessable(
+        'Ownership can only be transferred to an active Admin or Member',
+      );
+    }
+    if (target.userId === input.userId) {
+      throw AppError.unprocessable('Choose another organization member');
+    }
+
+    const now = input.now ?? new Date();
+    let request: OwnershipTransferRecord;
+    try {
+      request = await orgsRepository.createOwnershipTransfer({
+        organizationId: input.organizationId,
+        initiatorUserId: input.userId,
+        targetUserId: target.userId,
+        targetMemberId: target.id,
+        expiresAt: new Date(now.getTime() + config.OWNERSHIP_TRANSFER_EXPIRY_SECONDS * 1_000),
+        now,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, 'ownership_transfer_pending_organization_uniq')) {
+        throw AppError.conflict('An ownership transfer is already pending');
+      }
+      throw error;
+    }
+    const response = await transferResponse(request);
+    if (!response) throw AppError.conflict('Ownership transfer target changed');
+    const transferUrl = new URL('/designer/terms-roles', config.PUBLIC_WEB_URL).toString();
+    await sendOwnershipEmailBestEffort({
+      to: target.email,
+      subject: 'Tickif ownership transfer request',
+      idempotencyKey: `ownership-transfer-requested-${request.id}`,
+      html: `<p>You have been nominated as Owner of your Tickif organization.</p><p><a href="${transferUrl}">Review transfer</a></p>`,
+    });
+    return response;
+  },
+
+  async resolveOwnershipTransfer(input: {
+    id: string;
+    userId: string;
+    action: 'accept' | 'decline' | 'cancel';
+    now?: Date;
+  }): Promise<OwnershipTransferResponse> {
+    const existing = await orgsRepository.findOwnershipTransfer(input.id);
+    if (!existing) throw AppError.notFound('Ownership transfer not found');
+    await requireCorporateOrganization(existing.organizationId);
+    const result = await orgsRepository.resolveOwnershipTransfer({
+      id: input.id,
+      actorUserId: input.userId,
+      action: input.action,
+      now: input.now ?? new Date(),
+    });
+    if (result === OWNERSHIP_TRANSFER_RESULT.NOT_FOUND) {
+      throw AppError.notFound('Ownership transfer not found');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.FORBIDDEN) throw AppError.forbidden();
+    if (result === OWNERSHIP_TRANSFER_RESULT.NOT_PENDING) {
+      throw AppError.conflict('Ownership transfer is no longer pending');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.OWNER_STATE_CHANGED) {
+      throw AppError.conflict('Organization ownership changed');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.RETENTION_ACTIVE) {
+      throw AppError.conflict('Ownership cannot change while organization retention is active');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.INVALID_TARGET) {
+      throw AppError.conflict('Transfer target is no longer an eligible member');
+    }
+    if (result === OWNERSHIP_TRANSFER_RESULT.EXPIRED) {
+      throw AppError.conflict('Ownership transfer expired');
+    }
+
+    const response = await transferResponse(result);
+    if (!response) throw AppError.conflict('Ownership transfer membership changed');
+    if (input.action === 'accept' && result.initiatorUserId && result.targetUserId) {
+      const [previousOwner, newOwner] = await Promise.all([
+        orgsRepository.findUser(result.initiatorUserId),
+        orgsRepository.findUser(result.targetUserId),
+      ]);
+      if (previousOwner && newOwner) {
+        await Promise.all([
+          sendOwnershipEmailBestEffort({
+            to: previousOwner.email,
+            subject: 'Tickif ownership transfer completed',
+            idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
+            html: `<p>${escapeHtml(newOwner.name)} is now the organization Owner. Your role is now Admin.</p>`,
+          }),
+          sendOwnershipEmailBestEffort({
+            to: newOwner.email,
+            subject: 'You are now the Tickif organization Owner',
+            idempotencyKey: `ownership-transfer-completed-target-${result.id}`,
+            html: '<p>The ownership transfer is complete.</p>',
+          }),
+        ]);
+      }
+    }
+    return response;
+  },
+
+  async sweepExpirations(now: Date): Promise<{ invitations: number; transfers: number }> {
+    const [invitations, transfers] = await Promise.all([
+      orgsRepository.expireInvitations(now),
+      orgsRepository.expireOwnershipTransfers(now),
+    ]);
+    return { invitations: invitations.length, transfers: transfers.length };
   },
 };

@@ -1,47 +1,384 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({ sendEmail: vi.fn() }));
+
+vi.mock('@repo/auth/email', () => ({
+  escapeHtml: (value: string) => value,
+  sendEmail: mocks.sendEmail,
+}));
+
 vi.mock('../../../src/modules/orgs/repository.js', () => ({
+  OWNERSHIP_TRANSFER_RESULT: {
+    NOT_FOUND: 'not_found',
+    NOT_PENDING: 'not_pending',
+    EXPIRED: 'expired',
+    FORBIDDEN: 'forbidden',
+    INVALID_TARGET: 'invalid_target',
+    OWNER_STATE_CHANGED: 'owner_state_changed',
+  },
   orgsRepository: {
+    hasActiveRetention: vi.fn(),
+    isValidOrganizationContext: vi.fn(),
+    saveContextPreference: vi.fn(),
     hasMembership: vi.fn(),
-    findSoleOrganizationForUser: vi.fn(),
+    findDefaultActiveTeamForUser: vi.fn(),
     findMembershipRole: vi.fn(),
     findWorkspaceMembership: vi.fn(),
     listMembers: vi.fn(),
-    listPendingInvitations: vi.fn(),
+    listInvitations: vi.fn(),
+    findOrganizationPlan: vi.fn(),
+    countActiveMembers: vi.fn(),
+    freezeMembersToLimit: vi.fn(),
+    restoreMembersToLimit: vi.fn(),
+    listBranchesForUser: vi.fn(),
+    listBranchMembers: vi.fn(),
+    listBranchFootprints: vi.fn(),
+    countActiveBranches: vi.fn(),
+    freezeBranchesToLimit: vi.fn(),
+    restoreBranchesToLimit: vi.fn(),
+    findPendingOwnershipTransfer: vi.fn(),
+    findMemberById: vi.fn(),
+    createOwnershipTransfer: vi.fn(),
+    findOwnershipTransfer: vi.fn(),
+    resolveOwnershipTransfer: vi.fn(),
+    findUser: vi.fn(),
   },
+}));
+
+vi.mock('../../../src/modules/orgs/branch-removal-repository.js', () => ({
+  BRANCH_REMOVAL_RESULT: {
+    REMOVED: 'removed',
+    NOT_FOUND: 'not_found',
+    FORBIDDEN: 'forbidden',
+    INVALID_TARGET: 'invalid_target',
+    FINAL_BRANCH: 'final_branch',
+    REVIEW_CONFLICT: 'review_conflict',
+  },
+  removeBranchWithReassignment: vi.fn(),
 }));
 
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { orgsRepository } = await import('../../../src/modules/orgs/repository.js');
+const { removeBranchWithReassignment } =
+  await import('../../../src/modules/orgs/branch-removal-repository.js');
 
 describe('orgsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(orgsRepository.hasActiveRetention).mockResolvedValue(false);
+    vi.mocked(orgsRepository.findPendingOwnershipTransfer).mockResolvedValue(null);
+    mocks.sendEmail.mockResolvedValue(undefined);
   });
 
-  it('delegates membership and unambiguous legacy-session lookup to the repository', async () => {
+  it('delegates membership lookup to the repository', async () => {
     vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
-    vi.mocked(orgsRepository.findSoleOrganizationForUser).mockResolvedValue('org-1');
 
     await expect(orgsService.isMember('user-1', 'org-1')).resolves.toBe(true);
-    await expect(orgsService.findSoleOrganizationForUser('user-1')).resolves.toBe('org-1');
   });
 
-  it.each(['owner', 'admin', 'member,admin', 'owner,member'])(
+  it('returns the safe branch reassignment result', async () => {
+    vi.mocked(removeBranchWithReassignment).mockResolvedValue({
+      outcome: 'removed',
+      removedBranchId: 'branch-old',
+      targetBranchId: 'branch-new',
+      reassignedProjectCount: 3,
+    });
+
+    await expect(
+      orgsService.removeBranch({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        branchId: 'branch-old',
+        targetBranchId: 'branch-new',
+      }),
+    ).resolves.toEqual({
+      removedBranchId: 'branch-old',
+      targetBranchId: 'branch-new',
+      reassignedProjectCount: 3,
+    });
+  });
+
+  it.each([
+    ['not_found', 404],
+    ['forbidden', 403],
+    ['invalid_target', 422],
+    ['final_branch', 409],
+    ['review_conflict', 409],
+  ] as const)('maps branch removal %s to HTTP %s', async (outcome, status) => {
+    vi.mocked(removeBranchWithReassignment).mockResolvedValue(outcome);
+
+    await expect(
+      orgsService.removeBranch({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        branchId: 'branch-old',
+        targetBranchId: 'branch-new',
+      }),
+    ).rejects.toMatchObject({ status });
+  });
+
+  it('resolves an organization roll-up session without selecting a branch', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+
+    await expect(orgsService.resolveSessionContext('user-1', 'org-1', null)).resolves.toEqual({
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
+    });
+    expect(orgsRepository.findDefaultActiveTeamForUser).not.toHaveBeenCalled();
+    expect(orgsRepository.saveContextPreference).not.toHaveBeenCalled();
+  });
+
+  it('validates an explicitly selected organization roll-up context', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+
+    await expect(
+      orgsService.resolveContextSelection('user-1', {
+        kind: 'organization',
+        organizationId: 'org-1',
+        teamId: null,
+      }),
+    ).resolves.toEqual({
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
+    });
+  });
+
+  it('rejects an organization roll-up context for a non-member', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(false);
+
+    await expect(
+      orgsService.resolveContextSelection('user-1', {
+        kind: 'organization',
+        organizationId: 'org-1',
+        teamId: null,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('repairs a stale branch session to organization roll-up context', async () => {
+    vi.mocked(orgsRepository.isValidOrganizationContext).mockResolvedValue(false);
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+
+    await expect(orgsService.resolveSessionContext('user-1', 'org-1', 'team-1')).resolves.toEqual({
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
+    });
+    expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
+      kind: 'organization',
+      organizationId: 'org-1',
+      teamId: null,
+    });
+  });
+
+  it('clears a team id that has no active organization', async () => {
+    await expect(orgsService.resolveSessionContext('user-1', null, 'team-1')).resolves.toEqual({
+      kind: 'personal',
+    });
+    expect(orgsRepository.saveContextPreference).toHaveBeenCalledWith('user-1', {
+      kind: 'personal',
+    });
+  });
+
+  it('reconciles frozen seats against the current entitlement limit', async () => {
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'hobby',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.freezeMembersToLimit).mockResolvedValue(['member-2']);
+    vi.mocked(orgsRepository.restoreMembersToLimit).mockResolvedValue([]);
+    const now = new Date('2026-08-29T00:00:00.000Z');
+
+    await orgsService.reconcileMemberSeats('org-1', now);
+
+    expect(orgsRepository.freezeMembersToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: 1,
+      now,
+    });
+    expect(orgsRepository.restoreMembersToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: 1,
+    });
+  });
+
+  it('reconciles frozen branches against the current entitlement limit', async () => {
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.freezeBranchesToLimit).mockResolvedValue(['team-3']);
+    vi.mocked(orgsRepository.restoreBranchesToLimit).mockResolvedValue([]);
+    const now = new Date('2026-09-01T00:00:00.000Z');
+
+    await orgsService.reconcileBranches('org-1', now);
+
+    expect(orgsRepository.freezeBranchesToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: -1,
+      now,
+    });
+    expect(orgsRepository.restoreBranchesToLimit).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      activeLimit: -1,
+    });
+  });
+
+  it('returns branch profile summaries, footprint, frozen state, and members', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'owner',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.countActiveBranches).mockResolvedValue(1);
+    vi.mocked(orgsRepository.listBranchesForUser).mockResolvedValue([
+      {
+        id: 'team-1',
+        name: 'Bengaluru',
+        createdAt: new Date('2026-09-01T00:00:00.000Z'),
+        profileId: '22222222-2222-4222-8222-222222222222',
+        profileSlug: 'studio-bengaluru',
+        profileStatus: 'active',
+        projectCount: 3,
+        averageRating: '4.50',
+        reviewCount: 8,
+        frozen: true,
+        frozenAt: new Date('2026-08-31T00:00:00.000Z'),
+        freezeRank: 1,
+      },
+    ]);
+    vi.mocked(orgsRepository.listBranchFootprints).mockResolvedValue([
+      {
+        profileId: '22222222-2222-4222-8222-222222222222',
+        id: '33333333-3333-4333-8333-333333333333',
+        kind: 'city',
+        slug: 'bengaluru',
+        label: 'Bengaluru',
+      },
+    ]);
+    vi.mocked(orgsRepository.listBranchMembers).mockResolvedValue([
+      {
+        teamId: 'team-1',
+        userId: 'user-1',
+        name: 'Aditya',
+        email: 'aditya@example.com',
+        image: null,
+        role: 'owner',
+      },
+    ]);
+
+    await expect(
+      orgsService.listBranches({
+        userId: 'user-1',
+        organizationId: 'org-1',
+        activeTeamId: 'team-1',
+      }),
+    ).resolves.toEqual({
+      activeTeamId: 'team-1',
+      branchUsage: 1,
+      branchLimit: -1,
+      branches: [
+        {
+          id: 'team-1',
+          name: 'Bengaluru',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          profileId: '22222222-2222-4222-8222-222222222222',
+          profileSlug: 'studio-bengaluru',
+          profileStatus: 'active',
+          projectCount: 3,
+          memberCount: 1,
+          averageRating: 4.5,
+          reviewCount: 8,
+          footprint: [
+            {
+              id: '33333333-3333-4333-8333-333333333333',
+              kind: 'city',
+              slug: 'bengaluru',
+              label: 'Bengaluru',
+            },
+          ],
+          frozen: true,
+          frozenAt: '2026-08-31T00:00:00.000Z',
+          freezeRank: 1,
+          members: [
+            {
+              userId: 'user-1',
+              name: 'Aditya',
+              email: 'aditya@example.com',
+              image: null,
+              role: 'owner',
+            },
+          ],
+        },
+      ],
+    });
+    expect(orgsRepository.listBranchesForUser).toHaveBeenCalledWith('user-1', 'org-1', true);
+  });
+
+  it('limits regular members to branches they are assigned to', async () => {
+    vi.mocked(orgsRepository.hasMembership).mockResolvedValue(true);
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'member',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.countActiveBranches).mockResolvedValue(2);
+    vi.mocked(orgsRepository.listBranchesForUser).mockResolvedValue([]);
+    vi.mocked(orgsRepository.listBranchMembers).mockResolvedValue([]);
+    vi.mocked(orgsRepository.listBranchFootprints).mockResolvedValue([]);
+
+    await orgsService.listBranches({
+      userId: 'user-1',
+      organizationId: 'org-1',
+      activeTeamId: null,
+    });
+
+    expect(orgsRepository.listBranchesForUser).toHaveBeenCalledWith('user-1', 'org-1', false);
+  });
+
+  it.each(['owner', 'admin'])(
     'treats %s as a write-capable Better Auth organization role',
     async (role) => {
-      vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue(role);
+      vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({ role, frozen: false });
 
       await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(true);
     },
   );
 
   it.each([null, 'member', 'viewer'])('treats %s as read-only', async (role) => {
-    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue(role);
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue(
+      role ? { role, frozen: false } : null,
+    );
 
     await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
   });
 
+  it('blocks owner writes while organization retention is active', async () => {
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'owner',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.hasActiveRetention).mockResolvedValue(true);
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+
+    await expect(orgsService.isWriter('user-1', 'org-1')).resolves.toBe(false);
+    await expect(orgsService.getCapabilities('user-1', 'org-1')).resolves.toMatchObject({
+      writeProjects: false,
+      manageMembers: false,
+    });
+  });
   it('rejects workspace reads without an active organization', async () => {
     await expect(
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: null }),
@@ -60,7 +397,13 @@ describe('orgsService', () => {
     vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
       organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
       role: 'owner',
+      frozen: false,
     });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.countActiveMembers).mockResolvedValue(2);
     vi.mocked(orgsRepository.listMembers).mockResolvedValue([
       {
         id: 'member-1',
@@ -69,6 +412,9 @@ describe('orgsService', () => {
         email: 'asha@example.com',
         image: null,
         role: 'owner',
+        frozen: false,
+        frozenAt: null,
+        freezeRank: null,
         createdAt: new Date('2026-08-05T00:00:00.000Z'),
       },
       {
@@ -78,14 +424,18 @@ describe('orgsService', () => {
         email: 'rohan@example.com',
         image: null,
         role: 'member',
+        frozen: false,
+        frozenAt: null,
+        freezeRank: null,
         createdAt: new Date('2026-08-04T00:00:00.000Z'),
       },
     ]);
-    vi.mocked(orgsRepository.listPendingInvitations).mockResolvedValue([
+    vi.mocked(orgsRepository.listInvitations).mockResolvedValue([
       {
         id: 'invitation-1',
         email: 'new@example.com',
         role: 'admin',
+        status: 'pending',
         createdAt: new Date('2026-08-05T00:00:00.000Z'),
         expiresAt: new Date('2026-08-07T00:00:00.000Z'),
       },
@@ -97,6 +447,25 @@ describe('orgsService', () => {
       organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
       currentUserRole: 'owner',
       canManage: true,
+      rbacEnabled: true,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+      seatUsage: 2,
+      seatLimit: -1,
+      capabilities: {
+        billing: true,
+        manageMembers: true,
+        changeMemberRoles: true,
+        transferOwnership: true,
+        writeProjects: true,
+        submitProjects: true,
+        archiveProjects: true,
+        deleteProjects: true,
+        leadScope: 'full',
+        analyticsScope: 'full',
+        editOrganization: true,
+        manageVerification: true,
+      },
       members: [
         {
           id: 'member-1',
@@ -105,6 +474,9 @@ describe('orgsService', () => {
           email: 'asha@example.com',
           image: null,
           role: 'owner',
+          frozen: false,
+          frozenAt: null,
+          freezeRank: null,
           joinedAt: '2026-08-05T00:00:00.000Z',
           isCurrentUser: true,
         },
@@ -115,6 +487,9 @@ describe('orgsService', () => {
           email: 'rohan@example.com',
           image: null,
           role: 'member',
+          frozen: false,
+          frozenAt: null,
+          freezeRank: null,
           joinedAt: '2026-08-04T00:00:00.000Z',
           isCurrentUser: false,
         },
@@ -124,10 +499,40 @@ describe('orgsService', () => {
           id: 'invitation-1',
           email: 'new@example.com',
           role: 'admin',
+          state: 'pending',
           createdAt: '2026-08-05T00:00:00.000Z',
           expiresAt: '2026-08-07T00:00:00.000Z',
         },
       ],
+      ownershipTransfer: null,
+    });
+  });
+
+  it('surfaces a locked subscription and preserves Billing Admin recovery access', async () => {
+    vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
+      organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
+      role: 'billing_admin',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'locked',
+    });
+    vi.mocked(orgsRepository.countActiveMembers).mockResolvedValue(6);
+    vi.mocked(orgsRepository.listMembers).mockResolvedValue([]);
+
+    await expect(
+      orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
+    ).resolves.toMatchObject({
+      rbacEnabled: false,
+      planTier: 'corporate',
+      subscriptionState: 'locked',
+      seatLimit: 1,
+      capabilities: expect.objectContaining({
+        billing: true,
+        manageMembers: false,
+        changeMemberRoles: false,
+      }),
     });
   });
 
@@ -135,12 +540,121 @@ describe('orgsService', () => {
     vi.mocked(orgsRepository.findWorkspaceMembership).mockResolvedValue({
       organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
       role: 'member',
+      frozen: false,
     });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.countActiveMembers).mockResolvedValue(1);
     vi.mocked(orgsRepository.listMembers).mockResolvedValue([]);
 
     await expect(
       orgsService.getCurrentWorkspace({ userId: 'user-1', activeOrgId: 'org-1' }),
     ).resolves.toMatchObject({ currentUserRole: 'member', canManage: false, invitations: [] });
-    expect(orgsRepository.listPendingInvitations).not.toHaveBeenCalled();
+    expect(orgsRepository.listInvitations).not.toHaveBeenCalled();
+  });
+
+  it('returns a created transfer when request email delivery fails', async () => {
+    const request = {
+      id: '00000000-0000-4000-8000-000000000001',
+      organizationId: 'org-1',
+      initiatorUserId: 'owner-user',
+      targetUserId: 'target-user',
+      targetMemberId: 'target-member',
+      status: 'pending' as const,
+      expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+      resolvedAt: null,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    };
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.findMembershipRole).mockResolvedValue({
+      role: 'owner',
+      frozen: false,
+    });
+    vi.mocked(orgsRepository.findMemberById).mockResolvedValue({
+      id: 'target-member',
+      userId: 'target-user',
+      role: 'member',
+      frozen: false,
+      name: 'Target User',
+      email: 'target@example.com',
+    });
+    vi.mocked(orgsRepository.createOwnershipTransfer).mockResolvedValue(request);
+    vi.mocked(orgsRepository.findUser).mockResolvedValue({
+      id: 'owner-user',
+      name: 'Owner User',
+      email: 'owner@example.com',
+    });
+    mocks.sendEmail.mockRejectedValue(new Error('provider unavailable'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      orgsService.createOwnershipTransfer({
+        userId: 'owner-user',
+        organizationId: 'org-1',
+        targetMemberId: 'target-member',
+        now: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ id: request.id, status: 'pending' });
+    expect(errorLog).toHaveBeenCalledWith(
+      '[organizations] Ownership transfer email delivery failed',
+    );
+    errorLog.mockRestore();
+  });
+
+  it('returns an accepted transfer when completion email delivery fails', async () => {
+    const accepted = {
+      id: '00000000-0000-4000-8000-000000000002',
+      organizationId: 'org-1',
+      initiatorUserId: 'owner-user',
+      targetUserId: 'target-user',
+      targetMemberId: 'target-member',
+      status: 'accepted' as const,
+      expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+      resolvedAt: new Date('2026-08-02T00:00:00.000Z'),
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-02T00:00:00.000Z'),
+    };
+    vi.mocked(orgsRepository.findOwnershipTransfer).mockResolvedValue({
+      ...accepted,
+      status: 'pending',
+      resolvedAt: null,
+    });
+    vi.mocked(orgsRepository.findOrganizationPlan).mockResolvedValue({
+      tier: 'corporate',
+      state: 'active',
+    });
+    vi.mocked(orgsRepository.resolveOwnershipTransfer).mockResolvedValue(accepted);
+    vi.mocked(orgsRepository.findMemberById).mockResolvedValue({
+      id: 'target-member',
+      userId: 'target-user',
+      role: 'owner',
+      frozen: false,
+      name: 'Target User',
+      email: 'target@example.com',
+    });
+    vi.mocked(orgsRepository.findUser).mockImplementation(async (userId) =>
+      userId === 'owner-user'
+        ? { id: userId, name: 'Owner User', email: 'owner@example.com' }
+        : { id: userId, name: 'Target User', email: 'target@example.com' },
+    );
+    mocks.sendEmail.mockRejectedValue(new Error('provider unavailable'));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      orgsService.resolveOwnershipTransfer({
+        id: accepted.id,
+        userId: 'target-user',
+        action: 'accept',
+        now: new Date('2026-08-02T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ id: accepted.id, status: 'accepted' });
+    expect(errorLog).toHaveBeenCalledTimes(2);
+    errorLog.mockRestore();
   });
 });

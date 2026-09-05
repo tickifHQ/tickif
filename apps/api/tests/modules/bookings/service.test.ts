@@ -28,6 +28,7 @@ const caller = {
   phoneNumberVerified: true,
   isBanned: false,
   activeOrgId: null,
+  activeTeamId: null,
 };
 
 const designerCaller = {
@@ -37,12 +38,14 @@ const designerCaller = {
   phoneNumberVerified: true,
   isBanned: false,
   activeOrgId: 'org_1',
+  activeTeamId: 'team_1',
 };
 
 function row(overrides: Partial<BookingViewRecord> = {}): BookingViewRecord {
   return {
     id: '11111111-1111-4111-8111-111111111111',
     organizationId: 'org_1',
+    designerTeamId: 'team_1',
     designerProfileId: '22222222-2222-4222-8222-222222222222',
     requesterId: caller.userId,
     referredProjectId: '33333333-3333-4333-8333-333333333333',
@@ -182,6 +185,23 @@ describe('bookingsService listing', () => {
     ).rejects.toMatchObject({ status: 403 });
     expect(bookingsRepository.list).not.toHaveBeenCalled();
   });
+
+  it('scopes the designer inbox to the active branch', async () => {
+    vi.mocked(bookingsRepository.list).mockResolvedValue({ items: [row()], total: 1 });
+
+    await bookingsService.listInbox(
+      { status: 'all', page: 1, limit: 12 },
+      designerCaller,
+    );
+
+    expect(bookingsRepository.list).toHaveBeenCalledWith({
+      organizationId: designerCaller.activeOrgId,
+      designerTeamId: designerCaller.activeTeamId,
+      status: undefined,
+      limit: 12,
+      offset: 0,
+    });
+  });
 });
 
 describe('bookingsService transitions', () => {
@@ -306,6 +326,18 @@ describe('bookingsService transitions', () => {
     await expect(
       bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller),
     ).rejects.toMatchObject({ status: 403 });
+    expect(bookingsRepository.transition).not.toHaveBeenCalled();
+  });
+
+  it('hides bookings belonging to another branch from designer mutations', async () => {
+    vi.mocked(bookingsRepository.findById).mockResolvedValue(
+      row({ designerTeamId: 'team_2' }),
+    );
+
+    await expect(
+      bookingsService.confirm(row().id, { confirmedSlot: slot }, designerCaller),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(orgsService.isWriter).not.toHaveBeenCalled();
     expect(bookingsRepository.transition).not.toHaveBeenCalled();
   });
 

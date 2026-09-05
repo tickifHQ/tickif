@@ -46,9 +46,14 @@ import {
   Tags,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { createProjectReviewCommentSchema } from '@repo/contracts';
 import {
+  ADMIN_MODERATION_QUEUE_TABS,
   correctAdminProject,
+  createAdminReviewComment,
+  updateAdminReviewComment,
   fetchAdminModerationDetail,
   fetchAdminModerationQueue,
   publishAdminProject,
@@ -56,17 +61,13 @@ import {
   requestAdminChanges,
   startAdminReview,
   unpublishAdminProject,
+  type AdminModerationQueueTab,
 } from '@/lib/admin-moderation-api';
 
-type ModerationTab = 'submitted' | 'in_review' | 'published';
+type ModerationTab = AdminModerationQueueTab;
 type ActionIntent = 'request_changes' | 'reject' | 'unpublish';
 type EditableField =
-  | 'title'
-  | 'propertyTypeSlug'
-  | 'scopeSlug'
-  | 'citySlug'
-  | 'localitySlug'
-  | 'budgetBandSlug';
+  'title' | 'propertyTypeSlug' | 'scopeSlug' | 'citySlug' | 'localitySlug' | 'budgetBandSlug';
 
 const tabLabels: Record<ModerationTab, string> = {
   submitted: 'Submitted',
@@ -288,12 +289,55 @@ function ReviewDetail({
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [draftValue, setDraftValue] = useState('');
   const [metadataError, setMetadataError] = useState<string | null>(null);
+  const [commentBody, setCommentBody] = useState('');
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const operationBusy = useRef(false);
 
   const isOwner = currentUserRole === 'superadmin' || project.reviewedBy === currentUserId;
   const canModerate = project.status === 'in_review' && isOwner;
   const blockedByOtherAdmin = project.status === 'in_review' && !isOwner;
+  const canCreateComment = project.status === 'submitted' || canModerate;
+  const canUpdateComment = canCreateComment || (project.status === 'changes_requested' && isOwner);
+  const unresolvedComments = detail.reviewComments.some(
+    (comment) => comment.status === 'unresolved',
+  );
+
+  async function saveComment(commentId?: string, status: 'resolved' | 'unresolved' = 'resolved') {
+    if (operationBusy.current) return;
+    const parsed = createProjectReviewCommentSchema.safeParse({ body: commentBody });
+    if (!commentId && !parsed.success) {
+      setCommentError('Enter a review comment between 1 and 2,000 characters.');
+      return;
+    }
+    operationBusy.current = true;
+    setBusyAction(commentId ?? 'comment');
+    setCommentError(null);
+    try {
+      const comment = commentId
+        ? await updateAdminReviewComment(project.id, commentId, { status })
+        : await createAdminReviewComment(project.id, parsed.success ? parsed.data : { body: '' });
+      onUpdated({
+        ...detail,
+        reviewComments: commentId
+          ? detail.reviewComments.map((existing) =>
+              existing.id === commentId ? comment : existing,
+            )
+          : [...detail.reviewComments, comment],
+      });
+      if (!commentId) setCommentBody('');
+    } catch (error) {
+      setCommentError(
+        error instanceof Error ? error.message : 'Could not save the review comment.',
+      );
+    } finally {
+      operationBusy.current = false;
+      setBusyAction(null);
+    }
+  }
 
   async function perform(action: string, operation: () => Promise<AdminModerationDetailResponse>) {
+    if (operationBusy.current) return;
+    operationBusy.current = true;
     setBusyAction(action);
     setActionError(null);
     try {
@@ -301,6 +345,7 @@ function ReviewDetail({
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The action could not be completed.');
     } finally {
+      operationBusy.current = false;
       setBusyAction(null);
     }
   }
@@ -336,11 +381,13 @@ function ReviewDetail({
   }
 
   async function saveMetadata(field: EditableField) {
+    if (operationBusy.current) return;
     const value = draftValue.trim();
     if (field === 'title' && value.length < 3) {
       setMetadataError('Project title must be at least 3 characters.');
       return;
     }
+    operationBusy.current = true;
     setBusyAction(`metadata:${field}`);
     setMetadataError(null);
     try {
@@ -350,13 +397,14 @@ function ReviewDetail({
     } catch (error) {
       setMetadataError(error instanceof Error ? error.message : 'Could not save metadata.');
     } finally {
+      operationBusy.current = false;
       setBusyAction(null);
     }
   }
 
   return (
     <>
-      <DialogHeader className="border-b px-6 py-5 pr-14">
+      <DialogHeader className="min-w-0 border-b px-6 py-5 pr-14 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -373,7 +421,7 @@ function ReviewDetail({
         </div>
       </DialogHeader>
 
-      <div className="space-y-8 px-6 py-6">
+      <div className="min-w-0 space-y-8 px-6 py-6">
         {blockedByOtherAdmin ? (
           <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -494,7 +542,7 @@ function ReviewDetail({
                           setDraftValue(fieldValue(project, key));
                           setMetadataError(null);
                         }}
-                        disabled={!canModerate}
+                        disabled={!canModerate || busyAction !== null}
                         aria-label={`Edit ${label}`}
                       >
                         <Pencil className="size-3.5" />
@@ -528,6 +576,79 @@ function ReviewDetail({
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="flex flex-col gap-3" aria-labelledby="review-comments-heading">
+          <h3 id="review-comments-heading" className="font-display text-base font-semibold">
+            Review comments
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Comments are visible to the designer as Tickif Review Team. Resolve all outstanding
+            comments before approving.
+          </p>
+          {detail.reviewComments.length ? (
+            <ul className="flex flex-col gap-3">
+              {detail.reviewComments.map((comment) => (
+                <li key={comment.id} className="flex flex-col gap-2 rounded-lg border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {comment.authorLabel} · {formatDate(comment.createdAt)}
+                    </p>
+                    <Badge variant={comment.status === 'resolved' ? 'success' : 'warning'}>
+                      {comment.status}
+                    </Badge>
+                  </div>
+                  <p className="whitespace-pre-wrap break-words text-sm">{comment.body}</p>
+                  {canUpdateComment ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      disabled={busyAction !== null}
+                      onClick={() =>
+                        void saveComment(
+                          comment.id,
+                          comment.status === 'resolved' ? 'unresolved' : 'resolved',
+                        )
+                      }
+                    >
+                      {comment.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No review comments yet.</p>
+          )}
+          {canCreateComment ? (
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveComment();
+              }}
+            >
+              <Label htmlFor="review-comment">Review comment</Label>
+              <Textarea
+                id="review-comment"
+                value={commentBody}
+                onChange={(event) => setCommentBody(event.target.value)}
+                disabled={busyAction !== null}
+                aria-invalid={Boolean(commentError)}
+                aria-describedby={commentError ? 'review-comment-error' : undefined}
+              />
+              <Button type="submit" className="self-start" disabled={busyAction !== null}>
+                Add comment
+              </Button>
+            </form>
+          ) : null}
+          {commentError ? (
+            <p id="review-comment-error" role="alert" className="text-sm text-destructive">
+              {commentError}
+            </p>
+          ) : null}
         </section>
 
         <Completeness requirements={detail.completeness.requirements} />
@@ -603,7 +724,9 @@ function ReviewDetail({
               <Button
                 type="button"
                 onClick={() => void perform('publish', () => publishAdminProject(project.id))}
-                disabled={busyAction !== null || !detail.completeness.complete}
+                disabled={
+                  busyAction !== null || !detail.completeness.complete || unresolvedComments
+                }
               >
                 {busyAction === 'publish' ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -687,87 +810,128 @@ function ReviewDetail({
 
 export function AdminModerationQueue({
   initialQueue,
+  initialTab = 'submitted',
+  initialCounts,
   currentUserId,
   currentUserRole,
   initialError,
 }: {
   initialQueue: AdminModerationQueueResponse;
+  initialTab?: ModerationTab;
+  initialCounts?: Record<ModerationTab, number>;
   currentUserId: string;
   currentUserRole: string;
   initialError?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<ModerationTab>('submitted');
-  const [queues, setQueues] = useState<
-    Partial<Record<ModerationTab, AdminModerationQueueResponse>>
-  >({
-    submitted: initialQueue,
-  });
+  const router = useRouter();
+  const [navigating, startNavigation] = useTransition();
+  const activeTab = initialTab;
+  const [activeQueue, setActiveQueue] = useState(initialQueue);
+  const [tabCounts, setTabCounts] = useState<Record<ModerationTab, number>>(
+    () =>
+      initialCounts ?? {
+        submitted: 0,
+        in_review: 0,
+        published: 0,
+        [initialTab]: initialQueue.total,
+      },
+  );
   const [queueError, setQueueError] = useState<string | null>(initialError ?? null);
-  const [loadingTab, setLoadingTab] = useState<ModerationTab | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminModerationDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const detailRequest = useRef(0);
+  const queueRequest = useRef(0);
+  const selectedId = useRef<string | null>(null);
+  const mounted = useRef(true);
+  const renderedDetailRequest = detailRequest.current;
+  const oldest = activeTab === 'submitted' ? oldestSubmission(activeQueue.items) : null;
 
-  const activeQueue = queues[activeTab] ?? { ...initialQueue, items: [], total: 0, totalPages: 0 };
-  const oldest = oldestSubmission(queues.submitted?.items ?? []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      detailRequest.current++;
+      queueRequest.current++;
+      selectedId.current = null;
+    };
+  }, []);
 
-  async function changeTab(value: string) {
-    const tab = value as ModerationTab;
-    setActiveTab(tab);
-    if (queues[tab]) return;
-    setLoadingTab(tab);
-    setQueueError(null);
-    try {
-      const nextQueue = await fetchAdminModerationQueue(tab);
-      setQueues((current) => ({ ...current, [tab]: nextQueue }));
-    } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not load this queue.');
-    } finally {
-      setLoadingTab(null);
-    }
+  function navigate(tab: ModerationTab, page: number) {
+    closeDetail();
+    queueRequest.current++;
+    setRefreshing(false);
+    startNavigation(() => router.push('/moderation?status=' + tab + '&page=' + page));
   }
 
   async function openDetail(projectId: string) {
+    const request = ++detailRequest.current;
+    selectedId.current = projectId;
     setSelectedProjectId(projectId);
     setDetail(null);
     setDetailError(null);
     setLoadingDetail(true);
     try {
-      setDetail(await fetchAdminModerationDetail(projectId));
+      const next = await fetchAdminModerationDetail(projectId);
+      if (request === detailRequest.current) setDetail(next);
     } catch (error) {
-      setDetailError(
-        error instanceof Error ? error.message : 'Could not load this project review.',
-      );
+      if (request === detailRequest.current)
+        setDetailError(
+          error instanceof Error ? error.message : 'Could not load this project review.',
+        );
     } finally {
-      setLoadingDetail(false);
+      if (request === detailRequest.current) setLoadingDetail(false);
     }
   }
 
   function closeDetail() {
+    detailRequest.current++;
+    selectedId.current = null;
     setSelectedProjectId(null);
     setDetail(null);
     setDetailError(null);
+    setLoadingDetail(false);
   }
 
   async function refreshQueues() {
-    const tabs: ModerationTab[] = ['submitted', 'in_review', 'published'];
-    const results = await Promise.allSettled(tabs.map((tab) => fetchAdminModerationQueue(tab)));
-    setQueues((current) => {
-      const next = { ...current };
-      results.forEach((result, index) => {
-        const tab = tabs[index]!;
-        if (result.status === 'fulfilled') next[tab] = result.value;
-      });
-      return next;
+    const request = ++queueRequest.current;
+    setRefreshing(true);
+    setQueueError(null);
+    const results = await Promise.allSettled(
+      ADMIN_MODERATION_QUEUE_TABS.map((tab) =>
+        fetchAdminModerationQueue(tab, tab === activeTab ? activeQueue.page : 1),
+      ),
+    );
+    if (request !== queueRequest.current) return;
+    setRefreshing(false);
+    const counts = { ...tabCounts };
+    results.forEach((result, index) => {
+      const tab = ADMIN_MODERATION_QUEUE_TABS[index]!;
+      if (result.status === 'fulfilled') {
+        counts[tab] = result.value.total;
+        if (tab === activeTab) {
+          const lastPage = Math.max(1, result.value.totalPages);
+          if (result.value.page > lastPage) {
+            closeDetail();
+            startNavigation(() =>
+              router.replace('/moderation?status=' + tab + '&page=' + lastPage),
+            );
+          } else setActiveQueue(result.value);
+        }
+      } else setQueueError('The queue could not be refreshed. Try again.');
     });
+    setTabCounts(counts);
   }
 
-  function handleDetailUpdated(nextDetail: AdminModerationDetailResponse) {
-    setDetail(nextDetail);
+  function handleDetailUpdated(nextDetail: AdminModerationDetailResponse, request: number) {
+    if (!mounted.current) return;
+    if (request === detailRequest.current && nextDetail.project.id === selectedId.current) {
+      setDetail(nextDetail);
+    }
     void refreshQueues();
   }
-
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -785,7 +949,7 @@ export function AdminModerationQueue({
         </div>
         <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm shadow-sm">
           <Clock3 className="size-4 text-primary" aria-hidden="true" />
-          <span className="text-muted-foreground">Oldest submission</span>
+          <span className="text-muted-foreground">Oldest submission on this page</span>
           <span className="font-medium text-foreground">{formatAge(oldest)}</span>
         </div>
       </div>
@@ -793,47 +957,62 @@ export function AdminModerationQueue({
       {queueError ? (
         <div className="mb-5 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {queueError}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            onClick={() => void refreshQueues()}
+          >
+            Refresh queue
+          </Button>
         </div>
       ) : null}
 
-      <Tabs value={activeTab} onValueChange={(value) => void changeTab(value)}>
+      <Tabs value={activeTab} onValueChange={(value) => navigate(value as ModerationTab, 1)}>
         <TabsList aria-label="Moderation queues">
-          {(Object.keys(tabLabels) as ModerationTab[]).map((tab) => (
-            <TabsTrigger key={tab} value={tab} disabled={loadingTab === tab}>
-              {loadingTab === tab ? <Loader2 className="size-3.5 animate-spin" /> : null}
+          {ADMIN_MODERATION_QUEUE_TABS.map((tab) => (
+            <TabsTrigger key={tab} value={tab} disabled={navigating}>
               {tabLabels[tab]}
-              {queues[tab] ? (
-                <span className="ml-1 text-xs text-muted-foreground">{queues[tab]?.total}</span>
-              ) : null}
+              <span className="ml-1 text-xs text-muted-foreground">{tabCounts[tab]}</span>
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="submitted" className="mt-5">
-          <QueueTable
-            queue={activeTab === 'submitted' ? activeQueue : (queues.submitted ?? initialQueue)}
-            tab="submitted"
-            onOpen={(id) => void openDetail(id)}
-          />
-        </TabsContent>
-        <TabsContent value="in_review" className="mt-5">
-          <QueueTable
-            queue={activeTab === 'in_review' ? activeQueue : (queues.in_review ?? activeQueue)}
-            tab="in_review"
-            onOpen={(id) => void openDetail(id)}
-          />
-        </TabsContent>
-        <TabsContent value="published" className="mt-5">
-          <QueueTable
-            queue={activeTab === 'published' ? activeQueue : (queues.published ?? activeQueue)}
-            tab="published"
-            onOpen={(id) => void openDetail(id)}
-          />
+        <TabsContent value={activeTab} className="mt-5" aria-busy={navigating || refreshing}>
+          <QueueTable queue={activeQueue} tab={activeTab} onOpen={(id) => void openDetail(id)} />
         </TabsContent>
       </Tabs>
+      <nav
+        aria-label="Moderation pagination"
+        className="mt-4 flex flex-wrap items-center justify-between gap-3"
+      >
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          Page {activeQueue.page} of {Math.max(1, activeQueue.totalPages)} · {activeQueue.total}{' '}
+          projects
+        </p>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={navigating || refreshing || activeQueue.page <= 1}
+            onClick={() => navigate(activeTab, activeQueue.page - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={navigating || refreshing || activeQueue.page >= activeQueue.totalPages}
+            onClick={() => navigate(activeTab, activeQueue.page + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </nav>
 
       <Dialog open={selectedProjectId !== null} onOpenChange={(open) => !open && closeDetail()}>
         <DialogContent
-          className="left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-2xl translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-2xl"
+          className="left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-2xl translate-x-0 translate-y-0 grid-cols-1 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0 sm:max-w-2xl"
           overlayClassName="bg-foreground/30"
         >
           <DialogTitle className="sr-only">Project review</DialogTitle>
@@ -862,7 +1041,7 @@ export function AdminModerationQueue({
               currentUserId={currentUserId}
               currentUserRole={currentUserRole}
               onClose={closeDetail}
-              onUpdated={handleDetailUpdated}
+              onUpdated={(next) => handleDetailUpdated(next, renderedDetailRequest)}
             />
           ) : null}
         </DialogContent>

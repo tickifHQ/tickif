@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { integrationEnv, workerTestDatabaseUrl } from '@repo/vitest-config/node';
+import { integrationEnv, testEnv, workerTestDatabaseUrl } from '@repo/vitest-config/node';
 
 /**
  * Two projects:
@@ -19,6 +19,8 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
+          maxWorkers: 2,
+          env: testEnv(),
           globals: true,
           environment: 'node',
           include: ['tests/**/*.test.ts'],

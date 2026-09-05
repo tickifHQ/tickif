@@ -74,7 +74,77 @@ export const RAZORPAY_EVENT_VALUES = [
   RAZORPAY_EVENT.SUBSCRIPTION_CANCELLED,
 ] as const;
 
-export const razorpayEventSchema = z
-  .enum(RAZORPAY_EVENT_VALUES)
-  .meta({ id: 'RazorpayEvent' });
+export const razorpayEventSchema = z.enum(RAZORPAY_EVENT_VALUES).meta({ id: 'RazorpayEvent' });
 export type RazorpayEvent = z.infer<typeof razorpayEventSchema>;
+
+/** Razorpay payment entity creation time in Unix seconds. */
+export const razorpayPaymentCreatedAtSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(8_640_000_000_000)
+  .meta({ id: 'RazorpayPaymentCreatedAt' });
+
+export const billingPlanRequestSchema = z
+  .object({ targetTier: planTierSchema })
+  .meta({ id: 'BillingPlanRequest' });
+export const billingCheckoutResponseSchema = z
+  .object({
+    razorpaySubscriptionId: z.string(),
+    shortUrl: z.string().nullable(),
+    razorpayKeyId: z.string(),
+    prefill: z.object({
+      name: z.string().nullable(),
+      email: z.string().nullable(),
+      contact: z.string().nullable(),
+    }),
+  })
+  .meta({ id: 'BillingCheckoutResponse' });
+export type BillingCheckoutResponse = z.infer<typeof billingCheckoutResponseSchema>;
+export const billingPlanResponseSchema = z
+  .object({ razorpaySubscriptionId: z.string() })
+  .meta({ id: 'BillingPlanResponse' });
+export const billingCancelResponseSchema = billingPlanResponseSchema
+  .extend({
+    alreadyCancelled: z.boolean(),
+    currentPeriodEnd: z.string().datetime().nullable(),
+  })
+  .meta({ id: 'BillingCancelResponse' });
+export const billingVerifyRequestSchema = z
+  .object({
+    razorpayPaymentId: z.string().min(1).max(100),
+    razorpaySubscriptionId: z.string().min(1).max(100),
+    razorpaySignature: z.string().min(1).max(128),
+  })
+  .meta({ id: 'BillingVerifyRequest' });
+export type BillingVerifyRequest = z.infer<typeof billingVerifyRequestSchema>;
+export const billingVerifyResponseSchema = z
+  .object({ verified: z.boolean() })
+  .meta({ id: 'BillingVerifyResponse' });
+export const billingRefreshResponseSchema = z
+  .object({
+    reconciled: z.boolean(),
+    razorpayStatus: z.string().nullable(),
+  })
+  .meta({ id: 'BillingRefreshResponse' });
+export const billingPaymentsQuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).max(100000).default(0),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  })
+  .meta({ id: 'BillingPaymentsQuery' });
+export const billingPaymentsResponseSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        id: z.string(),
+        amount: z.number().int().nonnegative(),
+        currency: z.string(),
+        status: z.string(),
+        occurredAt: z.string().datetime(),
+      }),
+    ),
+    nextOffset: z.number().int().nullable(),
+  })
+  .meta({ id: 'BillingPaymentsResponse' });
+export type BillingPaymentsResponse = z.infer<typeof billingPaymentsResponseSchema>;

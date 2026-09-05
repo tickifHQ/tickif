@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
 
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+
 vi.mock('@/components/enquiry-cta', () => ({
   EnquiryCta: ({ children, loginHref }: { children: ReactNode; loginHref: string }) => (
     <button data-login-href={loginHref}>{children}</button>

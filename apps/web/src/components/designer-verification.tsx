@@ -220,8 +220,9 @@ export function DesignerVerification({
   const applicationPending = state.status === VERIFICATION_APPLICATION_STATUS.PENDING;
   const applicationVerified = state.status === VERIFICATION_APPLICATION_STATUS.VERIFIED;
   const applicationExpired = state.status === VERIFICATION_EFFECTIVE_STATUS.EXPIRED;
-  const needsRejectedBusinessDocument =
-    state.status === VERIFICATION_APPLICATION_STATUS.REJECTED && !businessDocumentPresent;
+  const needsRejectedDocument =
+    state.status === VERIFICATION_APPLICATION_STATUS.REJECTED &&
+    state.documents.some((document) => document.status === VERIFICATION_DOCUMENT_STATUS.REJECTED);
   const applicationEditable = state.applicationEditable;
   const canManage = state.permissions.canManage && applicationEditable;
   const enteredPhone = phone ? `${selectedCountry.code} ${phone}` : 'Account owner phone';
@@ -736,6 +737,13 @@ export function DesignerVerification({
               </ul>
               {applicationPending ? (
                 <>
+                  {state.latestNote ? (
+                    <Alert variant="warning">
+                      <CircleAlert aria-hidden="true" />
+                      <AlertTitle>Approval returned to review</AlertTitle>
+                      <AlertDescription>{state.latestNote}</AlertDescription>
+                    </Alert>
+                  ) : null}
                   <TipCallout variant="info">
                     Once you submit, the admin team reviews within 2–5 business days. They may ask
                     for a quick clarification on your document; you&apos;ll get a notification if
@@ -754,16 +762,16 @@ export function DesignerVerification({
                   </TipCallout>
                   <Button
                     type="button"
-                    variant={needsRejectedBusinessDocument ? 'outline' : 'default'}
-                    size={needsRejectedBusinessDocument ? 'sm' : 'default'}
+                    variant={needsRejectedDocument ? 'outline' : 'default'}
+                    size={needsRejectedDocument ? 'sm' : 'default'}
                     className={cn(
                       'w-full',
-                      needsRejectedBusinessDocument &&
+                      needsRejectedDocument &&
                         'border-border bg-muted text-[13px] leading-[1.1] text-muted-foreground shadow-none disabled:opacity-100',
                     )}
                     onClick={handleSubmit}
                     disabled={
-                      needsRejectedBusinessDocument ||
+                      needsRejectedDocument ||
                       !state.eligibility.eligible ||
                       !canManage ||
                       busyAction !== null
@@ -773,7 +781,7 @@ export function DesignerVerification({
                       ? 'Submitting…'
                       : applicationExpired ||
                           (state.status === VERIFICATION_APPLICATION_STATUS.REJECTED &&
-                            !needsRejectedBusinessDocument)
+                            !needsRejectedDocument)
                         ? 'Resubmit for verification'
                         : 'Submit for verification'}
                   </Button>

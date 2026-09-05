@@ -15,6 +15,10 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectById: vi.fn(),
+    findPublicProjectLifecycleById: vi.fn(),
+    findPublicProjectLifecycleBySlug: vi.fn(),
+    isProjectTombstonedById: vi.fn(),
+    isProjectTombstonedBySlug: vi.fn(),
     findPublicProjectBySlug: vi.fn(),
     findPublicProjectByImageId: vi.fn(),
     listPublishedByDesigner: vi.fn(),
@@ -53,6 +57,10 @@ beforeEach(() => {
   vi.mocked(projectsRepository.findPublishedProjectNarrative).mockResolvedValue(null);
   vi.mocked(projectsRepository.listPublishedDesignerMotifCounts).mockResolvedValue([]);
   vi.mocked(projectsRepository.listPublishedRecommendationCandidates).mockResolvedValue([]);
+  vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+  vi.mocked(projectsRepository.findPublicProjectLifecycleBySlug).mockResolvedValue(null);
+  vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(false);
+  vi.mocked(projectsRepository.isProjectTombstonedBySlug).mockResolvedValue(false);
 });
 
 // --- Factories ---
@@ -65,6 +73,7 @@ function makeProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     slug: 'modern-apartment',
     description: 'A modern apartment design',
     status: 'published',
+    archiveReason: null,
     propertyTypeSlug: 'apartment',
     propertySubtypeSlug: null,
     scopeSlug: 'full-home',
@@ -150,6 +159,33 @@ describe('projectsService.getPublicBySlug', () => {
       projectsService.getPublicBySlug('inactive-designer-project'),
     ).rejects.toMatchObject({
       status: 404,
+    });
+  });
+
+  it('returns a minimal unavailable response for a retained slug', async () => {
+    vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleBySlug).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Retained Home',
+      status: 'delisted',
+      archiveReason: 'organization_retention',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(projectsService.getPublicPageBySlug('retained-home')).resolves.toMatchObject({
+      availability: 'unavailable',
+      status: 'delisted',
+    });
+  });
+
+  it('returns 410 for a purged project slug tombstone', async () => {
+    vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedBySlug).mockResolvedValue(true);
+
+    await expect(projectsService.getPublicPageBySlug('purged-home')).rejects.toMatchObject({
+      status: 410,
+      code: 'gone',
     });
   });
 
@@ -438,6 +474,104 @@ describe('projectsService.getPublicById', () => {
     await expect(
       projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns a minimal unavailable response for a recoverable delisted project', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Delisted Home',
+      status: 'delisted',
+      archiveReason: null,
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).resolves.toEqual({
+      availability: 'unavailable',
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Delisted Home',
+      status: 'delisted',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+    });
+  });
+
+  it('returns a minimal unavailable response for an organization-retention archive', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Recoverable Home',
+      status: 'archived',
+      archiveReason: 'organization_retention',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).resolves.toMatchObject({
+      availability: 'unavailable',
+      status: 'archived',
+    });
+  });
+
+  it('keeps manually archived projects private', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Manually Archived Home',
+      status: 'archived',
+      archiveReason: 'manual',
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('returns 410 for a permanently deleted project', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Deleted Home',
+      status: 'deleted',
+      archiveReason: null,
+      designerDisplayName: 'Studio A',
+      designerOrgSlug: 'studio-a',
+    });
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
+  });
+
+  it('returns 410 from a durable tombstone after the project row is purged', async () => {
+    vi.mocked(projectsRepository.findPublicProjectById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findPublicProjectLifecycleById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(true);
+
+    await expect(
+      projectsService.getPublicById('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
+  });
+});
+
+// =============================================================================
+// getGallery
+// =============================================================================
+
+describe('projectsService.getGallery', () => {
+  it('returns 410 from a durable tombstone after the project row is purged', async () => {
+    vi.mocked(projectsRepository.findById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(true);
+
+    await expect(
+      projectsService.getGallery('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
   });
 });
 

@@ -1,4 +1,5 @@
 import type {
+  AssignProjectResponsibleMemberInput,
   CreateProjectInput,
   CreateProjectRoomInput,
   DeleteProjectImageResponse,
@@ -26,9 +27,10 @@ import type {
   PortfolioProjectStatusGroup,
   ProjectResponse,
   PublicImageDetailResponse,
+  PublicProjectDetailResponse,
   ProjectReviewComment,
   ProjectReviewCommentsResponse,
-  PublicProjectBySlugResponse,
+  PublicProjectPageResponse,
   ListProjectsResponse,
   ProjectRoom,
   PublicProjectGalleryImage,
@@ -41,10 +43,12 @@ import type {
   UpdateProjectRoomInput,
   Derivative,
 } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
 import {
+  ProjectSlugUnavailableError,
   projectsRepository,
   type ProjectCoverImageRecord,
   type ProjectFeedItemRecord,
@@ -96,10 +100,12 @@ function toResponse(
   return {
     id: row.id,
     designerId: row.designerId,
+    responsibleMemberId: row.responsibleMemberId,
     title: row.title,
     slug: row.slug,
     description: row.description,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
@@ -488,6 +494,7 @@ function toListItemFields(
     city: row.citySlug,
     locality: row.localitySlug,
     status: row.status,
+    archiveReason: row.archiveReason,
     rejectionReasonCode: row.rejectionReasonCode,
     moderationNote: row.moderationNote,
     coverImageUrl,
@@ -565,6 +572,9 @@ function buildPortfolioStatusCounts(
     published: count(['published']),
     changesRequested: count(['changes_requested']),
     rejected: count(['rejected']),
+    archived: count(['archived']),
+    delisted: count(['delisted']),
+    deleted: count(['deleted']),
   };
 }
 
@@ -574,6 +584,7 @@ export type Caller = {
   userRole: string;
   isBanned: boolean;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
 };
 
 export type TransitionCaller = Pick<Caller, 'userId' | 'userRole'>;
@@ -718,11 +729,44 @@ function requireActiveOrganization(caller: Caller): string {
   return caller.activeOrgId;
 }
 
-function assertAccess(ownership: ProjectOwnership, caller: Caller): void {
+function requireActiveTeam(caller: Caller): string {
+  const teamId = caller.activeTeamId;
+  if (!teamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  return teamId;
+}
+
+async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
-  if (ownership.ownerUserId && ownership.ownerUserId === caller.userId) return;
+  if (
+    caller.activeOrgId === ownership.organizationId &&
+    (!caller.activeTeamId || !ownership.teamId || caller.activeTeamId === ownership.teamId) &&
+    (await orgsService.isMember(caller.userId, ownership.organizationId))
+  ) {
+    return;
+  }
   throw AppError.forbidden();
+}
+
+async function assertProjectCapability(
+  ownership: ProjectOwnership,
+  caller: Caller,
+  capability:
+    | typeof ORGANIZATION_CAPABILITY.WRITE_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.DELETE_PROJECTS,
+): Promise<void> {
+  if (caller.isBanned) throw AppError.forbidden('Account suspended');
+  if (caller.userRole === 'superadmin') return;
+  if (caller.activeOrgId !== ownership.organizationId) throw AppError.forbidden();
+  if (ownership.teamId && requireActiveTeam(caller) !== ownership.teamId) {
+    throw AppError.forbidden();
+  }
+  if (await orgsService.hasCapability(caller.userId, ownership.organizationId, capability)) return;
+  throw AppError.forbidden('Organization role does not allow this project action');
 }
 
 function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
@@ -732,10 +776,14 @@ function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
 async function requireEditableProject(
   projectId: string,
   caller: Caller,
+  capability:
+    | typeof ORGANIZATION_CAPABILITY.WRITE_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS
+    | typeof ORGANIZATION_CAPABILITY.DELETE_PROJECTS = ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
 ): Promise<ProjectOwnership> {
   const ownership = await projectsRepository.findOwnership(projectId);
   if (!ownership) throw AppError.notFound('Project not found');
-  await assertAccess(ownership, caller);
+  await assertProjectCapability(ownership, caller, capability);
   if (!isEditableProjectStatus(ownership.status)) {
     throw AppError.conflict('Only draft or changes-requested projects can be edited');
   }
@@ -920,14 +968,11 @@ function expandRoomPrefillSlugs(
 ): RoomPrefillSpec[] {
   return slugs.flatMap((slug): RoomPrefillSpec[] => {
     if (slug === 'bedroom') {
-      return Array.from(
-        { length: bhkCount(project.bhkSlug) },
-        (_, index): RoomPrefillSpec => ({
-          slug,
-          name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
-          metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
-        }),
-      );
+      return Array.from({ length: bhkCount(project.bhkSlug) }, (_, index): RoomPrefillSpec => ({
+        slug,
+        name: index === 0 ? 'Master Bedroom' : `Bedroom ${index + 1}`,
+        metadata: { labels: [index === 0 ? 'Master' : `Bedroom ${index + 1}`] },
+      }));
     }
     return [{ slug, metadata: prefillMetadata(slug) }];
   });
@@ -973,7 +1018,7 @@ async function createDraftWithUniqueSlug(
     try {
       return await projectsRepository.createDraft(input, designerId, slug);
     } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+      if (!(isUniqueViolation(error) || error instanceof ProjectSlugUnavailableError)) throw error;
     }
   }
   return projectsRepository.createDraft(input, designerId, `${base}-${Date.now().toString(36)}`);
@@ -991,7 +1036,7 @@ async function duplicateWithUniqueSlug(
     try {
       return await projectsRepository.duplicateProject({ source, title, slug });
     } catch (error) {
-      if (!isUniqueViolation(error)) throw error;
+      if (!(isUniqueViolation(error) || error instanceof ProjectSlugUnavailableError)) throw error;
     }
   }
   return projectsRepository.duplicateProject({
@@ -1005,6 +1050,7 @@ function statusesForList(status: ListProjectsQuery['status']): ProjectStatus[] |
   if (status === 'draft') return ['draft', 'changes_requested', 'rejected'];
   if (status === 'in_review') return ['submitted', 'in_review'];
   if (status === 'published') return ['published'];
+  if (status === 'archived') return ['archived'];
   return undefined;
 }
 
@@ -1100,7 +1146,7 @@ type PublicProjectDetailBuildOptions = {
 async function buildPublicProjectDetail(
   result: PublicProjectReadRecord,
   options: PublicProjectDetailBuildOptions,
-): Promise<PublicProjectBySlugResponse> {
+): Promise<PublicProjectDetailResponse> {
   const { project, designer } = result;
   if (project.status !== 'published' || designer.status !== 'active') {
     throw AppError.notFound('Project not found');
@@ -1268,9 +1314,20 @@ async function buildPublicProjectDetail(
 }
 
 export const projectsService = {
+  async assertPublicProjectNotDeleted(id: string): Promise<void> {
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (
+      lifecycle?.status === 'deleted' ||
+      (!lifecycle && (await projectsRepository.isProjectTombstonedById(id)))
+    ) {
+      throw AppError.gone('Project permanently deleted');
+    }
+  },
+
   async list(query: ListProjectsQuery, caller: Caller): Promise<ListProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
@@ -1279,6 +1336,7 @@ export const projectsService = {
     const { items, total } = await projectsRepository.list({
       userId: caller.userId,
       activeOrgId,
+      activeTeamId,
       statuses: statusesForList(query.status),
       q: query.q,
       limit,
@@ -1310,6 +1368,7 @@ export const projectsService = {
   ): Promise<PortfolioProjectsResponse> {
     if (caller.isBanned) throw AppError.forbidden('Account suspended');
     const activeOrgId = requireActiveOrganization(caller);
+    const activeTeamId = caller.activeTeamId ?? null;
     if (!(await orgsService.isMember(caller.userId, activeOrgId))) {
       throw AppError.forbidden('Organization membership required');
     }
@@ -1318,6 +1377,7 @@ export const projectsService = {
       projectsRepository.list({
         userId: caller.userId,
         activeOrgId,
+        activeTeamId,
         statuses: statusesForPortfolio(query.status),
         limit,
         offset: (page - 1) * limit,
@@ -1326,6 +1386,7 @@ export const projectsService = {
       projectsRepository.countByStatus({
         userId: caller.userId,
         activeOrgId,
+        activeTeamId,
       }),
     ]);
     const [coverImages, reviewCommentRows] = await Promise.all([
@@ -1417,11 +1478,37 @@ export const projectsService = {
     return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
   },
 
-  async getPublicById(id: string): Promise<PublicProjectBySlugResponse> {
+  async getPublicById(id: string): Promise<PublicProjectPageResponse> {
     const result = await projectsRepository.findPublicProjectById(id);
-    if (!result) throw AppError.notFound('Project not found');
+    if (result) {
+      return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    }
 
-    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+    const lifecycle = await projectsRepository.findPublicProjectLifecycleById(id);
+    if (!lifecycle) {
+      if (await projectsRepository.isProjectTombstonedById(id)) {
+        throw AppError.gone('Project permanently deleted');
+      }
+      throw AppError.notFound('Project not found');
+    }
+    if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
+    if (
+      lifecycle.status !== 'delisted' &&
+      !(lifecycle.status === 'archived' && lifecycle.archiveReason === 'organization_retention')
+    ) {
+      throw AppError.notFound('Project not found');
+    }
+
+    return {
+      availability: 'unavailable',
+      id: lifecycle.id,
+      title: lifecycle.title,
+      status: lifecycle.status,
+      designer: {
+        displayName: lifecycle.designerDisplayName,
+        slug: lifecycle.designerOrgSlug,
+      },
+    };
   },
 
   async create(input: CreateProjectInput, caller: Caller): Promise<ProjectDetailResponse> {
@@ -1430,12 +1517,19 @@ export const projectsService = {
       throw AppError.forbidden('Designer role required');
     }
     const activeOrgId = requireActiveOrganization(caller);
-    if (!(await orgsService.isWriter(caller.userId, activeOrgId))) {
+    const activeTeamId = requireActiveTeam(caller);
+    if (
+      !(await orgsService.hasCapability(
+        caller.userId,
+        activeOrgId,
+        ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+      ))
+    ) {
       throw AppError.forbidden('Organization write access required');
     }
     await validateProjectTaxonomy(input);
 
-    const designer = await projectsRepository.findDesignerByOrgId(activeOrgId);
+    const designer = await projectsRepository.findDesignerByTeamId(activeOrgId, activeTeamId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }
@@ -1469,22 +1563,116 @@ export const projectsService = {
     return toDetailResponse(row, rooms);
   },
 
+  async assignResponsibleMember(
+    projectId: string,
+    input: AssignProjectResponsibleMemberInput,
+    caller: Caller,
+  ): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertAccess(ownership, caller);
+    const outcome = await projectsRepository.withOrganizationLifecycleReadLock(
+      ownership.organizationId,
+      async (tx) => {
+        if (
+          !(await orgsService.hasCapability(
+            caller.userId,
+            ownership.organizationId,
+            ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+            tx,
+          ))
+        ) {
+          throw AppError.forbidden('Only organization owners and admins can assign projects');
+        }
+        return projectsRepository.assignResponsibleMember({
+          projectId,
+          organizationId: ownership.organizationId,
+          responsibleMemberId: input.responsibleMemberId,
+          tx,
+        });
+      },
+    );
+    if (outcome === 'invalid_member') {
+      throw AppError.unprocessable(
+        'Responsible member must be an active member of this organization',
+      );
+    }
+    if (!outcome) throw AppError.notFound('Project not found');
+    return toDetailResponse(outcome, await projectsRepository.listRooms(projectId));
+  },
+
   async delete(projectId: string, caller: Caller): Promise<DeleteProjectResponse> {
-    await requireEditableProject(projectId, caller);
-    const outcome = await projectsRepository.deleteProject(projectId);
-    if (outcome === 'moderated') {
-      throw AppError.conflict('Projects with moderation history cannot be deleted');
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.DELETE_PROJECTS);
+    if (ownership.status === 'deleted') throw AppError.conflict('Project is already deleted');
+    if (ownership.status === 'delisted') {
+      throw AppError.conflict('Delisted projects follow the organization retention policy');
     }
-    if (outcome === 'missing') {
-      throw AppError.notFound('Project not found');
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
     }
+    const deleted = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: ownership.status,
+      toStatus: 'deleted',
+      actorUserId: caller.userId,
+      action: 'delete',
+    });
+    if (!deleted) throw AppError.invalidTransition();
     return { id: projectId, deleted: true };
+  },
+
+  async archive(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
+    if (ownership.status !== 'draft' && ownership.status !== 'published') {
+      throw AppError.conflict('Only draft or published projects can be archived');
+    }
+    const archived = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: ownership.status,
+      toStatus: 'archived',
+      actorUserId: caller.userId,
+      action: 'archive',
+      patch: { archiveReason: 'manual' },
+    });
+    if (!archived || archived === 'unresolved_review_comments') throw AppError.invalidTransition();
+    return toDetailResponse(archived, await projectsRepository.listRooms(projectId));
+  },
+
+  async restore(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
+    const ownership = await projectsRepository.findOwnership(projectId);
+    if (!ownership) throw AppError.notFound('Project not found');
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
+    if (ownership.status !== 'archived') throw AppError.conflict('Project is not archived');
+    if (ownership.archiveReason === 'organization_retention') {
+      throw AppError.conflict('Retention-managed projects follow the organization lifecycle');
+    }
+    const restored = await projectsRepository.transition({
+      id: projectId,
+      fromStatus: 'archived',
+      toStatus: 'draft',
+      actorUserId: caller.userId,
+      action: 'restore',
+      patch: {
+        archiveReason: null,
+        publishedAt: null,
+        featuredAt: null,
+      },
+    });
+    if (!restored || restored === 'unresolved_review_comments') throw AppError.invalidTransition();
+    return toDetailResponse(restored, await projectsRepository.listRooms(projectId));
   },
 
   async duplicate(projectId: string, caller: Caller): Promise<DuplicateProjectResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
-    await assertAccess(ownership, caller);
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.WRITE_PROJECTS);
+    if (ownership.status === 'deleted' || ownership.status === 'delisted') {
+      throw AppError.conflict('Deleted or delisted projects cannot be duplicated');
+    }
 
     const source = await projectsRepository.findById(projectId);
     if (!source) throw AppError.notFound('Project not found');
@@ -1585,7 +1773,7 @@ export const projectsService = {
   },
 
   async submit(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
-    await requireEditableProject(projectId, caller);
+    await requireEditableProject(projectId, caller, ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS);
     const project = await projectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     const action = assertTransition(project.status, 'submitted', caller.userRole);
@@ -1636,7 +1824,7 @@ export const projectsService = {
   async withdraw(projectId: string, caller: Caller): Promise<ProjectDetailResponse> {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
-    await assertAccess(ownership, caller);
+    await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.SUBMIT_PROJECTS);
 
     const withdrawn = await transitionProject(
       {
@@ -1684,7 +1872,13 @@ export const projectsService = {
   > {
     // Verify project exists and is published
     const project = await projectsRepository.findById(projectId);
-    if (!project || project.status !== 'published') {
+    if (!project) {
+      if (await projectsRepository.isProjectTombstonedById(projectId)) {
+        throw AppError.gone('Project permanently deleted');
+      }
+      throw AppError.notFound('Project not found');
+    }
+    if (project.status !== 'published') {
       throw AppError.notFound('Project not found');
     }
 
@@ -1748,9 +1942,42 @@ export const projectsService = {
    * GET /api/projects/slug/{slug} — published project detail with designer summary,
    * rooms, and gallery images. Public, no auth.
    */
-  async getPublicBySlug(slug: string): Promise<PublicProjectBySlugResponse> {
+  async getPublicBySlug(slug: string): Promise<PublicProjectDetailResponse> {
     const result = await projectsRepository.findPublicProjectBySlug(slug);
     if (!result) throw AppError.notFound('Project not found');
+
+    return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
+  },
+
+  /** Public slug page, including recoverable retention placeholders. */
+  async getPublicPageBySlug(slug: string): Promise<PublicProjectPageResponse> {
+    const result = await projectsRepository.findPublicProjectBySlug(slug);
+    if (!result) {
+      const lifecycle = await projectsRepository.findPublicProjectLifecycleBySlug(slug);
+      if (!lifecycle) {
+        if (await projectsRepository.isProjectTombstonedBySlug(slug)) {
+          throw AppError.gone('Project permanently deleted');
+        }
+        throw AppError.notFound('Project not found');
+      }
+      if (lifecycle.status === 'deleted') throw AppError.gone('Project permanently deleted');
+      if (
+        lifecycle.status !== 'delisted' &&
+        !(lifecycle.status === 'archived' && lifecycle.archiveReason === 'organization_retention')
+      ) {
+        throw AppError.notFound('Project not found');
+      }
+      return {
+        availability: 'unavailable',
+        id: lifecycle.id,
+        title: lifecycle.title,
+        status: lifecycle.status,
+        designer: {
+          displayName: lifecycle.designerDisplayName,
+          slug: lifecycle.designerOrgSlug,
+        },
+      };
+    }
 
     return buildPublicProjectDetail(result, { includeRooms: true, includeMotifs: true });
   },

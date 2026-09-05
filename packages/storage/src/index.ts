@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '@repo/config';
@@ -115,6 +116,27 @@ export async function deleteObject(key: string): Promise<void> {
   await r2Client().send(
     new DeleteObjectCommand({ Bucket: requireEnv('R2_BUCKET', config.R2_BUCKET), Key: key }),
   );
+}
+
+/** List every key under a private organization-owned prefix, following S3 pagination. */
+export async function listObjectKeys(prefix: string): Promise<string[]> {
+  const bucket = requireEnv('R2_BUCKET', config.R2_BUCKET);
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await r2Client().send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+    for (const object of response.Contents ?? []) {
+      if (object.Key) keys.push(object.Key);
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return keys;
 }
 
 /** Fail fast at boot if R2 is misconfigured, instead of letting every job fail later. */

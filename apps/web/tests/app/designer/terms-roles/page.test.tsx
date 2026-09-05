@@ -47,8 +47,28 @@ const workspace: OrganizationWorkspaceResponse = {
   organization: { id: 'org-1', name: 'Studio One', slug: 'studio-one', logo: null },
   currentUserRole: 'owner',
   canManage: true,
+  rbacEnabled: true,
+  planTier: 'corporate',
+  subscriptionState: 'active',
+  seatUsage: 1,
+  seatLimit: -1,
+  capabilities: {
+    billing: true,
+    manageMembers: true,
+    changeMemberRoles: true,
+    transferOwnership: true,
+    writeProjects: true,
+    submitProjects: true,
+    archiveProjects: true,
+    deleteProjects: true,
+    leadScope: 'full',
+    analyticsScope: 'full',
+    editOrganization: true,
+    manageVerification: true,
+  },
   members: [],
   invitations: [],
+  ownershipTransfer: null,
 };
 
 describe('DesignerTermsRolesPage', () => {

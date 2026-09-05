@@ -7,7 +7,7 @@ import {
   visitorProfileResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requirePersonalContext } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { visitorsService, type VisitorCaller } from './service.js';
@@ -38,7 +38,7 @@ const getMineRoute = createRoute({
   tags: ['Visitors'],
   summary: 'Get the authenticated visitor profile',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requirePersonalContext] as const,
   responses: {
     200: {
       description: 'Persisted visitor onboarding profile',
@@ -56,7 +56,7 @@ const upsertMineRoute = createRoute({
   tags: ['Visitors'],
   summary: 'Persist and complete visitor onboarding',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requirePersonalContext] as const,
   request: {
     body: {
       content: { 'application/json': { schema: upsertVisitorProfileSchema } },

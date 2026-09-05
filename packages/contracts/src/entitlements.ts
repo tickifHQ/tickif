@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { type PlanTier, type SubscriptionState, planTierSchema, subscriptionStateSchema } from './billing';
+import {
+  type PlanTier,
+  type SubscriptionState,
+  planTierSchema,
+  subscriptionStateSchema,
+} from './billing';
 
 /**
  * E-119 Entitlement reads — tier × lifecycleState → feature map.
@@ -163,15 +168,35 @@ export const entitlementsObjectSchema = z
   })
   .meta({ id: 'Entitlements' });
 
+/** A resource preserved-but-frozen while a subscription is downgraded (E-239). */
+export const frozenResourceSchema = z
+  .object({
+    kind: z.enum(['seat', 'branch']),
+    label: z.string(),
+    count: z.number().int().min(0),
+  })
+  .meta({ id: 'FrozenResource' });
+export type FrozenResource = z.infer<typeof frozenResourceSchema>;
+
 export const subscriptionResponseSchema = z
   .object({
     tier: planTierSchema,
     lifecycleState: subscriptionStateSchema,
+    preLapseTier: planTierSchema.nullable(),
     razorpayStatus: z.string().nullable(),
+    razorpaySubscriptionId: z.string().nullable().optional(),
     currentPeriodEnd: z.string().datetime().nullable(),
+    cancellationScheduled: z.boolean(),
     seatUsage: z.number().int().min(0),
     branchUsage: z.number().int().min(0),
     entitlements: entitlementsObjectSchema,
+    // ─── E-239 plan-lapse lifecycle fields ───
+    /** Whole days left in the grace window before lock. Null unless state = 'grace'. */
+    graceDaysRemaining: z.number().int().min(0).nullable(),
+    /** Whole days left in the locked window before downgrade. Null unless state = 'locked'. */
+    lockedDaysRemaining: z.number().int().min(0).nullable(),
+    /** Resources preserved-but-frozen while downgraded. */
+    frozenResources: z.array(frozenResourceSchema),
   })
   .meta({ id: 'SubscriptionResponse' });
 export type SubscriptionResponse = z.infer<typeof subscriptionResponseSchema>;

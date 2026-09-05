@@ -35,4 +35,13 @@ describe('buildBillingState', () => {
     expect(state.preLapseTier).toBe('corporate');
     expect(state.billing).toBeNull();
   });
+
+  it('keeps locked access copy aligned with the production adapter', () => {
+    const state = buildBillingState('professional_plus', 'locked');
+
+    expect(state.lockedAccess).toEqual({
+      suspended: ['Team management', 'Branch dashboards', 'Discovery priority', 'Verified badge'],
+      available: ['Public portfolio', 'Published projects', 'Existing enquiries'],
+    });
+  });
 });

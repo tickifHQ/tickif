@@ -151,10 +151,12 @@ describe('DesignerProjectUpload', () => {
         JSON.stringify({
           id: '11111111-1111-4111-8111-111111111111',
           designerId: '22222222-2222-4222-8222-222222222222',
+          responsibleMemberId: null,
           title: '2 BHK in Adyar',
           slug: '2-bhk-in-adyar',
           description: null,
           status: 'draft',
+          archiveReason: null,
           rejectionReasonCode: null,
           moderationNote: null,
           propertyTypeSlug: 'residential',

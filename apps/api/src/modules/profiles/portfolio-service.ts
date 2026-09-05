@@ -5,6 +5,7 @@ import type {
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
 } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
 import { config } from '@repo/config';
 import { randomUUID } from 'node:crypto';
@@ -28,6 +29,7 @@ import { readState } from './google-mapper.js';
 export type Caller = {
   userId: string;
   activeOrgId: string | null;
+  activeTeamId?: string | null;
 };
 
 const ALLOWED_LOGO_CONTENT_TYPES = new Set([
@@ -186,13 +188,23 @@ export async function resolveProfile(caller: Caller): Promise<DesignerProfileRec
   if (!caller.activeOrgId) {
     throw AppError.unprocessable('No active organization selected');
   }
-  const canWrite = await orgsService.isWriter(caller.userId, caller.activeOrgId);
+  const canWrite = await orgsService.hasCapability(
+    caller.userId,
+    caller.activeOrgId,
+    ORGANIZATION_CAPABILITY.EDIT_ORGANIZATION,
+  );
   if (!canWrite) {
     throw AppError.forbidden('Insufficient org role to manage portfolio');
   }
-  const profile = await profilesRepository.findByOrgId(caller.activeOrgId);
+  if (!caller.activeTeamId) {
+    throw AppError.unprocessable('No active branch selected');
+  }
+  const profile = await profilesRepository.findByTeamId(caller.activeTeamId);
   if (!profile) {
-    throw AppError.notFound('No designer profile found for the active organization');
+    throw AppError.notFound('No designer profile found for the active branch');
+  }
+  if (profile.orgId !== caller.activeOrgId) {
+    throw AppError.forbidden('Active branch does not belong to the active organization');
   }
   return profile;
 }
@@ -206,19 +218,17 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   // Independent reads — one round-trip's worth of latency, not three.
-  const [logoUrl, googleRow, orgSlug, isKycVerified] = await Promise.all([
+  const [logoUrl, googleRow, isKycVerified] = await Promise.all([
     presignProfileLogo(profile),
     // Lightweight Google connection snapshot so the settings page renders the
     // real connection state (badge + rating) without a second request.
     googleReviewsRepository.findByProfileId(profile.id),
-    portfolioRepository.findOrgSlug(profile.orgId),
     profilesRepository.isOrganizationKycVerified(profile.orgId),
   ]);
   const badges = computeBadges(profile, isKycVerified);
 
   const googleConnection = googleRow ? readState(googleRow).summary : null;
-  // Null only if the owning org vanished mid-request; the FK makes that a no-op case.
-  const portfolioUrl = orgSlug ? publicPortfolioUrl(portfolio.portfolioSlug, orgSlug) : null;
+  const portfolioUrl = publicPortfolioUrl(portfolio.portfolioSlug, profile.slug);
 
   return {
     id: portfolio.id,
@@ -517,11 +527,23 @@ export const portfolioService = {
     }
 
     const key = `originals/logos/${profile.id}/${randomUUID()}`;
-    const uploadUrl = await presignUpload({
+    const reserved = await portfolioRepository.reserveLogoUpload(
+      profile.id,
       key,
-      contentType: input.contentType,
-      contentLength: input.contentLength,
-    });
+      new Date(Date.now() + config.R2_UPLOAD_URL_EXPIRY_SECONDS * 1_000),
+    );
+    if (!reserved) throw AppError.conflict('Organization is no longer accepting uploads');
+    let uploadUrl: string;
+    try {
+      uploadUrl = await presignUpload({
+        key,
+        contentType: input.contentType,
+        contentLength: input.contentLength,
+      });
+    } catch (error) {
+      await portfolioRepository.releaseUploadLease(key).catch(() => undefined);
+      throw error;
+    }
 
     return { uploadUrl, key };
   },

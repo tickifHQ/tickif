@@ -36,7 +36,11 @@ export function isValidBillingCombination(
 export const DEV_SCENARIOS: DevBillingScenario[] = [
   { label: 'Hobby (Active)', tier: 'hobby', lifecycle: 'active' },
   { label: 'Professional+ (Active)', tier: 'professional_plus', lifecycle: 'active' },
-  { label: 'Professional+ (Payment Failed)', tier: 'professional_plus', lifecycle: 'payment_failed' },
+  {
+    label: 'Professional+ (Payment Failed)',
+    tier: 'professional_plus',
+    lifecycle: 'payment_failed',
+  },
   { label: 'Professional+ (Grace)', tier: 'professional_plus', lifecycle: 'grace' },
   { label: 'Professional+ (Locked)', tier: 'professional_plus', lifecycle: 'locked' },
   {
@@ -84,9 +88,12 @@ export function buildBillingState(
   return {
     lifecycle,
     tier,
+    razorpayStatus: tier !== 'hobby' ? 'active' : null,
+    cancellationScheduled: false,
     preLapseTier: resolvedPreLapse,
     renewalDate: lifecycle === 'active' && tier !== 'hobby' ? isoDateOffsetDays(30) : null,
-    subscriptionId: tier === 'hobby' && lifecycle !== 'downgraded' ? null : `sub_TICKIF_${tier.toUpperCase()}`,
+    subscriptionId:
+      tier === 'hobby' && lifecycle !== 'downgraded' ? null : `sub_TICKIF_${tier.toUpperCase()}`,
     usage: {
       seats: seatsUsage[tier],
       branches: branchesUsage[tier],
@@ -118,16 +125,12 @@ export function buildBillingState(
       lifecycle === 'locked'
         ? {
             suspended: [
-              'New project creation',
-              'Lead responses',
-              'Portfolio editing',
-              'Team invites',
+              'Team management',
+              'Branch dashboards',
+              'Discovery priority',
+              'Verified badge',
             ],
-            available: [
-              'View existing projects',
-              'View existing leads',
-              'Public portfolio (read-only)',
-            ],
+            available: ['Public portfolio', 'Published projects', 'Existing enquiries'],
           }
         : null,
   };

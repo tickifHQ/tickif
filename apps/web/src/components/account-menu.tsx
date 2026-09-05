@@ -12,17 +12,21 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuItem,
+  DropdownMenuGroup,
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
-import { ChevronDown } from 'lucide-react';
+import { cn } from '@repo/ui/lib/utils';
+import { ChevronDown, Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export function AccountMenu({
   showLabel = false,
   avatarSeed,
+  showProfileSettings = false,
 }: {
   showLabel?: boolean;
   avatarSeed?: string;
+  showProfileSettings?: boolean;
 }) {
   const { data: session, isPending } = authClient.useSession();
   const router = useRouter();
@@ -49,6 +53,7 @@ export function AccountMenu({
   }
 
   const user = session.user;
+  const personalRole = 'role' in user ? user.role : null;
   const displayName = user.name ?? user.email ?? 'Account';
   const firstName = (user.name ?? '').split(' ')[0] || displayName;
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
@@ -71,11 +76,12 @@ export function AccountMenu({
         <button
           type="button"
           aria-label={`Open account menu for ${displayName}`}
-          className={
+          className={cn(
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             showLabel
               ? 'inline-flex cursor-pointer items-center gap-0 rounded-full border border-border bg-background p-1 text-sm leading-none font-medium text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground sm:gap-2 sm:pr-3'
-              : 'inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none'
-          }
+              : 'inline-flex size-8 cursor-pointer items-center justify-center rounded-full outline-none',
+          )}
         >
           <Avatar className="size-8">
             <InitialsAvatar seed={resolvedAvatarSeed} fallbackSeed="Your name" alt="" size={32} />
@@ -96,9 +102,32 @@ export function AccountMenu({
           {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleSignOut} variant="destructive" className="cursor-pointer">
-          Sign out
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          {(personalRole === 'visitor' || personalRole === 'designer') &&
+          !session.session.activeOrganizationId ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/home/settings">
+                <Settings aria-hidden="true" />
+                Personal settings
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          {showProfileSettings ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/designer/profile">
+                <Settings aria-hidden="true" />
+                Profile &amp; settings
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            onSelect={handleSignOut}
+            variant="destructive"
+            className="cursor-pointer"
+          >
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

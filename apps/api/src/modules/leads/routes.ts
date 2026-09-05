@@ -11,7 +11,7 @@ import {
   updateLeadSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireOrganizationContext } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { leadsService } from './service.js';
@@ -28,6 +28,7 @@ function caller(user: AuthVariables['user'], session?: AuthVariables['session'])
     userId: user.id,
     isBanned,
     activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
   };
 }
 
@@ -37,7 +38,7 @@ const listRoute = createRoute({
   tags: ['Leads'],
   summary: 'List leads for the caller organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: { query: listLeadsQuerySchema },
   responses: {
     200: {
@@ -56,7 +57,7 @@ const getRoute = createRoute({
   tags: ['Leads'],
   summary: 'Get a lead by id',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: { params: leadIdParamSchema },
   responses: {
     200: {
@@ -76,7 +77,7 @@ const countsRoute = createRoute({
   tags: ['Leads'],
   summary: 'Count leads by status for the caller organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: { query: leadCountsQuerySchema },
   responses: {
     200: {
@@ -95,7 +96,7 @@ const createRouteInternal = createRoute({
   tags: ['Leads'],
   summary: 'Create a lead for tests/internal seed flows',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: {
     body: {
       content: { 'application/json': { schema: createLeadSchema } },
@@ -116,9 +117,9 @@ const updateRoute = createRoute({
   method: 'patch',
   path: '/{id}',
   tags: ['Leads'],
-  summary: 'Update lead status or notes',
+  summary: 'Update lead assignment, status, or notes',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireOrganizationContext] as const,
   request: {
     params: leadIdParamSchema,
     body: {

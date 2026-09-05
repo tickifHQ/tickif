@@ -295,6 +295,125 @@
       "when": 1787761359099,
       "tag": "0043_curious_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788204906388,
+      "tag": "0044_cheerful_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1788269622864,
+      "tag": "0045_sturdy_donald_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788269972546,
+      "tag": "0046_slippery_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1788290913289,
+      "tag": "0047_pale_sheva_callister",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788291043351,
+      "tag": "0048_chunky_grim_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1788375000050,
+      "tag": "0049_crazy_giant_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788472244544,
+      "tag": "0050_dizzy_albert_cleary",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1788477166022,
+      "tag": "0051_amazing_garia",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788481945768,
+      "tag": "0052_next_mathemanic",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788503067591,
+      "tag": "0053_hesitant_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788535924441,
+      "tag": "0054_tidy_bromley",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788537140970,
+      "tag": "0055_chief_wild_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1788543664476,
+      "tag": "0056_clumsy_preak",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1788544145217,
+      "tag": "0057_closed_glorian",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1788545899128,
+      "tag": "0058_bent_loners",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788608469126,
+      "tag": "0059_flashy_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788613080937,
+      "tag": "0060_light_rattler",
+      "breakpoints": true
     }
   ]
 }

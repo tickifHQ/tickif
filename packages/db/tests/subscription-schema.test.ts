@@ -199,8 +199,13 @@ describe('payment transaction schema', () => {
     expect(col?.notNull).toBe(true);
   });
 
-  it('indexes subscription_id foreign key for lookups', () => {
-    const indexNames = config.indexes.map((idx) => idx.config.name);
-    expect(indexNames).toContain('payment_transaction_subscription_idx');
+  it('indexes subscription and provider occurrence time for analytics lookups', () => {
+    const index = config.indexes.find(
+      (candidate) => candidate.config.name === 'payment_transaction_subscription_occurred_idx',
+    );
+    expect(index?.config.columns.map((column) => column.name)).toEqual([
+      'subscription_id',
+      'occurred_at',
+    ]);
   });
 });

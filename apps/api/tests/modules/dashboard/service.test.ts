@@ -37,6 +37,8 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   profileId: '11111111-1111-4111-8111-111111111111',
   orgId: 'org_1',
   orgSlug: 'studio-noir',
+  teamId: 'team_1',
+  profileSlug: 'studio-noir',
   portfolioSlug: 'studio-noir-portfolio',
   ...overrides,
 });
@@ -96,7 +98,7 @@ describe('dashboardService.getProfileDashboard', () => {
       },
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
     });
-    expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1');
+    expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
   });
 
   it('falls back to the organization slug before a custom portfolio slug is set', async () => {
@@ -119,6 +121,7 @@ describe('dashboardService.getProfileDashboard', () => {
     expect(profilesService.getCompletion).toHaveBeenCalledWith({
       userId: 'user_1',
       orgId: 'org_2',
+      teamId: 'team_1',
     });
   });
 

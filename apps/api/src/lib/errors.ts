@@ -22,6 +22,10 @@ export class AppError extends Error {
     return new AppError('not_found', message, 404, details);
   }
 
+  static gone(message = 'Resource is no longer available', details?: unknown) {
+    return new AppError('gone', message, 410, details);
+  }
+
   static badRequest(message: string, details?: unknown) {
     return new AppError('bad_request', message, 400, details);
   }

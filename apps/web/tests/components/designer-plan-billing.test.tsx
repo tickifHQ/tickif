@@ -1,7 +1,27 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
+
+const apiMocks = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  getSubscription: vi.fn(),
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    api: {
+      billing: {
+        subscription: {
+          refresh: { $get: apiMocks.refresh },
+          $get: apiMocks.getSubscription,
+        },
+      },
+    },
+  },
+}));
+
 import { DesignerPlanBilling } from '../../src/components/designer-plan-billing';
 import { BillingStatusBanner } from '../../src/components/billing-status-banner';
 import { BillingAccessDenied } from '../../src/components/billing-access-denied';
@@ -12,6 +32,8 @@ function makeBilling(overrides: Partial<BillingState> = {}): BillingState {
   return {
     lifecycle: 'active',
     tier: 'professional_plus',
+    razorpayStatus: 'active',
+    cancellationScheduled: false,
     preLapseTier: null,
     renewalDate: '2099-12-12',
     subscriptionId: 'sub_TEST_123',
@@ -58,6 +80,11 @@ describe('BillingAccessDenied', () => {
 // ─── Lifecycle-Aware Rendering ───────────────────────────────────────────────
 
 describe('DesignerPlanBilling', () => {
+  beforeEach(() => {
+    apiMocks.refresh.mockReset().mockResolvedValue(new Response(null, { status: 200 }));
+    apiMocks.getSubscription.mockReset().mockResolvedValue(new Response(null, { status: 503 }));
+  });
+
   describe('active state', () => {
     it('renders the current plan name and price', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
@@ -132,7 +159,8 @@ describe('DesignerPlanBilling', () => {
       expect(cta).toBeEnabled();
       await user.click(cta);
       expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Choose your plan' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Proceed to Checkout' }));
+      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
     });
   });
 
@@ -180,7 +208,8 @@ describe('DesignerPlanBilling', () => {
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
       expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
-      expect(screen.getByText(/upgrading from Hobby to Corporate/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Proceed to Payment Review' }));
+      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
     });
   });
 
@@ -199,6 +228,35 @@ describe('DesignerPlanBilling', () => {
       );
       expect(screen.getByText('Unlimited seats')).toBeInTheDocument();
     });
+  });
+
+  it('replaces the complete billing snapshot after reconciliation', async () => {
+    apiMocks.getSubscription.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tier: 'corporate',
+          lifecycleState: 'active',
+          preLapseTier: null,
+          razorpayStatus: 'active',
+          currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+          cancellationScheduled: false,
+          seatUsage: 7,
+          branchUsage: 5,
+          graceDaysRemaining: null,
+          lockedDaysRemaining: null,
+          frozenResources: [],
+          entitlements: resolveEntitlements('corporate', 'active'),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    render(<DesignerPlanBilling billing={makeBilling()} />);
+
+    await waitFor(() => expect(screen.getByText('Corporate')).toBeInTheDocument());
+    expect(screen.getByText('7 active seats')).toBeInTheDocument();
+    expect(screen.getByText('5 active branches')).toBeInTheDocument();
+    expect(screen.getAllByText('₹7,999').length).toBeGreaterThan(0);
   });
 });
 

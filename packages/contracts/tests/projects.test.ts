@@ -7,6 +7,7 @@ import {
   listProjectsQuerySchema,
   portfolioProjectsQuerySchema,
   publicProjectBySlugResponseSchema,
+  publicProjectPageResponseSchema,
   publicImageDetailResponseSchema,
   projectListStatus,
   projectStatus,
@@ -17,6 +18,38 @@ import {
 
 // A valid RFC-4122 UUID (version + variant nibbles correct).
 const VALID_UUID = '11111111-1111-4111-8111-111111111111';
+
+describe('publicProjectPageResponseSchema', () => {
+  it('accepts the minimal delisted notice without private project fields', () => {
+    expect(
+      publicProjectPageResponseSchema.parse({
+        availability: 'unavailable',
+        id: VALID_UUID,
+        title: 'Recoverable Home',
+        status: 'delisted',
+        designer: { displayName: 'Studio A', slug: 'studio-a' },
+      }),
+    ).toEqual({
+      availability: 'unavailable',
+      id: VALID_UUID,
+      title: 'Recoverable Home',
+      status: 'delisted',
+      designer: { displayName: 'Studio A', slug: 'studio-a' },
+    });
+  });
+
+  it('accepts an archived notice only for the recoverable organization-retention path', () => {
+    expect(
+      publicProjectPageResponseSchema.parse({
+        availability: 'unavailable',
+        id: VALID_UUID,
+        title: 'Recoverable Home',
+        status: 'archived',
+        designer: { displayName: 'Studio A', slug: 'studio-a' },
+      }),
+    ).toMatchObject({ status: 'archived' });
+  });
+});
 
 describe('createProjectSchema', () => {
   it('accepts a valid payload', () => {
@@ -71,6 +104,21 @@ describe('updateProjectSchema', () => {
 });
 
 describe('listProjectsQuerySchema', () => {
+  it('keeps lifecycle states append-only and exposes archived projects to owners', () => {
+    expect(projectStatus.options).toEqual([
+      'draft',
+      'submitted',
+      'in_review',
+      'published',
+      'rejected',
+      'changes_requested',
+      'archived',
+      'delisted',
+      'deleted',
+    ]);
+    expect(projectListStatus.parse('archived')).toBe('archived');
+  });
+
   it('keeps moderation statuses persisted while using grouped list buckets', () => {
     expect(projectStatus.parse('changes_requested')).toBe('changes_requested');
     expect(projectListStatus.safeParse('changes_requested').success).toBe(false);

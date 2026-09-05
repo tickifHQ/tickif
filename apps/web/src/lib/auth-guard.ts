@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { PLATFORM_ROLE, platformRoleSchema, type PlatformRole } from '@repo/contracts';
+import type { ActiveContext } from '@repo/contracts';
 import { env } from '@/env';
 
 export type RequiredPlatformRole = Exclude<PlatformRole, typeof PLATFORM_ROLE.VISITOR>;
@@ -35,6 +36,7 @@ type SessionData = {
     token: string;
     expiresAt: string;
     activeOrganizationId?: string | null;
+    activeTeamId?: string | null;
     [key: string]: unknown;
   };
   user: SessionUser;
@@ -62,6 +64,14 @@ export function rolePassesCheck(
   const requiredLevel = PLATFORM_ROLE_LEVEL[requiredRole];
 
   return userLevel >= requiredLevel;
+}
+
+export function activeContextForSession(session: SessionData): ActiveContext {
+  const organizationId = session.session.activeOrganizationId;
+  const teamId = session.session.activeTeamId;
+  return organizationId
+    ? { kind: 'organization', organizationId, teamId: teamId ?? null }
+    : { kind: 'personal' };
 }
 
 /**
@@ -114,6 +124,7 @@ const fetchSession = cache(async (disableCookieCache: boolean): Promise<SessionD
  */
 export async function requireAuth(options?: {
   requiredRole?: RequiredPlatformRole;
+  requiredContext?: ActiveContext['kind'];
 }): Promise<SessionData> {
   const session = await getServerSession({ disableCookieCache: true });
 
@@ -125,6 +136,13 @@ export async function requireAuth(options?: {
     if (!rolePassesCheck(session.user.role, options.requiredRole)) {
       redirect('/unauthorized');
     }
+  }
+
+  if (
+    options?.requiredContext &&
+    activeContextForSession(session).kind !== options.requiredContext
+  ) {
+    redirect('/unauthorized');
   }
 
   return session;

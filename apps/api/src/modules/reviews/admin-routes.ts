@@ -1,5 +1,7 @@
 import { OpenAPIHono, createRoute } from '@hono/zod-openapi';
 import {
+  adminReviewDecisionQuerySchema,
+  adminReviewDetailResponseSchema,
   adminReviewsQuerySchema,
   adminReviewsResponseSchema,
   errorResponseSchema,
@@ -44,6 +46,25 @@ const listReviewsRoute = createRoute({
   },
 });
 
+const detailReviewRoute = createRoute({
+  method: 'get',
+  path: '/{id}',
+  tags: ['Admin Reviews'],
+  summary: 'Read review context and private moderation history',
+  security: [{ cookieAuth: [] }],
+  middleware: adminMiddleware,
+  request: { params: reviewIdParamSchema },
+  responses: {
+    200: {
+      description: 'Private review detail',
+      content: { 'application/json': { schema: adminReviewDetailResponseSchema } },
+    },
+    401: errorJson('Unauthorized'),
+    403: errorJson('Admin role required'),
+    404: errorJson('Review not found'),
+  },
+});
+
 const publishReviewRoute = createRoute({
   method: 'post',
   path: '/{id}/publish',
@@ -51,7 +72,7 @@ const publishReviewRoute = createRoute({
   summary: 'Publish a pending review',
   security: [{ cookieAuth: [] }],
   middleware: adminMiddleware,
-  request: { params: reviewIdParamSchema },
+  request: { params: reviewIdParamSchema, query: adminReviewDecisionQuerySchema },
   responses: {
     200: {
       description: 'Published review',
@@ -61,6 +82,7 @@ const publishReviewRoute = createRoute({
     403: errorJson('Admin role required'),
     404: errorJson('Review not found'),
     409: errorJson('Review state changed'),
+    422: errorJson('A valid expected revision is required'),
   },
 });
 
@@ -73,6 +95,7 @@ const rejectReviewRoute = createRoute({
   middleware: adminMiddleware,
   request: {
     params: reviewIdParamSchema,
+    query: adminReviewDecisionQuerySchema,
     body: {
       content: { 'application/json': { schema: rejectReviewSchema } },
     },
@@ -99,6 +122,7 @@ const resolveDisputeRoute = createRoute({
   middleware: adminMiddleware,
   request: {
     params: reviewIdParamSchema,
+    query: adminReviewDecisionQuerySchema,
     body: {
       content: { 'application/json': { schema: resolveReviewDisputeSchema } },
     },
@@ -125,7 +149,11 @@ export const adminReviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>(
   })
   .openapi(publishReviewRoute, async (c) => {
     const { id } = c.req.valid('param');
-    const result = await reviewsService.publish(id, caller(c.get('user')));
+    const result = await reviewsService.publish(
+      id,
+      caller(c.get('user')),
+      c.req.valid('query').expectedRevision,
+    );
     return c.json(result, 200);
   })
   .openapi(rejectReviewRoute, async (c) => {
@@ -134,6 +162,7 @@ export const adminReviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>(
       id,
       c.req.valid('json'),
       caller(c.get('user')),
+      c.req.valid('query').expectedRevision,
     );
     return c.json(result, 200);
   })
@@ -143,8 +172,12 @@ export const adminReviewsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>(
       id,
       c.req.valid('json'),
       caller(c.get('user')),
+      c.req.valid('query').expectedRevision,
     );
     return c.json(result, 200);
+  })
+  .openapi(detailReviewRoute, async (c) => {
+    return c.json(await reviewsService.getAdminDetail(c.req.valid('param').id), 200);
   });
 
 export type AdminReviewsRoutes = typeof adminReviewsRoutes;
