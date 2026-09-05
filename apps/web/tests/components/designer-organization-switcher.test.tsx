@@ -46,7 +46,7 @@ describe('DesignerOrganizationSwitcher', () => {
     mock.router.push.mockReset();
   });
 
-  it('lists only the memberships returned by the auth organization API', async () => {
+  it('lists My Tickif before the memberships returned by the auth organization API', async () => {
     const user = userEvent.setup();
     render(
       <DesignerOrganizationSwitcher
@@ -58,8 +58,27 @@ describe('DesignerOrganizationSwitcher', () => {
 
     await user.click(screen.getByRole('button', { name: 'Switch organization' }));
 
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveTextContent('My Tickif');
     expect(screen.getByRole('menuitem', { name: /Studio One.*Current/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Studio Two/i })).toBeInTheDocument();
+  });
+
+  it('switches to My Tickif and opens the personal workspace', async () => {
+    const user = userEvent.setup();
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Switch organization' }));
+    await user.click(screen.getByRole('menuitem', { name: /My Tickif/i }));
+
+    expect(mock.setActive).toHaveBeenCalledWith({ json: { kind: 'personal' } });
+    expect(mock.router.push).toHaveBeenCalledWith('/home');
   });
 
   it('switches to another membership and refreshes server-rendered org data', async () => {
