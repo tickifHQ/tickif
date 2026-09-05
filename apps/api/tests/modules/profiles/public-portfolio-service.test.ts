@@ -337,7 +337,6 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
       items: [
         {
           id: 'review-1',
-          designerProfileId: 'profile-1',
           author: {
             name: 'Priya K.',
             avatarUrl: null,

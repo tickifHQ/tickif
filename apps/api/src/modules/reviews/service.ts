@@ -42,6 +42,7 @@ export type AdminReviewCaller = {
 function toResponse(row: ReviewViewRecord): ReviewResponse {
   return {
     id: row.id,
+    designerProfileId: row.designerProfileId,
     author: {
       id: row.authorUserId,
       name: row.authorName,
@@ -72,7 +73,6 @@ function toPublishedResponse(row: ReviewViewRecord): PublishedReview {
   if (!row.publishedAt) throw new Error('Published review is missing its publication timestamp');
   return {
     id: row.id,
-    designerProfileId: row.designerProfileId,
     author: {
       name: row.authorName,
       avatarUrl: row.authorImage,
