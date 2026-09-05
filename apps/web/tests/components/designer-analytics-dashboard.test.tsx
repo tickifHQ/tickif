@@ -9,6 +9,61 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+const branchesPayload = {
+  activeTeamId: null,
+  branchUsage: 2,
+  branchLimit: -1,
+  branches: [
+    {
+      id: 'team-1',
+      name: 'Andheri',
+      profileId: '11111111-1111-4111-8111-111111111111',
+      profileSlug: 'andheri-studio',
+      profileStatus: 'active',
+      projectCount: 1,
+      memberCount: 1,
+      averageRating: 0,
+      reviewCount: 0,
+      footprint: [],
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      members: [],
+    },
+    {
+      id: 'team-2',
+      name: 'Bandra',
+      profileId: '22222222-2222-4222-8222-222222222222',
+      profileSlug: 'bandra-studio',
+      profileStatus: 'active',
+      projectCount: 0,
+      memberCount: 0,
+      averageRating: 0,
+      reviewCount: 0,
+      footprint: [],
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
+      createdAt: '2026-08-02T00:00:00.000Z',
+      members: [],
+    },
+  ],
+};
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    api: {
+      orgs: {
+        branches: {
+          $get: () =>
+            Promise.resolve({ ok: true, json: async () => structuredClone(branchesPayload) }),
+        },
+      },
+    },
+  },
+}));
+
 class ChartResizeObserver implements ResizeObserver {
   constructor(private readonly callback: ResizeObserverCallback) {}
 
@@ -137,8 +192,8 @@ describe('DesignerAnalyticsDashboard', () => {
     expect(document.querySelector('.lucide-shield-check')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /engagement breakdown/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /how they found you/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('table')).toHaveLength(2);
-    expect(screen.getByRole('columnheader', { name: 'Conversions' })).toBeInTheDocument();
+    expect(screen.getAllByRole('table')).toHaveLength(3);
+    expect(screen.getAllByRole('columnheader', { name: 'Conversions' })).toHaveLength(2);
     expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Enquiry share' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Conversion' })).toBeInTheDocument();
@@ -224,5 +279,230 @@ describe('DesignerAnalyticsDashboard', () => {
       '/designer/analytics',
     );
     expect(screen.queryByText('Total projects')).not.toBeInTheDocument();
+  });
+
+  it('renders the corporate branch breakdown with a roll-up picker', async () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          branches: [
+            {
+              branchId: 'team-1',
+              name: 'Andheri',
+              projects: 4,
+              enquiries: 3,
+              conversions: 1,
+              projectViews: 8,
+              profileViews: 2,
+            },
+          ],
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: /branch breakdown/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Andheri').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('combobox', { name: 'Branch' })).toBeInTheDocument();
+    expect(screen.getAllByRole('table')).toHaveLength(3);
+  });
+
+  it('shows an upgrade path instead of an empty branch selector below Corporate', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: {
+            ...analytics.access,
+            tier: 'hobby',
+            tierScope: 'basic',
+            branchAccess: 'upgrade_required',
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByText(/Branch-level analytics/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Corporate plans/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.queryByRole('heading', { name: /branch breakdown/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Branch' })).not.toBeInTheDocument();
+  });
+
+  it('suspends branch views under lock reusing the restore language', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: {
+            ...analytics.access,
+            lifecycleState: 'locked',
+            branchAccess: 'suspended',
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByText('Suspended')).toBeInTheDocument();
+    expect(screen.getByText('Still Available')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reactivate to restore/i })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.queryByRole('heading', { name: /branch breakdown/i })).not.toBeInTheDocument();
+  });
+
+  it('explains frozen branches instead of dropping them silently', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          frozenBranches: [
+            {
+              branchId: 'team-9',
+              name: 'Powai',
+              frozenAt: '2026-08-20T00:00:00.000Z',
+              freezeRank: 1,
+            },
+          ],
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: /frozen branches/i })).toBeInTheDocument();
+    expect(screen.getByText(/Powai.*restores on re-upgrade/i)).toBeInTheDocument();
+  });
+
+  it('scopes the member view to their own projects', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: {
+            role: 'member',
+            roleScope: 'own',
+            tier: 'corporate',
+            lifecycleState: 'active',
+            tierScope: 'branch',
+            level: 'organization',
+            branchId: null,
+            branchAccess: 'available',
+            readOnly: false,
+            engagementVisible: true,
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByText(/Showing your projects only/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Analytics' })).toBeInTheDocument();
+  });
+
+  it('hides the roll-up breakdown once a branch is selected', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: { ...analytics.access, level: 'branch', branchId: 'team-1' },
+          branches: [],
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: /branch breakdown/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Analytics' })).toBeInTheDocument();
+  });
+
+  it('marks the viewer layout read-only', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          ...analytics,
+          access: {
+            role: 'viewer',
+            roleScope: 'organization',
+            tier: 'corporate',
+            lifecycleState: 'active',
+            tierScope: 'branch',
+            level: 'organization',
+            branchId: null,
+            branchAccess: 'available',
+            readOnly: true,
+            engagementVisible: true,
+          },
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByText(/View-only org-level analytics/i)).toBeInTheDocument();
+  });
+
+  it('renders the billing admin revenue view without engagement metrics', () => {
+    render(
+      <DesignerAnalyticsDashboard
+        analytics={{
+          dataset: 'billing',
+          window: analytics.window,
+          frozenBranches: [],
+          access: {
+            role: 'billing_admin',
+            roleScope: 'billing',
+            tier: 'corporate',
+            lifecycleState: 'active',
+            tierScope: 'branch',
+            level: 'organization',
+            branchId: null,
+            branchAccess: 'available',
+            readOnly: false,
+            engagementVisible: false,
+          },
+          billing: {
+            currencies: [
+              {
+                currency: 'INR',
+                capturedAmount: 500000,
+                failedAmount: 0,
+                transactionCount: 2,
+                capturedTransactions: 2,
+                failedTransactions: 0,
+              },
+            ],
+            currentPeriodEnd: '2026-09-30T00:00:00.000Z',
+          },
+          branches: [],
+          projects: {
+            total: 0,
+            draft: 0,
+            submitted: 0,
+            inReview: 0,
+            published: 0,
+            rejected: 0,
+            changesRequested: 0,
+          },
+          leads: { total: 0, new: 0, contacted: 0, closed: 0, spam: 0 },
+          engagement: { projectViews: 0, profileViews: 0 },
+          previousPeriod: { projectViews: 0, enquiries: 0, viewToEnquiryRate: 0, responseRate: 0 },
+          activity: [],
+          topConvertingProjects: [],
+          acquisitionSources: [],
+          deferredMetrics: [],
+        }}
+        profileCompletion={profileCompletion}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: /Billing analytics/i })).toBeInTheDocument();
+    expect(screen.getByText(/Revenue only/i)).toBeInTheDocument();
+    expect(screen.queryByText('Enquiries received')).not.toBeInTheDocument();
+    expect(screen.queryByText('Top converting projects')).not.toBeInTheDocument();
   });
 });

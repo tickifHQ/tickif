@@ -17,12 +17,25 @@ function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function parseAnalyticsDays(searchParams: Record<string, string | string[] | undefined>) {
-  const parsed = analyticsQuerySchema.safeParse({ days: firstParam(searchParams.days) });
-  return parsed.success ? parsed.data.days : analyticsQuerySchema.parse({}).days;
+function parseAnalyticsQuery(searchParams: Record<string, string | string[] | undefined>) {
+  const parsed = analyticsQuerySchema.safeParse({
+    days: firstParam(searchParams.days),
+    branchId: firstParam(searchParams.branchId),
+    dataset: firstParam(searchParams.dataset),
+  });
+  if (parsed.success) return parsed.data;
+  return { days: analyticsQuerySchema.parse({}).days } as {
+    days: number;
+    branchId?: string;
+    dataset?: 'engagement' | 'billing';
+  };
 }
 
-async function getAnalytics(days: number) {
+async function getAnalytics(query: {
+  days: number;
+  branchId?: string;
+  dataset?: 'engagement' | 'billing';
+}) {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get('cookie');
   if (!cookie) {
@@ -31,9 +44,23 @@ async function getAnalytics(days: number) {
 
   try {
     const response = await api.api.reports.analytics.$get(
-      { query: { days } },
+      { query: { days: query.days, branchId: query.branchId, dataset: query.dataset } },
       { headers: { cookie } },
     );
+    if (response.status === 402) {
+      return {
+        ok: false as const,
+        data: null,
+        message: 'Branch analytics need Corporate. Upgrade to unlock them.',
+      };
+    }
+    if (response.status === 403) {
+      return {
+        ok: false as const,
+        data: null,
+        message: 'Your role does not allow this analytics view.',
+      };
+    }
     if (!response.ok) {
       return { ok: false as const, data: null, message: 'Refresh the page and try again.' };
     }
@@ -51,8 +78,8 @@ async function getAnalytics(days: number) {
 
 export default async function DesignerAnalyticsPage({ searchParams }: DesignerAnalyticsPageProps) {
   await requireAuth({ requiredRole: 'designer' });
-  const days = parseAnalyticsDays(await searchParams);
-  const [result, completion] = await Promise.all([getAnalytics(days), getProfileCompletion()]);
+  const query = parseAnalyticsQuery(await searchParams);
+  const [result, completion] = await Promise.all([getAnalytics(query), getProfileCompletion()]);
 
   return (
     <DesignerAnalyticsDashboard

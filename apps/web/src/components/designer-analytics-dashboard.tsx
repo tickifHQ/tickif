@@ -8,9 +8,11 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui
 import { cn } from '@repo/ui/lib/utils';
 import {
   ArrowRight,
+  Building2,
   CircleAlert,
   Ellipsis,
   Eye,
+  Lock,
   Minus,
   Moon,
   TrendingDown,
@@ -24,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@repo/ui/components/dropdown-menu';
+import { AnalyticsBranchControl } from '@/components/analytics-branch-control';
 import { AnalyticsDataTable } from '@/components/analytics-data-table';
 import { AnalyticsDateRangeControl } from '@/components/analytics-date-range-control';
 import {
@@ -117,8 +120,14 @@ function MetricCard({
 }
 
 function AnalyticsControls({ analytics }: { analytics: AnalyticsResponse }) {
+  const showBranchPicker =
+    analytics.dataset === 'engagement' &&
+    analytics.access.branchAccess === 'available' &&
+    analytics.access.roleScope === 'full';
+
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      {showBranchPicker ? <AnalyticsBranchControl /> : null}
       <AnalyticsDateRangeControl {...analytics.window} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -271,6 +280,216 @@ const acquisitionSourceLabels: Record<string, string> = {
   consultation: 'Consultation',
 };
 
+type BranchBreakdownBranch = {
+  branchId: string;
+  name: string;
+  projects: number;
+  enquiries: number;
+  conversions: number;
+  projectViews: number;
+  profileViews: number;
+};
+
+function BranchBreakdown({ branches }: { branches: BranchBreakdownBranch[] }) {
+  return (
+    <Card radius="lg" className="px-4 py-5">
+      <h2 className="font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Branch breakdown
+      </h2>
+      <div className="mt-3">
+        <AnalyticsDataTable className="[&_th]:px-2 [&_td]:px-2">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Branch</TableHead>
+              <TableHead className="text-right">Projects</TableHead>
+              <TableHead className="text-right">Views</TableHead>
+              <TableHead className="text-right">Enquiries</TableHead>
+              <TableHead className="text-right">Conversions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {branches.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="h-32 px-6 text-center text-xs leading-5 text-muted-foreground"
+                >
+                  Branch figures will appear here once branches record activity.
+                </TableCell>
+              </TableRow>
+            ) : (
+              branches.map((branch) => (
+                <TableRow key={branch.branchId}>
+                  <TableCell className="truncate text-sm font-medium text-foreground">
+                    {branch.name}
+                  </TableCell>
+                  <TableCell className="text-right text-xs leading-5 font-medium text-muted-foreground">
+                    {formatNumber(branch.projects)}
+                  </TableCell>
+                  <TableCell className="text-right text-xs leading-5 font-medium text-muted-foreground">
+                    {formatNumber(branch.projectViews + branch.profileViews)}
+                  </TableCell>
+                  <TableCell className="text-right text-xs leading-5 font-medium text-muted-foreground">
+                    {formatNumber(branch.enquiries)}
+                  </TableCell>
+                  <TableCell className="text-right text-xs leading-5 font-medium text-success">
+                    {formatNumber(branch.conversions)}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </AnalyticsDataTable>
+      </div>
+    </Card>
+  );
+}
+
+function BranchUpgradePrompt() {
+  return (
+    <Card radius="lg" className="px-4 py-5">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Building2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-medium text-foreground">Branch-level analytics</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Per-branch breakdowns and the org roll-up are a Corporate feature. Upgrade to unlock
+              them.
+            </p>
+          </div>
+        </div>
+        <Button asChild size="sm" className="shrink-0">
+          <Link href="/designer/plan-billing">View Corporate plans</Link>
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function SuspendedBranchNotice() {
+  return (
+    <Card radius="lg" className="px-4 py-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-destructive uppercase">
+            <Lock className="size-3.5" aria-hidden="true" />
+            Suspended
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Branch dashboards are suspended while billing is locked.
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium tracking-wide text-success uppercase">
+            Still Available
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Basic org-level analytics stay live.
+          </p>
+          <Button asChild size="sm" className="mt-3">
+            <Link href="/designer/plan-billing">Reactivate to restore</Link>
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function FrozenBranchesNote({ branches }: { branches: { branchId: string; name: string }[] }) {
+  if (branches.length === 0) return null;
+
+  return (
+    <Card radius="lg" className="mt-4 px-4 py-5">
+      <h2 className="font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Frozen branches
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        {branches.map((branch) => branch.name).join(', ')} {branches.length === 1 ? 'is' : 'are'}{' '}
+        frozen — data retained, restores on re-upgrade. Frozen branches are excluded from the
+        figures above without losing history.
+      </p>
+    </Card>
+  );
+}
+
+function RoleScopeBanner({ roleScope, readOnly }: { roleScope: string; readOnly: boolean }) {
+  if (roleScope === 'full' && !readOnly) return null;
+
+  return (
+    <p className="text-sm leading-relaxed text-muted-foreground" role="note">
+      {roleScope === 'own' ? 'Showing your projects only.' : 'View-only org-level analytics.'}{' '}
+      {readOnly ? 'You cannot change anything here.' : null}
+    </p>
+  );
+}
+
+function formatCurrency(amountPaise: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(
+      amountPaise / 100,
+    );
+  } catch {
+    return `${currency} ${(amountPaise / 100).toFixed(2)}`;
+  }
+}
+
+function BillingRevenueView({
+  analytics,
+}: {
+  analytics: Extract<AnalyticsResponse, { dataset: 'billing' }>;
+}) {
+  return (
+    <div className="p-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl leading-tight font-medium tracking-tight text-foreground">
+          Billing analytics
+        </h1>
+        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          Revenue only. Engagement metrics are not part of this view.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {analytics.billing.currencies.length === 0 ? (
+          <Card radius="lg" className="min-w-0 px-4 py-4 sm:col-span-2">
+            <p className="text-sm text-muted-foreground">
+              No captured revenue in the last {analytics.window.days} days.
+            </p>
+          </Card>
+        ) : (
+          analytics.billing.currencies.map((row) => (
+            <Card key={row.currency} radius="lg" className="min-w-0 px-4 py-4">
+              <p className="font-mono text-xs font-medium tracking-tight text-muted-foreground uppercase">
+                Captured · {row.currency}
+              </p>
+              <div className="mt-2 text-2xl leading-tight font-medium tracking-tight text-foreground">
+                {formatCurrency(row.capturedAmount, row.currency)}
+              </div>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {formatNumber(row.capturedTransactions)} of {formatNumber(row.transactionCount)}{' '}
+                transactions · {formatCurrency(row.failedAmount, row.currency)} failed
+              </p>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {analytics.billing.currentPeriodEnd ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Current period ends{' '}
+          {new Intl.DateTimeFormat('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }).format(new Date(analytics.billing.currentPeriodEnd))}
+          .
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AcquisitionSources({ sources }: { sources: AnalyticsResponse['acquisitionSources'] }) {
   const totalEnquiries = sources.reduce((total, source) => total + source.enquiries, 0);
 
@@ -355,6 +574,10 @@ export function DesignerAnalyticsDashboard({
     );
   }
 
+  if (analytics.dataset === 'billing') {
+    return <BillingRevenueView analytics={analytics} />;
+  }
+
   const respondedLeads = analytics.leads.contacted + analytics.leads.closed;
   const responseRate =
     analytics.leads.total === 0 ? 0 : (respondedLeads / analytics.leads.total) * 100;
@@ -382,6 +605,30 @@ export function DesignerAnalyticsDashboard({
         </div>
         <AnalyticsControls analytics={analytics} />
       </div>
+
+      <RoleScopeBanner
+        roleScope={analytics.access.roleScope}
+        readOnly={analytics.access.readOnly}
+      />
+
+      {analytics.access.branchAccess === 'available' &&
+      analytics.access.level === 'organization' &&
+      analytics.access.roleScope === 'full' ? (
+        <div className="mt-4">
+          <BranchBreakdown branches={analytics.branches} />
+        </div>
+      ) : null}
+      {analytics.access.branchAccess === 'upgrade_required' ? (
+        <div className="mt-4">
+          <BranchUpgradePrompt />
+        </div>
+      ) : null}
+      {analytics.access.branchAccess === 'suspended' ? (
+        <div className="mt-4">
+          <SuspendedBranchNotice />
+        </div>
+      ) : null}
+      <FrozenBranchesNote branches={analytics.frozenBranches} />
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
