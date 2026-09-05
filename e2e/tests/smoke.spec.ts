@@ -17,7 +17,7 @@ test('home page renders', async ({ page }) => {
 test('api is healthy and protects the projects endpoint', async ({ request }) => {
   const health = await request.get(`${API_URL}/health`);
   expect(health.ok()).toBeTruthy();
-  expect(await health.json()).toMatchObject({ status: 'ok' });
+  expect(await health.json()).toMatchObject({ status: 'ready' });
 
   const projects = await request.get(`${API_URL}/api/projects`);
   expect(projects.status()).toBe(401);
