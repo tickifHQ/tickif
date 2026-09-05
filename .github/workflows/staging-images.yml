@@ -49,6 +49,8 @@ jobs:
             test -f infra/staging/scripts/backup-job.sh
             pg_dump --version
             pg_restore --version
+            createdb --version
+            psql --version
             age --version
             rclone --version
           '
