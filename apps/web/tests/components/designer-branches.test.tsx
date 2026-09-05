@@ -10,10 +10,10 @@ const mocks = vi.hoisted(() => ({
   createTeam: vi.fn(),
   updateTeam: vi.fn(),
   removeTeamMember: vi.fn(),
-  listTeams: vi.fn(),
   inviteMember: vi.fn(),
   addTeamMember: vi.fn(),
   contextPut: vi.fn(),
+  branchDelete: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -26,7 +26,6 @@ vi.mock('../../src/lib/auth-client', () => ({
       createTeam: mocks.createTeam,
       updateTeam: mocks.updateTeam,
       removeTeamMember: mocks.removeTeamMember,
-      listTeams: mocks.listTeams,
       inviteMember: mocks.inviteMember,
       addTeamMember: mocks.addTeamMember,
     },
@@ -34,7 +33,14 @@ vi.mock('../../src/lib/auth-client', () => ({
 }));
 
 vi.mock('@/lib/api', () => ({
-  api: { api: { orgs: { context: { $put: mocks.contextPut } } } },
+  api: {
+    api: {
+      orgs: {
+        context: { $put: mocks.contextPut },
+        branches: { ':branchId': { $delete: mocks.branchDelete } },
+      },
+    },
+  },
 }));
 
 const branches: OrganizationBranchesResponse = {
@@ -47,7 +53,22 @@ const branches: OrganizationBranchesResponse = {
       name: 'Andheri',
       profileId: '11111111-1111-4111-8111-111111111111',
       profileSlug: 'andheri-studio',
+      profileStatus: 'active',
       projectCount: 4,
+      memberCount: 2,
+      averageRating: 4.5,
+      reviewCount: 10,
+      footprint: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          kind: 'city',
+          slug: 'mumbai',
+          label: 'Mumbai',
+        },
+      ],
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
       createdAt: '2026-08-01T00:00:00.000Z',
       members: [
         {
@@ -69,9 +90,17 @@ const branches: OrganizationBranchesResponse = {
     {
       id: 'team-2',
       name: 'Bandra',
-      profileId: '22222222-2222-4222-8222-222222222222',
+      profileId: '33333333-3333-4333-8333-333333333333',
       profileSlug: 'bandra-studio',
+      profileStatus: 'active',
       projectCount: 2,
+      memberCount: 0,
+      averageRating: 0,
+      reviewCount: 0,
+      footprint: [],
+      frozen: false,
+      frozenAt: null,
+      freezeRank: null,
       createdAt: '2026-08-02T00:00:00.000Z',
       members: [],
     },
@@ -139,10 +168,17 @@ describe('DesignerBranches', () => {
     mocks.createTeam.mockResolvedValue({ data: {}, error: null });
     mocks.updateTeam.mockResolvedValue({ data: {}, error: null });
     mocks.removeTeamMember.mockResolvedValue({ data: {}, error: null });
-    mocks.listTeams.mockResolvedValue({ data: [] });
     mocks.inviteMember.mockResolvedValue({ data: {}, error: null });
     mocks.addTeamMember.mockResolvedValue({ data: {}, error: null });
     mocks.contextPut.mockResolvedValue({ ok: true });
+    mocks.branchDelete.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        removedBranchId: 'team-2',
+        targetBranchId: 'team-1',
+        reassignedProjectCount: 2,
+      }),
+    });
   });
 
   it('renders each branch with its public profile state', () => {
@@ -236,13 +272,15 @@ describe('DesignerBranches', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Branch renamed.');
   });
 
-  it('explains that branches cannot be removed instead of offering removal', () => {
-    render(<DesignerBranches branches={branches} workspace={workspace} />);
+  it('hides branch removal from non-owners', () => {
+    render(
+      <DesignerBranches
+        branches={branches}
+        workspace={{ ...workspace, currentUserRole: 'admin' }}
+      />,
+    );
 
     expect(screen.queryByRole('button', { name: /Remove branch/i })).not.toBeInTheDocument();
-    expect(
-      screen.getAllByText(/cannot be removed while they hold projects/i).length,
-    ).toBeGreaterThan(0);
   });
 
   it('removes a member from a branch without touching studio membership', async () => {
@@ -329,16 +367,75 @@ describe('DesignerBranches', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Rohan Shah assigned to the branch.');
   });
 
-  it('shows frozen branches as recoverable with live projects noted', async () => {
-    mocks.listTeams.mockResolvedValue({
-      data: [{ id: 'team-frozen', name: 'Powai', frozen: true }],
-    });
+  it('shows frozen branches from the API as recoverable with live projects noted', () => {
+    render(
+      <DesignerBranches
+        branches={{
+          ...branches,
+          branches: [
+            ...branches.branches,
+            {
+              id: 'team-frozen',
+              name: 'Powai',
+              profileId: '44444444-4444-4444-8444-444444444444',
+              profileSlug: 'powai-studio',
+              profileStatus: 'active',
+              projectCount: 3,
+              memberCount: 0,
+              averageRating: 0,
+              reviewCount: 0,
+              footprint: [],
+              frozen: true,
+              frozenAt: '2026-08-20T00:00:00.000Z',
+              freezeRank: 1,
+              createdAt: '2026-08-03T00:00:00.000Z',
+              members: [],
+            },
+          ],
+        }}
+        workspace={workspace}
+      />,
+    );
+
+    expect(screen.getAllByText('Powai').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Frozen').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/restores when you re-upgrade/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/stay publicly live/i).length).toBeGreaterThan(0);
+  });
+
+  it('removes a branch with reassignment to another branch', async () => {
+    const user = userEvent.setup();
     render(<DesignerBranches branches={branches} workspace={workspace} />);
 
-    expect(await screen.findByText('Powai')).toBeInTheDocument();
-    expect(screen.getByText('Frozen')).toBeInTheDocument();
-    expect(screen.getByText(/restores when you re-upgrade/i)).toBeInTheDocument();
-    expect(screen.getByText(/stay publicly live/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
+
+    await waitFor(() => {
+      expect(mocks.branchDelete).toHaveBeenCalledWith({
+        param: { branchId: 'team-2' },
+        json: { targetBranchId: 'team-1' },
+      });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Branch Bandra removed. 2 projects moved.',
+    );
+  });
+
+  it('surfaces remove errors without deleting anything', async () => {
+    mocks.branchDelete.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { code: 'CONFLICT', message: 'The final branch stands alone' } }),
+    });
+    const user = userEvent.setup();
+    render(<DesignerBranches branches={branches} workspace={workspace} />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The final branch stands alone');
   });
 
   it('maps tier errors to an upgrade message', async () => {

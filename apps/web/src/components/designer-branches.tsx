@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
+import { useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
@@ -13,6 +13,14 @@ import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@repo/ui/components/dialog';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { SelectField } from '@repo/ui/components/select-field';
@@ -28,6 +36,7 @@ import {
   Pencil,
   Send,
   SquareUser,
+  Trash2,
   UserX,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
@@ -69,8 +78,6 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-type FrozenBranch = { id: string; name: string };
-
 export function DesignerBranches({
   branches,
   workspace,
@@ -92,40 +99,17 @@ export function DesignerBranches({
   const [assignBranchId, setAssignBranchId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [frozenBranches, setFrozenBranches] = useState<FrozenBranch[]>([]);
   const [expandedBranches, setExpandedBranches] = useState<Record<string, boolean>>({});
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [confirmUnassignKey, setConfirmUnassignKey] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Record<string, string>>({});
+  const [removeDialogBranch, setRemoveDialogBranch] = useState<{
+    id: string;
+    name: string;
+    projectCount: number;
+  } | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  useEffect(() => {
-    let cancelled = false;
-    async function loadFrozenBranches() {
-      try {
-        const result = await authClient.organization.listTeams();
-        if (cancelled) return;
-        const data = (result as { data?: unknown }).data;
-        if (!Array.isArray(data)) return;
-        setFrozenBranches(
-          data
-            .filter(
-              (team): team is { id: string; name: string; frozen?: unknown } =>
-                typeof team === 'object' &&
-                team !== null &&
-                'id' in team &&
-                'name' in team &&
-                (team as { frozen?: unknown }).frozen === true,
-            )
-            .map((team) => ({ id: String(team.id), name: String(team.name) })),
-        );
-      } catch {
-        if (!cancelled) setFrozenBranches([]);
-      }
-    }
-    void loadFrozenBranches();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (!branches || !workspace) {
     return (
@@ -142,7 +126,10 @@ export function DesignerBranches({
   }
 
   const canManageBranches = workspace.canManage && workspace.rbacEnabled;
-  const branchOptions = branches.branches.map((branch) => ({
+  const canRemoveBranches = workspace.currentUserRole === 'owner' && workspace.rbacEnabled;
+  const activeBranches = branches.branches.filter((branch) => !branch.frozen);
+  const frozenListedBranches = branches.branches.filter((branch) => branch.frozen);
+  const branchOptions = activeBranches.map((branch) => ({
     value: branch.id,
     label: branch.name,
   }));
@@ -250,6 +237,48 @@ export function DesignerBranches({
       }
     });
   }
+  function removeBranch(branchId: string, branchName: string) {
+    const targetBranchId = removeTarget[branchId];
+    if (!targetBranchId || targetBranchId === branchId) {
+      setRemoveError('Select a different active branch to receive the projects.');
+      return;
+    }
+    setFeedback(null);
+    setRemoveError(null);
+    startTransition(async () => {
+      try {
+        const response = await api.api.orgs.branches[':branchId'].$delete({
+          param: { branchId },
+          json: { targetBranchId },
+        });
+        const body = (await response.json().catch(() => null)) as {
+          error?: { code?: string; message?: string };
+          reassignedProjectCount?: number;
+        } | null;
+        if (!response.ok) {
+          const message = formatMutationError('Could not remove the branch.', body?.error ?? null);
+          setRemoveError(message);
+          setFeedback({ tone: 'error', message });
+          return;
+        }
+        setRemoveDialogBranch(null);
+        setRemoveTarget((previous) => {
+          const next = { ...previous };
+          delete next[branchId];
+          return next;
+        });
+        const moved =
+          body && typeof body.reassignedProjectCount === 'number'
+            ? ` ${body.reassignedProjectCount} ${body.reassignedProjectCount === 1 ? 'project' : 'projects'} moved.`
+            : '';
+        setFeedback({ tone: 'success', message: `Branch ${branchName} removed.${moved}` });
+        refresh();
+      } catch {
+        setFeedback({ tone: 'error', message: 'Could not remove the branch.' });
+      }
+    });
+  }
+
   function openDashboard(teamId: string) {
     setFeedback(null);
     startTransition(async () => {
@@ -421,7 +450,7 @@ export function DesignerBranches({
                         {branch.name}
                       </p>
                     )}
-                    {canManageBranches && !isEditing ? (
+                    {canManageBranches && !isEditing && !branch.frozen ? (
                       <Button
                         type="button"
                         variant="ghost"
@@ -438,12 +467,20 @@ export function DesignerBranches({
                         <Pencil className="size-4" />
                       </Button>
                     ) : null}
-                    {isActive ? (
+                    {isActive && !branch.frozen ? (
                       <Badge
                         shape="square"
                         className="border-transparent bg-success-lighter px-2 py-1 text-xs leading-none text-success uppercase"
                       >
                         Active
+                      </Badge>
+                    ) : null}
+                    {branch.frozen ? (
+                      <Badge
+                        shape="square"
+                        className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
+                      >
+                        Frozen
                       </Badge>
                     ) : null}
                   </div>
@@ -475,6 +512,28 @@ export function DesignerBranches({
                     <span>
                       {branch.projectCount} {branch.projectCount === 1 ? 'project' : 'projects'}
                     </span>
+                    <span>
+                      {branch.memberCount} {branch.memberCount === 1 ? 'member' : 'members'}
+                    </span>
+                    {branch.reviewCount > 0 ? (
+                      <span>
+                        {branch.averageRating.toFixed(1)} · {branch.reviewCount}{' '}
+                        {branch.reviewCount === 1 ? 'review' : 'reviews'}
+                      </span>
+                    ) : null}
+                    {branch.footprint.length ? (
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        {branch.footprint.map((entry) => (
+                          <Badge
+                            key={entry.id}
+                            shape="square"
+                            className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground"
+                          >
+                            {entry.label}
+                          </Badge>
+                        ))}
+                      </span>
+                    ) : null}
                     {branch.members.length ? (
                       <Button
                         type="button"
@@ -522,7 +581,7 @@ export function DesignerBranches({
                             <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                           </div>
                           <RoleBadge role={member.role} />
-                          {canManageBranches ? (
+                          {canManageBranches && !branch.frozen ? (
                             confirmUnassignKey === `${branch.id}:${member.userId}` ? (
                               <>
                                 <Button
@@ -570,11 +629,8 @@ export function DesignerBranches({
                       ))}
                     </ul>
                   ) : null}
-                  {canManageBranches && !isEditing ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        Branches cannot be removed while they hold projects.
-                      </p>
+                  {canManageBranches && !isEditing && !branch.frozen ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {!isActive ? (
                         <Button
                           type="button"
@@ -587,7 +643,32 @@ export function DesignerBranches({
                           Switch Branch
                         </Button>
                       ) : null}
+                      {canRemoveBranches && activeBranches.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={isPending}
+                          title="Remove branch"
+                          aria-label={`Remove branch ${branch.name}`}
+                          onClick={() =>
+                            setRemoveDialogBranch({
+                              id: branch.id,
+                              name: branch.name,
+                              projectCount: branch.projectCount,
+                            })
+                          }
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      ) : null}
                     </div>
+                  ) : null}
+                  {branch.frozen ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Frozen, restores when you re-upgrade. Published projects stay publicly live.
+                    </p>
                   ) : null}
                 </Card>
               );
@@ -719,10 +800,10 @@ export function DesignerBranches({
           </SectionCard>
         ) : null}
 
-        {frozenBranches.length ? (
+        {frozenListedBranches.length ? (
           <SectionCard title="Frozen branches">
             <Card className="space-y-3 p-4 shadow-none">
-              {frozenBranches.map((branch) => (
+              {frozenListedBranches.map((branch) => (
                 <div key={branch.id} className="flex flex-wrap items-center gap-2">
                   <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                     {branch.name}
@@ -753,6 +834,74 @@ export function DesignerBranches({
             </Card>
           </SectionCard>
         ) : null}
+
+        <Dialog
+          open={removeDialogBranch !== null}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setRemoveDialogBranch(null);
+              setRemoveError(null);
+            }
+          }}
+        >
+          <DialogContent aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>
+                Remove {removeDialogBranch ? `“${removeDialogBranch.name}”` : 'branch'}?
+              </DialogTitle>
+              <DialogDescription>
+                {removeDialogBranch
+                  ? `${removeDialogBranch.projectCount} ${removeDialogBranch.projectCount === 1 ? 'project' : 'projects'} will move to the branch you select. This cannot be undone.`
+                  : null}
+              </DialogDescription>
+            </DialogHeader>
+            <SelectField
+              label="Move projects to"
+              value={removeDialogBranch ? (removeTarget[removeDialogBranch.id] ?? '') : ''}
+              placeholder="Select a branch"
+              options={activeBranches
+                .filter((target) => target.id !== removeDialogBranch?.id)
+                .map((target) => ({ value: target.id, label: target.name }))}
+              className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
+              disabled={isPending}
+              onValueChange={(value) => {
+                if (!removeDialogBranch) return;
+                const dialogBranchId = removeDialogBranch.id;
+                setRemoveTarget((previous) => ({ ...previous, [dialogBranchId]: value }));
+              }}
+            />
+            {removeError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {removeError}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="neutral"
+                size="compact"
+                disabled={isPending}
+                onClick={() => setRemoveDialogBranch(null)}
+              >
+                Keep
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="compact"
+                disabled={isPending}
+                onClick={() => {
+                  if (removeDialogBranch) {
+                    removeBranch(removeDialogBranch.id, removeDialogBranch.name);
+                  }
+                }}
+              >
+                {isPending ? <Loader2 className="animate-spin" /> : null}
+                Confirm removal
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
