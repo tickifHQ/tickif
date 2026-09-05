@@ -42,6 +42,7 @@ const queue: AdminVerificationQueueResponse = {
       submittedAt: '2026-09-01T10:00:00.000Z',
       reviewedAt: null,
       documentCount: 2,
+      expiresAt: null,
     },
   ],
   page: 1,
@@ -133,11 +134,53 @@ describe('AdminVerificationQueue', () => {
     expect(screen.getByText(/oldest submission/i)).toBeInTheDocument();
   });
 
+  it('opens expired approvals read-only with renewal guidance and their expiry date', async () => {
+    const user = userEvent.setup();
+    const expiredQueue: AdminVerificationQueueResponse = {
+      ...queue,
+      tab: 'expired',
+      items: [{ ...queue.items[0]!, status: 'expired', expiresAt: '2026-09-01T10:00:00.000Z' }],
+    };
+    mock.fetchDetail.mockResolvedValue({
+      ...detail,
+      application: {
+        ...detail.application,
+        status: 'expired',
+        approvedAt: '2026-07-01T10:00:00.000Z',
+        expiresAt: '2026-09-01T10:00:00.000Z',
+      },
+    });
+    render(<AdminVerificationQueue initialQueue={expiredQueue} />);
+    await user.click(screen.getByRole('button', { name: 'Open verification for Studio North' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/The verified badge is inactive/)).toBeVisible();
+    expect(within(dialog).getByText('Approval expires')).toBeVisible();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Revoke approval' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Approve verification' }),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Verified', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('distinguishes an expired approval renewal from a corrections resubmission', async () => {
+    const user = userEvent.setup();
+    mock.fetchDetail.mockResolvedValue({
+      ...detail,
+      history: [{ ...detail.history[0]!, fromStatus: 'verified' }],
+    });
+    render(<AdminVerificationQueue initialQueue={queue} />);
+    await user.click(screen.getByRole('button', { name: 'Open verification for Studio North' }));
+    expect(await screen.findByText(/Renewal review: this designer resubmitted/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Approve verification' })).toBeEnabled();
+  });
+
   it('shows every verification queue count before inactive queues are loaded', () => {
     render(
       <AdminVerificationQueue
         initialQueue={queue}
-        initialCounts={{ new: 1, re_review: 2, accepted: 7, changes_requested: 3 }}
+        initialCounts={{ new: 1, re_review: 2, accepted: 7, changes_requested: 3, expired: 1 }}
       />,
     );
 

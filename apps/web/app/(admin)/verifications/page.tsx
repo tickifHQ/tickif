@@ -32,6 +32,7 @@ export default async function AdminVerificationsPage() {
     re_review: 0,
     accepted: 0,
     changes_requested: 0,
+    expired: 0,
   };
   let error: string | undefined;
   if (cookie) {
