@@ -15,22 +15,26 @@ and mounted into the API. We do not hand-roll sessions, OTP, or OAuth.
 
 ## Temporary phone OTP delivery by email
 
-The existing `phoneNumber({ sendOTP })` callback can send all phone login codes
-through the existing Resend provider to a single test inbox. Better Auth still
-generates and verifies the code with the same expiry and attempt limits.
+The existing `phoneNumber({ sendOTP })` callback can send allowlisted phone login
+codes through the existing Resend provider to a single test inbox. Better Auth
+still generates and verifies the code with the same expiry and attempt limits.
 
 Set these values in the API environment (or the root `.env` for local runs),
 then restart the API:
 
 ```dotenv
 PHONE_OTP_DELIVERY=email
-PHONE_OTP_EMAIL_TO=contactme.shikharsingh@gmail.com
+PHONE_OTP_EMAIL_TO=tester@example.com
+PHONE_OTP_EMAIL_ALLOWED_NUMBERS=+919800000010,+919800000011
 RESEND_API_KEY=<your Resend API key>
 EMAIL_FROM="Tickif <onboarding@resend.dev>"
 SMS_PROVIDER=console
 ```
 
-The Resend test sender works only if the destination is the email associated
+Email delivery is rejected when `NODE_ENV=production`, and requests for phone
+numbers outside `PHONE_OTP_EMAIL_ALLOWED_NUMBERS` fail without sending a code.
+Keep that comma-separated allowlist limited to dedicated test accounts in E.164
+format. The Resend test sender works only if the destination is the email associated
 with your Resend account. Otherwise use a sender on a verified domain. See
 [Resend's test sender restrictions](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
 Do not commit the API key. Missing inbox/key configuration fails at startup;
@@ -39,8 +43,8 @@ provider failures fail the OTP request instead of silently dropping the code.
 Enter a phone number in the existing login form, retrieve its code from the
 configured inbox, and enter that code in the same form. The email includes the
 phone number to distinguish requests. The login UI still describes SMS delivery.
-Every requested phone number is redirected: access to this inbox enables login
-as any requested phone, so this mode is for controlled testing before public use.
+Access to this inbox enables login as any allowlisted phone, so this mode is limited
+to controlled non-production testing.
 Ordinary email verification still goes to the user's email address.
 
 `SMS_PROVIDER=console` avoids requiring Novu credentials while it is unconfigured;

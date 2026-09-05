@@ -28,6 +28,7 @@ const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
 const DEFAULT_EMAIL_FROM = 'Tickif <noreply@tickif.com>';
 const DEFAULT_EMAIL_ADDRESS = 'noreply@tickif.com';
 const NAMED_EMAIL_FROM_PATTERN = /^[^<>\r\n]+<([^<>\r\n]+)>$/;
+const E164_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 
 function blankStringToUndefined(value: unknown): unknown {
   return typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -51,6 +52,17 @@ const emailFromSchema = z
     },
     { message: 'must be an email address or Name <email@example.com>' },
   );
+
+const phoneOtpEmailAllowedNumbersSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value ?? [];
+    return value
+      .split(',')
+      .map((phoneNumber) => phoneNumber.trim())
+      .filter(Boolean);
+  },
+  z.array(z.string().regex(E164_PHONE_PATTERN, 'must be an E.164 phone number')).min(1),
+);
 
 /**
  * Single source of truth for environment configuration.
@@ -128,9 +140,10 @@ const envSchema = z.object({
 
   // SMS provider. Selection is explicit; credentials and workflows are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
-  // Temporary phone-login delivery override: all codes go to one test inbox.
+  // Temporary phone-login delivery override: allowlisted codes go to one test inbox.
   PHONE_OTP_DELIVERY: z.enum(['sms', 'email']).default('sms'),
   PHONE_OTP_EMAIL_TO: z.preprocess(blankStringToUndefined, z.email().optional()),
+  PHONE_OTP_EMAIL_ALLOWED_NUMBERS: phoneOtpEmailAllowedNumbersSchema.optional().default([]),
   NOVU_SECRET_KEY: z.string().trim().min(1).optional(),
   NOVU_OTP_WORKFLOW_ID: z.string().trim().min(1).optional(),
   NOVU_BOOKING_WORKFLOW_ID: z.string().trim().min(1).optional(),
@@ -329,8 +342,17 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
   }
   const env = parsed.data;
   if (env.PHONE_OTP_DELIVERY === 'email') {
-    if (!env.PHONE_OTP_EMAIL_TO || !env.RESEND_API_KEY) {
-      throw new Error('Email OTP delivery requires PHONE_OTP_EMAIL_TO and RESEND_API_KEY');
+    if (env.NODE_ENV === 'production') {
+      throw new Error('PHONE_OTP_DELIVERY=email must not be enabled in production');
+    }
+    if (
+      !env.PHONE_OTP_EMAIL_TO ||
+      env.PHONE_OTP_EMAIL_ALLOWED_NUMBERS.length === 0 ||
+      !env.RESEND_API_KEY
+    ) {
+      throw new Error(
+        'Email OTP delivery requires PHONE_OTP_EMAIL_TO, PHONE_OTP_EMAIL_ALLOWED_NUMBERS, and RESEND_API_KEY',
+      );
     }
   }
   assertProductionMediaConfig(env);
