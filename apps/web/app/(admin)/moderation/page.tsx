@@ -1,4 +1,6 @@
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { adminModerationQueueQuerySchema } from '@repo/contracts';
 import type { AdminModerationQueueResponse } from '@repo/contracts';
 import { AdminModerationQueue } from '@/components/admin-moderation-queue';
 import { requireAuth } from '@/lib/auth-guard';
@@ -20,11 +22,21 @@ const emptyQueue: AdminModerationQueueResponse = {
   totalPages: 0,
 };
 
-export default async function AdminModerationPage() {
+export default async function AdminModerationPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
   const session = await requireAuth({ requiredRole: 'admin' });
+  const params = (await searchParams) ?? {};
+  const parsed = adminModerationQueueQuerySchema.safeParse({
+    status: params.status,
+    page: params.page,
+  });
+  const { status, page } = parsed.success ? parsed.data : { status: 'submitted' as const, page: 1 };
   const cookie = (await headers()).get('cookie');
 
-  let queue = emptyQueue;
+  let queue = { ...emptyQueue, page };
   const initialCounts: Record<AdminModerationQueueTab, number> = {
     submitted: 0,
     in_review: 0,
@@ -36,12 +48,17 @@ export default async function AdminModerationPage() {
       const queues = await Promise.all(
         ADMIN_MODERATION_QUEUE_TABS.map(
           async (tab) =>
-            [tab, await fetchAdminModerationQueue(tab, { headers: { cookie } })] as const,
+            [
+              tab,
+              await fetchAdminModerationQueue(tab, tab === status ? page : 1, {
+                headers: { cookie },
+              }),
+            ] as const,
         ),
       );
       for (const [tab, loadedQueue] of queues) {
         initialCounts[tab] = loadedQueue.total;
-        if (tab === 'submitted') queue = loadedQueue;
+        if (tab === status) queue = loadedQueue;
       }
     } catch {
       error = 'Could not load the moderation queue. Try refreshing the page.';
@@ -50,8 +67,14 @@ export default async function AdminModerationPage() {
     error = 'Your admin session could not be found. Please sign in again.';
   }
 
+  if (!error && page > Math.max(1, queue.totalPages)) {
+    redirect(`/moderation?status=${status}&page=${Math.max(1, queue.totalPages)}`);
+  }
+
   return (
     <AdminModerationQueue
+      key={`${status}:${page}`}
+      initialTab={status}
       initialQueue={queue}
       initialCounts={initialCounts}
       currentUserId={session.user.id}
