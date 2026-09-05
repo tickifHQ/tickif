@@ -1,7 +1,6 @@
 {
   "extends": "@repo/tsconfig/base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["react", "react-dom"]
