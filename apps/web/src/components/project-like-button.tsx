@@ -8,6 +8,9 @@ import { Heart } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import {
+  beginProjectLikeMutation,
+  finishProjectLikeMutation,
+  isLatestProjectLikeMutation,
   loadProjectLikeState,
   publishProjectLikeState,
   subscribeProjectLikeState,
@@ -88,11 +91,16 @@ export function ProjectLikeButton({
     }
     requestPending.current = true;
     setPending(true);
+    const mutationToken = beginProjectLikeMutation(identity, projectId);
     try {
       const response = state.liked
         ? await api.api['project-likes'][':projectId'].$delete({ param: { projectId } })
         : await api.api['project-likes'][':projectId'].$put({ param: { projectId } });
-      if (currentKey.current !== stateKey) return;
+      if (
+        currentKey.current !== stateKey ||
+        !isLatestProjectLikeMutation(identity, projectId, mutationToken)
+      )
+        return;
       if (response.status === 401) {
         router.push(loginHref);
         return;
@@ -103,9 +111,16 @@ export function ProjectLikeButton({
       if (!response.ok) throw new Error('Could not update your like. Please try again.');
       const parsed = projectLikeStateSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error('Could not update your like. Please try again.');
-      if (currentKey.current === stateKey) publishProjectLikeState(identity, parsed.data);
+      if (
+        currentKey.current === stateKey &&
+        isLatestProjectLikeMutation(identity, projectId, mutationToken)
+      )
+        publishProjectLikeState(identity, parsed.data);
     } catch (error) {
-      if (currentKey.current === stateKey)
+      if (
+        currentKey.current === stateKey &&
+        isLatestProjectLikeMutation(identity, projectId, mutationToken)
+      )
         setResolved({
           key: stateKey,
           state,
@@ -115,6 +130,7 @@ export function ProjectLikeButton({
               : 'Could not update your like. Please try again.',
         });
     } finally {
+      finishProjectLikeMutation(identity, projectId, mutationToken);
       requestPending.current = false;
       setPending(false);
     }
