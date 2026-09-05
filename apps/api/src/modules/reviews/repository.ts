@@ -70,9 +70,7 @@ export type UpdateReviewResult =
   | { kind: 'self_review' };
 
 export type TransitionReviewResult =
-  | { kind: 'updated'; review: ReviewViewRecord }
-  | { kind: 'conflict' }
-  | { kind: 'forbidden' };
+  { kind: 'updated'; review: ReviewViewRecord } | { kind: 'conflict' } | { kind: 'forbidden' };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Handle = typeof db | Tx;
@@ -196,6 +194,42 @@ async function aggregatePublished(
 }
 
 export const reviewsRepository = {
+  async findAdminDetail(id: string) {
+    return db.transaction(
+      async (tx) => {
+        const review = await findByIdWith(tx, id);
+        if (!review) return null;
+        const [designer] = await tx
+          .select({ name: schema.organization.name })
+          .from(schema.organization)
+          .where(eq(schema.organization.id, review.designerOrgId));
+        const history = await tx
+          .select({
+            id: schema.reviewModerationEvent.id,
+            actorUserId: schema.reviewModerationEvent.actorUserId,
+            action: schema.reviewModerationEvent.action,
+            fromStatus: schema.reviewModerationEvent.fromStatus,
+            toStatus: schema.reviewModerationEvent.toStatus,
+            note: schema.reviewModerationEvent.note,
+            reasonCode: schema.reviewModerationEvent.reasonCode,
+            createdAt: schema.reviewModerationEvent.createdAt,
+          })
+          .from(schema.reviewModerationEvent)
+          .where(eq(schema.reviewModerationEvent.reviewId, id))
+          .orderBy(
+            desc(schema.reviewModerationEvent.createdAt),
+            desc(schema.reviewModerationEvent.id),
+          );
+        return {
+          review,
+          designer: { id: review.designerProfileId, name: designer?.name ?? 'Designer' },
+          history,
+        };
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
+  },
+
   async findById(id: string): Promise<ReviewViewRecord | null> {
     return findByIdWith(db, id);
   },
@@ -314,17 +348,15 @@ export const reviewsRepository = {
     return result;
   },
 
-  async update(
-    params: {
-      id: string;
-      authorUserId: string;
-      designerProfileId: string;
-      fromStatus: 'pending' | 'published';
-      expectedRevision: number;
-      rating?: number;
-      body?: string | null;
-    },
-  ): Promise<UpdateReviewResult> {
+  async update(params: {
+    id: string;
+    authorUserId: string;
+    designerProfileId: string;
+    fromStatus: 'pending' | 'published';
+    expectedRevision: number;
+    rating?: number;
+    body?: string | null;
+  }): Promise<UpdateReviewResult> {
     return db.transaction(async (tx) => {
       const now = new Date();
       const [author] = await tx
@@ -509,38 +541,42 @@ export const reviewsRepository = {
   async listPublished(
     query: ListPublishedReviewsQuery,
   ): Promise<{ items: ReviewViewRecord[]; aggregate: ReviewAggregateRecord }> {
-    return db.transaction(async (tx) => {
-      const items = await reviewViewQuery(tx)
-        .where(
-          and(
-            eq(schema.review.designerProfileId, query.designerProfileId),
-            eq(schema.review.status, 'published'),
-            eq(schema.designerProfile.status, 'active'),
-          ),
-        )
-        .orderBy(desc(schema.review.publishedAt), desc(schema.review.id))
-        .limit(query.limit)
-        .offset((query.page - 1) * query.limit);
-      const aggregate = await aggregatePublished(tx, query.designerProfileId);
-      return { items, aggregate };
-    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
+    return db.transaction(
+      async (tx) => {
+        const items = await reviewViewQuery(tx)
+          .where(
+            and(
+              eq(schema.review.designerProfileId, query.designerProfileId),
+              eq(schema.review.status, 'published'),
+              eq(schema.designerProfile.status, 'active'),
+            ),
+          )
+          .orderBy(desc(schema.review.publishedAt), desc(schema.review.id))
+          .limit(query.limit)
+          .offset((query.page - 1) * query.limit);
+        const aggregate = await aggregatePublished(tx, query.designerProfileId);
+        return { items, aggregate };
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
   },
 
-  async listAdmin(
-    query: AdminReviewsQuery,
-  ): Promise<{ items: ReviewViewRecord[]; total: number }> {
-    return db.transaction(async (tx) => {
-      const where = eq(schema.review.status, query.status);
-      const items = await reviewViewQuery(tx)
-        .where(where)
-        .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
-        .limit(query.limit)
-        .offset((query.page - 1) * query.limit);
-      const [count] = await tx
-        .select({ value: sql<number>`count(*)::int` })
-        .from(schema.review)
-        .where(where);
-      return { items, total: count?.value ?? 0 };
-    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
+  async listAdmin(query: AdminReviewsQuery): Promise<{ items: ReviewViewRecord[]; total: number }> {
+    return db.transaction(
+      async (tx) => {
+        const where = eq(schema.review.status, query.status);
+        const items = await reviewViewQuery(tx)
+          .where(where)
+          .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
+          .limit(query.limit)
+          .offset((query.page - 1) * query.limit);
+        const [count] = await tx
+          .select({ value: sql<number>`count(*)::int` })
+          .from(schema.review)
+          .where(where);
+        return { items, total: count?.value ?? 0 };
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
   },
 };
