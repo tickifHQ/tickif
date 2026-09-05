@@ -102,6 +102,12 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {(user.role === 'visitor' || user.role === 'designer') &&
+          !session.session.activeOrganizationId ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/home/consultations">My consultations</Link>
+            </DropdownMenuItem>
+          ) : null}
           {showProfileSettings ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/designer/profile">

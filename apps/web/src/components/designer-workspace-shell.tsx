@@ -12,6 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/compon
 import { Skeleton } from '@repo/ui/components/skeleton';
 import {
   ChartLine,
+  CalendarDays,
   CreditCard,
   ExternalLink,
   FileUser,
@@ -43,6 +44,7 @@ const studioItems: NavItem[] = [
   { label: 'Projects', href: '/designer/projects', icon: Layers },
   { label: 'Leads', href: '/designer/leads', icon: FileUser },
   { label: 'Reviews', href: '/designer/reviews', icon: MessageSquareMore },
+  { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
   { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
 ];
 

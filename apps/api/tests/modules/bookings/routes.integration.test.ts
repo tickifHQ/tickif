@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { and, db, eq, schema, sql } from '@repo/db';
-import {
-  makeConsultationBooking,
-  makeDesigner,
-  makeProject,
-  makeTeam,
-} from '@repo/db/testing';
+import { makeConsultationBooking, makeDesigner, makeProject, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { bookingsRepository } from '../../../src/modules/bookings/repository.js';
 import {
@@ -32,6 +27,101 @@ const istDay = (daysFromNow: number): string =>
 
 const slot = { date: istDay(1), window: 'morning' } as const;
 const secondSlot = { date: istDay(2), window: 'afternoon' } as const;
+
+describe('consultation participant boundaries', () => {
+  it('uses database time when the application clock trails the stored request timestamp', async () => {
+    const { designer, cookie } = await makeDesignerSession('+919800009109');
+    const booking = await makeConsultationBooking({
+      designerProfileId: designer.id,
+      preferredSlots: [slot],
+    });
+    const future = new Date(Date.now() + 60_000);
+    await db
+      .update(schema.consultationBooking)
+      .set({ createdAt: future, requestedAt: future, updatedAt: future })
+      .where(eq(schema.consultationBooking.id, booking.id));
+    const response = await requestJson(
+      `/api/bookings/${booking.id}/confirm?expectedStatus=requested`,
+      'POST',
+      cookie,
+      { confirmedSlot: slot },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(new Date(body.confirmedAt).getTime()).toBeGreaterThanOrEqual(future.getTime());
+  });
+  it('rejects stale cancellation without changing a confirmed consultation', async () => {
+    const { designer, cookie: ownerCookie } = await makeDesignerSession('+919800009101');
+    const { cookie, userId } = await createRoleSession('+919800009102', 'visitor');
+    const booking = await makeConsultationBooking({
+      designerProfileId: designer.id,
+      requesterId: userId,
+      preferredSlots: [slot],
+    });
+    const confirmed = await requestJson(
+      `/api/bookings/${booking.id}/confirm?expectedStatus=requested`,
+      'POST',
+      ownerCookie,
+      { confirmedSlot: slot },
+    );
+    expect(confirmed.status).toBe(200);
+    const stale = await requestJson(
+      `/api/bookings/${booking.id}/cancel?expectedStatus=requested`,
+      'POST',
+      cookie,
+      { reason: 'My plans changed' },
+    );
+    expect(stale.status).toBe(409);
+    const invalid = await requestJson(
+      `/api/bookings/${booking.id}/cancel?expectedStatus=made-up`,
+      'POST',
+      cookie,
+      { reason: 'My plans changed' },
+    );
+    expect(invalid.status).toBe(422);
+    expect((await bookingsRepository.findById(booking.id))?.status).toBe('confirmed');
+    expect(
+      (
+        await requestJson(
+          `/api/bookings/${booking.id}/cancel?expectedStatus=confirmed`,
+          'POST',
+          cookie,
+          { reason: 'My plans changed' },
+        )
+      ).status,
+    ).toBe(200);
+  });
+  it('keeps requester contacts private and rejects platform/admin and organization-context personal reads', async () => {
+    const { designer, cookie: ownerCookie } = await makeDesignerSession('+919800009103');
+    const { cookie, userId } = await createRoleSession('+919800009104', 'visitor');
+    await makeConsultationBooking({
+      designerProfileId: designer.id,
+      requesterId: userId,
+      preferredSlots: [slot],
+    });
+    const mine = await requestJson('/api/bookings/mine', 'GET', cookie);
+    expect(mine.status).toBe(200);
+    expect(mine.headers.get('cache-control')).toBe('private, no-store');
+    const stranger = await createRoleSession('+919800009105', 'visitor');
+    const strangerMine = await requestJson('/api/bookings/mine', 'GET', stranger.cookie);
+    expect((await strangerMine.json()).items).toHaveLength(0);
+    expect((await requestJson('/api/bookings/mine', 'GET', ownerCookie)).status).toBe(403);
+    const admin = await createRoleSession('+919800009106', 'admin');
+    expect((await requestJson('/api/bookings/mine', 'GET', admin.cookie)).status).toBe(403);
+    await db.update(schema.user).set({ status: 'deleted' }).where(eq(schema.user.id, userId));
+    expect((await requestJson('/api/bookings/mine', 'GET', cookie)).status).toBe(403);
+  });
+  it('blocks studio members booking themselves even from personal context', async () => {
+    const { cookie, userId } = await createRoleSession('+919800009107', 'designer');
+    const designer = await makeDesigner({ userId, status: 'active', phone: '+919800009108' });
+    const response = await requestJson('/api/bookings', 'POST', cookie, {
+      designerProfileId: designer.id,
+      preferredSlots: [slot],
+    });
+    expect(response.status).toBe(422);
+    expect((await response.json()).error.message).toContain('own studio');
+  });
+});
 
 async function makeDesignerSession(phoneNumber: string) {
   const { cookie, userId } = await createRoleSession(phoneNumber, 'designer');
@@ -72,12 +162,9 @@ async function requestJson(
 }
 
 async function activateTeam(cookie: string, teamId: string): Promise<string> {
-  const response = await requestJson(
-    '/api/auth/organization/set-active-team',
-    'POST',
-    cookie,
-    { teamId },
-  );
+  const response = await requestJson('/api/auth/organization/set-active-team', 'POST', cookie, {
+    teamId,
+  });
   if (!response.ok) {
     throw new Error(`activateTeam: Better Auth returned ${response.status}`);
   }
@@ -144,10 +231,7 @@ describe('POST /api/bookings', () => {
       .select()
       .from(schema.lead)
       .where(
-        and(
-          eq(schema.lead.organizationId, designer.orgId),
-          eq(schema.lead.source, 'consultation'),
-        ),
+        and(eq(schema.lead.organizationId, designer.orgId), eq(schema.lead.source, 'consultation')),
       );
     expect(lead).toMatchObject({
       referredProjectId: project.id,
@@ -241,7 +325,8 @@ describe('POST /api/bookings', () => {
   it('rolls back the booking when consultation lead creation fails', async () => {
     const designer = await makeDesigner({ status: 'active', phone: '+919800009996' });
     const { cookie, userId } = await createRoleSession('+919800004111', 'visitor');
-    await db.execute(sql.raw(`
+    await db.execute(
+      sql.raw(`
       CREATE FUNCTION fail_consultation_lead_insert() RETURNS trigger AS $$
       BEGIN
         IF NEW.source = 'consultation' THEN
@@ -250,12 +335,15 @@ describe('POST /api/bookings', () => {
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql
-    `));
-    await db.execute(sql.raw(`
+    `),
+    );
+    await db.execute(
+      sql.raw(`
       CREATE TRIGGER fail_consultation_lead_insert
       BEFORE INSERT ON lead
       FOR EACH ROW EXECUTE FUNCTION fail_consultation_lead_insert()
-    `));
+    `),
+    );
 
     try {
       const response = await requestJson('/api/bookings', 'POST', cookie, {

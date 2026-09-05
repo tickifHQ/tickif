@@ -33,6 +33,7 @@ export type CreateBookingResult =
   | { kind: 'designer_not_found' }
   | { kind: 'designer_not_notifiable' }
   | { kind: 'invalid_project' }
+  | { kind: 'own_studio' }
   | { kind: 'open_limit_reached' };
 
 export type ListBookingsParams = {
@@ -89,40 +90,35 @@ function bookingProjection() {
 }
 
 function bookingViewQuery() {
-  return db
-    .select(bookingProjection())
-    .from(schema.consultationBooking)
-    .innerJoin(
-      schema.designerProfile,
-      eq(schema.consultationBooking.designerProfileId, schema.designerProfile.id),
-    )
-    .innerJoin(
-      schema.organization,
-      eq(schema.consultationBooking.organizationId, schema.organization.id),
-    )
-    .innerJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
-    // Designers who never opened portfolio settings have no row; the org slug covers them.
-    .leftJoin(
-      schema.designerPortfolio,
-      eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
-    )
-    .leftJoin(
-      schema.project,
-      eq(schema.consultationBooking.referredProjectId, schema.project.id),
-    );
+  return (
+    db
+      .select(bookingProjection())
+      .from(schema.consultationBooking)
+      .innerJoin(
+        schema.designerProfile,
+        eq(schema.consultationBooking.designerProfileId, schema.designerProfile.id),
+      )
+      .innerJoin(
+        schema.organization,
+        eq(schema.consultationBooking.organizationId, schema.organization.id),
+      )
+      .innerJoin(schema.user, eq(schema.consultationBooking.requesterId, schema.user.id))
+      // Designers who never opened portfolio settings have no row; the org slug covers them.
+      .leftJoin(
+        schema.designerPortfolio,
+        eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+      )
+      .leftJoin(schema.project, eq(schema.consultationBooking.referredProjectId, schema.project.id))
+  );
 }
 
 export const bookingsRepository = {
   async findById(id: string): Promise<BookingViewRecord | null> {
-    const [row] = await bookingViewQuery()
-      .where(eq(schema.consultationBooking.id, id))
-      .limit(1);
+    const [row] = await bookingViewQuery().where(eq(schema.consultationBooking.id, id)).limit(1);
     return row ?? null;
   },
 
-  async list(
-    params: ListBookingsParams,
-  ): Promise<{ items: BookingViewRecord[]; total: number }> {
+  async list(params: ListBookingsParams): Promise<{ items: BookingViewRecord[]; total: number }> {
     const filters = [
       params.requesterId
         ? eq(schema.consultationBooking.requesterId, params.requesterId)
@@ -130,9 +126,7 @@ export const bookingsRepository = {
       params.organizationId
         ? eq(schema.consultationBooking.organizationId, params.organizationId)
         : undefined,
-      params.designerTeamId
-        ? eq(schema.designerProfile.teamId, params.designerTeamId)
-        : undefined,
+      params.designerTeamId ? eq(schema.designerProfile.teamId, params.designerTeamId) : undefined,
       params.status ? eq(schema.consultationBooking.status, params.status) : undefined,
     ].filter((filter) => filter !== undefined);
     const where = and(...filters);
@@ -140,10 +134,7 @@ export const bookingsRepository = {
     const [items, [count]] = await Promise.all([
       bookingViewQuery()
         .where(where)
-        .orderBy(
-          desc(schema.consultationBooking.requestedAt),
-          desc(schema.consultationBooking.id),
-        )
+        .orderBy(desc(schema.consultationBooking.requestedAt), desc(schema.consultationBooking.id))
         .limit(params.limit)
         .offset(params.offset),
       db
@@ -183,6 +174,28 @@ export const bookingsRepository = {
         .limit(1);
       if (!designer) return { kind: 'designer_not_found' } as const;
       if (!designer.phoneNumber) return { kind: 'designer_not_notifiable' } as const;
+
+      const [ownStudio] = await tx
+        .select({ id: schema.member.id })
+        .from(schema.member)
+        .where(
+          and(
+            eq(schema.member.organizationId, designer.organizationId),
+            eq(schema.member.userId, params.requesterId),
+          ),
+        )
+        .limit(1);
+      const [ownProfile] = await tx
+        .select({ id: schema.designerProfile.id })
+        .from(schema.designerProfile)
+        .where(
+          and(
+            eq(schema.designerProfile.id, designer.id),
+            eq(schema.designerProfile.userId, params.requesterId),
+          ),
+        )
+        .limit(1);
+      if (ownStudio || ownProfile) return { kind: 'own_studio' } as const;
 
       if (params.referredProjectId) {
         const [project] = await tx
@@ -259,7 +272,8 @@ export const bookingsRepository = {
 
   async transition(params: TransitionBookingParams): Promise<BookingViewRecord | null> {
     return db.transaction(async (tx) => {
-      const now = new Date();
+      // Preserve timestamp ordering even when application and database clocks differ.
+      const now = sql`greatest(statement_timestamp(), ${schema.consultationBooking.requestedAt}, ${schema.consultationBooking.confirmedAt}, ${schema.consultationBooking.updatedAt})`;
       const [row] = await tx
         .update(schema.consultationBooking)
         .set({

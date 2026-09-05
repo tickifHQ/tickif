@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   bookingResponseSchema,
+  bookingMutationQuerySchema,
   bookingSlotSchema,
   cancelBookingSchema,
   confirmBookingSchema,
@@ -66,6 +67,19 @@ const istDay = (daysFromNow: number): string =>
   new Date(Date.now() + IST_OFFSET_MS + daysFromNow * 86_400_000).toISOString().slice(0, 10);
 
 describe('booking contracts', () => {
+  it('validates rendered transition status without accepting unknown query fields', () => {
+    expect(bookingMutationQuerySchema.parse({ expectedStatus: 'requested' })).toEqual({
+      expectedStatus: 'requested',
+    });
+    expect(bookingMutationQuerySchema.safeParse({ expectedStatus: 'pending' }).success).toBe(false);
+    expect(
+      bookingMutationQuerySchema.safeParse({
+        expectedStatus: 'requested',
+        requesterId: 'someone-else',
+      }).success,
+    ).toBe(false);
+    expect(bookingMutationQuerySchema.parse({})).toEqual({});
+  });
   it('accepts one to three unique preferred slots and trims the message', () => {
     const parsed = createBookingSchema.parse({
       designerProfileId: PROFILE_ID,

@@ -5,6 +5,7 @@ import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/publi
 
 const mocks = vi.hoisted(() => ({
   session: null as {
+    session: { activeOrganizationId: string | null };
     user: { id: string; email: string; phoneNumber: string | null };
   } | null,
   checkEnquiry: vi.fn(async () => ({
@@ -410,6 +411,7 @@ describe('PublicDesignerProfile', () => {
 
   it('renders enquiry actions as in-page controls for a signed-in visitor', () => {
     mocks.session = {
+      session: { activeOrganizationId: null },
       user: {
         id: 'visitor-1',
         email: 'homeowner@example.com',

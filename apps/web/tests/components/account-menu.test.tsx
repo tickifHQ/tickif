@@ -5,7 +5,7 @@ import { AccountMenu } from '../../src/components/account-menu';
 
 const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
-  session: null as { user: { name: string; email: string | null } } | null,
+  session: null as { user: { name: string; email: string | null; role?: string }; session?: { activeOrganizationId: string | null } } | null,
   isPending: false,
   router: {
     refresh: vi.fn(),
@@ -25,6 +25,19 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('AccountMenu', () => {
+  it.each(['visitor', 'designer'])('links personal consultations for a %s in My Tickif', async (role) => {
+    mock.session = { user: { name: 'Alice', email: 'alice@example.test', role }, session: { activeOrganizationId: null } };
+    render(<AccountMenu />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.getByRole('menuitem', { name: 'My consultations' })).toHaveAttribute('href', '/home/consultations');
+  });
+  it('keeps the personal consultation link out of an organization menu', async () => {
+    mock.session = { user: { name: 'Alice', email: 'alice@example.test', role: 'designer' }, session: { activeOrganizationId: 'org' } };
+    render(<AccountMenu showProfileSettings />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toBeInTheDocument();
+  });
   beforeEach(() => {
     mock.session = null;
     mock.isPending = false;
