@@ -94,7 +94,9 @@ test.describe('personal settings with persisted accounts', () => {
     await expect(other.getByRole('status')).toHaveText('Personal settings saved.');
     await page.getByLabel('Personal address (optional)').fill('Stale edit');
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByRole('alert')).toContainText('changed elsewhere');
+    await expect(
+      page.getByRole('form', { name: 'Personal settings' }).getByRole('alert'),
+    ).toContainText('changed elsewhere');
     await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Stale edit');
     await page.getByRole('button', { name: 'Reload latest settings' }).click();
     await expect(page.getByLabel('Personal address (optional)')).toHaveValue(
