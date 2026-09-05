@@ -28,7 +28,7 @@ type FlowStep =
   | { step: 'activating'; targetTier: PlanTier }
   | { step: 'upi-limitation'; targetTier: PlanTier }
   | { step: 'cancellation-scheduled'; periodEnd: string | null }
-  | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' }
+  | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' | 'activated' }
   | { step: 'error'; message: string }
   | { step: 'cancelled' };
 
@@ -277,7 +277,7 @@ export function CheckoutFlow({
               setFlowStep({ step: 'activating', targetTier });
               const activated = await waitForSubscriptionActivation(targetTier);
               if (activated) {
-                setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+                setFlowStep({ step: 'success', targetTier, kind: 'activated' });
                 onSubscriptionChange?.();
               } else {
                 setFlowStep({
@@ -524,7 +524,7 @@ export function SuccessStep({
   onDone,
 }: {
   targetTier: PlanTier;
-  kind: 'upgrade' | 'downgrade';
+  kind: 'upgrade' | 'downgrade' | 'activated';
   onDone: () => void;
 }) {
   const plan = PLAN_MAP[targetTier];
@@ -539,11 +539,19 @@ export function SuccessStep({
         <CheckCircle2 className="size-8 text-primary" />
       </div>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
-        {kind === 'upgrade' ? 'Plan change scheduled' : 'Plan change confirmed'}
+        {kind === 'activated' ? 'Plan activated' : 'Plan change scheduled'}
       </h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your plan will change to <strong>{plan.label}</strong> at the end of your current billing
-        period. Your data and resources remain preserved.
+        {kind === 'activated' ? (
+          <>
+            Your <strong>{plan.label}</strong> plan is now active.
+          </>
+        ) : (
+          <>
+            Your plan will change to <strong>{plan.label}</strong> at the end of your current
+            billing period. Your data and resources remain preserved.
+          </>
+        )}
       </p>
       <Button className="mt-6" onClick={onDone}>
         Done
