@@ -69,7 +69,7 @@ test.describe('public designer discovery', () => {
     if (profile) {
       await assertTestDb();
       await db.delete(schema.organization).where(eq(schema.organization.id, profile.orgId));
-      await db.delete(schema.user).where(eq(schema.user.id, profile.userId));
+      if (profile.userId) await db.delete(schema.user).where(eq(schema.user.id, profile.userId));
     }
   });
 

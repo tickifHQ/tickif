@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./e2e": {
+      "types": "./src/e2e.ts",
+      "default": "./src/e2e.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"

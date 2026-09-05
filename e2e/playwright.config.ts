@@ -1,36 +1,26 @@
 import { defineConfig } from '@playwright/test';
-
-const API_URL = 'http://localhost:3001';
-const WEB_URL = 'http://localhost:3000';
-
-// E2E points the stack at the test DB so it never touches dev data.
-// Preconditions: `pnpm infra:up` and the test DB migrated.
-const testDbUrl =
-  process.env.DATABASE_URL_TEST ??
-  'postgresql://tickif:tickif@localhost:5432/tickif_test';
+import { apiUrl, webUrl, providerUrl, environment } from './lib/environment';
 
 export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: WEB_URL, trace: 'on-first-retry' },
-  webServer: [
-    {
-      command: 'pnpm --filter @repo/api dev',
-      url: `${API_URL}/health`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-      env: { DATABASE_URL: testDbUrl, PORT: '3001' },
-    },
-    {
-      command: 'pnpm --filter @repo/web dev',
-      url: WEB_URL,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-      env: { NEXT_PUBLIC_API_URL: API_URL },
-    },
-  ],
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  reporter: [['list'], ['json', { outputFile: '../test-results/e2e-results.json' }]],
+  outputDir: '../test-results/e2e',
+  use: { baseURL: webUrl, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  globalSetup: './scripts/readiness.ts',
+  webServer: {
+    command: 'pnpm stack',
+    url: webUrl,
+    reuseExistingServer: false,
+    // Cold Next compilation + guarded migration/seed/bootstrap can take minutes on a shared host.
+    // Assertions keep the ordinary 10s deadline; this allowance applies only to stack startup.
+    timeout: 300_000,
+    env: environment,
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 15_000 },
+  },
+  metadata: { apiUrl, providerUrl },
 });

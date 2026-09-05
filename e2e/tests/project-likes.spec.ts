@@ -115,6 +115,6 @@ test('visitor likes persist across project and portfolio views independently of 
   } finally {
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, designer.orgId));
-    await db.delete(schema.user).where(inArray(schema.user.id, [visitor.id, designer.userId]));
+    await db.delete(schema.user).where(inArray(schema.user.id, [visitor.id, designer.userId].filter((id): id is string => id !== null)));
   }
 });
