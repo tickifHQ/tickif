@@ -7,6 +7,7 @@ import {
   isNull,
   lte,
   max,
+  ne,
   or,
   schema,
   sql,
@@ -97,10 +98,7 @@ export async function archiveOrganization(organizationId: string, now: Date): Pr
             .select({ id: schema.project.id })
             .from(schema.project)
             .where(
-              and(
-                inArray(schema.project.id, projectIds),
-                eq(schema.project.status, 'delisted'),
-              ),
+              and(inArray(schema.project.id, projectIds), eq(schema.project.status, 'delisted')),
             )
             .for('update');
     if (projects.length > 0) {
@@ -470,7 +468,8 @@ function uniqueStorageKeys(input: {
       ...derivatives.map(({ key }) => key),
     ]),
     ...input.verificationDocumentKeys,
-  ].filter((key): key is string => typeof key === 'string' && key.length > 0)
+  ]
+    .filter((key): key is string => typeof key === 'string' && key.length > 0)
     .filter((key, index, keys) => keys.indexOf(key) === index);
 }
 
@@ -492,11 +491,7 @@ export async function prepareOrganizationPurge(
       .limit(1);
     if (!retention || retention.holdPlacedAt !== null) return null;
     const scheduled = retention.status === 'archived' && retention.hardDeleteDueAt <= now;
-    if (
-      retention.status !== 'purge_pending' &&
-      retention.status !== 'purging' &&
-      !scheduled
-    ) {
+    if (retention.status !== 'purge_pending' && retention.status !== 'purging' && !scheduled) {
       return null;
     }
 
@@ -536,8 +531,7 @@ export async function prepareOrganizationPurge(
       .where(eq(schema.organizationUploadLease.organizationId, organizationId));
     const storageScanNotBefore = latestUploadLease?.expiresAt
       ? new Date(
-          latestUploadLease.expiresAt.getTime() +
-            config.ORGANIZATION_UPLOAD_SETTLE_SECONDS * 1_000,
+          latestUploadLease.expiresAt.getTime() + config.ORGANIZATION_UPLOAD_SETTLE_SECONDS * 1_000,
         )
       : null;
     const [application] = await tx
@@ -734,7 +728,12 @@ export async function markOrganizationPurgeFailed(
     const [manifest] = await tx
       .update(schema.organizationPurgeManifest)
       .set({ status: 'failed', lastErrorCode: errorCode, updatedAt: now })
-      .where(eq(schema.organizationPurgeManifest.id, manifestId))
+      .where(
+        and(
+          eq(schema.organizationPurgeManifest.id, manifestId),
+          ne(schema.organizationPurgeManifest.status, 'completed'),
+        ),
+      )
       .returning({
         organizationId: schema.organizationPurgeManifest.organizationId,
         trigger: schema.organizationPurgeManifest.trigger,
@@ -833,12 +832,12 @@ export async function finalizeOrganizationPurge(
           })),
         )
         .onConflictDoNothing();
-      await tx.delete(schema.projectModerationEvent).where(
-        inArray(schema.projectModerationEvent.projectId, projectIds),
-      );
-      await tx.delete(schema.projectReviewComment).where(
-        inArray(schema.projectReviewComment.projectId, projectIds),
-      );
+      await tx
+        .delete(schema.projectModerationEvent)
+        .where(inArray(schema.projectModerationEvent.projectId, projectIds));
+      await tx
+        .delete(schema.projectReviewComment)
+        .where(inArray(schema.projectReviewComment.projectId, projectIds));
     }
 
     if (profileIds.length > 0) {

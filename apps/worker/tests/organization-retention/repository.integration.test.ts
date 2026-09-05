@@ -4,6 +4,7 @@ import { db, eq, schema } from '@repo/db';
 import { makeOrganization, makeSubscription, makeTeam } from '@repo/db/testing';
 import {
   claimPendingProviderCleanup,
+  markOrganizationPurgeFailed,
   markProviderCleanupAttemptFailed,
   prepareOrganizationPurge,
   runProviderCleanup,
@@ -98,22 +99,14 @@ describe('organization purge fencing', () => {
       })
       .returning();
     const [claimed] = await claimPendingProviderCleanup(now, 10);
-    expect(claimed).toEqual(
-      expect.objectContaining({ sequence: item!.sequence }),
-    );
+    expect(claimed).toEqual(expect.objectContaining({ sequence: item!.sequence }));
     await db
       .delete(schema.organizationRetention)
       .where(eq(schema.organizationRetention.organizationId, seeded.organization.id));
     const cancel = vi.fn(async () => undefined);
 
     expect(await claimPendingProviderCleanup(now, 10)).toEqual([]);
-    await expect(
-      runProviderCleanup(
-        claimed!,
-        now,
-        cancel,
-      ),
-    ).resolves.toBe(false);
+    await expect(runProviderCleanup(claimed!, now, cancel)).resolves.toBe(false);
     expect(cancel).not.toHaveBeenCalled();
   });
 
@@ -198,7 +191,11 @@ describe('organization purge fencing', () => {
     const [retryClaim] = await claimPendingProviderCleanup(retryAt, 10);
     expect(retryClaim?.claimToken).not.toBe(firstClaim?.claimToken);
     await expect(
-      runProviderCleanup(retryClaim!, retryAt, vi.fn(async () => undefined)),
+      runProviderCleanup(
+        retryClaim!,
+        retryAt,
+        vi.fn(async () => undefined),
+      ),
     ).resolves.toBe(true);
 
     const [subscription] = await db
@@ -216,5 +213,31 @@ describe('organization purge fencing', () => {
       razorpayStatus: 'cancelled',
     });
     expect(item).toMatchObject({ status: 'deleted', claimToken: null, claimedAt: null });
+  });
+
+  it('does not regress a completed manifest when a concurrent purge attempt fails late', async () => {
+    const now = new Date('2026-09-04T16:00:00.000Z');
+    const seeded = await seedPurgingOrganization(now);
+    const [manifest] = await db
+      .insert(schema.organizationPurgeManifest)
+      .values({
+        organizationId: seeded.organization.id,
+        organizationSlug: seeded.organization.slug,
+        trigger: 'owner',
+        status: 'completed',
+        completedAt: now,
+      })
+      .returning();
+
+    await markOrganizationPurgeFailed(manifest!.id, 'LateFailure', new Date(now.getTime() + 1_000));
+
+    const [stored] = await db
+      .select({
+        status: schema.organizationPurgeManifest.status,
+        lastErrorCode: schema.organizationPurgeManifest.lastErrorCode,
+      })
+      .from(schema.organizationPurgeManifest)
+      .where(eq(schema.organizationPurgeManifest.id, manifest!.id));
+    expect(stored).toEqual({ status: 'completed', lastErrorCode: null });
   });
 });

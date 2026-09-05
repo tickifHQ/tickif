@@ -561,6 +561,21 @@ describe('projectsService.getPublicById', () => {
 });
 
 // =============================================================================
+// getGallery
+// =============================================================================
+
+describe('projectsService.getGallery', () => {
+  it('returns 410 from a durable tombstone after the project row is purged', async () => {
+    vi.mocked(projectsRepository.findById).mockResolvedValue(null);
+    vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(true);
+
+    await expect(
+      projectsService.getGallery('11111111-1111-4111-8111-111111111111'),
+    ).rejects.toMatchObject({ status: 410, code: 'gone' });
+  });
+});
+
+// =============================================================================
 // getPublicImageDetail
 // =============================================================================
 

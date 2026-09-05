@@ -23,7 +23,7 @@ vi.mock('@repo/config', async (importOriginal) => {
 });
 
 import { eq } from 'drizzle-orm';
-import { db, schema } from '@repo/db';
+import { db, schema, sql } from '@repo/db';
 import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
 
 /**
@@ -395,7 +395,8 @@ function pgError(err: unknown): { code?: string; constraint?: string } {
 // auth checks remain real. This tests the actual subscribe-service code path.
 vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import('../../../src/modules/billing/razorpay-client.js');
+  const actual =
+    (await importOriginal()) as typeof import('../../../src/modules/billing/razorpay-client.js');
   return {
     ...actual,
     // Override only the functions that call Razorpay's HTTP API
@@ -412,12 +413,8 @@ const {
   createSubscription: mockCreateSubscription,
   fetchSubscription: mockFetchSubscription,
   cancelSubscription: mockCancelSubscription,
-} = await import(
-  '../../../src/modules/billing/razorpay-client.js'
-);
-const { subscribeService } = await import(
-  '../../../src/modules/billing/subscribe-service.js'
-);
+} = await import('../../../src/modules/billing/razorpay-client.js');
+const { subscribeService } = await import('../../../src/modules/billing/subscribe-service.js');
 
 /** Create an org with an owner member for auth checks. */
 async function makeOrgWithOwner() {
@@ -477,6 +474,58 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
     // No lapse fields set
     expect(sub!.preLapseTier).toBeNull();
     expect(sub!.graceStartedAt).toBeNull();
+  });
+
+  it('does not create a provider subscription when retention starts after the access check', async () => {
+    const { user, org } = await makeOrgWithOwner();
+    let releaseRetentionLock!: () => void;
+    let signalRetentionLock!: () => void;
+    const retentionLockReleased = new Promise<void>((resolve) => {
+      releaseRetentionLock = resolve;
+    });
+    const retentionLockAcquired = new Promise<void>((resolve) => {
+      signalRetentionLock = resolve;
+    });
+    const now = new Date('2026-09-05T00:00:00.000Z');
+    const retention = db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`organization-retention:${org.id}`}, 0))`,
+      );
+      signalRetentionLock();
+      await retentionLockReleased;
+      await tx.insert(schema.organizationRetention).values({
+        organizationId: org.id,
+        status: 'deletion_requested',
+        requestedByUserId: user.id,
+        requestedAt: now,
+        archiveDueAt: new Date('2026-12-04T00:00:00.000Z'),
+        hardDeleteDueAt: new Date('2027-12-04T00:00:00.000Z'),
+        delistWindowDays: 90,
+        archiveWindowDays: 365,
+      });
+    });
+    await retentionLockAcquired;
+
+    const checkout = subscribeService.createSubscription(
+      { userId: user.id, activeOrgId: org.id },
+      { targetTier: 'professional_plus' },
+    );
+    try {
+      await vi.waitFor(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1 from pg_locks where locktype = 'advisory' and granted = false
+          ) as waiting
+        `);
+        expect(result.rows[0]?.waiting).toBe(true);
+      });
+    } finally {
+      releaseRetentionLock();
+    }
+    await retention;
+
+    await expect(checkout).rejects.toMatchObject({ status: 403 });
+    expect(mockCreateSubscription).not.toHaveBeenCalled();
   });
 
   it('createSubscription returns shortUrl for checkout handoff', async () => {
@@ -651,54 +700,57 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
   it.each([
     { lifecycle: 'locked' as const, tier: 'corporate' as const },
     { lifecycle: 'downgraded' as const, tier: 'hobby' as const },
-  ])('allows an explicit recovery checkout from $lifecycle after Razorpay is halted', async ({ lifecycle, tier }) => {
-    const { user, org } = await makeOrgWithOwner();
-    const now = new Date();
-    await db.insert(schema.subscription).values({
-      organizationId: org.id,
-      planTier: tier,
-      subscriptionState: lifecycle,
-      razorpaySubscriptionId: `sub_${lifecycle}_old`,
-      razorpayStatus: 'halted',
-      graceStartedAt: new Date(now.getTime() - 40 * 86_400_000),
-      lockedAt: new Date(now.getTime() - 30 * 86_400_000),
-      downgradedAt: lifecycle === 'downgraded' ? now : null,
-      preLapseTier: 'corporate',
-    });
-    vi.mocked(mockFetchSubscription).mockResolvedValue({
-      id: `sub_${lifecycle}_old`,
-      entity: 'subscription',
-      plan_id: 'plan_test',
-      status: 'halted',
-      current_start: null,
-      current_end: null,
-      short_url: null,
-      created_at: Math.floor(Date.now() / 1000),
-    });
-    vi.mocked(mockCreateSubscription).mockResolvedValue({
-      id: `sub_${lifecycle}_recovery`,
-      entity: 'subscription',
-      plan_id: 'plan_test',
-      status: 'created',
-      current_start: null,
-      current_end: null,
-      short_url: 'https://rzp.io/recovery',
-      created_at: Math.floor(Date.now() / 1000),
-    });
+  ])(
+    'allows an explicit recovery checkout from $lifecycle after Razorpay is halted',
+    async ({ lifecycle, tier }) => {
+      const { user, org } = await makeOrgWithOwner();
+      const now = new Date();
+      await db.insert(schema.subscription).values({
+        organizationId: org.id,
+        planTier: tier,
+        subscriptionState: lifecycle,
+        razorpaySubscriptionId: `sub_${lifecycle}_old`,
+        razorpayStatus: 'halted',
+        graceStartedAt: new Date(now.getTime() - 40 * 86_400_000),
+        lockedAt: new Date(now.getTime() - 30 * 86_400_000),
+        downgradedAt: lifecycle === 'downgraded' ? now : null,
+        preLapseTier: 'corporate',
+      });
+      vi.mocked(mockFetchSubscription).mockResolvedValue({
+        id: `sub_${lifecycle}_old`,
+        entity: 'subscription',
+        plan_id: 'plan_test',
+        status: 'halted',
+        current_start: null,
+        current_end: null,
+        short_url: null,
+        created_at: Math.floor(Date.now() / 1000),
+      });
+      vi.mocked(mockCreateSubscription).mockResolvedValue({
+        id: `sub_${lifecycle}_recovery`,
+        entity: 'subscription',
+        plan_id: 'plan_test',
+        status: 'created',
+        current_start: null,
+        current_end: null,
+        short_url: 'https://rzp.io/recovery',
+        created_at: Math.floor(Date.now() / 1000),
+      });
 
-    const result = await subscribeService.createSubscription(
-      { userId: user.id, activeOrgId: org.id },
-      { targetTier: 'corporate' },
-    );
+      const result = await subscribeService.createSubscription(
+        { userId: user.id, activeOrgId: org.id },
+        { targetTier: 'corporate' },
+      );
 
-    expect(result.razorpaySubscriptionId).toBe(`sub_${lifecycle}_recovery`);
-    const [recovering] = await db
-      .select()
-      .from(schema.subscription)
-      .where(eq(schema.subscription.organizationId, org.id));
-    expect(recovering!.subscriptionState).toBe(lifecycle);
-    expect(recovering!.razorpayStatus).toBe('created');
-  });
+      expect(result.razorpaySubscriptionId).toBe(`sub_${lifecycle}_recovery`);
+      const [recovering] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.organizationId, org.id));
+      expect(recovering!.subscriptionState).toBe(lifecycle);
+      expect(recovering!.razorpayStatus).toBe('created');
+    },
+  );
 
   it('records cycle-end cancellation without pretending Razorpay is already cancelled', async () => {
     const { user, org } = await makeOrgWithOwner();

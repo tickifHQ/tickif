@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createHmac } from 'node:crypto';
 import { db, schema } from '@repo/db';
 import { ORGANIZATION_CAPABILITY, type PlanTier } from '@repo/contracts';
@@ -77,15 +77,25 @@ export const subscribeService = {
     // Server-side plan resolution — never trust client
     const razorpayPlanId = resolveRazorpayPlanId(params.targetTier);
     if (!razorpayPlanId) {
-      throw AppError.unprocessable(
-        `Razorpay plan not configured for tier: ${params.targetTier}`,
-      );
+      throw AppError.unprocessable(`Razorpay plan not configured for tier: ${params.targetTier}`);
     }
 
     // Use a transaction with row-level locking to serialize concurrent subscribe
     // requests for the same organization. This prevents the race where two requests
     // both pass the "no existing subscription" check and both call Razorpay.
     return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${caller.activeOrgId!}`}, 0))`,
+      );
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, caller.activeOrgId!))
+        .limit(1);
+      if (retention) {
+        throw AppError.forbidden('Organization billing access required');
+      }
+
       // Lock the subscription row (or verify none exists) using FOR UPDATE.
       // If another transaction is already creating a subscription for this org,
       // this will block until that transaction completes.
@@ -210,9 +220,7 @@ export const subscribeService = {
     // Server-side plan resolution
     const razorpayPlanId = resolveRazorpayPlanId(params.targetTier);
     if (!razorpayPlanId) {
-      throw AppError.unprocessable(
-        `Razorpay plan not configured for tier: ${params.targetTier}`,
-      );
+      throw AppError.unprocessable(`Razorpay plan not configured for tier: ${params.targetTier}`);
     }
 
     // Find existing subscription
@@ -270,7 +278,11 @@ export const subscribeService = {
    */
   async cancelSubscription(
     caller: Caller,
-  ): Promise<{ razorpaySubscriptionId: string; alreadyCancelled: boolean; currentPeriodEnd: string | null }> {
+  ): Promise<{
+    razorpaySubscriptionId: string;
+    alreadyCancelled: boolean;
+    currentPeriodEnd: string | null;
+  }> {
     assertBillingConfigured();
     await assertOrgBillingAccess(caller);
 
@@ -447,7 +459,8 @@ export const subscribeService = {
     switch (rzpSub.status) {
       case 'active': {
         // Subscription is active — resolve the tier from plan_id or notes
-        const tier = inferTierFromConfig(rzpSub.plan_id) ?? inferTierFromNotes(rzpSub.notes) ?? null;
+        const tier =
+          inferTierFromConfig(rzpSub.plan_id) ?? inferTierFromNotes(rzpSub.notes) ?? null;
         if (tier && subscription.planTier !== tier) {
           updates.planTier = tier;
           tierChanged = true;
@@ -456,7 +469,9 @@ export const subscribeService = {
         if (rzpSub.cancel_at_cycle_end !== undefined) {
           updates.cancelAtPeriodEnd = rzpSub.cancel_at_cycle_end;
         }
-        updates.currentPeriodEnd = rzpSub.current_end ? new Date(rzpSub.current_end * 1000) : undefined;
+        updates.currentPeriodEnd = rzpSub.current_end
+          ? new Date(rzpSub.current_end * 1000)
+          : undefined;
 
         // Clear any lapse fields (reactivation)
         if (subscription.subscriptionState !== 'active') {
@@ -480,7 +495,10 @@ export const subscribeService = {
         break;
       case 'halted':
         // Payment retries exhausted → grace period
-        if (subscription.subscriptionState === 'active' || subscription.subscriptionState === 'payment_failed') {
+        if (
+          subscription.subscriptionState === 'active' ||
+          subscription.subscriptionState === 'payment_failed'
+        ) {
           updates.subscriptionState = 'grace';
           updates.graceStartedAt = subscription.graceStartedAt ?? new Date();
           updates.preLapseTier = (subscription.planTier as PlanTier) ?? undefined;

@@ -1832,7 +1832,13 @@ export const projectsService = {
   > {
     // Verify project exists and is published
     const project = await projectsRepository.findById(projectId);
-    if (!project || project.status !== 'published') {
+    if (!project) {
+      if (await projectsRepository.isProjectTombstonedById(projectId)) {
+        throw AppError.gone('Project permanently deleted');
+      }
+      throw AppError.notFound('Project not found');
+    }
+    if (project.status !== 'published') {
       throw AppError.notFound('Project not found');
     }
 

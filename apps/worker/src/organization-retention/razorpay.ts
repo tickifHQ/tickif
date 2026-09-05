@@ -23,18 +23,28 @@ export async function cancelRazorpaySubscription(subscriptionId: string): Promis
   const { authorization } = credentials();
   const url = `https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`;
   const current = await fetch(url, { headers: { Authorization: authorization } });
+  if (current.status === 404) return;
   if (!current.ok) throw new Error(`Razorpay subscription lookup failed with ${current.status}`);
   const currentStatus = await parseStatus(current);
-  if (currentStatus === 'cancelled' || currentStatus === 'completed') return;
+  if (
+    currentStatus === 'cancelled' ||
+    currentStatus === 'completed' ||
+    currentStatus === 'expired'
+  ) {
+    return;
+  }
 
   const cancelled = await fetch(`${url}/cancel`, {
     method: 'POST',
     headers: { Authorization: authorization, 'Content-Type': 'application/json' },
     body: JSON.stringify({ cancel_at_cycle_end: false }),
   });
-  if (!cancelled.ok) throw new Error(`Razorpay subscription cancellation failed with ${cancelled.status}`);
+  if (!cancelled.ok)
+    throw new Error(`Razorpay subscription cancellation failed with ${cancelled.status}`);
   const cancelledStatus = await parseStatus(cancelled);
   if (cancelledStatus !== 'cancelled' && cancelledStatus !== 'completed') {
-    throw new Error(`Razorpay subscription cancellation returned ${cancelledStatus ?? 'no status'}`);
+    throw new Error(
+      `Razorpay subscription cancellation returned ${cancelledStatus ?? 'no status'}`,
+    );
   }
 }

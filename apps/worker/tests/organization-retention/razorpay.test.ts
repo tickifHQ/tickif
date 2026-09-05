@@ -7,9 +7,7 @@ vi.mock('@repo/config', () => ({
   },
 }));
 
-const { cancelRazorpaySubscription } = await import(
-  '../../src/organization-retention/razorpay.js'
-);
+const { cancelRazorpaySubscription } = await import('../../src/organization-retention/razorpay.js');
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -19,9 +17,31 @@ describe('Razorpay retention cleanup', () => {
   it('treats an already-cancelled subscription as an idempotent success', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }),
+      );
 
     await expect(cancelRazorpaySubscription('sub_done')).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('treats an expired subscription as terminal instead of retrying an impossible cancellation', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'expired' }), { status: 200 }));
+
+    await expect(cancelRazorpaySubscription('sub_expired')).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('treats a missing provider subscription as an idempotent success', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    await expect(cancelRazorpaySubscription('sub_missing')).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -30,7 +50,9 @@ describe('Razorpay retention cleanup', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'active' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }),
+      );
 
     await cancelRazorpaySubscription('sub_active');
 
@@ -59,14 +81,14 @@ describe('Razorpay retention cleanup', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'active' }), { status: 200 }))
       .mockResolvedValueOnce(new Response('not-json', { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }),
+      );
 
     await expect(cancelRazorpaySubscription('sub_ambiguous')).rejects.toThrow();
     await expect(cancelRazorpaySubscription('sub_ambiguous')).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(
-      fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST'),
-    ).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 });
