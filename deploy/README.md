@@ -23,7 +23,7 @@ not already initialized, then label the current manager:
 
 ```bash
 docker swarm init --advertise-addr <vm-private-ip>
-docker node update --label-add tickif.staging=true self
+docker node update --label-add tickif.staging=true "$(docker info --format '{{.Swarm.NodeID}}')"
 ```
 
 Do not run initialization against the shared developer daemon. `release.sh`
