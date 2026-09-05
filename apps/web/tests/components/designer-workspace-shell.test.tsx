@@ -14,7 +14,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: () => <div data-testid="account-menu" />,
+  AccountMenu: ({ showProfileSettings }: { showProfileSettings?: boolean }) => (
+    <div data-testid="account-menu" data-profile-settings={showProfileSettings} />
+  ),
 }));
 
 vi.mock('@/components/initials-avatar', () => ({
@@ -153,10 +155,7 @@ describe('DesignerWorkspaceShell', () => {
       'href',
       '/designer/plan-billing',
     );
-    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute(
-      'href',
-      '/designer/profile',
-    );
+    expect(screen.queryByRole('link', { name: /profile & settings/i })).not.toBeInTheDocument();
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
   });
 
@@ -166,7 +165,6 @@ describe('DesignerWorkspaceShell', () => {
     ['/designer/portfolio', 'Portfolio', 'lucide-link', 'lucide-link-2'],
     ['/designer/analytics', 'Analytics', 'lucide-chart-line', 'lucide-chart-column-big'],
     ['/designer/plan-billing', 'Plan & billing', 'lucide-credit-card', 'lucide-hand-coins'],
-    ['/designer/profile', 'Profile & settings', 'lucide-settings', 'lucide-circle-user-round'],
   ])(
     'uses the requested Lucide icon for %s in the sidebar and header',
     (pathname, label, iconClass, oldIconClass) => {
@@ -209,8 +207,8 @@ describe('DesignerWorkspaceShell', () => {
     expect(document.querySelector('.lucide-badge-help')).not.toBeInTheDocument();
   });
 
-  it('routes Profile & settings to the designer profile page', () => {
-    mock.pathname = '/designer/dashboard';
+  it('keeps the profile header and enables settings in the header account menu', () => {
+    mock.pathname = '/designer/profile';
 
     render(
       <DesignerWorkspaceShell
@@ -223,10 +221,11 @@ describe('DesignerWorkspaceShell', () => {
       </DesignerWorkspaceShell>,
     );
 
-    expect(screen.getAllByRole('link', { name: /profile & settings/i })[0]).toHaveAttribute(
-      'href',
-      '/designer/profile',
-    );
+    expect(screen.queryByRole('link', { name: /profile & settings/i })).not.toBeInTheDocument();
+    const header = screen.getByRole('banner');
+    expect(header).toHaveTextContent('Profile & settings');
+    expect(header.querySelector('svg.lucide-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'true');
   });
 
   it('routes Verification to the designer verification page', () => {
@@ -321,6 +320,7 @@ describe('DesignerWorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open navigation' }));
     expect(screen.getByRole('dialog', { name: 'Designer navigation' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /profile & settings/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Close navigation' }));
     expect(screen.queryByRole('dialog', { name: 'Designer navigation' })).not.toBeInTheDocument();
