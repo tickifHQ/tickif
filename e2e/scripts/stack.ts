@@ -6,7 +6,7 @@ import { apiUrl, webUrl, environment } from '../lib/environment.js';
 
 // Preparation completes before the API/web readiness probes can hit an unmigrated schema.
 await import('./prepare.js');
-const require = createRequire(import.meta.url);
+
 const children: ChildProcess[] = [];
 let stopping = false;
 function shutdown(code = 0) {

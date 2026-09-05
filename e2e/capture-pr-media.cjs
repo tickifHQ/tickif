@@ -9,12 +9,7 @@ const OUT_DIR = path.join(__dirname, '..', 'demo', 'pr-media');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 async function shot(page, name, clip) {
-  await page.screenshot({
-    path: path.join(OUT_DIR, `${name}.jpg`),
-    type: 'jpeg',
-    quality: 82,
-    clip,
-  });
+  await page.screenshot({ path: path.join(OUT_DIR, `${name}.jpg`), type: 'jpeg', quality: 82, clip });
   console.log('captured', name);
 }
 
@@ -43,21 +38,14 @@ async function main() {
   // filters row scrolled to the end — Filters button and divider stay pinned
   const filtersBtn = page.getByRole('button', { name: 'Filters' });
   await filtersBtn.scrollIntoViewIfNeeded();
-  const chips = page
-    .locator('div.overflow-x-auto', { has: page.getByRole('button', { name: 'All' }) })
-    .first();
+  const chips = page.locator('div.overflow-x-auto', { has: page.getByRole('button', { name: 'All' }) }).first();
   await chips.evaluate((el) => {
     el.scrollLeft = el.scrollWidth;
   });
   await pause(600);
   const box = await filtersBtn.boundingBox();
   if (box) {
-    await shot(page, '07-filters-scrolled', {
-      x: 0,
-      y: Math.max(0, box.y - 60),
-      width: 1512,
-      height: 220,
-    });
+    await shot(page, '07-filters-scrolled', { x: 0, y: Math.max(0, box.y - 60), width: 1512, height: 220 });
   } else {
     console.warn('skipped 07-filters-scrolled: Filters button not visible');
   }

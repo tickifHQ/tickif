@@ -9,9 +9,10 @@ const expected = [
   'project moderation lifecycle',
   'verification lifecycle',
   'review lifecycle',
+  'consultation lifecycle',
   'visitor onboarding and discovery',
   'designer onboarding and media processing',
-  'organization roles and isolation',
+  'invitation acceptance, role changes and studio switching',
   'billing owner sees real payments',
 ];
 const resultSchema = z.object({ suites: z.array(z.unknown()) });
