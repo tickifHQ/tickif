@@ -44,6 +44,27 @@ describe('GET /api/reports/analytics', () => {
     expect(response.status).toBe(422);
   });
 
+  it('denies analytics while organization retention is active', async () => {
+    const { cookie, designer } = await makeDesignerSession('+919800004012');
+    const requestedAt = new Date('2026-09-04T00:00:00.000Z');
+    await db.insert(schema.organizationRetention).values({
+      organizationId: designer.orgId,
+      status: 'deletion_requested',
+      requestedByUserId: designer.userId!,
+      requestedAt,
+      archiveDueAt: new Date('2026-09-05T00:00:00.000Z'),
+      hardDeleteDueAt: new Date('2026-12-04T00:00:00.000Z'),
+      delistWindowDays: 1,
+      archiveWindowDays: 90,
+    });
+
+    const response = await app.request('/api/reports/analytics', {
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(403);
+  });
+
   it('returns real metrics scoped to the active designer organization', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-20T06:30:00.000Z'));

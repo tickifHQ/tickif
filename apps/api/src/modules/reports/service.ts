@@ -2,6 +2,7 @@ import {
   ANALYTICS_SCOPE,
   INTERACTION_EVENT_TYPE,
   ORGANIZATION_ACCESS_SCOPE,
+  ORGANIZATION_CAPABILITY,
   ORGANIZATION_MEMBER_ROLE,
   analyticsScope,
   rbacEnabled,
@@ -12,6 +13,7 @@ import {
   type OrganizationMemberRole,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
+import { orgsService } from '../orgs/service.js';
 import {
   reportsRepository,
   type AnalyticsDailyCount,
@@ -177,6 +179,15 @@ export const reportsService = {
     });
     if (!context || context.frozen) {
       throw AppError.forbidden('Active organization membership required');
+    }
+    if (
+      !(await orgsService.hasCapability(
+        input.userId,
+        input.orgId,
+        ORGANIZATION_CAPABILITY.READ_ANALYTICS,
+      ))
+    ) {
+      throw AppError.forbidden('Organization role does not allow analytics access');
     }
 
     const parsedRole = organizationMemberRoleSchema.safeParse(context.role);

@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ORGANIZATION_ACCESS_SCOPE,
+  ORGANIZATION_CAPABILITY,
   ORGANIZATION_MEMBER_ROLE,
   type OrganizationMemberRole,
 } from '@repo/contracts';
@@ -22,8 +23,15 @@ vi.mock('../../../src/modules/reports/repository.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    hasCapability: vi.fn(),
+  },
+}));
+
 const { reportsService } = await import('../../../src/modules/reports/service.js');
 const { reportsRepository } = await import('../../../src/modules/reports/repository.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 
 const input = { userId: 'user_1', orgId: 'org_1', query: { days: 7 } };
 const profiles = [
@@ -54,6 +62,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-08-07T12:30:00.000Z'));
   mockRole(ORGANIZATION_MEMBER_ROLE.OWNER);
+  vi.mocked(orgsService.hasCapability).mockResolvedValue(true);
   vi.mocked(reportsRepository.listActiveProfiles).mockResolvedValue(profiles);
   vi.mocked(reportsRepository.listFrozenBranches).mockResolvedValue([]);
   vi.mocked(reportsRepository.countProjectsByStatus).mockResolvedValue([]);
@@ -210,6 +219,19 @@ describe('reportsService.getAnalytics', () => {
     mockRole(ORGANIZATION_MEMBER_ROLE.MEMBER, { frozen: true });
     await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
     expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+  });
+
+  it('rejects analytics while organization retention disables every capability', async () => {
+    vi.mocked(orgsService.hasCapability).mockResolvedValue(false);
+
+    await expect(reportsService.getAnalytics(input)).rejects.toMatchObject({ status: 403 });
+    expect(orgsService.hasCapability).toHaveBeenCalledWith(
+      'user_1',
+      'org_1',
+      ORGANIZATION_CAPABILITY.READ_ANALYTICS,
+    );
+    expect(reportsRepository.listActiveProfiles).not.toHaveBeenCalled();
+    expect(reportsRepository.getBillingAnalytics).not.toHaveBeenCalled();
   });
 
   it('rejects requests without an active organization before querying', async () => {
