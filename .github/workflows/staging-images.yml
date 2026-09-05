@@ -40,6 +40,18 @@ jobs:
             docker run --rm --entrypoint sh "localhost:5000/tickif/$service:$revision" \
               -c 'test ! -e /app/.env.production && test ! -e /app/apps/web/.env.local'
           done
+          docker run --rm --entrypoint bash "localhost:5000/tickif/operations:$revision" -ec '
+            pnpm --filter @repo/worker exec tsx --version
+            pnpm --filter @repo/db exec drizzle-kit --version
+            test -f apps/worker/src/staging-prepare.ts
+            test -f packages/db/src/seeds/index.ts
+            test -f infra/staging/scripts/release-job.sh
+            test -f infra/staging/scripts/backup-job.sh
+            pg_dump --version
+            pg_restore --version
+            age --version
+            rclone --version
+          '
       - name: Test release on the disposable runner Swarm
         run: bash infra/staging/scripts/test-swarm.sh
       - name: Service diagnostics

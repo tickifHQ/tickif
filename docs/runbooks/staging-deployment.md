@@ -60,6 +60,12 @@ Create all secret objects named by the environment file:
 - Google OAuth client secret and Razorpay test-mode API/webhook secrets.
 - An age public recipient for backups; keep its private identity offline and mount it only for restores.
 
+Provision the search-only key in Typesense itself using its key-management API
+with `actions: ["documents:search"]` and `collections: ["tickif_staging_.*"]`
+(use the configured collection prefix). Mount that key value as the search-key
+Swarm secret. A random secret object alone does not register a Typesense key;
+preparation deliberately stays closed until the actual query key works.
+
 Secrets are external and versioned. To rotate, create a `_v2` object, change the
 name in `/opt/tickif/staging.env`, deploy, verify, then remove `_v1`. Swarm grants
 runtime secrets only to consumers: Postgres gets its password, Typesense its
