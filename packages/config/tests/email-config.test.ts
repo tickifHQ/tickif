@@ -12,6 +12,65 @@ const productionEnvironment = {
 } satisfies NodeJS.ProcessEnv;
 
 describe('email environment configuration', () => {
+  it('defaults phone OTP delivery to SMS', () => {
+    expect(parseConfig(productionEnvironment).PHONE_OTP_DELIVERY).toBe('sms');
+  });
+
+  it('requires an inbox and credentials for email phone OTP delivery in every environment', () => {
+    const environment = { ...productionEnvironment, NODE_ENV: 'test', PHONE_OTP_DELIVERY: 'email' };
+    expect(() => parseConfig(environment)).toThrow(
+      'PHONE_OTP_EMAIL_TO, PHONE_OTP_EMAIL_ALLOWED_NUMBERS, and RESEND_API_KEY',
+    );
+    expect(() => parseConfig({ ...environment, PHONE_OTP_EMAIL_TO: 'tester@example.com' })).toThrow(
+      'PHONE_OTP_EMAIL_ALLOWED_NUMBERS',
+    );
+    expect(() =>
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010',
+        RESEND_API_KEY: 'test-key',
+      }),
+    ).toThrow(
+      'PHONE_OTP_EMAIL_TO',
+    );
+    expect(
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_TO: 'tester@example.com',
+        PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010,+919800000011',
+        RESEND_API_KEY: 'test-key',
+      }).PHONE_OTP_EMAIL_ALLOWED_NUMBERS,
+    ).toEqual(['+919800000010', '+919800000011']);
+    expect(() =>
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_TO: 'invalid',
+        PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010',
+        RESEND_API_KEY: 'test-key',
+      }),
+    ).toThrow('PHONE_OTP_EMAIL_TO');
+    expect(() =>
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_TO: 'tester@example.com',
+        PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010,not-a-phone',
+        RESEND_API_KEY: 'test-key',
+      }),
+    ).toThrow('PHONE_OTP_EMAIL_ALLOWED_NUMBERS');
+  });
+
+  it('forbids the temporary phone OTP email override in production', () => {
+    expect(() =>
+      parseConfig({
+        ...productionEnvironment,
+        PHONE_OTP_DELIVERY: 'email',
+        PHONE_OTP_EMAIL_TO: 'tester@example.com',
+        PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010',
+        RESEND_API_KEY: 'test-key',
+      }),
+    ).toThrow('must not be enabled in production');
+  });
+
   it('requires an explicit Resend API key in production', () => {
     expect(() => assertProductionEmailConfig(productionEnvironment)).toThrow(
       'RESEND_API_KEY: required when NODE_ENV=production',

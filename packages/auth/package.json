@@ -19,7 +19,8 @@
   },
   "scripts": {
     "generate": "npx --yes @better-auth/cli@latest generate --config ./src/index.ts --output ./auth-schema.generated.ts",
-    "lint": "eslint src",
+    "lint": "eslint src tests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -33,8 +34,10 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/tsconfig": "workspace:*",
+    "@repo/vitest-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "^9.18.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
