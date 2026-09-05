@@ -153,7 +153,14 @@ export type AdminReviewsResponse = z.infer<typeof adminReviewsResponseSchema>;
 
 /** Required on admin decisions: never moderate content newer than the viewed revision. */
 export const adminReviewDecisionQuerySchema = z
-  .object({ expectedRevision: z.coerce.number().int().nonnegative() })
+  .object({
+    expectedRevision: z.coerce
+      .string()
+      .trim()
+      .regex(/^\d+$/, 'Expected revision must be a nonnegative integer')
+      .transform(Number)
+      .pipe(z.number().int().nonnegative()),
+  })
   .meta({ id: 'AdminReviewDecisionQuery' });
 
 /** Private read model. Do not return moderation notes from public review endpoints. */
