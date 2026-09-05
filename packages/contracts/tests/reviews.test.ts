@@ -6,11 +6,27 @@ import {
   listPublishedReviewsQuerySchema,
   resolveReviewDisputeSchema,
   updateReviewSchema,
+  reviewMutationQuerySchema,
 } from '../src/reviews.js';
 
 const PROFILE_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('review contracts', () => {
+  it('requires exact integer revisions for participant edits and disputes', () => {
+    for (const expectedRevision of ['', ' ', '1.5', '-1', true, '1e2', undefined]) {
+      expect(reviewMutationQuerySchema.safeParse({ expectedRevision }).success).toBe(false);
+    }
+    expect(reviewMutationQuerySchema.parse({ expectedRevision: '2' })).toEqual({
+      expectedRevision: 2,
+    });
+    expect(
+      createReviewSchema.safeParse({
+        designerProfileId: PROFILE_ID,
+        rating: 5,
+        authorUserId: 'another-user',
+      }).success,
+    ).toBe(false);
+  });
   it('requires a nonnegative revision for admin decisions', () => {
     expect(adminReviewDecisionQuerySchema.safeParse({}).success).toBe(false);
     expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '' }).success).toBe(false);

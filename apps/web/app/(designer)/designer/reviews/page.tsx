@@ -1,7 +1,11 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { organizationReviewsQuerySchema, reviewStatusSchema } from '@repo/contracts';
+import {
+  organizationReviewsQuerySchema,
+  reviewStatusSchema,
+  type OrganizationReviewsQuery,
+} from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { DesignerReviews } from '@/components/designer-reviews';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
@@ -35,7 +39,7 @@ export default async function ReviewsPage({
     page: params.page,
     limit: 10,
   });
-  const query = parsed.success
+  const query: OrganizationReviewsQuery = parsed.success
     ? parsed.data
     : { designerProfileId: profile.id, page: 1, limit: 10 };
   const data = await fetchOrganizationReviews(query, requestHeaders.get('cookie') ?? '');
