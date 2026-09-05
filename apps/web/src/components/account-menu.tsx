@@ -53,6 +53,7 @@ export function AccountMenu({
   }
 
   const user = session.user;
+  const personalRole = 'role' in user ? user.role : null;
   const displayName = user.name ?? user.email ?? 'Account';
   const firstName = (user.name ?? '').split(' ')[0] || displayName;
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
@@ -102,6 +103,15 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {(personalRole === 'visitor' || personalRole === 'designer') &&
+          !session.session.activeOrganizationId ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href="/home/settings">
+                <Settings aria-hidden="true" />
+                Personal settings
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           {showProfileSettings ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/designer/profile">
