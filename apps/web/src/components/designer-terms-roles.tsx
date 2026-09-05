@@ -45,17 +45,15 @@ import {
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
+import { formatOrganizationMutationError } from '@/lib/organization-errors';
+import {
+  OrganizationRoleBadge,
+  formatSeatLimit,
+  organizationRoleLabels,
+} from '@/components/organization-presentation';
 
 type AssignableRole = Exclude<OrganizationMemberRole, 'owner'>;
 type Feedback = { tone: 'success' | 'error'; message: string };
-
-const roleLabels: Record<OrganizationMemberRole, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  billing_admin: 'Billing Admin',
-  member: 'Member',
-  viewer: 'Viewer',
-};
 
 const roleDescriptions: Record<OrganizationMemberRole, string> = {
   owner: 'Full control of this studio, including its team and settings.',
@@ -63,14 +61,6 @@ const roleDescriptions: Record<OrganizationMemberRole, string> = {
   billing_admin: 'Can manage billing, invoices, and subscription operations.',
   member: 'Can access the studio workspace without team-management controls.',
   viewer: 'Can view organization analytics without editing workspace data.',
-};
-
-const roleBadgeStyles: Record<OrganizationMemberRole, string> = {
-  owner: 'bg-secondary text-secondary-foreground',
-  admin: 'bg-info/10 text-info',
-  billing_admin: 'bg-feature/10 text-feature',
-  member: 'bg-success-lighter text-success',
-  viewer: 'bg-muted text-muted-foreground',
 };
 
 const avatarStyles = [
@@ -88,48 +78,14 @@ const assignableRoles = [
 
 // Owner is intentionally absent: Admin must not be offered Owner, and ownership
 // changes only through the two-party transfer flow (E-243), never the role menu.
-const TIER_ERROR_CODE = 'ORGANIZATION_RBAC_REQUIRES_CORPORATE';
-const BILLING_LOCKED_ERROR_CODE = 'ORGANIZATION_BILLING_LOCKED';
 const UPGRADE_MESSAGE = 'Upgrade to Corporate to unlock team management.';
 const RESTORE_MESSAGE = 'Restore billing to unlock team management.';
 
-function entitlementErrorCode(
-  error: unknown,
-): typeof TIER_ERROR_CODE | typeof BILLING_LOCKED_ERROR_CODE | null {
-  if (!error || typeof error !== 'object') return null;
-  const candidate = error as { code?: unknown; message?: unknown };
-  if (candidate.code === BILLING_LOCKED_ERROR_CODE) return BILLING_LOCKED_ERROR_CODE;
-  if (candidate.code === TIER_ERROR_CODE) return TIER_ERROR_CODE;
-  if (typeof candidate.message !== 'string') return null;
-  if (
-    candidate.message.includes(BILLING_LOCKED_ERROR_CODE) ||
-    candidate.message.includes('Restore billing')
-  ) {
-    return BILLING_LOCKED_ERROR_CODE;
-  }
-  if (
-    candidate.message.includes(TIER_ERROR_CODE) ||
-    candidate.message.includes('Upgrade to Corporate')
-  ) {
-    return TIER_ERROR_CODE;
-  }
-  return null;
-}
-
 function formatMutationError(fallback: string, error: unknown): string {
-  const entitlementCode = entitlementErrorCode(error);
-  if (entitlementCode === BILLING_LOCKED_ERROR_CODE) return RESTORE_MESSAGE;
-  if (entitlementCode === TIER_ERROR_CODE) return UPGRADE_MESSAGE;
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
-}
-
-function formatSeatLimit(limit: number): string {
-  if (!Number.isFinite(limit) || limit < 0) return 'Unlimited';
-  return String(limit);
+  return formatOrganizationMutationError(fallback, error, {
+    upgrade: UPGRADE_MESSAGE,
+    billingLocked: RESTORE_MESSAGE,
+  });
 }
 
 const planTierLabels: Record<OrganizationWorkspaceResponse['planTier'], string> = {
@@ -229,17 +185,6 @@ function daysUntil(value: string) {
   return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000));
 }
 
-function RoleBadge({ role }: { role: OrganizationMemberRole }) {
-  return (
-    <Badge
-      shape="square"
-      className={`border-transparent px-2.5 py-1 text-xs leading-relaxed ${roleBadgeStyles[role]}`}
-    >
-      {roleLabels[role]}
-    </Badge>
-  );
-}
-
 function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse }) {
   const displayedSeatLimit =
     workspace.subscriptionState === 'locked'
@@ -287,7 +232,7 @@ function SummaryCards({ workspace }: { workspace: OrganizationWorkspaceResponse 
         <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
           Your access
         </p>
-        <RoleBadge role={workspace.currentUserRole} />
+        <OrganizationRoleBadge role={workspace.currentUserRole} />
         <p className="mt-auto max-w-56 text-xs leading-relaxed text-muted-foreground">
           {roleDescriptions[workspace.currentUserRole]}
         </p>
@@ -411,7 +356,7 @@ function MembersList({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <RoleBadge role={member.role} />
+            <OrganizationRoleBadge role={member.role} />
             {canManage && !member.isCurrentUser && member.role !== 'owner' ? (
               <MemberActions
                 member={member}
@@ -473,7 +418,7 @@ function PendingInvites({
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   Invited as{' '}
                   <span className="font-medium text-foreground/80">
-                    {roleLabels[invitation.role]}
+                    {organizationRoleLabels[invitation.role]}
                   </span>{' '}
                   · {formatDate(invitation.createdAt)}
                 </p>
@@ -684,7 +629,7 @@ export function DesignerTermsRoles({
         }
         setFeedback({
           tone: 'success',
-          message: `${member.name}'s role changed to ${roleLabels[nextRole]}.`,
+          message: `${member.name}'s role changed to ${organizationRoleLabels[nextRole]}.`,
         });
         router.refresh();
       } catch {
@@ -981,7 +926,7 @@ export function DesignerTermsRoles({
                   placeholder="Select a teammate"
                   options={transferTargets.map((member) => ({
                     value: member.id,
-                    label: `${member.name} (${roleLabels[member.role]})`,
+                    label: `${member.name} (${organizationRoleLabels[member.role]})`,
                   }))}
                   disabled={isPending}
                   onValueChange={setTransferTargetId}

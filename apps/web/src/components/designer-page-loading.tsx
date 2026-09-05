@@ -282,6 +282,40 @@ export function DesignerTeamRolesLoading() {
   );
 }
 
+export function DesignerBranchesLoading() {
+  return (
+    <LoadingRegion label="Loading branches" className="px-5 py-10 sm:px-8 lg:py-12">
+      <div className="mx-auto max-w-4xl space-y-4">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-4 w-full max-w-lg" />
+        </div>
+
+        <Card className="space-y-3 p-4 shadow-xs">
+          {THREE_ITEMS.map((item) => (
+            <div key={item} className="space-y-2 rounded-xl border p-4">
+              <Skeleton className="h-5 w-44 max-w-full" />
+              <Skeleton className="h-3 w-64 max-w-full" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-28" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        <Card className="p-5 shadow-xs">
+          <Skeleton className="h-5 w-36" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1.7fr)_auto]">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-28" />
+          </div>
+        </Card>
+      </div>
+    </LoadingRegion>
+  );
+}
+
 export function DesignerPlanBillingLoading() {
   return (
     <LoadingRegion label="Loading plan and billing" className="p-6 md:p-8 xl:p-10">
