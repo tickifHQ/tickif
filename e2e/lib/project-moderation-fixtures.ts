@@ -65,7 +65,7 @@ export async function createProjectModerationFixture() {
     ),
     contentType: 'image/png',
   });
-  const projects = [];
+  const projects: Array<Awaited<ReturnType<typeof makeProject>>> = [];
   for (let index = 0; index < 21; index++) {
     const project = await makeProject({
       designerId: designer.id,
