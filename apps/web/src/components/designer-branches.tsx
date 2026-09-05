@@ -3,10 +3,12 @@
 import { useId, useState, useTransition, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type {
-  OrganizationBranchesResponse,
-  OrganizationMemberRole,
-  OrganizationWorkspaceResponse,
+import {
+  errorResponseSchema,
+  removeOrganizationBranchResponseSchema,
+  type OrganizationBranchesResponse,
+  type OrganizationMemberRole,
+  type OrganizationWorkspaceResponse,
 } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
@@ -42,19 +44,30 @@ import {
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { formatOrganizationMutationError } from '@/lib/organization-errors';
-import { RoleBadge, formatSeatLimit } from '@/components/designer-terms-roles';
+import {
+  OrganizationRoleBadge,
+  formatSeatLimit,
+} from '@/components/organization-presentation';
 
 type Feedback = { tone: 'success' | 'error'; message: string };
 
 type AssignableRole = Exclude<OrganizationMemberRole, 'owner'>;
 
 function formatMutationError(fallback: string, error: unknown): string {
-  return formatOrganizationMutationError(
-    fallback,
-    error,
-    'Upgrade to Corporate to unlock branches.',
-  );
+  return formatOrganizationMutationError(fallback, error, {
+    upgrade: 'Upgrade to Corporate to unlock branches.',
+    billingLocked: 'Restore billing to unlock branches.',
+  });
 }
+
+const profileStatusLabels: Record<
+  OrganizationBranchesResponse['branches'][number]['profileStatus'],
+  string
+> = {
+  active: 'Public',
+  draft: 'Draft',
+  suspended: 'Suspended',
+};
 
 function memberInitials(name: string) {
   return (
@@ -128,6 +141,7 @@ export function DesignerBranches({
   const canManageBranches = workspace.canManage && workspace.rbacEnabled;
   const canRemoveBranches = workspace.currentUserRole === 'owner' && workspace.rbacEnabled;
   const activeBranches = branches.branches.filter((branch) => !branch.frozen);
+  const publicRemovalTargets = activeBranches.filter((branch) => branch.profileStatus === 'active');
   const frozenListedBranches = branches.branches.filter((branch) => branch.frozen);
   const branchOptions = activeBranches.map((branch) => ({
     value: branch.id,
@@ -136,6 +150,8 @@ export function DesignerBranches({
   const organizationId = workspace.organization.id;
   const orgMembers = workspace.members;
   const assignableMembers = orgMembers.filter((member) => !member.frozen);
+  const currentUserId = orgMembers.find((member) => member.isCurrentUser)?.userId ?? null;
+  const billingLocked = workspace.subscriptionState === 'locked';
 
   function refresh() {
     router.refresh();
@@ -251,12 +267,20 @@ export function DesignerBranches({
           param: { branchId },
           json: { targetBranchId },
         });
-        const body = (await response.json().catch(() => null)) as {
-          error?: { code?: string; message?: string };
-          reassignedProjectCount?: number;
-        } | null;
+        const body: unknown = await response.json().catch(() => null);
         if (!response.ok) {
-          const message = formatMutationError('Could not remove the branch.', body?.error ?? null);
+          const parsedError = errorResponseSchema.safeParse(body);
+          const message = formatMutationError(
+            'Could not remove the branch.',
+            parsedError.success ? parsedError.data.error : null,
+          );
+          setRemoveError(message);
+          setFeedback({ tone: 'error', message });
+          return;
+        }
+        const parsed = removeOrganizationBranchResponseSchema.safeParse(body);
+        if (!parsed.success) {
+          const message = 'Could not verify that the branch was removed. Refresh and try again.';
           setRemoveError(message);
           setFeedback({ tone: 'error', message });
           return;
@@ -267,14 +291,13 @@ export function DesignerBranches({
           delete next[branchId];
           return next;
         });
-        const moved =
-          body && typeof body.reassignedProjectCount === 'number'
-            ? ` ${body.reassignedProjectCount} ${body.reassignedProjectCount === 1 ? 'project' : 'projects'} moved.`
-            : '';
+        const moved = ` ${parsed.data.reassignedProjectCount} ${parsed.data.reassignedProjectCount === 1 ? 'project' : 'projects'} moved.`;
         setFeedback({ tone: 'success', message: `Branch ${branchName} removed.${moved}` });
         refresh();
       } catch {
-        setFeedback({ tone: 'error', message: 'Could not remove the branch.' });
+        const message = 'Could not remove the branch.';
+        setRemoveError(message);
+        setFeedback({ tone: 'error', message });
       }
     });
   }
@@ -369,13 +392,18 @@ export function DesignerBranches({
 
         {!workspace.rbacEnabled ? (
           <Card className="space-y-3 p-5 shadow-none">
-            <p className="text-sm font-medium text-foreground">Branches are a Corporate feature</p>
+            <p className="text-sm font-medium text-foreground">
+              {billingLocked ? 'Branch management is suspended' : 'Branches are a Corporate feature'}
+            </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {workspace.organization.name} is on a single-user plan with 1 studio. Upgrade to
-              Corporate for unlimited branches and branch dashboards.
+              {billingLocked
+                ? `${workspace.organization.name} keeps its public branch pages while billing is locked. Restore billing to manage branches again.`
+                : `${workspace.organization.name} is on a single-user plan with 1 studio. Upgrade to Corporate for unlimited branches and branch dashboards.`}
             </p>
             <Button type="button" size="compact" asChild>
-              <Link href="/designer/plan-billing">View Corporate plans</Link>
+              <Link href="/designer/plan-billing">
+                {billingLocked ? 'Restore billing' : 'View Corporate plans'}
+              </Link>
             </Button>
           </Card>
         ) : null}
@@ -472,9 +500,15 @@ export function DesignerBranches({
                         shape="square"
                         className="border-transparent bg-success-lighter px-2 py-1 text-xs leading-none text-success uppercase"
                       >
-                        Active
+                        Current
                       </Badge>
                     ) : null}
+                    <Badge
+                      shape="square"
+                      className="border-transparent bg-muted px-2 py-1 text-xs leading-none text-muted-foreground uppercase"
+                    >
+                      {profileStatusLabels[branch.profileStatus]}
+                    </Badge>
                     {branch.frozen ? (
                       <Badge
                         shape="square"
@@ -485,30 +519,36 @@ export function DesignerBranches({
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <Link
-                      href={`/d/${branch.profileSlug}`}
-                      className="font-medium text-primary underline"
-                    >
-                      /d/{branch.profileSlug}
-                    </Link>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-6"
-                      aria-label={
-                        copiedSlug === branch.profileSlug
-                          ? `Link for ${branch.name} copied`
-                          : `Copy link for ${branch.name}`
-                      }
-                      onClick={() => copyProfileLink(branch.profileSlug)}
-                    >
-                      {copiedSlug === branch.profileSlug ? (
-                        <Check className="size-3.5" />
-                      ) : (
-                        <Copy className="size-3.5" />
-                      )}
-                    </Button>
+                    {branch.profileStatus === 'active' ? (
+                      <>
+                        <Link
+                          href={`/d/${branch.profileSlug}`}
+                          className="font-medium text-primary underline"
+                        >
+                          /d/{branch.profileSlug}
+                        </Link>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6"
+                          aria-label={
+                            copiedSlug === branch.profileSlug
+                              ? `Link for ${branch.name} copied`
+                              : `Copy link for ${branch.name}`
+                          }
+                          onClick={() => copyProfileLink(branch.profileSlug)}
+                        >
+                          {copiedSlug === branch.profileSlug ? (
+                            <Check className="size-3.5" />
+                          ) : (
+                            <Copy className="size-3.5" />
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <span>Public profile is not live</span>
+                    )}
                     <span>
                       {branch.projectCount} {branch.projectCount === 1 ? 'project' : 'projects'}
                     </span>
@@ -580,7 +620,7 @@ export function DesignerBranches({
                             </p>
                             <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                           </div>
-                          <RoleBadge role={member.role} />
+                          <OrganizationRoleBadge role={member.role} />
                           {canManageBranches && !branch.frozen ? (
                             confirmUnassignKey === `${branch.id}:${member.userId}` ? (
                               <>
@@ -631,7 +671,9 @@ export function DesignerBranches({
                   ) : null}
                   {canManageBranches && !isEditing && !branch.frozen ? (
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      {!isActive ? (
+                      {!isActive &&
+                      currentUserId !== null &&
+                      branch.members.some((member) => member.userId === currentUserId) ? (
                         <Button
                           type="button"
                           variant="fancy"
@@ -643,7 +685,8 @@ export function DesignerBranches({
                           Switch Branch
                         </Button>
                       ) : null}
-                      {canRemoveBranches && activeBranches.length > 1 ? (
+                      {canRemoveBranches &&
+                      publicRemovalTargets.some((target) => target.id !== branch.id) ? (
                         <Button
                           type="button"
                           variant="ghost"
@@ -750,7 +793,11 @@ export function DesignerBranches({
                 disabled={isPending}
                 onValueChange={setInviteBranchId}
               />
-              <Button type="submit" size="compact" disabled={isPending}>
+              <Button
+                type="submit"
+                size="compact"
+                disabled={isPending || !inviteEmail.trim() || !inviteBranchId}
+              >
                 {isPending ? <Loader2 className="animate-spin" /> : <Send />}
                 Send invite
               </Button>
@@ -859,7 +906,7 @@ export function DesignerBranches({
               label="Move projects to"
               value={removeDialogBranch ? (removeTarget[removeDialogBranch.id] ?? '') : ''}
               placeholder="Select a branch"
-              options={activeBranches
+              options={publicRemovalTargets
                 .filter((target) => target.id !== removeDialogBranch?.id)
                 .map((target) => ({ value: target.id, label: target.name }))}
               className="space-y-1 [&_label]:text-muted-foreground [&_select]:h-8 [&_select]:px-2 [&_select]:py-1 [&_select]:pr-8"
