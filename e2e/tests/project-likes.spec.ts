@@ -1,3 +1,4 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
@@ -35,19 +36,25 @@ test('visitor likes persist across project and portfolio views independently of 
     title: 'Synthetic Likes Project',
   });
   const path = `/projects/${project.id}`;
+  const projectActions = page.getByRole('complementary', {
+    name: 'Synthetic Likes Studio project designer',
+    exact: true,
+  });
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   try {
     await page.goto(path);
-    await page.getByRole('button', { name: 'Sign in to like project', exact: true }).click();
+    await projectActions
+      .getByRole('button', { name: 'Sign in to like project', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/login\?callbackURL=/);
     expect(new URL(page.url()).searchParams.get('callbackURL')).toBe(path);
 
-    const headers = { origin: 'http://localhost:3000' };
+    const headers = { origin: stackWebUrl };
     const phoneNumber = visitor.phoneNumber!;
     expect(
       (
-        await context.request.post('http://localhost:3001/api/auth/phone-number/send-otp', {
+        await context.request.post(`${stackApiUrl}/api/auth/phone-number/send-otp`, {
           headers,
           data: { phoneNumber },
         })
@@ -63,31 +70,31 @@ test('visitor likes persist across project and portfolio views independently of 
     if (!code) throw new Error('Synthetic visitor OTP missing.');
     expect(
       (
-        await context.request.post('http://localhost:3001/api/auth/phone-number/verify', {
+        await context.request.post(`${stackApiUrl}/api/auth/phone-number/verify`, {
           headers,
           data: { phoneNumber, code },
         })
       ).ok(),
     ).toBeTruthy();
     await page.goto(path);
-    await page.getByRole('button', { name: 'Like project', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Unlike project', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await expect(page.getByRole('button', { name: 'Unlike project', exact: true })).toContainText(
-      '1',
-    );
-    await expect(page.getByRole('button', { name: 'Save project', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    await page.getByRole('button', { name: 'Save project', exact: true }).click();
+    await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Remove saved project', exact: true }),
+      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
+    ).toContainText('1');
+    await expect(
+      projectActions.getByRole('button', { name: 'Save project', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await projectActions.getByRole('button', { name: 'Save project', exact: true }).click();
+    await expect(
+      projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Unlike project', exact: true })).toBeVisible();
+    await expect(
+      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
+    ).toBeVisible();
     await page.goto(`/d/${designer.slug}`);
     await expect(page.getByRole('button', { name: 'Unlike project', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Unlike project', exact: true }).click();
@@ -95,12 +102,11 @@ test('visitor likes persist across project and portfolio views independently of 
       '0',
     );
     await page.goto(path);
-    await expect(page.getByRole('button', { name: 'Like project', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
     await expect(
-      page.getByRole('button', { name: 'Remove saved project', exact: true }),
+      projectActions.getByRole('button', { name: 'Like project', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect
@@ -115,6 +121,11 @@ test('visitor likes persist across project and portfolio views independently of 
   } finally {
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, designer.orgId));
-    await db.delete(schema.user).where(inArray(schema.user.id, [visitor.id, designer.userId]));
+    await db.delete(schema.user).where(
+      inArray(
+        schema.user.id,
+        [visitor.id, designer.userId].filter((id): id is string => id !== null),
+      ),
+    );
   }
 });

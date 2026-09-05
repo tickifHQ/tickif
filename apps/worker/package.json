@@ -30,9 +30,13 @@
     "@repo/storage": "workspace:*",
     "bullmq": "catalog:",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "catalog:",
     "ioredis": "catalog:",
+    "pg": "catalog:",
+    "resend": "catalog:",
     "sharp": "catalog:",
-    "typesense": "catalog:"
+    "typesense": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

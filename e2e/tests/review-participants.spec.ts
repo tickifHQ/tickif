@@ -1,42 +1,19 @@
-import { expect, test, type BrowserContext } from '@playwright/test';
-import { config } from '../../packages/config/src/index';
-import { db, eq, schema } from '../../packages/db/src/index';
+import { expect, test } from '@playwright/test';
+import { apiUrl, webUrl } from '../lib/environment';
+import { signInPhone as signIn } from '../lib/auth';
 import { createReviewParticipantFixture } from '../lib/review-participant-fixtures';
 
-const apiUrl = config.NEXT_PUBLIC_API_URL;
 const reviewText = 'The studio listened closely and delivered a thoughtful and practical design.';
 
-async function signIn(context: BrowserContext, phoneNumber: string) {
-  const sent = await context.request.post(`${apiUrl}/api/auth/phone-number/send-otp`, {
-    headers: { origin: 'http://localhost:3000' },
-    data: { phoneNumber },
-  });
-  expect(sent.ok()).toBeTruthy();
-  const [otp] = await db
-    .select()
-    .from(schema.verification)
-    .where(eq(schema.verification.identifier, phoneNumber));
-  const code = otp?.value.match(/^\d{4,8}/)?.[0];
-  expect(code).toBeTruthy();
-  expect(
-    (
-      await context.request.post(`${apiUrl}/api/auth/phone-number/verify`, {
-        headers: { origin: 'http://localhost:3000' },
-        data: { phoneNumber, code },
-      })
-    ).ok(),
-  ).toBeTruthy();
-}
-
-test('visitor submits and edits, admin publishes, designer disputes, and admin resolves', async ({
+test('review lifecycle: visitor edits, admin rejects and publishes, designer disputes, admin publishes and removes', async ({
   browser,
 }, testInfo) => {
   test.setTimeout(120000);
   const fixture = await createReviewParticipantFixture();
-  const { author, owner, admin, organization, profile } = fixture;
-  const visitorContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
-  const designerContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
-  const adminContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
+  const { author, rejectedAuthor, owner, admin, organization: org, profile } = fixture;
+  const visitorContext = await browser.newContext({ baseURL: webUrl });
+  const designerContext = await browser.newContext({ baseURL: webUrl });
+  const adminContext = await browser.newContext({ baseURL: webUrl });
   const visitor = await visitorContext.newPage();
   const designer = await designerContext.newPage();
   const moderator = await adminContext.newPage();
@@ -50,15 +27,15 @@ test('visitor submits and edits, admin publishes, designer disputes, and admin r
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active`, {
-          headers: { origin: 'http://localhost:3000' },
-          data: { organizationId: organization.id },
+          headers: { origin: webUrl },
+          data: { organizationId: org.id },
         })
       ).ok(),
     ).toBeTruthy();
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active-team`, {
-          headers: { origin: 'http://localhost:3000' },
+          headers: { origin: webUrl },
           data: { teamId: profile.teamId },
         })
       ).ok(),
@@ -115,6 +92,46 @@ test('visitor submits and edits, admin publishes, designer disputes, and admin r
       await visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBeTruthy();
     await visitor.screenshot({ path: testInfo.outputPath('tickif-reviews-mobile.png') });
+    await designer.getByRole('button', { name: 'Dispute review' }).click();
+    await designer
+      .getByLabel('Dispute reason')
+      .fill('New evidence shows this review references a different project.');
+    await designer.getByRole('button', { name: 'Submit dispute' }).click();
+    await moderator.goto('/review-moderation?status=disputed');
+    await moderator
+      .getByRole('button', { name: 'Review feedback by Review Journey Visitor' })
+      .click();
+    await moderator
+      .getByLabel('Resolution note (required)')
+      .fill('Removed after confirming the project attribution was incorrect.');
+    await moderator.getByRole('button', { name: 'Resolve and remove' }).click();
+    await expect(moderator.getByRole('dialog')).not.toBeVisible();
+    await visitor.getByRole('button', { name: 'Refresh reviews' }).click();
+    await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('removed');
+    await expect(visitor.getByLabel('5 star reviews')).toHaveAttribute('value', '0');
+    await visitorContext.request.post(`${apiUrl}/api/auth/sign-out`, {
+      headers: { origin: webUrl },
+    });
+    await signIn(visitorContext, rejectedAuthor.phoneNumber);
+    await visitor.goto(`/d/${profile.slug}#tickif-reviews`);
+    await visitor.getByLabel('Your rating').selectOption('2');
+    await visitor
+      .getByLabel('Your experience (optional)')
+      .fill('Synthetic rejection branch for an incorrectly attributed project.');
+    await visitor.getByRole('button', { name: 'Submit review' }).click();
+    await moderator.goto('/review-moderation?status=pending');
+    await moderator
+      .getByRole('button', { name: 'Review feedback by Review Rejection Visitor' })
+      .click();
+    await moderator.getByLabel('Rejection reason code').fill('incorrect-attribution');
+    await moderator
+      .getByLabel('Rejection note (required to reject)')
+      .fill('This feedback describes a different organization.');
+    await moderator.getByRole('button', { name: 'Reject review', exact: true }).click();
+    await expect(moderator.getByRole('dialog')).not.toBeVisible();
+    await visitor.getByRole('button', { name: 'Refresh reviews' }).click();
+    await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('rejected');
+    await expect(visitor.getByRole('button', { name: 'Edit your review' })).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await Promise.allSettled([
