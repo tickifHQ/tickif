@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { ReviewResponse } from '@repo/contracts';
-import { makeDesigner } from '@repo/db/testing';
+import { makeDesigner, makeOrganization } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 describe('review routes', () => {
   it('submits an eligible review and exposes only published reviews publicly', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const organization = await makeOrganization({ name: 'Parent Organization' });
+    const designer = await makeDesigner({
+      orgId: organization.id,
+      displayName: 'Reviewed Branch Studio',
+      status: 'active',
+    });
     const visitor = await createRoleSession('+919800004101', 'visitor');
     const admin = await createRoleSession('+919800004102', 'admin');
 
@@ -35,6 +40,7 @@ describe('review routes', () => {
     expect(detail.status).toBe(200);
     await expect(detail.json()).resolves.toMatchObject({
       review: { id: submitted.id },
+      designer: { id: designer.id, name: 'Reviewed Branch Studio' },
       history: [{ action: 'submit' }],
     });
     expect(

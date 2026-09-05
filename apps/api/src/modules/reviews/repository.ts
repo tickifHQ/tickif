@@ -200,9 +200,10 @@ export const reviewsRepository = {
         const review = await findByIdWith(tx, id);
         if (!review) return null;
         const [designer] = await tx
-          .select({ name: schema.organization.name })
-          .from(schema.organization)
-          .where(eq(schema.organization.id, review.designerOrgId));
+          .select({ name: schema.designerProfile.displayName })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.id, review.designerProfileId))
+          .limit(1);
         const history = await tx
           .select({
             id: schema.reviewModerationEvent.id,
