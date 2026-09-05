@@ -315,7 +315,7 @@ function assertProductionMediaConfig(env: RawEnv): void {
     const endpoint = new URL(env.R2_ENDPOINT);
     if (
       endpoint.protocol !== 'https:' ||
-      !/^[a-z0-9]+\.r2\.cloudflarestorage\.com$/.test(endpoint.hostname) ||
+      !/^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpoint.hostname) ||
       endpoint.port ||
       endpoint.username ||
       endpoint.password ||
