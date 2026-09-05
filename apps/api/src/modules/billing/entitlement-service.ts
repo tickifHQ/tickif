@@ -90,6 +90,7 @@ export const entitlementService = {
       lifecycleState: state,
       preLapseTier: subscription.preLapseTier as PlanTier | null,
       razorpayStatus: subscription.razorpayStatus,
+      razorpaySubscriptionId: subscription.razorpaySubscriptionId,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
       cancellationScheduled: subscription.cancelAtPeriodEnd && tier !== 'hobby',
       seatUsage: await entitlementRepository.countSeats(caller.activeOrgId),

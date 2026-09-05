@@ -1,6 +1,16 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
-import { createRoute, z } from '@hono/zod-openapi';
-import { planTierSchema } from '@repo/contracts';
+import { createRoute } from '@hono/zod-openapi';
+import {
+  billingPlanRequestSchema,
+  billingCheckoutResponseSchema,
+  billingPlanResponseSchema,
+  billingCancelResponseSchema,
+  billingVerifyRequestSchema,
+  billingVerifyResponseSchema,
+  billingRefreshResponseSchema,
+  billingPaymentsQuerySchema,
+  billingPaymentsResponseSchema,
+} from '@repo/contracts';
 import { config } from '@repo/config';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -21,9 +31,7 @@ const subscribeRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            targetTier: planTierSchema,
-          }),
+          schema: billingPlanRequestSchema,
         },
       },
     },
@@ -33,16 +41,7 @@ const subscribeRoute = createRoute({
       description: 'Subscription created',
       content: {
         'application/json': {
-          schema: z.object({
-            razorpaySubscriptionId: z.string(),
-            shortUrl: z.string().nullable(),
-            razorpayKeyId: z.string(),
-            prefill: z.object({
-              name: z.string().nullable(),
-              email: z.string().nullable(),
-              contact: z.string().nullable(),
-            }),
-          }),
+          schema: billingCheckoutResponseSchema,
         },
       },
     },
@@ -50,6 +49,7 @@ const subscribeRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     409: { description: 'Organization already has an active subscription' },
     422: { description: 'Invalid tier or billing not configured' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -66,9 +66,7 @@ const changePlanRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            targetTier: planTierSchema,
-          }),
+          schema: billingPlanRequestSchema,
         },
       },
     },
@@ -78,9 +76,7 @@ const changePlanRoute = createRoute({
       description: 'Plan changed',
       content: {
         'application/json': {
-          schema: z.object({
-            razorpaySubscriptionId: z.string(),
-          }),
+          schema: billingPlanResponseSchema,
         },
       },
     },
@@ -88,6 +84,7 @@ const changePlanRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Invalid tier, same plan, or billing not configured' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -107,11 +104,7 @@ const cancelRoute = createRoute({
       description: 'Cancellation scheduled or already scheduled',
       content: {
         'application/json': {
-          schema: z.object({
-            razorpaySubscriptionId: z.string(),
-            alreadyCancelled: z.boolean(),
-            currentPeriodEnd: z.string().datetime().nullable(),
-          }),
+          schema: billingCancelResponseSchema,
         },
       },
     },
@@ -119,6 +112,7 @@ const cancelRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Already on Hobby' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -137,11 +131,7 @@ const verifyPaymentRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            razorpayPaymentId: z.string().min(1),
-            razorpaySubscriptionId: z.string().min(1),
-            razorpaySignature: z.string().min(1),
-          }),
+          schema: billingVerifyRequestSchema,
         },
       },
     },
@@ -151,12 +141,13 @@ const verifyPaymentRoute = createRoute({
       description: 'Payment verified',
       content: {
         'application/json': {
-          schema: z.object({ verified: z.boolean() }),
+          schema: billingVerifyResponseSchema,
         },
       },
     },
     400: { description: 'Invalid signature' },
     401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required or payment belongs to another organization' },
   },
 });
 
@@ -175,20 +166,86 @@ const refreshRoute = createRoute({
       description: 'Reconciliation result',
       content: {
         'application/json': {
-          schema: z.object({
-            reconciled: z.boolean(),
-            razorpayStatus: z.string().nullable(),
-          }),
+          schema: billingRefreshResponseSchema,
         },
       },
     },
     401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
+  },
+});
+
+const paymentMethodRoute = createRoute({
+  method: 'post',
+  path: '/payment-method',
+  tags: ['Billing'],
+  summary: 'Open Razorpay Checkout to update an existing subscription payment method',
+  middleware: [requireAuth] as const,
+  security: [{ cookieAuth: [] }],
+  responses: {
+    200: {
+      description: 'Existing subscription checkout',
+      content: { 'application/json': { schema: billingCheckoutResponseSchema } },
+    },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
+    404: { description: 'No subscription' },
+    409: { description: 'Subscription is not recoverable' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
+  },
+});
+const paymentsRoute = createRoute({
+  method: 'get',
+  path: '/payments',
+  tags: ['Billing'],
+  summary: 'List recorded payments for the active organization',
+  middleware: [requireAuth] as const,
+  security: [{ cookieAuth: [] }],
+  request: { query: billingPaymentsQuerySchema },
+  responses: {
+    200: {
+      description: 'Payment history',
+      content: { 'application/json': { schema: billingPaymentsResponseSchema } },
+    },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
   },
 });
 
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(paymentMethodRoute, async (c) => {
+    const user = c.get('user')!;
+    const session = c.get('session')!;
+    const result = await subscribeService.paymentMethod({
+      userId: user.id,
+      activeOrgId: session.activeOrganizationId ?? null,
+    });
+    return c.json(
+      {
+        ...result,
+        razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
+        prefill: {
+          name: user.name?.startsWith('+') ? null : (user.name ?? null),
+          email: user.email?.endsWith('@phone.tickif.local') ? null : (user.email ?? null),
+          contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
+        },
+      },
+      200,
+    );
+  })
+  .openapi(paymentsRoute, async (c) => {
+    const user = c.get('user')!;
+    const session = c.get('session')!;
+    return c.json(
+      await subscribeService.payments(
+        { userId: user.id, activeOrgId: session.activeOrganizationId ?? null },
+        c.req.valid('query'),
+      ),
+      200,
+    );
+  })
   .openapi(subscribeRoute, async (c) => {
     const user = c.get('user');
     const session = c.get('session');
@@ -207,15 +264,18 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
     const email = rawEmail?.endsWith('@phone.tickif.local') ? null : rawEmail;
     const name = rawName?.startsWith('+') ? null : rawName;
 
-    return c.json({
-      ...result,
-      razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
-      prefill: {
-        name,
-        email,
-        contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
+    return c.json(
+      {
+        ...result,
+        razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
+        prefill: {
+          name,
+          email,
+          contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
+        },
       },
-    }, 200);
+      200,
+    );
   })
   .openapi(changePlanRoute, async (c) => {
     const user = c.get('user');

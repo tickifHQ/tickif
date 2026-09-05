@@ -9,16 +9,16 @@ import { headers } from 'next/headers';
 import { api } from '@/lib/api';
 import type { BillingState } from './billing-types';
 import type { SubscriptionResponse } from '@repo/contracts';
-import { HOBBY_DEFAULT, mapSubscriptionToBillingState } from './billing-state';
+import { mapSubscriptionToBillingState } from './billing-state';
 
 /**
  * Fetch billing state for the active organization.
  * Calls GET /api/billing/subscription (E-119) and maps to BillingState.
  */
-export async function getBillingState(): Promise<BillingState> {
+export async function getBillingState(): Promise<BillingState | null> {
   const requestHeaders = await headers();
   const cookie = requestHeaders.get('cookie');
-  if (!cookie) return HOBBY_DEFAULT;
+  if (!cookie) return null;
 
   try {
     // Trigger Razorpay reconciliation on page load — self-heals if webhooks were missed.
@@ -38,13 +38,13 @@ export async function getBillingState(): Promise<BillingState> {
     });
 
     if (!response.ok) {
-      return HOBBY_DEFAULT;
+      return null;
     }
 
     const data = (await response.json()) as SubscriptionResponse;
     return mapSubscriptionToBillingState(data);
   } catch {
-    // API unavailable — return hobby defaults
-    return HOBBY_DEFAULT;
+    // Preserve uncertainty: an unavailable API is not evidence of a downgrade.
+    return null;
   }
 }

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { type PlanTier, type SubscriptionState, planTierSchema, subscriptionStateSchema } from './billing';
+import {
+  type PlanTier,
+  type SubscriptionState,
+  planTierSchema,
+  subscriptionStateSchema,
+} from './billing';
 
 /**
  * E-119 Entitlement reads — tier × lifecycleState → feature map.
@@ -179,6 +184,7 @@ export const subscriptionResponseSchema = z
     lifecycleState: subscriptionStateSchema,
     preLapseTier: planTierSchema.nullable(),
     razorpayStatus: z.string().nullable(),
+    razorpaySubscriptionId: z.string().nullable().optional(),
     currentPeriodEnd: z.string().datetime().nullable(),
     cancellationScheduled: z.boolean(),
     seatUsage: z.number().int().min(0),
