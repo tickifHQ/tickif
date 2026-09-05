@@ -62,7 +62,7 @@ export function subscribeProjectLikeState(
   listener: (state: ProjectLikeState) => void,
 ) {
   const key = subscriptionKey(identity, projectId);
-  const listeners = subscribers.get(key) ?? new Set();
+  const listeners = subscribers.get(key) ?? new Set<(state: ProjectLikeState) => void>();
   listeners.add(listener);
   subscribers.set(key, listeners);
   return () => {
