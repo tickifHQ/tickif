@@ -37,15 +37,13 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     phoneNumberVerified: true,
   });
   const org = await makeOrganization({ name: `Billing smoke ${randomUUID()}` });
-  await db
-    .insert(schema.member)
-    .values({
-      id: randomUUID(),
-      organizationId: org.id,
-      userId: user.id,
-      role: 'owner',
-      createdAt: new Date(),
-    });
+  await db.insert(schema.member).values({
+    id: randomUUID(),
+    organizationId: org.id,
+    userId: user.id,
+    role: 'owner',
+    createdAt: new Date(),
+  });
   await makeDesigner({ orgId: org.id, userId: user.id, status: 'active' });
   const providerId = `sub_smoke_${org.id}`;
   const [sub] = await db
@@ -58,16 +56,14 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
       razorpaySubscriptionId: providerId,
     })
     .returning();
-  await db
-    .insert(schema.paymentTransaction)
-    .values({
-      subscriptionId: sub!.id,
-      razorpayPaymentId: `pay_smoke_${org.id}`,
-      amount: 799900,
-      currency: 'INR',
-      status: 'failed',
-      payload: {},
-    });
+  await db.insert(schema.paymentTransaction).values({
+    subscriptionId: sub!.id,
+    razorpayPaymentId: `pay_smoke_${org.id}`,
+    amount: 799900,
+    currency: 'INR',
+    status: 'failed',
+    payload: {},
+  });
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   try {
@@ -147,6 +143,19 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     await expect(page.getByText('Payment Failed', { exact: true }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('billing-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
+    const copyButton = page.getByRole('button', { name: 'Copy subscription ID', exact: true });
+    await expect
+      .poll(() =>
+        copyButton.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return (
+            bounds.left >= 0 &&
+            bounds.right <= window.innerWidth &&
+            element.scrollWidth <= element.clientWidth
+          );
+        }),
+      )
+      .toBe(true);
     await page.screenshot({ path: testInfo.outputPath('billing-mobile.png'), fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
