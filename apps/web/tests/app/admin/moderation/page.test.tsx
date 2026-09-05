@@ -68,4 +68,11 @@ describe('AdminModerationPage', () => {
     await Page({ searchParams: Promise.resolve({ status: 'in_review', page: '9' }) });
     expect(mock.redirect).toHaveBeenCalledWith('/moderation?status=in_review&page=1');
   });
+
+  it('preserves a valid tab when normalizing an invalid page', async () => {
+    const { default: Page } = await import('../../../../app/(admin)/moderation/page');
+    await Page({ searchParams: Promise.resolve({ status: 'published', page: '-1' }) });
+
+    expect(mock.redirect).toHaveBeenCalledWith('/moderation?status=published&page=1');
+  });
 });

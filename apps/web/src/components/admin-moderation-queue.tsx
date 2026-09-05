@@ -862,6 +862,7 @@ export function AdminModerationQueue({
   function navigate(tab: ModerationTab, page: number) {
     closeDetail();
     queueRequest.current++;
+    setRefreshing(false);
     startNavigation(() => router.push('/moderation?status=' + tab + '&page=' + page));
   }
 
