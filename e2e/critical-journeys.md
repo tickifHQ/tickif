@@ -58,6 +58,9 @@ coverage gate.
   discovery, persistent save/like, enquiry, lead response and billing access.
 - `organization-access.spec.ts`: real invitations, acceptance, role changes,
   context switching and forbidden cross-organization mutations.
+- `organization-workflows.spec.ts`: projects, leads, profile, portfolio,
+  verification, analytics and billing after organization switches, including
+  owner/admin/member capabilities and private direct-ID isolation.
 - `consultation-participants.spec.ts`: requests, confirmation, stale-state
   rejection, completion, verified review link and cancellation persistence.
 - Existing billing, personal settings, designer directory and homepage pagination
@@ -113,6 +116,8 @@ main `9029d46`, admin reviews `e9ff0bf`, project moderation `038d4fe`, billing
 `2873822`, likes `49ae55f`, personal settings `f1d692a`, designer discovery
 `8d0c594`, participant reviews `69ec866`, consultations `0af5ca1`, and the runtime
 dependency fix from deployment `2b15f40`. KYC and pagination are already in that
-main snapshot. The audit12 PR targets `codex/staging-12-integration-main` so its diff
+main snapshot. Consultation follow-ups `7df2cf9`, `2d4c246` and `0dfaaf5` add the
+validated response types, web type fixes and the booking CTA hydration fix found
+by this browser suite. The audit12 PR targets `codex/staging-12-integration-main` so its diff
 contains the harness and coverage changes. Retarget/rebase after the feature PRs
 are incorporated; do not merge the synthetic integration branch as a deployment.

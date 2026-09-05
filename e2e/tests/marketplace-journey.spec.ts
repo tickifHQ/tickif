@@ -65,7 +65,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     profileId = onboarded.profile.id;
     await expect(designer.getByRole('button', { name: 'Add your projects' })).toBeVisible();
     await designer.getByRole('button', { name: 'Add your projects' }).click();
-    await expect(designer).toHaveURL(/\/designer\/projects\/new/);
+    await expect(designer).toHaveURL(/\/designer\/projects\/upload/);
 
     // Metadata setup uses the same authenticated public API as the editor; uploads and
     // submission are exercised through the rendered editor, with an actual BullMQ worker.
@@ -96,7 +96,9 @@ test('designer onboarding and media processing connects to visitor onboarding an
     const room = projectRoomSchema.parse(await roomResponse.json());
     await designer.goto(`/designer/projects/${project.id}/edit`);
     await expect(designer.locator(`input[value="${project.title}"]`)).toBeVisible();
-    await expect(designer.getByRole('button', { name: 'Toggle Living room', exact: true })).toBeVisible();
+    await expect(
+      designer.getByRole('button', { name: 'Toggle Living room', exact: true }),
+    ).toBeVisible();
     await designer
       .locator('input[type="file"]')
       .first()
@@ -141,8 +143,15 @@ test('designer onboarding and media processing connects to visitor onboarding an
     objectKeys.push(...originals.map((image) => image.key));
     await designer.reload();
     await expect(designer.locator(`input[value="${project.title}"]`)).toBeVisible();
-    await expect(designer.getByRole('img', { name: /\(Ready\)$/, includeHidden: true })).toHaveCount(3);
-    if (!(await designer.getByRole('img', { name: /\(Ready\)$/ }).first().isVisible())) {
+    await expect(
+      designer.getByRole('img', { name: /\(Ready\)$/, includeHidden: true }),
+    ).toHaveCount(3);
+    if (
+      !(await designer
+        .getByRole('img', { name: /\(Ready\)$/ })
+        .first()
+        .isVisible())
+    ) {
       await designer.getByRole('button', { name: 'Toggle Living room', exact: true }).click();
     }
     await expect(designer.getByRole('img', { name: /\(Ready\)$/ })).toHaveCount(3);
@@ -180,14 +189,37 @@ test('designer onboarding and media processing connects to visitor onboarding an
 
     // New profiles remain private until the required portfolio hero is complete.
     await designer.goto('/designer/portfolio');
-    await designer.getByPlaceholder('A short tagline for your portfolio').fill('Thoughtful homes for everyday living');
-    await designer.getByPlaceholder('Tell visitors about your design philosophy...').fill('We design practical, welcoming homes around the people who live in them.');
-    const logoCommit = designer.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me/portfolio/logo/commit'));
-    await designer.locator('input[type="file"]').setInputFiles(resolve('../apps/web/public/images/home-hero/bright-kitchen-living-room.jpg'));
+    await designer
+      .getByPlaceholder('A short tagline for your portfolio')
+      .fill('Thoughtful homes for everyday living');
+    await designer
+      .getByPlaceholder('Tell visitors about your design philosophy...')
+      .fill('We design practical, welcoming homes around the people who live in them.');
+    const logoCommit = designer.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith('/api/profiles/me/portfolio/logo/commit'),
+    );
+    await designer
+      .locator('input[type="file"]')
+      .setInputFiles(resolve('../apps/web/public/images/home-hero/bright-kitchen-living-room.jpg'));
     expect((await logoCommit).ok()).toBeTruthy();
     await designer.getByRole('button', { name: 'Save changes', exact: true }).click();
-    await expect.poll(async () => (await db.select().from(schema.designerProfile).where(eq(schema.designerProfile.id, onboarded.profile.id)))[0]?.status).toBe('active');
-    const [activeProfile] = await db.select().from(schema.designerProfile).where(eq(schema.designerProfile.id, onboarded.profile.id));
+    await expect
+      .poll(
+        async () =>
+          (
+            await db
+              .select()
+              .from(schema.designerProfile)
+              .where(eq(schema.designerProfile.id, onboarded.profile.id))
+          )[0]?.status,
+      )
+      .toBe('active');
+    const [activeProfile] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, onboarded.profile.id));
     if (activeProfile?.logoImageId) objectKeys.push(activeProfile.logoImageId);
 
     await visitor.goto('/login');
@@ -222,16 +254,25 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(visitor).toHaveURL(/\/d\//);
     const publicProfileUrl = visitor.url();
     await visitor.goto(`/projects/${project.id}`);
-    await visitor.getByRole('button', { name: 'Like project', exact: true }).click();
-    await visitor.getByRole('button', { name: 'Save project', exact: true }).click();
+    const projectActions = visitor.getByRole('complementary', { name: `Journey Studio ${suffix}` });
+    await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
+    await expect(
+      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
+    ).toBeVisible();
+    await projectActions.getByRole('button', { name: 'Save project', exact: true }).click();
+    await expect(
+      projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
+    ).toBeVisible();
     await visitor.reload();
     await expect(
-      visitor.getByRole('button', { name: 'Unlike project', exact: true }),
+      projectActions.getByRole('button', { name: 'Unlike project', exact: true }),
     ).toBeVisible();
     await expect(
-      visitor.getByRole('button', { name: 'Remove saved project', exact: true }),
+      projectActions.getByRole('button', { name: 'Remove saved project', exact: true }),
     ).toBeVisible();
-    await visitor.getByRole('button', { name: 'Enquire', exact: true }).first().click();
+    await visitor
+      .getByRole('button', { name: `Enquire about ${project.title}`, exact: true })
+      .click();
     const enquiry = visitor.getByRole('dialog', { name: 'Send an Enquiry' });
     await enquiry
       .getByLabel('Description', { exact: false })
@@ -259,7 +300,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       path: testInfo.outputPath('processed-project-lead.png'),
       fullPage: true,
     });
-    await designer.goto('/designer/billing');
+    await designer.goto('/designer/plan-billing');
     await expect(designer.getByText('Hobby', { exact: true }).first()).toBeVisible();
   } finally {
     await Promise.all([designerContext.close(), visitorContext.close(), adminContext.close()]);
