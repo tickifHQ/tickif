@@ -43,6 +43,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Require a release from main
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main || {
+            echo "Staging only accepts commits reachable from main" >&2
+            exit 1
+          }
 
       - name: Configure SSH
         env:

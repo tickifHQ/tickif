@@ -1,5 +1,5 @@
 # Tickif web — Next.js standalone production server.
-FROM node:22-slim AS build
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS build
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
@@ -15,7 +15,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
 RUN test -n "$NEXT_PUBLIC_API_URL" && test -n "$NEXT_PUBLIC_WEB_URL"
 RUN pnpm --filter @repo/web build
 
-FROM node:22-slim AS runtime
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \

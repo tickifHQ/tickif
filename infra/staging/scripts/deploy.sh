@@ -8,7 +8,8 @@ load_staging_env "${1:-$DEFAULT_ENV_FILE}"
 acquire_release_lock
 assert_single_manager
 [[ "${RAZORPAY_KEY_ID:-}" == rzp_test_* ]] || { echo 'Staging requires Razorpay test mode' >&2; exit 1; }
-require_variables GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET_NAME RAZORPAY_KEY_SECRET_NAME RAZORPAY_WEBHOOK_SECRET_NAME
+require_variables GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET_NAME RAZORPAY_KEY_SECRET_NAME \
+  RAZORPAY_WEBHOOK_SECRET_NAME RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS RAZORPAY_PLAN_ID_CORPORATE
 
 
 require_variables \
@@ -23,15 +24,11 @@ for image in "$API_IMAGE" "$WEB_IMAGE" "$WORKER_IMAGE" "$OPERATIONS_IMAGE"; do
   assert_immutable_image "$image"
 done
 
-for name in \
+require_secrets \
   "$POSTGRES_PASSWORD_SECRET" "$REDIS_PASSWORD_SECRET" "$TYPESENSE_ADMIN_KEY_SECRET" \
   "$TYPESENSE_SEARCH_KEY_SECRET" "$BETTER_AUTH_SECRET_NAME" "$NOVU_SECRET_NAME" \
-  "$R2_ACCESS_KEY_ID_SECRET" "$R2_SECRET_ACCESS_KEY_SECRET" "$RESEND_API_KEY_SECRET"; do
-  if ! secret_exists "$name"; then
-    echo "required external Swarm secret does not exist: $name" >&2
-    exit 1
-  fi
-done
+  "$R2_ACCESS_KEY_ID_SECRET" "$R2_SECRET_ACCESS_KEY_SECRET" "$RESEND_API_KEY_SECRET" \
+  "$GOOGLE_CLIENT_SECRET_NAME" "$RAZORPAY_KEY_SECRET_NAME" "$RAZORPAY_WEBHOOK_SECRET_NAME"
 
 render_dir="$(mktemp -d)"
 finish() {

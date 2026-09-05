@@ -4,7 +4,8 @@ set -Eeuo pipefail
 [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == github-hosted ]] || exit 1
 [[ "$(docker info --format '{{.Swarm.LocalNodeState}}')" == inactive ]] || exit 1
 cd "$(dirname "$0")/../../.."
-docker run -d --name staging-test-registry -p 127.0.0.1:5000:5000 registry:2
+docker run -d --name staging-test-registry -p 127.0.0.1:5000:5000 \
+  registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
 revision=$(git rev-parse HEAD)
 for service in api worker web operations; do docker push "localhost:5000/tickif/$service:$revision"; done
 docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" >/dev/null
@@ -18,6 +19,8 @@ WEB_IMAGE=$(docker image inspect "localhost:5000/tickif/web:$revision" --format 
 WORKER_IMAGE=$(docker image inspect "localhost:5000/tickif/worker:$revision" --format '{{index .RepoDigests 0}}')
 OPERATIONS_IMAGE=$(docker image inspect "localhost:5000/tickif/operations:$revision" --format '{{index .RepoDigests 0}}')
 export GOOGLE_CLIENT_ID=synthetic.apps.googleusercontent.com RAZORPAY_KEY_ID=rzp_test_synthetic
+export RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS=plan_synthetic_professional_plus
+export RAZORPAY_PLAN_ID_CORPORATE=plan_synthetic_corporate
 export STAGING_HOST=staging.invalid
 export ACME_CA_SERVER=http://127.0.0.1:9/directory
 export EMAIL_FROM='Tickif Staging <ci@example.com>'
@@ -70,6 +73,18 @@ docker service rm staging-key-fixture
 
 export -p >"$fixture/env"
 bash infra/staging/scripts/deploy.sh "$fixture/env"
+# Runtime credentials must stay in mounted files, never process arguments or
+# inspectable service environment. Billing plan IDs are intentionally non-secret.
+for service in redis typesense; do
+  container=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_$service")
+  command_line=$(docker inspect --format '{{.Path}} {{join .Args " "}}' "$container")
+  [[ "$command_line" != *synthetic-redis-password* ]]
+  [[ "$command_line" != *synthetic-typesense-admin* ]]
+  ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep -Eq '^(REDIS_PASSWORD|TYPESENSE_API_KEY)='
+done
+api_environment=$(docker service inspect "${STACK_NAME}_api" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}')
+grep -q '^RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS=plan_synthetic_professional_plus$' <<<"$api_environment"
+grep -q '^RAZORPAY_PLAN_ID_CORPORATE=plan_synthetic_corporate$' <<<"$api_environment"
 # The actual worker process must stay unready when its Redis authentication fails.
 docker service update --detach=true --update-order stop-first --update-failure-action pause \
   --env-add REDIS_URL=redis://:synthetic-invalid-password@redis:6379 "${STACK_NAME}_worker"

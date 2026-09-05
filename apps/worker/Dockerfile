@@ -5,20 +5,20 @@
 # container memory limit accordingly, or lower MEDIA_WORKER_CONCURRENCY.
 #
 # Debian slim (not alpine): sharp's prebuilt libvips binaries target glibc.
-FROM node:22-slim AS build
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 COPY . .
 RUN pnpm --filter @repo/worker... install --frozen-lockfile
 RUN pnpm --filter @repo/worker... build
 
-FROM node:22-slim AS production-dependencies
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS production-dependencies
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 COPY . .
 RUN pnpm --filter @repo/worker... install --prod --frozen-lockfile
 
-FROM node:22-slim AS runtime
+FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 WORKDIR /app
 RUN useradd -m -u 1001 app
 COPY --from=production-dependencies --chown=app:app /app/node_modules ./node_modules

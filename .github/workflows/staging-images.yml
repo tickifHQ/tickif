@@ -26,6 +26,7 @@ jobs:
       - name: Validate scripts and failure gate
         run: |
           for script in infra/staging/scripts/*.sh; do bash -n "$script"; done
+          bash infra/staging/scripts/test-deploy-preflight.sh
           bash infra/staging/scripts/test-restore-gate.sh
       - name: Build all release images without runtime secrets
         env:

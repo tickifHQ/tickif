@@ -13,6 +13,7 @@ case "$1 $2" in
   'info --format') [[ "$3" == *ControlAvailable* ]] && echo true || echo node ;;
   'node ls') echo node ;;
   'node inspect') echo true ;;
+  'secret inspect') ;;
   'service inspect')
     [[ "$3" == *_restore_* ]] && exit 1
     case "$3" in *_api) echo 3 ;; *_web) echo 2 ;; *) echo 1 ;; esac

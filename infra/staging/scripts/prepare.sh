@@ -10,6 +10,8 @@ run_swarm_job "$release_job" "$OPERATIONS_IMAGE" \
   --env GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --env GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google_client_secret \
   --env RAZORPAY_KEY_ID="$RAZORPAY_KEY_ID" --env RAZORPAY_KEY_SECRET_FILE=/run/secrets/razorpay_key_secret \
   --env RAZORPAY_WEBHOOK_SECRET_FILE=/run/secrets/razorpay_webhook_secret \
+  --env RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS="$RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS" \
+  --env RAZORPAY_PLAN_ID_CORPORATE="$RAZORPAY_PLAN_ID_CORPORATE" \
   --secret source="$GOOGLE_CLIENT_SECRET_NAME",target=google_client_secret \
   --secret source="$RAZORPAY_KEY_SECRET_NAME",target=razorpay_key_secret \
   --secret source="$RAZORPAY_WEBHOOK_SECRET_NAME",target=razorpay_webhook_secret \
@@ -35,4 +37,3 @@ run_swarm_job "$release_job" "$OPERATIONS_IMAGE" \
   --secret source="$RESEND_API_KEY_SECRET",target=resend_api_key \
   -- \
   infra/staging/scripts/release-job.sh
-

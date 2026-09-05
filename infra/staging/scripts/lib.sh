@@ -41,6 +41,16 @@ secret_exists() {
   docker secret inspect "$1" >/dev/null 2>&1
 }
 
+require_secrets() {
+  local name
+  for name in "$@"; do
+    if ! secret_exists "$name"; then
+      echo "required external Swarm secret does not exist: $name" >&2
+      return 1
+    fi
+  done
+}
+
 wait_for_job() {
   local service="$1"
   local deadline=$((SECONDS + 900))

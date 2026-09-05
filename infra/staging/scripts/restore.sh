@@ -13,11 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 load_staging_env "$env_file"
 require_variables OPERATIONS_IMAGE POSTGRES_USER POSTGRES_DB R2_ENDPOINT BACKUP_R2_BUCKET \
-  POSTGRES_PASSWORD_SECRET R2_ACCESS_KEY_ID_SECRET R2_SECRET_ACCESS_KEY_SECRET BACKUP_ENCRYPTION_KEY_SECRET
+  POSTGRES_PASSWORD_SECRET BACKUP_R2_ACCESS_KEY_ID_SECRET BACKUP_R2_SECRET_ACCESS_KEY_SECRET \
+  BACKUP_ENCRYPTION_KEY_SECRET
 
 acquire_release_lock
 assert_single_manager
 assert_immutable_image "$OPERATIONS_IMAGE"
+require_secrets "$POSTGRES_PASSWORD_SECRET" "$BACKUP_R2_ACCESS_KEY_ID_SECRET" \
+  "$BACKUP_R2_SECRET_ACCESS_KEY_SECRET" "$BACKUP_ENCRYPTION_KEY_SECRET"
 declare -A previous_replicas
 for service in traefik api web worker; do
   previous_replicas[$service]=$(docker service inspect "${STACK_NAME}_$service" --format '{{.Spec.Mode.Replicated.Replicas}}')
@@ -35,8 +38,8 @@ run_swarm_job "${STACK_NAME}_restore_$(date +%s)" "$OPERATIONS_IMAGE" \
   --env POSTGRES_HOST=postgres --env POSTGRES_USER="$POSTGRES_USER" --env POSTGRES_DB="$POSTGRES_DB" \
   --env R2_ENDPOINT="$R2_ENDPOINT" --env BACKUP_R2_BUCKET="$BACKUP_R2_BUCKET" \
   --secret source="$POSTGRES_PASSWORD_SECRET",target=postgres_password \
-  --secret source="$R2_ACCESS_KEY_ID_SECRET",target=r2_access_key_id \
-  --secret source="$R2_SECRET_ACCESS_KEY_SECRET",target=r2_secret_access_key \
+  --secret source="$BACKUP_R2_ACCESS_KEY_ID_SECRET",target=r2_access_key_id \
+  --secret source="$BACKUP_R2_SECRET_ACCESS_KEY_SECRET",target=r2_secret_access_key \
   --secret source="$BACKUP_ENCRYPTION_KEY_SECRET",target=backup_encryption_key \
   -- \
   infra/staging/scripts/backup-job.sh

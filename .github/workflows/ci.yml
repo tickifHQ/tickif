@@ -101,7 +101,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_USER: tickif
           POSTGRES_PASSWORD: tickif
@@ -115,7 +115,7 @@ jobs:
           --health-retries 10
 
       redis:
-        image: redis:7-alpine
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
         ports:
           - 6379:6379
         options: >-
@@ -125,7 +125,7 @@ jobs:
           --health-retries 10
 
       typesense:
-        image: typesense/typesense:30.2
+        image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
         env:
           TYPESENSE_DATA_DIR: /tmp
           TYPESENSE_API_KEY: ci-typesense-api-key
@@ -135,7 +135,7 @@ jobs:
       minio:
         # Bitnami relocated their public images to the bitnamilegacy org; bitnami/minio:latest
         # no longer resolves. This image keeps MINIO_DEFAULT_BUCKETS auto-creation + server entrypoint.
-        image: bitnamilegacy/minio:latest
+        image: bitnamilegacy/minio:latest@sha256:451fe6858cb770cc9d0e77ba811ce287420f781c7c1b806a386f6896471a349c
         env:
           MINIO_DEFAULT_BUCKETS: test-bucket
           MINIO_ROOT_USER: minioadmin

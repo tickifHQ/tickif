@@ -53,10 +53,15 @@ unset value
 
 Create all secret objects named by the environment file:
 
-- Postgres password; Redis password.
+- Postgres password; Redis password. Generate the Redis password with
+  `openssl rand -hex 32`; its startup config accepts only letters, digits,
+  underscores, and hyphens so shell/config metacharacters cannot be injected.
 - Typesense admin key and a distinct search-only key (minimum 16 characters).
+  Generate both with `openssl rand -hex 32` for the same safe-character rule.
 - better-auth secret (at least 32 random bytes).
-- Novu secret, R2 access-key ID/secret, and Resend API key.
+- Novu secret, media-bucket R2 access-key ID/secret, and Resend API key.
+- A separate R2 access-key ID/secret restricted to the backup bucket; application
+  services never receive these database-backup credentials.
 - Google OAuth client secret and Razorpay test-mode API/webhook secrets.
 - An age public recipient for backups; keep its private identity offline and mount it only for restores.
 
@@ -65,6 +70,8 @@ with `actions: ["documents:search"]` and `collections: ["tickif_staging_.*"]`
 (use the configured collection prefix). Mount that key value as the search-key
 Swarm secret. A random secret object alone does not register a Typesense key;
 preparation deliberately stays closed until the actual query key works.
+Set both Razorpay staging plan IDs in `staging.env`; deploy preflight rejects a
+release missing either ID before it closes traffic.
 
 Secrets are external and versioned. For application/provider credentials,
 coordinate the provider-side change, create a `_v2` object, change the name in
@@ -77,8 +84,8 @@ are attached only to short-lived backup/restore jobs. No secret value belongs in
 Git, GitHub variables, the stack manifest, or the non-secret environment file.
 
 For R2, use a staging media bucket with browser CORS configured for the exact
-staging origin. Use a separate backup bucket and preferably separate restricted
-credentials. Apply retention/versioning policies appropriate for recovery.
+staging origin. Use a separate backup bucket and separate credentials restricted
+to that bucket. Apply retention/versioning policies appropriate for recovery.
 
 ### PostgreSQL password rotation
 
@@ -124,7 +131,8 @@ The deployment workflow uses the protected `staging` GitHub environment. Configu
 
 After successful main CI, deployment automatically uploads only the staging
 infrastructure files and invokes `scripts/deploy.sh`. Manual workflow dispatch
-requires the exact 40-character SHA. Every release rebuilds search synchronously.
+requires the exact 40-character SHA of a commit reachable from `main`. Every
+release rebuilds search synchronously.
 
 The deployment is explicitly migration-first:
 

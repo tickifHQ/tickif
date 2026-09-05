@@ -1,5 +1,3 @@
-version: '3.9'
-
 x-logging: &default-logging
   driver: json-file
   options:
@@ -237,6 +235,8 @@ services:
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET_FILE: /run/secrets/razorpay_key_secret
       RAZORPAY_WEBHOOK_SECRET_FILE: /run/secrets/razorpay_webhook_secret
+      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: ${RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS}
+      RAZORPAY_PLAN_ID_CORPORATE: ${RAZORPAY_PLAN_ID_CORPORATE}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_ACCESS_KEY_ID_FILE: /run/secrets/r2_access_key_id
       R2_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_secret_access_key
@@ -409,14 +409,19 @@ services:
     entrypoint: ['/bin/sh', '-ec']
     command:
       [
-        'exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$(cat /run/secrets/redis_password)"',
+        'password="$$(cat /run/secrets/redis_password)"; case "$$password" in ""|*[!A-Za-z0-9_-]*) echo "Redis password must contain only A-Z, a-z, 0-9, underscore or hyphen" >&2; exit 1;; esac; [ "$${#password}" -ge 16 ] || { echo "Redis password must be at least 16 characters" >&2; exit 1; }; umask 077; printf "appendonly yes\nappendfsync everysec\nrequirepass %s\n" "$$password" >/tmp/redis.conf; unset password; chown redis:redis /tmp/redis.conf; exec /usr/local/bin/docker-entrypoint.sh redis-server /tmp/redis.conf',
       ]
     secrets:
       - redis_password
     volumes:
       - redis_data:/data
+      - type: tmpfs
+        target: /tmp
     networks:
       - backend
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test:
         [
@@ -449,14 +454,19 @@ services:
     entrypoint: ['/bin/sh', '-ec']
     command:
       [
-        'exec /opt/typesense-server --data-dir=/data --api-key="$$(cat /run/secrets/typesense_admin_key)" --enable-cors=false',
+        'key="$$(cat /run/secrets/typesense_admin_key)"; case "$$key" in ""|*[!A-Za-z0-9_-]*) echo "Typesense key must contain only A-Z, a-z, 0-9, underscore or hyphen" >&2; exit 1;; esac; [ "$${#key}" -ge 16 ] || { echo "Typesense key must be at least 16 characters" >&2; exit 1; }; umask 077; printf "[server]\ndata-dir = /data\napi-key = %s\nenable-cors = false\n" "$$key" >/tmp/typesense.ini; unset key; exec /opt/typesense-server --config=/tmp/typesense.ini',
       ]
     secrets:
       - typesense_admin_key
     volumes:
       - typesense_data:/data
+      - type: tmpfs
+        target: /tmp
     networks:
       - backend
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test:
         - CMD-SHELL
