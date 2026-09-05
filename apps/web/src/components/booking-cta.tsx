@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useSyncExternalStore, type FormEvent } from 'react';
 import Link from 'next/link';
 import { createBookingSchema, type BookingSlot } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
@@ -18,6 +18,8 @@ function istDay(days: number) {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000 + days * 86400000).toISOString().slice(0, 10);
 }
 
+const subscribeToHydration = () => () => undefined;
+
 export function BookingCta({
   designerProfileId,
   designerName,
@@ -30,11 +32,17 @@ export function BookingCta({
   loginHref: string;
 }) {
   const { data: session, isPending } = authClient.useSession();
+  // The browser may already have a session while SSR reports it pending.
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   const [open, setOpen] = useState(false);
   const userRole = session && 'role' in session.user ? session.user.role : null;
   return (
     <>
-      <Button variant="outline" disabled={isPending} onClick={() => setOpen(true)}>
+      <Button variant="outline" disabled={!hydrated || isPending} onClick={() => setOpen(true)}>
         Book consultation
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>

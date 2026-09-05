@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import userEvent from '@testing-library/user-event';
 import type { BookingResponse, ListBookingsResponse } from '@repo/contracts';
 import { BookingForm, BookingCta } from '../../src/components/booking-cta';
@@ -13,10 +15,11 @@ const mock = vi.hoisted(() => ({
   completeConsultation: vi.fn(),
   refresh: vi.fn(),
   session: null as unknown,
+  isPending: false,
 }));
 vi.mock('@/lib/bookings-api', () => mock);
 vi.mock('@/lib/auth-client', () => ({
-  authClient: { useSession: () => ({ data: mock.session, isPending: false }) },
+  authClient: { useSession: () => ({ data: mock.session, isPending: mock.isPending }) },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
 const profileId = '11111111-1111-4111-8111-111111111111';
@@ -57,9 +60,41 @@ const page = (item: BookingResponse = booking): ListBookingsResponse => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mock.session = null;
+  mock.isPending = false;
 });
 
 describe('consultation request', () => {
+  it('enables the server-rendered project CTA when hydration starts with a cached session', async () => {
+    const props = {
+      designerProfileId: profileId,
+      designerName: 'Studio',
+      referredProjectId: projectId,
+      loginHref: '/login?callbackUrl=%2Fprojects%2Fexample',
+    };
+    mock.isPending = true;
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<BookingCta {...props} />);
+    document.body.append(container);
+    expect(container.querySelector('button')).toBeDisabled();
+    mock.isPending = false;
+    mock.session = {
+      user: { id: 'visitor', role: 'visitor', phoneNumberVerified: true },
+      session: { activeOrganizationId: null },
+    };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const root = hydrateRoot(container, <BookingCta {...props} />);
+    try {
+      await waitFor(() => expect(container.querySelector('button')).toBeEnabled());
+      await userEvent.click(screen.getByRole('button', { name: 'Book consultation' }));
+      expect(await screen.findByRole('dialog', { name: 'Consultation with Studio' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Request consultation' })).toBeEnabled();
+      expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat/i);
+    } finally {
+      await act(() => root.unmount());
+      consoleError.mockRestore();
+      container.remove();
+    }
+  });
   it('submits three IST choices with project context and shows persisted pending confirmation', async () => {
     const user = userEvent.setup();
     render(<BookingForm designerProfileId={profileId} referredProjectId={projectId} />);
