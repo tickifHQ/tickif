@@ -40,6 +40,10 @@ jobs:
         if: failure()
         run: |
           docker service ls || true
+          docker service ps staging-key-fixture --no-trunc || true
+          docker service logs staging-key-fixture --tail 50 || true
+          docker service ps tickif-staging_typesense --no-trunc || true
+          docker service logs tickif-staging_typesense --tail 50 || true
           docker service ps tickif-staging_prepare --no-trunc || true
           docker service logs tickif-staging_prepare --tail 100 || true
           docker service logs tickif-staging_worker --tail 50 || true

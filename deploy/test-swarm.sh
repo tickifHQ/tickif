@@ -48,6 +48,7 @@ maxmemory-policy noeviction
 requirepass synthetic-redis-password
 EOF
 cat >"$fixture/typesense" <<'EOF'
+[server]
 data-dir = /data
 api-key = synthetic-typesense-admin
 EOF
@@ -56,7 +57,7 @@ docker secret create "$POSTGRES_SECRET" "$fixture/postgres"
 docker secret create "$REDIS_SECRET" "$fixture/redis"
 docker secret create "$TYPESENSE_SECRET" "$fixture/typesense"
 (cd deploy && docker stack deploy --with-registry-auth -c stack.staging.yml tickif-staging)
-docker service create --detach=true --name staging-key-fixture --restart-condition none \
+docker service create --detach=true --name staging-key-fixture --restart-condition none --no-healthcheck \
   --network tickif-staging_backend "$API_IMAGE" node -e '
   (async () => {
     for (let i=0; i<60; i++) {

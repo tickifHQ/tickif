@@ -67,7 +67,8 @@ The Postgres file contains only the password, matching `POSTGRES_PASSWORD` in th
 app credential file. Redis config contains `appendonly yes`, `maxmemory 512mb`,
 `maxmemory-policy noeviction`, and `requirepass <random-password>`; put its
 URL-encoded password in the app's `REDIS_URL=redis://:<password>@redis:6379/0`.
-Typesense INI contains `data-dir = /data` and `api-key = <random-admin-key>`; match
+Typesense INI contains a `[server]` section with `data-dir = /data` and
+`api-key = <random-admin-key>`; match
 that key in the app credential file. Keep the search-only key distinct.
 
 Create the search-only key using the Typesense keys API from inside the private
