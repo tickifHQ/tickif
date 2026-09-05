@@ -3,16 +3,31 @@ import { z } from 'zod';
 
 // Fail closed on missing, skipped, flaky or failed journeys. A subset run is not readiness.
 const expected = [
-  'phone OTP', 'email OTP', 'Google authorization',
-  'project moderation lifecycle', 'verification lifecycle',
-  'review lifecycle', 'visitor onboarding and discovery',
-  'designer onboarding and media processing', 'organization roles and isolation',
+  'phone OTP',
+  'email OTP',
+  'Google authorization',
+  'project moderation lifecycle',
+  'verification lifecycle',
+  'review lifecycle',
+  'visitor onboarding and discovery',
+  'designer onboarding and media processing',
+  'organization roles and isolation',
   'billing owner sees real payments',
 ];
 const resultSchema = z.object({ suites: z.array(z.unknown()) });
-const testSchema = z.object({ title: z.string(), tests: z.array(z.object({ results: z.array(z.object({ status: z.string() })), status: z.string() })) });
-const suiteSchema: z.ZodType<{ suites?: unknown[]; specs?: unknown[] }> = z.object({ suites: z.array(z.unknown()).optional(), specs: z.array(z.unknown()).optional() });
-const report = resultSchema.parse(JSON.parse(await readFile('../test-results/e2e-results.json', 'utf8')));
+const testSchema = z.object({
+  title: z.string(),
+  tests: z.array(
+    z.object({ results: z.array(z.object({ status: z.string() })), status: z.string() }),
+  ),
+});
+const suiteSchema: z.ZodType<{ suites?: unknown[]; specs?: unknown[] }> = z.object({
+  suites: z.array(z.unknown()).optional(),
+  specs: z.array(z.unknown()).optional(),
+});
+const report = resultSchema.parse(
+  JSON.parse(await readFile('../test-results/e2e-results.json', 'utf8')),
+);
 const specs: z.infer<typeof testSchema>[] = [];
 function visit(input: unknown) {
   const suite = suiteSchema.parse(input);
@@ -20,6 +35,20 @@ function visit(input: unknown) {
   for (const child of suite.suites ?? []) visit(child);
 }
 report.suites.forEach(visit);
-const missing = expected.filter((name) => !specs.some((spec) => spec.title.includes(name) && spec.tests.length > 0 && spec.tests.every((test) => test.status === 'expected' && test.results.length === 1 && test.results[0]?.status === 'passed')));
-if (missing.length) throw new Error(`Critical journeys missing or not green: ${missing.join(', ')}`);
+const missing = expected.filter(
+  (name) =>
+    !specs.some(
+      (spec) =>
+        spec.title.includes(name) &&
+        spec.tests.length > 0 &&
+        spec.tests.every(
+          (test) =>
+            test.status === 'expected' &&
+            test.results.length === 1 &&
+            test.results[0]?.status === 'passed',
+        ),
+    ),
+);
+if (missing.length)
+  throw new Error(`Critical journeys missing or not green: ${missing.join(', ')}`);
 console.log(`All ${expected.length} critical journey groups executed and passed.`);

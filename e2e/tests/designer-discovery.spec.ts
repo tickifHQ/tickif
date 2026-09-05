@@ -1,3 +1,4 @@
+import '../lib/environment';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
@@ -25,10 +26,10 @@ test.describe('public designer discovery', () => {
       !['localhost', '127.0.0.1'].includes(database.hostname) ||
       !database.pathname.endsWith('_test') ||
       config.DATABASE_URL !== config.DATABASE_URL_TEST ||
-      !config.TYPESENSE_COLLECTION_PREFIX.includes('stage11')
+      !/^tickif_(?:stage11|e2e)(?:_[a-z0-9]+)*$/.test(config.TYPESENSE_COLLECTION_PREFIX)
     ) {
       throw new Error(
-        'Directory fixtures require matching local *_test database URLs and a stage11 search prefix.',
+        'Directory fixtures require matching local *_test database URLs and an isolated search prefix.',
       );
     }
     await migrateTestDb(config.DATABASE_URL);

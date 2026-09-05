@@ -1,3 +1,4 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from './environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test';
@@ -16,7 +17,7 @@ import {
 } from '@repo/db/testing';
 import { deleteObject, putObject } from '@repo/storage';
 
-export const moderationApiUrl = 'http://localhost:3001';
+export const moderationApiUrl = stackApiUrl;
 
 /** Only creates/removes this fixture; never truncates a shared database. */
 export async function createProjectModerationFixture() {
@@ -111,7 +112,7 @@ export async function createProjectModerationFixture() {
 
 export async function signInProjectAdmin(context: BrowserContext, phoneNumber: string | null) {
   if (!phoneNumber) throw new Error('Synthetic admin needs a phone number.');
-  const options = { headers: { origin: 'http://localhost:3000' }, data: { phoneNumber } };
+  const options = { headers: { origin: stackWebUrl }, data: { phoneNumber } };
   const send = await context.request.post(
     `${moderationApiUrl}/api/auth/phone-number/send-otp`,
     options,

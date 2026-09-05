@@ -74,6 +74,7 @@ jobs:
         run: |
           pnpm --filter @repo/api build
           pnpm --filter @repo/worker build
+          pnpm --filter @repo/e2e build:launchers
       - name: Wait for search
         run: curl --retry 30 --retry-all-errors --retry-delay 1 --fail http://localhost:8108/health
       - name: Run critical journeys with real local stack

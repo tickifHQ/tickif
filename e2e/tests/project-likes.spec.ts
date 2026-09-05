@@ -1,3 +1,4 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
@@ -43,11 +44,11 @@ test('visitor likes persist across project and portfolio views independently of 
     await expect(page).toHaveURL(/\/login\?callbackURL=/);
     expect(new URL(page.url()).searchParams.get('callbackURL')).toBe(path);
 
-    const headers = { origin: 'http://localhost:3000' };
+    const headers = { origin: stackWebUrl };
     const phoneNumber = visitor.phoneNumber!;
     expect(
       (
-        await context.request.post('http://localhost:3001/api/auth/phone-number/send-otp', {
+        await context.request.post(`${stackApiUrl}/api/auth/phone-number/send-otp`, {
           headers,
           data: { phoneNumber },
         })
@@ -63,7 +64,7 @@ test('visitor likes persist across project and portfolio views independently of 
     if (!code) throw new Error('Synthetic visitor OTP missing.');
     expect(
       (
-        await context.request.post('http://localhost:3001/api/auth/phone-number/verify', {
+        await context.request.post(`${stackApiUrl}/api/auth/phone-number/verify`, {
           headers,
           data: { phoneNumber, code },
         })
@@ -115,6 +116,11 @@ test('visitor likes persist across project and portfolio views independently of 
   } finally {
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, designer.orgId));
-    await db.delete(schema.user).where(inArray(schema.user.id, [visitor.id, designer.userId].filter((id): id is string => id !== null)));
+    await db.delete(schema.user).where(
+      inArray(
+        schema.user.id,
+        [visitor.id, designer.userId].filter((id): id is string => id !== null),
+      ),
+    );
   }
 });

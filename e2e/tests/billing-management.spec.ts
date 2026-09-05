@@ -1,3 +1,4 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
@@ -10,7 +11,7 @@ import {
   migrateTestDb,
 } from '@repo/db/testing';
 
-const apiUrl = 'http://localhost:3001';
+const apiUrl = stackApiUrl;
 
 test('billing owner sees real payments, recovers an existing mandate, and gets honest refresh errors', async ({
   page,
@@ -69,7 +70,7 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
   try {
     // Use real local Better Auth; retrieve only this synthetic phone's one-time code.
     const authOptions = {
-      headers: { origin: 'http://localhost:3000' },
+      headers: { origin: stackWebUrl },
       data: { phoneNumber: user.phoneNumber },
     };
     expect(
