@@ -275,6 +275,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      resend:
+        specifier: 'catalog:'
+        version: 4.8.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       typesense:
         specifier: 'catalog:'
         version: 3.0.6(@babel/runtime@7.29.7)
