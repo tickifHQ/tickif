@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
 // Import order matters: load the monorepo-root .env first, then validate.
 // ESM evaluates static imports in declaration order.
 import './load-root-env';
@@ -6,6 +7,8 @@ import './load-root-env';
 import './src/env';
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
+  outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   // Transpile workspace packages consumed directly as TS source.
   transpilePackages: ['@repo/contracts', '@repo/ui'],
   images: {

@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { config } from '@repo/config';
 import * as schema from './schema/index.js';
+import { closeReadinessDatabase } from './readiness.js';
 
 /**
  * Shared pooled Postgres connection + Drizzle instance.
@@ -22,5 +23,10 @@ const pool = new Pool({
 });
 
 export const db = drizzle(pool, { schema, casing: 'snake_case' });
+
+/** Stop accepting database work and drain the shared pool during process shutdown. */
+export async function closeDatabase(): Promise<void> {
+  await Promise.all([pool.end(), closeReadinessDatabase()]);
+}
 
 export type DB = typeof db;

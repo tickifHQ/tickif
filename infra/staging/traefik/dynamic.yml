@@ -1,0 +1,23 @@
+http:
+  middlewares:
+    secure-headers:
+      headers:
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        permissionsPolicy: 'camera=(), microphone=(), geolocation=()'
+  serversTransports:
+    staging-default:
+      forwardingTimeouts:
+        dialTimeout: 5s
+        responseHeaderTimeout: 30s
+        idleConnTimeout: 90s
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

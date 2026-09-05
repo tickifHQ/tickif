@@ -1,4 +1,5 @@
-export { db, type DB } from './client.js';
+export { closeDatabase, db, type DB } from './client.js';
+export { isDatabaseReady } from './readiness.js';
 export * as schema from './schema/index.js';
 export { SEARCH_PROJECTION_ADVISORY_LOCK_KEY } from './search-projection.js';
 export {
