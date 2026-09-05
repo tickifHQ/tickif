@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ShowcaseCard } from '@/components/showcase-card';
 import { EnquiryCta } from '@/components/enquiry-cta';
+import { ProjectLikeButton } from '@/components/project-like-button';
 import { env } from '@/env';
 
 interface ImageDetailViewProps {
@@ -363,6 +364,7 @@ export function ImageDetailView({
 
               {/* Action buttons: bookmark + share */}
               <div className="flex items-center gap-3">
+                <ProjectLikeButton projectId={project.id} loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`} />
                 <button
                   type="button"
                   onClick={handleBookmark}
