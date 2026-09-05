@@ -11,8 +11,8 @@ revision=$(git rev-parse HEAD)
 for service in api worker web; do
   docker push "localhost:5000/tickif/$service:$revision"
 done
-docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')"
-docker node update --label-add tickif.staging=true self
+docker swarm init --advertise-addr "$(hostname -I | awk '{print $1}')" >/dev/null
+docker node update --label-add tickif.staging=true "$(docker info --format '{{.Swarm.NodeID}}')"
 set -a
 source deploy/staging.env.example
 set +a
