@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
 import { AppError } from '../../lib/errors.js';
 
@@ -32,7 +32,18 @@ function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert'>) {
           and(
             eq(schema.subscription.id, id),
             eq(schema.subscription.razorpaySubscriptionId, providerId),
-            eq(schema.subscription.razorpayStatus, 'created'),
+            or(
+              eq(schema.subscription.razorpayStatus, 'created'),
+              and(
+                inArray(schema.subscription.razorpayStatus, ['pending', 'halted']),
+                inArray(schema.subscription.subscriptionState, [
+                  'payment_failed',
+                  'grace',
+                  'locked',
+                  'downgraded',
+                ]),
+              ),
+            ),
           ),
         );
     },

@@ -136,6 +136,33 @@ describe('billing management safety', () => {
       .where(eq(schema.subscription.id, sub.id));
     expect(stored).toMatchObject({ razorpayStatus: 'authenticated', planTier: 'hobby' });
   });
+  it.each([
+    ['pending', 'payment_failed'],
+    ['halted', 'grace'],
+    ['halted', 'locked'],
+    ['halted', 'downgraded'],
+  ] as const)(
+    'acknowledges a signed %s recovery callback from %s so webhooks can reactivate it',
+    async (razorpayStatus, subscriptionState) => {
+      const caller = await owner();
+      const sub = await subscription(caller, {
+        razorpayStatus,
+        subscriptionState,
+        ...(subscriptionState === 'downgraded' ? { planTier: 'hobby' as const } : {}),
+      });
+
+      await subscribeService.verifyPayment(caller, callback(sub.razorpaySubscriptionId!));
+
+      const [stored] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(stored).toMatchObject({
+        razorpayStatus: 'authenticated',
+        subscriptionState,
+      });
+    },
+  );
   it.each(['bad', '0'.repeat(64)])('rejects malformed and wrong signatures', async (signature) => {
     const caller = await owner();
     const sub = await subscription(caller);
