@@ -24,6 +24,7 @@ import { Card } from '@repo/ui/components/card';
 import { Rating } from '@repo/ui/components/reui/rating';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { EnquiryAvailabilityProvider, EnquiryCta } from '@/components/enquiry-cta';
+import { BookingCta } from '@/components/booking-cta';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -167,7 +168,12 @@ function StudioBar({ portfolio, view }: SectionProps) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <BookingCta
+            designerProfileId={portfolio.profileId}
+            designerName={portfolio.displayName}
+            loginHref={view.loginHref}
+          />
           {portfolio.sections.shareBlock ? (
             <CopyLinkButton
               value={view.publicProfileHref}
