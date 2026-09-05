@@ -66,8 +66,11 @@ with `actions: ["documents:search"]` and `collections: ["tickif_staging_.*"]`
 Swarm secret. A random secret object alone does not register a Typesense key;
 preparation deliberately stays closed until the actual query key works.
 
-Secrets are external and versioned. To rotate, create a `_v2` object, change the
-name in `/opt/tickif/staging.env`, deploy, verify, then remove `_v1`. Swarm grants
+Secrets are external and versioned. For application/provider credentials,
+coordinate the provider-side change, create a `_v2` object, change the name in
+`/opt/tickif/staging.env`, deploy, verify, then remove `_v1`. PostgreSQL requires
+the separate procedure below: replacing its secret does not change an initialized
+database role's password. Swarm grants
 runtime secrets only to consumers: Postgres gets its password, Typesense its
 admin key, and API/worker get only their application credentials. Backup secrets
 are attached only to short-lived backup/restore jobs. No secret value belongs in
@@ -76,6 +79,37 @@ Git, GitHub variables, the stack manifest, or the non-secret environment file.
 For R2, use a staging media bucket with browser CORS configured for the exact
 staging origin. Use a separate backup bucket and preferably separate restricted
 credentials. Apply retention/versioning policies appropriate for recovery.
+
+### PostgreSQL password rotation
+
+Keep the existing password/secret available until the new credential has been
+verified. In a maintenance window, load the environment and hold the same lock
+used by deployment/restore, then stop ingress and writers:
+
+```bash
+source infra/staging/scripts/lib.sh
+load_staging_env /opt/tickif/staging.env
+acquire_release_lock
+close_traffic
+wait_stopped
+```
+
+Create the new versioned Swarm password secret using the secure prompt above.
+Open an interactive `psql` session through the private PostgreSQL container
+(`docker exec -it CONTAINER psql -U ROLE -d postgres`) and use `\password ROLE`
+to enter that same new password twice. This changes the actual role without
+putting a plaintext password in a shell argument, SQL history, or deployment log.
+The manager's Docker access and local database administrator access are required.
+
+While still holding the lock, update `POSTGRES_PASSWORD_SECRET` in the protected
+environment file to the new secret object. Release the lock with `flock -u 9`,
+then run normal deployment from the reviewed release. Its authenticated database
+probe verifies the new secret before traffic opens. A PostgreSQL restart using
+`POSTGRES_PASSWORD_FILE` alone does **not** perform this rotation on existing PGDATA.
+
+If verification fails, keep traffic closed. Use the same interactive procedure
+to restore the previous password and secret reference, then redeploy. Remove the
+old secret only after recovery and the new credential are verified.
 
 ## Release flow
 
@@ -154,7 +188,33 @@ The operations image writes a custom-format dump into a private temporary direct
 
 Generate an identity offline with `age-keygen -o backup-identity.txt`. Put its public recipient in `BACKUP_AGE_RECIPIENT`; keep the private identity separately from the VM. Only restore jobs receive `BACKUP_ENCRYPTION_KEY_SECRET` containing that identity. Losing it makes backups unrecoverable.
 
-Restore authenticates the **whole** downloaded file before any database write, checks the archive table of contents, then uses `pg_restore --single-transaction --exit-on-error`. It captures actual replica counts and stops ingress and writers. Only successful restore, migration/search rebuild and readiness checks permit those counts to resume. Any failure leaves traffic stopped. SQL failure rolls back the restore transaction; a later migration/search failure requires operator investigation.
+Restore authenticates the **whole** downloaded file before database changes,
+checks the archive table of contents, and uses `pg_restore --single-transaction
+--exit-on-error` into a fresh database created from `template0`. This removes
+newer tables and foreign keys absent from an older backup, allowing the restored
+migration journal to drive subsequent migrations correctly. Once that succeeds,
+it disables connections to the current database, terminates its sessions and
+atomically renames it to the logged `tickif_before_restore_*` name while giving
+the candidate the configured database name. The previous database is preserved
+with connections disabled. The role needs database creation/rename and session
+termination privileges (the supplied PostgreSQL staging administrator has them).
+
+Actual replica counts are captured before stopping ingress and writers. Only
+successful restore, current migrations/search rebuild and readiness permit those
+counts to resume. Any failure leaves traffic stopped. A failed restore transaction
+does not replace the original; a failed rename transaction rolls back both names.
+After a rename failure the original configured database remains connection-disabled
+until an operator investigates and explicitly re-enables it. A later migration or
+reindex failure preserves the old database under its recorded recovery name.
+
+Before starting, budget free disk space for the full candidate database plus the
+plaintext dump and encrypted archive, in addition to the current database, with
+headroom for indexes and WAL. No retained database is deleted automatically. After
+the new release and a fresh off-host backup are verified, connect to maintenance
+database `postgres`, inspect `pg_database`, match the exact recorded retained name,
+and remove that reviewed copy with `DROP DATABASE "exact_recorded_name"`. Failed
+`tickif_restore_*` candidates may also be inspected and removed once confirmed
+unused. Retain the current database and any copy still needed for recovery.
 
 Legacy `.dump.enc` CBC files are explicitly rejected and must never be renamed to `.age`. If any exist, preserve the original, decrypt offline with the historical key/settings into an isolated recovery database, verify contents against independently trusted evidence, then create a fresh authenticated backup. No automatic conversion or trust claim is made.
 

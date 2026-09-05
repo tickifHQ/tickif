@@ -42,9 +42,28 @@ case "${BACKUP_ACTION:-backup}" in
     # Never stream decryption to pg_restore: verify the entire authenticated file first.
     age --decrypt --identity /run/secrets/backup_encryption_key --output "$scratch/database.dump" "$scratch/database.dump.age"
     pg_restore --list "$scratch/database.dump" >/dev/null
-    pg_restore --host "$POSTGRES_HOST" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-      --single-transaction --clean --if-exists --no-owner --no-acl --exit-on-error "$scratch/database.dump"
-    echo "transactional restore completed from: ${BACKUP_OBJECT}"
+    case "$POSTGRES_DB" in postgres|template0|template1) echo 'Refusing to replace a maintenance database' >&2; exit 2 ;; esac
+    suffix="$(date -u +%Y%m%d%H%M%S)_$RANDOM"
+    candidate="tickif_restore_$suffix"
+    preserved="tickif_before_restore_$suffix"
+    # --clean alone cannot remove tables/FKs introduced after the backup. Restore
+    # into an empty database and keep the previous database for operator recovery.
+    createdb --host "$POSTGRES_HOST" --username "$POSTGRES_USER" --template template0 "$candidate"
+    pg_restore --host "$POSTGRES_HOST" --username "$POSTGRES_USER" --dbname "$candidate" \
+      --single-transaction --no-owner --no-acl --exit-on-error "$scratch/database.dump"
+    psql --host "$POSTGRES_HOST" --username "$POSTGRES_USER" --dbname postgres \
+      -X --set ON_ERROR_STOP=1 --set active="$POSTGRES_DB" <<'SQL'
+ALTER DATABASE :"active" ALLOW_CONNECTIONS false;
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'active';
+SQL
+    psql --host "$POSTGRES_HOST" --username "$POSTGRES_USER" --dbname postgres \
+      -X --set ON_ERROR_STOP=1 --set active="$POSTGRES_DB" --set candidate="$candidate" --set preserved="$preserved" <<'SQL'
+BEGIN;
+ALTER DATABASE :"active" RENAME TO :"preserved";
+ALTER DATABASE :"candidate" RENAME TO :"active";
+COMMIT;
+SQL
+    echo "restore completed; previous database retained with connections disabled: $preserved"
     ;;
   *) echo 'unknown backup action' >&2; exit 2 ;;
 esac

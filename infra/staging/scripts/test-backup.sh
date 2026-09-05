@@ -32,7 +32,7 @@ chmod 644 "$fixture/secrets/backup_encryption_key"
 docker network create backup-fixture
 docker run -d --name backup-fixture-postgres --network backup-fixture -e POSTGRES_PASSWORD=fixture-password -e POSTGRES_DB=fixture postgres:16-bookworm
 for ((i=0;i<60;i++)); do docker exec backup-fixture-postgres pg_isready -U postgres && break; sleep 1; done
-docker exec backup-fixture-postgres psql -U postgres -d fixture -c "CREATE TABLE proof (value text); INSERT INTO proof VALUES ('original');"
+docker exec backup-fixture-postgres psql -U postgres -d fixture -c "CREATE TABLE proof (value text PRIMARY KEY); INSERT INTO proof VALUES ('original'); CREATE TABLE migration_journal (version int); INSERT INTO migration_journal VALUES (1);"
 run_job() {
   docker run --rm --network backup-fixture -v "$fixture:/fixture" -v "$fixture/secrets:/run/secrets:ro" \
     -e POSTGRES_HOST=backup-fixture-postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=fixture \
@@ -43,12 +43,39 @@ run_job() {
 }
 run_job backup
 object=$(find "$fixture/objects" -type f -name '*.age' -printf '%f\n')
-docker exec backup-fixture-postgres psql -U postgres -d fixture -c "UPDATE proof SET value='changed';"
+docker exec backup-fixture-postgres psql -U postgres -d fixture -c "UPDATE proof SET value='changed'; CREATE TABLE later (value text REFERENCES proof(value)); INSERT INTO later VALUES ('changed'); INSERT INTO migration_journal VALUES (2);"
 run_job restore "postgres/$object"
 [[ "$(docker exec backup-fixture-postgres psql -U postgres -d fixture -Atc 'SELECT value FROM proof')" == original ]]
+[[ "$(docker exec backup-fixture-postgres psql -U postgres -d fixture -Atc "SELECT to_regclass('public.later') IS NULL AND (SELECT max(version) FROM migration_journal)=1")" == t ]]
+# Reapply a newer migration after restoring the older journal/schema.
+docker exec backup-fixture-postgres psql -U postgres -d fixture -v ON_ERROR_STOP=1 -c "CREATE TABLE later (value text REFERENCES proof(value)); INSERT INTO later VALUES ('original'); INSERT INTO migration_journal VALUES (2);"
+[[ "$(docker exec backup-fixture-postgres psql -U postgres -d fixture -Atc 'SELECT count(*) FROM migration_journal')" == 2 ]]
+docker exec -i backup-fixture-postgres psql -U postgres -d postgres <<'SQL'
+\set ON_ERROR_STOP on
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_database WHERE datname LIKE 'tickif_before_restore_%' AND NOT datallowconn) THEN
+    RAISE EXCEPTION 'Previous database was not retained safely';
+  END IF;
+END $$;
+ALTER DATABASE fixture ALLOW_CONNECTIONS false;
+\set ON_ERROR_STOP off
+BEGIN;
+ALTER DATABASE fixture RENAME TO fixture_swap_abort;
+-- Expected failure: prove that the first rename rolls back with the second.
+ALTER DATABASE deliberately_missing_candidate RENAME TO fixture;
+COMMIT;
+\set ON_ERROR_STOP on
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_database WHERE datname='fixture' AND NOT datallowconn)
+    OR EXISTS(SELECT 1 FROM pg_database WHERE datname='fixture_swap_abort') THEN
+    RAISE EXCEPTION 'Failed name swap left an inconsistent database state';
+  END IF;
+END $$;
+ALTER DATABASE fixture ALLOW_CONNECTIONS true;
+SQL
 # Truncation must fail authentication before any database writes.
 truncate -s -16 "$fixture/objects/$object"
 if run_job restore "postgres/$object"; then echo 'Corrupted backup restored unexpectedly' >&2; exit 1; fi
 [[ "$(docker exec backup-fixture-postgres psql -U postgres -d fixture -Atc 'SELECT value FROM proof')" == original ]]
 if run_job restore postgres/legacy.dump.enc; then echo 'Legacy CBC accepted unexpectedly' >&2; exit 1; fi
-echo 'PostgreSQL backup, age recovery and corrupt/legacy rejection passed; R2 transport was a local fixture.'
+echo 'PostgreSQL cross-schema recovery, failed-swap rollback and corrupt/legacy rejection passed; R2 transport was a local fixture.'
