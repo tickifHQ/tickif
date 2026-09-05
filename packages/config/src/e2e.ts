@@ -15,11 +15,19 @@ export const e2eEnvironmentSchema = z
         (value) => /^\/[a-z0-9_]+_test$/.test(new URL(value).pathname),
         'E2E database must end in _test',
       )
+      .refine(
+        (value) => new URL(value).pathname !== '/tickif_test',
+        'E2E database must not use the shared integration-test database',
+      )
       .default('postgresql://tickif:tickif@localhost:5432/tickif_stage12_test'),
     REDIS_URL_TEST: localUrl
       .refine(
         (value) => /^\/(?:[1-9]|1[0-5])$/.test(new URL(value).pathname),
         'E2E Redis needs a dedicated nonzero database',
+      )
+      .refine(
+        (value) => new URL(value).pathname !== '/15',
+        'E2E Redis must not use the shared integration-test database',
       )
       .default('redis://localhost:6379/12'),
     TYPESENSE_HOST: localUrl.default('http://localhost:8108'),

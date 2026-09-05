@@ -1,9 +1,7 @@
-import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { apiUrl, webUrl } from '../lib/environment';
 import { signInPhone as signIn } from '../lib/auth';
-import { db, eq, inArray, schema } from '@repo/db';
-import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import { createReviewParticipantFixture } from '../lib/review-participant-fixtures';
 
 const reviewText = 'The studio listened closely and delivered a thoughtful and practical design.';
 
@@ -11,56 +9,8 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
   browser,
 }, testInfo) => {
   test.setTimeout(120000);
-  await assertTestDb();
-  const suffix = randomUUID();
-  const author = await makeUser({
-    name: 'Review Journey Visitor',
-    email: `review-visitor-${suffix}@test.local`,
-    phoneNumber: `+9191${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    status: 'active',
-  });
-  const rejectedAuthor = await makeUser({
-    name: 'Review Rejection Visitor',
-    email: `review-rejected-${suffix}@test.local`,
-    phoneNumber: `+9194${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    status: 'active',
-  });
-  const owner = await makeUser({
-    name: 'Review Journey Designer',
-    email: `review-designer-${suffix}@test.local`,
-    phoneNumber: `+9192${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    role: 'designer',
-    status: 'active',
-  });
-  const admin = await makeUser({
-    name: 'Review Journey Moderator',
-    email: `review-admin-${suffix}@test.local`,
-    phoneNumber: `+9193${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    role: 'admin',
-    status: 'active',
-  });
-  const org = await makeOrganization({
-    name: 'Review Journey Studio',
-    slug: `review-journey-${suffix}`,
-  });
-  const profile = await makeDesigner({
-    userId: owner.id,
-    orgId: org.id,
-    slug: org.slug,
-    displayName: 'Review Journey Studio',
-    status: 'active',
-  });
-  await db.insert(schema.member).values({
-    id: randomUUID(),
-    organizationId: org.id,
-    userId: owner.id,
-    role: 'owner',
-    createdAt: new Date(),
-  });
+  const fixture = await createReviewParticipantFixture();
+  const { author, rejectedAuthor, owner, admin, organization: org, profile } = fixture;
   const visitorContext = await browser.newContext({ baseURL: webUrl });
   const designerContext = await browser.newContext({ baseURL: webUrl });
   const adminContext = await browser.newContext({ baseURL: webUrl });
@@ -184,18 +134,11 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
     await expect(visitor.getByRole('button', { name: 'Edit your review' })).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
-    await Promise.all([visitorContext.close(), designerContext.close(), adminContext.close()]);
-    await assertTestDb();
-    const reviews = db
-      .select({ id: schema.review.id })
-      .from(schema.review)
-      .where(eq(schema.review.designerProfileId, profile.id));
-    await db
-      .delete(schema.reviewModerationEvent)
-      .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
-    await db.delete(schema.review).where(eq(schema.review.designerProfileId, profile.id));
-    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
-    for (const user of [author, rejectedAuthor, owner, admin])
-      await db.delete(schema.user).where(eq(schema.user.id, user.id));
+    await Promise.allSettled([
+      visitorContext.close(),
+      designerContext.close(),
+      adminContext.close(),
+    ]);
+    await fixture.cleanup();
   }
 });

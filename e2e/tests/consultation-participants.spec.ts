@@ -19,53 +19,69 @@ test('consultation lifecycle: visitor books, studio confirms and completes, visi
   test.setTimeout(180000);
   await assertTestDb();
   const suffix = randomUUID();
-  const visitorUser = await makeUser({
-    name: 'Consultation Journey Visitor',
-    email: `consultation-visitor-${suffix}@test.local`,
-    phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    status: 'active',
-  });
-  const owner = await makeUser({
-    name: 'Consultation Journey Owner',
-    email: `consultation-owner-${suffix}@test.local`,
-    phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
-    phoneNumberVerified: true,
-    role: 'designer',
-    status: 'active',
-  });
-  const org = await makeOrganization({
-    name: 'Consultation Journey Studio',
-    slug: `consultation-journey-${suffix}`,
-  });
-  const profile = await makeDesigner({
-    userId: owner.id,
-    orgId: org.id,
-    slug: org.slug,
-    displayName: org.name,
-    status: 'active',
-    phone: owner.phoneNumber,
-  });
-  await db.insert(schema.member).values({
-    id: randomUUID(),
-    organizationId: org.id,
-    userId: owner.id,
-    role: 'owner',
-    createdAt: new Date(),
-  });
-  const project = await makeProject({
-    designerId: profile.id,
-    title: 'Consultation Journey Kitchen',
-    status: 'published',
-  });
-  const visitorContext = await browser.newContext({ baseURL });
-  const designerContext = await browser.newContext({ baseURL });
-  const visitor = await visitorContext.newPage();
-  const designer = await designerContext.newPage();
-  const pageErrors: string[] = [];
-  visitor.on('pageerror', (error) => pageErrors.push(error.message));
-  designer.on('pageerror', (error) => pageErrors.push(error.message));
+  const cleanup: Array<() => Promise<unknown>> = [];
   try {
+    const visitorUser = await makeUser({
+      name: 'Consultation Journey Visitor',
+      email: `consultation-visitor-${suffix}@test.local`,
+      phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
+      phoneNumberVerified: true,
+      status: 'active',
+    });
+    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, visitorUser.id)));
+    const owner = await makeUser({
+      name: 'Consultation Journey Owner',
+      email: `consultation-owner-${suffix}@test.local`,
+      phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
+      phoneNumberVerified: true,
+      role: 'designer',
+      status: 'active',
+    });
+    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, owner.id)));
+    const org = await makeOrganization({
+      name: 'Consultation Journey Studio',
+      slug: `consultation-journey-${suffix}`,
+    });
+    cleanup.push(() => db.delete(schema.organization).where(eq(schema.organization.id, org.id)));
+    const profile = await makeDesigner({
+      userId: owner.id,
+      orgId: org.id,
+      slug: org.slug,
+      displayName: org.name,
+      status: 'active',
+      phone: owner.phoneNumber,
+    });
+    cleanup.push(async () => {
+      const reviews = db
+        .select({ id: schema.review.id })
+        .from(schema.review)
+        .where(eq(schema.review.designerProfileId, profile.id));
+      await db
+        .delete(schema.reviewModerationEvent)
+        .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
+      await db.delete(schema.review).where(eq(schema.review.designerProfileId, profile.id));
+    });
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      organizationId: org.id,
+      userId: owner.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    const project = await makeProject({
+      designerId: profile.id,
+      title: 'Consultation Journey Kitchen',
+      status: 'published',
+    });
+    const visitorContext = await browser.newContext({ baseURL });
+    cleanup.push(() => visitorContext.close());
+    const designerContext = await browser.newContext({ baseURL });
+    cleanup.push(() => designerContext.close());
+    const visitor = await visitorContext.newPage();
+    const designer = await designerContext.newPage();
+    const pageErrors: string[] = [];
+    visitor.on('pageerror', (error) => pageErrors.push(error.message));
+    designer.on('pageerror', (error) => pageErrors.push(error.message));
     await signIn(visitorContext, visitorUser.phoneNumber!);
     await signIn(designerContext, owner.phoneNumber!);
     expect(
@@ -164,18 +180,6 @@ test('consultation lifecycle: visitor books, studio confirms and completes, visi
     ).toBe(true);
     expect(pageErrors).toEqual([]);
   } finally {
-    await visitorContext.close();
-    await designerContext.close();
-    const reviews = db
-      .select({ id: schema.review.id })
-      .from(schema.review)
-      .where(eq(schema.review.designerProfileId, profile.id));
-    await db
-      .delete(schema.reviewModerationEvent)
-      .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
-    await db.delete(schema.review).where(eq(schema.review.designerProfileId, profile.id));
-    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
-    await db.delete(schema.user).where(eq(schema.user.id, visitorUser.id));
-    await db.delete(schema.user).where(eq(schema.user.id, owner.id));
+    for (const dispose of cleanup.reverse()) await dispose();
   }
 });

@@ -6,6 +6,7 @@
   "scripts": {
     "stack": "tsx scripts/stack.ts",
     "e2e:prepare": "tsx scripts/prepare.ts",
+    "test": "vitest run scripts/coverage.test.ts",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -20,6 +21,7 @@
     "pg": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
+    "vitest": "catalog:",
     "zod": "catalog:",
     "@playwright/test": "catalog:",
     "@repo/config": "workspace:*",
