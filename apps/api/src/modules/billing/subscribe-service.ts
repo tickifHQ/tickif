@@ -16,7 +16,7 @@ import {
   resolveRazorpayPlanId,
 } from './razorpay-client.js';
 import { config } from '@repo/config';
-import { invalidateEntitlementCache } from '../../lib/redis.js';
+import { acquireBillingRefreshLease, invalidateEntitlementCache } from '../../lib/redis.js';
 import { orgsService } from '../orgs/service.js';
 
 /**
@@ -144,14 +144,10 @@ export const subscribeService = {
       // replacing that ID can orphan a valid subscription. Reconcile the existing
       // ID with Razorpay before deciding whether it is safe to create another one.
       if (existing?.razorpaySubscriptionId) {
-        let remoteSubscription;
-        try {
-          remoteSubscription = await fetchSubscription(existing.razorpaySubscriptionId);
-        } catch {
-          throw AppError.conflict(
-            'An existing checkout could not be verified. Retry shortly or contact support.',
-          );
-        }
+        // Preserve upstream failures as 502s. Treating an outage or malformed
+        // provider response as a local conflict tells clients not to retry and
+        // hides an operational failure behind a business-state error.
+        const remoteSubscription = await fetchSubscription(existing.razorpaySubscriptionId);
 
         if (remoteSubscription.status === 'created' && existing.planTier === 'hobby') {
           const checkoutTier =
@@ -427,125 +423,139 @@ export const subscribeService = {
     }
 
     await assertOrgBillingAccess(caller);
-    return withBillingUpdate(caller.activeOrgId, async (repository) => {
-      const subscription = await repository.find(caller.activeOrgId!);
-
-      if (!subscription?.razorpaySubscriptionId) {
-        return { reconciled: false, razorpayStatus: null };
-      }
-
-      // If credentials aren't configured, skip gracefully
-      if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
-        return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
-      }
-
-      let rzpSub;
-      try {
-        rzpSub = await fetchSubscription(subscription.razorpaySubscriptionId);
-      } catch {
-        // Razorpay API failure — return current local state, don't corrupt DB
-        return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
-      }
-
-      const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
-      // Terminal statuses must always pass through the state transition below. This
-      // also repairs rows written by older code that stored `cancelled` before the
-      // subscription had actually ended.
-      if (
-        subscription.razorpayStatus === rzpSub.status &&
-        !terminalStatuses.has(rzpSub.status) &&
-        !(
-          rzpSub.status === 'active' &&
-          (subscription.subscriptionState !== 'active' ||
-            subscription.planTier !==
-              (inferTierFromConfig(rzpSub.plan_id) ??
-                inferTierFromNotes(rzpSub.notes) ??
-                subscription.planTier) ||
-            subscription.currentPeriodEnd?.getTime() !==
-              (rzpSub.current_end ? rzpSub.current_end * 1000 : undefined))
-        ) &&
-        (rzpSub.cancel_at_cycle_end === undefined ||
-          subscription.cancelAtPeriodEnd === rzpSub.cancel_at_cycle_end)
-      ) {
-        return { reconciled: false, razorpayStatus: rzpSub.status };
-      }
-
-      // Reconcile based on Razorpay's live status
-      const updates: SubscriptionUpdate = {
-        razorpayStatus: rzpSub.status,
+    if (!(await acquireBillingRefreshLease(caller.activeOrgId))) {
+      const subscription = await subscribeRepository.find(caller.activeOrgId);
+      return {
+        reconciled: false,
+        razorpayStatus: subscription?.razorpayStatus ?? null,
       };
+    }
+    const result = await subscribeRepository.withOrganizationLock(
+      caller.activeOrgId,
+      async (repository) => {
+        const subscription = await repository.find(caller.activeOrgId!);
 
-      switch (rzpSub.status) {
-        case 'active': {
-          // Subscription is active — resolve the tier from plan_id or notes
-          const tier =
-            inferTierFromConfig(rzpSub.plan_id) ?? inferTierFromNotes(rzpSub.notes) ?? null;
-          if (tier && subscription.planTier !== tier) {
-            updates.planTier = tier;
-          }
-          updates.subscriptionState = 'active';
-          if (rzpSub.cancel_at_cycle_end !== undefined) {
-            updates.cancelAtPeriodEnd = rzpSub.cancel_at_cycle_end;
-          }
-          updates.currentPeriodEnd = rzpSub.current_end
-            ? new Date(rzpSub.current_end * 1000)
-            : undefined;
+        if (!subscription?.razorpaySubscriptionId) {
+          return { reconciled: false, razorpayStatus: null };
+        }
 
-          // Clear any lapse fields (reactivation)
-          if (subscription.subscriptionState !== 'active') {
+        // If credentials aren't configured, skip gracefully
+        if (!config.RAZORPAY_KEY_ID || !config.RAZORPAY_KEY_SECRET) {
+          return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
+        }
+
+        let rzpSub;
+        try {
+          rzpSub = await fetchSubscription(subscription.razorpaySubscriptionId);
+        } catch {
+          // Razorpay API failure — return current local state, don't corrupt DB
+          return { reconciled: false, razorpayStatus: subscription.razorpayStatus };
+        }
+
+        const terminalStatuses = new Set(['cancelled', 'completed', 'expired']);
+        // Terminal statuses must always pass through the state transition below. This
+        // also repairs rows written by older code that stored `cancelled` before the
+        // subscription had actually ended.
+        if (
+          subscription.razorpayStatus === rzpSub.status &&
+          !terminalStatuses.has(rzpSub.status) &&
+          !(
+            rzpSub.status === 'active' &&
+            (subscription.subscriptionState !== 'active' ||
+              subscription.planTier !==
+                (inferTierFromConfig(rzpSub.plan_id) ??
+                  inferTierFromNotes(rzpSub.notes) ??
+                  subscription.planTier) ||
+              subscription.currentPeriodEnd?.getTime() !==
+                (rzpSub.current_end ? rzpSub.current_end * 1000 : undefined))
+          ) &&
+          (rzpSub.cancel_at_cycle_end === undefined ||
+            subscription.cancelAtPeriodEnd === rzpSub.cancel_at_cycle_end)
+        ) {
+          return { reconciled: false, razorpayStatus: rzpSub.status };
+        }
+
+        // Reconcile based on Razorpay's live status
+        const updates: SubscriptionUpdate = {
+          razorpayStatus: rzpSub.status,
+        };
+
+        switch (rzpSub.status) {
+          case 'active': {
+            // Subscription is active — resolve the tier from plan_id or notes
+            const tier =
+              inferTierFromConfig(rzpSub.plan_id) ?? inferTierFromNotes(rzpSub.notes) ?? null;
+            if (tier && subscription.planTier !== tier) {
+              updates.planTier = tier;
+            }
+            updates.subscriptionState = 'active';
+            if (rzpSub.cancel_at_cycle_end !== undefined) {
+              updates.cancelAtPeriodEnd = rzpSub.cancel_at_cycle_end;
+            }
+            updates.currentPeriodEnd = rzpSub.current_end
+              ? new Date(rzpSub.current_end * 1000)
+              : undefined;
+
+            // Clear any lapse fields (reactivation)
+            if (subscription.subscriptionState !== 'active') {
+              updates.graceStartedAt = null;
+              updates.lockedAt = null;
+              updates.downgradedAt = null;
+              updates.preLapseTier = null;
+            }
+            break;
+          }
+          case 'authenticated':
+            // Authorization payment done but not yet charged — keep current state
+            updates.razorpayStatus = 'authenticated';
+            break;
+          case 'pending':
+            // Payment pending/retrying
+            if (subscription.subscriptionState === 'active') {
+              updates.subscriptionState = 'payment_failed';
+            }
+            break;
+          case 'halted':
+            // Payment retries exhausted → grace period
+            if (
+              subscription.subscriptionState === 'active' ||
+              subscription.subscriptionState === 'payment_failed'
+            ) {
+              updates.subscriptionState = 'grace';
+              updates.graceStartedAt = subscription.graceStartedAt ?? new Date();
+              updates.preLapseTier = (subscription.planTier as PlanTier) ?? undefined;
+            }
+            break;
+          case 'cancelled':
+          case 'completed':
+          case 'expired':
+            // Terminal — revert to hobby
+            if (subscription.planTier !== 'hobby') {
+              updates.planTier = 'hobby';
+            }
+            updates.subscriptionState = 'active';
+            updates.razorpaySubscriptionId = null;
+            updates.cancelAtPeriodEnd = false;
+            updates.currentPeriodEnd = null;
             updates.graceStartedAt = null;
             updates.lockedAt = null;
             updates.downgradedAt = null;
             updates.preLapseTier = null;
-          }
-          break;
+            break;
+          default:
+            // Unknown status — just update razorpayStatus
+            break;
         }
-        case 'authenticated':
-          // Authorization payment done but not yet charged — keep current state
-          updates.razorpayStatus = 'authenticated';
-          break;
-        case 'pending':
-          // Payment pending/retrying
-          if (subscription.subscriptionState === 'active') {
-            updates.subscriptionState = 'payment_failed';
-          }
-          break;
-        case 'halted':
-          // Payment retries exhausted → grace period
-          if (
-            subscription.subscriptionState === 'active' ||
-            subscription.subscriptionState === 'payment_failed'
-          ) {
-            updates.subscriptionState = 'grace';
-            updates.graceStartedAt = subscription.graceStartedAt ?? new Date();
-            updates.preLapseTier = (subscription.planTier as PlanTier) ?? undefined;
-          }
-          break;
-        case 'cancelled':
-        case 'completed':
-        case 'expired':
-          // Terminal — revert to hobby
-          if (subscription.planTier !== 'hobby') {
-            updates.planTier = 'hobby';
-          }
-          updates.subscriptionState = 'active';
-          updates.razorpaySubscriptionId = null;
-          updates.cancelAtPeriodEnd = false;
-          updates.currentPeriodEnd = null;
-          updates.graceStartedAt = null;
-          updates.lockedAt = null;
-          updates.downgradedAt = null;
-          updates.preLapseTier = null;
-          break;
-        default:
-          // Unknown status — just update razorpayStatus
-          break;
-      }
 
-      await repository.update(subscription.id, updates);
+        await repository.update(subscription.id, updates);
 
-      return { reconciled: true, razorpayStatus: rzpSub.status };
-    });
+        return { reconciled: true, razorpayStatus: rzpSub.status };
+      },
+    );
+    if (result.reconciled) {
+      await invalidateEntitlementCache(caller.activeOrgId);
+    }
+    return result;
   },
 };
 

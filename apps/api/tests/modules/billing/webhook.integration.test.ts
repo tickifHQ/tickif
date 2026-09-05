@@ -1092,6 +1092,37 @@ describe('E-117: webhook event processing', () => {
   });
 
   describe('out-of-order events', () => {
+    it('records an older charge without regressing the current period or plan', async () => {
+      const currentPeriodEnd = new Date('2026-11-01T00:00:00.000Z');
+      const sub = await makeSubscription({
+        planTier: 'corporate',
+        subscriptionState: 'active',
+        razorpaySubscriptionId: 'sub_out_of_order_charge',
+        currentPeriodEnd,
+      });
+      const payload = makeChargedPayload({
+        subscriptionId: 'sub_out_of_order_charge',
+        paymentId: 'pay_out_of_order_charge',
+        planId: 'plan_test_professional_plus',
+        currentEnd: Math.floor(new Date('2026-10-01T00:00:00.000Z').getTime() / 1000),
+        paymentCreatedAt: Math.floor(new Date('2026-09-01T00:00:00.000Z').getTime() / 1000),
+      });
+
+      const result = await processWebhookEvent(RAZORPAY_EVENT.SUBSCRIPTION_CHARGED, payload);
+
+      expect(result.outcome).toBe('processed');
+      const [updated] = await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.id, sub.id));
+      expect(updated).toMatchObject({ planTier: 'corporate', currentPeriodEnd });
+      const payments = await db
+        .select()
+        .from(schema.paymentTransaction)
+        .where(eq(schema.paymentTransaction.razorpayPaymentId, 'pay_out_of_order_charge'));
+      expect(payments).toHaveLength(1);
+    });
+
     it('stale halted after reactivation is rejected', async () => {
       // Org was in grace, charged reactivated them back to active
       await makeSubscription({
