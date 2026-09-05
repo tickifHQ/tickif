@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usePaymentMethod } from '../../src/components/subscribe/use-payment-method';
 import { PaymentHistory } from '../../src/components/payment-history';
+import { SuccessStep } from '../../src/components/subscribe/checkout-flow';
 
 const mocks = vi.hoisted(() => ({
   method: vi.fn(),
@@ -35,6 +36,14 @@ function Harness() {
   );
 }
 describe('real payment controls', () => {
+  it('distinguishes a confirmed new subscription from a cycle-end plan change', () => {
+    const view = render(<SuccessStep targetTier="corporate" kind="activated" onDone={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Plan activated' })).toBeInTheDocument();
+    expect(screen.queryByText(/end of your current billing/)).not.toBeInTheDocument();
+    view.rerender(<SuccessStep targetTier="professional_plus" kind="downgrade" onDone={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Plan change scheduled' })).toBeInTheDocument();
+    expect(screen.getByText(/end of your current billing/)).toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.method.mockResolvedValue(
