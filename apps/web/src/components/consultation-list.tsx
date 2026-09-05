@@ -121,6 +121,7 @@ function ConsultationCard({
           <fieldset disabled={busy} className="flex flex-col gap-3">
             <SelectField
               label="Confirm preferred time"
+              placeholder="Select a preferred time"
               value={slotIndex}
               onValueChange={setSlotIndex}
               options={booking.preferredSlots.map((slot, index) => ({
