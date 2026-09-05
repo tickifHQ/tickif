@@ -26,12 +26,13 @@ describe('mounted secrets', () => {
       NODE_ENV: 'test',
       BETTER_AUTH_URL: 'http://localhost:3001',
       CONFIG_SECRETS_FILE: secretFile(
-        'BETTER_AUTH_SECRET="synthetic#secret-long"\nPOSTGRES_PASSWORD="test@password"\n',
+        'BETTER_AUTH_SECRET="synthetic#secret-long"\nPOSTGRES_PASSWORD="test@password"\nREDIS_PASSWORD="redis@password"\n',
       ),
     };
     const parsed = parseConfig(environment);
     expect(parsed.BETTER_AUTH_SECRET).toBe('synthetic#secret-long');
     expect(parsed.DATABASE_URL).toContain('test%40password');
+    expect(parsed.REDIS_URL).toBe('redis://:redis%40password@localhost:6379');
     expect(environment).not.toHaveProperty('BETTER_AUTH_SECRET');
   });
   it('uses the same mounted values at production email and search boundaries', () => {

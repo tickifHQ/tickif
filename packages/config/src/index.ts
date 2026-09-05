@@ -29,6 +29,60 @@ const DEFAULT_EMAIL_FROM = 'Tickif <noreply@tickif.com>';
 const DEFAULT_EMAIL_ADDRESS = 'noreply@tickif.com';
 const NAMED_EMAIL_FROM_PATTERN = /^[^<>\r\n]+<([^<>\r\n]+)>$/;
 
+/**
+ * Only credentials in this allow-list support Docker/Swarm's conventional
+ * `<NAME>_FILE` indirection. Keeping the list explicit prevents an accidental
+ * file read from being enabled for arbitrary configuration keys.
+ */
+export const sensitiveFileVariables = [
+  'POSTGRES_PASSWORD',
+  'DATABASE_URL',
+  'REDIS_PASSWORD',
+  'REDIS_URL',
+  'TYPESENSE_API_KEY',
+  'TYPESENSE_SEARCH_API_KEY',
+  'BETTER_AUTH_SECRET',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_PLACES_API_KEY',
+  'NOVU_SECRET_KEY',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'RESEND_API_KEY',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+] as const;
+
+type SensitiveFileVariable = (typeof sensitiveFileVariables)[number];
+
+function resolveSecretFiles(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const resolved = { ...environment };
+
+  for (const name of sensitiveFileVariables) {
+    const fileName = `${name}_FILE` as `${SensitiveFileVariable}_FILE`;
+    const filePath = environment[fileName];
+    if (!filePath) continue;
+    if (environment[name]) {
+      throw new Error(
+        `Invalid environment configuration:\n  - ${name}: set either ${name} or ${fileName}, not both`,
+      );
+    }
+
+    let value: string;
+    try {
+      value = readFileSync(filePath, 'utf8').replace(/[\r\n]+$/, '');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid environment configuration:\n  - ${fileName}: ${message}`);
+    }
+    if (value.length === 0) {
+      throw new Error(`Invalid environment configuration:\n  - ${fileName}: secret file is empty`);
+    }
+    resolved[name] = value;
+  }
+
+  return resolved;
+}
+
 function blankStringToUndefined(value: unknown): unknown {
   return typeof value === 'string' && value.trim() === '' ? undefined : value;
 }
@@ -80,6 +134,7 @@ const envSchema = z.object({
   // Redis (cache + BullMQ) — connection string built from these parts.
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
+  REDIS_PASSWORD: z.string().min(1).optional(),
   REDIS_URL: z.string().url().optional(),
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
@@ -345,22 +400,7 @@ function assertProductionSmsConfig(env: RawEnv): void {
 }
 
 /** Only secret values may come from the mounted file; it cannot change the runtime mode. */
-const secretKeys = new Set([
-  'POSTGRES_PASSWORD',
-  'DATABASE_URL',
-  'REDIS_URL',
-  'BETTER_AUTH_SECRET',
-  'TYPESENSE_API_KEY',
-  'TYPESENSE_SEARCH_API_KEY',
-  'GOOGLE_CLIENT_SECRET',
-  'R2_ACCESS_KEY_ID',
-  'R2_SECRET_ACCESS_KEY',
-  'RESEND_API_KEY',
-  'NOVU_SECRET_KEY',
-  'RAZORPAY_KEY_SECRET',
-  'RAZORPAY_WEBHOOK_SECRET',
-  'GOOGLE_PLACES_API_KEY',
-]);
+const secretKeys = new Set<string>(sensitiveFileVariables);
 
 function resolveSecretEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const file = environment.CONFIG_SECRETS_FILE;
@@ -388,7 +428,9 @@ function resolveSecretEnvironment(environment: NodeJS.ProcessEnv): NodeJS.Proces
 }
 
 export function parseConfig(environment: NodeJS.ProcessEnv): Config {
-  const parsed = refinedEnvSchema.safeParse(resolveSecretEnvironment(environment));
+  const parsed = refinedEnvSchema.safeParse(
+    resolveSecretFiles(resolveSecretEnvironment(environment)),
+  );
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -402,7 +444,9 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
     DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
-    REDIS_URL: env.REDIS_URL ?? `redis://${env.REDIS_HOST}:${env.REDIS_PORT}`,
+    REDIS_URL:
+      env.REDIS_URL ??
+      `redis://${env.REDIS_PASSWORD ? `:${encodeURIComponent(env.REDIS_PASSWORD)}@` : ''}${env.REDIS_HOST}:${env.REDIS_PORT}`,
     TYPESENSE_HOST: env.TYPESENSE_HOST ?? LOCAL_TYPESENSE_HOST,
     TYPESENSE_API_KEY: env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
     TYPESENSE_SEARCH_API_KEY:
@@ -412,7 +456,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
 
 /** Validate Resend only in the auth process that sends transactional email. */
 export function assertProductionEmailConfig(environment: NodeJS.ProcessEnv = process.env): void {
-  environment = resolveSecretEnvironment(environment);
+  environment = resolveSecretFiles(resolveSecretEnvironment(environment));
   if (environment.NODE_ENV !== 'production') return;
 
   const resendApiKey = blankStringToUndefined(environment.RESEND_API_KEY);
@@ -441,7 +485,7 @@ export function assertProductionEmailConfig(environment: NodeJS.ProcessEnv = pro
 
 /** Validate search credentials only in processes that actually use Typesense. */
 export function assertProductionSearchConfig(environment: NodeJS.ProcessEnv = process.env): void {
-  environment = resolveSecretEnvironment(environment);
+  environment = resolveSecretFiles(resolveSecretEnvironment(environment));
   if (environment.NODE_ENV !== 'production') return;
   const parsed = productionSearchEnvSchema.safeParse(environment);
   if (parsed.success) return;

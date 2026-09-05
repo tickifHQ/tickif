@@ -29,13 +29,12 @@ import { markFailed } from './media/repository.js';
 import { selectSmsSender } from './jobs/sms-sender.js';
 import { SmsService } from './jobs/sms-service.js';
 import { processBookingNotificationSweep } from './jobs/booking-notifications.js';
-import {
-  processGoogleReviewRefresh,
-  processGoogleReviewSweep,
-} from './jobs/google-reviews.js';
+import { processGoogleReviewRefresh, processGoogleReviewSweep } from './jobs/google-reviews.js';
 import { processSearchIndex } from './jobs/search-indexer.js';
 import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
 import { probeSearchReadiness } from './search/readiness.js';
+import { isDatabaseReady, closeDatabase } from './health/repository.js';
+import { consumersAreReady, createWorkerReadinessProbe } from './health/readiness.js';
 import {
   processVerificationEmail,
   processVerificationNotificationSweep,
@@ -78,9 +77,7 @@ const smsWorker = new Worker<SmsQueueJob>(
       const { enqueued, failed } = await processBookingNotificationSweep();
       // Report failures separately: an all-failing batch and an empty one both
       // enqueue zero, and only one of them is a problem.
-      console.log(
-        `[worker] booking-notifications sweep: enqueued ${enqueued}, failed ${failed}`,
-      );
+      console.log(`[worker] booking-notifications sweep: enqueued ${enqueued}, failed ${failed}`);
       return;
     }
     await smsService.send(job.data);
@@ -198,15 +195,28 @@ verificationEmailWorker.on('failed', (job, err) =>
 );
 
 let draining = false;
-let searchReady = false;
+let dependenciesReady = false;
 let readinessPromise: Promise<void> | null = null;
 let dispatchPromise: Promise<void> | null = null;
+const consumers = [
+  mediaWorker,
+  smsWorker,
+  searchIndexWorker,
+  verificationEmailWorker,
+  billingLifecycleWorker,
+  ...(googleReviewsWorker ? [googleReviewsWorker] : []),
+];
+const probeReadiness = createWorkerReadinessProbe({
+  postgres: isDatabaseReady,
+  search: () => probeSearchReadiness(() => searchWriteClient().health.retrieve()),
+  consumers: () => consumersAreReady(consumers),
+});
 
-function refreshSearchReadiness(): Promise<void> {
+function refreshReadiness(): Promise<void> {
   if (readinessPromise) return readinessPromise;
-  readinessPromise = probeSearchReadiness(() => searchWriteClient().health.retrieve())
+  readinessPromise = probeReadiness()
     .then((ready) => {
-      searchReady = ready;
+      dependenciesReady = ready;
     })
     .finally(() => {
       readinessPromise = null;
@@ -231,19 +241,19 @@ function dispatchSearchOutbox(): Promise<void> {
   return dispatchPromise;
 }
 
-void refreshSearchReadiness();
+void refreshReadiness();
 void dispatchSearchOutbox();
-const readinessTimer = setInterval(() => void refreshSearchReadiness(), 10_000);
+const readinessTimer = setInterval(() => void refreshReadiness(), 10_000);
 const outboxTimer = setInterval(() => void dispatchSearchOutbox(), 2_000);
 
 // Liveness = process up; readiness flips to 503 on shutdown so an orchestrator stops routing first.
 const health = createServer((req, res) => {
   if (req.url === '/livez') return void res.writeHead(200).end('ok');
   if (req.url === '/readyz') {
-    const ready = !draining && searchReady;
+    const ready = !draining && dependenciesReady;
     return void res
       .writeHead(ready ? 200 : 503)
-      .end(draining ? 'draining' : searchReady ? 'ready' : 'search-unavailable');
+      .end(draining ? 'draining' : dependenciesReady ? 'ready' : 'dependencies-unavailable');
   }
   res.writeHead(404).end();
 });
@@ -254,6 +264,7 @@ console.log(
 );
 
 async function shutdown(signal: string): Promise<void> {
+  if (draining) return;
   draining = true;
   clearInterval(readinessTimer);
   clearInterval(outboxTimer);
@@ -272,6 +283,7 @@ async function shutdown(signal: string): Promise<void> {
     ]);
     await closeEntitlementCache();
     await closeQueues();
+    await closeDatabase();
   } catch (err) {
     console.error('[worker] error during shutdown:', err);
     code = 1;
