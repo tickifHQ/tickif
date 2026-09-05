@@ -107,13 +107,13 @@ function CurrentPlanCard({
   return (
     <Card radius="2xl">
       <div className="flex flex-col gap-5 p-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-stretch gap-5">
+        <div className="flex min-w-0 items-stretch gap-5">
           <span className="flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-primary/10 text-primary sm:w-36">
             <Crown className="size-9" />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-muted-foreground">Current Plan</p>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <h2 className="text-2xl font-bold text-foreground">{tierLabel}</h2>
               {billing.lifecycle === 'active' && billing.tier === 'hobby' && (
                 <Badge variant="secondary">Free</Badge>
@@ -158,17 +158,17 @@ function CurrentPlanCard({
               </p>
             )}
             {billing.subscriptionId && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="mt-1.5 flex min-w-0 flex-col items-start gap-1.5 text-xs text-muted-foreground">
                 Subscription ID:{' '}
-                <span className="break-all font-mono">{billing.subscriptionId}</span>
+                <span className="max-w-full break-all font-mono">{billing.subscriptionId}</span>
                 <CopyLinkButton
                   value={billing.subscriptionId}
                   variant="ghost"
-                  size="icon"
+                  size="compact"
                   label="Copy subscription ID"
                   icon="copy"
                 />
-              </p>
+              </div>
             )}
           </div>
         </div>
