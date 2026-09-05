@@ -365,7 +365,9 @@ export function AdminReviewQueue({
                     maxLength={2000}
                   />
                   <p className="text-sm text-muted-foreground">
-                    Notes are recorded in the private moderation history.
+                    {detail.review.status === 'pending'
+                      ? 'Rejection notes stay in the private moderation history.'
+                      : 'Resolution notes are shared with the reviewer and studio.'}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
