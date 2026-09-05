@@ -142,8 +142,8 @@ The root gate runs at most two Turbo package tasks simultaneously, and shared
 Vitest presets cap file workers at two. API/worker DB files remain serialized
 within each integration project. This bounds nested parallelism without
 increasing UI assertion or test timeouts. On memory-constrained machines, use
-`pnpm test --concurrency=1`. Avoid running multiple full gates concurrently on
-the same host. Unit/integration results are never reused from Turbo's cache,
+`pnpm exec turbo run test --concurrency=1`. Avoid running multiple full gates
+concurrently on the same host. Unit/integration results are never reused from Turbo's cache,
 because database, Redis and Typesense state can change without source changes.
 
 ## E2E (Playwright)
