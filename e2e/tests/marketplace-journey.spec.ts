@@ -76,7 +76,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
         citySlug: 'mumbai',
         propertyTypeSlug: 'apartment',
         scopeSlug: 'full-home',
-        budgetBandSlug: 'premium',
+        budgetBandSlug: 'upscale',
       },
     });
     expect(create.ok(), await create.text()).toBeTruthy();
@@ -138,6 +138,12 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .where(eq(schema.projectImage.projectId, project.id));
     objectKeys.push(...originals.map((image) => image.key));
     await designer.reload();
+    await expect(designer.getByRole('img', { name: /\(Ready\)$/ })).toHaveCount(3);
+    await designer
+      .getByRole('img', { name: /\(Ready\)$/ })
+      .first()
+      .scrollIntoViewIfNeeded();
+    await designer.screenshot({ path: testInfo.outputPath('rendered-worker-derivatives.png') });
     await designer.getByRole('button', { name: 'Preview & Submit Project' }).click();
     await expect
       .poll(
@@ -184,6 +190,9 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .where(eq(schema.user.phoneNumber, visitorPhone));
     expect(persistedVisitor?.name).toBe(`Journey Visitor ${suffix}`);
     await visitor.goto(`/designers?q=${encodeURIComponent(`Journey Studio ${suffix}`)}`);
+    await visitor.getByRole('combobox', { name: 'Designer type' }).selectOption('individual');
+    await visitor.getByRole('button', { name: 'Find designers', exact: true }).click();
+    await expect(visitor).toHaveURL(/entityType=individual/);
     await expect(
       visitor.getByRole('link', { name: new RegExp(`Journey Studio ${suffix}`) }).first(),
     ).toBeVisible({ timeout: 20_000 });
@@ -192,6 +201,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .first()
       .click();
     await expect(visitor).toHaveURL(/\/d\//);
+    const publicProfileUrl = visitor.url();
     await visitor.goto(`/projects/${project.id}`);
     await visitor.getByRole('button', { name: 'Like project', exact: true }).click();
     await visitor.getByRole('button', { name: 'Save project', exact: true }).click();
@@ -209,6 +219,13 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .fill(`Please discuss the kitchen renovation for synthetic household ${suffix}.`);
     await enquiry.getByRole('button', { name: 'Send Enquiry', exact: true }).click();
     await expect(enquiry.getByText('Enquiry sent successfully!')).toBeVisible();
+    await visitor.goto(`${publicProfileUrl}#tickif-reviews`);
+    await visitor.getByLabel('Your rating').selectOption('5');
+    await visitor
+      .getByLabel('Your experience (optional)')
+      .fill('The designer responded clearly to our synthetic renovation enquiry.');
+    await visitor.getByRole('button', { name: 'Submit review' }).click();
+    await expect(visitor.getByRole('region', { name: 'Your review' })).toContainText('pending');
     await designer.goto('/designer/leads');
     await expect(designer.getByText(`Journey Visitor ${suffix}`, { exact: true })).toBeVisible();
     await designer
@@ -237,7 +254,17 @@ test('designer onboarding and media processing connects to visitor onboarding an
         .where(eq(schema.projectModerationEvent.projectId, projectId));
       await deleteSearchDocument('projects', projectId);
     }
-    if (profileId) await deleteSearchDocument('designers', profileId);
+    if (profileId) {
+      const reviews = db
+        .select({ id: schema.review.id })
+        .from(schema.review)
+        .where(eq(schema.review.designerProfileId, profileId));
+      await db
+        .delete(schema.reviewModerationEvent)
+        .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
+      await db.delete(schema.review).where(eq(schema.review.designerProfileId, profileId));
+      await deleteSearchDocument('designers', profileId);
+    }
     if (orgId) await db.delete(schema.organization).where(eq(schema.organization.id, orgId));
     await db.delete(schema.user).where(inArray(schema.user.id, [owner.id, admin.id]));
     await db.delete(schema.user).where(eq(schema.user.phoneNumber, visitorPhone));

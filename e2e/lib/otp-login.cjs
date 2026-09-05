@@ -3,8 +3,7 @@ const path = require('path');
 
 // Worker dev log that echoes OTPs, e.g. "[sms] OTP for 91XXXXXXXXXX: 123456".
 // Override with DEV_LOG_PATH; defaults to the local demo/ capture setup.
-const DEV_LOG =
-  process.env.DEV_LOG_PATH || path.join(__dirname, '..', '..', 'demo', 'worker-dev.log');
+const DEV_LOG = process.env.DEV_LOG_PATH || path.join(__dirname, '..', '..', 'demo', 'worker-dev.log');
 
 const PHONE_DIGITS = process.env.DEMO_PHONE || '9876543210';
 const NORMALIZED_PHONE = '91' + PHONE_DIGITS;
@@ -51,10 +50,7 @@ async function loginViaOtp(page, baseUrl) {
     await page.getByLabel(`OTP digit ${i + 1}`).fill(otp[i]);
     await pause(80);
   }
-  await page
-    .getByRole('button', { name: 'Continue' })
-    .click({ timeout: 3000 })
-    .catch(() => {});
+  await page.getByRole('button', { name: 'Continue' }).click({ timeout: 3000 }).catch(() => {});
   await page.waitForURL(`${baseUrl}/`, { timeout: 20000 });
   await page.waitForLoadState('networkidle').catch(() => {});
 }
