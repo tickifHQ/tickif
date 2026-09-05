@@ -209,23 +209,61 @@ describe('verification repository lifecycle', () => {
 
     const tabs = await Promise.all(
       Object.values(ADMIN_VERIFICATION_QUEUE_TAB).map((tab) =>
-        verificationsRepository.listAdminQueue({ tab, page: 1, limit: 20 }),
+        verificationsRepository.listAdminQueue({ tab, page: 1, limit: 20 }, reviewedAt),
       ),
     );
 
-    expect(tabs.map(({ total }) => total)).toEqual([1, 1, 1, 1]);
+    expect(tabs.map(({ total }) => total)).toEqual([1, 1, 1, 1, 0]);
     expect(tabs.map(({ items }) => items[0]?.id)).toEqual([
       newSubmission.application.id,
       reReview.application.id,
       accepted.application.id,
       changesRequested.application.id,
+      undefined,
     ]);
     expect(tabs.map(({ items }) => items[0]?.status)).toEqual([
       'pending',
       'pending',
       'verified',
       'rejected',
+      undefined,
     ]);
+  });
+
+  it('moves approvals from accepted to expired at the exact expiry boundary', async () => {
+    const { application } = await setupApplication();
+    const expiry = new Date('2026-11-01T09:00:00.000Z');
+    await db
+      .update(schema.verificationApplication)
+      .set({
+        status: 'verified',
+        submittedAt: new Date('2026-09-01T08:00:00.000Z'),
+        reviewedAt: new Date('2026-09-01T09:00:00.000Z'),
+        approvedAt: new Date('2026-09-01T09:00:00.000Z'),
+        expiresAt: expiry,
+      })
+      .where(eq(schema.verificationApplication.id, application.id));
+    for (const [offset, acceptedTotal, expiredTotal] of [
+      [-1, 1, 0],
+      [0, 0, 1],
+      [1, 0, 1],
+    ] as const) {
+      const now = new Date(expiry.getTime() + offset);
+      const accepted = await verificationsRepository.listAdminQueue(
+        { tab: 'accepted', page: 1, limit: 20 },
+        now,
+      );
+      const expired = await verificationsRepository.listAdminQueue(
+        { tab: 'expired', page: 1, limit: 20 },
+        now,
+      );
+      expect(accepted.total).toBe(acceptedTotal);
+      expect(accepted.items).toHaveLength(acceptedTotal);
+      expect(expired.total).toBe(expiredTotal);
+      expect(expired.items).toHaveLength(expiredTotal);
+      if (expiredTotal)
+        expect(expired.items[0]).toMatchObject({ id: application.id, expiresAt: expiry });
+    }
   });
 
   it('keeps queue totals aligned with applications that can be rendered', async () => {

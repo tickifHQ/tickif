@@ -616,6 +616,20 @@ describe('verificationsService', () => {
     });
   });
 
+  it.each([
+    ['2026-08-13T00:00:00.001Z', 'verified'],
+    ['2026-08-13T00:00:00.000Z', 'expired'],
+    ['2026-08-12T23:59:59.999Z', 'expired'],
+  ])('reports the admin effective status at expiry %s as %s', async (expiry, status) => {
+    vi.mocked(verificationsRepository.findAdminDetail).mockResolvedValue({
+      ...context,
+      organizationName: 'Studio One',
+      application: { ...application, status: 'verified', expiresAt: new Date(expiry) },
+    });
+    const result = await verificationsService.getAdminDetail(application.id);
+    expect(result.application).toMatchObject({ status });
+  });
+
   it('serializes the selected admin queue tab and its lifecycle timestamps', async () => {
     const submittedAt = new Date('2026-08-10T00:00:00.000Z');
     const reviewedAt = new Date('2026-08-11T00:00:00.000Z');
@@ -631,6 +645,7 @@ describe('verificationsService', () => {
           submittedAt,
           reviewedAt,
           documentCount: 1,
+          expiresAt: new Date('2026-10-11T00:00:00.000Z'),
         },
       ],
       total: 1,

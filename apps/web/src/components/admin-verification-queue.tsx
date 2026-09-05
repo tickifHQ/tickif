@@ -66,6 +66,7 @@ const tabLabels: Record<AdminVerificationQueueTab, string> = {
   re_review: 'Re-review',
   accepted: 'Accepted',
   changes_requested: 'Changes requested',
+  expired: 'Expired',
 };
 
 const emptyStateContent: Record<AdminVerificationQueueTab, { title: string; description: string }> =
@@ -85,6 +86,10 @@ const emptyStateContent: Record<AdminVerificationQueueTab, { title: string; desc
     changes_requested: {
       title: 'No changes requested',
       description: 'Applications returned to designers for corrections will appear here.',
+    },
+    expired: {
+      title: 'No expired verifications',
+      description: 'Expired approvals awaiting designer renewal will appear here.',
     },
   };
 
@@ -132,12 +137,13 @@ function statusLabel(status: AdminVerificationDetailResponse['application']['sta
   if (status === 'pending') return 'Pending review';
   if (status === 'verified') return 'Verified';
   if (status === 'rejected') return 'Changes requested';
+  if (status === 'expired') return 'Expired';
   return 'Draft';
 }
 
 function statusVariant(status: AdminVerificationDetailResponse['application']['status']) {
   if (status === 'verified') return 'success' as const;
-  if (status === 'rejected') return 'warning' as const;
+  if (status === 'rejected' || status === 'expired') return 'warning' as const;
   if (status === 'pending') return 'info' as const;
   return 'secondary' as const;
 }
@@ -225,7 +231,15 @@ function QueueTable({
                       Attempt {item.attempt}
                     </Badge>
                   ) : (
-                    <Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge>
+                    <div className="space-y-1">
+                      <Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge>
+                      {item.expiresAt ? (
+                        <p className="text-xs text-muted-foreground">
+                          {item.status === 'expired' ? 'Expired' : 'Expires'}{' '}
+                          {formatDate(item.expiresAt)}
+                        </p>
+                      ) : null}
+                    </div>
                   )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
@@ -272,6 +286,14 @@ function ReviewDetail({
   onReviewed: (applicationId: string, intent: ReviewIntent) => void;
 }) {
   const { application, documents, eligibility, history } = detail;
+  const renewal =
+    application.status === 'pending' &&
+    history.some(
+      (event) =>
+        event.attempt === application.attempt &&
+        event.action === 'resubmitted' &&
+        event.fromStatus === 'verified',
+    );
   const [reviewIntent, setReviewIntent] = useState<ReviewIntent | null>(null);
   const [feedback, setFeedback] = useState('');
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(() => new Set());
@@ -397,6 +419,29 @@ function ReviewDetail({
       </DialogHeader>
 
       <div className="space-y-8 px-6 py-6">
+        {application.status === 'expired' ? (
+          <div className="rounded-lg border bg-muted/35 p-4 text-sm" role="status">
+            Approval expired {formatDate(application.expiresAt)}. The verified badge is inactive.
+            The designer can update documents and submit a renewal from their verification page.
+          </div>
+        ) : renewal ? (
+          <div className="rounded-lg border bg-muted/35 p-4 text-sm" role="status">
+            Renewal review: this designer resubmitted after their previous approval expired. Check
+            the current documents before granting a new two-month approval.
+          </div>
+        ) : null}
+        {application.approvedAt ? (
+          <dl className="grid gap-3 rounded-lg border p-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Approved</dt>
+              <dd>{formatDate(application.approvedAt)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Approval expires</dt>
+              <dd>{formatDate(application.expiresAt)}</dd>
+            </div>
+          </dl>
+        ) : null}
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <h3 className="font-display text-base font-semibold">Application</h3>
@@ -709,6 +754,7 @@ export function AdminVerificationQueue({
     new: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW ? initialQueue.total : 0,
     re_review: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.RE_REVIEW ? initialQueue.total : 0,
     accepted: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.ACCEPTED ? initialQueue.total : 0,
+    expired: initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.EXPIRED ? initialQueue.total : 0,
     changes_requested:
       initialQueue.tab === ADMIN_VERIFICATION_QUEUE_TAB.CHANGES_REQUESTED ? initialQueue.total : 0,
     ...initialCounts,
