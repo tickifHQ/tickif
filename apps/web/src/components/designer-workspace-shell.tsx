@@ -16,6 +16,7 @@ import {
   CreditCard,
   ExternalLink,
   FileUser,
+  Building2,
   Layers,
   LayoutDashboard,
   Link as LinkIcon,
@@ -57,6 +58,7 @@ const growItems: NavItem[] = [
     headerIcon: Shield,
   },
   { label: 'Team & Roles', href: '/designer/terms-roles', icon: UsersRound },
+  { label: 'Branches', href: '/designer/branches', icon: Building2 },
   { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
 ];
 
