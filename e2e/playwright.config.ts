@@ -20,6 +20,8 @@ export default defineConfig({
     // Assertions keep the ordinary 10s deadline; this allowance applies only to stack startup.
     timeout: 300_000,
     env: environment,
+    stdout: 'pipe',
+    stderr: 'pipe',
     gracefulShutdown: { signal: 'SIGTERM', timeout: 15_000 },
   },
   metadata: { apiUrl, providerUrl },

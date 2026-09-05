@@ -13,6 +13,7 @@ const expected = [
   'visitor onboarding and discovery',
   'designer onboarding and media processing',
   'invitation acceptance, role changes and studio switching',
+  'studio workspaces isolate all business surfaces',
   'billing owner sees real payments',
 ];
 const resultSchema = z.object({ suites: z.array(z.unknown()) });
