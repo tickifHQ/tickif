@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { testEnv } from './node.mjs';
 
 /**
  * Shared Vitest base for React (Next.js) component tests. happy-dom + RTL.
@@ -16,6 +17,8 @@ export function reactPreset(overrides = {}) {
     test: {
       globals: true,
       environment: 'happy-dom',
+      // Keep DOM tests responsive while other Turbo packages are running.
+      maxWorkers: 2,
       include: ['tests/**/*.test.{ts,tsx}'],
       setupFiles: ['./tests/setup.ts'],
       coverage: {
@@ -24,6 +27,7 @@ export function reactPreset(overrides = {}) {
         include: ['app/**/*.{ts,tsx}', 'src/**/*.{ts,tsx}'],
       },
       ...overrides,
+      env: { ...testEnv(), ...overrides.env },
     },
   });
 }

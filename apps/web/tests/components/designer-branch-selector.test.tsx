@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OrganizationBranchesResponse } from '@repo/contracts';
 import { DesignerBranchSelector } from '../../src/components/designer-branch-selector';
 
 const mocks = vi.hoisted(() => ({
@@ -64,7 +65,7 @@ const branchesPayload = {
       members: [],
     },
   ],
-};
+} satisfies OrganizationBranchesResponse;
 
 type BranchesResponse = {
   ok: boolean;
