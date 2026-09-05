@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { createReviewSchema, updateReviewSchema, type ParticipantReview } from '@repo/contracts';
+import {
+  createReviewSchema,
+  updateReviewSchema,
+  type ParticipantReview,
+  type ReviewResponse,
+} from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import { Label } from '@repo/ui/components/label';
@@ -20,7 +25,7 @@ export function ReviewEditor({
   designerProfileId: string;
   bookingId?: string;
   existing?: ParticipantReview;
-  onSaved: () => Promise<void>;
+  onSaved: (review: ReviewResponse) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [rating, setRating] = useState(String(existing?.review.rating ?? 5));
@@ -41,17 +46,22 @@ export function ReviewEditor({
     setBusy(true);
     setError('');
     try {
-      if (existing)
-        await editReview(existing.review.id, existing.review.moderationRevision, valid.data);
-      else {
+      let saved: ReviewResponse;
+      if (existing) {
+        saved = await editReview(
+          existing.review.id,
+          existing.review.moderationRevision,
+          valid.data,
+        );
+      } else {
         const create = createReviewSchema.safeParse({ ...input, designerProfileId, bookingId });
         if (!create.success) {
           setError('This review link is invalid. Open the studio profile and try again.');
           return;
         }
-        await submitReview(create.data);
+        saved = await submitReview(create.data);
       }
-      await onSaved();
+      await onSaved(saved);
     } catch (cause) {
       setError(
         userFacingErrorMessage(cause, 'Could not save your review. Your edits are still here.'),

@@ -4,6 +4,7 @@ import {
   adminReviewsQuerySchema,
   createReviewSchema,
   listPublishedReviewsQuerySchema,
+  publishedReviewSchema,
   resolveReviewDisputeSchema,
   updateReviewSchema,
   reviewMutationQuerySchema,
@@ -131,5 +132,30 @@ describe('review contracts', () => {
       limit: 20,
     });
     expect(adminReviewsQuerySchema.safeParse({ status: 'draft' }).success).toBe(false);
+  });
+
+  it('keeps internal author, booking, and moderation identifiers out of public reviews', () => {
+    const publicReview = {
+      id: '22222222-2222-4222-8222-222222222222',
+      author: { name: 'Reviewer', avatarUrl: null },
+      project: null,
+      verifiedConsultation: true,
+      rating: 5,
+      body: null,
+      publishedAt: '2026-09-05T12:00:00.000Z',
+    };
+    expect(publishedReviewSchema.parse(publicReview)).toEqual(publicReview);
+    expect(
+      publishedReviewSchema.safeParse({
+        ...publicReview,
+        bookingId: '33333333-3333-4333-8333-333333333333',
+      }).success,
+    ).toBe(false);
+    expect(
+      publishedReviewSchema.safeParse({
+        ...publicReview,
+        author: { ...publicReview.author, id: 'internal-user-id' },
+      }).success,
+    ).toBe(false);
   });
 });

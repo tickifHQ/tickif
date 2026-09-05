@@ -101,6 +101,23 @@ export const reviewResponseSchema = z
   .meta({ id: 'Review' });
 export type ReviewResponse = z.infer<typeof reviewResponseSchema>;
 
+/** Public review display data. Internal user, booking, and moderation identifiers stay private. */
+export const publishedReviewSchema = reviewResponseSchema
+  .pick({
+    id: true,
+    project: true,
+    verifiedConsultation: true,
+    rating: true,
+    body: true,
+  })
+  .extend({
+    author: reviewResponseSchema.shape.author.omit({ id: true }).strict(),
+    publishedAt: z.string().datetime(),
+  })
+  .strict()
+  .meta({ id: 'PublishedReview' });
+export type PublishedReview = z.infer<typeof publishedReviewSchema>;
+
 export const listPublishedReviewsQuerySchema = z
   .object({
     designerProfileId: z.uuid(),
@@ -123,7 +140,7 @@ export type ReviewHistogram = z.infer<typeof reviewHistogramSchema>;
 
 export const publishedReviewsResponseSchema = z
   .object({
-    items: z.array(reviewResponseSchema),
+    items: z.array(publishedReviewSchema),
     histogram: reviewHistogramSchema,
     averageRating: z.number().min(0).max(5),
     reviewCount: z.number().int().nonnegative(),

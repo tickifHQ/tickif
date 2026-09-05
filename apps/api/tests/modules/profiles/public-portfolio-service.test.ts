@@ -50,15 +50,12 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/orgs/repository.js', () => ({ isOrgWriter: vi.fn() }));
 
 // Import AFTER mock registration
-const { publicPortfolioService } = await import(
-  '../../../src/modules/profiles/public-portfolio-service.js'
-);
-const { portfolioRepository } = await import(
-  '../../../src/modules/profiles/portfolio-repository.js'
-);
-const { googleReviewsRepository } = await import(
-  '../../../src/modules/profiles/google-repository.js'
-);
+const { publicPortfolioService } =
+  await import('../../../src/modules/profiles/public-portfolio-service.js');
+const { portfolioRepository } =
+  await import('../../../src/modules/profiles/portfolio-repository.js');
+const { googleReviewsRepository } =
+  await import('../../../src/modules/profiles/google-repository.js');
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { reviewsService } = await import('../../../src/modules/reviews/service.js');
 
@@ -342,21 +339,14 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
           id: 'review-1',
           designerProfileId: 'profile-1',
           author: {
-            id: 'author-1',
             name: 'Priya K.',
             avatarUrl: null,
           },
           project: null,
-          bookingId: null,
           verifiedConsultation: false,
           rating: 5,
           body: 'The team translated our needs into a home that feels effortless.',
-          status: 'published',
-          moderationRevision: 1,
           publishedAt: '2026-07-20T00:00:00.000Z',
-          disputedAt: null,
-          createdAt: '2026-07-18T00:00:00.000Z',
-          updatedAt: '2026-07-20T00:00:00.000Z',
         },
       ],
       histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
@@ -454,10 +444,7 @@ describe('publicPortfolioService.getBySlug — reviews', () => {
 
   it('hides all reviews when the designer hid the reviews section', async () => {
     vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(makeGoogleRow());
-    resolveTo(
-      makeProfile(),
-      makePortfolio({ showTickifReviews: false, showGoogleReviews: false }),
-    );
+    resolveTo(makeProfile(), makePortfolio({ showTickifReviews: false, showGoogleReviews: false }));
 
     const result = await publicPortfolioService.getBySlug('test-studio');
 

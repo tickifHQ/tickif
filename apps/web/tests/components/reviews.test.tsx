@@ -159,6 +159,44 @@ describe('Tickif review display', () => {
     expect(screen.getByText('A verified phone number is required.')).toBeInTheDocument();
     expect(screen.queryByRole('form')).not.toBeInTheDocument();
   });
+
+  it('keeps a committed review successful when the follow-up refresh fails', async () => {
+    const user = userEvent.setup();
+    const savedReview = { ...own.review, moderationRevision: 0 };
+    mock.submitReview.mockResolvedValue(savedReview);
+    mock.fetchTickifReviews.mockRejectedValue(new Error('refresh unavailable'));
+    render(
+      <TickifReviews designerProfileId={profileId} initialPage={page} initialOwn={null} canWrite />,
+    );
+    await user.type(screen.getByLabelText('Your experience (optional)'), own.review.body!);
+    await user.click(screen.getByRole('button', { name: 'Submit review' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('awaiting moderation');
+    expect(screen.getByRole('region', { name: 'Your review' })).toHaveTextContent('pending');
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load reviews');
+    expect(screen.queryByRole('button', { name: 'Submit review' })).not.toBeInTheDocument();
+  });
+
+  it('refetches the last valid page when moderation shrinks the result set', async () => {
+    const user = userEvent.setup();
+    mock.fetchTickifReviews
+      .mockResolvedValueOnce({ ...page, page: 3, totalPages: 1 })
+      .mockResolvedValueOnce({ ...page, page: 1, totalPages: 1 });
+    render(
+      <TickifReviews
+        designerProfileId={profileId}
+        initialPage={{ ...page, page: 2, totalPages: 3, reviewCount: 21 }}
+        initialOwn={null}
+        canWrite={false}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Next reviews' }));
+
+    expect(await screen.findByText('Page 1 of 1')).toBeInTheDocument();
+    expect(mock.fetchTickifReviews).toHaveBeenNthCalledWith(1, profileId, 3);
+    expect(mock.fetchTickifReviews).toHaveBeenNthCalledWith(2, profileId, 1);
+    expect(window.location.search).toContain('reviewsPage=1');
+  });
 });
 
 describe('designer disputes', () => {

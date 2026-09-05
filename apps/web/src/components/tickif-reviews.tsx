@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { ParticipantReview, PublishedReviewsResponse } from '@repo/contracts';
+import type { ParticipantReview, PublishedReviewsResponse, ReviewResponse } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
@@ -39,14 +39,19 @@ export function TickifReviews({
     setBusy(true);
     setError('');
     try {
-      const [published, mine] = await Promise.all([
+      const [requestedPage, mine] = await Promise.all([
         fetchTickifReviews(designerProfileId, targetPage),
         canWrite ? fetchOwnReview(designerProfileId) : Promise.resolve(null),
       ]);
+      const resolvedPage = Math.min(targetPage, Math.max(requestedPage.totalPages, 1));
+      const published =
+        resolvedPage === targetPage
+          ? requestedPage
+          : await fetchTickifReviews(designerProfileId, resolvedPage);
       setPage(published);
       if (mine) setOwn(mine.item);
       const url = new URL(window.location.href);
-      url.searchParams.set('reviewsPage', String(targetPage));
+      url.searchParams.set('reviewsPage', String(resolvedPage));
       window.history.replaceState(null, '', url);
     } catch (cause) {
       setError(userFacingErrorMessage(cause, 'Could not load reviews. Please try again.'));
@@ -55,10 +60,23 @@ export function TickifReviews({
       setBusy(false);
     }
   }
-  async function onSaved() {
-    await reload(1);
+  async function onSaved(review: ReviewResponse) {
+    const previous = own?.review.id === review.id ? own : null;
+    setOwn({
+      review,
+      canEdit: true,
+      editableUntil: null,
+      dispute: previous?.dispute ?? null,
+      resolution: previous?.resolution ?? null,
+    });
+    if (previous?.review.status === 'published') setPage(null);
     setEditing(false);
     setSaved(true);
+    try {
+      await reload(1);
+    } catch {
+      // The mutation already committed. `reload` displays the refresh failure separately.
+    }
   }
   return (
     <section

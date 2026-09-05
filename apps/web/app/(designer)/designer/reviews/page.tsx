@@ -60,13 +60,20 @@ export default async function ReviewsPage({
       </header>
       <nav aria-label="Review status" className="flex flex-wrap gap-2">
         <Button asChild variant={!query.status ? 'default' : 'outline'}>
-          <Link href="/designer/reviews">All reviews</Link>
+          <Link href="/designer/reviews" aria-current={!query.status ? 'page' : undefined}>
+            All reviews
+          </Link>
         </Button>
         {reviewStatusSchema.options
           .filter((status) => ['published', 'disputed', 'removed'].includes(status))
           .map((status) => (
             <Button asChild key={status} variant={query.status === status ? 'default' : 'outline'}>
-              <Link href={href(1, status)}>{status}</Link>
+              <Link
+                href={href(1, status)}
+                aria-current={query.status === status ? 'page' : undefined}
+              >
+                {status}
+              </Link>
             </Button>
           ))}
       </nav>

@@ -1,18 +1,14 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { config } from '../../packages/config/src/index';
 import { db, eq, schema } from '../../packages/db/src/index';
-import {
-  assertTestDb,
-  makeDesigner,
-  makeOrganization,
-  makeUser,
-} from '../../packages/db/src/testing';
+import { createReviewParticipantFixture } from '../lib/review-participant-fixtures';
 
 const apiUrl = config.NEXT_PUBLIC_API_URL;
 const reviewText = 'The studio listened closely and delivered a thoughtful and practical design.';
 
 async function signIn(context: BrowserContext, phoneNumber: string) {
   const sent = await context.request.post(`${apiUrl}/api/auth/phone-number/send-otp`, {
+    headers: { origin: 'http://localhost:3000' },
     data: { phoneNumber },
   });
   expect(sent.ok()).toBeTruthy();
@@ -25,6 +21,7 @@ async function signIn(context: BrowserContext, phoneNumber: string) {
   expect(
     (
       await context.request.post(`${apiUrl}/api/auth/phone-number/verify`, {
+        headers: { origin: 'http://localhost:3000' },
         data: { phoneNumber, code },
       })
     ).ok(),
@@ -35,50 +32,8 @@ test('visitor submits and edits, admin publishes, designer disputes, and admin r
   browser,
 }, testInfo) => {
   test.setTimeout(120000);
-  await assertTestDb();
-  const author = await makeUser({
-    name: 'Review Journey Visitor',
-    email: 'review-journey-visitor@example.test',
-    phoneNumber: '+919800008901',
-    phoneNumberVerified: true,
-    status: 'active',
-  });
-  const owner = await makeUser({
-    name: 'Review Journey Designer',
-    email: 'review-journey-designer@example.test',
-    phoneNumber: '+919800008902',
-    phoneNumberVerified: true,
-    role: 'designer',
-    status: 'active',
-  });
-  const admin = await makeUser({
-    name: 'Review Journey Moderator',
-    email: 'review-journey-admin@example.test',
-    phoneNumber: '+919800008903',
-    phoneNumberVerified: true,
-    role: 'admin',
-    status: 'active',
-  });
-  const org = await makeOrganization({
-    name: 'Review Journey Studio',
-    slug: 'review-journey-studio',
-  });
-  const profile = await makeDesigner({
-    userId: owner.id,
-    orgId: org.id,
-    slug: 'review-journey-studio',
-    displayName: 'Review Journey Studio',
-    status: 'active',
-  });
-  await db
-    .insert(schema.member)
-    .values({
-      id: 'review-journey-owner',
-      organizationId: org.id,
-      userId: owner.id,
-      role: 'owner',
-      createdAt: new Date(),
-    });
+  const fixture = await createReviewParticipantFixture();
+  const { author, owner, admin, organization, profile } = fixture;
   const visitorContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
   const designerContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
   const adminContext = await browser.newContext({ baseURL: 'http://localhost:3000' });
@@ -95,18 +50,20 @@ test('visitor submits and edits, admin publishes, designer disputes, and admin r
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active`, {
-          data: { organizationId: org.id },
+          headers: { origin: 'http://localhost:3000' },
+          data: { organizationId: organization.id },
         })
       ).ok(),
     ).toBeTruthy();
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active-team`, {
+          headers: { origin: 'http://localhost:3000' },
           data: { teamId: profile.teamId },
         })
       ).ok(),
     ).toBeTruthy();
-    await visitor.goto('/d/review-journey-studio#tickif-reviews');
+    await visitor.goto(`/d/${profile.slug}#tickif-reviews`);
     await expect(visitor.getByRole('heading', { name: 'Tickif community reviews' })).toBeVisible();
     await visitor.getByLabel('Your rating').selectOption('4');
     await visitor.getByLabel('Your experience (optional)').fill(reviewText);
@@ -160,10 +117,11 @@ test('visitor submits and edits, admin publishes, designer disputes, and admin r
     await visitor.screenshot({ path: testInfo.outputPath('tickif-reviews-mobile.png') });
     expect(errors).toEqual([]);
   } finally {
-    await Promise.all([visitorContext.close(), designerContext.close(), adminContext.close()]);
-    await assertTestDb();
-    for (const user of [author, owner, admin])
-      await db.delete(schema.user).where(eq(schema.user.id, user.id));
-    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
+    await Promise.allSettled([
+      visitorContext.close(),
+      designerContext.close(),
+      adminContext.close(),
+    ]);
+    await fixture.cleanup();
   }
 });

@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { TickifReviews } from '@/components/tickif-reviews';
 import { getServerSession, activeContextForSession } from '@/lib/auth-guard';
 import { fetchOwnReview, fetchTickifReviews } from '@/lib/reviews-api';
@@ -18,6 +19,11 @@ export async function TickifReviewsSection({
     getServerSession({ disableCookieCache: true }),
     fetchTickifReviews(designerProfileId, page).catch(() => null),
   ]);
+  if (published && page > Math.max(published.totalPages, 1)) {
+    const query = new URLSearchParams({ reviewsPage: String(Math.max(published.totalPages, 1)) });
+    if (bookingId) query.set('bookingId', bookingId);
+    redirect(`/d/${encodeURIComponent(slug)}?${query}#tickif-reviews`);
+  }
   const personal =
     !!session &&
     activeContextForSession(session).kind === 'personal' &&

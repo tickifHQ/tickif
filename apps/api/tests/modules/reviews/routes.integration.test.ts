@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ReviewResponse } from '@repo/contracts';
-import { makeDesigner, makeOrganization } from '@repo/db/testing';
+import { publishedReviewsResponseSchema, type ReviewResponse } from '@repo/contracts';
+import { db, eq, schema } from '@repo/db';
+import { makeDesigner, makeOrganization, makeProject } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
@@ -14,6 +15,11 @@ describe('review routes', () => {
     });
     const visitor = await createRoleSession('+919800004101', 'visitor');
     const admin = await createRoleSession('+919800004102', 'admin');
+    const project = await makeProject({
+      designerId: designer.id,
+      title: 'Public review project',
+      status: 'published',
+    });
 
     const submittedResponse = await app.request('/api/reviews', {
       method: 'POST',
@@ -23,6 +29,7 @@ describe('review routes', () => {
       },
       body: JSON.stringify({
         designerProfileId: designer.id,
+        projectId: project.id,
         rating: 5,
         body: 'A clear process, thoughtful choices, and a result that works beautifully.',
       }),
@@ -86,11 +93,27 @@ describe('review routes', () => {
 
     const afterPublish = await app.request(`/api/reviews?designerProfileId=${designer.id}`);
     expect(afterPublish.status).toBe(200);
-    await expect(afterPublish.json()).resolves.toMatchObject({
-      items: [{ id: submitted.id, status: 'published' }],
+    const published = publishedReviewsResponseSchema.parse(await afterPublish.json());
+    expect(published).toMatchObject({
+      items: [{ id: submitted.id }],
       averageRating: 5,
       reviewCount: 1,
     });
+    expect(published.items[0]).not.toHaveProperty('bookingId');
+    expect(published.items[0]).not.toHaveProperty('designerProfileId');
+    expect(published.items[0]).not.toHaveProperty('moderationRevision');
+    expect(published.items[0]).not.toHaveProperty('disputedAt');
+    expect(published.items[0]?.author).not.toHaveProperty('id');
+    expect(published.items[0]?.project).toMatchObject({ id: project.id });
+
+    await db
+      .update(schema.project)
+      .set({ status: 'draft' })
+      .where(eq(schema.project.id, project.id));
+    const afterUnpublish = publishedReviewsResponseSchema.parse(
+      await (await app.request(`/api/reviews?designerProfileId=${designer.id}`)).json(),
+    );
+    expect(afterUnpublish.items[0]?.project).toBeNull();
   });
 
   it('requires authentication for review submission', async () => {

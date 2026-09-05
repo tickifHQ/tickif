@@ -4,12 +4,31 @@ import {
   organizationReviewsResponseSchema,
   reviewResponseSchema,
 } from '@repo/contracts';
-import { db, eq, schema } from '@repo/db';
+import { and, db, eq, schema } from '@repo/db';
 import { makeDesigner, makeOrganization, makeTeam } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession, activateOrganization } from '../../helpers/auth.js';
 
 const body = 'A considered design and clear communication throughout the entire project.';
+function withoutSessionCache(cookie: string) {
+  return cookie
+    .split('; ')
+    .filter((value) => !value.startsWith('better-auth.session_data'))
+    .join('; ');
+}
+async function activateBranch(
+  cookie: string,
+  userId: string,
+  organizationId: string,
+  teamId: string,
+) {
+  const activeOrganizationCookie = await activateOrganization(cookie, organizationId);
+  await db
+    .update(schema.session)
+    .set({ activeTeamId: teamId })
+    .where(eq(schema.session.userId, userId));
+  return withoutSessionCache(activeOrganizationCookie);
+}
 async function fixture() {
   const author = await createRoleSession('+919800008101', 'visitor');
   const other = await createRoleSession('+919800008102', 'visitor');
@@ -24,7 +43,7 @@ async function fixture() {
     role: 'owner',
     createdAt: new Date(),
   });
-  const ownerCookie = await activateOrganization(owner.cookie, org.id);
+  const ownerCookie = await activateBranch(owner.cookie, owner.userId, org.id, profile.teamId);
   const submitted = await request('/api/reviews', 'POST', author.cookie, {
     designerProfileId: profile.id,
     rating: 4,
@@ -202,7 +221,7 @@ describe('review participant boundaries', () => {
       .set({ status: 'suspended', phoneNumberVerified: true })
       .where(eq(schema.user.id, author.userId));
     expect((await request('/api/reviews', 'POST', author.cookie, payload)).status).toBe(403);
-    const activated = await activateOrganization(owner.cookie, org.id);
+    const activated = await activateBranch(owner.cookie, owner.userId, org.id, profile.teamId);
     const foreign = await makeDesigner({ status: 'active' });
     expect(
       (await request(`/api/reviews/organization?designerProfileId=${foreign.id}`, 'GET', activated))
@@ -248,5 +267,75 @@ describe('review participant boundaries', () => {
         )
       ).status,
     ).toBe(403);
+  });
+
+  it('requires an active branch for organization reads and disputes', async () => {
+    const { owner, ownerCookie, admin, profile, review } = await fixture();
+    expect(
+      (
+        await request(
+          `/api/admin/reviews/${review.id}/publish?expectedRevision=0`,
+          'POST',
+          admin.cookie,
+        )
+      ).status,
+    ).toBe(200);
+    await db
+      .update(schema.session)
+      .set({ activeTeamId: null })
+      .where(eq(schema.session.userId, owner.userId));
+    const rollupCookie = withoutSessionCache(ownerCookie);
+
+    expect(
+      (
+        await request(
+          `/api/reviews/organization?designerProfileId=${profile.id}`,
+          'GET',
+          rollupCookie,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(
+          `/api/reviews/${review.id}/dispute?expectedRevision=1`,
+          'POST',
+          rollupCookie,
+          { note: 'A roll-up context must not select a branch implicitly.' },
+        )
+      ).status,
+    ).toBe(404);
+
+    await db
+      .update(schema.session)
+      .set({ activeTeamId: profile.teamId })
+      .where(eq(schema.session.userId, owner.userId));
+    await db
+      .delete(schema.teamMember)
+      .where(
+        and(
+          eq(schema.teamMember.teamId, profile.teamId),
+          eq(schema.teamMember.userId, owner.userId),
+        ),
+      );
+    expect(
+      (
+        await request(
+          `/api/reviews/organization?designerProfileId=${profile.id}`,
+          'GET',
+          rollupCookie,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(
+          `/api/reviews/${review.id}/dispute?expectedRevision=1`,
+          'POST',
+          rollupCookie,
+          { note: 'Revoked branch membership must prevent disputes.' },
+        )
+      ).status,
+    ).toBe(404);
   });
 });

@@ -1,4 +1,4 @@
-import { and, db, desc, eq, schema, sql } from '@repo/db';
+import { and, db, desc, eq, inArray, schema, sql } from '@repo/db';
 import type {
   AdminReviewsQuery,
   ListPublishedReviewsQuery,
@@ -12,10 +12,12 @@ export type ReviewRecord = typeof schema.review.$inferSelect;
 
 export type ReviewViewRecord = ReviewRecord & {
   designerOrgId: string;
+  designerTeamId: string;
   authorName: string;
   authorImage: string | null;
   projectTitle: string | null;
   projectSlug: string | null;
+  projectStatus: typeof schema.project.$inferSelect.status | null;
 };
 
 export type ReviewAggregateRecord = {
@@ -63,7 +65,7 @@ export type TransitionReviewParams = {
   requiredWriter?: {
     organizationId: string;
     userId: string;
-    teamId?: string | null;
+    teamId: string;
     sessionId?: string;
   };
 };
@@ -150,9 +152,17 @@ async function organizationWriter(
   );
 }
 
-async function participantFeedback(tx: Tx, reviewId: string) {
+type ParticipantFeedback = {
+  dispute: { action: ReviewModerationAction; note: string | null; createdAt: Date } | null;
+  resolution: { action: ReviewModerationAction; note: string | null; createdAt: Date } | null;
+};
+
+async function participantFeedback(tx: Tx, reviewIds: string[]) {
+  const feedback = new Map<string, ParticipantFeedback>();
+  if (reviewIds.length === 0) return feedback;
   const events = await tx
     .select({
+      reviewId: schema.reviewModerationEvent.reviewId,
       action: schema.reviewModerationEvent.action,
       note: schema.reviewModerationEvent.note,
       createdAt: schema.reviewModerationEvent.createdAt,
@@ -160,18 +170,35 @@ async function participantFeedback(tx: Tx, reviewId: string) {
     .from(schema.reviewModerationEvent)
     .where(
       and(
-        eq(schema.reviewModerationEvent.reviewId, reviewId),
+        inArray(schema.reviewModerationEvent.reviewId, reviewIds),
         sql`${schema.reviewModerationEvent.action} in ('dispute', 'resolve_publish', 'remove')`,
       ),
     )
     .orderBy(desc(schema.reviewModerationEvent.createdAt), desc(schema.reviewModerationEvent.id));
-  const disputeIndex = events.findIndex((event) => event.action === 'dispute');
-  const dispute = events[disputeIndex] ?? null;
-  const resolution =
-    disputeIndex > 0
-      ? (events.slice(0, disputeIndex).find((event) => event.action !== 'dispute') ?? null)
-      : null;
-  return { dispute, resolution };
+  for (const reviewId of reviewIds) {
+    const reviewEvents = events.filter((event) => event.reviewId === reviewId);
+    const disputeIndex = reviewEvents.findIndex((event) => event.action === 'dispute');
+    const dispute = reviewEvents[disputeIndex] ?? null;
+    const resolution =
+      disputeIndex > 0
+        ? (reviewEvents.slice(0, disputeIndex).find((event) => event.action !== 'dispute') ?? null)
+        : null;
+    feedback.set(reviewId, { dispute, resolution });
+  }
+  return feedback;
+}
+
+async function activeBranchMember(tx: Tx, teamId: string, userId: string): Promise<boolean> {
+  const [branch] = await tx
+    .select({ id: schema.team.id })
+    .from(schema.team)
+    .innerJoin(
+      schema.teamMember,
+      and(eq(schema.teamMember.teamId, teamId), eq(schema.teamMember.userId, userId)),
+    )
+    .where(and(eq(schema.team.id, teamId), eq(schema.team.frozen, false)))
+    .for('update');
+  return !!branch;
 }
 
 function reviewProjection() {
@@ -191,10 +218,12 @@ function reviewProjection() {
     createdAt: schema.review.createdAt,
     updatedAt: schema.review.updatedAt,
     designerOrgId: schema.designerProfile.orgId,
+    designerTeamId: schema.designerProfile.teamId,
     authorName: schema.user.name,
     authorImage: schema.user.image,
     projectTitle: schema.project.title,
     projectSlug: schema.project.slug,
+    projectStatus: schema.project.status,
   };
 }
 
@@ -294,73 +323,85 @@ async function aggregatePublished(
 
 export const reviewsRepository = {
   async findOwn(designerProfileId: string, scope: ReviewParticipantScope) {
-    return db.transaction(async (tx) => {
-      if (scope.activeOrgId || !(await sessionMatches(tx, scope)))
-        return { kind: 'forbidden' } as const;
-      const account = await eligibleAccount(tx, scope.userId);
-      if (!account) return { kind: 'forbidden' } as const;
-      const [review] = await reviewViewQuery(tx)
-        .where(
-          and(
-            eq(schema.review.designerProfileId, designerProfileId),
-            eq(schema.review.authorUserId, scope.userId),
-          ),
-        )
-        .limit(1);
-      return {
-        kind: 'ok',
-        item: review ? { review, feedback: await participantFeedback(tx, review.id) } : null,
-        phoneVerified: account.phoneNumberVerified === true,
-      } as const;
-    });
+    return db.transaction(
+      async (tx) => {
+        if (scope.activeOrgId || !(await sessionMatches(tx, scope)))
+          return { kind: 'forbidden' } as const;
+        const account = await eligibleAccount(tx, scope.userId);
+        if (!account) return { kind: 'forbidden' } as const;
+        const [review] = await reviewViewQuery(tx)
+          .where(
+            and(
+              eq(schema.review.designerProfileId, designerProfileId),
+              eq(schema.review.authorUserId, scope.userId),
+            ),
+          )
+          .limit(1);
+        const feedback = review ? await participantFeedback(tx, [review.id]) : null;
+        return {
+          kind: 'ok',
+          item: review
+            ? {
+                review,
+                feedback: feedback?.get(review.id) ?? { dispute: null, resolution: null },
+              }
+            : null,
+          phoneVerified: account.phoneNumberVerified === true,
+        } as const;
+      },
+      { isolationLevel: 'repeatable read' },
+    );
   },
 
   async listOrganization(query: OrganizationReviewsQuery, scope: ReviewParticipantScope) {
-    return db.transaction(async (tx) => {
-      if (
-        !scope.activeOrgId ||
-        !(await sessionMatches(tx, scope)) ||
-        !(await eligibleAccount(tx, scope.userId))
-      )
-        return { kind: 'forbidden' } as const;
-      const [profile] = await tx
-        .select({ orgId: schema.designerProfile.orgId, teamId: schema.designerProfile.teamId })
-        .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.id, query.designerProfileId));
-      if (
-        !profile ||
-        profile.orgId !== scope.activeOrgId ||
-        (scope.activeTeamId && scope.activeTeamId !== profile.teamId) ||
-        !(await organizationWriter(tx, scope.activeOrgId, scope.userId))
-      )
-        return { kind: 'forbidden' } as const;
-      const [branch] = await tx
-        .select({ frozen: schema.team.frozen })
-        .from(schema.team)
-        .where(eq(schema.team.id, profile.teamId));
-      if (!branch || branch.frozen) return { kind: 'forbidden' } as const;
-      const where = and(
-        eq(schema.review.designerProfileId, query.designerProfileId),
-        sql`${schema.review.status} in ('published', 'disputed', 'removed')`,
-        query.status ? eq(schema.review.status, query.status) : undefined,
-      );
-      const reviews = await reviewViewQuery(tx)
-        .where(where)
-        .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
-        .limit(query.limit)
-        .offset((query.page - 1) * query.limit);
-      const [count] = await tx
-        .select({ value: sql<number>`count(*)::int` })
-        .from(schema.review)
-        .where(where);
-      const items = await Promise.all(
-        reviews.map(async (review) => ({
+    return db.transaction(
+      async (tx) => {
+        if (
+          !scope.activeOrgId ||
+          !scope.activeTeamId ||
+          !(await sessionMatches(tx, scope)) ||
+          !(await eligibleAccount(tx, scope.userId))
+        )
+          return { kind: 'forbidden' } as const;
+        const [profile] = await tx
+          .select({ orgId: schema.designerProfile.orgId, teamId: schema.designerProfile.teamId })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.id, query.designerProfileId));
+        if (
+          !profile ||
+          profile.orgId !== scope.activeOrgId ||
+          scope.activeTeamId !== profile.teamId ||
+          !(await organizationWriter(tx, scope.activeOrgId, scope.userId))
+        )
+          return { kind: 'forbidden' } as const;
+        if (!(await activeBranchMember(tx, profile.teamId, scope.userId)))
+          return { kind: 'forbidden' } as const;
+        const where = and(
+          eq(schema.review.designerProfileId, query.designerProfileId),
+          sql`${schema.review.status} in ('published', 'disputed', 'removed')`,
+          query.status ? eq(schema.review.status, query.status) : undefined,
+        );
+        const reviews = await reviewViewQuery(tx)
+          .where(where)
+          .orderBy(desc(schema.review.updatedAt), desc(schema.review.id))
+          .limit(query.limit)
+          .offset((query.page - 1) * query.limit);
+        const [count] = await tx
+          .select({ value: sql<number>`count(*)::int` })
+          .from(schema.review)
+          .where(where);
+        const feedback = await participantFeedback(
+          tx,
+          reviews.map((review) => review.id),
+        );
+        const items = reviews.map((review) => ({
           review,
-          feedback: await participantFeedback(tx, review.id),
-        })),
-      );
-      return { kind: 'ok', items, total: count?.value ?? 0 } as const;
-    });
+          feedback: feedback.get(review.id) ?? { dispute: null, resolution: null },
+        }));
+        return { kind: 'ok', items, total: count?.value ?? 0 } as const;
+      },
+      { isolationLevel: 'repeatable read' },
+    );
   },
   async findAdminDetail(id: string) {
     return db.transaction(
@@ -655,7 +696,7 @@ export const reviewsRepository = {
       if (params.requiredWriter) {
         if (
           designer.orgId !== params.requiredWriter.organizationId ||
-          (params.requiredWriter.teamId && params.requiredWriter.teamId !== designer.teamId)
+          params.requiredWriter.teamId !== designer.teamId
         ) {
           return { kind: 'forbidden' } as const;
         }
@@ -666,11 +707,8 @@ export const reviewsRepository = {
           .for('update');
         if (!(await organizationWriter(tx, designer.orgId, params.requiredWriter.userId)))
           return { kind: 'forbidden' } as const;
-        const [branch] = await tx
-          .select({ frozen: schema.team.frozen })
-          .from(schema.team)
-          .where(eq(schema.team.id, designer.teamId));
-        if (!branch || branch.frozen) return { kind: 'forbidden' } as const;
+        if (!(await activeBranchMember(tx, designer.teamId, params.requiredWriter.userId)))
+          return { kind: 'forbidden' } as const;
       }
 
       const [updated] = await tx

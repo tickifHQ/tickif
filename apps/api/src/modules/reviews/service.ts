@@ -16,6 +16,7 @@ import type {
   OwnReviewResponse,
   OrganizationReviewsQuery,
   OrganizationReviewsResponse,
+  PublishedReview,
 } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -41,7 +42,6 @@ export type AdminReviewCaller = {
 function toResponse(row: ReviewViewRecord): ReviewResponse {
   return {
     id: row.id,
-    designerProfileId: row.designerProfileId,
     author: {
       id: row.authorUserId,
       name: row.authorName,
@@ -65,6 +65,30 @@ function toResponse(row: ReviewViewRecord): ReviewResponse {
     disputedAt: row.disputedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function toPublishedResponse(row: ReviewViewRecord): PublishedReview {
+  if (!row.publishedAt) throw new Error('Published review is missing its publication timestamp');
+  return {
+    id: row.id,
+    designerProfileId: row.designerProfileId,
+    author: {
+      name: row.authorName,
+      avatarUrl: row.authorImage,
+    },
+    project:
+      row.projectStatus === 'published' && row.projectId && row.projectTitle && row.projectSlug
+        ? {
+            id: row.projectId,
+            title: row.projectTitle,
+            slug: row.projectSlug,
+          }
+        : null,
+    verifiedConsultation: row.bookingId !== null,
+    rating: row.rating,
+    body: row.body,
+    publishedAt: row.publishedAt.toISOString(),
   };
 }
 
@@ -248,7 +272,7 @@ export const reviewsService = {
   async listPublished(query: ListPublishedReviewsQuery): Promise<PublishedReviewsResponse> {
     const { items, aggregate } = await reviewsRepository.listPublished(query);
     return {
-      items: items.map(toResponse),
+      items: items.map(toPublishedResponse),
       histogram: aggregate.histogram,
       averageRating: aggregate.averageRating,
       reviewCount: aggregate.reviewCount,
@@ -265,7 +289,13 @@ export const reviewsService = {
     expectedRevision?: number,
   ): Promise<ReviewResponse> {
     const review = await reviewsRepository.findById(id);
-    if (!review || !caller.activeOrgId || review.designerOrgId !== caller.activeOrgId) {
+    if (
+      !review ||
+      !caller.activeOrgId ||
+      !caller.activeTeamId ||
+      review.designerOrgId !== caller.activeOrgId ||
+      review.designerTeamId !== caller.activeTeamId
+    ) {
       throw AppError.notFound('Review not found');
     }
     if (review.status !== 'published') throw reviewTransitionError();

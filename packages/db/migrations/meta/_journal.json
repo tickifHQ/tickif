@@ -414,6 +414,13 @@
       "when": 1788613080937,
       "tag": "0060_light_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788625330825,
+      "tag": "0061_bizarre_stranger",
+      "breakpoints": true
     }
   ]
 }
