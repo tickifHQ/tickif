@@ -173,7 +173,6 @@ export const bookingsRepository = {
         )
         .limit(1);
       if (!designer) return { kind: 'designer_not_found' } as const;
-      if (!designer.phoneNumber) return { kind: 'designer_not_notifiable' } as const;
 
       const [ownStudio] = await tx
         .select({ id: schema.member.id })
@@ -196,6 +195,7 @@ export const bookingsRepository = {
         )
         .limit(1);
       if (ownStudio || ownProfile) return { kind: 'own_studio' } as const;
+      if (!designer.phoneNumber) return { kind: 'designer_not_notifiable' } as const;
 
       if (params.referredProjectId) {
         const [project] = await tx

@@ -39,7 +39,7 @@ const booking: BookingResponse = {
   preferredSlots: [{ date: '2026-10-01', window: 'morning' }],
   confirmedSlot: null,
   message: 'Kitchen plans',
-  requestedAt: '2026-09-05T01:00:00Z',
+  requestedAt: '2026-09-04T20:30:00Z',
   confirmedAt: null,
   completedAt: null,
   cancelledAt: null,
@@ -166,6 +166,16 @@ describe('consultation request', () => {
   });
 });
 describe('consultation lifecycle', () => {
+  it('renders request dates in IST and hides confirmation while cancellation is open', async () => {
+    const user = userEvent.setup();
+    render(<ConsultationList data={page()} scope="inbox" canWrite />);
+
+    expect(screen.getByText(/Requested 5 Sept 2026/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel consultation' }));
+    expect(screen.queryByRole('button', { name: 'Confirm consultation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm cancellation' })).toBeVisible();
+  });
+
   it('confirms a proposed slot using the rendered status', async () => {
     const user = userEvent.setup();
     render(<ConsultationList data={page()} scope="inbox" canWrite />);

@@ -1,6 +1,7 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import { config } from '../../packages/config/src/index';
-import { db, eq, schema } from '../../packages/db/src/index';
+import { db, desc, eq, schema } from '../../packages/db/src/index';
 import {
   assertTestDb,
   makeDesigner,
@@ -21,7 +22,9 @@ async function signIn(context: BrowserContext, phoneNumber: string) {
   const [otp] = await db
     .select()
     .from(schema.verification)
-    .where(eq(schema.verification.identifier, phoneNumber));
+    .where(eq(schema.verification.identifier, phoneNumber))
+    .orderBy(desc(schema.verification.createdAt))
+    .limit(1);
   const code = otp?.value.match(/^\d{4,8}/)?.[0];
   expect(code).toBeTruthy();
   expect(
@@ -39,55 +42,63 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
 }, testInfo) => {
   test.setTimeout(180000);
   await assertTestDb();
-  const visitorUser = await makeUser({
-    name: 'Consultation Journey Visitor',
-    email: 'consultation-visitor@example.test',
-    phoneNumber: '+919800009901',
-    phoneNumberVerified: true,
-    status: 'active',
-  });
-  const owner = await makeUser({
-    name: 'Consultation Journey Owner',
-    email: 'consultation-owner@example.test',
-    phoneNumber: '+919800009902',
-    phoneNumberVerified: true,
-    role: 'designer',
-    status: 'active',
-  });
-  const org = await makeOrganization({
-    name: 'Consultation Journey Studio',
-    slug: 'consultation-journey-studio',
-  });
-  const profile = await makeDesigner({
-    userId: owner.id,
-    orgId: org.id,
-    slug: org.slug,
-    displayName: org.name,
-    status: 'active',
-    phone: owner.phoneNumber,
-  });
-  await db
-    .insert(schema.member)
-    .values({
-      id: 'consultation-journey-owner',
+  const runId = randomUUID();
+  const phoneSuffix = [...runId.replaceAll('-', '').slice(0, 9)]
+    .map((character) => String.parseInt(character, 16) % 10)
+    .join('');
+  const cleanup: Array<() => Promise<unknown>> = [];
+  try {
+    const visitorUser = await makeUser({
+      name: `Consultation Journey Visitor ${runId.slice(0, 8)}`,
+      email: `consultation-visitor-${runId}@example.test`,
+      phoneNumber: `+919${phoneSuffix}`,
+      phoneNumberVerified: true,
+      status: 'active',
+    });
+    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, visitorUser.id)));
+    const owner = await makeUser({
+      name: `Consultation Journey Owner ${runId.slice(0, 8)}`,
+      email: `consultation-owner-${runId}@example.test`,
+      phoneNumber: `+918${phoneSuffix}`,
+      phoneNumberVerified: true,
+      role: 'designer',
+      status: 'active',
+    });
+    cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, owner.id)));
+    const org = await makeOrganization({
+      name: `Consultation Journey Studio ${runId.slice(0, 8)}`,
+      slug: `consultation-journey-studio-${runId}`,
+    });
+    cleanup.push(() => db.delete(schema.organization).where(eq(schema.organization.id, org.id)));
+    const profile = await makeDesigner({
+      userId: owner.id,
+      orgId: org.id,
+      slug: org.slug,
+      displayName: org.name,
+      status: 'active',
+      phone: owner.phoneNumber,
+    });
+    await db.insert(schema.member).values({
+      id: `consultation-journey-owner-${runId}`,
       organizationId: org.id,
       userId: owner.id,
       role: 'owner',
       createdAt: new Date(),
     });
-  const project = await makeProject({
-    designerId: profile.id,
-    title: 'Consultation Journey Kitchen',
-    status: 'published',
-  });
-  const visitorContext = await browser.newContext({ baseURL });
-  const designerContext = await browser.newContext({ baseURL });
-  const visitor = await visitorContext.newPage();
-  const designer = await designerContext.newPage();
-  const pageErrors: string[] = [];
-  visitor.on('pageerror', (error) => pageErrors.push(error.message));
-  designer.on('pageerror', (error) => pageErrors.push(error.message));
-  try {
+    const project = await makeProject({
+      designerId: profile.id,
+      title: 'Consultation Journey Kitchen',
+      status: 'published',
+    });
+    const visitorContext = await browser.newContext({ baseURL });
+    cleanup.push(() => visitorContext.close());
+    const designerContext = await browser.newContext({ baseURL });
+    cleanup.push(() => designerContext.close());
+    const visitor = await visitorContext.newPage();
+    const designer = await designerContext.newPage();
+    const pageErrors: string[] = [];
+    visitor.on('pageerror', (error) => pageErrors.push(error.message));
+    designer.on('pageerror', (error) => pageErrors.push(error.message));
     await signIn(visitorContext, visitorUser.phoneNumber!);
     await signIn(designerContext, owner.phoneNumber!);
     expect(
@@ -122,7 +133,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     // Keep this requester screen stale while the designer confirms the appointment.
     await designer.goto('/designer/consultations?status=requested');
     await expect(
-      designer.getByText(/Private contact: consultation-visitor@example.test/),
+      designer.getByText(new RegExp(`Private contact: ${visitorUser.email}`)),
     ).toBeVisible();
     await designer.getByLabel('Confirm preferred time').selectOption('1');
     await designer.getByRole('button', { name: 'Confirm consultation', exact: true }).click();
@@ -141,7 +152,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     const reviewLink = visitor.getByRole('link', { name: 'Review consultation' });
     await expect(reviewLink).toHaveAttribute(
       'href',
-      /\/d\/consultation-journey-studio\?bookingId=.*#tickif-reviews/,
+      new RegExp(`/d/${org.slug}\\?bookingId=.*#tickif-reviews`),
     );
     await reviewLink.click();
     await expect(
@@ -180,10 +191,6 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     ).toBe(true);
     expect(pageErrors).toEqual([]);
   } finally {
-    await visitorContext.close();
-    await designerContext.close();
-    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
-    await db.delete(schema.user).where(eq(schema.user.id, visitorUser.id));
-    await db.delete(schema.user).where(eq(schema.user.id, owner.id));
+    for (const dispose of cleanup.reverse()) await dispose();
   }
 });

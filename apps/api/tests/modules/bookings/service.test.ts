@@ -150,6 +150,17 @@ describe('bookingsService.create', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
+  it('treats booking your own studio as an authorization failure', async () => {
+    vi.mocked(bookingsRepository.createWithLead).mockResolvedValue({ kind: 'own_studio' });
+
+    await expect(
+      bookingsService.create(
+        { designerProfileId: row().designerProfileId, preferredSlots: [slot] },
+        caller,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
   it('rejects designers without a notification destination', async () => {
     vi.mocked(bookingsRepository.createWithLead).mockResolvedValue({
       kind: 'designer_not_notifiable',

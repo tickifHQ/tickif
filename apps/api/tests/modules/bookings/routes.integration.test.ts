@@ -113,6 +113,32 @@ describe('consultation participant boundaries', () => {
     await db.update(schema.user).set({ status: 'deleted' }).where(eq(schema.user.id, userId));
     expect((await requestJson('/api/bookings/mine', 'GET', cookie)).status).toBe(403);
   });
+
+  it('repairs a stale branch session before exposing requester contact details', async () => {
+    const designerSession = await makeDesignerSession('+919800009110');
+    const requesterSession = await createRoleSession('+919800009111', 'visitor');
+    await makeConsultationBooking({
+      organizationId: designerSession.designer.orgId,
+      designerProfileId: designerSession.designer.id,
+      requesterId: requesterSession.userId,
+      preferredSlots: [slot],
+    });
+    await db
+      .delete(schema.teamMember)
+      .where(
+        and(
+          eq(schema.teamMember.teamId, designerSession.designer.teamId),
+          eq(schema.teamMember.userId, designerSession.userId),
+        ),
+      );
+
+    const response = await app.request('/api/bookings', {
+      headers: { cookie: designerSession.cookie },
+    });
+
+    expect(response.status).toBe(422);
+    expect(JSON.stringify(await response.json())).not.toContain(requesterSession.userId);
+  });
   it('blocks studio members booking themselves even from personal context', async () => {
     const { cookie, userId } = await createRoleSession('+919800009107', 'designer');
     const designer = await makeDesigner({ userId, status: 'active', phone: '+919800009108' });
@@ -120,7 +146,7 @@ describe('consultation participant boundaries', () => {
       designerProfileId: designer.id,
       preferredSlots: [slot],
     });
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
       error: { message: expect.stringContaining('own studio') },
     });

@@ -28,6 +28,11 @@ import { userFacingErrorMessage } from '@/lib/user-facing-error';
 const slotLabel = (slot: BookingResponse['preferredSlots'][number]) =>
   `${slot.date} · ${slot.window} IST`;
 
+const requestedDateFormatter = new Intl.DateTimeFormat('en-IN', {
+  dateStyle: 'medium',
+  timeZone: 'Asia/Kolkata',
+});
+
 function ConsultationCard({
   booking,
   scope,
@@ -82,7 +87,7 @@ function ConsultationCard({
           {scope === 'mine' ? booking.designerProfile.displayName : booking.requester.name}
         </CardTitle>
         <CardDescription>
-          Requested {booking.requestedAt.slice(0, 10)} ·{' '}
+          Requested {requestedDateFormatter.format(new Date(booking.requestedAt))} ·{' '}
           {booking.referredProject?.title ?? 'General consultation'}
         </CardDescription>
         <Badge variant="outline">
@@ -117,7 +122,7 @@ function ConsultationCard({
             {booking.cancelReason}
           </p>
         ) : null}
-        {scope === 'inbox' && canWrite && booking.status === 'requested' && !changed ? (
+        {scope === 'inbox' && canWrite && booking.status === 'requested' && !action && !changed ? (
           <fieldset disabled={busy} className="flex flex-col gap-3">
             <SelectField
               label="Confirm preferred time"

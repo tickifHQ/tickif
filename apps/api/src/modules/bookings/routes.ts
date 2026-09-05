@@ -11,7 +11,7 @@ import {
   listBookingsResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireResolvedAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { bookingsService } from './service.js';
@@ -42,7 +42,7 @@ const createBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Request a consultation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     body: {
       content: { 'application/json': { schema: createBookingSchema } },
@@ -67,7 +67,7 @@ const listMineRoute = createRoute({
   tags: ['Bookings'],
   summary: 'List consultations requested by the caller',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: { query: listBookingsQuerySchema },
   responses: {
     200: {
@@ -85,7 +85,7 @@ const listInboxRoute = createRoute({
   tags: ['Bookings'],
   summary: 'List consultations for the active designer organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: { query: listBookingsQuerySchema },
   responses: {
     200: {
@@ -104,7 +104,7 @@ const confirmBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Confirm one of the requested consultation slots',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     params: bookingIdParamSchema,
     query: bookingMutationQuerySchema,
@@ -131,7 +131,7 @@ const completeBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Mark a confirmed consultation complete',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: { params: bookingIdParamSchema, query: bookingMutationQuerySchema },
   responses: {
     200: {
@@ -151,7 +151,7 @@ const cancelBookingRoute = createRoute({
   tags: ['Bookings'],
   summary: 'Cancel an open consultation',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   request: {
     params: bookingIdParamSchema,
     query: bookingMutationQuerySchema,

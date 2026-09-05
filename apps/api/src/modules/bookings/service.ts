@@ -176,7 +176,7 @@ export const bookingsService = {
       case 'open_limit_reached':
         throw AppError.conflict('You already have three open consultations with this designer');
       case 'own_studio':
-        throw AppError.unprocessable('You cannot book a consultation with your own studio');
+        throw AppError.forbidden('You cannot book a consultation with your own studio');
       case 'created':
         return toResponse(result.booking);
     }
