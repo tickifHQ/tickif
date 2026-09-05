@@ -12,6 +12,35 @@ const productionEnvironment = {
 } satisfies NodeJS.ProcessEnv;
 
 describe('email environment configuration', () => {
+  it('defaults phone OTP delivery to SMS', () => {
+    expect(parseConfig(productionEnvironment).PHONE_OTP_DELIVERY).toBe('sms');
+  });
+
+  it('requires an inbox and credentials for email phone OTP delivery in every environment', () => {
+    const environment = { ...productionEnvironment, NODE_ENV: 'test', PHONE_OTP_DELIVERY: 'email' };
+    expect(() => parseConfig(environment)).toThrow('PHONE_OTP_EMAIL_TO and RESEND_API_KEY');
+    expect(() => parseConfig({ ...environment, PHONE_OTP_EMAIL_TO: 'tester@example.com' })).toThrow(
+      'RESEND_API_KEY',
+    );
+    expect(() => parseConfig({ ...environment, RESEND_API_KEY: 'test-key' })).toThrow(
+      'PHONE_OTP_EMAIL_TO',
+    );
+    expect(
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_TO: 'tester@example.com',
+        RESEND_API_KEY: 'test-key',
+      }).PHONE_OTP_DELIVERY,
+    ).toBe('email');
+    expect(() =>
+      parseConfig({
+        ...environment,
+        PHONE_OTP_EMAIL_TO: 'invalid',
+        RESEND_API_KEY: 'test-key',
+      }),
+    ).toThrow('PHONE_OTP_EMAIL_TO');
+  });
+
   it('requires an explicit Resend API key in production', () => {
     expect(() => assertProductionEmailConfig(productionEnvironment)).toThrow(
       'RESEND_API_KEY: required when NODE_ENV=production',

@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { ACCOUNT_STATUS_VALUES, ADMIN_PLATFORM_ROLES, PLATFORM_ROLE } from '@repo/contracts';
 import { and, db, eq, inArray, isNull, or, schema } from '@repo/db';
 import { assertProductionEmailConfig, config } from '@repo/config';
-import { enqueueSms } from '@repo/queue';
+import { sendPhoneOtp } from './phone-otp.js';
 import { ac, orgAc, orgRoles, roles } from './permissions.js';
 import {
   organizationMembershipLimit,
@@ -553,7 +553,7 @@ export const auth = betterAuth({
   plugins: [
     phoneNumber({
       sendOTP: async ({ phoneNumber: phone, code }) => {
-        await enqueueSms({ phoneNumber: phone, code });
+        await sendPhoneOtp({ phoneNumber: phone, code });
       },
       otpLength: 6,
       expiresIn: 300,

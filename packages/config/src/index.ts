@@ -128,6 +128,9 @@ const envSchema = z.object({
 
   // SMS provider. Selection is explicit; credentials and workflows are per-provider.
   SMS_PROVIDER: z.enum(['console', 'novu']).default('console'),
+  // Temporary phone-login delivery override: all codes go to one test inbox.
+  PHONE_OTP_DELIVERY: z.enum(['sms', 'email']).default('sms'),
+  PHONE_OTP_EMAIL_TO: z.preprocess(blankStringToUndefined, z.email().optional()),
   NOVU_SECRET_KEY: z.string().trim().min(1).optional(),
   NOVU_OTP_WORKFLOW_ID: z.string().trim().min(1).optional(),
   NOVU_BOOKING_WORKFLOW_ID: z.string().trim().min(1).optional(),
@@ -325,6 +328,11 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
+  if (env.PHONE_OTP_DELIVERY === 'email') {
+    if (!env.PHONE_OTP_EMAIL_TO || !env.RESEND_API_KEY) {
+      throw new Error('Email OTP delivery requires PHONE_OTP_EMAIL_TO and RESEND_API_KEY');
+    }
+  }
   assertProductionMediaConfig(env);
   assertProductionSmsConfig(env);
   return {
