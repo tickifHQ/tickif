@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+
 const mocks = vi.hoisted(() => ({
   session: null as {
     user: { id: string; email: string; phoneNumber: string | null };
