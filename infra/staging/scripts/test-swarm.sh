@@ -74,11 +74,16 @@ bash infra/staging/scripts/deploy.sh "$fixture/env"
 docker service update --detach=true --update-order stop-first --update-failure-action pause \
   --env-add REDIS_URL=redis://:synthetic-invalid-password@redis:6379 "${STACK_NAME}_worker"
 bad_worker_observed=false
+candidate=''
+candidate_since=0
 for ((i=0;i<90;i++)); do
   worker=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_worker")
   if [[ -n "$worker" ]] && docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$worker" | grep -q '^REDIS_URL=redis://:synthetic-invalid-password@redis:6379$'; then
+    if [[ "$candidate" != "$worker" ]]; then candidate=$worker; candidate_since=$SECONDS; fi
     response=$(docker exec "$worker" node -e "Promise.all(['/livez','/readyz'].map(p=>fetch('http://127.0.0.1:3002'+p).then(r=>r.status))).then(s=>console.log(s.join(','))).catch(()=>process.exit(1))" 2>/dev/null || true)
-    if [[ "$response" == 200,503 ]]; then bad_worker_observed=true; break; fi
+    # Outlast startup and at least one ten-second readiness refresh, so initial
+    # unready state alone cannot make an implementation ignoring Redis pass.
+    if [[ "$response" == 200,503 ]] && (( SECONDS - candidate_since >= 15 )); then bad_worker_observed=true; break; fi
   fi
   sleep 2
 done

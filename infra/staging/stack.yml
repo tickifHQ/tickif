@@ -54,13 +54,15 @@ services:
       VOLUMES: '0'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - type: tmpfs
+        target: /run
+      - type: tmpfs
+        target: /tmp
+      - type: tmpfs
+        target: /var/lib/haproxy
     networks:
       - socket_proxy
     read_only: true
-    tmpfs:
-      - /run
-      - /tmp
-      - /var/lib/haproxy
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -108,12 +110,12 @@ services:
         mode: ingress
     volumes:
       - traefik_acme:/letsencrypt
+      - type: tmpfs
+        target: /tmp
     networks:
       - edge
       - socket_proxy
     read_only: true
-    tmpfs:
-      - /tmp
     cap_drop:
       - ALL
     cap_add:
@@ -161,8 +163,9 @@ services:
     networks:
       - edge
     read_only: true
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
     cap_drop:
       - ALL
     security_opt:
@@ -263,8 +266,9 @@ services:
       - edge
       - backend
     read_only: true
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
     cap_drop:
       - ALL
     security_opt:
@@ -321,8 +325,9 @@ services:
     networks:
       - backend
     read_only: true
-    tmpfs:
-      - /tmp
+    volumes:
+      - type: tmpfs
+        target: /tmp
     cap_drop:
       - ALL
     security_opt:
