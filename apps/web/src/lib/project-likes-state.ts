@@ -5,6 +5,7 @@ type Waiter = { resolve: (state: ProjectLikeState) => void; reject: (error: Erro
 type Batch = Map<string, Waiter[]>;
 const batches = new Map<string, Batch>();
 const subscribers = new Map<string, Set<(state: ProjectLikeState) => void>>();
+const latestMutations = new Map<string, symbol>();
 const subscriptionKey = (identity: string, projectId: string) =>
   JSON.stringify([identity, projectId]);
 
@@ -74,4 +75,29 @@ export function subscribeProjectLikeState(
 export function publishProjectLikeState(identity: string, state: ProjectLikeState) {
   for (const listener of subscribers.get(subscriptionKey(identity, state.projectId)) ?? [])
     listener(state);
+}
+
+/** Orders writes shared by duplicate controls so a late response cannot restore stale state. */
+export function beginProjectLikeMutation(identity: string, projectId: string): symbol {
+  const key = subscriptionKey(identity, projectId);
+  const token = Symbol();
+  latestMutations.set(key, token);
+  return token;
+}
+
+export function isLatestProjectLikeMutation(
+  identity: string,
+  projectId: string,
+  token: symbol,
+): boolean {
+  return latestMutations.get(subscriptionKey(identity, projectId)) === token;
+}
+
+export function finishProjectLikeMutation(
+  identity: string,
+  projectId: string,
+  token: symbol,
+): void {
+  const key = subscriptionKey(identity, projectId);
+  if (latestMutations.get(key) === token) latestMutations.delete(key);
 }

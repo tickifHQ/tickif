@@ -240,6 +240,55 @@ describe('ProjectLikeButton', () => {
     expect(screen.getAllByText('3')).toHaveLength(2);
     expect(mocks.get).toHaveBeenCalledTimes(1);
   });
+  it('ignores an older mutation response that arrives after a newer unlike', async () => {
+    signIn();
+    let finishOlderLike: ((value: ReturnType<typeof response>) => void) | undefined;
+    let finishNewerLike: ((value: ReturnType<typeof response>) => void) | undefined;
+    mocks.put
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOlderLike = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishNewerLike = resolve;
+        }),
+      );
+    render(
+      <>
+        {view()}
+        {view()}
+      </>,
+    );
+    await screen.findAllByText('2');
+    const buttons = screen.getAllByRole('button', { name: 'Like project' });
+    fireEvent.click(buttons[0]!);
+    fireEvent.click(buttons[1]!);
+    await act(async () => {
+      finishNewerLike?.(response({ ...state, liked: true, likeCount: 3 }));
+    });
+    const unlike = await waitFor(() => {
+      const button = screen
+        .getAllByRole('button', { name: 'Unlike project' })
+        .find((candidate) => !candidate.hasAttribute('disabled'));
+      expect(button).toBeDefined();
+      return button!;
+    });
+    fireEvent.click(unlike);
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Like project' })
+          .every((button) => button.getAttribute('aria-pressed') === 'false'),
+      ).toBe(true),
+    );
+    await act(async () => {
+      finishOlderLike?.(response({ ...state, liked: true, likeCount: 3 }));
+    });
+    expect(screen.getAllByRole('button', { name: 'Like project' })).toHaveLength(2);
+    expect(screen.getAllByText('2')).toHaveLength(2);
+  });
   it('reloads after logout and for a new user without reusing personalized state', async () => {
     signIn();
     mocks.get.mockResolvedValueOnce(response({ projects: [{ ...state, liked: true }] }));
