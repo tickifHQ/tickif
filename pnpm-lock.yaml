@@ -500,6 +500,12 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.62.1
+      '@repo/config':
+        specifier: workspace:*
+        version: link:../packages/config
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../packages/db
       '@repo/search':
         specifier: workspace:*
         version: link:../packages/search

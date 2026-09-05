@@ -8,7 +8,7 @@ type PublicNavigationItem = { href: string; label: string } | { href?: never; la
 
 const navigationItems = [
   { href: '/', label: 'Explore' },
-  { label: 'Designers' },
+  { href: '/designers', label: 'Designers' },
   { label: 'Cost Calculator' },
   { href: '/enquiries', label: 'Your Enquiries' },
   { label: 'For you' },
