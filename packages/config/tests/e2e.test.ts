@@ -13,9 +13,11 @@ describe('isolated E2E environment', () => {
   it.each([
     { NODE_ENV: 'production' },
     { DATABASE_URL_TEST: 'postgresql://tickif:tickif@localhost:5432/tickif' },
+    { DATABASE_URL_TEST: 'postgresql://tickif:tickif@localhost:5432/tickif_test' },
     { DATABASE_URL_TEST: 'postgresql://tickif:tickif@production.example:5432/tickif_test' },
     { DATABASE_URL: 'postgresql://tickif:tickif@localhost:5432/tickif' },
     { REDIS_URL_TEST: 'redis://localhost:6379/0' },
+    { REDIS_URL_TEST: 'redis://localhost:6379/15' },
     { TYPESENSE_COLLECTION_PREFIX: 'tickif' },
     { R2_ENDPOINT: 'https://example.r2.cloudflarestorage.com' },
     { R2_BUCKET: 'production' },

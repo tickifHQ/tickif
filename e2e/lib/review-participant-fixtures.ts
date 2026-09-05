@@ -52,6 +52,14 @@ export async function createReviewParticipantFixture() {
       status: 'active',
     });
     userIds.push(author.id);
+    const rejectedAuthor = await makeUser({
+      name: 'Review Rejection Visitor',
+      email: `review-rejected-${suffix}@example.test`,
+      phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
+      phoneNumberVerified: true,
+      status: 'active',
+    });
+    userIds.push(rejectedAuthor.id);
     const owner = await makeUser({
       name: 'Review Journey Designer',
       email: `review-journey-designer-${suffix}@example.test`,
@@ -94,6 +102,7 @@ export async function createReviewParticipantFixture() {
     let cleaned = false;
     return {
       author,
+      rejectedAuthor,
       owner,
       admin,
       organization,

@@ -66,8 +66,8 @@ coverage gate.
 - Existing billing, personal settings, designer directory and homepage pagination
   specs remain in the same complete run.
 
-`test-results/e2e-results.json` is checked for missing, skipped, flaky or failed
-critical groups. Screenshots and failed-run traces are in `test-results/e2e` and
+`test-results/e2e-results.json` is checked against the complete 25-test manifest;
+missing, filtered, skipped, retried or failed tests fail the gate. Screenshots and failed-run traces are in `test-results/e2e` and
 uploaded as the `critical-e2e-evidence` workflow artifact. The repository's ordinary
 CI independently runs typecheck, lint, unit/integration tests and builds.
 
@@ -109,15 +109,10 @@ fixture launcher at staging.
 Capture pass/fail and provider event references for each step. Until these are
 executed, provider smoke remains pending even when the local critical suite is green.
 
-## Integration snapshot
+## Integration base
 
-This audit task uses a separate synthetic integration base, not merged PRs:
-main `9029d46`, admin reviews `e9ff0bf`, project moderation `038d4fe`, billing
-`2873822`, likes `49ae55f`, personal settings `f1d692a`, designer discovery
-`8d0c594`, participant reviews `69ec866`, consultations `0af5ca1`, and the runtime
-dependency fix from deployment `2b15f40`. KYC and pagination are already in that
-main snapshot. Consultation follow-ups `7df2cf9`, `2d4c246` and `0dfaaf5` add the
-validated response types, web type fixes and the booking CTA hydration fix found
-by this browser suite. The audit12 PR targets `codex/staging-12-integration-main` so its diff
-contains the harness and coverage changes. Retarget/rebase after the feature PRs
-are incorporated; do not merge the synthetic integration branch as a deployment.
+This suite was developed on a temporary synthetic integration branch while its
+dependent feature PRs were still in flight. After those dependencies landed, the
+14 E2E-focused commits were replayed onto `main` at `e142a04`; the PR diff contains
+the harness, coverage changes, and direct worker runtime declarations required by
+the built E2E launcher. The synthetic integration branch is not a deployment source.

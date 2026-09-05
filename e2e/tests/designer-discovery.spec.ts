@@ -115,10 +115,10 @@ test.describe('public designer discovery', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/designers?q=${term}&citySlugs=pune`);
     await expect(
-      page
-        .getByRole('navigation', { name: 'Mobile primary' })
-        .getByRole('link', { name: 'Designers', exact: true }),
-    ).toBeVisible();
+      page.getByRole('navigation', { name: 'Mobile primary' }).getByText('Designers', {
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('article')).toHaveCount(1);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
