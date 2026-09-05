@@ -45,12 +45,12 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
     ),
   ),
   isApplicationEditable: vi.fn(
-    (application: { status: string; expiresAt: Date | null }) =>
+    (application: { status: string; expiresAt: Date | null }, now = new Date()) =>
       application.status === 'draft' ||
       application.status === 'rejected' ||
       (application.status === 'verified' &&
         application.expiresAt !== null &&
-        application.expiresAt <= new Date()),
+        application.expiresAt <= now),
   ),
   verificationsRepository: {
     getOrCreateForOrganization: vi.fn(),
@@ -72,7 +72,7 @@ vi.mock('../../../src/modules/verifications/repository.js', () => ({
 }));
 
 const { verificationsService } = await import('../../../src/modules/verifications/service.js');
-const { verificationsRepository } =
+const { isApplicationEditable, verificationsRepository } =
   await import('../../../src/modules/verifications/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
 const { deleteObject, presignDownload, presignUpload } = await import('@repo/storage');
@@ -247,6 +247,10 @@ describe('verificationsService', () => {
     await expect(verificationsService.getState(caller)).resolves.toMatchObject({
       status: VERIFICATION_EFFECTIVE_STATUS.EXPIRED,
     });
+    expect(isApplicationEditable).toHaveBeenCalledWith(
+      expect.objectContaining({ status: VERIFICATION_APPLICATION_STATUS.VERIFIED }),
+      new Date('2026-08-13T00:00:00.000Z'),
+    );
   });
 
   it('rejects submission when a server-derived requirement is missing', async () => {

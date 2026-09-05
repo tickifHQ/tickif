@@ -1071,11 +1071,14 @@ export const verificationsRepository = {
     });
   },
 
-  async revokeApproval(input: {
-    applicationId: string;
-    reviewerId: string;
-    revocation: RevokeVerificationInput;
-  }): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
+  async revokeApproval(
+    input: {
+      applicationId: string;
+      reviewerId: string;
+      revocation: RevokeVerificationInput;
+    },
+    now = new Date(),
+  ): Promise<VerificationApplicationRecord | VerificationMutationFailure> {
     return db.transaction(async (tx) => {
       const [application] = await tx
         .select()
@@ -1084,11 +1087,14 @@ export const verificationsRepository = {
         .for('update')
         .limit(1);
       if (!application) return VERIFICATION_MUTATION_RESULT.NOT_FOUND;
-      if (application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED) {
+      if (
+        application.status !== VERIFICATION_APPLICATION_STATUS.VERIFIED ||
+        (application.expiresAt !== null && application.expiresAt <= now)
+      ) {
         return VERIFICATION_MUTATION_RESULT.STATE_CHANGED;
       }
 
-      const revokedAt = new Date();
+      const revokedAt = now;
       const nextAttempt = application.attempt + 1;
       const [updated] = await tx
         .update(schema.verificationApplication)

@@ -167,6 +167,41 @@ describe('verification repository lifecycle', () => {
     );
   });
 
+  it('keeps an expired approval read-only at the exact expiry boundary', async () => {
+    const { application } = await setupApplication();
+    const reviewer = await makeUser({ role: PLATFORM_ROLE.ADMIN });
+    const expiry = new Date('2026-11-01T09:00:00.000Z');
+    await db
+      .update(schema.verificationApplication)
+      .set({
+        status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+        submittedAt: new Date('2026-09-01T08:00:00.000Z'),
+        reviewedAt: new Date('2026-09-01T09:00:00.000Z'),
+        reviewedByUserId: reviewer.id,
+        approvedAt: new Date('2026-09-01T09:00:00.000Z'),
+        expiresAt: expiry,
+      })
+      .where(eq(schema.verificationApplication.id, application.id));
+
+    await expect(
+      verificationsRepository.revokeApproval(
+        {
+          applicationId: application.id,
+          reviewerId: reviewer.id,
+          revocation: { note: 'This expired approval must remain read-only.' },
+        },
+        expiry,
+      ),
+    ).resolves.toBe(VERIFICATION_MUTATION_RESULT.STATE_CHANGED);
+    await expect(verificationsRepository.findAdminDetail(application.id)).resolves.toMatchObject({
+      application: {
+        status: VERIFICATION_APPLICATION_STATUS.VERIFIED,
+        attempt: application.attempt,
+        expiresAt: expiry,
+      },
+    });
+  });
+
   it('filters the admin queue into new, re-review, accepted, and changes-requested tabs', async () => {
     const newSubmission = await setupApplication('+919800000011');
     const reReview = await setupApplication('+919800000012');

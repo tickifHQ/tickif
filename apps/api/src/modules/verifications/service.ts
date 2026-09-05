@@ -186,10 +186,11 @@ async function stateForContext(
     .reverse()
     .find((event) => event.action === VERIFICATION_REVIEW_ACTION.APPROVAL_REVOKED);
   const canEditIdentity = context.ownerUserId === callerUserId;
+  const now = new Date();
   return {
     applicationId: context.application.id,
-    status: effectiveStatus(context.application),
-    applicationEditable: isApplicationEditable(context.application),
+    status: effectiveStatus(context.application, now),
+    applicationEditable: isApplicationEditable(context.application, now),
     attempt: context.application.attempt,
     identity: {
       ownerName: context.ownerName,
