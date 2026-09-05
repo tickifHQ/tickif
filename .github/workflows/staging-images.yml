@@ -25,7 +25,15 @@ jobs:
         env:
           REGISTRY: localhost:5000/tickif
           STAGING_DOMAIN: staging.example.com
-        run: bash deploy/build.sh
+        run: |
+          printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-must-not-enter-images' > .env.production
+          printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-nested-secret' > apps/web/.env.local
+          bash deploy/build.sh
+          revision=$(git rev-parse HEAD)
+          for service in api worker web; do
+            docker run --rm --entrypoint sh "localhost:5000/tickif/$service:$revision" \
+              -c 'test ! -e /app/.env.production && test ! -e /app/apps/web/.env.local'
+          done
       - name: Test release on the disposable runner Swarm
         run: bash deploy/test-swarm.sh
       - name: Service diagnostics
