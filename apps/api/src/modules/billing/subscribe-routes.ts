@@ -212,42 +212,6 @@ const paymentsRoute = createRoute({
   },
 });
 
-const paymentMethodRoute = createRoute({
-  method: 'post',
-  path: '/payment-method',
-  tags: ['Billing'],
-  summary: 'Open Razorpay Checkout to update an existing subscription payment method',
-  middleware: [requireAuth] as const,
-  security: [{ cookieAuth: [] }],
-  responses: {
-    200: {
-      description: 'Existing subscription checkout',
-      content: { 'application/json': { schema: billingCheckoutResponseSchema } },
-    },
-    401: { description: 'Unauthorized' },
-    403: { description: 'Billing access required' },
-    404: { description: 'No subscription' },
-    409: { description: 'Subscription is not recoverable' },
-  },
-});
-const paymentsRoute = createRoute({
-  method: 'get',
-  path: '/payments',
-  tags: ['Billing'],
-  summary: 'List recorded payments for the active organization',
-  middleware: [requireAuth] as const,
-  security: [{ cookieAuth: [] }],
-  request: { query: billingPaymentsQuerySchema },
-  responses: {
-    200: {
-      description: 'Payment history',
-      content: { 'application/json': { schema: billingPaymentsResponseSchema } },
-    },
-    401: { description: 'Unauthorized' },
-    403: { description: 'Billing access required' },
-  },
-});
-
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
