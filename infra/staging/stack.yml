@@ -121,7 +121,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ['CMD', 'traefik', 'healthcheck', '--ping']
+      test: ['CMD', 'traefik', 'healthcheck', '--ping', '--configFile=/etc/traefik/static.yml']
       interval: 10s
       timeout: 3s
       retries: 3
