@@ -47,6 +47,14 @@ describe('review routes', () => {
     ).toBe(422);
     expect(
       (
+        await app.request(`${detailUrl}/publish?expectedRevision=`, {
+          method: 'POST',
+          headers: { cookie: admin.cookie },
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
         await app.request(`${detailUrl}/publish?expectedRevision=99`, {
           method: 'POST',
           headers: { cookie: admin.cookie },

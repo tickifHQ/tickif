@@ -13,6 +13,13 @@ const PROFILE_ID = '11111111-1111-4111-8111-111111111111';
 describe('review contracts', () => {
   it('requires a nonnegative revision for admin decisions', () => {
     expect(adminReviewDecisionQuerySchema.safeParse({}).success).toBe(false);
+    expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '' }).success).toBe(false);
+    expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '  ' }).success).toBe(
+      false,
+    );
+    expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '1e2' }).success).toBe(
+      false,
+    );
     expect(adminReviewDecisionQuerySchema.safeParse({ expectedRevision: '-1' }).success).toBe(
       false,
     );
