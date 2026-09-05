@@ -10,6 +10,7 @@ RUN pnpm --filter @repo/api... build
 
 FROM node:22-slim AS runtime
 WORKDIR /app
+ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/* \

@@ -85,6 +85,19 @@ done
 "$key_ready" || exit 1
 docker service rm staging-key-fixture
 bash deploy/release.sh --hold-traffic
+# A bad mounted credential must fail the release and leave all traffic/writers closed.
+good_secret=$APP_SECRET
+export APP_SECRET=tickif_staging_app_invalid
+printf '%s\n' 'BETTER_AUTH_SECRET=too-short' >"$fixture/invalid"
+docker secret create "$APP_SECRET" "$fixture/invalid"
+if bash deploy/release.sh --hold-traffic; then
+  echo 'Invalid secret unexpectedly passed the release gate' >&2
+  exit 1
+fi
+for service in edge api web worker; do
+  test "$(docker service inspect "tickif-staging_$service" --format '{{.Spec.Mode.Replicated.Replicas}}')" = 0
+done
+export APP_SECRET=$good_secret
 # A second release proves completed one-shot tasks are not mistaken for the new run.
 bash deploy/release.sh --hold-traffic
 test "$(docker service inspect tickif-staging_edge --format '{{.Spec.Mode.Replicated.Replicas}}')" = 0
