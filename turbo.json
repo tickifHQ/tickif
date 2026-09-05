@@ -20,7 +20,8 @@
     "API_URL",
     "NEXT_PUBLIC_API_URL",
     "NOVU_BOOKING_WORKFLOW_ID",
-    "DATABASE_URL_TEST"
+    "DATABASE_URL_TEST",
+    "REDIS_URL_TEST"
   ],
   "tasks": {
     "build": {
@@ -39,7 +40,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "tests/**", "vitest.config.ts"]
+      "cache": false
     },
     "test:watch": {
       "cache": false,

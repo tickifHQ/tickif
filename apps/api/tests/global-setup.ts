@@ -1,10 +1,12 @@
-import { migrateTestDb } from '@repo/db/testing';
-import { QUEUES } from '@repo/queue';
-import { testDatabaseUrl, testRedisUrl } from '@repo/vitest-config/node';
+import { installTestEnv, testDatabaseUrl, testRedisUrl } from '@repo/vitest-config/node';
 import { Queue } from 'bullmq';
+import type { TestProject } from 'vitest/node';
 
 /** Runs once before the integration project: migrate the test DB + clear the test sms queue. */
-export default async function setup() {
+export default async function setup(project: TestProject) {
+  const restoreEnvironment = installTestEnv(project.config.env);
+  const { migrateTestDb } = await import('@repo/db/testing');
+  const { QUEUES } = await import('@repo/queue');
   const url = testDatabaseUrl();
   await migrateTestDb(url);
 
@@ -26,4 +28,5 @@ export default async function setup() {
 
   // Visible confirmation that integration tests target a *_test database.
   console.log(`[test] integration DB migrated: ${url.replace(/:[^:@/]+@/, ':***@')}`);
+  return restoreEnvironment;
 }

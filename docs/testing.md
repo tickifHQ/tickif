@@ -35,7 +35,8 @@ integration project wires up the DB.
 ## Commands
 
 ```bash
-pnpm test            # all unit + integration (turbo, cached)
+pnpm verify          # clean gate: typecheck, then lint, then unit + integration
+pnpm test            # all unit + integration (always executes; no result cache)
 pnpm test:watch      # watch mode
 pnpm test:coverage   # with coverage
 pnpm test:e2e        # Playwright (needs the running stack — see below)
@@ -88,17 +89,62 @@ const { cookie } = await createAuthedSession();
 const res = await client.api.projects.$post({ json: {...} }, { headers: { cookie } });
 ```
 
-## One-time setup
+## Clean-checkout gate setup
+
+Use Node >=22.13 and the pinned pnpm version. No `.env` file or auth/provider
+secrets are needed for the Vitest gate. The shared presets inject a synthetic
+test-only auth secret and localhost auth URL. Integration global setup installs
+the same project environment before importing the DB singleton; Vitest's
+`test.env` alone only applies in test workers. Application environment validation
+is unchanged and still rejects missing auth settings, including in production.
+
+Postgres, Redis and Typesense must be running locally. The default Compose
+credentials and ports match the test defaults; MinIO is only needed for live
+upload/E2E work (Vitest storage calls are mocked or signed locally).
 
 ```bash
-pnpm infra:up
-docker exec tickif-postgres createdb -U tickif tickif_test   # once
-# Optionally set DATABASE_URL_TEST in .env (defaults to the line above).
-pnpm test
+pnpm install --frozen-lockfile
+docker compose up -d --wait postgres redis typesense
+docker exec tickif-postgres createdb -U tickif tickif_test
+docker exec tickif-postgres createdb -U tickif tickif_worker_test
+pnpm verify
 ```
 
-The integration global-setup prints the DB it migrated — confirm it ends in
-`_test`.
+Create the databases once; an "already exists" response on later setup runs is
+expected. Do not drop or recreate them to run the gate. Integration global setup
+migrates them automatically. The API uses `tickif_test`; worker suites use
+`tickif_worker_test`, so one suite cannot truncate the other's data. Both names
+must end in `_test`. API global setup prints its redacted connection target.
+
+The queue target defaults to Redis DB 15. API setup clears only the test SMS
+queue and refuses Redis DB 0. Use a dedicated disposable Redis index for each
+simultaneous worktree. Worker search integration bootstraps its test collections.
+For non-default services, set `DATABASE_URL_TEST`, `REDIS_URL_TEST`,
+`TYPESENSE_HOST`, `TYPESENSE_API_KEY` and `TYPESENSE_SEARCH_API_KEY`. Keep all targets
+local/disposable. `DATABASE_URL` is intentionally ignored for test DB selection.
+
+For parallel worktrees, an isolated PowerShell example is:
+
+```powershell
+docker exec tickif-postgres createdb -U tickif tickif_stage13_test
+docker exec tickif-postgres createdb -U tickif tickif_stage13_worker_test
+$env:DATABASE_URL_TEST = 'postgresql://tickif:tickif@localhost:5432/tickif_stage13_test'
+$env:REDIS_URL_TEST = 'redis://localhost:6379/13'
+$env:TYPESENSE_COLLECTION_PREFIX = 'tickif_stage13'
+pnpm verify
+```
+
+An override ending in `example_test` derives the worker database
+`example_worker_test`. Select different names, Redis indices and Typesense
+prefixes for each worktree; do not reuse another running suite's targets.
+
+The root gate runs at most two Turbo package tasks simultaneously, and shared
+Vitest presets cap file workers at two. API/worker DB files remain serialized
+within each integration project. This bounds nested parallelism without
+increasing UI assertion or test timeouts. On memory-constrained machines, use
+`pnpm test --concurrency=1`. Avoid running multiple full gates concurrently on
+the same host. Unit/integration results are never reused from Turbo's cache,
+because database, Redis and Typesense state can change without source changes.
 
 ## E2E (Playwright)
 
