@@ -101,6 +101,44 @@ describe('personal and organization context', () => {
     });
   });
 
+  it('repairs a saved frozen branch to organization roll-up on the next login', async () => {
+    const phone = '+919800004212';
+    const account = await createOrganizationContext(phone);
+    await db.insert(schema.userContextPreference).values({
+      userId: account.userId,
+      contextKind: 'organization',
+      organizationId: account.organization.id,
+      teamId: account.team.id,
+    });
+    await db
+      .update(schema.team)
+      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
+      .where(eq(schema.team.id, account.team.id));
+
+    const nextLogin = await createAuthedSession(phone);
+    const response = await app.request('/api/orgs/context', {
+      headers: { cookie: nextLogin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
+      },
+    });
+    const [preference] = await db
+      .select()
+      .from(schema.userContextPreference)
+      .where(eq(schema.userContextPreference.userId, account.userId));
+    expect(preference).toMatchObject({
+      contextKind: 'organization',
+      organizationId: account.organization.id,
+      teamId: null,
+    });
+  });
+
   it('preserves an explicit personal selection on the next login', async () => {
     const phone = '+919800004210';
     const account = await createOrganizationContext(phone);

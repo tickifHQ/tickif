@@ -129,6 +129,17 @@ async function preferredContextForNewSession(userId: string): Promise<{
       }
     }
 
+    if (validMembership) {
+      await db
+        .update(schema.userContextPreference)
+        .set({ teamId: null })
+        .where(eq(schema.userContextPreference.userId, userId));
+      return {
+        activeOrganizationId: preference.organizationId,
+        activeTeamId: null,
+      };
+    }
+
     await db
       .update(schema.userContextPreference)
       .set({ contextKind: 'personal', organizationId: null, teamId: null })
