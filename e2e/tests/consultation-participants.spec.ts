@@ -1,73 +1,46 @@
-import { expect, test, type BrowserContext } from '@playwright/test';
-import { randomUUID } from 'node:crypto';
-import { config } from '../../packages/config/src/index';
-import { db, desc, eq, schema } from '../../packages/db/src/index';
+import { randomInt, randomUUID } from 'node:crypto';
+import { expect, test } from '@playwright/test';
+import { apiUrl, webUrl } from '../lib/environment';
+import { signInPhone as signIn } from '../lib/auth';
+
+import { db, eq, inArray, schema } from '@repo/db';
 import {
   assertTestDb,
   makeDesigner,
   makeOrganization,
   makeProject,
   makeUser,
-} from '../../packages/db/src/testing';
+} from '@repo/db/testing';
 
-const apiUrl = config.NEXT_PUBLIC_API_URL;
-async function signIn(context: BrowserContext, phoneNumber: string) {
-  expect(
-    (
-      await context.request.post(`${apiUrl}/api/auth/phone-number/send-otp`, {
-        data: { phoneNumber },
-      })
-    ).ok(),
-  ).toBeTruthy();
-  const [otp] = await db
-    .select()
-    .from(schema.verification)
-    .where(eq(schema.verification.identifier, phoneNumber))
-    .orderBy(desc(schema.verification.createdAt))
-    .limit(1);
-  const code = otp?.value.match(/^\d{4,8}/)?.[0];
-  expect(code).toBeTruthy();
-  expect(
-    (
-      await context.request.post(`${apiUrl}/api/auth/phone-number/verify`, {
-        data: { phoneNumber, code },
-      })
-    ).ok(),
-  ).toBeTruthy();
-}
-
-test('visitor books, studio confirms and completes, visitor reviews and cancels another request', async ({
+test('consultation lifecycle: visitor books, studio confirms and completes, visitor reviews and cancels another request', async ({
   browser,
   baseURL,
 }, testInfo) => {
   test.setTimeout(180000);
   await assertTestDb();
-  const runId = randomUUID();
-  const phoneSuffix = [...runId.replaceAll('-', '').slice(0, 9)]
-    .map((character) => String.parseInt(character, 16) % 10)
-    .join('');
+  const suffix = randomUUID();
   const cleanup: Array<() => Promise<unknown>> = [];
   try {
     const visitorUser = await makeUser({
-      name: `Consultation Journey Visitor ${runId.slice(0, 8)}`,
-      email: `consultation-visitor-${runId}@example.test`,
-      phoneNumber: `+919${phoneSuffix}`,
+      name: 'Consultation Journey Visitor',
+      email: `consultation-visitor-${suffix}@test.local`,
+      phoneNumber: `+9195${randomInt(10_000_000, 99_999_999)}`,
       phoneNumberVerified: true,
       status: 'active',
     });
     cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, visitorUser.id)));
     const owner = await makeUser({
-      name: `Consultation Journey Owner ${runId.slice(0, 8)}`,
-      email: `consultation-owner-${runId}@example.test`,
-      phoneNumber: `+918${phoneSuffix}`,
+      name: 'Consultation Journey Owner',
+      email: `consultation-owner-${suffix}@test.local`,
+      phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
       phoneNumberVerified: true,
       role: 'designer',
       status: 'active',
     });
     cleanup.push(() => db.delete(schema.user).where(eq(schema.user.id, owner.id)));
     const org = await makeOrganization({
-      name: `Consultation Journey Studio ${runId.slice(0, 8)}`,
-      slug: `consultation-journey-studio-${runId}`,
+      name: 'Consultation Journey Studio',
+      slug: `consultation-journey-${suffix}`,
     });
     cleanup.push(() => db.delete(schema.organization).where(eq(schema.organization.id, org.id)));
     const profile = await makeDesigner({
@@ -78,8 +51,18 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
       status: 'active',
       phone: owner.phoneNumber,
     });
+    cleanup.push(async () => {
+      const reviews = db
+        .select({ id: schema.review.id })
+        .from(schema.review)
+        .where(eq(schema.review.designerProfileId, profile.id));
+      await db
+        .delete(schema.reviewModerationEvent)
+        .where(inArray(schema.reviewModerationEvent.reviewId, reviews));
+      await db.delete(schema.review).where(eq(schema.review.designerProfileId, profile.id));
+    });
     await db.insert(schema.member).values({
-      id: `consultation-journey-owner-${runId}`,
+      id: randomUUID(),
       organizationId: org.id,
       userId: owner.id,
       role: 'owner',
@@ -104,6 +87,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active`, {
+          headers: { origin: webUrl },
           data: { organizationId: org.id },
         })
       ).ok(),
@@ -111,6 +95,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     expect(
       (
         await designerContext.request.post(`${apiUrl}/api/auth/organization/set-active-team`, {
+          headers: { origin: webUrl },
           data: { teamId: profile.teamId },
         })
       ).ok(),
@@ -127,13 +112,14 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
       visitor.getByRole('status').filter({ hasText: 'Consultation requested' }),
     ).toBeVisible();
     await visitor.getByRole('link', { name: 'View my consultations' }).click();
+    await expect(visitor).toHaveURL(/\/home\/consultations/);
     await expect(visitor.getByText('Awaiting confirmation', { exact: true })).toBeVisible();
     await visitor.reload();
     await expect(visitor.getByText('Planning our kitchen renovation.')).toBeVisible();
     // Keep this requester screen stale while the designer confirms the appointment.
     await designer.goto('/designer/consultations?status=requested');
     await expect(
-      designer.getByText(new RegExp(`Private contact: ${visitorUser.email}`)),
+      designer.getByText(`Private contact: ${visitorUser.email}`, { exact: false }),
     ).toBeVisible();
     await designer.getByLabel('Confirm preferred time').selectOption('1');
     await designer.getByRole('button', { name: 'Confirm consultation', exact: true }).click();
@@ -141,7 +127,9 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     await visitor.getByRole('button', { name: 'Cancel consultation', exact: true }).click();
     await visitor.getByLabel('Cancellation reason').fill('Stale cancellation should be rejected');
     await visitor.getByRole('button', { name: 'Confirm cancellation' }).click();
-    await expect(visitor.getByRole('alert')).toContainText('Booking changed');
+    await expect(visitor.getByRole('alert').filter({ hasText: 'Booking changed' })).toContainText(
+      'Booking changed',
+    );
     await visitor.getByRole('button', { name: 'Reload consultations' }).click();
     await expect(visitor.getByText(/Confirmed: .*afternoon IST/)).toBeVisible();
     await designer.getByRole('link', { name: 'confirmed', exact: true }).click();
@@ -152,7 +140,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     const reviewLink = visitor.getByRole('link', { name: 'Review consultation' });
     await expect(reviewLink).toHaveAttribute(
       'href',
-      new RegExp(`/d/${org.slug}\\?bookingId=.*#tickif-reviews`),
+      new RegExp(`/d/${profile.slug}\\?bookingId=.*#tickif-reviews`),
     );
     await reviewLink.click();
     await expect(
@@ -166,6 +154,7 @@ test('visitor books, studio confirms and completes, visitor reviews and cancels 
     await visitor.getByRole('button', { name: 'Book consultation', exact: true }).click();
     await visitor.getByRole('button', { name: 'Request consultation', exact: true }).click();
     await visitor.getByRole('link', { name: 'View my consultations' }).click();
+    await expect(visitor).toHaveURL(/\/home\/consultations/);
     await expect(visitor.getByText(/Consultation Journey Kitchen/)).toBeVisible();
     await visitor.getByRole('button', { name: 'Cancel consultation', exact: true }).click();
     await visitor.getByLabel('Cancellation reason').fill('Our renovation schedule changed.');

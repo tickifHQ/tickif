@@ -1,0 +1,90 @@
+name: Critical E2E
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: critical-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  critical-journeys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: tickif-e2e-only-auth-secret-000000000000000000
+      BETTER_AUTH_URL: http://localhost:3001
+      PUBLIC_WEB_URL: http://localhost:3000
+      DATABASE_URL_TEST: postgresql://tickif:tickif@localhost:5432/tickif_stage12_test
+      REDIS_URL_TEST: redis://localhost:6379/12
+      TYPESENSE_HOST: http://localhost:8108
+      TYPESENSE_API_KEY: ci-typesense-api-key
+      TYPESENSE_COLLECTION_PREFIX: tickif_e2e
+      R2_ENDPOINT: http://localhost:9000
+      R2_ACCESS_KEY_ID: minioadmin
+      R2_SECRET_ACCESS_KEY: minioadmin
+      R2_BUCKET: tickif-e2e
+      TURBO_TELEMETRY_DISABLED: '1'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tickif
+          POSTGRES_PASSWORD: tickif
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U tickif"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      typesense:
+        image: typesense/typesense:30.2
+        env:
+          TYPESENSE_DATA_DIR: /tmp
+          TYPESENSE_API_KEY: ci-typesense-api-key
+        ports: ['8108:8108']
+      minio:
+        image: bitnamilegacy/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:3000
+        ports: ['9000:9000']
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @repo/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @repo/e2e typecheck
+      - name: Build API and worker
+        run: |
+          pnpm --filter @repo/api build
+          pnpm --filter @repo/worker build
+          pnpm --filter @repo/e2e build:launchers
+      - name: Wait for search
+        run: curl --retry 30 --retry-all-errors --retry-delay 1 --fail http://localhost:8108/health
+      - name: Run critical journeys with real local stack
+        run: pnpm --filter @repo/e2e test:e2e
+      - name: Assert every critical journey ran and passed
+        if: always()
+        run: pnpm --filter @repo/e2e exec tsx scripts/assert-coverage.ts
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: critical-e2e-evidence
+          path: test-results/
+          retention-days: 7

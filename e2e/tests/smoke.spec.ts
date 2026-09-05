@@ -1,6 +1,7 @@
+import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
 import { test, expect } from '@playwright/test';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = stackApiUrl;
 
 // Full-stack smoke: proves web + api + DB boot together and serve.
 // (The authenticated write path is covered at the API integration layer; an
