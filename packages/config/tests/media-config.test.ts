@@ -17,6 +17,7 @@ describe('production R2 endpoint', () => {
     'https://minio:9000',
     'https://127.0.0.1',
     'https://[::1]',
+    'https://account.r2.cloudflarestorage.com',
     'http://account.r2.cloudflarestorage.com',
     'https://account.r2.cloudflarestorage.com.evil.example',
     'https://evil.example/account.r2.cloudflarestorage.com',
@@ -31,7 +32,10 @@ describe('production R2 endpoint', () => {
 
   it('accepts the Cloudflare S3 origin and an omitted endpoint with a valid account label', () => {
     expect(() =>
-      parseConfig({ ...environment, R2_ENDPOINT: 'https://account.r2.cloudflarestorage.com' }),
+      parseConfig({
+        ...environment,
+        R2_ENDPOINT: `https://${'a'.repeat(32)}.r2.cloudflarestorage.com`,
+      }),
     ).not.toThrow();
     expect(() =>
       parseConfig({ ...environment, R2_ACCOUNT_ID: 'a'.repeat(32), R2_ENDPOINT: '' }),

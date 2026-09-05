@@ -39,7 +39,7 @@ x-app-deploy: &app-deploy
 
 services:
   edge:
-    image: caddy:2.10-alpine
+    image: ${CADDY_IMAGE:?Set immutable CADDY_IMAGE}
     environment:
       STAGING_DOMAIN: ${STAGING_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
@@ -101,7 +101,7 @@ services:
       restart_policy: { condition: none }
 
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:?Set immutable POSTGRES_IMAGE}
     environment:
       POSTGRES_USER: tickif
       POSTGRES_DB: tickif_staging
@@ -120,7 +120,7 @@ services:
         limits: { memory: 2G }
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:?Set immutable REDIS_IMAGE}
     command: [redis-server, /run/secrets/redis_config]
     secrets: [redis_config]
     networks: [backend]
@@ -132,7 +132,7 @@ services:
         limits: { memory: 1G }
 
   typesense:
-    image: typesense/typesense:30.2
+    image: ${TYPESENSE_IMAGE:?Set immutable TYPESENSE_IMAGE}
     command: [--config=/run/secrets/typesense_config]
     secrets: [typesense_config]
     networks: [backend]

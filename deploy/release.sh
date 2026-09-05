@@ -19,7 +19,9 @@ mapfile -t nodes < <(docker node ls --filter node.label=tickif.staging=true --fo
 test "${#nodes[@]}" -eq 1 && test "${nodes[0]}" = "$node_id" || {
   echo 'Exactly this manager must have node label tickif.staging=true (local persistent volumes)' >&2; exit 1;
 }
-for image in "${API_IMAGE:?}" "${WORKER_IMAGE:?}" "${WEB_IMAGE:?}"; do
+for image in \
+  "${API_IMAGE:?}" "${WORKER_IMAGE:?}" "${WEB_IMAGE:?}" \
+  "${CADDY_IMAGE:?}" "${POSTGRES_IMAGE:?}" "${REDIS_IMAGE:?}" "${TYPESENSE_IMAGE:?}"; do
   [[ "$image" =~ @sha256:[a-f0-9]{64}$ ]] || { echo 'Release images must use immutable sha256 digests' >&2; exit 1; }
 done
 [[ "${RAZORPAY_KEY_ID:?}" == rzp_test_* ]] || { echo 'Staging requires Razorpay test mode' >&2; exit 1; }

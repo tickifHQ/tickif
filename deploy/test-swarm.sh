@@ -16,10 +16,17 @@ docker node update --label-add tickif.staging=true "$(docker info --format '{{.S
 set -a
 source deploy/staging.env.example
 set +a
-export API_IMAGE WORKER_IMAGE WEB_IMAGE
+export API_IMAGE WORKER_IMAGE WEB_IMAGE CADDY_IMAGE POSTGRES_IMAGE REDIS_IMAGE TYPESENSE_IMAGE
 API_IMAGE=$(docker image inspect "localhost:5000/tickif/api:$revision" --format '{{index .RepoDigests 0}}')
 WORKER_IMAGE=$(docker image inspect "localhost:5000/tickif/worker:$revision" --format '{{index .RepoDigests 0}}')
 WEB_IMAGE=$(docker image inspect "localhost:5000/tickif/web:$revision" --format '{{index .RepoDigests 0}}')
+for image in caddy:2.10-alpine postgres:16-alpine redis:7-alpine typesense/typesense:30.2; do
+  docker pull "$image" >/dev/null
+done
+CADDY_IMAGE=$(docker image inspect caddy:2.10-alpine --format '{{index .RepoDigests 0}}')
+POSTGRES_IMAGE=$(docker image inspect postgres:16-alpine --format '{{index .RepoDigests 0}}')
+REDIS_IMAGE=$(docker image inspect redis:7-alpine --format '{{index .RepoDigests 0}}')
+TYPESENSE_IMAGE=$(docker image inspect typesense/typesense:30.2 --format '{{index .RepoDigests 0}}')
 export R2_ACCOUNT_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export RAZORPAY_KEY_ID=rzp_test_synthetic
 export EMAIL_FROM='Tickif Staging <ci@example.com>'
@@ -79,7 +86,14 @@ for ((i=0; i<90; i++)); do
   if test -n "$task"; then
     state=$(docker inspect --format '{{.Status.State}}' "$task")
     test "$state" = complete && { key_ready=true; break; }
-    case "$state" in failed|rejected) exit 1 ;; esac
+    case "$state" in
+      failed|rejected)
+        echo "Typesense search-key fixture entered $state" >&2
+        docker service ps staging-key-fixture --no-trunc >&2 || true
+        docker service logs staging-key-fixture --tail 50 >&2 || true
+        exit 1
+        ;;
+    esac
   fi
   sleep 2
 done
@@ -111,6 +125,6 @@ web=$(docker ps -q --filter label=com.docker.swarm.service.name=tickif-staging_w
 docker exec "$web" node -e "fetch('http://127.0.0.1:3000/login').then(async r=>{if(!r.ok || !(await r.text()).includes('/_next/static/'))process.exit(1)})"
 # Validate the production Caddyfile without obtaining certificates or opening ingress.
 docker run --rm -e STAGING_DOMAIN -e ACME_EMAIL \
-  -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine \
+  -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" "$CADDY_IMAGE" \
   caddy validate --config /etc/caddy/Caddyfile
 echo 'Two isolated Swarm releases passed. Real TLS/provider/R2 smoke remains a staging check.'

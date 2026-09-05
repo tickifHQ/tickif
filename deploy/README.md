@@ -102,7 +102,8 @@ export REGISTRY=<registry-host>/tickif
 bash deploy/build.sh
 # Authenticate to your private registry with its approved credential helper.
 # Push api, worker and web tags printed by build.sh. Record their returned digests
-# as API_IMAGE, WORKER_IMAGE and WEB_IMAGE in /secure/tickif/staging.env.
+# as API_IMAGE, WORKER_IMAGE and WEB_IMAGE in /secure/tickif/staging.env. Resolve
+# and record immutable digests for the four infrastructure images as well.
 ```
 
 Next.js embeds `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WEB_URL` during the image
@@ -121,7 +122,8 @@ the public environment, take the backup below, then run:
 bash deploy/release.sh
 ```
 
-The script serializes releases with `flock`, verifies image digests and test-mode
+The script serializes releases with `flock`, verifies application and infrastructure
+image digests and test-mode
 billing, closes edge/API/web/worker replicas, and waits for old writer containers
 to stop. It deploys infrastructure, runs a fresh one-shot prepare task, waits for
 authenticated DB/Redis/search connectivity, applies committed migrations, seeds
