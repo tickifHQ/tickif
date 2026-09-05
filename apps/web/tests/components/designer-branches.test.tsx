@@ -189,7 +189,27 @@ describe('DesignerBranches', () => {
     expect(screen.getAllByText('Bandra').length).toBeGreaterThan(0);
     expect(screen.getByText('/d/andheri-studio')).toBeInTheDocument();
     expect(screen.getByText('4 projects')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getAllByText('Public')).toHaveLength(2);
+    expect(screen.getByText('Current')).toBeInTheDocument();
+  });
+
+  it('does not publish links or offer an unpublished branch as a removal target', () => {
+    render(
+      <DesignerBranches
+        branches={{
+          ...branches,
+          branches: [branches.branches[0]!, { ...branches.branches[1]!, profileStatus: 'draft' }],
+        }}
+        workspace={workspace}
+      />,
+    );
+
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByText('Public profile is not live')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '/d/bandra-studio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy link for Bandra' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove branch Andheri' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove branch Bandra' })).toBeInTheDocument();
   });
 
   it('expands a branch to show assigned members with roles', async () => {
@@ -237,6 +257,27 @@ describe('DesignerBranches', () => {
       'href',
       '/designer/plan-billing',
     );
+  });
+
+  it('shows billing recovery copy for a locked Corporate workspace', () => {
+    render(
+      <DesignerBranches
+        branches={{ ...branches, branchUsage: 1, branchLimit: 1 }}
+        workspace={{
+          ...workspace,
+          canManage: false,
+          rbacEnabled: false,
+          subscriptionState: 'locked',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Branch management is suspended')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Restore billing' })).toHaveAttribute(
+      'href',
+      '/designer/plan-billing',
+    );
+    expect(screen.queryByText(/single-user plan/i)).not.toBeInTheDocument();
   });
 
   it('creates a branch through Better Auth', async () => {
@@ -320,7 +361,22 @@ describe('DesignerBranches', () => {
 
   it('opens a branch dashboard by switching context first', async () => {
     const user = userEvent.setup();
-    render(<DesignerBranches branches={branches} workspace={workspace} />);
+    render(
+      <DesignerBranches
+        branches={{
+          ...branches,
+          branches: [
+            branches.branches[0]!,
+            {
+              ...branches.branches[1]!,
+              memberCount: 1,
+              members: [branches.branches[0]!.members[0]!],
+            },
+          ],
+        }}
+        workspace={workspace}
+      />,
+    );
 
     await user.click(screen.getByRole('button', { name: 'Switch Branch' }));
 
@@ -330,6 +386,12 @@ describe('DesignerBranches', () => {
       });
     });
     expect(mocks.push).toHaveBeenCalledWith('/designer/dashboard');
+  });
+
+  it('does not offer a dashboard switch for a branch the current user cannot access', () => {
+    render(<DesignerBranches branches={branches} workspace={workspace} />);
+
+    expect(screen.queryByRole('button', { name: 'Switch Branch' })).not.toBeInTheDocument();
   });
 
   it('invites a teammate directly into a branch', async () => {
@@ -436,6 +498,33 @@ describe('DesignerBranches', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The final branch stands alone');
+  });
+
+  it('keeps a network removal error inside the confirmation dialog', async () => {
+    mocks.branchDelete.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    render(<DesignerBranches branches={branches} workspace={workspace} />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Could not remove the branch.');
+  });
+
+  it('does not claim removal when the success response is malformed', async () => {
+    mocks.branchDelete.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const user = userEvent.setup();
+    render(<DesignerBranches branches={branches} workspace={workspace} />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove branch Bandra' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Move projects to' }), 'team-1');
+    await user.click(screen.getByRole('button', { name: 'Confirm removal' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'Could not verify that the branch was removed. Refresh and try again.',
+    );
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('maps tier errors to an upgrade message', async () => {

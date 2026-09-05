@@ -14,9 +14,16 @@ describe('organization-errors', () => {
   });
 
   it('maps tier errors to the upgrade message and passes other messages through', () => {
-    expect(formatOrganizationMutationError('Fallback', { status: 402 }, 'Custom upgrade')).toBe(
-      'Custom upgrade',
-    );
+    expect(
+      formatOrganizationMutationError('Fallback', { status: 402 }, { upgrade: 'Custom upgrade' }),
+    ).toBe('Custom upgrade');
+    expect(
+      formatOrganizationMutationError(
+        'Fallback',
+        { code: 'ORGANIZATION_BILLING_LOCKED' },
+        { billingLocked: 'Custom restore' },
+      ),
+    ).toBe('Custom restore');
     expect(formatOrganizationMutationError('Fallback', { message: 'Nope' })).toBe('Nope');
     expect(formatOrganizationMutationError('Fallback', null)).toBe('Fallback');
   });
