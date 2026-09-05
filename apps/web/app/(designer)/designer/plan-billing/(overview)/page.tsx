@@ -3,6 +3,7 @@ import { BillingAccessDenied } from '@/components/billing-access-denied';
 import { DesignerPlanBilling } from '@/components/designer-plan-billing';
 import { getBillingState } from '@/lib/billing-data';
 import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-role';
+import { BillingLoadError } from '@/components/billing-load-error';
 import { requireAuth } from '@/lib/auth-guard';
 
 export const metadata = {
@@ -25,6 +26,7 @@ export default async function DesignerPlanBillingPage() {
   }
 
   const billing = await getBillingState();
+  if (!billing) return <BillingLoadError />;
 
   return (
     <>

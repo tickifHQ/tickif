@@ -1,11 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@repo/ui/components/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Button } from '@repo/ui/components/button';
 import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import type { PlanTier, SubscriptionState } from '@repo/contracts';
@@ -16,6 +12,7 @@ import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
 import { ReviewPayStep } from './review-pay-step';
 import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
+import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
 
 // ─── State Machine ───────────────────────────────────────────────────────────
@@ -31,7 +28,7 @@ type FlowStep =
   | { step: 'activating'; targetTier: PlanTier }
   | { step: 'upi-limitation'; targetTier: PlanTier }
   | { step: 'cancellation-scheduled'; periodEnd: string | null }
-  | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' }
+  | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' | 'activated' }
   | { step: 'error'; message: string }
   | { step: 'cancelled' };
 
@@ -169,16 +166,19 @@ export function CheckoutFlow({
             `Cancellation failed (${response.status})`;
           setFlowStep({ step: 'error', message });
         } else {
-          const data = (await response.json()) as {
-            alreadyCancelled?: boolean;
-            currentPeriodEnd?: string | null;
-          };
+          const data = await response.json();
           if (data.alreadyCancelled) {
             // Already scheduled — show the status modal, don't claim we just cancelled.
-            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+            setFlowStep({
+              step: 'cancellation-scheduled',
+              periodEnd: data.currentPeriodEnd ?? null,
+            });
           } else {
             // Cancellation scheduled — subscription stays active until period ends.
-            setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
+            setFlowStep({
+              step: 'cancellation-scheduled',
+              periodEnd: data.currentPeriodEnd ?? null,
+            });
           }
         }
       } catch (err) {
@@ -225,9 +225,7 @@ export function CheckoutFlow({
       // Hobby → paid: create a new Razorpay subscription via /subscribe.
       // Paid → paid: change the existing subscription via /change-plan.
       const isNewSubscription =
-        currentTier === 'hobby' ||
-        lifecycleState === 'locked' ||
-        lifecycleState === 'downgraded';
+        currentTier === 'hobby' || lifecycleState === 'locked' || lifecycleState === 'downgraded';
 
       if (isNewSubscription) {
         const response = await api.api.billing.subscribe.$post({
@@ -244,19 +242,14 @@ export function CheckoutFlow({
           return;
         }
 
-        const data = (await response.json()) as {
-          razorpaySubscriptionId: string;
-          shortUrl: string | null;
-          razorpayKeyId: string;
-          prefill: { name: string | null; email: string | null; contact: string | null };
-        };
+        const data = await response.json();
 
         // Close our Dialog before opening Razorpay Checkout.
         // The Radix Dialog overlay would block clicks on the Razorpay iframe.
         onOpenChange(false);
 
         // Open Razorpay Checkout JS modal on the page.
-        openRazorpayCheckout({
+        await openRazorpayCheckout({
           keyId: data.razorpayKeyId,
           subscriptionId: data.razorpaySubscriptionId,
           targetTier,
@@ -284,7 +277,7 @@ export function CheckoutFlow({
               setFlowStep({ step: 'activating', targetTier });
               const activated = await waitForSubscriptionActivation(targetTier);
               if (activated) {
-                setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
+                setFlowStep({ step: 'success', targetTier, kind: 'activated' });
                 onSubscriptionChange?.();
               } else {
                 setFlowStep({
@@ -312,8 +305,7 @@ export function CheckoutFlow({
 
         if (!response.ok) {
           const error = await response.json().catch(() => null);
-          const rawMessage =
-            (error as { error?: { message?: string } })?.error?.message ?? '';
+          const rawMessage = (error as { error?: { message?: string } })?.error?.message ?? '';
           // Detect Razorpay UPI limitation → show cancel-and-resubscribe flow
           const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
           if (isUpiLimitation) {
@@ -321,7 +313,10 @@ export function CheckoutFlow({
             setIsApiLoading(false);
             return;
           }
-          setFlowStep({ step: 'error', message: rawMessage || `Plan change failed (${response.status})` });
+          setFlowStep({
+            step: 'error',
+            message: rawMessage || `Plan change failed (${response.status})`,
+          });
           setIsApiLoading(false);
           return;
         }
@@ -331,6 +326,7 @@ export function CheckoutFlow({
         setIsApiLoading(false);
       }
     } catch (err) {
+      onOpenChange(true);
       setFlowStep({
         step: 'error',
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
@@ -352,10 +348,7 @@ export function CheckoutFlow({
           `Cancellation failed (${response.status})`;
         setFlowStep({ step: 'error', message });
       } else {
-        const data = (await response.json()) as {
-          alreadyCancelled?: boolean;
-          currentPeriodEnd?: string | null;
-        };
+        const data = await response.json();
         setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
       }
     } catch (err) {
@@ -386,7 +379,8 @@ export function CheckoutFlow({
     onSubscriptionChange?.();
   }
 
-  const isBlocking = flowStep.step === 'processing' || flowStep.step === 'pending' || flowStep.step === 'activating';
+  const isBlocking =
+    flowStep.step === 'processing' || flowStep.step === 'pending' || flowStep.step === 'activating';
   const isWide = flowStep.step === 'select';
 
   return (
@@ -469,11 +463,7 @@ export function CheckoutFlow({
         )}
 
         {flowStep.step === 'success' && (
-          <SuccessStep
-            targetTier={flowStep.targetTier}
-            kind={flowStep.kind}
-            onDone={handleDone}
-          />
+          <SuccessStep targetTier={flowStep.targetTier} kind={flowStep.kind} onDone={handleDone} />
         )}
 
         {flowStep.step === 'error' && (
@@ -484,9 +474,7 @@ export function CheckoutFlow({
           />
         )}
 
-        {flowStep.step === 'cancelled' && (
-          <CancelledStep onClose={() => handleOpenChange(false)} />
-        )}
+        {flowStep.step === 'cancelled' && <CancelledStep onClose={() => handleOpenChange(false)} />}
       </DialogContent>
     </Dialog>
   );
@@ -496,7 +484,11 @@ export function CheckoutFlow({
 
 function ProcessingStep() {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center py-12 text-center"
+    >
       <div className="relative flex size-20 items-center justify-center">
         <div className="absolute inset-0 animate-spin rounded-full border-4 border-muted border-t-primary" />
         <Loader2 className="size-8 animate-spin text-primary" />
@@ -504,23 +496,23 @@ function ProcessingStep() {
       <h2 className="mt-6 text-lg font-semibold text-foreground">
         Setting up your subscription...
       </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Please don&rsquo;t close this window.
-      </p>
+      <p className="mt-2 text-sm text-muted-foreground">Please don&rsquo;t close this window.</p>
     </div>
   );
 }
 
 function PendingStep() {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center py-12 text-center"
+    >
       <Clock className="size-10 text-primary" />
-      <h2 className="mt-4 text-lg font-semibold text-foreground">
-        Redirecting to payment...
-      </h2>
+      <h2 className="mt-4 text-lg font-semibold text-foreground">Redirecting to payment...</h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        You&rsquo;re being redirected to Razorpay to complete payment.
-        Once confirmed, your subscription will activate automatically.
+        You&rsquo;re being redirected to Razorpay to complete payment. Once confirmed, your
+        subscription will activate automatically.
       </p>
     </div>
   );
@@ -532,22 +524,34 @@ export function SuccessStep({
   onDone,
 }: {
   targetTier: PlanTier;
-  kind: 'upgrade' | 'downgrade';
+  kind: 'upgrade' | 'downgrade' | 'activated';
   onDone: () => void;
 }) {
   const plan = PLAN_MAP[targetTier];
 
   return (
-    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center py-12 text-center"
+    >
       <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
         <CheckCircle2 className="size-8 text-primary" />
       </div>
       <h2 className="mt-5 text-lg font-semibold text-foreground">
-        {kind === 'upgrade' ? 'Plan change scheduled' : 'Plan change confirmed'}
+        {kind === 'activated' ? 'Plan activated' : 'Plan change scheduled'}
       </h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your plan will change to <strong>{plan.label}</strong> at the end of your current
-        billing period. Your data and resources remain preserved.
+        {kind === 'activated' ? (
+          <>
+            Your <strong>{plan.label}</strong> plan is now active.
+          </>
+        ) : (
+          <>
+            Your plan will change to <strong>{plan.label}</strong> at the end of your current
+            billing period. Your data and resources remain preserved.
+          </>
+        )}
       </p>
       <Button className="mt-6" onClick={onDone}>
         Done
@@ -573,7 +577,9 @@ function ErrorStep({
       <h2 className="mt-5 text-lg font-semibold text-foreground">Something went wrong</h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">{message}</p>
       <div className="mt-6 flex gap-3">
-        <Button variant="outline" onClick={onClose}>Close</Button>
+        <Button variant="outline" onClick={onClose}>
+          Close
+        </Button>
         <Button onClick={onRetry}>Try Again</Button>
       </div>
     </div>
@@ -587,14 +593,20 @@ function CancelledStep({ onClose }: { onClose: () => void }) {
       <p className="mt-2 text-sm text-muted-foreground">
         No changes were made to your subscription.
       </p>
-      <Button className="mt-6" variant="outline" onClick={onClose}>Close</Button>
+      <Button className="mt-6" variant="outline" onClick={onClose}>
+        Close
+      </Button>
     </div>
   );
 }
 
 function ActivatingStep() {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center py-12 text-center">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center py-12 text-center"
+    >
       <Loader2 className="size-10 animate-spin text-primary" />
       <h2 className="mt-4 text-lg font-semibold text-foreground">
         Activating your subscription...
@@ -607,76 +619,6 @@ function ActivatingStep() {
 }
 
 // ─── Razorpay Checkout JS ────────────────────────────────────────────────────
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => {
-      open: () => void;
-      on: (event: string, handler: (response: Record<string, string>) => void) => void;
-    };
-  }
-}
-
-function loadRazorpayScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.Razorpay) {
-      resolve();
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Razorpay Checkout'));
-    document.head.appendChild(script);
-  });
-}
-
-async function openRazorpayCheckout(params: {
-  keyId: string;
-  subscriptionId: string;
-  targetTier: PlanTier;
-  prefill: { name: string | null; email: string | null; contact: string | null };
-  onSuccess: (data: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => void;
-  onDismiss: () => void;
-}): Promise<void> {
-  await loadRazorpayScript();
-
-  if (!window.Razorpay) {
-    throw new Error('Razorpay Checkout not available');
-  }
-
-  // Build prefill from the user's actual Tickif profile data.
-  // Only include fields that have values — Razorpay handles missing fields gracefully.
-  const prefill: Record<string, string> = {};
-  if (params.prefill.name) prefill.name = params.prefill.name;
-  if (params.prefill.email) prefill.email = params.prefill.email;
-  if (params.prefill.contact) prefill.contact = params.prefill.contact;
-
-  const rzp = new window.Razorpay({
-    key: params.keyId,
-    subscription_id: params.subscriptionId,
-    name: 'Tickif',
-    description: `Subscribe to ${PLAN_MAP[params.targetTier]?.label ?? params.targetTier}`,
-    ...(Object.keys(prefill).length > 0 ? { prefill } : {}),
-    handler: (response: Record<string, string>) => {
-      params.onSuccess({
-        razorpay_payment_id: response.razorpay_payment_id ?? '',
-        razorpay_subscription_id: response.razorpay_subscription_id ?? '',
-        razorpay_signature: response.razorpay_signature ?? '',
-      });
-    },
-    modal: {
-      ondismiss: () => {
-        params.onDismiss();
-      },
-    },
-    theme: {
-      color: '#FF8F73',
-    },
-  });
-
-  rzp.open();
-}
 
 // ─── UPI Limitation Flow ─────────────────────────────────────────────────────
 
@@ -701,18 +643,16 @@ function UpiLimitationStep({
       <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
         <AlertCircle className="size-8 text-yellow-600" />
       </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">
-        Plan change unavailable
-      </h2>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">Plan change unavailable</h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your current {current?.label} subscription uses UPI, which does not support
-        plan changes. To switch to {target?.label}, cancel your current subscription
-        and subscribe again on the new plan.
+        Your current {current?.label} subscription uses UPI, which does not support plan changes. To
+        switch to {target?.label}, cancel your current subscription and subscribe again on the new
+        plan.
       </p>
       <p className="mt-3 max-w-sm text-xs text-muted-foreground">
-        Your {current?.label} access will remain active until the end of your current
-        billing period after cancellation. You can pay with any supported method
-        (card, UPI, etc.) when you resubscribe.
+        Your {current?.label} access will remain active until the end of your current billing period
+        after cancellation. You can pay with any supported method (card, UPI, etc.) when you
+        resubscribe.
       </p>
       <div className="mt-6 flex gap-3">
         <Button variant="outline" onClick={onClose} disabled={isLoading}>
@@ -758,9 +698,7 @@ function CancellationScheduledStep({
       <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
         <CheckCircle2 className="size-8 text-primary" />
       </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">
-        Cancellation scheduled
-      </h2>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">Cancellation scheduled</h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         Your {current?.label} subscription will remain active
         {formattedEnd ? ` until ${formattedEnd}` : ' until the end of your current billing period'}.

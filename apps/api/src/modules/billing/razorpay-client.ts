@@ -141,6 +141,7 @@ export async function createPlan(params: {
   const response = await fetch(`${baseUrl()}/plans`, {
     method: 'POST',
     headers: authHeaders(keyId, keySecret),
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       period: params.period,
       interval: params.interval ?? 1,
@@ -176,6 +177,7 @@ export async function createSubscription(params: {
   const response = await fetch(`${baseUrl()}/subscriptions`, {
     method: 'POST',
     headers: authHeaders(keyId, keySecret),
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       plan_id: params.planId,
       total_count: params.totalCount ?? 120, // ~10 years monthly
@@ -208,6 +210,7 @@ export async function updateSubscription(params: {
   const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}`, {
     method: 'PATCH',
     headers: authHeaders(keyId, keySecret),
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       plan_id: params.planId,
       schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
@@ -238,6 +241,7 @@ export async function cancelSubscription(params: {
   const response = await fetch(`${baseUrl()}/subscriptions/${params.subscriptionId}/cancel`, {
     method: 'POST',
     headers: authHeaders(keyId, keySecret),
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       cancel_at_cycle_end: params.cancelAtCycleEnd ?? true,
     }),
@@ -258,13 +262,12 @@ export async function cancelSubscription(params: {
  * Fetch a subscription's live state from Razorpay.
  * Used for reconciliation when webhooks may have been missed.
  */
-export async function fetchSubscription(
-  subscriptionId: string,
-): Promise<RazorpaySubscription> {
+export async function fetchSubscription(subscriptionId: string): Promise<RazorpaySubscription> {
   const { keyId, keySecret } = getCredentials();
   const response = await fetch(`${baseUrl()}/subscriptions/${subscriptionId}`, {
     method: 'GET',
     headers: authHeaders(keyId, keySecret),
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
@@ -288,6 +291,7 @@ export async function verifyConnectivity(): Promise<boolean> {
     const response = await fetch(`${baseUrl()}/plans?count=1`, {
       method: 'GET',
       headers: authHeaders(keyId, keySecret),
+      signal: AbortSignal.timeout(15_000),
     });
     return response.ok;
   } catch {
