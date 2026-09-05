@@ -49,6 +49,7 @@ const subscribeRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     409: { description: 'Organization already has an active subscription' },
     422: { description: 'Invalid tier or billing not configured' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -83,6 +84,7 @@ const changePlanRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Invalid tier, same plan, or billing not configured' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -110,6 +112,7 @@ const cancelRoute = createRoute({
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
     422: { description: 'Already on Hobby' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 
@@ -144,6 +147,7 @@ const verifyPaymentRoute = createRoute({
     },
     400: { description: 'Invalid signature' },
     401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required or payment belongs to another organization' },
   },
 });
 
@@ -167,6 +171,7 @@ const refreshRoute = createRoute({
       },
     },
     401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
   },
 });
 
@@ -186,6 +191,7 @@ const paymentMethodRoute = createRoute({
     403: { description: 'Billing access required' },
     404: { description: 'No subscription' },
     409: { description: 'Subscription is not recoverable' },
+    502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
 const paymentsRoute = createRoute({
