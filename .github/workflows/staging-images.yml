@@ -1,0 +1,75 @@
+name: Staging images
+on:
+  pull_request:
+    paths:
+      - 'infra/staging/**'
+      - 'apps/api/src/modules/health/**'
+      - 'apps/web/app/health/**'
+      - '**/Dockerfile'
+      - '.dockerignore'
+      - 'apps/web/next.config.ts'
+      - 'apps/worker/src/staging*/**'
+      - 'apps/worker/src/staging-prepare.ts'
+      - 'packages/config/**'
+      - '.github/workflows/staging-images.yml'
+concurrency:
+  group: staging-images-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  images-and-swarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate scripts and failure gate
+        run: |
+          for script in infra/staging/scripts/*.sh; do bash -n "$script"; done
+          bash infra/staging/scripts/test-restore-gate.sh
+      - name: Build all release images without runtime secrets
+        env:
+          REGISTRY: localhost:5000/tickif
+          STAGING_DOMAIN: staging.example.com
+        run: |
+          printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-must-not-enter-images' > .env.production
+          printf '%s\n' 'BUILD_CONTEXT_SECRET=synthetic-nested-secret' > apps/web/.env.local
+          bash infra/staging/scripts/build.sh
+          revision=$(git rev-parse HEAD)
+          for service in api worker web operations; do
+            docker run --rm --entrypoint sh "localhost:5000/tickif/$service:$revision" \
+              -c 'test ! -e /app/.env.production && test ! -e /app/apps/web/.env.local'
+          done
+          docker run --rm --entrypoint bash "localhost:5000/tickif/operations:$revision" -ec '
+            pnpm --filter @repo/worker exec tsx --version
+            pnpm --filter @repo/db exec drizzle-kit --version
+            test -f apps/worker/src/staging-prepare.ts
+            test -f packages/db/src/seeds/index.ts
+            test -f infra/staging/scripts/release-job.sh
+            test -f infra/staging/scripts/backup-job.sh
+            pg_dump --version
+            pg_restore --version
+            createdb --version
+            psql --version
+            age --version
+            rclone --version
+          '
+      - name: Test release on the disposable runner Swarm
+        run: bash infra/staging/scripts/test-swarm.sh
+      - name: Service diagnostics
+        if: failure()
+        run: |
+          docker service ls || true
+          docker service ps staging-key-fixture --no-trunc || true
+          docker service logs staging-key-fixture --tail 50 || true
+          docker service ps tickif_typesense --no-trunc || true
+          docker service logs tickif_typesense --tail 50 || true
+          docker service ps tickif_prepare --no-trunc || true
+          docker service logs tickif_prepare --tail 100 || true
+          docker service logs tickif_worker --tail 50 || true
+          docker service logs tickif_api --tail 50 || true
+          docker service logs tickif_socket-proxy --tail 50 || true
+          docker service logs tickif_traefik --tail 50 || true
+      - name: Remove disposable runner stack
+        if: always()
+        run: docker stack rm tickif || true

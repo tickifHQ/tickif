@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { config as loadDotenv } from 'dotenv';
+import { config as loadDotenv, parse as parseDotenv } from 'dotenv';
 import { z } from 'zod';
 
 /**
@@ -28,6 +28,60 @@ const LOCAL_TYPESENSE_API_KEY = 'tickif-local-typesense-key';
 const DEFAULT_EMAIL_FROM = 'Tickif <noreply@tickif.com>';
 const DEFAULT_EMAIL_ADDRESS = 'noreply@tickif.com';
 const NAMED_EMAIL_FROM_PATTERN = /^[^<>\r\n]+<([^<>\r\n]+)>$/;
+
+/**
+ * Only credentials in this allow-list support Docker/Swarm's conventional
+ * `<NAME>_FILE` indirection. Keeping the list explicit prevents an accidental
+ * file read from being enabled for arbitrary configuration keys.
+ */
+export const sensitiveFileVariables = [
+  'POSTGRES_PASSWORD',
+  'DATABASE_URL',
+  'REDIS_PASSWORD',
+  'REDIS_URL',
+  'TYPESENSE_API_KEY',
+  'TYPESENSE_SEARCH_API_KEY',
+  'BETTER_AUTH_SECRET',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_PLACES_API_KEY',
+  'NOVU_SECRET_KEY',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'RESEND_API_KEY',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+] as const;
+
+type SensitiveFileVariable = (typeof sensitiveFileVariables)[number];
+
+function resolveSecretFiles(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const resolved = { ...environment };
+
+  for (const name of sensitiveFileVariables) {
+    const fileName = `${name}_FILE` as `${SensitiveFileVariable}_FILE`;
+    const filePath = environment[fileName];
+    if (!filePath) continue;
+    if (environment[name]) {
+      throw new Error(
+        `Invalid environment configuration:\n  - ${name}: set either ${name} or ${fileName}, not both`,
+      );
+    }
+
+    let value: string;
+    try {
+      value = readFileSync(filePath, 'utf8').replace(/[\r\n]+$/, '');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid environment configuration:\n  - ${fileName}: ${message}`);
+    }
+    if (value.length === 0) {
+      throw new Error(`Invalid environment configuration:\n  - ${fileName}: secret file is empty`);
+    }
+    resolved[name] = value;
+  }
+
+  return resolved;
+}
 
 function blankStringToUndefined(value: unknown): unknown {
   return typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -61,6 +115,8 @@ const emailFromSchema = z
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Docker/secret-manager mounted dotenv file. Values are validated by this schema.
+  CONFIG_SECRETS_FILE: z.string().min(1).optional(),
 
   // Postgres — the connection string is built from these parts (see below).
   POSTGRES_HOST: z.string().default('localhost'),
@@ -78,6 +134,7 @@ const envSchema = z.object({
   // Redis (cache + BullMQ) — connection string built from these parts.
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
+  REDIS_PASSWORD: z.string().min(1).optional(),
   REDIS_URL: z.string().url().optional(),
   // Dedicated Redis target for integration tests (use a separate DB index, e.g. /15).
   REDIS_URL_TEST: z.string().url().optional(),
@@ -136,7 +193,7 @@ const envSchema = z.object({
   // Cloudflare R2 (media). Endpoint defaults to the account's S3 API host; set
   // R2_ENDPOINT explicitly to point at a local minio in tests/dev.
   R2_ACCOUNT_ID: z.string().optional(),
-  R2_ENDPOINT: z.string().url().optional(),
+  R2_ENDPOINT: z.preprocess(blankStringToUndefined, z.string().url().optional()),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
@@ -204,7 +261,11 @@ const envSchema = z.object({
   BILLING_LOCKED_PERIOD_DAYS: z.coerce.number().int().min(1).default(30),
   // How often the billing lifecycle sweep runs (ms). Day-granularity windows
   // tolerate an hourly cadence.
-  BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+  BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 1000),
 
   // Organization closure and retention windows (E-250). A closure remains
   // owner-recoverable while delisted, then admin-recoverable while archived.
@@ -300,6 +361,28 @@ function assertProductionMediaConfig(env: RawEnv): void {
     const lines = missing.map((m) => `  - ${m}: required when NODE_ENV=production`).join('\n');
     throw new Error(`Invalid environment configuration:\n${lines}`);
   }
+  if (!env.R2_ENDPOINT && !/^[a-f0-9]{32}$/i.test(env.R2_ACCOUNT_ID ?? '')) {
+    throw new Error(
+      'Invalid environment configuration: R2_ACCOUNT_ID must be a Cloudflare account ID',
+    );
+  }
+  if (env.R2_ENDPOINT) {
+    const endpoint = new URL(env.R2_ENDPOINT);
+    if (
+      endpoint.protocol !== 'https:' ||
+      !/^[a-f0-9]{32}\.r2\.cloudflarestorage\.com$/.test(endpoint.hostname) ||
+      endpoint.port ||
+      endpoint.username ||
+      endpoint.password ||
+      endpoint.pathname !== '/' ||
+      endpoint.search ||
+      endpoint.hash
+    ) {
+      throw new Error(
+        'Invalid environment configuration: R2_ENDPOINT must be an HTTPS Cloudflare R2 S3 origin',
+      );
+    }
+  }
 }
 
 function assertProductionSmsConfig(env: RawEnv): void {
@@ -316,8 +399,38 @@ function assertProductionSmsConfig(env: RawEnv): void {
   }
 }
 
+/** Only secret values may come from the mounted file; it cannot change the runtime mode. */
+const secretKeys = new Set<string>(sensitiveFileVariables);
+
+function resolveSecretEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const file = environment.CONFIG_SECRETS_FILE;
+  if (!file) return environment;
+  let secrets: Record<string, string>;
+  try {
+    secrets = parseDotenv(readFileSync(file));
+  } catch {
+    // Filesystem errors can contain mounted paths; never include file contents.
+    throw new Error('Invalid environment configuration: CONFIG_SECRETS_FILE could not be read');
+  }
+  for (const key of Object.keys(secrets)) {
+    if (!secretKeys.has(key)) {
+      throw new Error(
+        'Invalid environment configuration: CONFIG_SECRETS_FILE contains an unsupported key',
+      );
+    }
+    if (environment[key] !== undefined) {
+      throw new Error(
+        `Invalid environment configuration: ${key} must be supplied by either environment or secret file`,
+      );
+    }
+  }
+  return { ...environment, ...secrets };
+}
+
 export function parseConfig(environment: NodeJS.ProcessEnv): Config {
-  const parsed = refinedEnvSchema.safeParse(environment);
+  const parsed = refinedEnvSchema.safeParse(
+    resolveSecretFiles(resolveSecretEnvironment(environment)),
+  );
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -331,7 +444,9 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     ...env,
     DATABASE_URL: env.DATABASE_URL ?? postgresUrl(env, env.POSTGRES_DB),
     DATABASE_URL_TEST: env.DATABASE_URL_TEST ?? postgresUrl(env, `${env.POSTGRES_DB}_test`),
-    REDIS_URL: env.REDIS_URL ?? `redis://${env.REDIS_HOST}:${env.REDIS_PORT}`,
+    REDIS_URL:
+      env.REDIS_URL ??
+      `redis://${env.REDIS_PASSWORD ? `:${encodeURIComponent(env.REDIS_PASSWORD)}@` : ''}${env.REDIS_HOST}:${env.REDIS_PORT}`,
     TYPESENSE_HOST: env.TYPESENSE_HOST ?? LOCAL_TYPESENSE_HOST,
     TYPESENSE_API_KEY: env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
     TYPESENSE_SEARCH_API_KEY:
@@ -341,6 +456,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
 
 /** Validate Resend only in the auth process that sends transactional email. */
 export function assertProductionEmailConfig(environment: NodeJS.ProcessEnv = process.env): void {
+  environment = resolveSecretFiles(resolveSecretEnvironment(environment));
   if (environment.NODE_ENV !== 'production') return;
 
   const resendApiKey = blankStringToUndefined(environment.RESEND_API_KEY);
@@ -369,6 +485,7 @@ export function assertProductionEmailConfig(environment: NodeJS.ProcessEnv = pro
 
 /** Validate search credentials only in processes that actually use Typesense. */
 export function assertProductionSearchConfig(environment: NodeJS.ProcessEnv = process.env): void {
+  environment = resolveSecretFiles(resolveSecretEnvironment(environment));
   if (environment.NODE_ENV !== 'production') return;
   const parsed = productionSearchEnvSchema.safeParse(environment);
   if (parsed.success) return;

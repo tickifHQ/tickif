@@ -5,7 +5,7 @@ const productionEnvironment = {
   NODE_ENV: 'production',
   BETTER_AUTH_SECRET: 'production-auth-secret',
   BETTER_AUTH_URL: 'https://api.tickif.com',
-  R2_ENDPOINT: 'https://example.r2.cloudflarestorage.com',
+  R2_ENDPOINT: `https://${'a'.repeat(32)}.r2.cloudflarestorage.com`,
   R2_ACCESS_KEY_ID: 'r2-access-key',
   R2_SECRET_ACCESS_KEY: 'r2-secret-key',
   R2_BUCKET: 'tickif-media',

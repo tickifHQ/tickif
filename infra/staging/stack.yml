@@ -1,0 +1,561 @@
+version: '3.9'
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+x-stateless-update: &stateless-update
+  parallelism: 1
+  delay: 10s
+  failure_action: rollback
+  monitor: 30s
+  max_failure_ratio: 0
+  order: start-first
+
+x-stateless-rollback: &stateless-rollback
+  parallelism: 1
+  delay: 5s
+  failure_action: pause
+  monitor: 30s
+  max_failure_ratio: 0
+  order: start-first
+
+services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2@sha256:1f3a6f303320723d199d2316a3e82b2e2685d86c275d5e3deeaf182573b47476
+    environment:
+      ALLOW_START: '0'
+      ALLOW_STOP: '0'
+      ALLOW_RESTARTS: '0'
+      AUTH: '0'
+      BUILD: '0'
+      COMMIT: '0'
+      CONFIGS: '0'
+      CONTAINERS: '0'
+      DISTRIBUTION: '0'
+      EVENTS: '1'
+      EXEC: '0'
+      IMAGES: '0'
+      INFO: '1'
+      NETWORKS: '1'
+      NODES: '1'
+      PING: '1'
+      PLUGINS: '0'
+      POST: '0'
+      SECRETS: '0'
+      SERVICES: '1'
+      SESSION: '0'
+      SWARM: '1'
+      SYSTEM: '0'
+      TASKS: '1'
+      VERSION: '1'
+      VOLUMES: '0'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - type: tmpfs
+        target: /run
+      - type: tmpfs
+        target: /tmp
+      - type: tmpfs
+        target: /var/lib/haproxy
+    networks:
+      - socket_proxy
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:2375/_ping']
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 1m
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 32M
+        limits:
+          cpus: '0.50'
+          memory: 128M
+
+  traefik:
+    image: traefik:v3.7.1@sha256:6b9cbca6fac42ab0075f5437d8dc1685cfd188626d8d515839ea94f8b6271c42
+    command: ['--configFile=/etc/traefik/static.yml']
+    configs:
+      - source: traefik_static
+        target: /etc/traefik/static.yml
+        mode: 0444
+      - source: traefik_dynamic
+        target: /etc/traefik/dynamic.yml
+        mode: 0444
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - traefik_acme:/letsencrypt
+      - type: tmpfs
+        target: /tmp
+    networks:
+      - edge
+      - socket_proxy
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'traefik', 'healthcheck', '--ping', '--configFile=/etc/traefik/static.yml']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    deploy:
+      replicas: ${TRAEFIK_REPLICAS:-0}
+      placement:
+        constraints:
+          - node.labels.tickif.traefik == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        parallelism: 1
+        failure_action: rollback
+        monitor: 30s
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        monitor: 30s
+        order: stop-first
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+        limits:
+          cpus: '1.00'
+          memory: 512M
+
+  web:
+    image: ${WEB_IMAGE}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
+      NEXT_PUBLIC_WEB_URL: https://${STAGING_HOST}
+    networks:
+      - edge
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      replicas: ${WEB_REPLICAS:-0}
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=tickif_edge
+        - traefik.http.routers.tickif-web.rule=Host(`${STAGING_HOST}`)
+        - traefik.http.routers.tickif-web.entrypoints=websecure
+        - traefik.http.routers.tickif-web.tls.certresolver=letsencrypt
+        - traefik.http.routers.tickif-web.priority=10
+        - traefik.http.routers.tickif-web.middlewares=secure-headers@file
+        - traefik.http.services.tickif-web.loadbalancer.server.port=3000
+        - traefik.http.services.tickif-web.loadbalancer.serverstransport=staging-default@file
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 1m
+      update_config: *stateless-update
+      rollback_config: *stateless-rollback
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.00'
+          memory: 768M
+
+  api:
+    image: ${API_IMAGE}
+    environment: &app-environment
+      NODE_ENV: production
+      PORT: '3001'
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      TYPESENSE_HOST: http://typesense:8108
+      TYPESENSE_API_KEY_FILE: /run/secrets/typesense_admin_key
+      TYPESENSE_SEARCH_API_KEY_FILE: /run/secrets/typesense_search_key
+      TYPESENSE_COLLECTION_PREFIX: ${TYPESENSE_COLLECTION_PREFIX}
+      BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
+      BETTER_AUTH_URL: https://${STAGING_HOST}
+      NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
+      PUBLIC_WEB_URL: https://${STAGING_HOST}
+      TRUSTED_ORIGINS: ''
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET_FILE: /run/secrets/razorpay_key_secret
+      RAZORPAY_WEBHOOK_SECRET_FILE: /run/secrets/razorpay_webhook_secret
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_ACCESS_KEY_ID_FILE: /run/secrets/r2_access_key_id
+      R2_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_secret_access_key
+      R2_BUCKET: ${R2_BUCKET}
+      RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+      EMAIL_FROM: ${EMAIL_FROM}
+      SMS_PROVIDER: ${SMS_PROVIDER}
+      NOVU_SECRET_KEY_FILE: /run/secrets/novu_secret
+      NOVU_OTP_WORKFLOW_ID: ${NOVU_OTP_WORKFLOW_ID}
+      NOVU_BOOKING_WORKFLOW_ID: ${NOVU_BOOKING_WORKFLOW_ID}
+      NOVU_API_URL: ${NOVU_API_URL}
+      WORKER_HEALTH_PORT: '3002'
+    secrets: &app-secrets
+      - postgres_password
+      - redis_password
+      - typesense_admin_key
+      - typesense_search_key
+      - better_auth_secret
+      - novu_secret
+      - r2_access_key_id
+      - r2_secret_access_key
+      - resend_api_key
+      - google_client_secret
+      - razorpay_key_secret
+      - razorpay_webhook_secret
+    networks:
+      - edge
+      - backend
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      replicas: ${API_REPLICAS:-0}
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=tickif_edge
+        - traefik.http.routers.tickif-api.rule=Host(`${STAGING_HOST}`) && (PathPrefix(`/api`) || Path(`/docs`) || Path(`/openapi.json`) || Path(`/health`) || Path(`/livez`) || Path(`/readyz`))
+        - traefik.http.routers.tickif-api.entrypoints=websecure
+        - traefik.http.routers.tickif-api.tls.certresolver=letsencrypt
+        - traefik.http.routers.tickif-api.priority=200
+        - traefik.http.routers.tickif-api.middlewares=secure-headers@file
+        - traefik.http.services.tickif-api.loadbalancer.server.port=3001
+        - traefik.http.services.tickif-api.loadbalancer.serverstransport=staging-default@file
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 1m
+      update_config: *stateless-update
+      rollback_config: *stateless-rollback
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.00'
+          memory: 768M
+
+  worker:
+    image: ${WORKER_IMAGE}
+    environment:
+      <<: *app-environment
+      PORT: '3001'
+      MEDIA_WORKER_CONCURRENCY: '2'
+      SEARCH_WORKER_CONCURRENCY: '4'
+    secrets: *app-secrets
+    networks:
+      - backend
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 2m
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3002/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      replicas: ${WORKER_REPLICAS:-0}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+      update_config: *stateless-update
+      rollback_config: *stateless-rollback
+      resources:
+        reservations:
+          cpus: '0.50'
+          memory: 768M
+        limits:
+          cpus: '2.00'
+          memory: 2G
+
+  postgres:
+    image: postgres:16.15-alpine3.24@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    stop_grace_period: 1m
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.tickif.stateful == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      update_config:
+        parallelism: 1
+        failure_action: rollback
+        order: stop-first
+      resources:
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+        limits:
+          cpus: '2.00'
+          memory: 2G
+
+  redis:
+    image: redis:7.4.7-alpine@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf
+    entrypoint: ['/bin/sh', '-ec']
+    command:
+      [
+        'exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$(cat /run/secrets/redis_password)"',
+      ]
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping | grep -q PONG',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    logging: *default-logging
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.tickif.stateful == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.00'
+          memory: 1G
+
+  typesense:
+    image: typesense/typesense:30.2@sha256:610f2d34b1f93d00762869da2c67736775e5798d19a2c8b91b014b8a0cc1e110
+    entrypoint: ['/bin/sh', '-ec']
+    command:
+      [
+        'exec /opt/typesense-server --data-dir=/data --api-key="$$(cat /run/secrets/typesense_admin_key)" --enable-cors=false',
+      ]
+    secrets:
+      - typesense_admin_key
+    volumes:
+      - typesense_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -ec 'exec 3<>/dev/tcp/127.0.0.1/8108;
+          printf "GET /health HTTP/1.0\r\n\r\n" >&3;
+          read -r status <&3; [[ "$$status" == *" 200 "* ]]'
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.tickif.stateful == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+        limits:
+          cpus: '2.00'
+          memory: 2G
+
+networks:
+  edge:
+    name: tickif_edge
+    driver: overlay
+    driver_opts:
+      encrypted: 'true'
+  backend:
+    name: tickif_backend
+    driver: overlay
+    driver_opts:
+      encrypted: 'true'
+  socket_proxy:
+    name: tickif_socket_proxy
+    driver: overlay
+    driver_opts:
+      encrypted: 'true'
+    internal: true
+
+volumes:
+  traefik_acme:
+    name: tickif_staging_traefik_acme
+  postgres_data:
+    name: tickif_staging_postgres_data
+  redis_data:
+    name: tickif_staging_redis_data
+  typesense_data:
+    name: tickif_staging_typesense_data
+
+configs:
+  traefik_static:
+    external: true
+    name: ${TRAEFIK_STATIC_CONFIG}
+  traefik_dynamic:
+    external: true
+    name: ${TRAEFIK_DYNAMIC_CONFIG}
+
+secrets:
+  postgres_password:
+    external: true
+    name: ${POSTGRES_PASSWORD_SECRET}
+  redis_password:
+    external: true
+    name: ${REDIS_PASSWORD_SECRET}
+  typesense_admin_key:
+    external: true
+    name: ${TYPESENSE_ADMIN_KEY_SECRET}
+  typesense_search_key:
+    external: true
+    name: ${TYPESENSE_SEARCH_KEY_SECRET}
+  better_auth_secret:
+    external: true
+    name: ${BETTER_AUTH_SECRET_NAME}
+  novu_secret:
+    external: true
+    name: ${NOVU_SECRET_NAME}
+  r2_access_key_id:
+    external: true
+    name: ${R2_ACCESS_KEY_ID_SECRET}
+  r2_secret_access_key:
+    external: true
+    name: ${R2_SECRET_ACCESS_KEY_SECRET}
+  resend_api_key:
+    external: true
+    name: ${RESEND_API_KEY_SECRET}
+
+  google_client_secret:
+    external: true
+    name: ${GOOGLE_CLIENT_SECRET_NAME}
+  razorpay_key_secret:
+    external: true
+    name: ${RAZORPAY_KEY_SECRET_NAME}
+  razorpay_webhook_secret:
+    external: true
+    name: ${RAZORPAY_WEBHOOK_SECRET_NAME}

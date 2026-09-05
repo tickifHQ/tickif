@@ -20,3 +20,4 @@ export * from './visitors';
 export * from './verifications';
 export * from './billing';
 export * from './entitlements';
+export * from './health';

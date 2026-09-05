@@ -28,7 +28,7 @@
     "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
     "better-auth": "catalog:",
-    "resend": "^4.1.0"
+    "resend": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

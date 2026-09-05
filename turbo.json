@@ -4,6 +4,7 @@
   "globalDependencies": [".env"],
   "globalEnv": [
     "NODE_ENV",
+    "CONFIG_SECRETS_FILE",
     "DATABASE_URL",
     "REDIS_URL",
     "TYPESENSE_HOST",
@@ -19,6 +20,8 @@
     "GOOGLE_PLACES_REFRESH_DAYS",
     "API_URL",
     "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_WEB_URL",
+    "NEXT_PUBLIC_SCROLL_GATE_LIMIT",
     "NOVU_BOOKING_WORKFLOW_ID",
     "DATABASE_URL_TEST",
     "REDIS_URL_TEST"

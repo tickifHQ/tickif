@@ -32,6 +32,7 @@ import {
   adminOrganizationRetentionRoutes,
   organizationRetentionRoutes,
 } from './modules/organization-retention/routes.js';
+import { healthRoutes } from './modules/health/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -51,7 +52,9 @@ base.onError(onError);
 
 base.use('*', logger());
 base.use('*', cors({ origin: corsOrigins, credentials: true }));
-base.use('*', withSession);
+// Diagnostics/docs never need session resolution. Keeping health probes outside
+// this middleware ensures /livez cannot acquire a hidden Postgres dependency.
+base.use('/api/*', withSession);
 
 // better-auth owns everything under /api/auth/* (sign-in, OTP, OAuth, session).
 base.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
@@ -74,6 +77,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
   .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
+  .route('/', healthRoutes)
   .route('/api/admin/verifications', adminVerificationsRoutes)
   .route('/api/admin/reviews', adminReviewsRoutes)
   .route('/api/admin/projects', adminProjectsRoutes)
@@ -98,8 +102,7 @@ export const app = base
   .route('/api/search', searchRoutes)
   .route('/api/billing', subscribeRoutes)
   .route('/api/billing', webhookRoutes)
-  .route('/api/billing', entitlementRoutes)
-  .get('/health', (c) => c.json({ status: 'ok', service: 'tickif-api' }));
+  .route('/api/billing', entitlementRoutes);
 
 /** Exported for the web app's type-safe `hc<AppType>` client. */
 export type AppType = typeof app;
