@@ -144,6 +144,7 @@ describe('review lifecycle', () => {
         userId: owner.id,
         phoneNumberVerified: true,
         activeOrgId: organization.id,
+        activeTeamId: designer.teamId,
       },
     );
     expect(disputed.status).toBe('disputed');
@@ -183,6 +184,12 @@ describe('review lifecycle', () => {
       role: 'admin',
       createdAt: new Date(),
     });
+    await db.insert(schema.teamMember).values({
+      id: `team-member-${writer.id}`,
+      teamId: designer.teamId,
+      userId: writer.id,
+      createdAt: new Date(),
+    });
     const review = await reviewsService.create(
       {
         designerProfileId: designer.id,
@@ -206,6 +213,7 @@ describe('review lifecycle', () => {
           userId: writer.id,
           phoneNumberVerified: true,
           activeOrgId: organization.id,
+          activeTeamId: designer.teamId,
         },
       ),
     ).rejects.toMatchObject({ code: 'forbidden' });
@@ -577,6 +585,7 @@ describe('review lifecycle', () => {
         userId: second.owner.id,
         phoneNumberVerified: true,
         activeOrgId: second.organization.id,
+        activeTeamId: second.designer.teamId,
       },
     );
     const removed = await reviewsService.resolveDispute(
