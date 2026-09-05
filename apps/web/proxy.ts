@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { api } from '@/lib/api';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/design-system']);
+const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers']);
 
 /**
  * Route trees anonymous visitors may enter.
