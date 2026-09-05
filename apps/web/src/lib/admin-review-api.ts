@@ -24,7 +24,7 @@ export async function fetchAdminReviews(query: AdminReviewsQuery, cookie?: strin
         limit: String(query.limit),
       },
     },
-    cookie ? { headers: { cookie }, cache: 'no-store' } : undefined,
+    cookie ? { headers: { cookie }, init: { cache: 'no-store' } } : undefined,
   );
   await check(response);
   const parsed = adminReviewsResponseSchema.safeParse(await response.json());
