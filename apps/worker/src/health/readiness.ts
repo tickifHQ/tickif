@@ -1,7 +1,9 @@
+import type { IRedisClient } from 'bullmq';
+
 type Consumer = {
   isRunning(): boolean;
   waitUntilReady(): Promise<unknown>;
-  client: Promise<{ status: string; ping(): Promise<string> }>;
+  client: Promise<Pick<IRedisClient, 'status' | 'info'>>;
 };
 
 /** Prove authentication and command round-trip on the consumers' actual Redis connections. */
@@ -15,8 +17,10 @@ export async function consumersAreReady(consumers: readonly Consumer[]): Promise
           await consumer.waitUntilReady();
           const client = await consumer.client;
           if (client.status !== 'ready') return false;
+          // INFO is part of BullMQ's adapter contract and its own initialization checks.
+          const info = await client.info();
           return (
-            (await client.ping()) === 'PONG' && client.status === 'ready' && consumer.isRunning()
+            info.includes('redis_version:') && client.status === 'ready' && consumer.isRunning()
           );
         } catch {
           return false;

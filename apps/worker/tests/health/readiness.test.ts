@@ -30,7 +30,10 @@ describe('worker deployment readiness', () => {
           waitUntilReady: async () => {
             throw new Error('WRONGPASS synthetic-secret');
           },
-          client: Promise.resolve({ status: 'reconnecting', ping: async () => 'PONG' }),
+          client: Promise.resolve({
+            status: 'reconnecting',
+            info: async () => 'redis_version:7.4.0',
+          }),
         },
       ]),
     );
@@ -61,8 +64,11 @@ describe('worker deployment readiness', () => {
     expect(checks.consumers).toHaveBeenCalledTimes(2);
   });
 
-  it('checks initialized, running consumers and authenticated Redis PONG responses', async () => {
-    const redis = { status: 'ready', ping: vi.fn(async () => 'PONG') };
+  it('checks initialized, running consumers and authenticated Redis INFO responses', async () => {
+    const redis = {
+      status: 'ready',
+      info: vi.fn(async () => '# Server\r\nredis_version:7.4.0\r\n'),
+    };
     const consumer = {
       isRunning: vi.fn(() => true),
       waitUntilReady: vi.fn(async () => undefined),
@@ -70,10 +76,13 @@ describe('worker deployment readiness', () => {
     };
     await expect(consumersAreReady([consumer])).resolves.toBe(true);
     expect(consumer.waitUntilReady).toHaveBeenCalled();
+    expect(redis.info).toHaveBeenCalledOnce();
     redis.status = 'reconnecting';
     await expect(consumersAreReady([consumer])).resolves.toBe(false);
     redis.status = 'ready';
-    redis.ping.mockResolvedValueOnce('NOAUTH');
+    redis.info.mockResolvedValueOnce('');
+    await expect(consumersAreReady([consumer])).resolves.toBe(false);
+    redis.info.mockRejectedValueOnce(new Error('NOAUTH Authentication required'));
     await expect(consumersAreReady([consumer])).resolves.toBe(false);
     consumer.isRunning.mockReturnValue(false);
     await expect(consumersAreReady([consumer])).resolves.toBe(false);

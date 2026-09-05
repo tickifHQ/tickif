@@ -76,7 +76,7 @@ docker service update --detach=true --update-order stop-first --update-failure-a
 bad_worker_observed=false
 for ((i=0;i<90;i++)); do
   worker=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_worker")
-  if [[ -n "$worker" ]]; then
+  if [[ -n "$worker" ]] && docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$worker" | grep -q '^REDIS_URL=redis://:synthetic-invalid-password@redis:6379$'; then
     response=$(docker exec "$worker" node -e "Promise.all(['/livez','/readyz'].map(p=>fetch('http://127.0.0.1:3002'+p).then(r=>r.status))).then(s=>console.log(s.join(','))).catch(()=>process.exit(1))" 2>/dev/null || true)
     if [[ "$response" == 200,503 ]]; then bad_worker_observed=true; break; fi
   fi
@@ -104,7 +104,24 @@ for service in api worker web; do
   container=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_$service")
   docker exec "$container" node -e "fetch('http://127.0.0.1:$port/$route').then(r=>{if(!r.ok)process.exit(1)})"
 done
-# Run the real Traefik/socket-proxy pair; .invalid test hostname never requests a real certificate.
+# Keep production strict SNI enabled, using a disposable certificate only in this fixture.
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=staging.invalid \
+  -addext subjectAltName=DNS:staging.invalid -keyout "$fixture/tls.key" -out "$fixture/tls.crt"
+cp infra/staging/traefik/dynamic.yml "$fixture/dynamic.yml"
+cat >>"$fixture/dynamic.yml" <<'TLS'
+  certificates:
+    - certFile: /etc/traefik/fixture.crt
+      keyFile: /run/secrets/fixture.key
+TLS
+docker secret create staging_fixture_tls_key "$fixture/tls.key"
+docker config create staging_fixture_tls_cert "$fixture/tls.crt"
+docker config create staging_fixture_dynamic "$fixture/dynamic.yml"
+previous_dynamic=$(docker service inspect "${STACK_NAME}_traefik" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{if eq .File.Name "/etc/traefik/dynamic.yml"}}{{.ConfigName}}{{end}}{{end}}')
+docker service update --detach=true --config-rm "$previous_dynamic" \
+  --config-add source=staging_fixture_dynamic,target=/etc/traefik/dynamic.yml \
+  --config-add source=staging_fixture_tls_cert,target=/etc/traefik/fixture.crt \
+  --secret-add source=staging_fixture_tls_key,target=fixture.key "${STACK_NAME}_traefik"
+# The fixture ACME endpoint is unreachable localhost, so no CA/provider is contacted.
 docker service scale --detach=true "${STACK_NAME}_traefik=1"
 source infra/staging/scripts/lib.sh
 wait_healthy traefik 1
