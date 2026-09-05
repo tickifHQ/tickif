@@ -145,10 +145,26 @@ describe('billing management safety', () => {
     'acknowledges a signed %s recovery callback from %s so webhooks can reactivate it',
     async (razorpayStatus, subscriptionState) => {
       const caller = await owner();
+      const graceStartedAt = new Date('2026-09-01T00:00:00Z');
+      const lockedAt = new Date('2026-09-02T00:00:00Z');
       const sub = await subscription(caller, {
         razorpayStatus,
         subscriptionState,
-        ...(subscriptionState === 'downgraded' ? { planTier: 'hobby' as const } : {}),
+        ...(subscriptionState === 'grace'
+          ? { graceStartedAt, preLapseTier: 'professional_plus' as const }
+          : {}),
+        ...(subscriptionState === 'locked'
+          ? { graceStartedAt, lockedAt, preLapseTier: 'professional_plus' as const }
+          : {}),
+        ...(subscriptionState === 'downgraded'
+          ? {
+              planTier: 'hobby' as const,
+              graceStartedAt,
+              lockedAt,
+              downgradedAt: new Date('2026-09-03T00:00:00Z'),
+              preLapseTier: 'professional_plus' as const,
+            }
+          : {}),
       });
 
       await subscribeService.verifyPayment(caller, callback(sub.razorpaySubscriptionId!));
