@@ -24,6 +24,8 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     updateProfileInTx: vi.fn(),
     clearLogoIfMatch: vi.fn(),
     setLogoIfMatch: vi.fn(),
+    reserveLogoUpload: vi.fn(),
+    releaseUploadLease: vi.fn(),
     activateIfDraft: vi.fn(async () => true),
     activateIfDraftInTx: vi.fn(async () => true),
   },
@@ -163,7 +165,10 @@ function setupGetPortfolio(portfolio = makePortfolio()) {
   return portfolio;
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(portfolioRepository.reserveLogoUpload).mockResolvedValue(true);
+});
 
 describe('resolveProfile', () => {
   it('requires an active branch', async () => {

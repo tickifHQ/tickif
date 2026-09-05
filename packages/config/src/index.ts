@@ -141,6 +141,7 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_UPLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(600),
+  ORGANIZATION_UPLOAD_SETTLE_SECONDS: z.coerce.number().int().positive().default(300),
   R2_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(3600),
   R2_VERIFICATION_DOWNLOAD_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(60),
 
@@ -204,6 +205,11 @@ const envSchema = z.object({
   // How often the billing lifecycle sweep runs (ms). Day-granularity windows
   // tolerate an hourly cadence.
   BILLING_LIFECYCLE_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
+
+  // Organization closure and retention windows (E-250). A closure remains
+  // owner-recoverable while delisted, then admin-recoverable while archived.
+  ORGANIZATION_DELIST_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  ORGANIZATION_ARCHIVE_RETENTION_DAYS: z.coerce.number().int().min(1).default(365),
 });
 
 /**

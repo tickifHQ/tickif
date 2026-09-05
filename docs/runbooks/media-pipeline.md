@@ -101,12 +101,19 @@ Originals can be orphaned two ways, cleaned two ways:
   ```bash
   mc rm local/tickif-media/originals/<projectId>/<uuid>     # or aws s3 rm against R2
   ```
-- **Abandoned uploads** (URL minted, never committed) → swept by the **R2 lifecycle
-  rule** on the `originals/` prefix (infra/r2). If abandoned objects are piling up,
-  check that the lifecycle rule is present and its expiry window is sane.
+- **Abandoned uploads** (URL minted, never committed) require a database-aware
+  sweep. Never apply an age-only rule to `originals/`: committed project
+  originals and profile logos use that prefix and must survive recovery windows.
 
 To audit orphans: list `originals/` and diff against `project_image.original_key`
 where `status != 'failed'`.
+
+Organization erasure is stricter. Upload URL issuance persists a lease for project
+originals, profile logos, and verification documents. The retention worker waits through
+the latest lease expiry plus `ORGANIZATION_UPLOAD_SETTLE_SECONDS`, blocks against in-flight
+media work, inventories every project, logo, and verification prefix, deletes manifest
+items, then inventories them again before the database cascade. Failures leave the
+manifest retryable.
 
 ## Worker memory sizing
 

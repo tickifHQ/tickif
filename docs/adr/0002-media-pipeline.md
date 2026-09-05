@@ -73,17 +73,21 @@ than once.
 
 7. **Orphan cleanup is split by cause.**
    - **Permanent failure** → the app deletes the original inline (best-effort; a failed
-     delete is logged, not retried — the lifecycle rule below is the backstop).
-   - **Abandoned uploads** (URL minted, bytes never PUT or never committed) → swept by an
-     **R2 lifecycle rule** on the `originals/` prefix (infra/r2, authored separately), not by
-     application code. The API has no way to know a client walked away, so time-based
-     expiry at the bucket is the right layer.
+     delete is logged, not retried; a database-aware orphan sweep is the backstop).
+   - **Abandoned uploads** (URL minted, bytes never PUT or never committed) → swept only
+     after database references are checked. Committed originals use the same prefix, so
+     an age-only bucket rule would destroy live or recoverable media.
+   - **Organization purge** records every project, logo, and verification upload URL in
+     `organization_upload_lease`. It waits for the latest URL to expire plus the configured
+     settling window, takes an exclusive lifecycle lock against media processing, and scans
+     every owned prefix twice before deleting database rows. A late PUT or derivative job
+     cannot escape the durable purge manifest.
 
 ## Consequences
 
 - The upload is a **three-call dance** (mint → PUT → commit); a client that mints but never
-  commits leaves a `processing` row and an orphan original until the lifecycle rule expires
-  it. That's accepted: commit is the only signal the bytes actually landed.
+  commits leaves a `processing` row and an orphan original until the database-aware sweep
+  removes it. That's accepted: commit is the only signal the bytes actually landed.
 - Authorization is **owner OR superadmin** (moderation) for every media use-case, matching
   the canonical `requireOwnership` policy. **Org-member access is deferred** until
   `designer_profile ↔ organization` is modeled (E-66) — there is no designer↔org link yet.

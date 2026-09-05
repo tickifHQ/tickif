@@ -133,6 +133,57 @@ async function slugAvailable(
 }
 
 export const portfolioRepository = {
+  async reserveLogoUpload(
+    profileId: string,
+    resourceKey: string,
+    expiresAt: Date,
+  ): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      const [candidate] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, profileId))
+        .limit(1);
+      if (!candidate) return false;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+      );
+      const [current] = await tx
+        .select({ organizationId: schema.designerProfile.orgId })
+        .from(schema.designerProfile)
+        .innerJoin(
+          schema.organization,
+          eq(schema.organization.id, schema.designerProfile.orgId),
+        )
+        .where(
+          and(
+            eq(schema.designerProfile.id, profileId),
+            eq(schema.designerProfile.orgId, candidate.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!current) return false;
+      const [retention] = await tx
+        .select({ organizationId: schema.organizationRetention.organizationId })
+        .from(schema.organizationRetention)
+        .where(eq(schema.organizationRetention.organizationId, candidate.organizationId))
+        .limit(1);
+      if (retention) return false;
+      await tx.insert(schema.organizationUploadLease).values({
+        resourceKey,
+        organizationId: candidate.organizationId,
+        expiresAt,
+      });
+      return true;
+    });
+  },
+
+  async releaseUploadLease(resourceKey: string): Promise<void> {
+    await db
+      .delete(schema.organizationUploadLease)
+      .where(eq(schema.organizationUploadLease.resourceKey, resourceKey));
+  },
+
   /** Find portfolio by designer profile ID. */
   async findByProfileId(profileId: string): Promise<PortfolioRecord | null> {
     const [row] = await db

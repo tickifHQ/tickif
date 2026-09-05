@@ -104,7 +104,7 @@ export const entitlementService = {
         state === 'locked'
           ? daysRemaining(subscription.lockedAt, config.BILLING_LOCKED_PERIOD_DAYS, now)
           : null,
-      // Frozen resources are only relevant once downgraded (seats frozen by E-239 sweep).
+      // Frozen resources are only relevant once downgraded.
       frozenResources: state === 'downgraded' ? await frozenResourcesFor(caller.activeOrgId) : [],
     };
 
@@ -116,14 +116,19 @@ export const entitlementService = {
 };
 
 /**
- * Resources preserved-but-frozen while downgraded. Currently seats only —
- * branch freeze follows once E-244 lands the branch table.
+ * Resources preserved but frozen while downgraded.
  */
 async function frozenResourcesFor(organizationId: string): Promise<FrozenResource[]> {
-  const frozenSeats = await entitlementRepository.countFrozenSeats(organizationId);
+  const [frozenSeats, frozenBranches] = await Promise.all([
+    entitlementRepository.countFrozenSeats(organizationId),
+    entitlementRepository.countFrozenBranches(organizationId),
+  ]);
   const resources: FrozenResource[] = [];
   if (frozenSeats > 0) {
     resources.push({ kind: 'seat', label: 'Team Seats', count: frozenSeats });
+  }
+  if (frozenBranches > 0) {
+    resources.push({ kind: 'branch', label: 'Branches', count: frozenBranches });
   }
   return resources;
 }

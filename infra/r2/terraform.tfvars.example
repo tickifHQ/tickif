@@ -11,5 +11,3 @@ cors_allowed_origins = [
   "https://www.tickif.co",
   "http://localhost:3000"
 ]
-
-lifecycle_expiry_days = 7

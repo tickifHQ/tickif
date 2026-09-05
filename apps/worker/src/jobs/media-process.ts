@@ -13,7 +13,8 @@ import { eachDerivative } from '../media/derivatives.js';
 import { defaultWatermarkConfig } from '../media/watermark.js';
 import { computePhash, findNearestDuplicate } from '../media/phash.js';
 import {
-  getImageForProcessing,
+  withMediaProcessingLease,
+  type ProcessingImage,
   markReady,
   refreshReadyDerivatives,
   markFailed,
@@ -89,11 +90,12 @@ async function generateAndStoreDerivatives(
  * row is only marked failed once attempts are exhausted (see the worker's failed handler).
  * Deterministic derivative keys make re-runs overwrite rather than orphan (E-112).
  */
-export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProcessResult> {
+async function processMediaWithLease(
+  job: Job<MediaProcessJob>,
+  image: ProcessingImage,
+): Promise<MediaProcessResult> {
   const { imageId } = job.data;
   const isReprocess = job.data.mode === 'reprocess';
-  const image = await getImageForProcessing(imageId);
-  if (!image) return { ok: true, skipped: 'missing' };
   if (image.status === 'ready' && !isReprocess) return { ok: true, skipped: 'already-ready' };
   if (image.status === 'failed') return { ok: true, skipped: 'already-failed' };
   if (image.status === 'processing' && isReprocess) return { ok: true, skipped: 'not-ready' };
@@ -194,4 +196,11 @@ export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProc
   // Another run already finished this image; its derivatives overwrote ours (idempotent keys).
   if (!flipped) return { ok: true, skipped: 'lost-race' };
   return { ok: true, derivatives: derivatives.length };
+}
+
+export async function processMedia(job: Job<MediaProcessJob>): Promise<MediaProcessResult> {
+  const result = await withMediaProcessingLease(job.data.imageId, (image) =>
+    processMediaWithLease(job, image),
+  );
+  return result ?? { ok: true, skipped: 'missing' };
 }

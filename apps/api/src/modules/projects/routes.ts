@@ -580,6 +580,7 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
           content: { 'application/json': { schema: galleryResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
+        410: errorJson('Project permanently deleted'),
       },
     }),
     async (c) => {
@@ -636,6 +637,9 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const { id } = c.req.valid('param');
     const result = await projectsService.getPublicById(id);
     c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    if ('availability' in result && result.availability === 'unavailable') {
+      c.header('X-Robots-Tag', 'noindex');
+    }
     return c.json(result, 200);
   })
   .openapi(getRoute, async (c) => {
@@ -793,12 +797,16 @@ export const projectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
           content: { 'application/json': { schema: publicProjectBySlugResponseSchema } },
         },
         404: errorJson('Project not found or not published'),
+        410: errorJson('Project permanently deleted'),
       },
     }),
     async (c) => {
       const { slug } = c.req.valid('param');
-      const result = await projectsService.getPublicBySlug(slug);
+      const result = await projectsService.getPublicPageBySlug(slug);
       c.header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      if ('availability' in result && result.availability === 'unavailable') {
+        c.header('X-Robots-Tag', 'noindex');
+      }
       return c.json(result, 200);
     },
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { and, db, eq, schema, selectMemberIdsToFreeze } from '@repo/db';
 import { config } from '@repo/config';
-import { makeOrganization, makeSubscription, makeUser } from '@repo/db/testing';
+import { makeOrganization, makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 import {
   findGraceExpired,
   findLockedExpired,
@@ -97,6 +97,13 @@ async function countFrozen(organizationId: string): Promise<number> {
   return rows.filter((r) => r.frozen).length;
 }
 
+async function frozenBranches(organizationId: string) {
+  return db
+    .select({ id: schema.team.id, frozen: schema.team.frozen, freezeRank: schema.team.freezeRank })
+    .from(schema.team)
+    .where(eq(schema.team.organizationId, organizationId));
+}
+
 describe('E-239 grace → locked transition', () => {
   it('transitions a grace subscription past its window to locked', async () => {
     const now = new Date();
@@ -122,7 +129,7 @@ describe('E-239 grace → locked transition', () => {
     expect(due.some((c) => c.id === sub.id)).toBe(false);
   });
 
-  it('starts sweep eligibility strictly after the displayed deadline', async () => {
+  it('starts sweep eligibility at the displayed deadline', async () => {
     const now = new Date('2026-09-08T00:00:00.000Z');
     const atDeadline = await makeGraceSubscription(now, GRACE_DAYS);
     const pastDeadline = await makeGraceSubscription(now, GRACE_DAYS);
@@ -133,7 +140,7 @@ describe('E-239 grace → locked transition', () => {
 
     const due = await findGraceExpired(now, GRACE_DAYS, 100);
 
-    expect(due.some(({ id }) => id === atDeadline.sub.id)).toBe(false);
+    expect(due.some(({ id }) => id === atDeadline.sub.id)).toBe(true);
     expect(due.some(({ id }) => id === pastDeadline.sub.id)).toBe(true);
   });
 });
@@ -278,6 +285,45 @@ describe('E-239 seat freeze on downgrade', () => {
     expect(selectMemberIdsToFreeze(candidates, 1)).toEqual(['new-owner', 'new-member']);
     expect(selectMemberIdsToFreeze(candidates, -1)).toEqual([]);
   });
+
+  it('freezes excess branches newest-first with stable ranks in the downgrade transaction', async () => {
+    const now = new Date();
+    const { org, sub } = await makeLockedSubscription(now, LOCKED_DAYS + 1);
+    const oldest = await makeTeam({
+      organizationId: org.id,
+      name: 'Oldest Branch',
+      createdAt: new Date(now.getTime() - 10 * DAY_MS),
+    });
+    const middle = await makeTeam({
+      organizationId: org.id,
+      name: 'Middle Branch',
+      createdAt: new Date(now.getTime() - 5 * DAY_MS),
+    });
+    const newest = await makeTeam({
+      organizationId: org.id,
+      name: 'Newest Branch',
+      createdAt: new Date(now.getTime() - 2 * DAY_MS),
+    });
+
+    expect(await transitionLockedToDowngraded(sub.id, now)).toBe(true);
+
+    const branches = await frozenBranches(org.id);
+    expect(branches.find(({ id }) => id === oldest.id)).toMatchObject({
+      frozen: false,
+      freezeRank: null,
+    });
+    expect(branches.find(({ id }) => id === newest.id)).toMatchObject({
+      frozen: true,
+      freezeRank: 1,
+    });
+    expect(branches.find(({ id }) => id === middle.id)).toMatchObject({
+      frozen: true,
+      freezeRank: 2,
+    });
+
+    expect(await transitionLockedToDowngraded(sub.id, now)).toBe(false);
+    expect(await frozenBranches(org.id)).toEqual(expect.arrayContaining(branches));
+  });
 });
 
 describe('E-239 seat restore on reactivation', () => {
@@ -315,11 +361,22 @@ describe('E-239 config-driven windows', () => {
     const now = new Date();
     // Exactly at the window boundary minus a hair — not yet due.
     const notDue = await makeGraceSubscription(now, GRACE_DAYS - 0.5);
-    // Comfortably past the window — due.
-    const due = await makeGraceSubscription(now, GRACE_DAYS + 0.5);
+    // The exact deadline is due, so no extra sweep interval is added.
+    const due = await makeGraceSubscription(now, GRACE_DAYS);
 
     const expired = await findGraceExpired(now, GRACE_DAYS, 100);
     const ids = expired.map((c) => c.id);
+    expect(ids).toContain(due.sub.id);
+    expect(ids).not.toContain(notDue.sub.id);
+  });
+
+  it('includes a locked subscription at the exact downgrade deadline', async () => {
+    const now = new Date();
+    const notDue = await makeLockedSubscription(now, LOCKED_DAYS - 0.5);
+    const due = await makeLockedSubscription(now, LOCKED_DAYS);
+
+    const expired = await findLockedExpired(now, LOCKED_DAYS, 100);
+    const ids = expired.map((candidate) => candidate.id);
     expect(ids).toContain(due.sub.id);
     expect(ids).not.toContain(notDue.sub.id);
   });

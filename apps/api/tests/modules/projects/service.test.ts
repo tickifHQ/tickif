@@ -17,7 +17,9 @@ vi.mock('@repo/storage', () => ({
 // Replace the Drizzle-backed repository with a fake. This is what makes the
 // service unit-testable with NO database — the payoff of the layering rule.
 vi.mock('../../../src/modules/projects/repository.js', () => {
+  class ProjectSlugUnavailableError extends Error {}
   return {
+    ProjectSlugUnavailableError,
     projectsRepository: {
       list: vi.fn(),
       countByStatus: vi.fn(),

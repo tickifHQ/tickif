@@ -28,6 +28,10 @@ import { adminVerificationsRoutes, verificationsRoutes } from './modules/verific
 import { subscribeRoutes } from './modules/billing/subscribe-routes.js';
 import { webhookRoutes } from './modules/billing/webhook-routes.js';
 import { entitlementRoutes } from './modules/billing/entitlement-routes.js';
+import {
+  adminOrganizationRetentionRoutes,
+  organizationRetentionRoutes,
+} from './modules/organization-retention/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -69,6 +73,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
   .route('/api/admin/verifications', adminVerificationsRoutes)
   .route('/api/admin/reviews', adminReviewsRoutes)
   .route('/api/admin/projects', adminProjectsRoutes)
@@ -82,6 +87,7 @@ export const app = base
   .route('/api/leads', leadsRoutes)
   .route('/api/bookings', bookingsRoutes)
   .route('/api/orgs', orgsRoutes)
+  .route('/api/orgs/retention', organizationRetentionRoutes)
   .route('/api/reports', reportsRoutes)
   .route('/api/enquiries', enquiriesRoutes)
   .route('/api/interactions', interactionsRoutes)

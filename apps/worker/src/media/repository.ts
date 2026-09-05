@@ -10,6 +10,7 @@ import {
   isNotNull,
   asc,
   sql,
+  type DB,
 } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
 
@@ -21,6 +22,53 @@ export type ProcessingImage = {
   derivatives: schema.ProjectImageDerivative[];
   status: (typeof schema.projectImageStatusEnum.enumValues)[number];
 };
+
+type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
+
+async function findImageForProcessing(
+  tx: Transaction,
+  imageId: string,
+): Promise<(ProcessingImage & { organizationId: string }) | null> {
+  const [row] = await tx
+    .select({
+      id: schema.projectImage.id,
+      projectId: schema.projectImage.projectId,
+      originalKey: schema.projectImage.originalKey,
+      contentType: schema.projectImage.contentType,
+      derivatives: schema.projectImage.derivatives,
+      status: schema.projectImage.status,
+      organizationId: schema.designerProfile.orgId,
+    })
+    .from(schema.projectImage)
+    .innerJoin(schema.project, eq(schema.project.id, schema.projectImage.projectId))
+    .innerJoin(schema.designerProfile, eq(schema.designerProfile.id, schema.project.designerId))
+    .where(eq(schema.projectImage.id, imageId))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Keep organization purge out until an in-flight media job has finished writing objects. */
+export async function withMediaProcessingLease<T>(
+  imageId: string,
+  task: (image: ProcessingImage) => Promise<T>,
+): Promise<T | null> {
+  return db.transaction(async (tx) => {
+    const candidate = await findImageForProcessing(tx, imageId);
+    if (!candidate) return null;
+    await tx.execute(
+      sql`select pg_advisory_xact_lock_shared(hashtextextended(${`organization-retention:${candidate.organizationId}`}, 0))`,
+    );
+    const image = await findImageForProcessing(tx, imageId);
+    if (!image) return null;
+    const [retention] = await tx
+      .select({ organizationId: schema.organizationRetention.organizationId })
+      .from(schema.organizationRetention)
+      .where(eq(schema.organizationRetention.organizationId, image.organizationId))
+      .limit(1);
+    if (retention) return null;
+    return task(image);
+  });
+}
 
 export async function getImageForProcessing(imageId: string): Promise<ProcessingImage | null> {
   const [row] = await db
