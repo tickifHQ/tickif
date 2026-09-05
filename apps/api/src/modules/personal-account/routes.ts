@@ -17,7 +17,6 @@ const common = {
   path: '/me' as const,
   tags: ['Personal account'],
   security: [{ cookieAuth: [] }],
-  middleware: [requirePersonalContext] as const,
   responses: {
     200: {
       description: 'Personal account settings',
@@ -31,11 +30,13 @@ const common = {
 };
 const getRoute = createRoute({
   ...common,
+  middleware: [requirePersonalContext] as const,
   method: 'get',
   summary: 'Read your personal account settings',
 });
 const updateRoute = createRoute({
   ...common,
+  middleware: [requirePersonalContext] as const,
   method: 'patch',
   summary: 'Update your personal account settings',
   request: { body: { content: { 'application/json': { schema: updatePersonalAccountSchema } } } },
