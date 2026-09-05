@@ -123,15 +123,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
   const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
 
-  const session = await getServerSession();
-  if (session) {
-    const parsedRole = platformRoleSchema.safeParse(session.user.role);
-    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      const context = activeContextForSession(session);
-      if (context.kind === 'personal') redirect('/home');
-    }
-  }
-
+  const sessionPromise = getServerSession();
   const taxonomyOptionsPromise = fetchTaxonomyOptions();
   // One request per feed, always at the real page size: `hasMore` and the
   // rel=prev/next hints have to describe the 24-per-page scheme the links use.
@@ -141,10 +133,21 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       })
     : fetchFeedSafely(baseRequest, page);
   const featuredPagePromise = isDefaultFeed
-    ? session
-      ? Promise.resolve(emptyHomeFeedPage(1))
-      : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
+    ? sessionPromise.then((session) =>
+        session
+          ? emptyHomeFeedPage(1)
+          : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1),
+      )
     : Promise.resolve(emptyHomeFeedPage(1));
+  const session = await sessionPromise;
+  if (session) {
+    const parsedRole = platformRoleSchema.safeParse(session.user.role);
+    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+      const context = activeContextForSession(session);
+      if (context.kind === 'personal') redirect('/home');
+    }
+  }
+
   const [taxonomyOptions, initialPage, featuredPage] = await Promise.all([
     taxonomyOptionsPromise,
     initialPagePromise,
