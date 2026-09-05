@@ -45,6 +45,7 @@ catalog:
   typescript: ^5.9.2
   tsx: ^4.20.3
   '@types/node': 26.4.0
+  eslint-config-prettier: ^10.1.8
 
   # Validation (zod v4 — required by @hono/zod-openapi v1)
   zod: ^4.4.3
