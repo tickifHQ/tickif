@@ -45,3 +45,4 @@ e2e/playwright-report/
 
 # better-auth CLI reference output — regenerate with `pnpm auth:generate`; SOT is schema/auth.ts
 packages/auth/auth-schema.generated.ts
+test-results/
