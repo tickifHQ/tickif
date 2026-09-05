@@ -150,3 +150,29 @@ export const adminReviewsResponseSchema = z
   })
   .meta({ id: 'AdminReviews' });
 export type AdminReviewsResponse = z.infer<typeof adminReviewsResponseSchema>;
+
+/** Required on admin decisions: never moderate content newer than the viewed revision. */
+export const adminReviewDecisionQuerySchema = z
+  .object({ expectedRevision: z.coerce.number().int().nonnegative() })
+  .meta({ id: 'AdminReviewDecisionQuery' });
+
+/** Private read model. Do not return moderation notes from public review endpoints. */
+export const adminReviewDetailResponseSchema = z
+  .object({
+    review: reviewResponseSchema,
+    designer: z.object({ id: z.uuid(), name: z.string() }),
+    history: z.array(
+      z.object({
+        id: z.uuid(),
+        actorUserId: z.string().nullable(),
+        action: reviewModerationActionSchema,
+        fromStatus: reviewStatusSchema.nullable(),
+        toStatus: reviewStatusSchema,
+        note: z.string().nullable(),
+        reasonCode: z.string().nullable(),
+        createdAt: z.string().datetime(),
+      }),
+    ),
+  })
+  .meta({ id: 'AdminReviewDetail' });
+export type AdminReviewDetailResponse = z.infer<typeof adminReviewDetailResponseSchema>;

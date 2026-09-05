@@ -1,4 +1,5 @@
 import type {
+  AdminReviewDetailResponse,
   AdminReviewsQuery,
   AdminReviewsResponse,
   CreateReviewInput,
@@ -94,6 +95,18 @@ function transitionParams(
 }
 
 export const reviewsService = {
+  async getAdminDetail(id: string): Promise<AdminReviewDetailResponse> {
+    const detail = await reviewsRepository.findAdminDetail(id);
+    if (!detail) throw AppError.notFound('Review not found');
+    return {
+      review: toResponse(detail.review),
+      designer: detail.designer,
+      history: detail.history.map((event) => ({
+        ...event,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    };
+  },
   async create(input: CreateReviewInput, caller: ReviewCaller): Promise<ReviewResponse> {
     if (!caller.phoneNumberVerified) {
       throw AppError.unprocessable('A verified phone number is required to submit a review');
@@ -141,8 +154,7 @@ export const reviewsService = {
     }
     if (
       review.status === 'published' &&
-      (!review.publishedAt ||
-        Date.now() - review.publishedAt.getTime() > PUBLISHED_EDIT_WINDOW_MS)
+      (!review.publishedAt || Date.now() - review.publishedAt.getTime() > PUBLISHED_EDIT_WINDOW_MS)
     ) {
       throw AppError.conflict('Published reviews can only be edited within 24 hours');
     }
@@ -174,8 +186,7 @@ export const reviewsService = {
       reviewCount: aggregate.reviewCount,
       page: query.page,
       limit: query.limit,
-      totalPages:
-        aggregate.reviewCount === 0 ? 0 : Math.ceil(aggregate.reviewCount / query.limit),
+      totalPages: aggregate.reviewCount === 0 ? 0 : Math.ceil(aggregate.reviewCount / query.limit),
     };
   },
 
@@ -217,23 +228,34 @@ export const reviewsService = {
     };
   },
 
-  async publish(id: string, caller: AdminReviewCaller): Promise<ReviewResponse> {
+  async publish(
+    id: string,
+    caller: AdminReviewCaller,
+    expectedRevision?: number,
+  ): Promise<ReviewResponse> {
     const review = await reviewsRepository.findById(id);
     if (!review) throw AppError.notFound('Review not found');
-    if (review.status !== 'pending') throw reviewTransitionError();
-    return transitionOrConflict(
-      transitionParams(review, caller, 'published', 'publish'),
-    );
+    if (
+      review.status !== 'pending' ||
+      (expectedRevision !== undefined && review.moderationRevision !== expectedRevision)
+    )
+      throw reviewTransitionError();
+    return transitionOrConflict(transitionParams(review, caller, 'published', 'publish'));
   },
 
   async reject(
     id: string,
     input: RejectReviewInput,
     caller: AdminReviewCaller,
+    expectedRevision?: number,
   ): Promise<ReviewResponse> {
     const review = await reviewsRepository.findById(id);
     if (!review) throw AppError.notFound('Review not found');
-    if (review.status !== 'pending') throw reviewTransitionError();
+    if (
+      review.status !== 'pending' ||
+      (expectedRevision !== undefined && review.moderationRevision !== expectedRevision)
+    )
+      throw reviewTransitionError();
     return transitionOrConflict(
       transitionParams(review, caller, 'rejected', 'reject', {
         note: input.note,
@@ -246,10 +268,15 @@ export const reviewsService = {
     id: string,
     input: ResolveReviewDisputeInput,
     caller: AdminReviewCaller,
+    expectedRevision?: number,
   ): Promise<ReviewResponse> {
     const review = await reviewsRepository.findById(id);
     if (!review) throw AppError.notFound('Review not found');
-    if (review.status !== 'disputed') throw reviewTransitionError();
+    if (
+      review.status !== 'disputed' ||
+      (expectedRevision !== undefined && review.moderationRevision !== expectedRevision)
+    )
+      throw reviewTransitionError();
 
     const publish = input.decision === 'publish';
     return transitionOrConflict(
