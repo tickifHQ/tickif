@@ -74,6 +74,21 @@ describe('activeContextForSession', () => {
       }),
     ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: 'team-1' });
   });
+
+  it('returns organization roll-up context when no branch is selected', () => {
+    expect(
+      activeContextForSession({
+        session: {
+          id: 'session-1',
+          token: 'token-1',
+          expiresAt: '2026-06-19T00:00:00Z',
+          activeOrganizationId: 'org-1',
+          activeTeamId: null,
+        },
+        user,
+      }),
+    ).toEqual({ kind: 'organization', organizationId: 'org-1', teamId: null });
+  });
 });
 
 describe('getServerSession', () => {

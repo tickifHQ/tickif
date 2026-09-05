@@ -13,7 +13,7 @@ export const activeContextSchema = z
       .object({
         kind: z.literal(ACTIVE_CONTEXT_KIND.ORGANIZATION),
         organizationId: z.string().min(1),
-        teamId: z.string().min(1),
+        teamId: z.string().min(1).nullable(),
       })
       .strict(),
   ])
@@ -27,7 +27,7 @@ export const setActiveContextSchema = z
       .object({
         kind: z.literal(ACTIVE_CONTEXT_KIND.ORGANIZATION),
         organizationId: z.string().min(1),
-        teamId: z.string().min(1).optional(),
+        teamId: z.string().min(1).nullable().optional(),
       })
       .strict(),
   ])
@@ -358,13 +358,30 @@ export const organizationBranchMemberSchema = z
   })
   .meta({ id: 'OrganizationBranchMember' });
 
+export const organizationBranchFootprintSchema = z
+  .object({
+    id: z.uuid(),
+    kind: z.enum(['city', 'locality']),
+    slug: z.string().min(1),
+    label: z.string().min(1),
+  })
+  .meta({ id: 'OrganizationBranchFootprint' });
+
 export const organizationBranchSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     profileId: z.uuid(),
     profileSlug: z.string().min(1),
+    profileStatus: z.enum(['draft', 'active', 'suspended']),
     projectCount: z.number().int().min(0),
+    memberCount: z.number().int().min(0),
+    averageRating: z.number().min(0).max(5),
+    reviewCount: z.number().int().min(0),
+    footprint: z.array(organizationBranchFootprintSchema),
+    frozen: z.boolean(),
+    frozenAt: z.string().datetime().nullable(),
+    freezeRank: z.number().int().positive().nullable(),
     createdAt: z.string().datetime(),
     members: z.array(organizationBranchMemberSchema),
   })
@@ -379,3 +396,24 @@ export const organizationBranchesResponseSchema = z
   })
   .meta({ id: 'OrganizationBranchesResponse' });
 export type OrganizationBranchesResponse = z.infer<typeof organizationBranchesResponseSchema>;
+
+export const removeOrganizationBranchParamsSchema = z
+  .object({ branchId: z.string().min(1) })
+  .strict();
+
+export const removeOrganizationBranchSchema = z
+  .object({ targetBranchId: z.string().min(1) })
+  .strict()
+  .meta({ id: 'RemoveOrganizationBranch' });
+export type RemoveOrganizationBranchInput = z.infer<typeof removeOrganizationBranchSchema>;
+
+export const removeOrganizationBranchResponseSchema = z
+  .object({
+    removedBranchId: z.string().min(1),
+    targetBranchId: z.string().min(1),
+    reassignedProjectCount: z.number().int().min(0),
+  })
+  .meta({ id: 'RemoveOrganizationBranchResponse' });
+export type RemoveOrganizationBranchResponse = z.infer<
+  typeof removeOrganizationBranchResponseSchema
+>;

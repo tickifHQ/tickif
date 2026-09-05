@@ -212,7 +212,7 @@ export const userContextPreference = pgTable(
     index('user_context_preference_teamId_idx').on(t.teamId),
     check(
       'user_context_preference_shape_check',
-      sql`(${t.contextKind} = 'personal' and ${t.organizationId} is null and ${t.teamId} is null) or (${t.contextKind} = 'organization' and ${t.organizationId} is not null and ${t.teamId} is not null)`,
+      sql`(${t.contextKind} = 'personal' and ${t.organizationId} is null and ${t.teamId} is null) or (${t.contextKind} = 'organization' and ${t.organizationId} is not null)`,
     ),
   ],
 );

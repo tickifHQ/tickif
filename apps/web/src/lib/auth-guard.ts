@@ -69,8 +69,8 @@ export function rolePassesCheck(
 export function activeContextForSession(session: SessionData): ActiveContext {
   const organizationId = session.session.activeOrganizationId;
   const teamId = session.session.activeTeamId;
-  return organizationId && teamId
-    ? { kind: 'organization', organizationId, teamId }
+  return organizationId
+    ? { kind: 'organization', organizationId, teamId: teamId ?? null }
     : { kind: 'personal' };
 }
 

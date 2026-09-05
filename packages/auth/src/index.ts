@@ -83,25 +83,10 @@ async function preferredContextForNewSession(userId: string): Promise<{
     .where(eq(schema.userContextPreference.userId, userId))
     .limit(1);
 
-  if (preference?.kind === 'organization' && preference.organizationId && preference.teamId) {
-    const [valid] = await db
+  if (preference?.kind === 'organization' && preference.organizationId) {
+    const [validMembership] = await db
       .select({ id: schema.member.id })
       .from(schema.member)
-      .innerJoin(
-        schema.team,
-        and(
-          eq(schema.team.id, preference.teamId),
-          eq(schema.team.organizationId, preference.organizationId),
-          eq(schema.team.frozen, false),
-        ),
-      )
-      .innerJoin(
-        schema.teamMember,
-        and(
-          eq(schema.teamMember.teamId, preference.teamId),
-          eq(schema.teamMember.userId, userId),
-        ),
-      )
       .where(
         and(
           eq(schema.member.userId, userId),
@@ -110,10 +95,48 @@ async function preferredContextForNewSession(userId: string): Promise<{
         ),
       )
       .limit(1);
-    if (valid) {
+    if (validMembership && !preference.teamId) {
       return {
         activeOrganizationId: preference.organizationId,
-        activeTeamId: preference.teamId,
+        activeTeamId: null,
+      };
+    }
+
+    if (validMembership && preference.teamId) {
+      const [validTeam] = await db
+        .select({ id: schema.teamMember.id })
+        .from(schema.teamMember)
+        .innerJoin(
+          schema.team,
+          and(
+            eq(schema.team.id, preference.teamId),
+            eq(schema.team.organizationId, preference.organizationId),
+            eq(schema.team.frozen, false),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.teamMember.teamId, preference.teamId),
+            eq(schema.teamMember.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (validTeam) {
+        return {
+          activeOrganizationId: preference.organizationId,
+          activeTeamId: preference.teamId,
+        };
+      }
+    }
+
+    if (validMembership) {
+      await db
+        .update(schema.userContextPreference)
+        .set({ teamId: null })
+        .where(eq(schema.userContextPreference.userId, userId));
+      return {
+        activeOrganizationId: preference.organizationId,
+        activeTeamId: null,
       };
     }
 
@@ -394,9 +417,7 @@ export const auth = betterAuth({
           .select({ organizationId: schema.team.organizationId, frozen: schema.team.frozen })
           .from(schema.team)
           .innerJoin(schema.teamMember, eq(schema.teamMember.teamId, schema.team.id))
-          .where(
-            and(eq(schema.team.id, teamId), eq(schema.teamMember.userId, session.user.id)),
-          )
+          .where(and(eq(schema.team.id, teamId), eq(schema.teamMember.userId, session.user.id)))
           .limit(1);
         if (!target || target.frozen) {
           throw new APIError('FORBIDDEN', {

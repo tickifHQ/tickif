@@ -100,11 +100,17 @@ describe('leadsService.list', () => {
     expect(leadsRepository.list).not.toHaveBeenCalled();
   });
 
-  it('rejects listing without an active branch', async () => {
-    await expect(
-      leadsService.list({ status: 'all', page: 1, limit: 12 }, { ...caller, activeTeamId: null }),
-    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
-    expect(leadsRepository.list).not.toHaveBeenCalled();
+  it('lists the organization roll-up without an active branch', async () => {
+    vi.mocked(leadsRepository.list).mockResolvedValue({ items: [], total: 0 });
+
+    await leadsService.list(
+      { status: 'all', page: 1, limit: 12 },
+      { ...caller, activeTeamId: null },
+    );
+
+    expect(leadsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ activeOrgId: 'org_1', activeTeamId: null }),
+    );
   });
 
   it('filters assigned access by every active membership belonging to the caller', async () => {
@@ -176,6 +182,19 @@ describe('leadsService.counts', () => {
 });
 
 describe('leadsService.update', () => {
+  it('keeps lead mutations branch-bound in organization roll-up context', async () => {
+    vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());
+
+    await expect(
+      leadsService.update(
+        leadDetailRow().id,
+        { notes: 'Follow up' },
+        { ...caller, activeTeamId: null },
+      ),
+    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
+    expect(leadsRepository.update).not.toHaveBeenCalled();
+  });
+
   it('persists designer notes separately from the homeowner message', async () => {
     const updated = leadDetailRow({ notes: 'Call again on Friday.' });
     vi.mocked(leadsRepository.findById).mockResolvedValue(leadDetailRow());

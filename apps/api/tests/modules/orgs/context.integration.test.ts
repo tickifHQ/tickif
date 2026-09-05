@@ -101,6 +101,44 @@ describe('personal and organization context', () => {
     });
   });
 
+  it('repairs a saved frozen branch to organization roll-up on the next login', async () => {
+    const phone = '+919800004212';
+    const account = await createOrganizationContext(phone);
+    await db.insert(schema.userContextPreference).values({
+      userId: account.userId,
+      contextKind: 'organization',
+      organizationId: account.organization.id,
+      teamId: account.team.id,
+    });
+    await db
+      .update(schema.team)
+      .set({ frozen: true, frozenAt: new Date(), freezeRank: 1 })
+      .where(eq(schema.team.id, account.team.id));
+
+    const nextLogin = await createAuthedSession(phone);
+    const response = await app.request('/api/orgs/context', {
+      headers: { cookie: nextLogin.cookie },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
+      },
+    });
+    const [preference] = await db
+      .select()
+      .from(schema.userContextPreference)
+      .where(eq(schema.userContextPreference.userId, account.userId));
+    expect(preference).toMatchObject({
+      contextKind: 'organization',
+      organizationId: account.organization.id,
+      teamId: null,
+    });
+  });
+
   it('preserves an explicit personal selection on the next login', async () => {
     const phone = '+919800004210';
     const account = await createOrganizationContext(phone);
@@ -124,7 +162,7 @@ describe('personal and organization context', () => {
     await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
   });
 
-  it('revalidates an active session and repairs a later-frozen context to personal', async () => {
+  it('revalidates an active session and repairs a later-frozen branch to organization roll-up', async () => {
     const account = await createOrganizationContext('+919800004204');
     expect(
       (
@@ -144,7 +182,13 @@ describe('personal and organization context', () => {
       headers: { cookie: account.cookie },
     });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ context: { kind: 'personal' } });
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
+      },
+    });
 
     const [session] = await db
       .select({
@@ -153,19 +197,19 @@ describe('personal and organization context', () => {
       })
       .from(schema.session)
       .where(eq(schema.session.userId, account.userId));
-    expect(session).toEqual({ organizationId: null, teamId: null });
+    expect(session).toEqual({ organizationId: account.organization.id, teamId: null });
     const [preference] = await db
       .select()
       .from(schema.userContextPreference)
       .where(eq(schema.userContextPreference.userId, account.userId));
     expect(preference).toMatchObject({
-      contextKind: 'personal',
-      organizationId: null,
+      contextKind: 'organization',
+      organizationId: account.organization.id,
       teamId: null,
     });
   });
 
-  it('repairs an incomplete organization session with its default active branch', async () => {
+  it('preserves an organization roll-up session without selecting a branch', async () => {
     const account = await createOrganizationContext('+919800004206');
     await db
       .update(schema.session)
@@ -181,7 +225,49 @@ describe('personal and organization context', () => {
       context: {
         kind: 'organization',
         organizationId: account.organization.id,
-        teamId: account.team.id,
+        teamId: null,
+      },
+    });
+  });
+
+  it('selects and restores an organization roll-up context', async () => {
+    const phone = '+919800004211';
+    const account = await createOrganizationContext(phone);
+
+    const response = await setContext(account.cookie, {
+      kind: 'organization',
+      organizationId: account.organization.id,
+      teamId: null,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
+      },
+    });
+    const [preference] = await db
+      .select()
+      .from(schema.userContextPreference)
+      .where(eq(schema.userContextPreference.userId, account.userId));
+    expect(preference).toMatchObject({
+      contextKind: 'organization',
+      organizationId: account.organization.id,
+      teamId: null,
+    });
+
+    const nextLogin = await createAuthedSession(phone);
+    const restored = await app.request('/api/orgs/context', {
+      headers: { cookie: nextLogin.cookie },
+    });
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: null,
       },
     });
   });

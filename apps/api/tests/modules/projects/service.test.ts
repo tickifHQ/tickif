@@ -227,14 +227,18 @@ describe('projectsService.list', () => {
     expect(result.items[0]!.createdAt).toBe('2026-01-01T00:00:00.000Z');
   });
 
-  it('rejects listing without an active branch', async () => {
-    await expect(
-      projectsService.list(
-        { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
-        { ...caller, activeTeamId: null },
-      ),
-    ).rejects.toMatchObject({ status: 422, message: 'No active branch selected' });
-    expect(projectsRepository.list).not.toHaveBeenCalled();
+  it('lists the organization roll-up without an active branch', async () => {
+    vi.mocked(projectsRepository.list).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
+
+    await projectsService.list(
+      { status: 'all', page: 1, limit: 20, sort: '-updatedAt' },
+      { ...caller, activeTeamId: null },
+    );
+
+    expect(projectsRepository.list).toHaveBeenCalledWith(
+      expect.objectContaining({ activeOrgId: 'org_1', activeTeamId: null }),
+    );
   });
 
   it('surfaces only unresolved comments for changes-requested list rows', async () => {

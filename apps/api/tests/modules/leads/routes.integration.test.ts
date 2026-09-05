@@ -274,7 +274,7 @@ describe('GET /api/leads', () => {
     expect(retainedAssignment?.assignedMemberId).toBe(secondMemberId);
   });
 
-  it('revokes every lead operation when the active branch membership is removed', async () => {
+  it('falls back to organization reads while keeping writes branch-bound after membership removal', async () => {
     const {
       cookie: ownerCookie,
       userId: ownerUserId,
@@ -332,7 +332,7 @@ describe('GET /api/leads', () => {
       }),
     ];
 
-    expect(responses.map(({ status }) => status)).toEqual([403, 403, 403, 403, 403]);
+    expect(responses.map(({ status }) => status)).toEqual([200, 200, 200, 422, 422]);
     const [unchanged] = await db
       .select({ notes: schema.lead.notes })
       .from(schema.lead)

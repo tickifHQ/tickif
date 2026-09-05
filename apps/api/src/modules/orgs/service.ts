@@ -16,6 +16,7 @@ import {
   type OwnershipTransferResponse,
   type ActiveContext,
   type SetActiveContext,
+  type RemoveOrganizationBranchResponse,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
 import { escapeHtml, sendEmail } from '@repo/auth/email';
@@ -27,6 +28,10 @@ import {
   type OwnershipTransferRecord,
   type DbTransaction,
 } from './repository.js';
+import {
+  BRANCH_REMOVAL_RESULT,
+  removeBranchWithReassignment,
+} from './branch-removal-repository.js';
 
 const WRITE_ROLES = new Set<OrganizationMemberRole>([
   ORGANIZATION_MEMBER_ROLE.OWNER,
@@ -171,6 +176,11 @@ export const orgsService = {
     selection: SetActiveContext,
   ): Promise<ActiveContext> {
     if (selection.kind === 'personal') return selection;
+    if (selection.teamId === null) {
+      const valid = await orgsRepository.hasMembership(userId, selection.organizationId);
+      if (!valid) throw AppError.forbidden('Organization context is unavailable');
+      return { kind: 'organization', organizationId: selection.organizationId, teamId: null };
+    }
     const teamId =
       selection.teamId ??
       (await orgsRepository.findDefaultActiveTeamForUser(userId, selection.organizationId));
@@ -196,22 +206,26 @@ export const orgsService = {
       return { kind: 'personal' };
     }
 
-    const teamId =
-      activeTeamId ??
-      (await orgsRepository.findDefaultActiveTeamForUser(userId, activeOrganizationId));
-    if (
-      teamId &&
-      (await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, teamId))
-    ) {
-      const context = {
+    if (activeTeamId) {
+      if (
+        await orgsRepository.isValidOrganizationContext(userId, activeOrganizationId, activeTeamId)
+      ) {
+        return {
+          kind: 'organization',
+          organizationId: activeOrganizationId,
+          teamId: activeTeamId,
+        };
+      }
+    }
+    if (await orgsRepository.hasMembership(userId, activeOrganizationId)) {
+      const rollup = {
         kind: 'organization' as const,
         organizationId: activeOrganizationId,
-        teamId,
+        teamId: null,
       };
-      if (!activeTeamId) await orgsRepository.saveContextPreference(userId, context);
-      return context;
+      if (activeTeamId) await orgsRepository.saveContextPreference(userId, rollup);
+      return rollup;
     }
-
     const personal = { kind: 'personal' } as const;
     await orgsRepository.saveContextPreference(userId, personal);
     return personal;
@@ -304,29 +318,88 @@ export const orgsService = {
     if (!(await orgsRepository.hasMembership(input.userId, input.organizationId))) {
       throw AppError.forbidden('Organization membership required');
     }
-    const [branches, plan] = await Promise.all([
-      orgsRepository.listActiveBranchesForUser(input.userId, input.organizationId),
+    const [membership, plan] = await Promise.all([
+      orgsRepository.findMembershipRole(input.userId, input.organizationId),
       orgsRepository.findOrganizationPlan(input.organizationId),
     ]);
-    const members = await orgsRepository.listBranchMembers(branches.map(({ id }) => id));
+    const branches = await orgsRepository.listBranchesForUser(
+      input.userId,
+      input.organizationId,
+      hasWriteRole(membership?.role ?? null, membership?.frozen ?? false),
+    );
+    const profileIds = branches.map(({ profileId }) => profileId);
+    const teamIds = branches.map(({ id }) => id);
+    const [members, footprints, branchUsage] = await Promise.all([
+      orgsRepository.listBranchMembers(teamIds),
+      orgsRepository.listBranchFootprints(profileIds),
+      orgsRepository.countActiveBranches(input.organizationId),
+    ]);
+    const footprintsByProfileId = new Map<string, typeof footprints>();
+    for (const footprint of footprints) {
+      const existing = footprintsByProfileId.get(footprint.profileId) ?? [];
+      existing.push(footprint);
+      footprintsByProfileId.set(footprint.profileId, existing);
+    }
     return {
       activeTeamId: input.activeTeamId,
-      branchUsage: await orgsRepository.countActiveBranches(input.organizationId),
+      branchUsage,
       branchLimit: branchLimit(plan.tier, plan.state),
-      branches: branches.map((branch) => ({
-        ...branch,
-        createdAt: branch.createdAt.toISOString(),
-        members: members
-          .filter((member) => member.teamId === branch.id)
-          .map((member) => ({
+      branches: branches.map((branch) => {
+        const branchMembers = members.filter((member) => member.teamId === branch.id);
+        return {
+          ...branch,
+          memberCount: branchMembers.length,
+          averageRating: Number(branch.averageRating) || 0,
+          footprint: (footprintsByProfileId.get(branch.profileId) ?? []).map((entry) => ({
+            id: entry.id,
+            kind: entry.kind,
+            slug: entry.slug,
+            label: entry.label,
+          })),
+          frozenAt: branch.frozenAt?.toISOString() ?? null,
+          createdAt: branch.createdAt.toISOString(),
+          members: branchMembers.map((member) => ({
             userId: member.userId,
             name: member.name,
             email: member.email,
             image: member.image,
             role: normalizeRole(member.role),
           })),
-      })),
+        };
+      }),
     };
+  },
+
+  async removeBranch(input: {
+    userId: string;
+    organizationId: string;
+    branchId: string;
+    targetBranchId: string;
+  }): Promise<RemoveOrganizationBranchResponse> {
+    const result = await removeBranchWithReassignment(input);
+    if (typeof result !== 'string') {
+      return {
+        removedBranchId: result.removedBranchId,
+        targetBranchId: result.targetBranchId,
+        reassignedProjectCount: result.reassignedProjectCount,
+      };
+    }
+    switch (result) {
+      case BRANCH_REMOVAL_RESULT.NOT_FOUND:
+        throw AppError.notFound('Branch not found');
+      case BRANCH_REMOVAL_RESULT.FORBIDDEN:
+        throw AppError.forbidden('Only the active organization Owner can remove a branch');
+      case BRANCH_REMOVAL_RESULT.FINAL_BRANCH:
+        throw AppError.conflict('The final organization branch cannot be removed');
+      case BRANCH_REMOVAL_RESULT.REVIEW_CONFLICT:
+        throw AppError.conflict(
+          'The selected branches have reviews from the same customer and cannot be combined',
+        );
+      case BRANCH_REMOVAL_RESULT.INVALID_TARGET:
+        throw AppError.unprocessable(
+          'Select a different active branch from this organization as the reassignment target',
+        );
+    }
   },
 
   async getCurrentWorkspace(input: {

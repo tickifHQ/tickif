@@ -35,23 +35,6 @@ export type Ownership = {
 /** Resolves the requested resource's ownership; return null when it doesn't exist. */
 export type OwnershipResolver = (c: Context) => Promise<Ownership | null>;
 
-async function repairIncompleteOrganizationContext(
-  headers: Headers,
-  result: { user: Session['user']; session: Session['session'] },
-  appendCookie: (cookie: string) => void,
-): Promise<void> {
-  if (!result.session.activeOrganizationId || result.session.activeTeamId !== null) return;
-  const teamId = await orgsService.findDefaultActiveTeamForUser(
-    result.user.id,
-    result.session.activeOrganizationId,
-  );
-  if (!teamId) return;
-  const response = await setActiveTeam(headers, teamId);
-  if (!response.ok) return;
-  for (const cookie of response.headers.getSetCookie()) appendCookie(cookie);
-  result.session.activeTeamId = teamId;
-}
-
 /**
  * Resolves the better-auth session from the incoming request and attaches
  * `user` / `session` to the Hono context. Always runs; does not block.
@@ -65,20 +48,15 @@ async function repairIncompleteOrganizationContext(
  */
 export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   const result = await getSession(c.req.raw.headers);
-  if (result) {
-    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
-      c.header('Set-Cookie', cookie, { append: true });
-    });
-  }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
   c.set(
     'activeContext',
-    result?.session.activeOrganizationId && result.session.activeTeamId
+    result?.session.activeOrganizationId
       ? {
           kind: 'organization',
           organizationId: result.session.activeOrganizationId,
-          teamId: result.session.activeTeamId,
+          teamId: result.session.activeTeamId ?? null,
         }
       : { kind: 'personal' },
   );
@@ -86,10 +64,7 @@ export const withSession: MiddlewareHandler<{ Variables: AuthVariables }> = asyn
   await next();
 };
 
-function appendResponseCookies(
-  c: Context<{ Variables: AuthVariables }>,
-  response: Response,
-): void {
+function appendResponseCookies(c: Context<{ Variables: AuthVariables }>, response: Response): void {
   for (const cookie of response.headers.getSetCookie()) {
     c.header('Set-Cookie', cookie, { append: true });
   }
@@ -124,8 +99,7 @@ export async function applyActiveContext(
 
   const session = c.get('session');
   if (session) {
-    session.activeOrganizationId =
-      context.kind === 'organization' ? context.organizationId : null;
+    session.activeOrganizationId = context.kind === 'organization' ? context.organizationId : null;
     session.activeTeamId = context.kind === 'organization' ? context.teamId : null;
   }
   c.set('activeContext', context);
@@ -171,20 +145,15 @@ async function refreshSession(c: Context<{ Variables: AuthVariables }>): Promise
   for (const cookie of headers.getSetCookie()) {
     c.header('Set-Cookie', cookie, { append: true });
   }
-  if (result) {
-    await repairIncompleteOrganizationContext(c.req.raw.headers, result, (cookie) => {
-      c.header('Set-Cookie', cookie, { append: true });
-    });
-  }
   c.set('user', result?.user ?? null);
   c.set('session', result?.session ?? null);
   c.set(
     'activeContext',
-    result?.session.activeOrganizationId && result.session.activeTeamId
+    result?.session.activeOrganizationId
       ? {
           kind: 'organization',
           organizationId: result.session.activeOrganizationId,
-          teamId: result.session.activeTeamId,
+          teamId: result.session.activeTeamId ?? null,
         }
       : { kind: 'personal' },
   );

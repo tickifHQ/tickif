@@ -34,7 +34,7 @@ export type LeadStatusCount = {
 export type ListLeadsParams = {
   userId: string;
   activeOrgId: string;
-  activeTeamId: string;
+  activeTeamId: string | null;
   assignedMemberIds?: string[];
   status?: LeadStatus;
   q?: string;
@@ -95,9 +95,15 @@ export const leadsRepository = {
         select 1 from ${schema.member}
         where ${schema.member.organizationId} = ${schema.lead.organizationId}
           and ${schema.member.userId} = ${params.userId}
+          and ${schema.member.frozen} = false
       )`,
       eq(schema.lead.organizationId, params.activeOrgId),
-      eq(schema.lead.teamId, params.activeTeamId),
+      sql<boolean>`exists (
+        select 1 from ${schema.team}
+        where ${schema.team.id} = ${schema.lead.teamId}
+          and ${schema.team.frozen} = false
+      )`,
+      params.activeTeamId ? eq(schema.lead.teamId, params.activeTeamId) : undefined,
       params.assignedMemberIds
         ? inArray(schema.lead.assignedMemberId, params.assignedMemberIds)
         : undefined,
@@ -276,6 +282,11 @@ export const leadsRepository = {
         .where(
           and(
             eq(schema.lead.organizationId, organizationId),
+            sql<boolean>`exists (
+              select 1 from ${schema.team}
+              where ${schema.team.id} = ${schema.lead.teamId}
+                and ${schema.team.frozen} = false
+            )`,
             teamId ? eq(schema.lead.teamId, teamId) : undefined,
             assignedMemberIds
               ? inArray(schema.lead.assignedMemberId, assignedMemberIds)
@@ -292,6 +303,11 @@ export const leadsRepository = {
       .where(
         and(
           eq(schema.lead.organizationId, organizationId),
+          sql<boolean>`exists (
+            select 1 from ${schema.team}
+            where ${schema.team.id} = ${schema.lead.teamId}
+              and ${schema.team.frozen} = false
+          )`,
           teamId ? eq(schema.lead.teamId, teamId) : undefined,
           assignedMemberIds ? inArray(schema.lead.assignedMemberId, assignedMemberIds) : undefined,
           leadSearchFilter(q),
