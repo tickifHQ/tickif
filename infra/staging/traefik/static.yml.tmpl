@@ -40,6 +40,8 @@ certificatesResolvers:
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
+        # Swarm routes to the task only after its first successful health check.
+        delay: 30s
 
 log:
   level: INFO
