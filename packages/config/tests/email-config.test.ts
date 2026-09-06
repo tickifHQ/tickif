@@ -12,6 +12,44 @@ const productionEnvironment = {
 } satisfies NodeJS.ProcessEnv;
 
 describe('email environment configuration', () => {
+  const stagingEmailEnvironment = {
+    ...productionEnvironment,
+    DEPLOYMENT_ENV: 'staging',
+    PHONE_OTP_DELIVERY: 'email',
+    PHONE_OTP_EMAIL_TO: 'tester@example.com',
+    PHONE_OTP_EMAIL_ALLOW_ALL: 'true',
+    RESEND_API_KEY: 'test-key',
+  };
+
+  it('allows email OTPs for all phones only in explicitly configured staging', () => {
+    expect(parseConfig(stagingEmailEnvironment)).toMatchObject({
+      NODE_ENV: 'production',
+      PHONE_OTP_EMAIL_ALLOW_ALL: true,
+      PHONE_OTP_EMAIL_ALLOWED_NUMBERS: [],
+    });
+  });
+
+  it.each(['production', undefined])(
+    'rejects unrestricted email OTPs outside staging (%s)',
+    (deployment) => {
+      expect(() =>
+        parseConfig({ ...stagingEmailEnvironment, DEPLOYMENT_ENV: deployment }),
+      ).toThrow();
+    },
+  );
+
+  it('requires the staging email destination even when all phones are allowed', () => {
+    expect(() => parseConfig({ ...stagingEmailEnvironment, PHONE_OTP_EMAIL_TO: '' })).toThrow(
+      'PHONE_OTP_EMAIL_TO',
+    );
+  });
+
+  it('does not interpret the string false as enabling every phone', () => {
+    expect(() =>
+      parseConfig({ ...stagingEmailEnvironment, PHONE_OTP_EMAIL_ALLOW_ALL: 'false' }),
+    ).toThrow('PHONE_OTP_EMAIL_ALLOWED_NUMBERS');
+  });
+
   it('defaults phone OTP delivery to SMS', () => {
     expect(parseConfig(productionEnvironment).PHONE_OTP_DELIVERY).toBe('sms');
   });
@@ -30,9 +68,7 @@ describe('email environment configuration', () => {
         PHONE_OTP_EMAIL_ALLOWED_NUMBERS: '+919800000010',
         RESEND_API_KEY: 'test-key',
       }),
-    ).toThrow(
-      'PHONE_OTP_EMAIL_TO',
-    );
+    ).toThrow('PHONE_OTP_EMAIL_TO');
     expect(
       parseConfig({
         ...environment,

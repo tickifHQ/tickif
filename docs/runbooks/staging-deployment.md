@@ -83,6 +83,15 @@ admin key, and API/worker get only their application credentials. Backup secrets
 are attached only to short-lived backup/restore jobs. No secret value belongs in
 Git, GitHub variables, the stack manifest, or the non-secret environment file.
 
+For temporary email-only phone login, set `SMS_PROVIDER=console`,
+`PHONE_OTP_DELIVERY=email`, `PHONE_OTP_EMAIL_TO` to the staging test inbox, and
+`PHONE_OTP_EMAIL_ALLOW_ALL=true`. Staging passes `DEPLOYMENT_ENV=staging` while
+retaining `NODE_ENV=production`. The configured inbox receives codes for every
+valid phone number; booking SMS remains unavailable and OTPs are never logged.
+The current manifest still mounts a Novu secret in console mode: provision an
+unused random value for that object, not a provider credential. Replace it with
+a real Novu credential before selecting `SMS_PROVIDER=novu`.
+
 For R2, use a staging media bucket with browser CORS configured for the exact
 staging origin. Use a separate backup bucket and separate credentials restricted
 to that bucket. Apply retention/versioning policies appropriate for recovery.

@@ -31,7 +31,7 @@ EMAIL_FROM="Tickif <onboarding@resend.dev>"
 SMS_PROVIDER=console
 ```
 
-Email delivery is rejected when `NODE_ENV=production`, and requests for phone
+Email delivery is rejected when `NODE_ENV=production` unless `DEPLOYMENT_ENV=staging` is explicitly configured. Requests for phone
 numbers outside `PHONE_OTP_EMAIL_ALLOWED_NUMBERS` fail without sending a code.
 Keep that comma-separated allowlist limited to dedicated test accounts in E.164
 format. The Resend test sender works only if the destination is the email associated
@@ -46,6 +46,15 @@ phone number to distinguish requests. The login UI still describes SMS delivery.
 Access to this inbox enables login as any allowlisted phone, so this mode is limited
 to controlled non-production testing.
 Ordinary email verification still goes to the user's email address.
+
+For staging containers, retain `NODE_ENV=production` so secure cookies, Redis
+rate limiting, and production checks stay enabled. Set `DEPLOYMENT_ENV=staging`
+and `PHONE_OTP_EMAIL_ALLOW_ALL=true` to send login codes for any valid phone
+number to `PHONE_OTP_EMAIL_TO`. This opt-in is rejected outside staging and
+defaults to false. The inbox can sign in as any staging phone account while it
+is enabled; use staging-only data. OTP generation, expiry, attempt limits, and
+verification still belong to Better Auth. Set `PHONE_OTP_DELIVERY=sms` and
+`PHONE_OTP_EMAIL_ALLOW_ALL=false` when switching to the real SMS provider.
 
 `SMS_PROVIDER=console` avoids requiring Novu credentials while it is unconfigured;
 booking SMS will not be delivered. To restore SMS, set `PHONE_OTP_DELIVERY=sms`,
