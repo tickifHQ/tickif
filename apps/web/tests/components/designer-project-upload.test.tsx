@@ -305,6 +305,16 @@ describe('DesignerProjectUpload', () => {
     ).toBeInTheDocument();
   });
 
+  it('anchors the hidden file input inside the upload zone so focus cannot scroll the workspace away', async () => {
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    const uploadCopy = await screen.findByText(/drag and drop files here or click to upload/i);
+    const uploadZone = uploadCopy.closest('label');
+
+    expect(uploadZone).toHaveClass('relative');
+    expect(uploadZone?.querySelector('input[type="file"]')).toHaveClass('sr-only');
+  });
+
   it('accepts image files dropped on the upload zone', async () => {
     render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
 

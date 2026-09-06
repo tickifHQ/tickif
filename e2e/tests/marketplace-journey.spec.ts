@@ -99,6 +99,10 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(
       designer.getByRole('button', { name: 'Toggle Living room', exact: true }),
     ).toBeVisible();
+    // The file picker receives focus on click and when the native dialog closes.
+    // Its hidden input must not scroll the fixed workspace out of the viewport.
+    await designer.locator('input[type="file"]').first().focus();
+    await expect(designer.getByRole('banner')).toBeInViewport();
     await designer
       .locator('input[type="file"]')
       .first()

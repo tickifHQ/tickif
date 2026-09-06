@@ -1132,7 +1132,7 @@ function RoomCard({
                 onDropFiles(Array.from(event.dataTransfer.files));
               }}
               className={cn(
-                'block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors',
+                'relative block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors',
                 room.uploading
                   ? 'cursor-not-allowed opacity-70'
                   : 'cursor-pointer hover:border-primary/50 hover:bg-primary/5',
