@@ -5,6 +5,7 @@ const { settings, enqueueSms, sendEmail } = vi.hoisted(() => ({
     PHONE_OTP_DELIVERY: 'email',
     PHONE_OTP_EMAIL_TO: 'tester@example.com',
     PHONE_OTP_EMAIL_ALLOWED_NUMBERS: ['+919800000010'],
+    PHONE_OTP_EMAIL_ALLOW_ALL: false,
     RESEND_API_KEY: 'test-key',
   },
   enqueueSms: vi.fn(),
@@ -22,6 +23,7 @@ describe('temporary phone OTP email delivery', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     settings.PHONE_OTP_DELIVERY = 'email';
+    settings.PHONE_OTP_EMAIL_ALLOW_ALL = false;
     settings.PHONE_OTP_EMAIL_ALLOWED_NUMBERS = ['+919800000010'];
     settings.RESEND_API_KEY = 'test-key';
   });
@@ -45,9 +47,9 @@ describe('temporary phone OTP email delivery', () => {
   });
 
   it('refuses to deliver a code for a phone outside the configured test allowlist', async () => {
-    await expect(
-      sendPhoneOtp({ ...input, phoneNumber: '+919800000011' }),
-    ).rejects.toThrow('not allowed');
+    await expect(sendPhoneOtp({ ...input, phoneNumber: '+919800000011' })).rejects.toThrow(
+      'not allowed',
+    );
     expect(sendEmail).not.toHaveBeenCalled();
     expect(enqueueSms).not.toHaveBeenCalled();
   });
@@ -55,6 +57,14 @@ describe('temporary phone OTP email delivery', () => {
   it('rejects HTML in delivery input', async () => {
     await expect(sendPhoneOtp({ ...input, phoneNumber: '<script>' })).rejects.toThrow('Invalid');
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('emails any valid phone to the same inbox when staging explicitly allows all phones', async () => {
+    settings.PHONE_OTP_EMAIL_ALLOW_ALL = true;
+    await sendPhoneOtp({ ...input, phoneNumber: '+919800000099' });
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'tester@example.com' }));
+    expect(enqueueSms).not.toHaveBeenCalled();
+    await expect(sendPhoneOtp({ ...input, phoneNumber: '<script>' })).rejects.toThrow('Invalid');
   });
 
   it('fails closed when email credentials are missing', async () => {

@@ -127,6 +127,8 @@ const phoneOtpEmailAllowedNumbersSchema = z.preprocess(
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Deployment identity is separate from Node's production runtime optimizations.
+  DEPLOYMENT_ENV: z.enum(['production', 'staging']).default('production'),
   // Docker/secret-manager mounted dotenv file. Values are validated by this schema.
   CONFIG_SECRETS_FILE: z.string().min(1).optional(),
 
@@ -201,6 +203,10 @@ const envSchema = z.object({
   PHONE_OTP_DELIVERY: z.enum(['sms', 'email']).default('sms'),
   PHONE_OTP_EMAIL_TO: z.preprocess(blankStringToUndefined, z.email().optional()),
   PHONE_OTP_EMAIL_ALLOWED_NUMBERS: phoneOtpEmailAllowedNumbersSchema.optional().default([]),
+  PHONE_OTP_EMAIL_ALLOW_ALL: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   NOVU_SECRET_KEY: z.string().trim().min(1).optional(),
   NOVU_OTP_WORKFLOW_ID: z.string().trim().min(1).optional(),
   NOVU_BOOKING_WORKFLOW_ID: z.string().trim().min(1).optional(),
@@ -454,13 +460,16 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   const env = parsed.data;
+  if (env.PHONE_OTP_EMAIL_ALLOW_ALL && env.DEPLOYMENT_ENV !== 'staging') {
+    throw new Error('PHONE_OTP_EMAIL_ALLOW_ALL is restricted to staging');
+  }
   if (env.PHONE_OTP_DELIVERY === 'email') {
-    if (env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production' && env.DEPLOYMENT_ENV !== 'staging') {
       throw new Error('PHONE_OTP_DELIVERY=email must not be enabled in production');
     }
     if (
       !env.PHONE_OTP_EMAIL_TO ||
-      env.PHONE_OTP_EMAIL_ALLOWED_NUMBERS.length === 0 ||
+      (!env.PHONE_OTP_EMAIL_ALLOW_ALL && env.PHONE_OTP_EMAIL_ALLOWED_NUMBERS.length === 0) ||
       !env.RESEND_API_KEY
     ) {
       throw new Error(

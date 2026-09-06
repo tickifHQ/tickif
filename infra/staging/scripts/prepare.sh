@@ -7,6 +7,10 @@ release_job="${STACK_NAME}_release_$(date +%s)_$RANDOM"
 release_job="${release_job:0:63}"
 run_swarm_job "$release_job" "$OPERATIONS_IMAGE" \
   --env NODE_ENV=production \
+  --env DEPLOYMENT_ENV=staging \
+  --env PHONE_OTP_DELIVERY="${PHONE_OTP_DELIVERY:-sms}" \
+  --env PHONE_OTP_EMAIL_TO="${PHONE_OTP_EMAIL_TO:-}" \
+  --env PHONE_OTP_EMAIL_ALLOW_ALL="${PHONE_OTP_EMAIL_ALLOW_ALL:-false}" \
   --env GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" --env GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google_client_secret \
   --env RAZORPAY_KEY_ID="$RAZORPAY_KEY_ID" --env RAZORPAY_KEY_SECRET_FILE=/run/secrets/razorpay_key_secret \
   --env RAZORPAY_WEBHOOK_SECRET_FILE=/run/secrets/razorpay_webhook_secret \
