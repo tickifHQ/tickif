@@ -421,6 +421,20 @@
       "when": 1788625330825,
       "tag": "0061_bizarre_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1788815723716,
+      "tag": "0062_dashing_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788815861922,
+      "tag": "0063_sleepy_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }

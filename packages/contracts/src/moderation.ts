@@ -178,6 +178,14 @@ export type AdminModerationProject = z.infer<typeof adminModerationProjectSchema
 
 export const adminModerationDetailResponseSchema = z
   .object({
+    pendingChanges: z.boolean().optional(),
+    liveVersion: z
+      .object({
+        project: adminModerationProjectSchema,
+        rooms: z.array(projectRoomSchema),
+        images: z.array(adminModerationImageSchema),
+      })
+      .optional(),
     project: adminModerationProjectSchema,
     rooms: z.array(projectRoomSchema),
     images: z.array(adminModerationImageSchema),
