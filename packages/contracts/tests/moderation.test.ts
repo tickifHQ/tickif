@@ -5,9 +5,27 @@ import {
   moderationHistoryResponseSchema,
   moderationAction,
   SELF_SERVICE_MODERATION_ACTIONS,
+  rejectProjectSchema,
 } from '../src/moderation.js';
 
 describe('moderation contracts', () => {
+  it('requires a non-empty selection of closed moderation reason categories', () => {
+    expect(
+      rejectProjectSchema.safeParse({ note: 'Please replace the images.', reasonCode: 'anything' })
+        .success,
+    ).toBe(false);
+    expect(
+      rejectProjectSchema.safeParse({
+        note: 'Please replace the images.',
+        reasonCodes: ['image-quality', 'image-authenticity'],
+      }).success,
+    ).toBe(true);
+    for (const reasonCodes of [[], ['anything'], ['image-quality', 'image-quality']]) {
+      expect(
+        rejectProjectSchema.safeParse({ note: 'Please replace the images.', reasonCodes }).success,
+      ).toBe(false);
+    }
+  });
   it('accepts every persisted moderation action', () => {
     expect(moderationAction.options).toEqual([
       'submit',
