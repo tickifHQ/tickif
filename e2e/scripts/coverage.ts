@@ -62,6 +62,10 @@ export const requiredTests = [
   ],
   [
     'project-moderation.spec.ts',
+    'E-254 categories persist and reach designer feedback on desktop and mobile',
+  ],
+  [
+    'project-moderation.spec.ts',
     'project moderation lifecycle: admin paginates, claims, comments, resolves and completes decisions',
   ],
   [

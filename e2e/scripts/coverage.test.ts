@@ -33,6 +33,12 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires the moderation categories and designer feedback journey', () => {
+    const title = 'E-254 categories persist and reach designer feedback on desktop and mobile';
+    expect(requiredTests).toContainEqual({ file: 'project-moderation.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/E-254/);
+  });
+
   it('accepts one clean execution of the complete manifest', () => {
     expect(() => assertCompleteCoverage(report())).not.toThrow();
   });
