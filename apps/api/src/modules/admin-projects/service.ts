@@ -404,12 +404,13 @@ export const adminProjectsService = {
     input: ModerationNoteInput,
     caller: AdminCaller,
   ): Promise<AdminModerationDetailResponse> {
-    const project = await adminProjectsRepository.findById(projectId);
+    const project = await adminProjectsRepository.findById(projectId, 'live');
     if (!project) throw AppError.notFound('Project not found');
     if (project.status !== 'published') throw AppError.invalidTransition();
     await transitionProject(
       {
         projectId,
+        sourceVersion: 'live',
         toStatus: 'in_review',
         note: input.note,
         patch: {

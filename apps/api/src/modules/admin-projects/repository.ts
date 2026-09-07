@@ -57,6 +57,10 @@ export const adminProjectsRepository = {
     query: AdminModerationQueueQuery,
     reviewerId?: string,
   ): Promise<{ items: AdminQueueRecord[]; total: number }> {
+    const submittedAt = sql<Date | null>`case
+      when ${schema.projectPendingVersion.projectId} is not null
+        then (${schema.projectPendingVersion.content}->'project'->>'submittedAt')::timestamp
+      else ${schema.project.submittedAt} end`.mapWith(schema.project.submittedAt);
     const where = and(
       sql`coalesce(${schema.projectPendingVersion.status}, ${schema.project.status}) = ${query.status}`,
       reviewerId
@@ -68,7 +72,7 @@ export const adminProjectsRepository = {
         id: schema.project.id,
         title: schema.project.title,
         status: schema.project.status,
-        submittedAt: schema.project.submittedAt,
+        submittedAt: submittedAt.as('queue_submitted_at'),
         reviewedBy: schema.project.reviewedBy,
         citySlug: schema.project.citySlug,
         propertyTypeSlug: schema.project.propertyTypeSlug,
@@ -88,7 +92,7 @@ export const adminProjectsRepository = {
       )
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(where)
-      .orderBy(sql`${schema.project.submittedAt} asc nulls last`, asc(schema.project.id))
+      .orderBy(sql`${submittedAt} asc nulls last`, asc(schema.project.id))
       .limit(query.limit)
       .offset((query.page - 1) * query.limit)
       .as('queue_page');
@@ -177,7 +181,7 @@ export const adminProjectsRepository = {
     return { items, total: count?.value ?? 0 };
   },
 
-  async findById(id: string): Promise<AdminProjectRecord | null> {
+  async findById(id: string, version: 'current' | 'live' = 'current'): Promise<AdminProjectRecord | null> {
     const [row] = await db
       .select({
         project: schema.project,
@@ -187,7 +191,7 @@ export const adminProjectsRepository = {
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, id))
       .limit(1);
-    const pending = row ? await getPendingProject(id) : null;
+    const pending = row && version === 'current' ? await getPendingProject(id) : null;
     return row ? { ...row.project, ...pending, designerName: row.designerName } : null;
   },
 

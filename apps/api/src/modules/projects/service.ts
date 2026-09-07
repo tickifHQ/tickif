@@ -683,6 +683,7 @@ export function assertTransition(
 export async function transitionProject(
   input: {
     projectId: string;
+    sourceVersion?: 'live';
     toStatus: ProjectStatus;
     note?: string | null;
     reasonCode?: string | null;
@@ -693,7 +694,10 @@ export async function transitionProject(
   },
   caller: TransitionCaller,
 ): Promise<ProjectRecord> {
-  const project = await projectsRepository.findById(input.projectId);
+  const project =
+    input.sourceVersion === 'live'
+      ? (await projectsRepository.findLiveByIdWithRooms(input.projectId))?.project
+      : await projectsRepository.findById(input.projectId);
   if (!project) throw AppError.notFound('Project not found');
   const action = assertTransition(project.status, input.toStatus, caller.userRole);
 

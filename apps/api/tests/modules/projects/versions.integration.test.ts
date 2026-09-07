@@ -9,6 +9,7 @@ import {
 } from '@repo/db/testing';
 import { projectsRepository } from '../../../src/modules/projects/repository.js';
 import { adminProjectsRepository } from '../../../src/modules/admin-projects/repository.js';
+import { adminProjectsService } from '../../../src/modules/admin-projects/service.js';
 import { projectsService } from '../../../src/modules/projects/service.js';
 import { readProjectAggregate } from '../../../src/modules/project-versions/repository.js';
 import { mediaRepository } from '../../../src/modules/media/repository.js';
@@ -69,6 +70,60 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('orders the review queue by the pending submission date rather than the original review', async () => {
+    const first = await publishedProject();
+    const second = await publishedProject();
+    for (const [index, fixture] of [first, second].entries()) {
+      await projectsRepository.updateDraft(fixture.project.id, { budgetBandSlug: 'luxury' });
+      await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+        actorUserId: fixture.actor.id, expectedStatus: 'draft', action: 'submit', minImageCount: 3,
+      });
+      const state = (await readProjectAggregate(fixture.project.id))!;
+      await db.update(schema.project).set({ submittedAt: new Date(index === 0 ? '2020-01-01' : '2021-01-01') }).where(eq(schema.project.id, fixture.project.id));
+      await db.update(schema.projectPendingVersion).set({ content: {
+        ...state.current,
+        project: { ...state.current.project, submittedAt: new Date(index === 0 ? '2026-09-02' : '2026-09-01') },
+      } }).where(eq(schema.projectPendingVersion.projectId, fixture.project.id));
+    }
+    const queue = await adminProjectsRepository.list({ status: 'submitted', sort: 'oldest', page: 1, limit: 1 });
+    expect(queue.total).toBe(2);
+    expect(queue.items[0]?.id).toBe(second.project.id);
+    expect(queue.items[0]?.submittedAt).toEqual(new Date('2026-09-01'));
+  });
+
+  it.each(['draft', 'submitted', 'in_review', 'changes_requested'] as const)(
+    'lets an admin unpublish the live project while pending changes are %s',
+    async (pendingStatus) => {
+      const fixture = await publishedProject();
+      await projectsRepository.updateDraft(fixture.project.id, { budgetBandSlug: 'luxury' });
+      await db
+        .update(schema.projectPendingVersion)
+        .set({ status: pendingStatus })
+        .where(eq(schema.projectPendingVersion.projectId, fixture.project.id));
+      await adminProjectsService.unpublish(
+        fixture.project.id,
+        { note: 'Temporarily remove listing' },
+        {
+          userId: fixture.actor.id,
+          userRole: 'superadmin',
+        },
+      );
+      const state = (await readProjectAggregate(fixture.project.id))!;
+      expect(state.pending).toBeNull();
+      expect(state.live.project).toMatchObject({ status: 'in_review', budgetBandSlug: 'premium' });
+      expect(await projectsRepository.findPublicProjectById(fixture.project.id)).toBeNull();
+      const [designer] = await db
+        .select()
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.id, fixture.designer.id));
+      expect(designer?.projectCount).toBe(0);
+      const events = await db.select().from(schema.searchProjectionOutbox);
+      const projectEvents = events.filter((event) => event.entityKind === 'project');
+      expect(projectEvents).toHaveLength(1);
+      expect(projectEvents[0]?.operation).toBe('delete');
+    },
+  );
+
   it('reports the cover requirement when a pending cover fails despite five eligible images', async () => {
     const fixture = await publishedProject();
     const upload = await mediaRepository.createProcessing({
