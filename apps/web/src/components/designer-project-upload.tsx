@@ -1346,6 +1346,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [projectId, setProjectId] = useState<string | null>(null);
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<ProjectDetailResponse['status'] | null>(null);
+  const [isLive, setIsLive] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState(false);
   const [moderationNote, setModerationNote] = useState<string | null>(null);
   const [rejectionReasonCode, setRejectionReasonCode] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
@@ -1790,6 +1792,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         setProjectId(project.id);
         setLoadedProjectId(project.id);
         setProjectStatus(project.status);
+        setIsLive(project.liveStatus === 'published' || project.status === 'published');
+        setPendingChanges(project.pendingChanges ?? false);
         setModerationNote(project.moderationNote);
         setRejectionReasonCode(project.rejectionReasonCode);
         setProjectName(project.title);
@@ -2291,6 +2295,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setProjectId(detail.id);
       setLoadedProjectId(detail.id);
       setProjectStatus(detail.status);
+      setIsLive(detail.liveStatus === 'published' || detail.status === 'published');
+      setPendingChanges(detail.pendingChanges ?? false);
       setModerationNote(detail.moderationNote);
       setRejectionReasonCode(detail.rejectionReasonCode);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
@@ -2315,6 +2321,14 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     if (!response.ok) {
       throw new Error(extractApiMessage(payloadJson, 'Could not save the draft project.'));
     }
+    const updated = parseApiPayload(
+      payloadJson,
+      projectDetailResponseSchema,
+      'Could not read the saved project.',
+    );
+    setProjectStatus(updated.status);
+    setIsLive(updated.liveStatus === 'published' || updated.status === 'published');
+    setPendingChanges(updated.pendingChanges ?? false);
   }
 
   async function syncRoomRecord(currentProjectId: string, room: RoomDraft, sortOrder: number) {
@@ -2439,12 +2453,32 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     return nextCompletion;
   }
 
+  async function refreshPublicationState(currentProjectId: string, refreshVersion?: number) {
+    const response = await api.api.projects[':id'].$get({ param: { id: currentProjectId } });
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      throw new Error(extractApiMessage(payload, 'Could not refresh the saved project.'));
+    }
+    const project = parseApiPayload(
+      payload,
+      projectDetailResponseSchema,
+      'Could not refresh the saved project.',
+    );
+    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion))
+      return project;
+    setProjectStatus(project.status);
+    setIsLive(project.liveStatus === 'published' || project.status === 'published');
+    setPendingChanges(project.pendingChanges ?? false);
+    return project;
+  }
+
   function refreshUploadStateInBackground(currentProjectId: string, refreshErrorMessage?: string) {
     const uploadStateRefreshVersion = beginUploadStateRefresh();
     const imageListRefreshVersion = beginImageListRefresh();
     void Promise.all([
       refreshProjectImages(currentProjectId, imageListRefreshVersion),
       fetchCompleteness(currentProjectId, uploadStateRefreshVersion),
+      isLive ? refreshPublicationState(currentProjectId, uploadStateRefreshVersion) : null,
     ]).catch((refreshError: unknown) => {
       if (!isCurrentUploadStateRefresh(uploadStateRefreshVersion)) return;
       setError(
@@ -2465,7 +2499,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       await syncImageMetadata(room, roomId);
     }
 
-    return currentProjectId;
+    if (!isLive) return { projectId: currentProjectId, project: null };
+
+    // Image and room changes can create a pending version after the scalar save.
+    const project = await refreshPublicationState(currentProjectId);
+    return { projectId: currentProjectId, project };
   }
 
   async function saveDraft(showSavedNotice = true) {
@@ -2475,11 +2513,17 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     invalidateUploadStateRefresh();
 
     try {
-      const currentProjectId = await syncDraft();
+      const { projectId: currentProjectId, project } = await syncDraft();
       await fetchCompleteness(currentProjectId);
 
       if (showSavedNotice) {
-        setNotice('Draft saved.');
+        setNotice(
+          project?.pendingChanges
+            ? 'Changes saved for review. Your approved project remains live.'
+            : isLive
+              ? 'Changes saved to your live project.'
+              : 'Draft saved.',
+        );
       }
       return currentProjectId;
     } catch (saveError) {
@@ -2502,7 +2546,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     invalidateUploadStateRefresh();
 
     try {
-      const currentProjectId = await syncDraft();
+      const { projectId: currentProjectId, project } = await syncDraft();
+      if (project?.status === 'published' && !project.pendingChanges) {
+        setNotice('Changes saved to your live project. No review is needed.');
+        return;
+      }
       const projectCompleteness = await fetchCompleteness(currentProjectId);
 
       if (!projectCompleteness.complete) {
@@ -2535,11 +2583,17 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         'Could not submit this project.',
       );
       setNotice(
-        submittedProject.submittedAt
-          ? 'Project submitted for review.'
-          : 'Project submitted. Review status will update shortly.',
+        submittedProject.pendingChanges
+          ? 'Changes submitted for review. Your approved project remains live.'
+          : submittedProject.submittedAt
+            ? 'Project submitted for review.'
+            : 'Project submitted. Review status will update shortly.',
       );
       setProjectStatus(submittedProject.status);
+      setIsLive(
+        submittedProject.liveStatus === 'published' || submittedProject.status === 'published',
+      );
+      setPendingChanges(submittedProject.pendingChanges ?? false);
       setModerationNote(submittedProject.moderationNote);
       setRejectionReasonCode(submittedProject.rejectionReasonCode);
     } catch (submitError) {
@@ -2561,6 +2615,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   async function handleUploadFiles(room: RoomDraft, files: File[]) {
+    if (projectStatus === 'submitted' || projectStatus === 'in_review') return;
     if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
       return;
     }
@@ -2826,6 +2881,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     closeRoomSearch();
   }
 
+  const reviewLocked = projectStatus === 'submitted' || projectStatus === 'in_review';
+
   return (
     <div className="px-6 py-6 md:px-8 md:py-8 xl:px-10 xl:py-8">
       <div>
@@ -2834,6 +2891,29 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           Let&apos;s get your profile ready to go live.
         </p>
       </div>
+
+      {isLive ? (
+        <Alert className="mt-6">
+          <Check className="size-4" />
+          <AlertTitle>{pendingChanges ? 'Live · Pending changes' : 'Live project'}</AlertTitle>
+          <AlertDescription>
+            {pendingChanges ? (
+              <>
+                Your approved project remains live at its existing URL. These changes are{' '}
+                {projectStatus === 'draft'
+                  ? 'saved as a draft'
+                  : projectStatus?.replaceAll('_', ' ')}
+                .
+                {reviewLocked
+                  ? ' Editing is paused during review.'
+                  : ' Submit them when ready for review.'}
+              </>
+            ) : (
+              'Minor edits appear immediately. Material changes require review while your approved project stays live.'
+            )}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <DesignerProjectModeration
         projectId={projectId}
@@ -2879,7 +2959,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       ) : null}
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,50.3125rem)_19.8125rem]">
-        <div className="space-y-4 xl:pr-2">
+        <fieldset disabled={reviewLocked} className="min-w-0 space-y-4 xl:pr-2">
           <SectionFrame
             step="Step 1"
             title="Project classification"
@@ -3217,18 +3297,18 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                     );
                   });
                 }}
-                disabled={saving || loadingProject}
+                disabled={saving || loadingProject || reviewLocked}
                 className="text-sm leading-none font-semibold"
               >
                 {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                Save as draft
+                {isLive ? 'Save changes' : 'Save as draft'}
               </Button>
               <Button
                 type="button"
                 onClick={async () => {
                   await handleSubmitProject();
                 }}
-                disabled={saving || loadingProject}
+                disabled={saving || loadingProject || reviewLocked}
                 className="text-sm leading-[1.6] font-medium"
               >
                 {saving ? (
@@ -3236,11 +3316,15 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                 ) : (
                   <Check className="size-4" />
                 )}
-                Preview &amp; Submit Project
+                {isLive
+                  ? projectStatus === 'changes_requested'
+                    ? 'Resubmit changes for review'
+                    : 'Submit changes for review'
+                  : 'Preview & Submit Project'}
               </Button>
             </div>
           </div>
-        </div>
+        </fieldset>
 
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
           {projectStatus === 'changes_requested' && moderationNote ? (
@@ -3378,9 +3462,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                 : 'Delete this image?'}
             </DialogTitle>
             <DialogDescription>
-              {pendingDeletion?.kind === 'room'
-                ? 'This removes the room and all of its uploaded images from the draft. This action cannot be undone.'
-                : `This removes “${pendingDeletion?.fileName ?? 'this image'}” from the draft. This action cannot be undone.`}
+              {isLive
+                ? 'This changes the edited version. Images in the approved live version stay available until any required review is approved.'
+                : pendingDeletion?.kind === 'room'
+                  ? 'This removes the room and all of its uploaded images from the draft. This action cannot be undone.'
+                  : `This removes “${pendingDeletion?.fileName ?? 'this image'}” from the draft. This action cannot be undone.`}
             </DialogDescription>
           </DialogHeader>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}

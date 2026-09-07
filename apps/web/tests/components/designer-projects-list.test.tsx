@@ -54,6 +54,26 @@ const projects: ListProjectsResponse = {
 };
 
 describe('DesignerProjectsList', () => {
+  it('keeps the live badge visible while changes await review', () => {
+    const pendingProject = {
+      ...projects.items[0]!,
+      status: 'submitted' as const,
+      liveStatus: 'published' as const,
+      pendingChanges: true,
+      pendingStatus: 'submitted' as const,
+    };
+    render(
+      <DesignerProjectsList
+        projects={{ ...projects, items: [pendingProject], total: 1 }}
+        activeStatus="all"
+      />,
+    );
+
+    expect(screen.getAllByText('Live')).toHaveLength(2);
+    expect(screen.getByText('Pending changes')).toBeInTheDocument();
+    expect(screen.getByText('Submitted')).toBeInTheDocument();
+  });
+
   it('does not show a sort indicator when project sorting is unavailable', () => {
     render(<DesignerProjectsList projects={projects} activeStatus="all" />);
 
