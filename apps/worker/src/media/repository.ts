@@ -129,6 +129,7 @@ export async function refreshReadyDerivatives(
       .returning({
         id: schema.projectImage.id,
         projectId: schema.projectImage.projectId,
+        isLive: schema.projectImage.isLive,
       });
     if (!image) return false;
 
@@ -137,7 +138,7 @@ export async function refreshReadyDerivatives(
       .from(schema.project)
       .where(eq(schema.project.id, image.projectId))
       .limit(1);
-    if (project?.status === 'published') {
+    if (project?.status === 'published' && image.isLive) {
       await tx.execute(
         sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
       );
