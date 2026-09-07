@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiscoveryFeedQuery } from '@repo/contracts';
 
+const searchConfig = vi.hoisted(() => ({ TYPESENSE_SEARCH_CONFIGURED: true }));
+vi.mock('@repo/config', () => ({ config: searchConfig }));
+
 /** Every facet present with no options — spread and override the one under test. */
 const emptyVocabulary = {
   citySlug: [] as string[],
@@ -84,8 +87,7 @@ describe('discoveryService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.stubEnv('TYPESENSE_HOST', 'localhost');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = true;
   });
 
   afterEach(() => {
@@ -95,8 +97,21 @@ describe('discoveryService', () => {
 
   it('detects complete Typesense configuration', () => {
     expect(isTypesenseConfigured()).toBe(true);
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     expect(isTypesenseConfigured()).toBe(false);
+  });
+
+  it('uses resolved search configuration when the key is absent from process.env', async () => {
+    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', undefined);
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = true;
+    vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
+    vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
+
+    const result = await discoveryService.getFeed(query);
+
+    expect(result.source).toBe('search');
+    expect(discoveryRepository.searchFeed).toHaveBeenCalledOnce();
+    expect(discoveryRepository.listFeedFallback).not.toHaveBeenCalled();
   });
 
   it('returns canonical cards and fallback metadata from Typesense', async () => {
@@ -200,7 +215,7 @@ describe('discoveryService', () => {
   });
 
   it('reports no further pages when the Postgres path itself lands on recent_in_city', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback)
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [postgresRow, postgresRow] });
@@ -221,7 +236,7 @@ describe('discoveryService', () => {
   });
 
   it('uses Postgres when Typesense is unavailable and keeps the response shape identical', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
 
     await expect(discoveryService.getFeed({ ...query, q: 'calm' })).resolves.toMatchObject({
@@ -233,7 +248,7 @@ describe('discoveryService', () => {
   });
 
   it('runs one bounded Postgres search without filter relaxation', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
     const result = await discoveryService.getFeed({
@@ -248,7 +263,7 @@ describe('discoveryService', () => {
   });
 
   it('does not restart an empty later Postgres page at offset zero', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
     const result = await discoveryService.getFeed({
@@ -309,8 +324,7 @@ describe('facet distribution', () => {
   });
 
   it('fills every taxonomy option Typesense omitted with a zero count', async () => {
-    vi.stubEnv('TYPESENSE_HOST', 'localhost');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = true;
     vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
       ...emptyVocabulary,
       citySlug: ['mumbai', 'pune'],
@@ -331,8 +345,7 @@ describe('facet distribution', () => {
   });
 
   it('reports a facet the vocabulary knows about even when nothing matched at all', async () => {
-    vi.stubEnv('TYPESENSE_HOST', 'localhost');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = true;
     vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
       ...emptyVocabulary,
       bhkSlug: ['2-bhk'],
@@ -345,8 +358,7 @@ describe('facet distribution', () => {
   });
 
   it('densifies the Postgres path from its own counts, so both paths agree in shape', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
     vi.mocked(discoveryRepository.listFacetVocabulary).mockResolvedValue({
       ...emptyVocabulary,
@@ -362,8 +374,7 @@ describe('facet distribution', () => {
   });
 
   it('counts facets over the same text-narrowed set as the page it labels', async () => {
-    vi.stubEnv('TYPESENSE_HOST', '');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    searchConfig.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [postgresRow] });
 
     await discoveryService.getFeed({ ...query, q: 'calm', citySlug: 'mumbai' });
