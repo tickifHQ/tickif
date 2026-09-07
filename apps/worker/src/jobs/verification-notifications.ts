@@ -1,3 +1,4 @@
+import { renderTickifEmail } from '@repo/auth/email-templates';
 import { sendEmail } from '@repo/auth/email';
 import { config } from '@repo/config';
 import { VERIFICATION_NOTIFICATION_EVENT } from '@repo/contracts';
@@ -13,15 +14,6 @@ import {
 const DISPATCH_BATCH_SIZE = 50;
 const STALE_CLAIM_MS = 5 * 60 * 1000;
 const MAX_DELIVERY_ATTEMPTS = 5;
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
 
 export async function processVerificationNotificationSweep(): Promise<{
   enqueued: number;
@@ -64,27 +56,23 @@ export async function processVerificationEmail(outboxId: string): Promise<void> 
     notification.eventType === VERIFICATION_NOTIFICATION_EVENT.CHANGES_REQUESTED;
   const approvalRevoked =
     notification.eventType === VERIFICATION_NOTIFICATION_EVENT.APPROVAL_REVOKED;
-  const note =
-    (changesRequested || approvalRevoked) && notification.note
-      ? `<p><strong>Reviewer note:</strong> ${escapeHtml(notification.note)}</p>`
-      : '';
   const title = approvalRevoked
     ? 'Your Tickif verification is under review again'
     : changesRequested
       ? 'Changes requested for your Tickif verification'
       : 'Your Tickif verification is approved';
-  const action = approvalRevoked
-    ? 'Your verified status has been removed while the Tickif Review Team reviews your profile again.'
-    : changesRequested
-      ? 'Review the note, replace the requested documents, and resubmit your verification.'
-      : 'Your verified status is now visible on Tickif.';
-  const verificationUrl = new URL('/designer/verification', config.PUBLIC_WEB_URL).toString();
-
   await sendEmail({
     to: notification.recipientEmail,
     subject: title,
     idempotencyKey: `verification-${notification.id}`,
-    html: `<h1>${title}</h1><p>${action}</p>${note}<p><a href="${verificationUrl}">Open verification</a></p>`,
+    ...(await renderTickifEmail(
+      approvalRevoked
+        ? { kind: 'verification-revoked', note: notification.note }
+        : changesRequested
+          ? { kind: 'verification-changes', note: notification.note }
+          : { kind: 'verification-approved' },
+      config.PUBLIC_WEB_URL,
+    )),
   });
   await markVerificationNotificationSent(notification.id);
 }

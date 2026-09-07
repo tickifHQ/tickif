@@ -42,7 +42,10 @@
     "pg": "catalog:",
     "resend": "catalog:",
     "typesense": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "react-email": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

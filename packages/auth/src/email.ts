@@ -17,6 +17,7 @@ type SendEmailParams = {
   to: string;
   subject: string;
   html: string;
+  text: string;
   idempotencyKey?: string;
 };
 
@@ -37,6 +38,7 @@ export async function sendEmail({
   to,
   subject,
   html,
+  text,
   idempotencyKey,
 }: SendEmailParams): Promise<void> {
   if (!resend) {
@@ -54,6 +56,7 @@ export async function sendEmail({
       to,
       subject,
       html,
+      text,
     },
     idempotencyKey ? { idempotencyKey } : undefined,
   );

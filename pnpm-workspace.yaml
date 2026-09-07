@@ -60,6 +60,7 @@ catalog:
   # Auth
   better-auth: ^1.6.22
   resend: ^4.1.0
+  react-email: ^6.9.3
 
   # Data layer
   drizzle-orm: ^0.45.2

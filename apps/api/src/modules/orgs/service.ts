@@ -19,7 +19,9 @@ import {
   type RemoveOrganizationBranchResponse,
 } from '@repo/contracts';
 import { organizationCapabilitiesForRole } from '@repo/auth';
-import { escapeHtml, sendEmail } from '@repo/auth/email';
+import { sendEmail } from '@repo/auth/email';
+import { renderTickifEmail } from '@repo/auth/email-templates';
+import type { TickifEmail } from '@repo/auth/email-templates';
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
 import {
@@ -72,10 +74,11 @@ function isUniqueViolation(error: unknown, constraint: string): boolean {
 }
 
 async function sendOwnershipEmailBestEffort(
-  message: Parameters<typeof sendEmail>[0],
+  message: Omit<Parameters<typeof sendEmail>[0], 'html' | 'text'>,
+  template: TickifEmail,
 ): Promise<void> {
   try {
-    await sendEmail(message);
+    await sendEmail({ ...message, ...(await renderTickifEmail(template, config.PUBLIC_WEB_URL)) });
   } catch {
     console.error('[organizations] Ownership transfer email delivery failed');
   }
@@ -542,13 +545,14 @@ export const orgsService = {
     }
     const response = await transferResponse(request);
     if (!response) throw AppError.conflict('Ownership transfer target changed');
-    const transferUrl = new URL('/designer/terms-roles', config.PUBLIC_WEB_URL).toString();
-    await sendOwnershipEmailBestEffort({
-      to: target.email,
-      subject: 'Tickif ownership transfer request',
-      idempotencyKey: `ownership-transfer-requested-${request.id}`,
-      html: `<p>You have been nominated as Owner of your Tickif organization.</p><p><a href="${transferUrl}">Review transfer</a></p>`,
-    });
+    await sendOwnershipEmailBestEffort(
+      {
+        to: target.email,
+        subject: 'Tickif ownership transfer request',
+        idempotencyKey: `ownership-transfer-requested-${request.id}`,
+      },
+      { kind: 'ownership-requested' },
+    );
     return response;
   },
 
@@ -596,18 +600,22 @@ export const orgsService = {
       ]);
       if (previousOwner && newOwner) {
         await Promise.all([
-          sendOwnershipEmailBestEffort({
-            to: previousOwner.email,
-            subject: 'Tickif ownership transfer completed',
-            idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
-            html: `<p>${escapeHtml(newOwner.name)} is now the organization Owner. Your role is now Admin.</p>`,
-          }),
-          sendOwnershipEmailBestEffort({
-            to: newOwner.email,
-            subject: 'You are now the Tickif organization Owner',
-            idempotencyKey: `ownership-transfer-completed-target-${result.id}`,
-            html: '<p>The ownership transfer is complete.</p>',
-          }),
+          sendOwnershipEmailBestEffort(
+            {
+              to: previousOwner.email,
+              subject: 'Tickif ownership transfer completed',
+              idempotencyKey: `ownership-transfer-completed-initiator-${result.id}`,
+            },
+            { kind: 'ownership-previous', newOwner: newOwner.name },
+          ),
+          sendOwnershipEmailBestEffort(
+            {
+              to: newOwner.email,
+              subject: 'You are now the Tickif organization Owner',
+              idempotencyKey: `ownership-transfer-completed-target-${result.id}`,
+            },
+            { kind: 'ownership-new' },
+          ),
         ]);
       }
     }

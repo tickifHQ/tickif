@@ -1,5 +1,6 @@
 import { config } from '@repo/config';
 import { enqueueSms } from '@repo/queue';
+import { renderTickifEmail } from './email-templates.js';
 import { sendEmail } from './email.js';
 
 /** Change delivery only; better-auth still owns code generation and verification. */
@@ -27,6 +28,6 @@ export async function sendPhoneOtp(input: { phoneNumber: string; code: string })
   await sendEmail({
     to: config.PHONE_OTP_EMAIL_TO,
     subject: 'Your Tickif test login code',
-    html: `<h2>Tickif test login</h2><p>Phone: ${input.phoneNumber}</p><p>Your code is <strong>${input.code}</strong>.</p><p>This code expires in 5 minutes.</p>`,
+    ...(await renderTickifEmail({ kind: 'phone-otp', ...input }, config.PUBLIC_WEB_URL)),
   });
 }

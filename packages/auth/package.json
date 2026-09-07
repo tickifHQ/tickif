@@ -15,9 +15,15 @@
     "./permissions": {
       "types": "./src/permissions.ts",
       "default": "./src/permissions.ts"
+    },
+    "./email-templates": {
+      "types": "./src/email-templates.ts",
+      "default": "./src/email-templates.ts"
     }
   },
   "scripts": {
+    "emails:preview": "tsx scripts/preview-emails.ts --serve",
+    "emails:export": "tsx scripts/preview-emails.ts",
     "generate": "npx --yes @better-auth/cli@latest generate --config ./src/index.ts --output ./auth-schema.generated.ts",
     "lint": "eslint src tests",
     "test": "vitest run",
@@ -29,7 +35,10 @@
     "@repo/db": "workspace:*",
     "@repo/queue": "workspace:*",
     "better-auth": "catalog:",
-    "resend": "catalog:"
+    "resend": "catalog:",
+    "react-email": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -38,6 +47,8 @@
     "@types/node": "catalog:",
     "eslint": "^9.18.0",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "tsx": "catalog:",
+    "vitest": "catalog:",
+    "@types/react": "catalog:"
   }
 }
