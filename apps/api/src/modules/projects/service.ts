@@ -151,6 +151,9 @@ function toDetailResponse(
   return {
     ...toResponse(row, reviewComments),
     rooms: rooms.map(toRoomResponse),
+    ...(row.pendingChanges
+      ? { pendingChanges: true, liveStatus: 'published' as const, pendingStatus: row.status }
+      : {}),
   };
 }
 
@@ -487,6 +490,9 @@ function toListItemFields(
   reviewComments: ProjectReviewComment[],
 ): ProjectListItem {
   return {
+    ...(row.pendingChanges
+      ? { pendingChanges: true, liveStatus: 'published' as const, pendingStatus: row.status }
+      : {}),
     id: row.id,
     slug: row.slug,
     title: row.title,
@@ -770,7 +776,12 @@ async function assertProjectCapability(
 }
 
 function isEditableProjectStatus(status: ProjectRecord['status']): boolean {
-  return status === 'draft' || status === 'changes_requested' || status === 'rejected';
+  return (
+    status === 'published' ||
+    status === 'draft' ||
+    status === 'changes_requested' ||
+    status === 'rejected'
+  );
 }
 
 async function requireEditableProject(
@@ -1146,24 +1157,23 @@ type PublicProjectDetailBuildOptions = {
 async function buildPublicProjectDetail(
   result: PublicProjectReadRecord,
   options: PublicProjectDetailBuildOptions,
+  existingSnapshot?: NonNullable<
+    Awaited<ReturnType<typeof projectsRepository.readPublicProjectSnapshot>>
+  >,
 ): Promise<PublicProjectDetailResponse> {
-  const { project, designer } = result;
+  if (result.project.status !== 'published' || result.designer.status !== 'active') {
+    throw AppError.notFound('Project not found');
+  }
+  const snapshot =
+    existingSnapshot ??
+    (await projectsRepository.readPublicProjectSnapshot(result, options.includeRooms));
+  if (!snapshot) throw AppError.notFound('Project not found');
+  const { project, designer } = snapshot.result;
   if (project.status !== 'published' || designer.status !== 'active') {
     throw AppError.notFound('Project not found');
   }
 
-  // Keep each DB fan-out below half the shared ten-connection pool. This route
-  // is public and can receive many simultaneous cold-cache requests.
-  const [rooms, rawGalleryImages, coverImages, narrative] = await Promise.all([
-    options.includeRooms
-      ? projectsRepository.listPublicRooms(project.id)
-      : Promise.resolve([] as PublicProjectRoomRecord[]),
-    projectsRepository.listPublicGalleryImages(project.id),
-    project.coverImageId
-      ? projectsRepository.findCoverImages([project.coverImageId])
-      : Promise.resolve(new Map()),
-    projectsRepository.findPublishedProjectNarrative(project.id),
-  ]);
+  const { rooms, galleryImages: rawGalleryImages, coverImages, narrative } = snapshot;
 
   const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
   const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
@@ -1461,21 +1471,33 @@ export const projectsService = {
   },
 
   async getById(id: string, caller?: Caller): Promise<ProjectDetailResponse> {
-    const row = await projectsRepository.findByIdWithRooms(id);
+    let row = await projectsRepository.findLiveByIdWithRooms(id);
     if (!row) throw AppError.notFound(`Project ${id} not found`);
-
-    if (row.project.status !== 'published') {
-      if (!caller) throw AppError.notFound(`Project ${id} not found`);
+    const live = row;
+    if (caller) {
       const ownership = await projectsRepository.findOwnership(id);
-      if (!ownership) throw AppError.notFound(`Project ${id} not found`);
-      await assertAccess(ownership, caller);
+      if (
+        ownership &&
+        (!caller.isBanned || row.project.status !== 'published') &&
+        (caller.userRole === 'superadmin' || caller.activeOrgId === ownership.organizationId)
+      ) {
+        await assertAccess(ownership, caller);
+        row = (await projectsRepository.findByIdWithRooms(id)) ?? row;
+      } else if (row.project.status !== 'published') {
+        throw AppError.notFound(`Project ${id} not found`);
+      }
+    } else if (row.project.status !== 'published') {
+      throw AppError.notFound(`Project ${id} not found`);
     }
 
     const reviewComments =
       row.project.status === 'changes_requested'
         ? await projectsRepository.listUnresolvedReviewComments([id])
         : [];
-    return toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment));
+    return {
+      ...toDetailResponse(row.project, row.rooms, reviewComments.map(toReviewComment)),
+      ...(row.project.pendingChanges ? { liveVersion: toResponse(live.project) } : {}),
+    };
   },
 
   async getPublicById(id: string): Promise<PublicProjectPageResponse> {
@@ -1614,7 +1636,7 @@ export const projectsService = {
     }
     const deleted = await projectsRepository.transition({
       id: projectId,
-      fromStatus: ownership.status,
+      fromStatus: ownership.liveStatus ?? ownership.status,
       toStatus: 'deleted',
       actorUserId: caller.userId,
       action: 'delete',
@@ -1627,12 +1649,16 @@ export const projectsService = {
     const ownership = await projectsRepository.findOwnership(projectId);
     if (!ownership) throw AppError.notFound('Project not found');
     await assertProjectCapability(ownership, caller, ORGANIZATION_CAPABILITY.ARCHIVE_PROJECTS);
-    if (ownership.status !== 'draft' && ownership.status !== 'published') {
+    if (
+      ownership.status !== 'draft' &&
+      ownership.status !== 'published' &&
+      ownership.liveStatus !== 'published'
+    ) {
       throw AppError.conflict('Only draft or published projects can be archived');
     }
     const archived = await projectsRepository.transition({
       id: projectId,
-      fromStatus: ownership.status,
+      fromStatus: ownership.liveStatus ?? ownership.status,
       toStatus: 'archived',
       actorUserId: caller.userId,
       action: 'archive',
@@ -1808,7 +1834,7 @@ export const projectsService = {
     });
     if (!submission.project) throw AppError.notFound('Project not found');
 
-    const completeness = buildCompleteness(project, submission.counts);
+    const completeness = buildCompleteness(submission.project, submission.counts);
     if (!completeness.complete) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: completeness.missing,
@@ -1871,7 +1897,7 @@ export const projectsService = {
     }>
   > {
     // Verify project exists and is published
-    const project = await projectsRepository.findById(projectId);
+    const project = (await projectsRepository.findLiveByIdWithRooms(projectId))?.project;
     if (!project) {
       if (await projectsRepository.isProjectTombstonedById(projectId)) {
         throw AppError.gone('Project permanently deleted');
@@ -1889,16 +1915,25 @@ export const projectsService = {
 
   async getPublicImageDetail(imageId: string): Promise<PublicImageDetailResponse> {
     const source = await projectsRepository.findPublicProjectByImageId(imageId);
-    if (!source) throw AppError.notFound('Image not found');
+    if (!source || source.project.status !== 'published' || source.designer.status !== 'active') {
+      throw AppError.notFound('Image not found');
+    }
 
-    const detail = await buildPublicProjectDetail(source, {
-      includeRooms: false,
-      includeMotifs: false,
-    });
+    const snapshot = await projectsRepository.readPublicProjectSnapshot(source, false);
+    if (!snapshot) throw AppError.notFound('Image not found');
+    const detail = await buildPublicProjectDetail(
+      source,
+      {
+        includeRooms: false,
+        includeMotifs: false,
+      },
+      snapshot,
+    );
     const activeImage = detail.images.find((image) => image.id === imageId);
     if (!activeImage) throw AppError.notFound('Image not found');
 
-    const coverImage = detail.images.find((image) => image.id === source.project.coverImageId);
+    const coverImageId = snapshot.result.project.coverImageId;
+    const coverImage = detail.images.find((image) => image.id === coverImageId);
     const specifications = detail.specifications;
     const tags = [
       specifications.bhk?.label,
@@ -1919,7 +1954,7 @@ export const projectsService = {
         reviewCount: detail.designer.reviewCount,
         budget: specifications.budgetBand?.label ?? null,
         tags,
-        coverImageId: source.project.coverImageId,
+        coverImageId,
         coverImageUrl: detail.coverImageUrl,
         imageWidth: coverImage?.width ?? null,
         imageHeight: coverImage?.height ?? null,
@@ -2038,7 +2073,7 @@ export const projectsService = {
    * Rule-based: same city + bhk + budget band + scope on denormalized slug columns.
    */
   async similarProjects(projectId: string): Promise<SimilarProjectsResponse> {
-    const project = await projectsRepository.findById(projectId);
+    const project = (await projectsRepository.findLiveByIdWithRooms(projectId))?.project;
     if (!project || project.status !== 'published') {
       throw AppError.notFound('Project not found');
     }

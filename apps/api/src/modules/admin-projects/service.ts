@@ -208,7 +208,20 @@ export const adminProjectsService = {
       adminProjectsRepository.listHistory(projectId),
       adminProjectsRepository.listReviewComments(projectId),
     ]);
+    const live = project.pendingChanges
+      ? await adminProjectsRepository.findLiveVersion(projectId)
+      : null;
     return {
+      ...(live
+        ? {
+            pendingChanges: true,
+            liveVersion: {
+              project: toProject({ ...live.project, designerName: project.designerName }),
+              rooms: live.rooms.map(toRoom),
+              images: await Promise.all(live.images.map(toImage)),
+            },
+          }
+        : {}),
       project: toProject(project),
       rooms: rooms.map(toRoom),
       images: await Promise.all(images.map(toImage)),

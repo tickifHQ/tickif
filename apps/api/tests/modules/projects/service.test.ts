@@ -31,6 +31,7 @@ vi.mock('../../../src/modules/projects/repository.js', () => {
       findCoverImages: vi.fn(),
       findById: vi.fn(),
       findByIdWithRooms: vi.fn(),
+      findLiveByIdWithRooms: vi.fn(),
       findBySlug: vi.fn(),
       createDraft: vi.fn(),
       duplicateProject: vi.fn(),
@@ -191,6 +192,7 @@ const caller = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(projectsRepository.findLiveByIdWithRooms).mockImplementation((id) => projectsRepository.findByIdWithRooms(id));
   vi.mocked(projectsRepository.findReferencedImageObjectKeys).mockResolvedValue([]);
   vi.mocked(projectsRepository.listReviewComments).mockResolvedValue([]);
   vi.mocked(projectsRepository.listUnresolvedReviewComments).mockResolvedValue([]);

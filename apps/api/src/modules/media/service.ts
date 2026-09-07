@@ -69,7 +69,12 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
 }
 
 function assertEditableProject(status: string): void {
-  if (status !== 'draft' && status !== 'changes_requested' && status !== 'rejected') {
+  if (
+    status !== 'draft' &&
+    status !== 'changes_requested' &&
+    status !== 'rejected' &&
+    status !== 'published'
+  ) {
     throw AppError.conflict(
       'Only draft, changes-requested, or rejected project media can be edited',
     );
@@ -190,6 +195,8 @@ export const mediaService = {
       throw AppError.unprocessable('Invalid materialSlugs');
     }
 
-    return toImageDto(await mediaRepository.updateMetadata(input.imageId, input.metadata));
+    const updated = await mediaRepository.updateMetadata(input.imageId, input.metadata);
+    if (!updated) throw AppError.conflict('Project media is no longer editable');
+    return toImageDto(updated);
   },
 };

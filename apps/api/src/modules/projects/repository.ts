@@ -2,7 +2,7 @@ import { exists, ilike, inArray, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, schema, eq, and, or, desc, asc, sql, isNotNull, notInArray } from '@repo/db';
 import type { DbTransaction } from '@repo/db';
-import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
+import { VERIFICATION_APPLICATION_STATUS, classifyProjectEdit } from '@repo/contracts';
 import type {
   CreateProjectInput,
   CreateProjectRoomInput,
@@ -18,20 +18,31 @@ import type {
   UpdateProjectRoomInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+import { AppError } from '../../lib/errors.js';
 import { projectFeedFilterClauses } from './feed-filters.repository.js';
+import {
+  getPendingProject,
+  getPendingProjects,
+  readProjectAggregate,
+  mutateProjectAggregate,
+  writePendingAggregate,
+  applyLiveAggregate,
+  projectContentFields,
+  type VersionedProject,
+} from '../project-versions/repository.js';
 
 /**
  * Data-access for projects. This is the ONLY layer that imports Drizzle.
  * It exposes a framework-free record type and typed methods over the schema.
  */
-export type ProjectRecord = typeof schema.project.$inferSelect;
+export type ProjectRecord = VersionedProject;
 export class ProjectSlugUnavailableError extends Error {
   constructor() {
     super('Project slug is already reserved');
     this.name = 'ProjectSlugUnavailableError';
   }
 }
-export type ProjectRoomRecord = typeof schema.projectRoom.$inferSelect;
+export type ProjectRoomRecord = Omit<typeof schema.projectRoom.$inferSelect, 'isLive'>;
 type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
 export type TaxonomyTermRecord = Pick<
   typeof schema.taxonomy.$inferSelect,
@@ -52,6 +63,7 @@ export type ProjectOwnership = {
   organizationId: string;
   teamId?: string;
   status: ProjectStatus;
+  liveStatus?: ProjectStatus;
   archiveReason: ProjectRecord['archiveReason'];
   ownerUserId: string | null;
 };
@@ -124,6 +136,11 @@ const emptyUploadImageCounts: UploadImageCounts = {
   taggedImageCount: 0,
 };
 
+const effectiveProjectStatus = sql<ProjectStatus>`case when ${schema.project.status} = 'published' then
+  coalesce((select ${schema.projectPendingVersion.status} from ${schema.projectPendingVersion}
+    where ${schema.projectPendingVersion.projectId} = ${schema.project.id}), ${schema.project.status})
+  else ${schema.project.status} end`;
+
 export type ListProjectsParams = {
   userId: string;
   activeOrgId: string;
@@ -151,6 +168,8 @@ export type ProjectListItemRecord = Pick<
   | 'coverImageId'
   | 'createdAt'
   | 'updatedAt'
+  | 'pendingChanges'
+  | 'liveStatus'
 >;
 export type ProjectCoverImageRecord = Pick<ProjectImageRecord, 'id' | 'derivatives' | 'status'>;
 export type ProjectStatusCountRecord = {
@@ -292,6 +311,7 @@ function recommendationBranch(params: {
     inner join ${schema.projectImage} as recommendation_cover
       on ${schema.project.coverImageId} = recommendation_cover.id
       and recommendation_cover.status = 'ready'
+      and recommendation_cover.is_live = true
     where ${schema.project.status} = 'published'
       and ${schema.designerProfile.status} = 'active'
       and ${params.match}
@@ -396,6 +416,15 @@ function escapeLikePattern(value: string): string {
 }
 
 export const projectsRepository = {
+  async findLiveByIdWithRooms(
+    id: string,
+  ): Promise<{ project: ProjectRecord; rooms: ProjectRoomRecord[] } | null> {
+    const state = await db.transaction((tx) => readProjectAggregate(id, tx), {
+      isolationLevel: 'repeatable read',
+      accessMode: 'read only',
+    });
+    return state ? { project: state.live.project, rooms: state.live.rooms } : null;
+  },
   async withOrganizationLifecycleReadLock<T>(
     organizationId: string,
     run: (tx: DbTransaction) => Promise<T>,
@@ -433,7 +462,7 @@ export const projectsRepository = {
               and ${schema.teamMember.userId} = ${params.userId}
           )`
         : undefined,
-      params.statuses?.length ? inArray(schema.project.status, params.statuses) : undefined,
+      params.statuses?.length ? inArray(effectiveProjectStatus, params.statuses) : undefined,
       searchPattern
         ? or(
             ilike(schema.project.title, searchPattern),
@@ -492,7 +521,11 @@ export const projectsRepository = {
         .where(where),
     ]);
 
-    return { items, total: count?.value ?? 0 };
+    const pending = await getPendingProjects(items.map((item) => item.id));
+    return {
+      items: items.map((item) => ({ ...item, ...pending.get(item.id) })),
+      total: count?.value ?? 0,
+    };
   },
 
   async countByStatus(params: {
@@ -529,13 +562,13 @@ export const projectsRepository = {
 
     return db
       .select({
-        status: schema.project.status,
+        status: effectiveProjectStatus,
         count: sql<number>`count(*)::int`,
       })
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(and(...filters))
-      .groupBy(schema.project.status);
+      .groupBy(effectiveProjectStatus);
   },
 
   async listReviewComments(projectId: string): Promise<ProjectReviewCommentRecord[]> {
@@ -560,18 +593,27 @@ export const projectsRepository = {
       .orderBy(asc(schema.projectReviewComment.createdAt), asc(schema.projectReviewComment.id));
   },
 
-  async findCoverImages(imageIds: string[]): Promise<Map<string, ProjectCoverImageRecord>> {
+  async findCoverImages(
+    imageIds: string[],
+    liveOnly = false,
+    reader: typeof db | DbTransaction = db,
+  ): Promise<Map<string, ProjectCoverImageRecord>> {
     const uniqueIds = [...new Set(imageIds)];
     if (uniqueIds.length === 0) return new Map();
 
-    const rows = await db
+    const rows = await reader
       .select({
         id: schema.projectImage.id,
         status: schema.projectImage.status,
         derivatives: schema.projectImage.derivatives,
       })
       .from(schema.projectImage)
-      .where(inArray(schema.projectImage.id, uniqueIds));
+      .where(
+        and(
+          inArray(schema.projectImage.id, uniqueIds),
+          liveOnly ? eq(schema.projectImage.isLive, true) : undefined,
+        ),
+      );
 
     return new Map(rows.map((row) => [row.id, row]));
   },
@@ -592,7 +634,7 @@ export const projectsRepository = {
         .select(feedProjectColumns(cover))
         .from(schema.project)
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-        .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+        .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
         // Only active designers: suspended studios 404 on their public profile, so their
         // projects must not surface here either. `id` is the stable tiebreaker for paging.
         .where(
@@ -680,6 +722,8 @@ export const projectsRepository = {
   },
 
   async findById(id: string): Promise<ProjectRecord | null> {
+    const pending = await getPendingProject(id);
+    if (pending) return pending;
     const [row] = await db.select().from(schema.project).where(eq(schema.project.id, id)).limit(1);
     return row ?? null;
   },
@@ -789,7 +833,12 @@ export const projectsRepository = {
       const sourceRooms = await tx
         .select()
         .from(schema.projectRoom)
-        .where(eq(schema.projectRoom.projectId, params.source.id))
+        .where(
+          and(
+            eq(schema.projectRoom.projectId, params.source.id),
+            eq(schema.projectRoom.isLive, true),
+          ),
+        )
         .orderBy(asc(schema.projectRoom.sortOrder), asc(schema.projectRoom.createdAt));
 
       const roomIdBySourceId = new Map<string, string>();
@@ -819,7 +868,12 @@ export const projectsRepository = {
       const sourceImages = await tx
         .select()
         .from(schema.projectImage)
-        .where(eq(schema.projectImage.projectId, params.source.id))
+        .where(
+          and(
+            eq(schema.projectImage.projectId, params.source.id),
+            eq(schema.projectImage.isLive, true),
+          ),
+        )
         .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
 
       let copiedCoverImageId: string | null = null;
@@ -864,30 +918,10 @@ export const projectsRepository = {
   },
 
   async updateDraft(id: string, input: UpdateProjectInput): Promise<ProjectRecord | null> {
-    const patch: Partial<typeof schema.project.$inferInsert> = {};
-    if (input.title !== undefined) patch.title = input.title;
-    if (input.description !== undefined) patch.description = input.description;
-    if (input.propertyTypeSlug !== undefined) patch.propertyTypeSlug = input.propertyTypeSlug;
-    if (input.propertySubtypeSlug !== undefined)
-      patch.propertySubtypeSlug = input.propertySubtypeSlug;
-    if (input.scopeSlug !== undefined) patch.scopeSlug = input.scopeSlug;
-    if (input.bhkSlug !== undefined) patch.bhkSlug = input.bhkSlug;
-    if (input.sizeSqft !== undefined) patch.sizeSqft = input.sizeSqft;
-    if (input.citySlug !== undefined) patch.citySlug = input.citySlug;
-    if (input.localitySlug !== undefined) patch.localitySlug = input.localitySlug;
-    if (input.buildingName !== undefined) patch.buildingName = input.buildingName;
-    if (input.budgetBandSlug !== undefined) patch.budgetBandSlug = input.budgetBandSlug;
-    if (input.completedMonth !== undefined) patch.completedMonth = input.completedMonth;
-    if (input.durationMonths !== undefined) patch.durationMonths = input.durationMonths;
-    if (input.coverImageId !== undefined) patch.coverImageId = input.coverImageId;
-    if (input.metadata !== undefined) patch.metadata = input.metadata;
-
-    const [row] = await db
-      .update(schema.project)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(schema.project.id, id))
-      .returning();
-    return row ?? null;
+    const versioned = await mutateProjectAggregate(id, (aggregate) => {
+      aggregate.project = { ...aggregate.project, ...input };
+    });
+    return versioned ? ((await getPendingProject(id)) ?? versioned.project) : null;
   },
 
   async assignResponsibleMember(input: {
@@ -946,6 +980,94 @@ export const projectsRepository = {
         return { project: null, counts: emptyUploadImageCounts, submitted: null };
       }
 
+      if (project.status === 'published') {
+        const state = await readProjectAggregate(id, tx);
+        if (!state?.pending || state.pending.status !== requirements.expectedStatus) {
+          return { project, counts: emptyUploadImageCounts, submitted: null };
+        }
+        const aggregate = state.current;
+        const eligible = aggregate.images.filter(
+          (image) =>
+            image.roomId &&
+            (image.status === 'ready' ||
+              (image.status === 'processing' &&
+                image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+        );
+        const counts = {
+          imageCount: eligible.length,
+          taggedImageCount: eligible.filter(
+            (image) => image.themeSlugs.length && image.finishSlugs.length,
+          ).length,
+        };
+        const hasCover = eligible.some((image) => image.id === aggregate.project.coverImageId);
+        if (
+          !hasCover ||
+          !aggregate.project.title.trim() ||
+          !aggregate.project.citySlug ||
+          !aggregate.project.propertyTypeSlug ||
+          !aggregate.project.scopeSlug ||
+          !aggregate.project.budgetBandSlug ||
+          counts.imageCount < requirements.minImageCount ||
+          counts.taggedImageCount !== counts.imageCount
+        ) {
+          return { project: aggregate.project, counts, submitted: null };
+        }
+        if (
+          aggregate.images.every((image) => image.status === 'ready') &&
+          classifyProjectEdit(
+            projectContentFields(state.live.project),
+            projectContentFields(aggregate.project),
+            aggregate.project.approvedImageIds ?? state.live.images.map((image) => image.id),
+            aggregate.images.map((image) => image.id),
+          ) === 'minor'
+        ) {
+          const published = await applyLiveAggregate(tx, aggregate);
+          await tx
+            .delete(schema.projectPendingVersion)
+            .where(eq(schema.projectPendingVersion.projectId, id));
+          return { project: aggregate.project, counts, submitted: published };
+        }
+        const now = new Date();
+        aggregate.project = {
+          ...aggregate.project,
+          status: 'submitted',
+          submittedAt: now,
+          reviewedBy: null,
+          reviewStartedAt: null,
+          rejectionReasonCode: null,
+          moderationNote: null,
+          updatedAt: now,
+        };
+        await writePendingAggregate(tx, aggregate, state.pending.revision + 1);
+        await tx.insert(schema.projectModerationEvent).values({
+          projectId: id,
+          actorUserId: requirements.actorUserId,
+          action: requirements.action,
+          fromStatus: requirements.expectedStatus,
+          toStatus: 'submitted',
+        });
+        if (requirements.expectedStatus === 'changes_requested') {
+          await tx
+            .update(schema.projectReviewComment)
+            .set({ status: 'resolved', updatedAt: now })
+            .where(
+              and(
+                eq(schema.projectReviewComment.projectId, id),
+                eq(schema.projectReviewComment.status, 'unresolved'),
+              ),
+            );
+        }
+        return {
+          project: aggregate.project,
+          counts,
+          submitted: {
+            ...aggregate.project,
+            pendingChanges: true,
+            liveStatus: 'published' as const,
+          },
+        };
+      }
+
       const [row] = await tx
         .select({
           imageCount: sql<number>`count(*)::int`,
@@ -970,6 +1092,11 @@ export const projectsRepository = {
         taggedImageCount: row?.taggedImageCount ?? 0,
       };
       const hasRequiredImages =
+        !!project.title.trim() &&
+        !!project.citySlug &&
+        !!project.propertyTypeSlug &&
+        !!project.scopeSlug &&
+        !!project.budgetBandSlug &&
         counts.imageCount >= requirements.minImageCount &&
         counts.taggedImageCount === counts.imageCount;
 
@@ -1022,6 +1149,71 @@ export const projectsRepository = {
 
   async transition(params: TransitionProjectParams): Promise<TransitionProjectResult> {
     return db.transaction(async (tx) => {
+      const state = await readProjectAggregate(params.id, tx, true);
+      if (state?.pending && !['archive', 'delete', 'unpublish'].includes(params.action)) {
+        const aggregate = state.current;
+        if (
+          aggregate.project.status !== params.fromStatus ||
+          (params.expectedModerationRevision !== undefined &&
+            state.pending.revision !== params.expectedModerationRevision)
+        )
+          return null;
+        if (params.requireNoUnresolvedReviewComments) {
+          const [comment] = await tx
+            .select({ id: schema.projectReviewComment.id })
+            .from(schema.projectReviewComment)
+            .where(
+              and(
+                eq(schema.projectReviewComment.projectId, params.id),
+                eq(schema.projectReviewComment.status, 'unresolved'),
+              ),
+            )
+            .limit(1);
+          if (comment) return 'unresolved_review_comments';
+          const ready = aggregate.images.filter(
+            (image) => image.status === 'ready' && image.roomId,
+          );
+          if (
+            ready.length < 3 ||
+            ready.length !== aggregate.images.length ||
+            ready.some((image) => !image.themeSlugs.length || !image.finishSlugs.length) ||
+            !ready.some((image) => image.id === aggregate.project.coverImageId)
+          )
+            return null;
+        }
+        aggregate.project = {
+          ...aggregate.project,
+          ...params.patch,
+          status: params.toStatus,
+          moderationRevision: state.pending.revision + 1,
+          updatedAt: new Date(),
+        };
+        await tx.insert(schema.projectModerationEvent).values({
+          projectId: params.id,
+          actorUserId: params.actorUserId,
+          action: params.action,
+          fromStatus: params.fromStatus,
+          toStatus: params.toStatus,
+          note: params.note ?? null,
+          reasonCode: params.reasonCode ?? null,
+          fieldDiff: params.fieldDiff ?? null,
+        });
+        if (params.toStatus === 'published') {
+          const published = await applyLiveAggregate(tx, aggregate, true);
+          await tx
+            .delete(schema.projectPendingVersion)
+            .where(eq(schema.projectPendingVersion.projectId, params.id));
+          return published;
+        }
+        if (params.toStatus === 'rejected') {
+          await tx
+            .delete(schema.projectPendingVersion)
+            .where(eq(schema.projectPendingVersion.projectId, params.id));
+          return state.live.project;
+        }
+        await writePendingAggregate(tx, aggregate, aggregate.project.moderationRevision);
+        return { ...aggregate.project, pendingChanges: true, liveStatus: 'published' };
+      }
       if (params.requireNoUnresolvedReviewComments) {
         const [lockedProject] = await tx
           .select({ id: schema.project.id })
@@ -1071,6 +1263,32 @@ export const projectsRepository = {
         .returning();
 
       if (!transitioned) return null;
+
+      if (params.toStatus !== 'published') {
+        await tx
+          .delete(schema.projectPendingVersion)
+          .where(eq(schema.projectPendingVersion.projectId, params.id));
+      } else {
+        await tx
+          .update(schema.projectImage)
+          .set({ isLive: false })
+          .where(
+            and(
+              eq(schema.projectImage.projectId, params.id),
+              sql`${schema.projectImage.status} <> 'ready'`,
+            ),
+          );
+        const approvedImages = await tx
+          .select({ id: schema.projectImage.id })
+          .from(schema.projectImage)
+          .where(
+            and(eq(schema.projectImage.projectId, params.id), eq(schema.projectImage.isLive, true)),
+          );
+        await tx
+          .update(schema.project)
+          .set({ approvedImageIds: approvedImages.map((image) => image.id) })
+          .where(eq(schema.project.id, params.id));
+      }
 
       await tx.insert(schema.projectModerationEvent).values({
         projectId: params.id,
@@ -1146,6 +1364,22 @@ export const projectsRepository = {
   },
 
   async getUploadImageCounts(projectId: string): Promise<UploadImageCounts> {
+    const state = await readProjectAggregate(projectId);
+    if (state) {
+      const images = state.current.images.filter(
+        (image) =>
+          image.roomId &&
+          (image.status === 'ready' ||
+            (image.status === 'processing' &&
+              image.updatedAt.getTime() >= Date.now() - 30 * 60_000)),
+      );
+      return {
+        imageCount: images.length,
+        taggedImageCount: images.filter(
+          (image) => image.themeSlugs.length && image.finishSlugs.length,
+        ).length,
+      };
+    }
     const [row] = await db
       .select({
         imageCount: sql<number>`count(*)::int`,
@@ -1226,7 +1460,14 @@ export const projectsRepository = {
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, projectId))
       .limit(1);
-    return row ?? null;
+    const pending = row ? await getPendingProject(projectId) : null;
+    return row
+      ? {
+          ...row,
+          status: pending?.status ?? row.status,
+          ...(pending ? { liveStatus: row.status } : {}),
+        }
+      : null;
   },
 
   async taxonomyExists(
@@ -1306,6 +1547,8 @@ export const projectsRepository = {
   },
 
   async listRooms(projectId: string): Promise<ProjectRoomRecord[]> {
+    const state = await readProjectAggregate(projectId);
+    if (state) return state.current.rooms;
     return db
       .select()
       .from(schema.projectRoom)
@@ -1314,6 +1557,8 @@ export const projectsRepository = {
   },
 
   async findRoom(projectId: string, roomId: string): Promise<ProjectRoomRecord | null> {
+    const state = await readProjectAggregate(projectId);
+    if (state) return state.current.rooms.find((room) => room.id === roomId) ?? null;
     const [row] = await db
       .select()
       .from(schema.projectRoom)
@@ -1323,19 +1568,17 @@ export const projectsRepository = {
   },
 
   async createRoom(projectId: string, input: CreateProjectRoomInput): Promise<ProjectRoomRecord> {
-    const [row] = await db
-      .insert(schema.projectRoom)
-      .values({
-        projectId,
-        roomTypeId: input.roomTypeId,
-        name: input.name,
-        description: input.description ?? null,
-        sortOrder: input.sortOrder ?? 0,
-        metadata: input.metadata ?? {},
-      })
-      .returning();
-    if (!row) throw new Error('insert returned no row');
-    return row;
+    const versioned = await mutateProjectAggregate(projectId, async (aggregate, tx) => {
+      const [room] = await tx
+        .insert(schema.projectRoom)
+        .values({ ...input, projectId, isLive: false })
+        .returning();
+      if (!room) throw new Error('insert returned no room');
+      aggregate.rooms.push(room);
+      return room;
+    });
+    if (!versioned) throw AppError.notFound('Project not found');
+    return versioned.value;
   },
 
   async findRoomTypesBySlugs(slugs: string[]): Promise<TaxonomyTermRecord[]> {
@@ -1357,24 +1600,16 @@ export const projectsRepository = {
     inputs: CreateProjectRoomInput[],
   ): Promise<ProjectRoomRecord[]> {
     if (inputs.length === 0) return [];
-    const now = new Date();
-    return db.transaction(async (tx) =>
-      tx
+    const versioned = await mutateProjectAggregate(projectId, async (aggregate, tx) => {
+      const rooms = await tx
         .insert(schema.projectRoom)
-        .values(
-          inputs.map((input) => ({
-            projectId,
-            roomTypeId: input.roomTypeId,
-            name: input.name,
-            description: input.description ?? null,
-            sortOrder: input.sortOrder ?? 0,
-            metadata: input.metadata ?? {},
-            createdAt: now,
-            updatedAt: now,
-          })),
-        )
-        .returning(),
-    );
+        .values(inputs.map((input) => ({ ...input, projectId, isLive: false })))
+        .returning();
+      aggregate.rooms.push(...rooms);
+      return rooms;
+    });
+    if (!versioned) throw AppError.notFound('Project not found');
+    return versioned.value;
   },
 
   async updateRoom(
@@ -1382,58 +1617,50 @@ export const projectsRepository = {
     roomId: string,
     input: UpdateProjectRoomInput,
   ): Promise<ProjectRoomRecord | null> {
-    const patch: Partial<typeof schema.projectRoom.$inferInsert> = {};
-    if (input.roomTypeId !== undefined) patch.roomTypeId = input.roomTypeId;
-    if (input.name !== undefined) patch.name = input.name;
-    if (input.description !== undefined) patch.description = input.description;
-    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
-    if (input.metadata !== undefined) patch.metadata = input.metadata;
-
-    const [row] = await db
-      .update(schema.projectRoom)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, roomId)))
-      .returning();
-    return row ?? null;
+    const versioned = await mutateProjectAggregate(projectId, (aggregate) => {
+      const room = aggregate.rooms.find((candidate) => candidate.id === roomId);
+      if (!room) return null;
+      Object.assign(room, input, { updatedAt: new Date() });
+      return room;
+    });
+    return versioned?.value ?? null;
   },
 
   async reorderRooms(
     projectId: string,
     input: ReorderProjectRoomsInput,
   ): Promise<ProjectRoomRecord[] | null> {
-    const ids = input.rooms.map((room) => room.id);
-    const existing = await db
-      .select({ id: schema.projectRoom.id })
-      .from(schema.projectRoom)
-      .where(and(eq(schema.projectRoom.projectId, projectId), inArray(schema.projectRoom.id, ids)));
-    if (existing.length !== ids.length) return null;
-
-    await db.transaction(async (tx) => {
+    const versioned = await mutateProjectAggregate(projectId, (aggregate) => {
+      if (
+        input.rooms.some((room) => !aggregate.rooms.some((candidate) => candidate.id === room.id))
+      )
+        return null;
       for (const room of input.rooms) {
-        await tx
-          .update(schema.projectRoom)
-          .set({ sortOrder: room.sortOrder, updatedAt: new Date() })
-          .where(
-            and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, room.id)),
-          );
+        const target = aggregate.rooms.find((candidate) => candidate.id === room.id);
+        if (target) target.sortOrder = room.sortOrder;
       }
+      return aggregate.rooms;
     });
-
-    return this.listRooms(projectId);
+    return versioned?.value ?? null;
   },
 
   async deleteRoom(projectId: string, roomId: string): Promise<boolean> {
-    const rows = await db
-      .delete(schema.projectRoom)
-      .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, roomId)))
-      .returning({ id: schema.projectRoom.id });
-    return rows.length > 0;
+    const versioned = await mutateProjectAggregate(projectId, async (aggregate, tx, published) => {
+      if (!aggregate.rooms.some((room) => room.id === roomId)) return false;
+      aggregate.rooms = aggregate.rooms.filter((room) => room.id !== roomId);
+      for (const image of aggregate.images) if (image.roomId === roomId) image.roomId = null;
+      if (!published) await tx.delete(schema.projectRoom).where(eq(schema.projectRoom.id, roomId));
+      return true;
+    });
+    return versioned?.value ?? false;
   },
 
   async findImage(
     projectId: string,
     imageId: string,
   ): Promise<ProjectImageAttachmentRecord | null> {
+    const state = await readProjectAggregate(projectId);
+    if (state) return state.current.images.find((image) => image.id === imageId) ?? null;
     const [row] = await db
       .select({
         id: schema.projectImage.id,
@@ -1453,62 +1680,40 @@ export const projectsRepository = {
     imageId: string,
     input: LinkProjectImageInput,
   ): Promise<ProjectImageAttachmentRecord | null> {
-    const patch: Partial<typeof schema.projectImage.$inferInsert> = {};
-    if (input.roomId !== undefined) patch.roomId = input.roomId;
-    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
-
-    const [row] = await db
-      .update(schema.projectImage)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)))
-      .returning({
-        id: schema.projectImage.id,
-        projectId: schema.projectImage.projectId,
-        roomId: schema.projectImage.roomId,
-        status: schema.projectImage.status,
-        sortOrder: schema.projectImage.sortOrder,
-      });
-    return row ?? null;
+    const versioned = await mutateProjectAggregate(projectId, (aggregate) => {
+      const image = aggregate.images.find((candidate) => candidate.id === imageId);
+      if (!image) return null;
+      Object.assign(image, input);
+      return image;
+    });
+    return versioned?.value ?? null;
   },
 
   async deleteImage(
     projectId: string,
     imageId: string,
   ): Promise<ProjectImageDeletionRecord | null> {
-    return db.transaction(async (tx) => {
-      const [image] = await tx
-        .select({
-          id: schema.projectImage.id,
-          projectId: schema.projectImage.projectId,
-          originalKey: schema.projectImage.originalKey,
-          derivatives: schema.projectImage.derivatives,
-        })
-        .from(schema.projectImage)
-        .where(
-          and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)),
-        )
-        .limit(1);
-
+    const versioned = await mutateProjectAggregate(projectId, (aggregate, tx, published) => {
+      const image = aggregate.images.find((candidate) => candidate.id === imageId);
       if (!image) return null;
-
-      await tx
-        .update(schema.project)
-        .set({ coverImageId: null, updatedAt: new Date() })
-        .where(and(eq(schema.project.id, projectId), eq(schema.project.coverImageId, imageId)));
-
-      await tx
+      aggregate.images = aggregate.images.filter((candidate) => candidate.id !== imageId);
+      if (aggregate.project.coverImageId === imageId) aggregate.project.coverImageId = null;
+      // Physical assets remain referenced by the live graph until promotion or discard.
+      if (published) return { ...image, originalKey: '', derivatives: [] };
+      return tx
         .delete(schema.projectImage)
-        .where(
-          and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)),
-        );
-
-      return image;
+        .where(eq(schema.projectImage.id, imageId))
+        .then(() => image);
     });
+    return versioned?.value ?? null;
   },
 
   /** Public rooms with an active controlled room type when one is available. */
-  async listPublicRooms(projectId: string): Promise<PublicProjectRoomRecord[]> {
-    return db
+  async listPublicRooms(
+    projectId: string,
+    reader: typeof db | DbTransaction = db,
+  ): Promise<PublicProjectRoomRecord[]> {
+    return reader
       .select({
         id: schema.projectRoom.id,
         name: schema.projectRoom.name,
@@ -1526,7 +1731,7 @@ export const projectsRepository = {
           eq(schema.taxonomy.isActive, true),
         ),
       )
-      .where(eq(schema.projectRoom.projectId, projectId))
+      .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.isLive, true)))
       .orderBy(
         asc(schema.projectRoom.sortOrder),
         asc(schema.projectRoom.createdAt),
@@ -1535,8 +1740,11 @@ export const projectsRepository = {
   },
 
   /** Public gallery: all ready images for a published project, ordered by sortOrder. */
-  async listPublicGalleryImages(projectId: string): Promise<PublicProjectGalleryImageRecord[]> {
-    return db
+  async listPublicGalleryImages(
+    projectId: string,
+    reader: typeof db | DbTransaction = db,
+  ): Promise<PublicProjectGalleryImageRecord[]> {
+    return reader
       .select({
         id: schema.projectImage.id,
         roomId: schema.projectImage.roomId,
@@ -1553,7 +1761,11 @@ export const projectsRepository = {
       .from(schema.projectImage)
       .leftJoin(schema.projectRoom, eq(schema.projectImage.roomId, schema.projectRoom.id))
       .where(
-        and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
+        and(
+          eq(schema.projectImage.projectId, projectId),
+          eq(schema.projectImage.status, 'ready'),
+          eq(schema.projectImage.isLive, true),
+        ),
       )
       .orderBy(
         asc(schema.projectImage.sortOrder),
@@ -1595,12 +1807,34 @@ export const projectsRepository = {
   // Public read endpoints (E-195)
   // ---------------------------------------------------------------------------
 
+  /** Re-read the lookup and its content under one MVCC snapshot across approval. */
+  async readPublicProjectSnapshot(lookup: PublicProjectReadRecord, includeRooms: boolean) {
+    return db.transaction(
+      async (tx) => {
+        const result = await this.findPublicProjectById(lookup.project.id, tx);
+        if (!result) return null;
+        const id = result.project.id;
+        const rooms = includeRooms ? await this.listPublicRooms(id, tx) : [];
+        const galleryImages = await this.listPublicGalleryImages(id, tx);
+        const coverImages = result.project.coverImageId
+          ? await this.findCoverImages([result.project.coverImageId], true, tx)
+          : new Map<string, ProjectCoverImageRecord>();
+        const narrative = await this.findPublishedProjectNarrative(id, tx);
+        return { result, rooms, galleryImages, coverImages, narrative };
+      },
+      { isolationLevel: 'repeatable read', accessMode: 'read only' },
+    );
+  },
+
   /**
    * Published project by id with the same canonical designer projection used
    * by the slug and image lookup paths.
    */
-  async findPublicProjectById(id: string): Promise<PublicProjectReadRecord | null> {
-    const [row] = await db
+  async findPublicProjectById(
+    id: string,
+    reader: typeof db | DbTransaction = db,
+  ): Promise<PublicProjectReadRecord | null> {
+    const [row] = await reader
       .select(publicProjectReadColumns)
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
@@ -1751,6 +1985,7 @@ export const projectsRepository = {
         and(
           eq(schema.projectImage.id, imageId),
           eq(schema.projectImage.status, 'ready'),
+          eq(schema.projectImage.isLive, true),
           eq(schema.project.status, 'published'),
           eq(schema.designerProfile.status, 'active'),
         ),
@@ -1809,8 +2044,9 @@ export const projectsRepository = {
 
   async findPublishedProjectNarrative(
     projectId: string,
+    reader: typeof db | DbTransaction = db,
   ): Promise<PublicProjectNarrativeRecord | null> {
-    const [row] = await db
+    const [row] = await reader
       .select({
         body: schema.review.body,
         rating: schema.review.rating,
@@ -1865,6 +2101,7 @@ export const projectsRepository = {
         where public_project.designer_id = ${designerId}
           and public_project.status = 'published'
           and public_image.status = 'ready'
+          and public_image.is_live = true
       ) as motif
       group by motif.kind, motif.slug
       order by count(distinct motif.project_id) desc, motif.kind asc, motif.slug asc
@@ -1905,6 +2142,7 @@ export const projectsRepository = {
               from ${schema.projectImage} as styled_image
               where styled_image.project_id = ${schema.project.id}
                 and styled_image.status = 'ready'
+                and styled_image.is_live = true
                 and jsonb_array_length(styled_image.theme_slugs) > 0
             )
             and not exists (
@@ -1913,6 +2151,7 @@ export const projectsRepository = {
               cross join lateral jsonb_array_elements_text(themed_image.theme_slugs) as theme(slug)
               where themed_image.project_id = ${schema.project.id}
                 and themed_image.status = 'ready'
+                and themed_image.is_live = true
                 and ${inArray(sql`theme.slug`, params.sourceThemeSlugs)}
             )
           `,
@@ -1987,7 +2226,7 @@ export const projectsRepository = {
       .select(feedProjectColumns(cover))
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
       .where(
         and(
           eq(schema.project.designerId, designerId),
@@ -2020,7 +2259,7 @@ export const projectsRepository = {
       .select(feedProjectColumns(cover))
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
       .where(
         and(
           eq(schema.project.status, 'published'),
