@@ -21,6 +21,19 @@ afterEach(() =>
 );
 
 describe('mounted secrets', () => {
+  it('enables search with a key resolved from the mounted dotenv secret', () => {
+    const parsed = parseConfig({
+      NODE_ENV: 'test',
+      BETTER_AUTH_URL: 'http://localhost:3001',
+      TYPESENSE_HOST: 'http://typesense:8108',
+      CONFIG_SECRETS_FILE: secretFile(
+        'BETTER_AUTH_SECRET=synthetic-auth-secret\nTYPESENSE_SEARCH_API_KEY=synthetic-search-key\n',
+      ),
+    });
+
+    expect(parsed.TYPESENSE_SEARCH_CONFIGURED).toBe(true);
+  });
+
   it('loads typed credentials without mutating the caller environment', () => {
     const environment = {
       NODE_ENV: 'test',

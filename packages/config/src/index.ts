@@ -361,6 +361,8 @@ export type Config = Omit<
   TYPESENSE_HOST: string;
   TYPESENSE_API_KEY: string;
   TYPESENSE_SEARCH_API_KEY: string;
+  /** Explicit host and search key were supplied, including mounted secrets, before local defaults. */
+  TYPESENSE_SEARCH_CONFIGURED: boolean;
 };
 
 function postgresUrl(env: RawEnv, database: string): string {
@@ -489,6 +491,7 @@ export function parseConfig(environment: NodeJS.ProcessEnv): Config {
       env.REDIS_URL ??
       `redis://${env.REDIS_PASSWORD ? `:${encodeURIComponent(env.REDIS_PASSWORD)}@` : ''}${env.REDIS_HOST}:${env.REDIS_PORT}`,
     TYPESENSE_HOST: env.TYPESENSE_HOST ?? LOCAL_TYPESENSE_HOST,
+    TYPESENSE_SEARCH_CONFIGURED: Boolean(env.TYPESENSE_HOST && env.TYPESENSE_SEARCH_API_KEY),
     TYPESENSE_API_KEY: env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
     TYPESENSE_SEARCH_API_KEY:
       env.TYPESENSE_SEARCH_API_KEY ?? env.TYPESENSE_API_KEY ?? LOCAL_TYPESENSE_API_KEY,
