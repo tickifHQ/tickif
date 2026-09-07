@@ -116,13 +116,19 @@ describe('project moderation transitions', () => {
     });
     const room = await makeProjectRoom({ projectId: project.id });
     for (let index = 0; index < 3; index += 1) {
-      await makeProjectImage({
+      const image = await makeProjectImage({
         projectId: project.id,
         roomId: room.id,
         status: 'ready',
         themeSlugs: ['modern'],
         finishSlugs: ['veneer'],
       });
+      if (index === 0) {
+        await db
+          .update(schema.project)
+          .set({ coverImageId: image.id })
+          .where(eq(schema.project.id, project.id));
+      }
     }
 
     const responses = await Promise.all([
