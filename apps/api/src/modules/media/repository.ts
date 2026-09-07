@@ -110,6 +110,7 @@ export const mediaRepository = {
           aggregate.project.reviewStartedAt = null;
           aggregate.project.moderationNote = null;
           aggregate.project.rejectionReasonCode = null;
+          aggregate.project.rejectionReasonCodes = [];
         }
         await writePendingAggregate(tx, aggregate, (state.pending?.revision ?? 0) + 1);
       }

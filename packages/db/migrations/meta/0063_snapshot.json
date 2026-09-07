@@ -1,6 +1,6 @@
 {
-  "id": "a272f071-d06d-4604-87dd-5f1db47ab63f",
-  "prevId": "3a4055a3-8eeb-4f18-b3d1-2e25aa54822d",
+  "id": "7f2a0288-f464-4140-bd56-45c77f83c2f1",
+  "prevId": "2a6881d4-743a-4eef-80f5-75a5f5e2bd96",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3825,6 +3825,14 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rejection_reason_codes": {
+          "name": "rejection_reason_codes",
+          "type": "project_moderation_reason[]",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::project_moderation_reason[]"
+        },
         "moderation_note": {
           "name": "moderation_note",
           "type": "text",
@@ -4624,6 +4632,14 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "reason_codes": {
+          "name": "reason_codes",
+          "type": "project_moderation_reason[]",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::project_moderation_reason[]"
         },
         "field_diff": {
           "name": "field_diff",
@@ -8334,6 +8350,20 @@
         "processing",
         "ready",
         "failed"
+      ]
+    },
+    "public.project_moderation_reason": {
+      "name": "project_moderation_reason",
+      "schema": "public",
+      "values": [
+        "project-details",
+        "image-quality",
+        "image-authenticity",
+        "room-tagging",
+        "project-ownership",
+        "budget-scope-clarity",
+        "duplicate-content",
+        "other"
       ]
     },
     "public.project_review_comment_status": {

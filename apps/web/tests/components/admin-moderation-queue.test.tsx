@@ -105,6 +105,7 @@ function detail(
       reviewedBy: null,
       reviewStartedAt: null,
       rejectionReasonCode: null,
+      rejectionReasonCodes: [],
       moderationNote: null,
       featuredAt: null,
       createdAt: '2026-07-01T10:00:00.000Z',
@@ -251,9 +252,40 @@ describe('AdminModerationQueue', () => {
     await user.click(await screen.findByRole('button', { name: 'Request changes' }));
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
-    expect(await screen.findByText('A note is required for this action.')).toBeInTheDocument();
+    expect(await screen.findByText('A note between 1 and 2,000 characters is required for this action.')).toBeInTheDocument();
     expect(mocks.requestChanges).not.toHaveBeenCalled();
   });
+
+  it.each(['Request changes', 'Reject'] as const)(
+    'requires categories and submits every selected category for %s',
+    async (action) => {
+      const user = userEvent.setup();
+      mocks.fetchDetail.mockResolvedValue(detail({ status: 'in_review', reviewedBy: 'admin-1' }));
+      mocks.requestChanges.mockResolvedValue(detail({ status: 'changes_requested' }));
+      mocks.reject.mockResolvedValue(detail({ status: 'rejected' }));
+      renderQueue();
+
+      await user.click(screen.getByRole('button', { name: /open review for a calm coastal home/i }));
+      await user.click(await screen.findByRole('button', { name: action }));
+      await user.type(screen.getByRole('textbox', { name: 'Note' }), 'Use clear images and correct room labels.');
+      await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+      expect(mocks.requestChanges).not.toHaveBeenCalled();
+      expect(mocks.reject).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert')).toHaveTextContent(/categor/i);
+      await user.click(screen.getByRole('checkbox', { name: /image quality/i }));
+      await user.click(screen.getByRole('checkbox', { name: /room tagging/i }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+      await waitFor(() => {
+        expect(action === 'Reject' ? mocks.reject : mocks.requestChanges).toHaveBeenCalledWith(
+          projectId,
+          { note: 'Use clear images and correct room labels.', reasonCodes: ['image-quality', 'room-tagging'] },
+        );
+      });
+    },
+  );
 
   it('round-trips inline metadata edits through the admin correction API', async () => {
     const user = userEvent.setup();

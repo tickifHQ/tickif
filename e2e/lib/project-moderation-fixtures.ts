@@ -48,8 +48,17 @@ export async function createProjectModerationFixture() {
     name: 'Synthetic Project Owner',
     role: 'designer',
     status: 'active',
+    phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
+    phoneNumberVerified: true,
   });
   const organization = await makeOrganization({ name: `Project moderation ${suffix}` });
+  await db.insert(schema.member).values({
+    id: randomUUID(),
+    organizationId: organization.id,
+    userId: owner.id,
+    role: 'owner',
+    createdAt: new Date(),
+  });
   const designer = await makeDesigner({
     userId: owner.id,
     orgId: organization.id,
@@ -78,8 +87,8 @@ export async function createProjectModerationFixture() {
       budgetBandSlug: 'premium',
     });
     const room = await makeProjectRoom({ projectId: project.id, roomTypeId: roomType.id });
-    for (let image = 0; image < 3; image++)
-      await makeProjectImage({
+    for (let image = 0; image < 3; image++) {
+      const photo = await makeProjectImage({
         projectId: project.id,
         roomId: room.id,
         originalKey,
@@ -87,10 +96,19 @@ export async function createProjectModerationFixture() {
         themeSlugs: ['modern'],
         finishSlugs: ['veneer'],
       });
+      if (image === 0) {
+        await db
+          .update(schema.project)
+          .set({ coverImageId: photo.id })
+          .where(eq(schema.project.id, project.id));
+      }
+    }
     projects.push(project);
   }
   return {
     admin,
+    owner,
+    organization,
     projects,
     async cleanup() {
       await assertTestDb();

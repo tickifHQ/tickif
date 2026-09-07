@@ -7,9 +7,11 @@ import type {
   AdminModerationQueueResponse,
   AdminModerationProject,
   ProjectCompletenessRequirement,
+  ModerationReasonCode,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
+import { Checkbox } from '@repo/ui/components/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -48,7 +50,14 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { createProjectReviewCommentSchema } from '@repo/contracts';
+import {
+  createProjectReviewCommentSchema,
+  MODERATION_REASON_OPTIONS,
+  moderationNoteSchema,
+  rejectProjectSchema,
+  requestChangesProjectSchema,
+} from '@repo/contracts';
+import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   ADMIN_MODERATION_QUEUE_TABS,
   correctAdminProject,
@@ -296,7 +305,7 @@ function ReviewDetail({
   const { project, liveVersion } = detail;
   const [actionIntent, setActionIntent] = useState<ActionIntent | null>(null);
   const [note, setNote] = useState('');
-  const [reasonCode, setReasonCode] = useState('');
+  const [reasonCodes, setReasonCodes] = useState<ModerationReasonCode[]>([]);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -367,29 +376,33 @@ function ReviewDetail({
   function openNoteAction(intent: ActionIntent) {
     setActionIntent(intent);
     setNote('');
-    setReasonCode('');
+    setReasonCodes([]);
     setNoteError(null);
   }
 
   async function submitNoteAction() {
-    const trimmedNote = note.trim();
-    if (!trimmedNote) {
-      setNoteError('A note is required for this action.');
-      return;
-    }
-    if (actionIntent === 'reject' && !reasonCode.trim()) {
-      setNoteError('A rejection reason code is required.');
-      return;
-    }
-
     const intent = actionIntent;
     if (!intent) return;
-    const operation =
-      intent === 'reject'
-        ? () => rejectAdminProject(project.id, { note: trimmedNote, reasonCode: reasonCode.trim() })
-        : intent === 'request_changes'
-          ? () => requestAdminChanges(project.id, { note: trimmedNote })
-          : () => unpublishAdminProject(project.id, { note: trimmedNote });
+    const parsedNote = moderationNoteSchema.safeParse({ note });
+    if (!parsedNote.success) {
+      setNoteError('A note between 1 and 2,000 characters is required for this action.');
+      return;
+    }
+    let operation: () => Promise<AdminModerationDetailResponse>;
+    if (intent === 'unpublish') {
+      operation = () => unpublishAdminProject(project.id, parsedNote.data);
+    } else {
+      const schema = intent === 'reject' ? rejectProjectSchema : requestChangesProjectSchema;
+      const parsed = schema.safeParse({ note, reasonCodes });
+      if (!parsed.success) {
+        setNoteError(parsed.error.issues[0]?.message ?? 'Select at least one reason category.');
+        return;
+      }
+      operation =
+        intent === 'reject'
+          ? () => rejectAdminProject(project.id, parsed.data)
+          : () => requestAdminChanges(project.id, parsed.data);
+    }
     setActionIntent(null);
     await perform(intent, operation);
   }
@@ -724,6 +737,13 @@ function ReviewDetail({
                   {event.note ? (
                     <p className="text-sm text-muted-foreground">{event.note}</p>
                   ) : null}
+                  <ProjectModerationReasons
+                    reasonCodes={
+                      event.reasonCodes.length > 0
+                        ? event.reasonCodes
+                        : event.reasonCode ? [event.reasonCode] : []
+                    }
+                  />
                 </li>
               ))
             ) : (
@@ -806,7 +826,7 @@ function ReviewDetail({
       </div>
 
       <Dialog open={actionIntent !== null} onOpenChange={(open) => !open && setActionIntent(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {actionIntent === 'reject'
@@ -825,22 +845,57 @@ function ReviewDetail({
               <Textarea
                 id="moderation-note"
                 value={note}
-                onChange={(event) => setNote(event.target.value)}
+                aria-describedby={noteError ? 'moderation-note-error' : undefined}
+                onChange={(event) => {
+                  setNote(event.target.value);
+                  setNoteError(null);
+                }}
                 placeholder="Explain what needs attention..."
               />
             </div>
-            {actionIntent === 'reject' ? (
-              <div className="space-y-2">
-                <Label htmlFor="rejection-reason">Reason code</Label>
-                <Input
-                  id="rejection-reason"
-                  value={reasonCode}
-                  onChange={(event) => setReasonCode(event.target.value)}
-                  placeholder="quality"
-                />
-              </div>
+            {actionIntent !== 'unpublish' ? (
+              <fieldset className="space-y-3">
+                <legend className="mb-2 text-sm font-medium">Reason categories</legend>
+                <p className="text-sm text-muted-foreground">
+                  Select every category the designer needs to address.
+                </p>
+                {MODERATION_REASON_OPTIONS.map((option) => (
+                  <div key={option.value} className="flex items-start gap-3">
+                    <Checkbox
+                      id={`moderation-reason-${option.value}`}
+                      checked={reasonCodes.includes(option.value)}
+                      onCheckedChange={(checked) => {
+                        setReasonCodes((current) =>
+                          checked === true
+                            ? [...current, option.value]
+                            : current.filter((code) => code !== option.value),
+                        );
+                        setNoteError(null);
+                      }}
+                      aria-describedby={
+                        noteError
+                          ? `moderation-reason-description-${option.value} moderation-note-error`
+                          : `moderation-reason-description-${option.value}`
+                      }
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor={`moderation-reason-${option.value}`}>{option.label}</Label>
+                      <p
+                        id={`moderation-reason-description-${option.value}`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {option.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </fieldset>
             ) : null}
-            {noteError ? <p className="text-sm text-destructive">{noteError}</p> : null}
+            {noteError ? (
+              <p id="moderation-note-error" role="alert" className="text-sm text-destructive">
+                {noteError}
+              </p>
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setActionIntent(null)}>

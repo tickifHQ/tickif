@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import type { ListProjectsResponse, ProjectListStatus, ProjectStatus } from '@repo/contracts';
+import type {
+  ListProjectsResponse,
+  ModerationReasonCode,
+  ProjectListStatus,
+  ProjectStatus,
+} from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { EmptyState } from '@repo/ui/components/empty-state';
@@ -27,6 +32,7 @@ import {
 import { DesignerListControls } from '@/components/designer-list-controls';
 import { DesignerListPagination } from '@/components/designer-list-pagination';
 import { DesignerProjectRowActions } from '@/components/designer-project-row-actions';
+import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import { cn } from '@repo/ui/lib/utils';
 
 const projectTabs: Array<{ value: ProjectListStatus; label: string }> = [
@@ -61,10 +67,12 @@ function formatUpdated(value: string) {
 function StatusFeedbackHoverCard({
   title,
   note,
+  reasonCodes,
   updatedAt,
 }: {
   title: string;
   note: string;
+  reasonCodes: ModerationReasonCode[];
   updatedAt: string;
 }) {
   const noteItems = note
@@ -79,6 +87,7 @@ function StatusFeedbackHoverCard({
     >
       <div className="flex flex-col gap-2 px-3 py-2 text-[13px]">
         <p className="font-medium leading-[1.1] text-foreground">{title}</p>
+        <ProjectModerationReasons reasonCodes={reasonCodes} />
         <ol className="list-decimal space-y-0 pl-5 leading-[1.6] text-muted-foreground">
           {noteItems.map((item, index) => (
             <li key={`${item}-${index}`}>{item}</li>
@@ -96,21 +105,23 @@ function StatusBadgeWithFeedback({
   status,
   moderationNote,
   rejectionReasonCode,
+  rejectionReasonCodes,
   updatedAt,
 }: {
   status: ProjectStatus;
   moderationNote: string | null;
-  rejectionReasonCode: string | null;
+  rejectionReasonCode: ModerationReasonCode | null;
+  rejectionReasonCodes: ModerationReasonCode[];
   updatedAt: string;
 }) {
-  const feedback =
-    status === 'changes_requested'
-      ? moderationNote
-      : status === 'rejected'
-        ? (moderationNote ?? rejectionReasonCode)
-        : null;
+  const reasonCodes = rejectionReasonCodes.length > 0
+    ? rejectionReasonCodes
+    : rejectionReasonCode ? [rejectionReasonCode] : [];
+  const hasFeedback =
+    (status === 'changes_requested' || status === 'rejected') &&
+    (moderationNote || reasonCodes.length > 0);
 
-  if (!feedback) return <StatusBadge status={status} />;
+  if (!hasFeedback) return <StatusBadge status={status} />;
 
   return (
     <div
@@ -121,7 +132,8 @@ function StatusBadgeWithFeedback({
       <StatusBadge status={status} />
       <StatusFeedbackHoverCard
         title={status === 'rejected' ? 'Rejection reason:' : 'Changes needed on:'}
-        note={feedback}
+        note={moderationNote ?? ''}
+        reasonCodes={reasonCodes}
         updatedAt={updatedAt}
       />
     </div>
@@ -312,6 +324,7 @@ export function DesignerProjectsList({
                       status={project.status}
                       moderationNote={project.moderationNote}
                       rejectionReasonCode={project.rejectionReasonCode}
+                      rejectionReasonCodes={project.rejectionReasonCodes}
                       updatedAt={project.updatedAt}
                     />
                   </TableCell>

@@ -1,5 +1,5 @@
 {
-  "id": "3a4055a3-8eeb-4f18-b3d1-2e25aa54822d",
+  "id": "2a6881d4-743a-4eef-80f5-75a5f5e2bd96",
   "prevId": "163fe8f1-5678-4fcc-8457-3291609234e9",
   "version": "7",
   "dialect": "postgresql",
@@ -3825,6 +3825,14 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rejection_reason_codes": {
+          "name": "rejection_reason_codes",
+          "type": "project_moderation_reason[]",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::project_moderation_reason[]"
+        },
         "moderation_note": {
           "name": "moderation_note",
           "type": "text",
@@ -4324,13 +4332,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "is_live": {
-          "name": "is_live",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
         "room_id": {
           "name": "room_id",
           "type": "uuid",
@@ -4619,6 +4620,14 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reason_codes": {
+          "name": "reason_codes",
+          "type": "project_moderation_reason[]",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::project_moderation_reason[]"
+        },
         "field_diff": {
           "name": "field_diff",
           "type": "jsonb",
@@ -4703,88 +4712,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.project_pending_version": {
-      "name": "project_pending_version",
-      "schema": "",
-      "columns": {
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "project_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'draft'"
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "project_pending_version_status_idx": {
-          "name": "project_pending_version_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "project_pending_version_project_id_project_id_fk": {
-          "name": "project_pending_version_project_id_project_id_fk",
-          "tableFrom": "project_pending_version",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "project_pending_version_status_valid": {
-          "name": "project_pending_version_status_valid",
-          "value": "\"project_pending_version\".\"status\"::text in ('draft', 'submitted', 'in_review', 'changes_requested')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.project_review_comment": {
@@ -4928,13 +4855,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
-        },
-        "is_live": {
-          "name": "is_live",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
         },
         "room_type_id": {
           "name": "room_type_id",
@@ -8328,6 +8248,20 @@
         "processing",
         "ready",
         "failed"
+      ]
+    },
+    "public.project_moderation_reason": {
+      "name": "project_moderation_reason",
+      "schema": "public",
+      "values": [
+        "project-details",
+        "image-quality",
+        "image-authenticity",
+        "room-tagging",
+        "project-ownership",
+        "budget-scope-clarity",
+        "duplicate-content",
+        "other"
       ]
     },
     "public.project_review_comment_status": {

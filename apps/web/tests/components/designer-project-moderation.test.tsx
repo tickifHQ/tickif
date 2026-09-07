@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesignerProjectModeration } from '../../src/components/designer-project-moderation';
+import { MODERATION_REASON_OPTIONS } from '@repo/contracts';
 
 const mock = vi.hoisted(() => ({ historyGet: vi.fn() }));
 
@@ -32,6 +33,7 @@ describe('DesignerProjectModeration', () => {
               actorLabel: 'Tickif Review Team',
               note: 'Add clearer room labels.',
               reasonCode: null,
+              reasonCodes: ['image-quality', 'room-tagging'],
               fieldDiff: null,
               createdAt: '2026-08-01T00:00:00.000Z',
             },
@@ -50,11 +52,18 @@ describe('DesignerProjectModeration', () => {
         status="changes_requested"
         moderationNote="Add clearer room labels."
         rejectionReasonCode={null}
+        rejectionReasonCodes={['image-quality', 'room-tagging']}
       />,
     );
 
     expect(screen.getByText('Needs Change')).toBeInTheDocument();
     expect(screen.getByText('Add clearer room labels.')).toBeInTheDocument();
+    for (const option of MODERATION_REASON_OPTIONS.filter((option) =>
+      ['image-quality', 'room-tagging'].includes(option.value),
+    )) {
+      expect(screen.getByText(option.label)).toBeInTheDocument();
+      expect(screen.getByText(option.description)).toBeInTheDocument();
+    }
 
     await user.click(screen.getByRole('button', { name: /view moderation history/i }));
 
@@ -65,6 +74,11 @@ describe('DesignerProjectModeration', () => {
     });
     expect(await screen.findByText('Request Changes')).toBeInTheDocument();
     expect(screen.getByText('by Tickif Review Team')).toBeInTheDocument();
+    for (const option of MODERATION_REASON_OPTIONS.filter((option) =>
+      ['image-quality', 'room-tagging'].includes(option.value),
+    )) {
+      expect(screen.getAllByText(option.label)).toHaveLength(2);
+    }
   });
 
   it('surfaces the rejected reason and still offers history', () => {
@@ -73,12 +87,12 @@ describe('DesignerProjectModeration', () => {
         projectId="33333333-3333-4333-8333-333333333333"
         status="rejected"
         moderationNote="Portfolio mismatch."
-        rejectionReasonCode="portfolio-mismatch"
+        rejectionReasonCode="project-ownership"
       />,
     );
 
     expect(screen.getByText('This project was rejected')).toBeInTheDocument();
-    expect(screen.getByText('Reason: Portfolio Mismatch')).toBeInTheDocument();
+    expect(screen.getByText(MODERATION_REASON_OPTIONS.find((option) => option.value === 'project-ownership')!.label)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /view moderation history/i })).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { projectReviewCommentSchema } from './review-comments';
+import { moderationReasonCodeSchema, moderationReasonCodesSchema } from './moderation-reasons';
 
 /**
  * Shared contracts for the `projects` slice — the single source of truth for
@@ -177,7 +178,8 @@ export const projectResponseSchema = z
     description: z.string().nullable(),
     status: projectStatus,
     archiveReason: projectArchiveReason.nullable(),
-    rejectionReasonCode: z.string().nullable(),
+    rejectionReasonCode: moderationReasonCodeSchema.nullable(),
+    rejectionReasonCodes: moderationReasonCodesSchema.default([]),
     moderationNote: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
     propertySubtypeSlug: z.string().nullable(),
@@ -272,7 +274,8 @@ export const projectListItemSchema = z
     locality: z.string().nullable(),
     status: projectStatus,
     archiveReason: projectArchiveReason.nullable(),
-    rejectionReasonCode: z.string().nullable(),
+    rejectionReasonCode: moderationReasonCodeSchema.nullable(),
+    rejectionReasonCodes: moderationReasonCodesSchema.default([]),
     moderationNote: z.string().nullable(),
     coverImageUrl: z.string().url().nullable(),
     reviewComments: z.array(projectReviewCommentSchema),
@@ -681,6 +684,7 @@ export const publicProjectDetailResponseSchema = projectDetailResponseSchema
     submittedAt: true,
     updatedAt: true,
     rejectionReasonCode: true,
+    rejectionReasonCodes: true,
     moderationNote: true,
     reviewComments: true,
     rooms: true,

@@ -10,6 +10,7 @@ import type {
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
+  ModerationReasonCode,
   ProjectMotifKind,
   ProjectListSort,
   ProjectStatus,
@@ -86,6 +87,7 @@ export type SubmitWithUploadCountsResult = {
   project: ProjectRecord | null;
   counts: UploadImageCounts;
   submitted: ProjectRecord | null;
+  missingCover?: boolean;
 };
 
 export type ProjectModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
@@ -99,6 +101,7 @@ export type ProjectTransitionPatch = Partial<
     | 'reviewedBy'
     | 'reviewStartedAt'
     | 'rejectionReasonCode'
+    | 'rejectionReasonCodes'
     | 'moderationNote'
     | 'featuredAt'
     | 'archiveReason'
@@ -113,6 +116,7 @@ export type TransitionProjectParams = {
   action: ModerationAction;
   note?: string | null;
   reasonCode?: string | null;
+  reasonCodes?: ModerationReasonCode[];
   fieldDiff?: ModerationFieldDiff | null;
   patch?: ProjectTransitionPatch;
   expectedModerationRevision?: number;
@@ -164,6 +168,7 @@ export type ProjectListItemRecord = Pick<
   | 'status'
   | 'archiveReason'
   | 'rejectionReasonCode'
+  | 'rejectionReasonCodes'
   | 'moderationNote'
   | 'coverImageId'
   | 'createdAt'
@@ -503,6 +508,7 @@ export const projectsRepository = {
           status: schema.project.status,
           archiveReason: schema.project.archiveReason,
           rejectionReasonCode: schema.project.rejectionReasonCode,
+          rejectionReasonCodes: schema.project.rejectionReasonCodes,
           moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
           createdAt: schema.project.createdAt,
@@ -1000,8 +1006,8 @@ export const projectsRepository = {
           ).length,
         };
         const hasCover = eligible.some((image) => image.id === aggregate.project.coverImageId);
+        if (!hasCover) return { project: aggregate.project, counts, submitted: null, missingCover: true };
         if (
-          !hasCover ||
           !aggregate.project.title.trim() ||
           !aggregate.project.citySlug ||
           !aggregate.project.propertyTypeSlug ||
@@ -1035,6 +1041,7 @@ export const projectsRepository = {
           reviewedBy: null,
           reviewStartedAt: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
           moderationNote: null,
           updatedAt: now,
         };
@@ -1092,15 +1099,36 @@ export const projectsRepository = {
         taggedImageCount: row?.taggedImageCount ?? 0,
       };
       const hasRequiredImages =
-        !!project.title.trim() &&
-        !!project.citySlug &&
-        !!project.propertyTypeSlug &&
-        !!project.scopeSlug &&
-        !!project.budgetBandSlug &&
         counts.imageCount >= requirements.minImageCount &&
         counts.taggedImageCount === counts.imageCount;
 
-      if (!hasRequiredImages) {
+      // Cover selection and deletion also update the project row, so this check
+      // runs under their shared lock. Fresh processing images remain eligible.
+      const [cover] = project.coverImageId
+        ? await tx
+            .select({ id: schema.projectImage.id })
+            .from(schema.projectImage)
+            .where(
+              and(
+                eq(schema.projectImage.projectId, id),
+                eq(schema.projectImage.id, project.coverImageId),
+                freshProcessingImageFilter,
+                isNotNull(schema.projectImage.roomId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (!cover) return { project, counts, submitted: null, missingCover: true };
+
+      // Recheck the scalar requirements from the locked snapshot, not the
+      // service's earlier read, before recording the submission transition.
+      const hasRequiredMetadata =
+        project.title.trim().length > 0 &&
+        !!project.citySlug &&
+        !!project.propertyTypeSlug &&
+        !!project.scopeSlug &&
+        !!project.budgetBandSlug;
+      if (!hasRequiredImages || !hasRequiredMetadata) {
         return { project, counts, submitted: null };
       }
 
@@ -1113,6 +1141,7 @@ export const projectsRepository = {
           reviewedBy: null,
           reviewStartedAt: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
           moderationNote: null,
           updatedAt: now,
         })
@@ -1196,6 +1225,7 @@ export const projectsRepository = {
           toStatus: params.toStatus,
           note: params.note ?? null,
           reasonCode: params.reasonCode ?? null,
+          reasonCodes: params.reasonCodes ?? [],
           fieldDiff: params.fieldDiff ?? null,
         });
         if (params.toStatus === 'published') {
@@ -1298,6 +1328,7 @@ export const projectsRepository = {
         toStatus: params.toStatus,
         note: params.note ?? null,
         reasonCode: params.reasonCode ?? null,
+        reasonCodes: params.reasonCodes ?? [],
         fieldDiff: params.fieldDiff ?? null,
       });
 

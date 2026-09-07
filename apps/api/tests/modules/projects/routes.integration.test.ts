@@ -1805,7 +1805,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       budgetBandSlug: 'premium',
     });
     const room = await makeProjectRoom({ projectId: project.id });
-    await makeProjectImage({
+    const cover = await makeProjectImage({
       projectId: project.id,
       roomId: room.id,
       status: 'ready',
@@ -1826,6 +1826,19 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       themeSlugs: ['modern'],
       finishSlugs: ['veneer'],
     });
+
+    const missingCover = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(missingCover.status).toBe(422);
+    expect(await missingCover.json()).toMatchObject({
+      error: { details: { missing: ['cover-image'] } },
+    });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: cover.id })
+      .where(eq(schema.project.id, project.id));
 
     const completeness = await app.request(`/api/projects/${project.id}/completeness`, {
       headers: { cookie },
@@ -1867,7 +1880,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     });
     const room = await makeProjectRoom({ projectId: project.id });
     for (let index = 0; index < 3; index += 1) {
-      await makeProjectImage({
+      const image = await makeProjectImage({
         projectId: project.id,
         roomId: room.id,
         status: 'processing',
@@ -1875,6 +1888,11 @@ describe('Project draft CRUD + rooms (E-102)', () => {
         themeSlugs: ['modern'],
         finishSlugs: ['veneer'],
       });
+      if (index === 0)
+        await db
+          .update(schema.project)
+          .set({ coverImageId: image.id })
+          .where(eq(schema.project.id, project.id));
     }
     await makeProjectImage({
       projectId: project.id,
@@ -1958,7 +1976,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       budgetBandSlug: 'premium',
     });
     const room = await makeProjectRoom({ projectId: project.id });
-    await makeProjectImage({
+    const cover = await makeProjectImage({
       projectId: project.id,
       roomId: room.id,
       status: 'ready',
@@ -1966,6 +1984,10 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       finishSlugs: ['veneer'],
     });
     const unresolved = await makeProjectReviewComment({ projectId: project.id });
+    await db
+      .update(schema.project)
+      .set({ coverImageId: cover.id })
+      .where(eq(schema.project.id, project.id));
     await makeProjectImage({
       projectId: project.id,
       roomId: room.id,

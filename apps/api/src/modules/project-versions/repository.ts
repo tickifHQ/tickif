@@ -211,6 +211,7 @@ export async function applyLiveAggregate(
             reviewedBy: aggregate.project.reviewedBy,
             reviewStartedAt: aggregate.project.reviewStartedAt,
             rejectionReasonCode: null,
+            rejectionReasonCodes: [],
             moderationNote: null,
             moderationRevision: aggregate.project.moderationRevision,
             featuredAt: aggregate.project.featuredAt,
@@ -392,6 +393,7 @@ export async function mutateProjectAggregate<T>(
         current.project.reviewStartedAt = null;
         current.project.moderationNote = null;
         current.project.rejectionReasonCode = null;
+        current.project.rejectionReasonCodes = [];
       }
       await writePendingAggregate(tx, current, current.project.moderationRevision);
       return { value, project: current.project };

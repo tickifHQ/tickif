@@ -37,6 +37,7 @@ import {
   uploadUrlResponseSchema,
   type AllowedImageContentType,
   type CreateProjectRoomInput,
+  type ModerationReasonCode,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
   type ProjectImageDto,
@@ -70,6 +71,7 @@ import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
+import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
   canonicalTaxonomySlug,
@@ -952,8 +954,14 @@ function TipsCard() {
   );
 }
 
-function ChangesNeededCard({ note }: { note: string }) {
-  const noteItems = note
+function ChangesNeededCard({
+  note,
+  reasonCodes,
+}: {
+  note: string | null;
+  reasonCodes: ModerationReasonCode[];
+}) {
+  const noteItems = (note ?? '')
     .split(/\r?\n/)
     .map((item) => item.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
     .filter(Boolean);
@@ -971,6 +979,7 @@ function ChangesNeededCard({ note }: { note: string }) {
       </div>
       <Card radius="xl" className="border-destructive/10 bg-destructive/5">
         <div className="space-y-2 p-2">
+          <ProjectModerationReasons reasonCodes={reasonCodes} />
           {noteItems.map((item, index) => (
             <div key={`${item}-${index}`} className="flex items-start gap-2">
               <ChevronRight className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -1349,7 +1358,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [isLive, setIsLive] = useState(false);
   const [pendingChanges, setPendingChanges] = useState(false);
   const [moderationNote, setModerationNote] = useState<string | null>(null);
-  const [rejectionReasonCode, setRejectionReasonCode] = useState<string | null>(null);
+  const [rejectionReasonCode, setRejectionReasonCode] = useState<ModerationReasonCode | null>(null);
+  const [rejectionReasonCodes, setRejectionReasonCodes] = useState<ModerationReasonCode[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
@@ -1549,6 +1559,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       ),
     [rooms],
   );
+  const selectedCoverImageId = useMemo(() => {
+    const persistedImages = rooms
+      .flatMap((room) => room.images)
+      .filter((image) => !isLocalPreviewImage(image) && image.status !== 'failed');
+    return (
+      persistedImages.find((image) => image.id === coverImageId)?.id
+      ?? persistedImages[0]?.id
+      ?? null
+    );
+  }, [coverImageId, rooms]);
 
   const localChecklist = useMemo(
     () => [
@@ -1557,6 +1577,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       { label: 'Project type', done: projectType.length > 0 },
       { label: 'Scope (Design / Execution)', done: selectedScopes.length > 0 },
       { label: 'At least 3 photos', done: totalImages >= 3 },
+      { label: 'Cover image selected', done: selectedCoverImageId !== null },
       {
         label: 'Room, theme, and finish metadata on each photo',
         done:
@@ -1569,7 +1590,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       },
       { label: 'Cost range selected', done: budgetBandSlug.length > 0 },
     ],
-    [budgetBandSlug, citySlug, projectName, projectType, rooms, selectedScopes.length, totalImages],
+    [
+      budgetBandSlug,
+      citySlug,
+      projectName,
+      projectType,
+      rooms,
+      selectedCoverImageId,
+      selectedScopes.length,
+      totalImages,
+    ],
   );
   const requiredChecklist = useMemo(
     () =>
@@ -1796,6 +1826,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         setPendingChanges(project.pendingChanges ?? false);
         setModerationNote(project.moderationNote);
         setRejectionReasonCode(project.rejectionReasonCode);
+        setRejectionReasonCodes(project.rejectionReasonCodes);
         setProjectName(project.title);
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
@@ -2249,9 +2280,6 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
   function buildUpdateProjectPayload(): UpdateProjectInput {
     const createPayload = buildCreateProjectPayload();
-    const fallbackCoverImageId =
-      rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
-
     return {
       title: createPayload.title,
       description: aboutProject.trim() || null,
@@ -2266,7 +2294,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       budgetBandSlug: createPayload.budgetBandSlug ?? null,
       completedMonth: createPayload.completedMonth ?? null,
       durationMonths: createPayload.durationMonths ?? null,
-      coverImageId: coverImageId ?? fallbackCoverImageId,
+      coverImageId: selectedCoverImageId,
       metadata: createPayload.metadata,
     };
   }
@@ -2299,6 +2327,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setPendingChanges(detail.pendingChanges ?? false);
       setModerationNote(detail.moderationNote);
       setRejectionReasonCode(detail.rejectionReasonCode);
+      setRejectionReasonCodes(detail.rejectionReasonCodes);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
@@ -2596,6 +2625,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setPendingChanges(submittedProject.pendingChanges ?? false);
       setModerationNote(submittedProject.moderationNote);
       setRejectionReasonCode(submittedProject.rejectionReasonCode);
+      setRejectionReasonCodes(submittedProject.rejectionReasonCodes);
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : 'Could not submit this project.',
@@ -2920,6 +2950,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         status={projectStatus}
         moderationNote={moderationNote}
         rejectionReasonCode={rejectionReasonCode}
+        rejectionReasonCodes={rejectionReasonCodes}
         showFeedbackAlert={projectStatus !== 'changes_requested'}
       />
 
@@ -3251,7 +3282,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                       fileName: image.fileName,
                     });
                   }}
-                  coverImageId={coverImageId}
+                  coverImageId={selectedCoverImageId}
                   allowDelete={!requiredDefaultRoomIds.has(room.clientId)}
                 />
               ))}
@@ -3327,8 +3358,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         </fieldset>
 
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
-          {projectStatus === 'changes_requested' && moderationNote ? (
-            <ChangesNeededCard note={moderationNote} />
+          {projectStatus === 'changes_requested' &&
+          (moderationNote || rejectionReasonCodes.length > 0 || rejectionReasonCode) ? (
+            <ChangesNeededCard
+              note={moderationNote}
+              reasonCodes={
+                rejectionReasonCodes.length > 0
+                  ? rejectionReasonCodes
+                  : rejectionReasonCode ? [rejectionReasonCode] : []
+              }
+            />
           ) : null}
           <TipsCard />
           <ChecklistCard

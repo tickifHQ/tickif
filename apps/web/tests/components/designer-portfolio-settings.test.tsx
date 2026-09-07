@@ -106,6 +106,7 @@ const portfolioProjects: PortfolioProjectsResponse = {
       archiveReason: null,
       statusGroup: 'published',
       rejectionReasonCode: null,
+      rejectionReasonCodes: [],
       moderationNote: null,
       reviewComments: [],
       coverImageUrl: null,

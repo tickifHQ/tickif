@@ -45,10 +45,52 @@ async function makeCompleteProject(overrides: Partial<typeof schema.project.$inf
       }),
     );
   }
-  return { designer, project, room, images };
+  await db
+    .update(schema.project)
+    .set({ coverImageId: images[0]!.id })
+    .where(eq(schema.project.id, project.id));
+  return { designer, project: { ...project, coverImageId: images[0]!.id }, room, images };
 }
 
 describe('admin project moderation API', () => {
+  it('rejects missing and unknown categories and persists multiple categories in the audit', async () => {
+    const admin = await roleSession('+919800002190', 'admin');
+    const review = await makeCompleteProject({ status: 'in_review', reviewedBy: admin.userId });
+    const post = (body: unknown) =>
+      app.request(`/api/admin/projects/${review.project.id}/request-changes`, {
+        method: 'POST',
+        headers: { cookie: admin.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    for (const reasonCodes of [undefined, [], ['anything'], ['image-quality', 'image-quality']]) {
+      expect(
+        (await post({ note: 'Replace blurred images and correct room tags.', reasonCodes })).status,
+      ).toBe(422);
+    }
+    expect(
+      (
+        await post({
+          note: 'Replace blurred images and correct room tags.',
+          reasonCodes: ['image-quality', 'room-tagging'],
+        })
+      ).status,
+    ).toBe(200);
+    const [stored] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, review.project.id));
+    const events = await db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, review.project.id));
+    expect(stored?.rejectionReasonCodes).toEqual(['image-quality', 'room-tagging']);
+    expect(events).toEqual([
+      expect.objectContaining({
+        action: 'request_changes',
+        reasonCodes: ['image-quality', 'room-tagging'],
+      }),
+    ]);
+  });
   it('creates and independently resolves review comments with reviewer scoping', async () => {
     const admin = await roleSession('+919800002114', 'admin');
     const otherAdmin = await roleSession('+919800002115', 'admin');
@@ -392,7 +434,10 @@ describe('admin project moderation API', () => {
       {
         method: 'POST',
         headers: { cookie: admin.cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ note: 'Add clearer room labels.' }),
+        body: JSON.stringify({
+          note: 'Add clearer room labels.',
+          reasonCodes: ['room-tagging', 'project-details'],
+        }),
       },
     );
     expect(changeResponse.status).toBe(200);
@@ -400,6 +445,7 @@ describe('admin project moderation API', () => {
       project: {
         status: 'changes_requested',
         moderationNote: 'Add clearer room labels.',
+        rejectionReasonCodes: ['room-tagging', 'project-details'],
       },
     });
 
@@ -407,14 +453,15 @@ describe('admin project moderation API', () => {
     const rejectResponse = await app.request(`/api/admin/projects/${rejection.project.id}/reject`, {
       method: 'POST',
       headers: { cookie: admin.cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ note: 'Portfolio mismatch.', reasonCode: 'portfolio-mismatch' }),
+      body: JSON.stringify({ note: 'Portfolio mismatch.', reasonCodes: ['project-ownership'] }),
     });
     expect(rejectResponse.status).toBe(200);
     expect((await rejectResponse.json()) as AdminModerationDetailResponse).toMatchObject({
       project: {
         status: 'rejected',
         moderationNote: 'Portfolio mismatch.',
-        rejectionReasonCode: 'portfolio-mismatch',
+        rejectionReasonCode: 'project-ownership',
+        rejectionReasonCodes: ['project-ownership'],
       },
     });
 

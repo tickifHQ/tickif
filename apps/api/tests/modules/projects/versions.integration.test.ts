@@ -69,6 +69,39 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('reports the cover requirement when a pending cover fails despite five eligible images', async () => {
+    const fixture = await publishedProject();
+    const upload = await mediaRepository.createProcessing({
+      projectId: fixture.project.id,
+      originalKey: `originals/${fixture.project.id}/failed-cover.jpg`,
+      contentType: 'image/jpeg',
+    });
+    await mediaRepository.updateMetadata(upload!.id, {
+      roomId: fixture.room.id,
+      themeSlugs: ['modern'],
+      finishSlugs: ['veneer'],
+    });
+    await projectsRepository.updateDraft(fixture.project.id, { coverImageId: upload!.id });
+    await db
+      .update(schema.projectImage)
+      .set({ status: 'failed' })
+      .where(eq(schema.projectImage.id, upload!.id));
+    const result = await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+      actorUserId: fixture.actor.id,
+      expectedStatus: 'draft',
+      action: 'submit',
+      minImageCount: 3,
+    });
+    expect(result).toMatchObject({
+      submitted: null,
+      missingCover: true,
+      counts: { imageCount: 5 },
+    });
+    expect((await readProjectAggregate(fixture.project.id))!.live.project.coverImageId).toBe(
+      fixture.images[0]!.id,
+    );
+  });
+
   it('keeps the approved cover live until a minor cover removal has a ready replacement', async () => {
     const fixture = await publishedProject();
     await projectsRepository.deleteImage(fixture.project.id, fixture.images[0]!.id);
@@ -311,7 +344,8 @@ describe('bounded live project versions', () => {
       actorUserId: fixture.actor.id,
       action: 'reject',
       note: 'Keep the existing budget',
-      reasonCode: 'incorrect_information',
+      reasonCode: 'other',
+      reasonCodes: ['other'],
     });
     expect((await readProjectAggregate(fixture.project.id))!.live).toEqual(before);
     expect((await readProjectAggregate(fixture.project.id))!.pending).toBeNull();
@@ -400,13 +434,18 @@ describe('bounded live project versions', () => {
       toStatus: 'changes_requested',
       actorUserId: fixture.actor.id,
       action: 'request_changes',
-      patch: { moderationNote: 'Correct the budget' },
+      patch: {
+        moderationNote: 'Correct the budget',
+        rejectionReasonCodes: ['budget-scope-clarity'],
+      },
       note: 'Correct the budget',
+      reasonCodes: ['budget-scope-clarity'],
     });
     const state = (await readProjectAggregate(fixture.project.id))!;
     expect(state.current.project).toMatchObject({
       status: 'changes_requested',
       moderationNote: 'Correct the budget',
+      rejectionReasonCodes: ['budget-scope-clarity'],
       budgetBandSlug: 'luxury',
     });
     expect(state.live.project).toMatchObject({
@@ -414,5 +453,16 @@ describe('bounded live project versions', () => {
       moderationNote: null,
       budgetBandSlug: 'premium',
     });
+    const events = await db.select().from(schema.projectModerationEvent);
+    expect(events.find((event) => event.action === 'request_changes')?.reasonCodes).toEqual([
+      'budget-scope-clarity',
+    ]);
+    const resubmitted = await projectsRepository.submitWithUploadCounts(fixture.project.id, {
+      actorUserId: fixture.actor.id,
+      expectedStatus: 'changes_requested',
+      action: 'resubmit',
+      minImageCount: 3,
+    });
+    expect(resubmitted.submitted?.rejectionReasonCodes).toEqual([]);
   });
 });

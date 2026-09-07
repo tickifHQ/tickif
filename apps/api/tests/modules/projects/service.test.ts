@@ -116,7 +116,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   localitySlug: null,
   buildingName: null,
   budgetBandSlug: null,
-  coverImageId: null,
+  coverImageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   completedMonth: null,
   durationMonths: null,
   metadata: {},
@@ -125,6 +125,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   reviewedBy: null,
   reviewStartedAt: null,
   rejectionReasonCode: null,
+  rejectionReasonCodes: [],
   moderationNote: null,
   featuredAt: null,
   moderationRevision: 0,
@@ -203,7 +204,10 @@ beforeEach(() => {
 
 describe('projectsService.list', () => {
   it('maps owner rows to the dashboard response shape and passes filters through', async () => {
-    vi.mocked(projectsRepository.list).mockResolvedValue({ items: [row()], total: 1 });
+    vi.mocked(projectsRepository.list).mockResolvedValue({
+      items: [row({ coverImageId: null })],
+      total: 1,
+    });
     vi.mocked(projectsRepository.findCoverImages).mockResolvedValue(new Map());
 
     const result = await projectsService.list(

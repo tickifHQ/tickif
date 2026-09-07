@@ -28,6 +28,7 @@ const projects: ListProjectsResponse = {
       status: 'published',
       archiveReason: null,
       rejectionReasonCode: null,
+      rejectionReasonCodes: [],
       moderationNote: null,
       coverImageUrl: null,
       reviewComments: [],
@@ -44,6 +45,7 @@ const projects: ListProjectsResponse = {
       status: 'changes_requested',
       archiveReason: null,
       rejectionReasonCode: null,
+      rejectionReasonCodes: ['image-quality', 'room-tagging'],
       moderationNote: 'Add clearer room labels.',
       coverImageUrl: null,
       reviewComments: [],
@@ -101,6 +103,8 @@ describe('DesignerProjectsList', () => {
     expect(screen.getByText('Needs Change')).toBeInTheDocument();
     expect(screen.getByRole('tooltip')).toHaveTextContent('Changes needed on:');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Add clearer room labels.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Image quality');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Room tagging');
     expect(screen.getByRole('link', { name: /edit 2bhk apartment in velachery/i })).toHaveAttribute(
       'href',
       '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
@@ -127,7 +131,8 @@ describe('DesignerProjectsList', () => {
         id: `11111111-1111-4111-8111-11111111111${index}`,
         title: `Status ${status}`,
         status,
-        rejectionReasonCode: status === 'rejected' ? 'portfolio-mismatch' : null,
+        rejectionReasonCode: status === 'rejected' ? 'project-ownership' : null,
+        rejectionReasonCodes: status === 'rejected' ? ['project-ownership'] : [],
         moderationNote: status === 'changes_requested' ? 'Update the room labels.' : null,
       })),
     };

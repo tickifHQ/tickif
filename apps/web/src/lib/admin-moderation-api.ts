@@ -4,6 +4,7 @@ import type {
   AdminModerationQueueResponse,
   ModerationNoteInput,
   RejectProjectInput,
+  RequestChangesProjectInput,
   CreateProjectReviewCommentInput,
   UpdateProjectReviewCommentInput,
 } from '@repo/contracts';
@@ -94,7 +95,7 @@ export async function publishAdminProject(projectId: string) {
   return parseDetail(await response.json());
 }
 
-export async function requestAdminChanges(projectId: string, input: ModerationNoteInput) {
+export async function requestAdminChanges(projectId: string, input: RequestChangesProjectInput) {
   const response = await api.api.admin.projects[':id']['request-changes'].$post({
     param: { id: projectId },
     json: input,
