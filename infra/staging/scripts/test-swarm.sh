@@ -124,6 +124,13 @@ for service in api worker web; do
   container=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_$service")
   docker exec "$container" node -e "fetch('http://127.0.0.1:$port/$route').then(r=>{if(!r.ok)process.exit(1)})"
 done
+# Verify the real Swarm mount, not just Compose parsing or image-layer ownership.
+mapfile -t web_containers < <(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_web")
+(( ${#web_containers[@]} > 0 )) || { echo 'No web replica found for cache verification' >&2; exit 1; }
+for web_container in "${web_containers[@]}"; do
+  [[ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$web_container")" == true ]]
+  docker exec -i "$web_container" node --input-type=module <infra/staging/scripts/verify-web-cache.mjs
+done
 # Keep production strict SNI enabled, using a disposable certificate only in this fixture.
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=staging.invalid \
   -addext subjectAltName=DNS:staging.invalid -keyout "$fixture/tls.key" -out "$fixture/tls.crt"
