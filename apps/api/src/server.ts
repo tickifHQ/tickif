@@ -5,6 +5,7 @@ import { assertMediaStorageConfig } from '@repo/storage';
 import { app } from './app.js';
 import { closeRedisCache } from './lib/redis.js';
 import { beginDraining, closePostgres } from './modules/health/service.js';
+import { seedSystemAdmin } from './modules/system-admin/service.js';
 
 // The API mints presigned upload URLs, so a prod boot must have R2 wired — fail fast here.
 if (isProduction) assertMediaStorageConfig();
@@ -14,6 +15,9 @@ if (isProduction) assertMediaStorageConfig();
 // it to the admin key and signs every public query with it. Reachability stays non-blocking
 // below — that is the part Postgres covers for.
 if (isProduction) assertProductionSearchConfig();
+
+// Complete provisioning before accepting authentication requests.
+await seedSystemAdmin();
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   console.log(`[api] Tickif API listening on http://localhost:${info.port}`);

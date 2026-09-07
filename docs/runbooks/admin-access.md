@@ -9,6 +9,23 @@ identify the operator, and take a current database backup before changing produc
 
 ## Bootstrap the first superadmin
 
+### Automatic provisioning
+
+Set `SYSTEM_ADMIN_EMAIL` to provision an active `superadmin` before the API starts
+accepting requests. An empty/unset value disables provisioning. Staging defaults to
+`contactme.shikharsingh+tickifadmin@gmail.com` in its stack configuration.
+No password is created, and the email remains unverified until successful OTP login.
+Open `/login?mode=designer`, enter the email and its emailed code; the existing
+role redirect opens `/dashboard` for superadmins.
+
+The seed serializes concurrent API replicas and creates only missing accounts.
+Existing identities (matched case-insensitively), roles, bans, and status are left
+untouched. It never automatically promotes an existing ordinary account or undoes
+a deliberate demotion. Use the operator procedure below for existing accounts.
+Database failures abort configured startup rather than silently skipping provisioning.
+
+### Manual provisioning
+
 1. Have the intended operator sign in through the normal Tickif login once. This creates
    their user record. Verify the identifier they use to sign in through a separate trusted
    channel. For phone login, verify the phone number. For Google login, verify the email.

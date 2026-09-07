@@ -227,6 +227,7 @@ services:
       TYPESENSE_COLLECTION_PREFIX: ${TYPESENSE_COLLECTION_PREFIX}
       BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
       BETTER_AUTH_URL: https://${STAGING_HOST}
+      SYSTEM_ADMIN_EMAIL: ${SYSTEM_ADMIN_EMAIL-contactme.shikharsingh+tickifadmin@gmail.com}
       NEXT_PUBLIC_API_URL: https://${STAGING_HOST}
       PUBLIC_WEB_URL: https://${STAGING_HOST}
       TRUSTED_ORIGINS: ''
