@@ -215,6 +215,17 @@ superadmin or recovering a deployment with no accessible superadmin.
 
 ## Client side (web)
 
+### Unfinished designer onboarding
+
+Fresh accounts keep their visitor role until validated onboarding creates the
+designer profile, organization and owner membership in one transaction. Choosing
+**Finish later** sends the user to `/designer/onboarding/deferred`, an
+authenticated page with **Continue setup** and **Explore projects** links.
+Opening a designer-only page before completion also redirects there. This does
+not provision placeholder workspaces or grant designer API access. Completed
+onboarding keeps its dashboard destination; admin and unknown-role restrictions
+are unchanged.
+
 The web app authenticates against `/api/auth/*` using better-auth's client (or
 direct calls during early development). Authenticated API calls rely on the
 session cookie; the `hc<AppType>` client forwards credentials when configured to.

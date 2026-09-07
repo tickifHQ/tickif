@@ -124,6 +124,20 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });
 
+  it.each([/just me/i, /interior company \(firm\)/i])(
+    'lets unfinished %s setup continue later without provisioning an empty workspace',
+    async (entity) => {
+      const user = userEvent.setup();
+      const submit = vi.fn();
+      render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+      await user.click(screen.getByRole('button', { name: entity }));
+      await user.click(screen.getByRole('button', { name: 'Finish later' }));
+
+      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred');
+      expect(submit).not.toHaveBeenCalled();
+    },
+  );
+
   it('renders generated initials avatars for individual and company details', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />);
@@ -160,6 +174,7 @@ describe('DesignerOnboarding', () => {
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
+
   });
 
   it('keeps the user on completion when the header is clicked', async () => {
@@ -198,6 +213,8 @@ describe('DesignerOnboarding', () => {
     expect(screen.queryByLabelText(/website/i)).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /skip to dashboard/i }));
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/dashboard');
   });
 
   it('opens project upload from the completion add-projects CTA', async () => {
@@ -259,7 +276,7 @@ describe('DesignerOnboarding', () => {
     await user.type(screen.getByLabelText(/company name/i), 'Antika Interiors');
     expect(screen.getByLabelText(/firm type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /skip to dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Finish later' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/address/i), '12 Studio Lane, Chennai');
 
