@@ -21,6 +21,8 @@ unique image IDs exceeding **20%** of the last approval's image IDs are material
 Exactly 20% is minor. Replacement contributes to both counts. The persisted approved
 baseline prevents repeated autosaves from evading this threshold. Changing only the
 completion month within the same year is minor.
+Clearing or removing the cover remains pending until a ready replacement belongs
+to a room in the editable version. Even a minor image removal cannot clear the live cover.
 
 New uploads are hidden until ready and included in an editable version. Image and
 room IDs remain stable. Removing an approved image from pending content preserves

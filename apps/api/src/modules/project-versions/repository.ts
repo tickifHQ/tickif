@@ -299,8 +299,13 @@ export async function mutateProjectAggregate<T>(
     if (current.images.some((image) => image.roomId && !roomIds.has(image.roomId))) {
       throw AppError.unprocessable('Image room must belong to the editable project version');
     }
+    const hasReadyCover = current.images.some(
+      (image) =>
+        image.id === current.project.coverImageId && image.status === 'ready' && image.roomId,
+    );
     const readyMinorPending =
       !!state.pending &&
+      hasReadyCover &&
       current.images.every((image) => image.status === 'ready') &&
       classifyProjectEdit(
         projectContentFields(state.live.project),
@@ -318,6 +323,7 @@ export async function mutateProjectAggregate<T>(
     // Pending-only assets and fields changed by this material operation never cross this boundary.
     if (
       state.pending &&
+      !readyMinorPending &&
       classifyProjectEdit(
         projectContentFields(state.current.project),
         projectContentFields(current.project),
@@ -331,8 +337,7 @@ export async function mutateProjectAggregate<T>(
       for (const key of Object.keys(next) as (keyof UpdateProjectInput)[]) {
         if (
           key === 'coverImageId' &&
-          next.coverImageId &&
-          !liveEdit.images.some((image) => image.id === next.coverImageId)
+          (!next.coverImageId || !liveEdit.images.some((image) => image.id === next.coverImageId))
         )
           continue;
         if (!isDeepStrictEqual(before[key], next[key]))
@@ -374,6 +379,7 @@ export async function mutateProjectAggregate<T>(
     const needsPending =
       published &&
       (options.forcePending ||
+        !hasReadyCover ||
         classification === 'material' ||
         current.images.some((image) => image.status !== 'ready'));
     if (needsPending) {

@@ -69,6 +69,36 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('keeps the approved cover live until a minor cover removal has a ready replacement', async () => {
+    const fixture = await publishedProject();
+    await projectsRepository.deleteImage(fixture.project.id, fixture.images[0]!.id);
+    let state = (await readProjectAggregate(fixture.project.id))!;
+    expect(state.pending).not.toBeNull();
+    expect(state.live.project.coverImageId).toBe(fixture.images[0]!.id);
+    expect(state.live.images).toHaveLength(5);
+    expect(state.current.project.coverImageId).toBeNull();
+    await projectsRepository.updateDraft(fixture.project.id, { description: 'Minor copy change' });
+    expect((await readProjectAggregate(fixture.project.id))!.live.project.coverImageId).toBe(
+      fixture.images[0]!.id,
+    );
+    await projectsRepository.updateDraft(fixture.project.id, {
+      coverImageId: fixture.images[1]!.id,
+    });
+    state = (await readProjectAggregate(fixture.project.id))!;
+    expect(state.pending).toBeNull();
+    expect(state.live.project.coverImageId).toBe(fixture.images[1]!.id);
+    expect(state.live.images).toHaveLength(4);
+  });
+
+  it('stages an explicit cover clear without clearing the public cover', async () => {
+    const fixture = await publishedProject();
+    await projectsRepository.updateDraft(fixture.project.id, { coverImageId: null });
+    const state = (await readProjectAggregate(fixture.project.id))!;
+    expect(state.pending).not.toBeNull();
+    expect(state.current.project.coverImageId).toBeNull();
+    expect(state.live.project.coverImageId).toBe(fixture.images[0]!.id);
+  });
+
   it('keeps public scalar and gallery reads on one version when approval commits between them', async () => {
     const fixture = await publishedProject();
     await projectsRepository.updateDraft(fixture.project.id, { budgetBandSlug: 'luxury' });
