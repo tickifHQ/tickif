@@ -808,26 +808,29 @@ export const projectsRepository = {
         .where(eq(schema.projectTombstone.projectSlug, params.slug))
         .limit(1);
       if (tombstone) throw new ProjectSlugUnavailableError();
+      const state = await readProjectAggregate(params.source.id, tx, true);
+      if (!state) throw AppError.notFound('Project not found');
+      const { project: source, rooms: sourceRooms, images: sourceImages } = state.live;
       const [project] = await tx
         .insert(schema.project)
         .values({
-          designerId: params.source.designerId,
+          designerId: source.designerId,
           title: params.title,
           slug: params.slug,
-          description: params.source.description,
+          description: source.description,
           status: 'draft',
-          propertyTypeSlug: params.source.propertyTypeSlug,
-          propertySubtypeSlug: params.source.propertySubtypeSlug,
-          scopeSlug: params.source.scopeSlug,
-          bhkSlug: params.source.bhkSlug,
-          sizeSqft: params.source.sizeSqft,
-          citySlug: params.source.citySlug,
-          localitySlug: params.source.localitySlug,
-          buildingName: params.source.buildingName,
-          budgetBandSlug: params.source.budgetBandSlug,
-          completedMonth: params.source.completedMonth,
-          durationMonths: params.source.durationMonths,
-          metadata: params.source.metadata ?? {},
+          propertyTypeSlug: source.propertyTypeSlug,
+          propertySubtypeSlug: source.propertySubtypeSlug,
+          scopeSlug: source.scopeSlug,
+          bhkSlug: source.bhkSlug,
+          sizeSqft: source.sizeSqft,
+          citySlug: source.citySlug,
+          localitySlug: source.localitySlug,
+          buildingName: source.buildingName,
+          budgetBandSlug: source.budgetBandSlug,
+          completedMonth: source.completedMonth,
+          durationMonths: source.durationMonths,
+          metadata: source.metadata ?? {},
           publishedAt: null,
           submittedAt: null,
           createdAt: now,
@@ -835,17 +838,6 @@ export const projectsRepository = {
         })
         .returning();
       if (!project) throw new Error('insert returned no row');
-
-      const sourceRooms = await tx
-        .select()
-        .from(schema.projectRoom)
-        .where(
-          and(
-            eq(schema.projectRoom.projectId, params.source.id),
-            eq(schema.projectRoom.isLive, true),
-          ),
-        )
-        .orderBy(asc(schema.projectRoom.sortOrder), asc(schema.projectRoom.createdAt));
 
       const roomIdBySourceId = new Map<string, string>();
       const rooms = sourceRooms.length
@@ -871,17 +863,6 @@ export const projectsRepository = {
         if (copiedRoom) roomIdBySourceId.set(room.id, copiedRoom.id);
       });
 
-      const sourceImages = await tx
-        .select()
-        .from(schema.projectImage)
-        .where(
-          and(
-            eq(schema.projectImage.projectId, params.source.id),
-            eq(schema.projectImage.isLive, true),
-          ),
-        )
-        .orderBy(asc(schema.projectImage.sortOrder), asc(schema.projectImage.createdAt));
-
       let copiedCoverImageId: string | null = null;
       for (const image of sourceImages) {
         const [copiedImage] = await tx
@@ -905,7 +886,7 @@ export const projectsRepository = {
             updatedAt: now,
           })
           .returning({ id: schema.projectImage.id });
-        if (image.id === params.source.coverImageId) {
+        if (image.id === source.coverImageId) {
           copiedCoverImageId = copiedImage?.id ?? null;
         }
       }

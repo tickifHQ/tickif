@@ -1711,7 +1711,7 @@ export const projectsService = {
       throw AppError.conflict('Deleted or delisted projects cannot be duplicated');
     }
 
-    const source = await projectsRepository.findById(projectId);
+    const source = (await projectsRepository.findLiveByIdWithRooms(projectId))?.project;
     if (!source) throw AppError.notFound('Project not found');
 
     const duplicated = await duplicateWithUniqueSlug(source, duplicateTitle(source.title));

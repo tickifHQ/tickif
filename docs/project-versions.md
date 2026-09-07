@@ -29,6 +29,9 @@ room IDs remain stable. Removing an approved image from pending content preserve
 the original live membership and storage references. Hidden physical rows remain
 available to the organization retention inventory but cannot be selected as covers,
 returned by public image IDs, or copied into a new project.
+Duplicating a project with pending changes copies its approved scalar fields,
+rooms, images and cover together under the canonical project lock. Pending edits
+remain only on the original project's review version.
 
 Every mutation locks the canonical project row before reading pending state. Submitted
 and in-review versions are locked against designer writes. Admin corrections use the

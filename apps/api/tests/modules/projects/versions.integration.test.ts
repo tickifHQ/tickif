@@ -70,22 +70,75 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('duplicates approved scalar fields and media together while material edits are pending', async () => {
+    const fixture = await publishedProject();
+    await projectsRepository.updateDraft(fixture.project.id, {
+      title: 'Pending home',
+      citySlug: 'pune',
+      budgetBandSlug: 'luxury',
+      description: 'Pending description',
+    });
+    await projectsRepository.deleteImage(fixture.project.id, fixture.images[4]!.id);
+    const pending = (await projectsRepository.findById(fixture.project.id))!;
+    const duplicate = await projectsRepository.duplicateProject({
+      source: pending,
+      title: 'Approved home copy',
+      slug: 'approved-home-copy',
+    });
+    expect(duplicate.project).toMatchObject({
+      status: 'draft',
+      citySlug: 'mumbai',
+      budgetBandSlug: 'premium',
+      description: 'Approved description',
+    });
+    expect(duplicate.rooms.map((room) => room.name)).toEqual([fixture.room.name]);
+    const copiedImages = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, duplicate.project.id));
+    expect(copiedImages.map((image) => image.originalKey).sort()).toEqual(
+      fixture.images.map((image) => image.originalKey).sort(),
+    );
+    expect(
+      copiedImages.find((image) => image.id === duplicate.project.coverImageId)?.originalKey,
+    ).toBe(fixture.images[0]!.originalKey);
+  });
+
   it('orders the review queue by the pending submission date rather than the original review', async () => {
     const first = await publishedProject();
     const second = await publishedProject();
     for (const [index, fixture] of [first, second].entries()) {
       await projectsRepository.updateDraft(fixture.project.id, { budgetBandSlug: 'luxury' });
       await projectsRepository.submitWithUploadCounts(fixture.project.id, {
-        actorUserId: fixture.actor.id, expectedStatus: 'draft', action: 'submit', minImageCount: 3,
+        actorUserId: fixture.actor.id,
+        expectedStatus: 'draft',
+        action: 'submit',
+        minImageCount: 3,
       });
       const state = (await readProjectAggregate(fixture.project.id))!;
-      await db.update(schema.project).set({ submittedAt: new Date(index === 0 ? '2020-01-01' : '2021-01-01') }).where(eq(schema.project.id, fixture.project.id));
-      await db.update(schema.projectPendingVersion).set({ content: {
-        ...state.current,
-        project: { ...state.current.project, submittedAt: new Date(index === 0 ? '2026-09-02' : '2026-09-01') },
-      } }).where(eq(schema.projectPendingVersion.projectId, fixture.project.id));
+      await db
+        .update(schema.project)
+        .set({ submittedAt: new Date(index === 0 ? '2020-01-01' : '2021-01-01') })
+        .where(eq(schema.project.id, fixture.project.id));
+      await db
+        .update(schema.projectPendingVersion)
+        .set({
+          content: {
+            ...state.current,
+            project: {
+              ...state.current.project,
+              submittedAt: new Date(index === 0 ? '2026-09-02' : '2026-09-01'),
+            },
+          },
+        })
+        .where(eq(schema.projectPendingVersion.projectId, fixture.project.id));
     }
-    const queue = await adminProjectsRepository.list({ status: 'submitted', sort: 'oldest', page: 1, limit: 1 });
+    const queue = await adminProjectsRepository.list({
+      status: 'submitted',
+      sort: 'oldest',
+      page: 1,
+      limit: 1,
+    });
     expect(queue.total).toBe(2);
     expect(queue.items[0]?.id).toBe(second.project.id);
     expect(queue.items[0]?.submittedAt).toEqual(new Date('2026-09-01'));

@@ -57,6 +57,24 @@ async function versionFixture(reject = true) {
 }
 
 describe('Public project version boundaries', () => {
+  it('duplicates the approved title and media through the authenticated route during re-review', async () => {
+    const { cookie, project, liveRoom, liveImage } = await versionFixture(false);
+    const response = await app.request(`/api/projects/${project.id}/duplicate`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { project: ProjectDetailResponse };
+    expect(body.project.title).toBe(`${project.title} Copy`);
+    expect(body.project.rooms.map((room) => room.name)).toEqual([liveRoom.name]);
+    const images = await db
+      .select()
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.projectId, body.project.id));
+    expect(images).toHaveLength(1);
+    expect(images[0]?.originalKey).toBe(liveImage.originalKey);
+  });
+
   it('returns the approved aggregate anonymously while internal review sees pending content', async () => {
     const { cookie, project, liveRoom } = await versionFixture(false);
     const anonymous = await app.request(`/api/projects/${project.id}`);
