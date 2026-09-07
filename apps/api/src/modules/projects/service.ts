@@ -13,6 +13,7 @@ import type {
   ListProjectRoomsResponse,
   ListProjectsQuery,
   ModerationAction,
+  ModerationReasonCode,
   ModerationHistoryResponse,
   FeedProjectsQuery,
   FeedProjectsResponse,
@@ -43,7 +44,7 @@ import type {
   UpdateProjectRoomInput,
   Derivative,
 } from '@repo/contracts';
-import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
+import { ORGANIZATION_CAPABILITY, normalizeModerationReasonCode } from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
@@ -106,7 +107,8 @@ function toResponse(
     description: row.description,
     status: row.status,
     archiveReason: row.archiveReason,
-    rejectionReasonCode: row.rejectionReasonCode,
+    rejectionReasonCode: normalizeModerationReasonCode(row.rejectionReasonCode),
+    rejectionReasonCodes: row.rejectionReasonCodes,
     moderationNote: row.moderationNote,
     propertyTypeSlug: row.propertyTypeSlug,
     propertySubtypeSlug: row.propertySubtypeSlug,
@@ -495,7 +497,8 @@ function toListItemFields(
     locality: row.localitySlug,
     status: row.status,
     archiveReason: row.archiveReason,
-    rejectionReasonCode: row.rejectionReasonCode,
+    rejectionReasonCode: normalizeModerationReasonCode(row.rejectionReasonCode),
+    rejectionReasonCodes: row.rejectionReasonCodes,
     moderationNote: row.moderationNote,
     coverImageUrl,
     reviewComments,
@@ -677,6 +680,7 @@ export async function transitionProject(
     toStatus: ProjectStatus;
     note?: string | null;
     reasonCode?: string | null;
+    reasonCodes?: ModerationReasonCode[];
     patch?: Parameters<typeof projectsRepository.transition>[0]['patch'];
     expectedModerationRevision?: number;
     requireNoUnresolvedReviewComments?: boolean;
@@ -695,6 +699,7 @@ export async function transitionProject(
     action,
     note: input.note,
     reasonCode: input.reasonCode,
+    reasonCodes: input.reasonCodes,
     patch: input.patch,
     expectedModerationRevision: input.expectedModerationRevision,
     requireNoUnresolvedReviewComments: input.requireNoUnresolvedReviewComments,
@@ -716,7 +721,8 @@ function toModerationHistoryItem(
     toStatus: row.toStatus,
     actorLabel: 'Tickif Review Team',
     note: row.note,
-    reasonCode: row.reasonCode,
+    reasonCode: normalizeModerationReasonCode(row.reasonCode),
+    reasonCodes: row.reasonCodes,
     fieldDiff: row.fieldDiff,
     createdAt: row.createdAt.toISOString(),
   };
@@ -1104,7 +1110,7 @@ async function validateRoomType(roomTypeId: string): Promise<void> {
 export function buildCompleteness(
   project: Pick<
     ProjectRecord,
-    'title' | 'citySlug' | 'propertyTypeSlug' | 'scopeSlug' | 'budgetBandSlug'
+    'title' | 'citySlug' | 'propertyTypeSlug' | 'scopeSlug' | 'budgetBandSlug' | 'coverImageId'
   >,
   imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
@@ -1114,6 +1120,7 @@ export function buildCompleteness(
     { key: 'property-type', label: 'Property type', complete: !!project.propertyTypeSlug },
     { key: 'scope', label: 'Scope', complete: !!project.scopeSlug },
     { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
+    { key: 'cover-image', label: 'Cover image selected', complete: !!project.coverImageId },
     {
       key: 'at-least-three-photos',
       label: 'At least 3 photos',
@@ -1807,8 +1814,13 @@ export const projectsService = {
       action,
     });
     if (!submission.project) throw AppError.notFound('Project not found');
+    if (submission.missingCover) {
+      throw AppError.unprocessable('Select a cover image from this project before submitting', {
+        missing: ['cover-image'],
+      });
+    }
 
-    const completeness = buildCompleteness(project, submission.counts);
+    const completeness = buildCompleteness(submission.project, submission.counts);
     if (!completeness.complete) {
       throw AppError.unprocessable('Project is missing required upload information', {
         missing: completeness.missing,
@@ -1834,6 +1846,7 @@ export const projectsService = {
           submittedAt: null,
           moderationNote: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
         },
       },
       caller,
