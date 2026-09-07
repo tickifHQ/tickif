@@ -2,7 +2,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
-import { Card } from '@repo/ui/components/card';
+import {
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@repo/ui/components/card';
 import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
@@ -28,24 +34,24 @@ export default async function DeferredDesignerOnboardingPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
-      <Card className="w-full max-w-lg space-y-6 p-6 sm:p-8">
-        <div className="space-y-3">
-          <h1 className="text-xl font-medium text-foreground">
-            Finish setting up your designer workspace
-          </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+      <Card className="flex w-full max-w-lg flex-col gap-6 p-6 sm:p-8">
+        <CardHeader className="gap-3 p-0">
+          <CardTitle>
+            <h1 className="text-xl">Finish setting up your designer workspace</h1>
+          </CardTitle>
+          <CardDescription>
             Your account is ready to explore Tickif. Complete your designer details to create your
             workspace and start adding projects.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
+          </CardDescription>
+        </CardHeader>
+        <CardFooter className="flex-col items-stretch gap-3 p-0 sm:flex-row">
           <Button asChild>
             <Link href="/designer/onboarding">Continue setup</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/home">Explore projects</Link>
           </Button>
-        </div>
+        </CardFooter>
       </Card>
     </main>
   );
