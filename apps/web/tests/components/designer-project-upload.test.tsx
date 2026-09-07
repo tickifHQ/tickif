@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
 
 const mock = vi.hoisted(() => ({
@@ -10,6 +11,11 @@ const mock = vi.hoisted(() => ({
   },
   taxonomyGet: vi.fn(),
   projectGet: vi.fn(),
+  projectPatch: vi.fn(),
+  roomPatch: vi.fn(),
+  imageMetadataPatch: vi.fn(),
+  completenessGet: vi.fn(),
+  submitProject: vi.fn(),
   listImagesGet: vi.fn(),
   deleteRoom: vi.fn(),
   deleteImage: vi.fn(),
@@ -30,6 +36,9 @@ vi.mock('@/lib/api', () => ({
       projects: {
         ':id': {
           $get: mock.projectGet,
+          $patch: mock.projectPatch,
+          completeness: { $get: mock.completenessGet },
+          submit: { $post: mock.submitProject },
           images: {
             $get: mock.listImagesGet,
             ':imageId': {
@@ -39,10 +48,12 @@ vi.mock('@/lib/api', () => ({
           rooms: {
             ':roomId': {
               $delete: mock.deleteRoom,
+              $patch: mock.roomPatch,
             },
           },
         },
       },
+      media: { ':imageId': { metadata: { $patch: mock.imageMetadataPatch } } },
     },
   },
 }));
@@ -158,6 +169,7 @@ describe('DesignerProjectUpload', () => {
           status: 'draft',
           archiveReason: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
           moderationNote: null,
           propertyTypeSlug: 'residential',
           propertySubtypeSlug: 'apartment',
@@ -420,6 +432,67 @@ describe('DesignerProjectUpload', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('saves the automatic cover before checking readiness and submitting a draft', async () => {
+    const user = userEvent.setup();
+    const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+    const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+    const firstImage = images.items[0]!;
+    const draft = { ...project, coverImageId: null };
+    mock.projectGet.mockResolvedValue({ ok: true, json: async () => draft });
+    mock.listImagesGet.mockReset().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          firstImage,
+          { ...firstImage, id: '66666666-6666-4666-8666-666666666666' },
+          { ...firstImage, id: '77777777-7777-4777-8777-777777777777' },
+        ],
+      }),
+    });
+    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.imageMetadataPatch.mockImplementation(
+      async ({ param }: { param: { imageId: string } }) => ({
+        ok: true,
+        json: async () => ({ ...firstImage, id: param.imageId }),
+      }),
+    );
+    mock.completenessGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        complete: true,
+        score: 100,
+        missing: [],
+        requirements: [{ key: 'cover-image', label: 'Cover image selected', complete: true }],
+      }),
+    });
+    mock.submitProject.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...draft,
+        status: 'submitted',
+        submittedAt: '2026-09-07T00:00:00.000Z',
+      }),
+    });
+    render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    expect(screen.getByText('Cover image selected')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Preview & Submit Project' });
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+
+    await waitFor(() => expect(mock.submitProject).toHaveBeenCalled());
+    expect(mock.projectPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ coverImageId: firstImage.id }),
+      }),
+    );
+    expect(mock.projectPatch.mock.invocationCallOrder[0]).toBeLessThan(
+      mock.completenessGet.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it('shows changes-needed feedback above the visibility tips for requested changes', async () => {
     const response = await mock.projectGet();
     const project = (await response.json()) as Record<string, unknown>;
@@ -429,6 +502,7 @@ describe('DesignerProjectUpload', () => {
           ...project,
           status: 'changes_requested',
           moderationNote: 'Upload higher-resolution images.\nAdd clearer room labels.',
+          rejectionReasonCodes: ['image-quality', 'room-tagging'],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
@@ -439,6 +513,8 @@ describe('DesignerProjectUpload', () => {
     const changesHeading = await screen.findByText('CHANGES NEEDED ON');
     expect(screen.getByText('Upload higher-resolution images.')).toBeInTheDocument();
     expect(screen.getByText('Add clearer room labels.')).toBeInTheDocument();
+    expect(screen.getByText('Image quality')).toBeInTheDocument();
+    expect(screen.getByText('Room tagging')).toBeInTheDocument();
     const tipsHeading = screen.getByText('TIPS FOR BETTER VISIBILITY');
     expect(changesHeading.compareDocumentPosition(tipsHeading)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
