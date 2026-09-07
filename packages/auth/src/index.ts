@@ -16,7 +16,8 @@ import {
   requireOrganizationRbac,
   validateOrganizationRoleChange,
 } from './organization-policy.js';
-import { escapeHtml, sendEmail } from './email.js';
+import { sendEmail } from './email.js';
+import { renderTickifEmail } from './email-templates.js';
 
 assertProductionEmailConfig();
 
@@ -519,17 +520,13 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      const escapedName = escapeHtml(user.name ?? '');
       await sendEmail({
         to: user.email,
         subject: 'Verify your Tickif email',
-        html: `
-          <h2>Verify your email</h2>
-          <p>Hi ${escapedName},</p>
-          <p>Click the link below to verify your email address:</p>
-          <p><a href="${url}">Verify Email</a></p>
-          <p>— Tickif</p>
-        `,
+        ...(await renderTickifEmail(
+          { kind: 'verify-email', name: user.name ?? '', url },
+          config.PUBLIC_WEB_URL,
+        )),
       });
     },
   },
@@ -619,13 +616,15 @@ export const auth = betterAuth({
         await sendEmail({
           to: email,
           subject: "You're invited to a Tickif studio",
-          html: `
-            <h2>Join ${escapeHtml(organization.name)} on Tickif</h2>
-            <p>${escapeHtml(inviter.user.name)} invited you to join their studio workspace.</p>
-            <p><a href="${invitationUrl.toString()}">Accept invitation</a></p>
-            <p>This invitation expires in 7 days.</p>
-            <p>Tickif</p>
-          `,
+          ...(await renderTickifEmail(
+            {
+              kind: 'invitation',
+              organization: organization.name,
+              inviter: inviter.user.name,
+              url: invitationUrl.toString(),
+            },
+            config.PUBLIC_WEB_URL,
+          )),
         });
       },
       organizationHooks: {
@@ -745,7 +744,14 @@ export const auth = betterAuth({
             to: inviter.email,
             subject: `Invitation to ${organization.name} declined`,
             idempotencyKey: `organization-invitation-declined-${invitation.id}`,
-            html: `<p>${escapeHtml(invitation.email)} declined the invitation to ${escapeHtml(organization.name)}.</p>`,
+            ...(await renderTickifEmail(
+              {
+                kind: 'invitation-declined',
+                organization: organization.name,
+                email: invitation.email,
+              },
+              config.PUBLIC_WEB_URL,
+            )),
           });
         },
         afterAcceptInvitation: async ({ invitation, user }) => {
@@ -786,19 +792,18 @@ export const auth = betterAuth({
         const subject =
           type === 'sign-in'
             ? 'Your Tickif login code'
-            : type === 'email-verification'
-              ? 'Verify your Tickif email'
-              : 'Reset your Tickif password';
+            : type === 'change-email'
+              ? 'Confirm your new Tickif email'
+              : type === 'email-verification'
+                ? 'Verify your Tickif email'
+                : 'Reset your Tickif password';
         await sendEmail({
           to: email,
           subject,
-          html: `
-            <h2>${subject}</h2>
-            <p>Your verification code is:</p>
-            <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px; margin: 16px 0;">${otp}</p>
-            <p>This code expires in 5 minutes. If you didn't request this, you can safely ignore this email.</p>
-            <p>— Tickif</p>
-          `,
+          ...(await renderTickifEmail(
+            { kind: 'otp', purpose: type, code: otp },
+            config.PUBLIC_WEB_URL,
+          )),
         });
       },
     }),

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { settings, enqueueSms, sendEmail } = vi.hoisted(() => ({
   settings: {
+    PUBLIC_WEB_URL: 'https://tickif.example',
     PHONE_OTP_DELIVERY: 'email',
     PHONE_OTP_EMAIL_TO: 'tester@example.com',
     PHONE_OTP_EMAIL_ALLOWED_NUMBERS: ['+919800000010'],
@@ -34,6 +35,7 @@ describe('temporary phone OTP email delivery', () => {
       to: 'tester@example.com',
       subject: 'Your Tickif test login code',
       html: expect.stringContaining(input.code),
+      text: expect.stringContaining(input.code),
     });
     expect(sendEmail.mock.calls[0]?.[0].html).toContain(input.phoneNumber);
     expect(enqueueSms).not.toHaveBeenCalled();
