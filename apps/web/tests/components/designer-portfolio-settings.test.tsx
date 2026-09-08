@@ -277,6 +277,26 @@ describe('DesignerPortfolioSettings', () => {
       ).not.toBeInTheDocument();
       expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
     });
+
+    it('keeps showing "Live" for an already-public portfolio after a required field is cleared (review P2)', async () => {
+      // The server never demotes an active profile when a required field is later
+      // cleared (e.g. the logo is deleted), so publiclyVisible stays true while
+      // missingRequiredFields is non-empty (API test:
+      // "keeps a live portfolio live after a required field is cleared"). The
+      // badge must trust publiclyVisible and NOT mislabel this as "Incomplete".
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: ['logo'],
+        publiclyVisible: true,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Live', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Incomplete', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('uses the shared Tip callout in portfolio customizations', async () => {
