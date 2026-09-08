@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Button } from '@repo/ui/components/button';
 import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import type { PlanTier, SubscriptionState } from '@repo/contracts';
+import { BILLING_ERROR_CODE, type PlanTier, type SubscriptionState } from '@repo/contracts';
 import { isUpgrade, isDowngrade, isValidTier, PLAN_MAP } from '@/lib/plan-config';
 import { PlanSelection } from './plan-selection';
 import { UpgradeConfirmationStep } from './upgrade-confirmation-step';
@@ -27,6 +27,7 @@ type FlowStep =
   | { step: 'pending'; targetTier: PlanTier }
   | { step: 'activating'; targetTier: PlanTier }
   | { step: 'upi-limitation'; targetTier: PlanTier }
+  | { step: 'domestic-card-limitation'; targetTier: PlanTier }
   | { step: 'cancellation-scheduled'; periodEnd: string | null }
   | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' | 'activated' }
   | { step: 'error'; message: string }
@@ -305,7 +306,16 @@ export function CheckoutFlow({
 
         if (!response.ok) {
           const error = await response.json().catch(() => null);
+          const errorCode = (error as { error?: { code?: string } })?.error?.code ?? '';
           const rawMessage = (error as { error?: { message?: string } })?.error?.message ?? '';
+          // E-289: domestic-card mandates cannot change plans in place. The API
+          // classifies this to a stable machine-readable code — match on the
+          // code, never the provider description → show the deferred-cancel flow.
+          if (errorCode === BILLING_ERROR_CODE.PAYMENT_MODE_CHANGE_UNSUPPORTED) {
+            setFlowStep({ step: 'domestic-card-limitation', targetTier });
+            setIsApiLoading(false);
+            return;
+          }
           // Detect Razorpay UPI limitation → show cancel-and-resubscribe flow
           const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
           if (isUpiLimitation) {
@@ -336,7 +346,12 @@ export function CheckoutFlow({
     }
   }
 
-  async function handleUpiCancel() {
+  // Schedules cancellation of the current subscription at cycle end via the
+  // existing /cancel endpoint (cancelAtCycleEnd). Shared by the UPI and E-289
+  // domestic-card limitation flows — both need the same deferred-cancel
+  // semantics: the current plan stays active until the period ends, then the
+  // webhook lifecycle transitions the org to Hobby.
+  async function handleScheduleCancellation() {
     setIsApiLoading(true);
     setFlowStep({ step: 'processing' });
     try {
@@ -445,7 +460,17 @@ export function CheckoutFlow({
           <UpiLimitationStep
             currentTier={currentTier}
             targetTier={flowStep.targetTier}
-            onCancel={handleUpiCancel}
+            onCancel={handleScheduleCancellation}
+            onClose={() => handleOpenChange(false)}
+            isLoading={isApiLoading}
+          />
+        )}
+
+        {flowStep.step === 'domestic-card-limitation' && (
+          <DomesticCardLimitationStep
+            currentTier={currentTier}
+            targetTier={flowStep.targetTier}
+            onCancel={handleScheduleCancellation}
             onClose={() => handleOpenChange(false)}
             isLoading={isApiLoading}
           />
@@ -660,6 +685,64 @@ function UpiLimitationStep({
         </Button>
         <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
           {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Domestic-Card Limitation Flow (E-289) ───────────────────────────────────
+
+/**
+ * Shown when the API returns `payment_mode_change_unsupported`: the current
+ * paid subscription was authorized with a domestic card, which Razorpay does
+ * not allow to change plans in place. Mirrors the UPI limitation pattern and
+ * uses the same deferred-cancel semantics.
+ *
+ * The copy MUST NOT imply the subscription was already cancelled, that the user
+ * has moved to the target plan, or that the switch is instant. It offers to
+ * SCHEDULE cancellation; the current plan stays active until the cycle ends,
+ * after which the user can subscribe to the target plan via the normal flow.
+ */
+function DomesticCardLimitationStep({
+  currentTier,
+  targetTier,
+  onCancel,
+  onClose,
+  isLoading,
+}: {
+  currentTier: PlanTier;
+  targetTier: PlanTier;
+  onCancel: () => void;
+  onClose: () => void;
+  isLoading?: boolean;
+}) {
+  const current = PLAN_MAP[currentTier];
+  const target = PLAN_MAP[targetTier];
+
+  return (
+    <div className="flex flex-col items-center py-8 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
+        <AlertCircle className="size-8 text-yellow-600" />
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-foreground">Plan change unavailable</h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        Your {current?.label} subscription was set up with a payment method whose subscription
+        cannot be changed directly to {target?.label}. To switch, cancel your current subscription
+        and subscribe to {target?.label} once the current period ends.
+      </p>
+      <p className="mt-3 max-w-sm text-xs text-muted-foreground">
+        If you continue, your {current?.label} access stays active until the end of your current
+        billing period — nothing is cancelled immediately and you are not moved to {target?.label}{' '}
+        yet. After the period ends, you can subscribe to {target?.label} using the normal flow and
+        pay with any supported method.
+      </p>
+      <div className="mt-6 flex gap-3">
+        <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          Not Now
+        </Button>
+        <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
+          {isLoading ? 'Scheduling...' : 'Schedule Cancellation'}
         </Button>
       </div>
     </div>

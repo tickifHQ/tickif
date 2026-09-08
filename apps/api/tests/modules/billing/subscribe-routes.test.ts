@@ -309,4 +309,18 @@ describe('POST /api/billing/change-plan', () => {
     const res = await post('/change-plan', { targetTier: 'corporate' });
     expect(res.status).toBe(403);
   });
+
+  it('surfaces the E-289 domestic-card limitation as 422 with a stable machine code', async () => {
+    mockAuthed();
+    const { AppError } = await import('../../../src/lib/errors.js');
+    vi.mocked(subscribeService.changePlan).mockRejectedValue(
+      AppError.paymentModeChangeUnsupported(
+        'This subscription was set up with a payment method that does not support changing plans directly.',
+      ),
+    );
+    const res = await post('/change-plan', { targetTier: 'corporate' });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('payment_mode_change_unsupported');
+  });
 });
