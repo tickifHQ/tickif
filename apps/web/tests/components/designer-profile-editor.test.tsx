@@ -166,14 +166,14 @@ describe('DesignerProfileEditor', () => {
   it('links same-page requirements to their editors', () => {
     render(
       <DesignerProfileEditor
-        initialCompletion={{ ...completion, score: 67, missing: ['bio', 'scope', 'contact'] }}
+        initialCompletion={{ ...completion, score: 67, missing: ['bio', 'scope'] }}
         initialProfile={profile}
         taxonomy={terms}
         taxonomyError={null}
       />,
     );
 
-    expect(screen.getByText('3 items remaining')).toBeInTheDocument();
+    expect(screen.getByText('2 items remaining')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Write your bio' })).toHaveAttribute(
       'href',
       '/designer/profile#profile-bio',
@@ -182,9 +182,22 @@ describe('DesignerProfileEditor', () => {
       'href',
       '/designer/profile#profile-services',
     );
-    expect(screen.getByRole('link', { name: 'Add contact details' })).toHaveAttribute(
+  });
+
+  it('routes missing contact to account verification since the studio phone cannot satisfy it', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 83, missing: ['contact'] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('Contact details')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Verify your phone number' })).toHaveAttribute(
       'href',
-      '/designer/profile#profile-phone',
+      '/designer/verification',
     );
   });
 

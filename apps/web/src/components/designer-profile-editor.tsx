@@ -300,10 +300,13 @@ const COMPLETION_REQUIREMENT_ACTIONS: Record<
     action: 'Choose your services',
     href: '/designer/profile#profile-services',
   },
+  // Contact means a verified sign-in phone or email (studio phone alone never
+  // satisfies it), so this points at account verification instead of the
+  // studio phone field, which cannot clear the requirement.
   contact: {
     label: 'Contact details',
-    action: 'Add contact details',
-    href: '/designer/profile#profile-phone',
+    action: 'Verify your phone number',
+    href: '/designer/verification',
   },
 };
 
