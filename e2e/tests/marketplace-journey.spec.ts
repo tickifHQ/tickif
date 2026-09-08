@@ -164,7 +164,11 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .last()
       .scrollIntoViewIfNeeded();
     await designer.screenshot({ path: testInfo.outputPath('rendered-worker-derivatives.png') });
+    // E-286: "Preview & Submit Project" now opens a review dialog instead of
+    // submitting directly. The designer must explicitly confirm in the dialog,
+    // which is the only action that fires the submit API.
     await designer.getByRole('button', { name: 'Preview & Submit Project' }).click();
+    await designer.getByRole('button', { name: 'Confirm & submit' }).click();
     await expect
       .poll(
         async () =>
