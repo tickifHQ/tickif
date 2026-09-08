@@ -34,6 +34,18 @@ afterEach(() => {
 });
 
 describe('Swarm secret-file configuration', () => {
+  it('enables search with a file-backed key without modifying the input environment', () => {
+    const environment = {
+      ...baseEnvironment(),
+      TYPESENSE_HOST: 'http://typesense:8108',
+      TYPESENSE_SEARCH_API_KEY_FILE: secretFile('synthetic-search-key\n'),
+    };
+    const parsed = parseConfig(environment);
+
+    expect(parsed.TYPESENSE_SEARCH_CONFIGURED).toBe(true);
+    expect(environment).not.toHaveProperty('TYPESENSE_SEARCH_API_KEY');
+  });
+
   it('loads allow-listed sensitive values and trims only trailing newlines', () => {
     const parsed = parseConfig({
       ...baseEnvironment(),

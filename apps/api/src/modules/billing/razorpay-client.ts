@@ -131,10 +131,25 @@ type RazorpayOperation =
   | 'cancelSubscription'
   | 'fetchSubscription';
 
+/**
+ * Optional per-operation classifier for provider error responses.
+ *
+ * Called ONLY on a non-2xx Razorpay response, BEFORE the default 502 mapping.
+ * Return an `AppError` to override the mapping for a specific, recognized
+ * business error; return `undefined` to fall through to the default
+ * `badGateway` (502) behaviour. This keeps the default mapping — and every
+ * operation that does not pass a classifier — completely unchanged.
+ */
+type RazorpayErrorClassifier = (
+  providerError: Partial<RazorpayError>,
+  status: number,
+) => AppError | undefined;
+
 async function requestRazorpay<T>(
   operation: RazorpayOperation,
   path: string,
   init: RequestInit,
+  classifyError?: RazorpayErrorClassifier,
 ): Promise<T> {
   const { keyId, keySecret } = getCredentials();
   let response: Response;
@@ -164,6 +179,13 @@ async function requestRazorpay<T>(
 
   if (!response.ok) {
     const providerError = payload as Partial<RazorpayError>;
+    // Give the caller a narrow chance to reclassify a recognized business error
+    // (e.g. E-289 domestic-card plan change). Anything not explicitly recognized
+    // still maps to badGateway (502) exactly as before.
+    const classified = classifyError?.(providerError, response.status);
+    if (classified) {
+      throw classified;
+    }
     throw AppError.badGateway(
       `Razorpay ${operation} failed: ${providerError.error?.description ?? response.statusText}`,
       { razorpayCode: providerError.error?.code, source: 'razorpay' },
@@ -171,6 +193,33 @@ async function requestRazorpay<T>(
   }
 
   return payload as T;
+}
+
+/**
+ * E-289: detect Razorpay's refusal to change the plan of a subscription whose
+ * mandate was authorized with a domestic card.
+ *
+ * Verified signal (from QA evidence / repo error fixtures):
+ *   HTTP 400, error.code = 'BAD_REQUEST_ERROR',
+ *   error.description contains
+ *   "Only offers can be updated for subscriptions when payment mode is domestic card."
+ *
+ * `BAD_REQUEST_ERROR` is Razorpay's generic 400 code and is NOT unique to this
+ * case, so the description substring is the discriminating signal. Matching is
+ * kept deliberately narrow (status 400 + description substring) so unrelated
+ * 400s continue to map to 502. The substring is normalized to lowercase to
+ * tolerate casing differences. See docs note in billing contracts.
+ */
+export function isDomesticCardPlanChangeRejection(
+  providerError: Partial<RazorpayError>,
+  status: number,
+): boolean {
+  if (status !== 400) return false;
+  const description = providerError.error?.description?.toLowerCase() ?? '';
+  return (
+    description.includes('payment mode is domestic card') &&
+    description.includes('only offers can be updated')
+  );
 }
 
 // ─── API Operations ──────────────────────────────────────────────────────────
@@ -239,6 +288,18 @@ export async function updateSubscription(params: {
         schedule_change_at: params.scheduleChangeAt ?? 'cycle_end',
       }),
     },
+    // E-289: reclassify ONLY the domestic-card plan-change rejection to an
+    // actionable 422. This classifier is scoped to updateSubscription; every
+    // other operation keeps the default 502 mapping unchanged.
+    (providerError, status) =>
+      isDomesticCardPlanChangeRejection(providerError, status)
+        ? AppError.paymentModeChangeUnsupported(
+            'This subscription was set up with a payment method that does not support ' +
+              'changing plans directly. Cancel the current plan and subscribe to the new ' +
+              'plan instead.',
+            { source: 'razorpay', razorpayCode: providerError.error?.code },
+          )
+        : undefined,
   );
 }
 

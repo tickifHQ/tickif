@@ -12,10 +12,11 @@
  * Test Organization:
  * - 9.1: Typesense primary path (mocked)
  * - 9.2: Postgres fallback path (Typesense mocked to throw)
- * - 9.3: Local development without Typesense (env vars cleared)
+ * - 9.3: Local development without explicit Typesense configuration
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { config } from '@repo/config';
 import { eq } from 'drizzle-orm';
 import type { DiscoveryFeedResponse, Derivative } from '@repo/contracts';
 import { db, schema } from '@repo/db';
@@ -27,6 +28,11 @@ import {
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
+
+const originalSearchConfigured = config.TYPESENSE_SEARCH_CONFIGURED;
+afterEach(() => {
+  config.TYPESENSE_SEARCH_CONFIGURED = originalSearchConfigured;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock Setup
@@ -206,8 +212,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
   describe('9.1 Typesense primary path', () => {
     beforeEach(async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-api-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       // Seed taxonomy since truncateAll() clears it between tests
       // (needed because toDiscoveryCard() resolves labels from Postgres)
       await seedFeedTaxonomy();
@@ -406,8 +411,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
   describe('9.2 Postgres fallback path', () => {
     beforeEach(async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-api-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       // Seed taxonomy since truncateAll() clears it between tests
       await seedFeedTaxonomy();
     });
@@ -512,9 +516,8 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
   describe('9.3 Local development without Typesense', () => {
     beforeEach(async () => {
-      // Clear Typesense env vars to simulate unconfigured state
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      // Simulate startup without explicit Typesense configuration.
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       // Re-seed taxonomy since truncateAll() clears it between tests
       await seedFeedTaxonomy();
     });
@@ -865,8 +868,7 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
 
   describe('9.4 Filter composition and facet distribution', () => {
     beforeEach(async () => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       // Facet counts are keyed by the active taxonomy vocabulary, so the terms the
       // fixtures reference have to exist (truncateAll clears them between tests).
       await seedFeedTaxonomy();

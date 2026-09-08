@@ -411,6 +411,7 @@ vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal
 
 const {
   createSubscription: mockCreateSubscription,
+  updateSubscription: mockUpdateSubscription,
   fetchSubscription: mockFetchSubscription,
   cancelSubscription: mockCancelSubscription,
 } = await import('../../../src/modules/billing/razorpay-client.js');
@@ -434,6 +435,7 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(mockCreateSubscription).mockReset();
+    vi.mocked(mockUpdateSubscription).mockReset();
     vi.mocked(mockFetchSubscription).mockReset();
     vi.mocked(mockCancelSubscription).mockReset();
   });
@@ -924,5 +926,48 @@ describe('E-116: real subscribe-service integration (mocked Razorpay)', () => {
         { targetTier: 'corporate' },
       ),
     ).rejects.toMatchObject({ status: 422, message: expect.stringContaining('not yet active') });
+  });
+
+  // ── E-289: domestic-card Professional+ → Corporate upgrade ─────────────────
+
+  it('changePlan on a domestic-card mandate surfaces payment_mode_change_unsupported and preserves Professional+', async () => {
+    const { AppError } = await import('../../../src/lib/errors.js');
+    const { user, org } = await makeOrgWithOwner();
+
+    // Active Professional+ subscription authorized with a domestic card.
+    await db.insert(schema.subscription).values({
+      organizationId: org.id,
+      planTier: 'professional_plus',
+      subscriptionState: 'active',
+      razorpaySubscriptionId: 'sub_domestic_card',
+      razorpayStatus: 'active',
+    });
+
+    // Razorpay rejects the in-place plan change; the real client classifies the
+    // domestic-card 400 to this actionable error, so the mock throws it directly.
+    vi.mocked(mockUpdateSubscription).mockRejectedValue(
+      AppError.paymentModeChangeUnsupported(
+        'This subscription was set up with a payment method that does not support changing plans directly.',
+      ),
+    );
+
+    await expect(
+      subscribeService.changePlan(
+        { userId: user.id, activeOrgId: org.id },
+        { targetTier: 'corporate' },
+      ),
+    ).rejects.toMatchObject({ status: 422, code: 'payment_mode_change_unsupported' });
+
+    // Professional+ is fully preserved — the failed upgrade must not partially
+    // mutate any local subscription state (transaction rolled back).
+    const [sub] = await db
+      .select()
+      .from(schema.subscription)
+      .where(eq(schema.subscription.organizationId, org.id));
+    expect(sub!.planTier).toBe('professional_plus');
+    expect(sub!.razorpaySubscriptionId).toBe('sub_domestic_card');
+    expect(sub!.razorpayStatus).toBe('active');
+    expect(sub!.cancelAtPeriodEnd).toBe(false);
+    expect(vi.mocked(mockUpdateSubscription)).toHaveBeenCalledOnce();
   });
 });

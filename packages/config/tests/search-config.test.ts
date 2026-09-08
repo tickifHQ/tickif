@@ -13,6 +13,29 @@ const productionEnvironment = {
 } satisfies NodeJS.ProcessEnv;
 
 describe('Typesense environment configuration', () => {
+  it.each([
+    [{}, false],
+    [{ TYPESENSE_HOST: 'http://localhost:8108' }, false],
+    [{ TYPESENSE_SEARCH_API_KEY: 'synthetic-search-key' }, false],
+    [{ TYPESENSE_HOST: 'http://localhost:8108', TYPESENSE_API_KEY: 'synthetic-admin-key' }, false],
+    [
+      { TYPESENSE_HOST: 'http://localhost:8108', TYPESENSE_SEARCH_API_KEY: 'synthetic-search-key' },
+      true,
+    ],
+  ])(
+    'detects explicit search configuration before applying defaults',
+    (searchEnvironment, expected) => {
+      const parsed = parseConfig({
+        NODE_ENV: 'test',
+        BETTER_AUTH_SECRET: 'synthetic-auth-secret',
+        BETTER_AUTH_URL: 'http://localhost:3001',
+        ...searchEnvironment,
+      });
+
+      expect(parsed.TYPESENSE_SEARCH_CONFIGURED).toBe(expected);
+    },
+  );
+
   it('does not make unrelated production processes depend on search credentials', () => {
     expect(() => parseConfig(productionEnvironment)).not.toThrow();
   });

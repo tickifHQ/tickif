@@ -46,7 +46,8 @@ coverage gate.
 ## Coverage and evidence
 
 - `authentication.spec.ts`: real phone/email OTP sessions, wrong-code rejection,
-  Google callback account creation and denied consent.
+  Google callback account creation and denied consent; unfinished designer setup
+  can be deferred, resumed and completed without granting premature workspace access.
 - `project-moderation.spec.ts`: authenticated claim, comments, approve, request
   changes, reject and unpublish with FIFO pagination.
 - `verification-lifecycle.spec.ts`: upload, private signed download, change request

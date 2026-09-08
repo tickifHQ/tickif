@@ -164,6 +164,30 @@ curl --fail-with-body \
   -H "X-TYPESENSE-API-KEY: $TYPESENSE_SEARCH_API_KEY"
 ```
 
+## Discovery configuration and fallback diagnosis
+
+Discovery enables Typesense when `TYPESENSE_HOST` and `TYPESENSE_SEARCH_API_KEY`
+are explicitly supplied. The search key may come from its environment variable,
+`TYPESENSE_SEARCH_API_KEY_FILE`, or `CONFIG_SECRETS_FILE`. `@repo/config` resolves
+and validates these once at startup, then computes `TYPESENSE_SEARCH_CONFIGURED`
+before applying local defaults. This flag is derived, not an environment switch.
+Restart the API after changing mounted credentials.
+
+Without explicit search configuration, local development deliberately returns
+the Postgres feed with `source: "db"` and logs `discovery.fallback` with reason
+`unconfigured`. In staging, `infra/staging/stack.yml` supplies the host and mounted
+search key, so a healthy query should return `source: "search"`. A search failure
+can still return a successful Postgres response; inspect the fallback log reason
+alongside the response's `source` field. An HTTP 200 alone does not verify search.
+
+The E-294 staging report showed false `unconfigured` events because discovery
+read raw process environment variables after mounted secrets had been resolved
+only into typed configuration. The fix uses that resolved configuration. The
+reported fallback requests took 4 to 51 ms on the server, so those samples did not
+demonstrate a slow feed. Compare server request duration and fallback frequency
+after deployment under representative traffic; client timing also includes
+network and connection setup and should not be treated as database latency.
+
 ## Availability follow-ups
 
 E-207 owns the production fallback behavior. Before production traffic it must

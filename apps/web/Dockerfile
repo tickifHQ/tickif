@@ -24,6 +24,8 @@ RUN useradd --create-home --uid 1001 app
 COPY --from=build --chown=app:app /app/apps/web/.next/standalone ./
 COPY --from=build --chown=app:app /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=app:app /app/apps/web/public ./apps/web/public
+# Docker's tmpfs mount inherits this mode but starts root-owned.
+RUN install -d -o app -g app -m 1777 /app/apps/web/.next/cache
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \

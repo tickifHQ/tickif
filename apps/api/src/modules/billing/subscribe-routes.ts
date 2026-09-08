@@ -83,7 +83,11 @@ const changePlanRoute = createRoute({
     401: { description: 'Unauthorized' },
     403: { description: 'Caller lacks organization billing access' },
     404: { description: 'No active subscription found' },
-    422: { description: 'Invalid tier, same plan, or billing not configured' },
+    422: {
+      description:
+        'Invalid tier, same plan, billing not configured, or the subscription payment mode ' +
+        'does not support an in-place plan change (E-289, code payment_mode_change_unsupported)',
+    },
     502: { description: 'Billing provider unavailable or returned an invalid response' },
   },
 });
