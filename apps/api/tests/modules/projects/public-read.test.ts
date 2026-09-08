@@ -15,7 +15,6 @@ vi.mock('@repo/storage', () => ({
 vi.mock('../../../src/modules/projects/repository.js', () => ({
   projectsRepository: {
     findPublicProjectById: vi.fn(),
-    readPublicProjectSnapshot: vi.fn(),
     findPublicProjectLifecycleById: vi.fn(),
     findPublicProjectLifecycleBySlug: vi.fn(),
     isProjectTombstonedById: vi.fn(),
@@ -26,7 +25,6 @@ vi.mock('../../../src/modules/projects/repository.js', () => ({
     findSimilarPublished: vi.fn(),
     findDesignerById: vi.fn(),
     findById: vi.fn(),
-    findLiveByIdWithRooms: vi.fn(),
     listRooms: vi.fn(),
     listPublicRooms: vi.fn(),
     listPublicGalleryImages: vi.fn(),
@@ -51,21 +49,6 @@ const { projectsRepository } = await import('../../../src/modules/projects/repos
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(projectsRepository.readPublicProjectSnapshot).mockImplementation(
-    async (result, includeRooms) => ({
-      result,
-      rooms: includeRooms ? await projectsRepository.listPublicRooms(result.project.id) : [],
-      galleryImages: await projectsRepository.listPublicGalleryImages(result.project.id),
-      coverImages: result.project.coverImageId
-        ? await projectsRepository.findCoverImages([result.project.coverImageId], true)
-        : new Map(),
-      narrative: await projectsRepository.findPublishedProjectNarrative(result.project.id),
-    }),
-  );
-  vi.mocked(projectsRepository.findLiveByIdWithRooms).mockImplementation(async (id) => {
-    const project = await projectsRepository.findById(id);
-    return project ? { project, rooms: [] } : null;
-  });
   vi.mocked(projectsRepository.listPublicRooms).mockResolvedValue([]);
   vi.mocked(projectsRepository.findTaxonomyLabels).mockResolvedValue(new Map());
   vi.mocked(projectsRepository.findLocalityLabels).mockResolvedValue(new Map());

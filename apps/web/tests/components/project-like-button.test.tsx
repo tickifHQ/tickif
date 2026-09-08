@@ -1,5 +1,3 @@
-import { renderToString } from 'react-dom/server';
-import { hydrateRoot } from 'react-dom/client';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,36 +50,6 @@ beforeEach(() => {
 });
 
 describe('ProjectLikeButton', () => {
-  it.each(['anonymous', 'authenticated'] as const)(
-    'hydrates pending server markup with a cached %s session',
-    async (identity) => {
-      mocks.sessionPending = true;
-      const container = document.createElement('div');
-      container.innerHTML = renderToString(view());
-      document.body.append(container);
-      mocks.sessionPending = false;
-      if (identity === 'authenticated') signIn();
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      const recoverableError = vi.fn();
-      const root = hydrateRoot(container, view(), { onRecoverableError: recoverableError });
-      try {
-        await waitFor(() =>
-          expect(
-            screen.getByRole('button', {
-              name: identity === 'anonymous' ? 'Sign in to like project' : 'Like project',
-            }),
-          ).toBeEnabled(),
-        );
-        expect(recoverableError).not.toHaveBeenCalled();
-        expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat/i);
-      } finally {
-        await act(() => root.unmount());
-        consoleError.mockRestore();
-        container.remove();
-      }
-    },
-  );
-
   it('shows public count and sends anonymous visitors to login with the exact return path', async () => {
     render(view());
     expect(await screen.findByText('2')).toBeInTheDocument();

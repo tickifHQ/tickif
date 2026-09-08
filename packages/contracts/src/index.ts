@@ -1,7 +1,6 @@
 export * from './common';
 export * from './auth';
 export * from './projects';
-export * from './project-versions';
 export * from './media';
 export * from './profiles';
 export * from './taxonomy';

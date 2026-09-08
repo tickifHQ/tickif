@@ -93,17 +93,6 @@ const editableFields: Array<{ key: EditableField; label: string }> = [
   { key: 'budgetBandSlug', label: 'Budget band' },
 ];
 
-const comparisonFields = [
-  ...editableFields,
-  { key: 'description', label: 'Description' },
-  { key: 'propertySubtypeSlug', label: 'Property subtype' },
-  { key: 'bhkSlug', label: 'BHK' },
-  { key: 'sizeSqft', label: 'Size in square feet' },
-  { key: 'buildingName', label: 'Building' },
-  { key: 'completedMonth', label: 'Completed month' },
-  { key: 'durationMonths', label: 'Duration in months' },
-] as const;
-
 function formatDate(value: string | null) {
   if (!value) return 'Not submitted';
   return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(
@@ -145,11 +134,8 @@ function readableValue(value: string | null) {
   return value ? value.replaceAll('-', ' ') : 'Not set';
 }
 
-function fieldValue(
-  project: AdminModerationProject,
-  field: (typeof comparisonFields)[number]['key'],
-) {
-  return String(project[field] ?? '');
+function fieldValue(project: AdminModerationProject, field: EditableField) {
+  return project[field] ?? '';
 }
 
 function fieldPatch(field: EditableField, value: string): AdminCorrectProjectInput {
@@ -302,7 +288,7 @@ function ReviewDetail({
   onClose: () => void;
   onUpdated: (detail: AdminModerationDetailResponse) => void;
 }) {
-  const { project, liveVersion } = detail;
+  const { project } = detail;
   const [actionIntent, setActionIntent] = useState<ActionIntent | null>(null);
   const [note, setNote] = useState('');
   const [reasonCodes, setReasonCodes] = useState<ModerationReasonCode[]>([]);
@@ -449,44 +435,6 @@ function ReviewDetail({
       </DialogHeader>
 
       <div className="min-w-0 space-y-8 px-6 py-6">
-        {detail.pendingChanges ? (
-          <section className="space-y-3 rounded-lg border border-info/30 bg-info/10 p-4">
-            <h3 className="font-display text-base font-semibold">Reviewing pending changes</h3>
-            <p className="text-sm text-muted-foreground">
-              The approved version stays public until these changes are approved. Rejecting these
-              changes keeps the approved version live.
-            </p>
-            {liveVersion ? (
-              <Table aria-label="Live and pending project metadata">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Field</TableHead>
-                    <TableHead>Live</TableHead>
-                    <TableHead>Pending</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {comparisonFields.map(({ key, label }) => (
-                    <TableRow key={key}>
-                      <TableCell>{label}</TableCell>
-                      <TableCell className="max-w-48 whitespace-normal break-words">
-                        {readableValue(fieldValue(liveVersion.project, key))}
-                      </TableCell>
-                      <TableCell className="max-w-48 whitespace-normal break-words">
-                        {readableValue(fieldValue(project, key))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow>
-                    <TableCell>Images</TableCell>
-                    <TableCell>{liveVersion.images.length}</TableCell>
-                    <TableCell>{detail.images.length}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            ) : null}
-          </section>
-        ) : null}
         {blockedByOtherAdmin ? (
           <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

@@ -1,15 +1,10 @@
-import { renderToString } from 'react-dom/server';
-import { hydrateRoot } from 'react-dom/client';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/components/project-like-button', () => ({
-  ProjectLikeButton: () => <button>Like</button>,
-}));
+vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
 
 const mocks = vi.hoisted(() => ({
   session: null as { user: { id: string } } | null,
-  isPending: false,
   getSavedState: vi.fn(),
   saveProject: vi.fn(),
   unsaveProject: vi.fn(),
@@ -17,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
-    useSession: () => ({ data: mocks.session, isPending: mocks.isPending }),
+    useSession: () => ({ data: mocks.session, isPending: false }),
   },
 }));
 
@@ -47,7 +42,6 @@ function response(body: unknown, status = 200) {
 describe('ProjectActions', () => {
   beforeEach(() => {
     mocks.session = null;
-    mocks.isPending = false;
     vi.clearAllMocks();
     mocks.getSavedState.mockResolvedValue(response({ savedProjectIds: [] }));
     mocks.saveProject.mockResolvedValue(
@@ -57,45 +51,6 @@ describe('ProjectActions', () => {
       response({ projectId: '11111111-1111-4111-8111-111111111111', saved: false }),
     );
   });
-
-  it.each(['anonymous', 'authenticated'] as const)(
-    'hydrates pending server markup with a cached %s session',
-    async (identity) => {
-      const view = (
-        <ProjectActions
-          projectId="11111111-1111-4111-8111-111111111111"
-          loginHref="/login"
-          canonicalUrl="https://tickif.com/projects/example"
-        />
-      );
-      mocks.isPending = true;
-      const container = document.createElement('div');
-      container.innerHTML = renderToString(view);
-      document.body.append(container);
-      mocks.isPending = false;
-      if (identity === 'authenticated') mocks.session = { user: { id: 'visitor' } };
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      const recoverableError = vi.fn();
-      const root = hydrateRoot(container, view, { onRecoverableError: recoverableError });
-      try {
-        if (identity === 'anonymous') {
-          expect(
-            await screen.findByRole('link', { name: 'Sign in to save project' }),
-          ).toHaveAttribute('href', '/login');
-        } else {
-          await waitFor(() =>
-            expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled(),
-          );
-        }
-        expect(recoverableError).not.toHaveBeenCalled();
-        expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat/i);
-      } finally {
-        await act(() => root.unmount());
-        consoleError.mockRestore();
-        container.remove();
-      }
-    },
-  );
 
   it('routes signed-out visitors to login before saving', () => {
     render(
@@ -128,7 +83,7 @@ describe('ProjectActions', () => {
       expect(mocks.getSavedState).toHaveBeenCalledWith({ query: { projectIds: projectId } }),
     );
     expect(screen.getByText('Save')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Save project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
 
     await waitFor(() => expect(mocks.saveProject).toHaveBeenCalledWith({ param: { projectId } }));
     expect(await screen.findByRole('button', { name: 'Remove saved project' })).toHaveAttribute(

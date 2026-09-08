@@ -47,7 +47,6 @@ export function projectFeedFilterClauses(filters: ProjectFeedFilters = {}): SQL[
           .where(
             and(
               eq(schema.projectRoom.projectId, schema.project.id),
-              eq(schema.projectRoom.isLive, true),
               eq(schema.taxonomy.kind, 'room'),
               inArray(schema.taxonomy.slug, rooms),
             ),
@@ -71,7 +70,6 @@ export function projectFeedFilterClauses(filters: ProjectFeedFilters = {}): SQL[
             and(
               eq(schema.projectImage.projectId, schema.project.id),
               eq(schema.projectImage.status, 'ready'),
-              eq(schema.projectImage.isLive, true),
               sql`${schema.projectImage.themeSlugs} ?| ARRAY[${themeParameters}]::text[]`,
             ),
           ),

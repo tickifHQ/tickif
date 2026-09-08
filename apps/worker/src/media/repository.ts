@@ -129,7 +129,6 @@ export async function refreshReadyDerivatives(
       .returning({
         id: schema.projectImage.id,
         projectId: schema.projectImage.projectId,
-        isLive: schema.projectImage.isLive,
       });
     if (!image) return false;
 
@@ -138,7 +137,7 @@ export async function refreshReadyDerivatives(
       .from(schema.project)
       .where(eq(schema.project.id, image.projectId))
       .limit(1);
-    if (project?.status === 'published' && image.isLive) {
+    if (project?.status === 'published') {
       await tx.execute(
         sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
       );
@@ -168,25 +167,6 @@ export async function listReadyImageIds(imageIds?: readonly string[]): Promise<s
 
 export async function markFailed(imageId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    const [candidate] = await tx
-      .select({ projectId: schema.projectImage.projectId })
-      .from(schema.projectImage)
-      .where(eq(schema.projectImage.id, imageId))
-      .limit(1);
-    if (!candidate) return;
-    // Designer edits and approval lock the canonical project before its images.
-    const [project] = await tx
-      .select({
-        id: schema.project.id,
-        designerId: schema.project.designerId,
-        status: schema.project.status,
-      })
-      .from(schema.project)
-      .where(eq(schema.project.id, candidate.projectId))
-      .for('update')
-      .limit(1);
-    if (!project) return;
-
     const now = new Date();
     const [image] = await tx
       .update(schema.projectImage)
@@ -198,13 +178,20 @@ export async function markFailed(imageId: string): Promise<void> {
         updatedAt: now,
       })
       .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
-      .returning({
-        id: schema.projectImage.id,
-        projectId: schema.projectImage.projectId,
-        isLive: schema.projectImage.isLive,
-      });
+      .returning({ id: schema.projectImage.id, projectId: schema.projectImage.projectId });
 
     if (!image) return;
+    const [project] = await tx
+      .select({
+        id: schema.project.id,
+        designerId: schema.project.designerId,
+        status: schema.project.status,
+      })
+      .from(schema.project)
+      .where(eq(schema.project.id, image.projectId))
+      .for('update')
+      .limit(1);
+    if (!project) return;
 
     const failureMetadata = {
       mediaProcessingFailure: {
@@ -214,42 +201,6 @@ export async function markFailed(imageId: string): Promise<void> {
         recordedAt: now.toISOString(),
       },
     };
-
-    if (!image.isLive) {
-      const [pending] = await tx
-        .select()
-        .from(schema.projectPendingVersion)
-        .where(eq(schema.projectPendingVersion.projectId, project.id))
-        .limit(1);
-      if (
-        project.status === 'published' &&
-        pending &&
-        ['submitted', 'in_review'].includes(pending.status) &&
-        pending.content.images.some((item) => item.id === image.id)
-      ) {
-        await tx
-          .update(schema.projectPendingVersion)
-          .set({
-            status: 'changes_requested',
-            revision: pending.revision + 1,
-            updatedAt: now,
-            content: {
-              ...pending.content,
-              project: {
-                ...pending.content.project,
-                status: 'changes_requested',
-                moderationRevision: pending.revision + 1,
-                submittedAt: null,
-                metadata: { ...pending.content.project.metadata, ...failureMetadata },
-                updatedAt: now,
-              },
-            },
-          })
-          .where(eq(schema.projectPendingVersion.projectId, project.id));
-      }
-      // Draft failures remain editable; removed/discarded assets cannot affect the live project.
-      return;
-    }
 
     const transitioned = await tx
       .update(schema.project)

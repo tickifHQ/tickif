@@ -7,7 +7,6 @@ import { Button } from '@repo/ui/components/button';
 import { Heart } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { useHydrated } from '@/lib/use-hydrated';
 import {
   beginProjectLikeMutation,
   finishProjectLikeMutation,
@@ -28,7 +27,6 @@ export function ProjectLikeButton({
   const errorId = useId();
   const countId = useId();
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const hydrated = useHydrated();
   const identity = session ? `user:${session.user.id}` : 'anonymous';
   const stateKey = JSON.stringify([identity, projectId]);
   const currentKey = useRef(stateKey);
@@ -146,7 +144,7 @@ export function ProjectLikeButton({
         variant={state?.liked ? 'default' : 'secondary'}
         size="compact"
         aria-label={
-          hydrated && !session && !sessionPending
+          !session && !sessionPending
             ? 'Sign in to like project'
             : result?.error && !state
               ? 'Retry loading likes'
@@ -155,7 +153,7 @@ export function ProjectLikeButton({
         aria-pressed={state?.liked ?? false}
         aria-busy={pending}
         aria-describedby={result?.error ? `${countId} ${errorId}` : countId}
-        disabled={!hydrated || sessionPending || pending || (!!session && !result)}
+        disabled={sessionPending || pending || (!!session && !result)}
         onClick={toggleLike}
       >
         <Heart aria-hidden data-icon="inline-start" fill={state?.liked ? 'currentColor' : 'none'} />

@@ -212,20 +212,7 @@ export const adminProjectsService = {
       adminProjectsRepository.listHistory(projectId),
       adminProjectsRepository.listReviewComments(projectId),
     ]);
-    const live = project.pendingChanges
-      ? await adminProjectsRepository.findLiveVersion(projectId)
-      : null;
     return {
-      ...(live
-        ? {
-            pendingChanges: true,
-            liveVersion: {
-              project: toProject({ ...live.project, designerName: project.designerName }),
-              rooms: live.rooms.map(toRoom),
-              images: await Promise.all(live.images.map(toImage)),
-            },
-          }
-        : {}),
       project: toProject(project),
       rooms: rooms.map(toRoom),
       images: await Promise.all(images.map(toImage)),
@@ -404,13 +391,12 @@ export const adminProjectsService = {
     input: ModerationNoteInput,
     caller: AdminCaller,
   ): Promise<AdminModerationDetailResponse> {
-    const project = await adminProjectsRepository.findById(projectId, 'live');
+    const project = await adminProjectsRepository.findById(projectId);
     if (!project) throw AppError.notFound('Project not found');
     if (project.status !== 'published') throw AppError.invalidTransition();
     await transitionProject(
       {
         projectId,
-        sourceVersion: 'live',
         toStatus: 'in_review',
         note: input.note,
         patch: {

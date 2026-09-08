@@ -20,7 +20,7 @@ import { deleteObject, putObject } from '@repo/storage';
 export const moderationApiUrl = stackApiUrl;
 
 /** Only creates/removes this fixture; never truncates a shared database. */
-export async function createProjectModerationFixture({ projectCount = 21 } = {}) {
+export async function createProjectModerationFixture() {
   const database = new URL(config.DATABASE_URL);
   const storage = config.R2_ENDPOINT ? new URL(config.R2_ENDPOINT) : null;
   if (
@@ -76,7 +76,7 @@ export async function createProjectModerationFixture({ projectCount = 21 } = {})
     contentType: 'image/png',
   });
   const projects: Array<Awaited<ReturnType<typeof makeProject>>> = [];
-  for (let index = 0; index < projectCount; index++) {
+  for (let index = 0; index < 21; index++) {
     const project = await makeProject({
       designerId: designer.id,
       status: 'submitted',
