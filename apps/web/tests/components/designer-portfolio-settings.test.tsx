@@ -235,6 +235,57 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
+  // E-287: with no custom slug, the server still returns a canonical URL that
+  // falls back to the org slug. Preview and Copy link must use that canonical
+  // URL (same one "Open full" uses) — never the '/d/your-studio' placeholder.
+  describe('empty custom slug uses the canonical URL (E-287)', () => {
+    const noSlugPortfolio = {
+      ...basePortfolio,
+      portfolioSlug: null,
+      portfolioUrl: 'http://localhost:3000/d/mahi-studio-org',
+    };
+
+    it('shows the canonical org-slug URL in the preview, not /d/your-studio', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      await renderSettings();
+
+      expect(screen.getAllByText(/\/d\/mahi-studio-org/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/your-studio/)).not.toBeInTheDocument();
+    });
+
+    it('copies the canonical org-slug URL, not /d/your-studio', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      await renderSettings();
+
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+      await user.click(screen.getByRole('button', { name: 'Copy link' }));
+
+      expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/mahi-studio-org');
+      expect(writeText).not.toHaveBeenCalledWith(
+        expect.stringContaining('your-studio'),
+      );
+    });
+
+    it('keeps the "your-studio" placeholder on the empty slug input', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      await renderSettings();
+
+      const slugInput = screen.getByPlaceholderText(SLUG_PLACEHOLDER);
+      expect(slugInput).toHaveValue('');
+    });
+
+    it('still shows the live typed slug in the preview before saving', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      await renderSettings();
+
+      const slugInput = screen.getByPlaceholderText(SLUG_PLACEHOLDER);
+      fireEvent.change(slugInput, { target: { value: 'typed-slug' } });
+
+      expect(screen.getAllByText(/\/d\/typed-slug/).length).toBeGreaterThan(0);
+    });
+  });
+
   it('disables the full portfolio control while the public page is unavailable', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
     await renderSettings();

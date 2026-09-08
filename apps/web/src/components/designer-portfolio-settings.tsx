@@ -654,10 +654,16 @@ export function DesignerPortfolioSettings() {
         .slice(0, 2)
         .toUpperCase()
     : 'SM';
-  const portfolioPath = `/d/${form.portfolioSlug || 'your-studio'}`;
-  const copyUrl = new URL(portfolioPath, portfolioWebUrl).toString();
-  // Derive the on-screen preview from the copy target so both always reflect
-  // the currently-typed slug, giving the designer real-time URL feedback.
+  // The share/copy target. A non-empty slug (saved OR being typed) drives the
+  // URL directly, so the preview updates live as the designer edits. When the
+  // slug is empty the portfolio still has a canonical URL — the server falls
+  // back to the organization slug (`portfolio.portfolioUrl`), which is the same
+  // URL "Open full" uses. Using that here keeps Preview = Copy = Open full and
+  // avoids minting a dead `/d/your-studio` link ('your-studio' is only the
+  // input placeholder, never a real slug).
+  const copyUrl = form.portfolioSlug
+    ? new URL(`/d/${form.portfolioSlug}`, portfolioWebUrl).toString()
+    : (portfolio.portfolioUrl ?? new URL('/d/', portfolioWebUrl).toString());
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
   // Google connection derived state (default `available` true until first load,
