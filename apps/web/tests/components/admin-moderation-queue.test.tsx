@@ -177,6 +177,26 @@ describe('AdminModerationQueue', () => {
     mocks.updateComment.mockResolvedValue({ ...comment, status: 'resolved' });
   });
 
+  it('distinguishes pending review content from the approved live metadata', async () => {
+    const live = detail({ status: 'published', citySlug: 'mumbai' });
+    mocks.fetchDetail.mockResolvedValue({
+      ...detail({ citySlug: 'pune' }),
+      pendingChanges: true,
+      liveVersion: { project: live.project, rooms: live.rooms, images: live.images },
+    });
+    const user = userEvent.setup();
+    renderQueue();
+    await user.click(screen.getByRole('button', { name: /open review for a calm coastal home/i }));
+
+    expect(await screen.findByText('Reviewing pending changes')).toBeInTheDocument();
+    expect(
+      screen.getByText(/The approved version stays public until these changes are approved/),
+    ).toBeInTheDocument();
+    const comparison = screen.getByRole('table', { name: 'Live and pending project metadata' });
+    expect(within(comparison).getByText('mumbai')).toBeInTheDocument();
+    expect(within(comparison).getByText('pune')).toBeInTheDocument();
+  });
+
   it('shows the FIFO queue and oldest submission indicator', () => {
     renderQueue();
 

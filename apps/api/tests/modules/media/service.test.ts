@@ -268,8 +268,20 @@ describe('mediaService.updateImageMetadata', () => {
     ownerUserId: OWNER.userId,
   };
 
-  it('409s when metadata is updated after the project leaves draft', async () => {
-    repo.findImageWithOwner.mockResolvedValue({ ...image, projectStatus: 'published' });
+  it('409s if the image leaves the editable version after the ownership check', async () => {
+    repo.findImageWithOwner.mockResolvedValue(image);
+    repo.updateMetadata.mockResolvedValue(null);
+    await expect(
+      mediaService.updateImageMetadata({
+        imageId: image.id,
+        metadata: { tagSlugs: ['hero'] },
+        ...OWNER,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('409s when metadata is updated while the project is submitted for review', async () => {
+    repo.findImageWithOwner.mockResolvedValue({ ...image, projectStatus: 'submitted' });
 
     await expect(
       mediaService.updateImageMetadata({
