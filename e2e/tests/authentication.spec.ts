@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb } from '@repo/db/testing';
+import { onboardDesignerResponseSchema } from '@repo/contracts';
 import { apiUrl, webUrl } from '../lib/environment';
 import { emailCode, phoneCode, removeSyntheticUserByPhone } from '../lib/auth';
 
@@ -41,7 +42,12 @@ test('email OTP creates a real session through a local Resend delivery double', 
   page,
   context,
 }, testInfo) => {
+  // One sequential journey now includes signup, deferral, recovery and completed onboarding.
+  test.setTimeout(120_000);
   const email = `email-${randomUUID()}@test.local`;
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  let orgId: string | undefined;
   try {
     await page.goto('/login?mode=designer');
     await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
@@ -56,13 +62,73 @@ test('email OTP creates a real session through a local Resend delivery double', 
     const body = await session.json();
     expect(body.user.email).toBe(email);
     expect(body.user.emailVerified).toBe(true);
-    expect(body.user.role).not.toBe('admin');
+    expect(body.user.role).toBe('visitor');
+    await page.getByRole('button', { name: /Just me/ }).click();
+    await page.getByRole('button', { name: 'Finish later', exact: true }).click();
+    await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
+    await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/home');
+    await expect(page).toHaveTitle(/Finish setup later/);
     await page.screenshot({
-      path: testInfo.outputPath('email-onboarding.png'),
+      path: testInfo.outputPath('email-onboarding-deferred-desktop.png'),
       animations: 'disabled',
     });
+
+    // Skipping keeps the real session but does not create an empty organization,
+    // change role or grant access to designer/admin writes.
+    expect(
+      await db.select().from(schema.member).where(eq(schema.member.userId, body.user.id)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(schema.designerProfile)
+        .where(eq(schema.designerProfile.userId, body.user.id)),
+    ).toEqual([]);
+    const deniedWrite = await context.request.post(`${apiUrl}/api/projects`, {
+      headers: { origin: webUrl },
+      data: { title: 'Unfinished account must not create this project' },
+    });
+    expect(deniedWrite.status()).toBe(403);
+    expect((await context.request.get(`${apiUrl}/api/admin/projects`)).status()).toBe(403);
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
+    await page.goto('/designer/dashboard');
+    await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('link', { name: 'Continue setup' })).toBeInViewport();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('email-onboarding-deferred-mobile.png'),
+      animations: 'disabled',
+    });
+
+    await page.getByRole('link', { name: 'Continue setup' }).click();
+    await page.getByRole('button', { name: /Just me/ }).click();
+    await page.getByLabel('Display name', { exact: true }).fill('Synthetic onboarding studio');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    const onboardingResponse = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
+    );
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
+    orgId = onboarded.organization.id;
+    await page.getByRole('button', { name: 'Skip to dashboard', exact: true }).click();
+    await expect(page).toHaveURL(/\/designer\/dashboard$/);
+    await page.reload();
+    await expect(page).toHaveURL(/\/designer\/dashboard$/);
+    const completedSession = await context.request.get(
+      `${apiUrl}/api/auth/get-session?disableCookieCache=true`,
+    );
+    expect((await completedSession.json()).user.role).toBe('designer');
+    await page.goto('/designer/onboarding/deferred');
+    await expect(page).toHaveURL(/\/designer\/dashboard$/);
+    expect(pageErrors).toEqual([]);
   } finally {
     await assertTestDb();
+    if (orgId) await db.delete(schema.organization).where(eq(schema.organization.id, orgId));
     await db.delete(schema.user).where(eq(schema.user.email, email));
   }
 });
