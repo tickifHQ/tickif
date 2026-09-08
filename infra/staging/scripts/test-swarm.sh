@@ -18,6 +18,7 @@ API_IMAGE=$(docker image inspect "localhost:5000/tickif/api:$revision" --format 
 WEB_IMAGE=$(docker image inspect "localhost:5000/tickif/web:$revision" --format '{{index .RepoDigests 0}}')
 WORKER_IMAGE=$(docker image inspect "localhost:5000/tickif/worker:$revision" --format '{{index .RepoDigests 0}}')
 OPERATIONS_IMAGE=$(docker image inspect "localhost:5000/tickif/operations:$revision" --format '{{index .RepoDigests 0}}')
+bash infra/staging/scripts/test-worker-fonts.sh "$WORKER_IMAGE"
 export GOOGLE_CLIENT_ID=synthetic.apps.googleusercontent.com RAZORPAY_KEY_ID=rzp_test_synthetic
 export RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS=plan_synthetic_professional_plus
 export RAZORPAY_PLAN_ID_CORPORATE=plan_synthetic_corporate

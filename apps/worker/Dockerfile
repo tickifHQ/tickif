@@ -20,13 +20,19 @@ RUN pnpm --filter @repo/worker... install --prod --frozen-lockfile
 
 FROM node:22-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 WORKDIR /app
+# sharp renders SVG watermark text through Fontconfig. Build its configuration
+# and font cache into the image so the read-only non-root runtime can use them.
+RUN apt-get update && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1001 app
 COPY --from=production-dependencies --chown=app:app /app/node_modules ./node_modules
 COPY --from=production-dependencies --chown=app:app /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=production-dependencies --chown=app:app /app/apps/worker/package.json ./apps/worker/package.json
 COPY --from=build --chown=app:app /app/apps/worker/dist ./apps/worker/dist
 USER app
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    XDG_CACHE_HOME=/tmp/tickif-cache
 EXPOSE 3002
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3002/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
