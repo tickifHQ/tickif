@@ -1,7 +1,16 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from 'react';
+import {
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   PROFILE_FOOTPRINT_LIMITS,
@@ -238,6 +247,66 @@ function collectValidationErrors(
   return { data: null, errors };
 }
 
+/**
+ * Smooth-scroll to a same-page profile field and hand it focus, instead of
+ * the instant jump a fragment navigation performs. Honors reduced-motion
+ * preferences and degrades to default anchor behavior when the target or
+ * smooth scrolling is unavailable (including cross-page links).
+ */
+function scrollToRequirementField(event: ReactMouseEvent<HTMLAnchorElement>, href: string) {
+  const fragmentIndex = href.indexOf('#');
+  if (fragmentIndex === -1) return;
+  const target = document.getElementById(href.slice(fragmentIndex + 1));
+  const scrollIntoView = target?.scrollIntoView;
+  if (!target || typeof scrollIntoView !== 'function') return;
+
+  event.preventDefault();
+  const reduceMotion =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  scrollIntoView.call(target, {
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+  const focusable = target.matches('input, textarea, select, button, [tabindex]')
+    ? target
+    : target.querySelector<HTMLElement>('input, textarea, select, button, [tabindex]');
+  focusable?.focus({ preventScroll: true });
+}
+
+/**
+ * Direct action for each known profile-completion requirement. Same-page
+ * entries glide to the field on /designer/profile; the logo lives in the
+ * separate portfolio editor, so it links out to /designer/portfolio.
+ */
+const COMPLETION_REQUIREMENT_ACTIONS: Record<
+  string,
+  { label: string; action: string; href: string }
+> = {
+  'display-name': {
+    label: 'Studio name',
+    action: 'Add your studio name',
+    href: '/designer/profile#profile-display-name',
+  },
+  bio: { label: 'Bio', action: 'Write your bio', href: '/designer/profile#profile-bio' },
+  logo: { label: 'Logo', action: 'Upload your logo', href: '/designer/portfolio' },
+  location: {
+    label: 'Location',
+    action: 'Add your location',
+    href: '/designer/profile#profile-address',
+  },
+  scope: {
+    label: 'Services',
+    action: 'Choose your services',
+    href: '/designer/profile#profile-services',
+  },
+  contact: {
+    label: 'Contact details',
+    action: 'Add contact details',
+    href: '/designer/profile#profile-phone',
+  },
+};
+
 export function DesignerProfileEditor({
   completionError = null,
   initialCompletion,
@@ -335,6 +404,31 @@ export function DesignerProfileEditor({
                   ? `${completion.missing.length} item${completion.missing.length === 1 ? '' : 's'} remaining`
                   : 'Your profile is complete'}
               </p>
+              {completion.missing.length > 0 ? (
+                <ul aria-label="Remaining profile requirements" className="mt-2 space-y-1">
+                  {completion.missing.map((requirement) => {
+                    const known = COMPLETION_REQUIREMENT_ACTIONS[requirement];
+                    const label = known?.label ?? requirement;
+                    const action = known?.action ?? 'Review this requirement';
+                    const href = known?.href ?? '/designer/profile';
+                    return (
+                      <li
+                        key={requirement}
+                        className="flex flex-wrap items-baseline gap-x-2 text-xs"
+                      >
+                        <span className="font-medium text-foreground">{label}</span>
+                        <Link
+                          href={href}
+                          onClick={(event) => scrollToRequirementField(event, href)}
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          {action}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </div>
             <div className="flex min-w-48 items-center gap-3">
               <div

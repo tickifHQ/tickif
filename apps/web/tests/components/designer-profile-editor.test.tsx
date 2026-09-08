@@ -145,6 +145,86 @@ describe('DesignerProfileEditor', () => {
     expect(screen.getByText('70% complete')).toBeInTheDocument();
   });
 
+  it('names each missing requirement with a direct action, including logo upload', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 83, missing: ['logo'] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('1 item remaining')).toBeInTheDocument();
+    expect(screen.getByText('Logo')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upload your logo' })).toHaveAttribute(
+      'href',
+      '/designer/portfolio',
+    );
+  });
+
+  it('links same-page requirements to their editors', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={{ ...completion, score: 67, missing: ['bio', 'scope', 'contact'] }}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('3 items remaining')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Write your bio' })).toHaveAttribute(
+      'href',
+      '/designer/profile#profile-bio',
+    );
+    expect(screen.getByRole('link', { name: 'Choose your services' })).toHaveAttribute(
+      'href',
+      '/designer/profile#profile-services',
+    );
+    expect(screen.getByRole('link', { name: 'Add contact details' })).toHaveAttribute(
+      'href',
+      '/designer/profile#profile-phone',
+    );
+  });
+
+  it('glides to the bio editor and focuses it when its action is selected', () => {
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(
+        <DesignerProfileEditor
+          initialCompletion={{ ...completion, score: 83, missing: ['bio'] }}
+          initialProfile={profile}
+          taxonomy={terms}
+          taxonomyError={null}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('link', { name: 'Write your bio' }));
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      expect(screen.getByLabelText(/bio/i)).toHaveFocus();
+    } finally {
+      // @ts-expect-error jsdom has no scrollIntoView; restore the missing builtin.
+      delete window.HTMLElement.prototype.scrollIntoView;
+    }
+  });
+
+  it('still names unrecognized requirements instead of dropping them', () => {
+    render(
+      <DesignerProfileEditor
+        initialCompletion={completion}
+        initialProfile={profile}
+        taxonomy={terms}
+        taxonomyError={null}
+      />,
+    );
+
+    expect(screen.getByText('1 item remaining')).toBeInTheDocument();
+    expect(screen.getByText('Publish a project')).toBeInTheDocument();
+  });
+
   it('saves validated profile and footprint changes, then refreshes completion', async () => {
     const user = userEvent.setup();
     mock.updateDesignerProfile.mockResolvedValue(ownerProfile({ displayName: 'Mahi Design Co.' }));
