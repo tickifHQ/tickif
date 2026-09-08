@@ -167,6 +167,16 @@ describe('HomeSearchBar', () => {
     expect(screen.getByRole('group', { name: 'Recent searches' })).toBeInTheDocument();
   });
 
+  it('keeps searches on the configured feed base instead of the public homepage', () => {
+    render(<HomeSearchBar basePath="/home" />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.change(input, { target: { value: 'sunlit' } });
+    fireEvent.submit(screen.getByRole('search'));
+
+    expect(mock.push).toHaveBeenCalledWith('/home?q=sunlit');
+  });
+
   it('runs a recent search when it is selected', () => {
     window.localStorage.setItem('tickif.homeSearchRecents.v1', JSON.stringify(['Sarthak W']));
     render(<HomeSearchBar />);

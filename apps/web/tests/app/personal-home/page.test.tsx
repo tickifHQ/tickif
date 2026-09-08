@@ -61,9 +61,16 @@ vi.mock('@/components/project-feed', () => ({
 }));
 
 vi.mock('@/components/public-header', () => ({
-  PublicHeader: ({ showListYourWork }: { showListYourWork?: boolean }) => (
+  PublicHeader: ({
+    showListYourWork,
+    contextSwitcher,
+  }: {
+    showListYourWork?: boolean;
+    contextSwitcher?: React.ReactNode;
+  }) => (
     <div data-testid="public-header" data-show-list-your-work={String(showListYourWork ?? true)}>
       header
+      {contextSwitcher}
     </div>
   ),
 }));
@@ -113,6 +120,17 @@ describe('PersonalHomePage', () => {
     render(await PersonalHomePage());
 
     expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
+  });
+
+  it('keeps the studio picker for designers restored into personal context', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
+      session: { activeOrganizationId: null, activeTeamId: null },
+    });
+
+    render(await PersonalHomePage());
+
+    expect(screen.getByRole('button', { name: 'Switch context' })).toBeInTheDocument();
   });
 
   it.each(['admin', 'superadmin'])('redirects %s users to the admin dashboard', async (role) => {

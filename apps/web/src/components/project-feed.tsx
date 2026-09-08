@@ -40,6 +40,12 @@ type ProjectFeedProps = {
    * secondary strips such as the featured rail.
    */
   paginationParams?: Record<string, string | string[] | undefined>;
+  /**
+   * Feed base for the crawlable prev/next links and the empty-state reset.
+   * The shared feed also renders inside the signed-in /home workspace, where
+   * those links must stay on /home instead of pointing at the public homepage.
+   */
+  paginationBase?: string;
 };
 
 type RenderedFeedPage = Pick<HomeFeedPage, 'items' | 'page'>;
@@ -108,6 +114,7 @@ function ProjectFeedResults({
   showTryFilter = true,
   filterSuggestions = [],
   paginationParams,
+  paginationBase = '/',
 }: ProjectFeedProps) {
   const [appendedPages, setAppendedPages] = useState<RenderedFeedPage[]>([]);
   const [page, setPage] = useState(initialPage.page);
@@ -127,11 +134,11 @@ function ProjectFeedResults({
   // something the visitor is already looking at.
   const previousHref =
     paginationParams && initialPage.page > 1
-      ? feedPageHref(paginationParams, initialPage.page - 1)
+      ? feedPageHref(paginationParams, initialPage.page - 1, paginationBase)
       : null;
   const nextHref =
     paginationParams && hasMore && page < MAX_HOME_FEED_PAGE
-      ? feedPageHref(paginationParams, page + 1)
+      ? feedPageHref(paginationParams, page + 1, paginationBase)
       : null;
   const fallbackMessage =
     initialPage.fallback === 'recent_in_city'
@@ -203,7 +210,7 @@ function ProjectFeedResults({
           }
           action={
             <Button asChild variant="outline" size="sm">
-              <a href="/">Clear search and filters</a>
+              <a href={paginationBase}>Clear search and filters</a>
             </Button>
           }
         />

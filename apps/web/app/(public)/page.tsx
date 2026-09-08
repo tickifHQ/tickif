@@ -129,10 +129,14 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       redirect('/unauthorized');
     }
     if (parsedRole.data === PLATFORM_ROLE.VISITOR) {
-      redirect('/home');
+      redirect(feedPageLink(params, page, '/home'));
     }
     if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      redirect(session.session.activeOrganizationId ? '/designer/dashboard' : '/home');
+      redirect(
+        session.session.activeOrganizationId
+          ? '/designer/dashboard'
+          : feedPageLink(params, page, '/home'),
+      );
     }
     redirect('/dashboard');
   }

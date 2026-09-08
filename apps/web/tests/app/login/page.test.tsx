@@ -107,6 +107,24 @@ describe('LoginPage', () => {
     );
   });
 
+  it('routes a fresh designer-tab signup to designer onboarding on the server', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u4',
+        name: 'New Designer',
+        email: 'new-designer@test.com',
+        role: 'visitor',
+        status: 'pending',
+      },
+      session: { id: 's4', token: 'token', expiresAt: new Date().toISOString() },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+
+    await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
+      'NEXT_REDIRECT:/designer/onboarding',
+    );
+  });
+
   it('sends an onboarded designer without restored organization context to personal home', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {

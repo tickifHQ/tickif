@@ -53,8 +53,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
       redirect('/unauthorized');
     }
     if (accountStatus.data === ACCOUNT_STATUS.PENDING) {
+      // Fresh Designer-tab signups still carry the visitor role until designer
+      // onboarding creates their studio, so explicit designer-mode intent must
+      // survive routing or they land in visitor onboarding with no studio.
       redirect(
-        session.user.role === PLATFORM_ROLE.DESIGNER ? '/designer/onboarding' : '/onboarding',
+        session.user.role === PLATFORM_ROLE.DESIGNER || initialMode === 'designer'
+          ? '/designer/onboarding'
+          : '/onboarding',
       );
     }
     redirect('/unauthorized');

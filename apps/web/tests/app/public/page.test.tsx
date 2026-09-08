@@ -58,6 +58,56 @@ describe('PublicHomePage', () => {
     );
   });
 
+  it('preserves feed parameters when sending signed-in visitors to personal home', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
+    });
+
+    await expect(
+      PublicHomePage({ searchParams: Promise.resolve({ q: 'kitchen', city: 'mumbai' }) }),
+    ).rejects.toThrow('NEXT_REDIRECT:/home?q=kitchen&city=mumbai');
+  });
+
+  it('preserves the feed page when sending signed-in visitors to personal home', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
+    });
+
+    await expect(PublicHomePage({ searchParams: Promise.resolve({ page: '3' }) })).rejects.toThrow(
+      'NEXT_REDIRECT:/home?page=3',
+    );
+  });
+
+  it('preserves feed parameters for designers without an active studio', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
+    });
+
+    await expect(
+      PublicHomePage({ searchParams: Promise.resolve({ q: 'kitchen' }) }),
+    ).rejects.toThrow('NEXT_REDIRECT:/home?q=kitchen');
+  });
   it('sends designers with an active studio to their dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
