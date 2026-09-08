@@ -14,7 +14,6 @@ import {
   X,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
-import { hasCompletedVisitorOnboarding } from '@/lib/visitor-onboarding';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
@@ -93,10 +92,6 @@ const browsingFeatures = [
   { icon: Calendar, title: 'Book free consultations' },
 ] as const;
 
-function visitorPostLoginPath() {
-  return hasCompletedVisitorOnboarding() ? '/' : '/onboarding';
-}
-
 const designerFeatures = [
   { icon: Bookmark, title: 'Share your work anywhere' },
   { icon: MessageSquare, title: 'Get bookings from home owners' },
@@ -161,7 +156,7 @@ export function LoginCard({
     if (loginMode === 'designer') {
       router.replace(DESIGNER_AUTH_CONTINUE_PATH);
     } else {
-      router.push(visitorPostLoginPath());
+      router.push('/onboarding');
     }
   }, [success, loginMode, router, callbackPath, onSuccess]);
 
@@ -279,9 +274,7 @@ export function LoginCard({
     setError('');
     const callbackURL = callbackPath
       ? `${window.location.origin}${callbackPath}`
-      : loginMode === 'designer'
-        ? `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`
-        : `${window.location.origin}${visitorPostLoginPath()}`;
+      : `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) setError("Couldn't sign in with Google");
@@ -474,7 +467,7 @@ export function LoginCard({
                     className="flex w-[200%] transition-transform duration-300 ease-in-out"
                     style={{ transform: `translateX(${loginMode === 'browsing' ? '0%' : '-50%'})` }}
                   >
-                    {/* ─── Browsing tab: Phone OTP + Google ─── */}
+                    {/* ─── Browsing tab: Phone OTP ─── */}
                     <div
                       className={cn(
                         'flex w-1/2 shrink-0 flex-col gap-3 transition-opacity duration-300',
@@ -515,16 +508,6 @@ export function LoginCard({
                       >
                         {loading ? 'Sending…' : 'Get OTP'}
                       </Button>
-
-                      <OrSeparator className="my-5" />
-
-                      <div className="flex flex-col items-center gap-2">
-                        <GoogleSignInButton
-                          label="Continue with Google"
-                          loading={loading}
-                          onClick={handleGoogleLogin}
-                        />
-                      </div>
                     </div>
 
                     {/* ─── Designer tab: Google SSO + Email OTP ─── */}

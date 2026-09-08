@@ -103,8 +103,7 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          {(personalRole === 'visitor' || personalRole === 'designer') &&
-          !session.session.activeOrganizationId ? (
+          {personalRole === 'visitor' && !session.session.activeOrganizationId ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/home/settings">
                 <Settings aria-hidden="true" />
@@ -112,8 +111,7 @@ export function AccountMenu({
               </Link>
             </DropdownMenuItem>
           ) : null}
-          {(personalRole === 'visitor' || personalRole === 'designer') &&
-          !session.session.activeOrganizationId ? (
+          {personalRole === 'visitor' && !session.session.activeOrganizationId ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/home/consultations">My consultations</Link>
             </DropdownMenuItem>

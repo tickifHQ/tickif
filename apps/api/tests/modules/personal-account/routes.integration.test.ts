@@ -42,45 +42,42 @@ describe('personal account settings', () => {
       (await request('PATCH', undefined, { ...changes, revision: 'a'.repeat(64) })).status,
     ).toBe(401);
   });
-  it.each(['visitor', 'designer'] as const)(
-    'persists the %s personal details and leaves organization/profile/contact data unchanged',
-    async (role) => {
-      const { cookie, userId } = await account(role);
-      const org = await makeOrganization();
-      const designer = await makeDesigner({ userId, orgId: org.id, displayName: 'Studio Name' });
-      const original = await read(cookie);
-      const response = await request('PATCH', cookie, { ...changes, revision: original.revision });
-      expect(response.status).toBe(200);
-      const saved = personalAccountSchema.parse(await response.json());
-      expect(saved).toMatchObject({
-        ...changes,
-        email: original.email,
-        phoneNumber: original.phoneNumber,
-        emailVerified: original.emailVerified,
-        phoneNumberVerified: original.phoneNumberVerified,
-      });
-      expect(saved.revision).not.toBe(original.revision);
-      expect(await read(cookie)).toEqual(saved);
-      const [studio] = await db
-        .select()
-        .from(schema.designerProfile)
-        .where(eq(schema.designerProfile.id, designer.id));
-      expect(studio?.displayName).toBe('Studio Name');
-      const [organization] = await db
-        .select()
-        .from(schema.organization)
-        .where(eq(schema.organization.id, org.id));
-      expect(organization?.name).toBe(org.name);
-      const cleared = await request('PATCH', cookie, {
-        name: changes.name,
-        address: null,
-        whatsappNumber: null,
-        revision: saved.revision,
-      });
-      expect(cleared.status).toBe(200);
-      expect(await read(cookie)).toMatchObject({ address: null, whatsappNumber: null });
-    },
-  );
+  it('persists visitor personal details and leaves organization/profile/contact data unchanged', async () => {
+    const { cookie, userId } = await account();
+    const org = await makeOrganization();
+    const designer = await makeDesigner({ userId, orgId: org.id, displayName: 'Studio Name' });
+    const original = await read(cookie);
+    const response = await request('PATCH', cookie, { ...changes, revision: original.revision });
+    expect(response.status).toBe(200);
+    const saved = personalAccountSchema.parse(await response.json());
+    expect(saved).toMatchObject({
+      ...changes,
+      email: original.email,
+      phoneNumber: original.phoneNumber,
+      emailVerified: original.emailVerified,
+      phoneNumberVerified: original.phoneNumberVerified,
+    });
+    expect(saved.revision).not.toBe(original.revision);
+    expect(await read(cookie)).toEqual(saved);
+    const [studio] = await db
+      .select()
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.id, designer.id));
+    expect(studio?.displayName).toBe('Studio Name');
+    const [organization] = await db
+      .select()
+      .from(schema.organization)
+      .where(eq(schema.organization.id, org.id));
+    expect(organization?.name).toBe(org.name);
+    const cleared = await request('PATCH', cookie, {
+      name: changes.name,
+      address: null,
+      whatsappNumber: null,
+      revision: saved.revision,
+    });
+    expect(cleared.status).toBe(200);
+    expect(await read(cookie)).toMatchObject({ address: null, whatsappNumber: null });
+  });
   it('rejects invalid, identity, ownership, and privilege fields without mutation', async () => {
     const { cookie } = await account();
     const original = await read(cookie);
@@ -137,18 +134,16 @@ describe('personal account settings', () => {
     expect(await read(second.cookie)).toMatchObject({ name: 'Personal Name', address: null });
   });
   it('rejects organization context and rechecks changed session scope inside persistence', async () => {
-    const { cookie, userId } = await account('designer');
+    const { cookie, userId } = await account();
     const original = await read(cookie);
     const org = await makeOrganization();
-    await db
-      .insert(schema.member)
-      .values({
-        id: 'personal-settings-member',
-        organizationId: org.id,
-        userId,
-        role: 'owner',
-        createdAt: new Date(),
-      });
+    await db.insert(schema.member).values({
+      id: 'personal-settings-member',
+      organizationId: org.id,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
     const orgCookie = await activateOrganization(cookie, org.id);
     expect((await request('GET', orgCookie)).status).toBe(403);
     expect(
@@ -166,7 +161,7 @@ describe('personal account settings', () => {
       }),
     ).resolves.toEqual({ kind: 'forbidden' });
   });
-  it.each(['pending', 'suspended', 'deleted', 'banned', 'admin'] as const)(
+  it.each(['pending', 'suspended', 'deleted', 'banned', 'designer', 'admin'] as const)(
     'rejects live %s state even after an earlier authorized read',
     async (state) => {
       const { cookie, userId } = await account();
@@ -176,8 +171,8 @@ describe('personal account settings', () => {
         .set(
           state === 'banned'
             ? { banned: true }
-            : state === 'admin'
-              ? { role: 'admin' }
+            : state === 'admin' || state === 'designer'
+              ? { role: state }
               : { status: state },
         )
         .where(eq(schema.user.id, userId));

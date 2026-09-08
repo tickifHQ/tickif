@@ -40,6 +40,16 @@ describe('personal settings', () => {
     expect(screen.getAllByRole('textbox')).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
+  it('does not present a generated phone-auth identity as a customer email', () => {
+    render(
+      <PersonalSettingsForm
+        initialAccount={{ ...original, email: '+919876543210@phone.tickif.local' }}
+      />,
+    );
+
+    expect(screen.getByText('Not added')).toBeInTheDocument();
+    expect(screen.queryByText(/@phone\.tickif\.local/)).not.toBeInTheDocument();
+  });
   it('saves through the API, clears optional data, refreshes identity and reopens with persisted data', async () => {
     const user = userEvent.setup();
     mock.patch.mockResolvedValue(Response.json(saved));

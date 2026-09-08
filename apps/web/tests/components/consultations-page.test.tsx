@@ -11,6 +11,7 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/bookings-api', () => ({ fetchConsultations: mock.fetchConsultations }));
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: async () => mock.session,
+  requireActiveVisitor: async () => mock.session,
   activeContextForSession: () => ({ kind: mock.activeOrg ? 'organization' : 'personal' }),
 }));
 vi.mock('@/lib/current-org-role', () => ({ getCurrentOrgRole: async () => mock.role }));

@@ -69,7 +69,13 @@ describe('DesignerOnboardingPage', () => {
   it('renders onboarding form when user is not yet a designer', async () => {
     mock.getServerSession.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-06-30T00:00:00.000Z' },
-      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
+      user: {
+        id: 'u1',
+        name: 'Mahi',
+        email: 'mahi@test.com',
+        role: 'visitor',
+        status: 'pending',
+      },
     });
     vi.mocked(rolePassesCheck).mockReturnValue(false);
 
@@ -79,6 +85,24 @@ describe('DesignerOnboardingPage', () => {
 
     expect(screen.getByTestId('designer-onboarding')).toBeInTheDocument();
     expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends an active visitor to the role-safe List your work explanation', async () => {
+    mock.getServerSession.mockResolvedValue({
+      session: { id: 's1', token: 't1', expiresAt: '2026-06-30T00:00:00.000Z' },
+      user: {
+        id: 'u1',
+        name: 'Mahi',
+        email: 'mahi@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
+    });
+    vi.mocked(rolePassesCheck).mockReturnValue(false);
+
+    const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/home/list-your-work');
   });
 
   it('routes an admin without an active organization to the admin dashboard', async () => {

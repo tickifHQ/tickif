@@ -25,12 +25,17 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('@/lib/auth-guard', () => ({
-  getServerSession: () =>
+  requireActiveVisitor: () =>
     Promise.resolve({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
+      user: {
+        id: 'u1',
+        name: 'Asha Rao',
+        email: 'a@x.com',
+        role: 'visitor',
+        status: 'active',
+      },
       session: { activeOrganizationId: null, activeTeamId: null },
     }),
-  activeContextForSession: () => ({ kind: 'personal' }),
 }));
 
 vi.mock('@/lib/home-feed', () => ({

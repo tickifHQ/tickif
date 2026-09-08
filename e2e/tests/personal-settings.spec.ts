@@ -3,7 +3,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { config } from '@repo/config';
 import { db, desc, eq, schema } from '@repo/db';
-import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import { assertTestDb, makeUser } from '@repo/db/testing';
 
 const apiUrl = stackApiUrl;
 const webOrigin = stackWebUrl;
@@ -48,7 +48,6 @@ async function signIn(context: BrowserContext, syntheticPhone: string) {
 test.describe('personal settings with persisted accounts', () => {
   test.describe.configure({ mode: 'serial' });
   let userId: string;
-  let organizationId: string;
   let syntheticEmail: string;
   let syntheticPhone: string;
 
@@ -63,20 +62,15 @@ test.describe('personal settings with persisted accounts', () => {
       email: syntheticEmail,
       phoneNumber: syntheticPhone,
       phoneNumberVerified: true,
-      role: 'designer',
+      role: 'visitor',
       status: 'active',
     });
     userId = user.id;
-    const organization = await makeOrganization({ name: 'Settings Studio' });
-    organizationId = organization.id;
-    await makeDesigner({ userId, orgId: organizationId, displayName: 'Settings Studio' });
   });
 
   test.afterEach(async () => {
     await assertTestDb();
     if (userId) await db.delete(schema.user).where(eq(schema.user.id, userId));
-    if (organizationId)
-      await db.delete(schema.organization).where(eq(schema.organization.id, organizationId));
   });
 
   test('edits personal details from My Tickif, survives reload, and detects another tab save', async ({
@@ -102,12 +96,6 @@ test.describe('personal settings with persisted accounts', () => {
     await expect(page.getByLabel('Display name')).toHaveValue('Updated Person');
     await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Bandra West, Mumbai');
     await expect(page.getByLabel('WhatsApp number (optional)')).toHaveValue('+919876543210');
-    const [studio] = await db
-      .select()
-      .from(schema.designerProfile)
-      .where(eq(schema.designerProfile.userId, userId));
-    expect(studio?.displayName).toBe('Settings Studio');
-
     const other = await context.newPage();
     await other.goto('/home/settings');
     await other.getByLabel('Personal address (optional)').fill('Saved in another tab');

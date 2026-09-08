@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VisitorOnboardingForm } from '../../src/components/visitor-onboarding-form';
-import { VISITOR_ONBOARDING_STORAGE_KEY } from '../../src/lib/visitor-onboarding';
 
 const mock = vi.hoisted(() => ({
   updateUser: vi.fn(),
+  upsertVisitor: vi.fn(),
   router: {
     push: vi.fn(),
     refresh: vi.fn(),
@@ -18,6 +18,10 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
+vi.mock('@/lib/api', () => ({
+  api: { api: { visitors: { me: { $put: mock.upsertVisitor } } } },
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => mock.router,
 }));
@@ -26,7 +30,15 @@ describe('VisitorOnboardingForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock.updateUser.mockResolvedValue({ data: { status: true }, error: null });
-    window.localStorage.clear();
+    mock.upsertVisitor.mockResolvedValue(
+      Response.json({
+        address: '12 Studio Lane, Chennai',
+        whatsappNumber: '+919123456789',
+        onboardingCompletedAt: '2026-09-08T10:00:00.000Z',
+        createdAt: '2026-09-08T10:00:00.000Z',
+        updatedAt: '2026-09-08T10:00:00.000Z',
+      }),
+    );
   });
 
   it('copies the signed-in phone number into WhatsApp when selected', async () => {
@@ -55,7 +67,7 @@ describe('VisitorOnboardingForm', () => {
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('+919123456789');
   });
 
-  it('keeps the phone field editable when the account has no authenticated phone number', () => {
+  it('does not present an editable sign-in phone when the account has none', () => {
     render(
       <VisitorOnboardingForm
         displayName="Sarthak Wade"
@@ -64,10 +76,12 @@ describe('VisitorOnboardingForm', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/^phone number$/i)).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i })).toBeDisabled();
   });
 
-  it('persists the display name and stores the remaining visitor preferences', async () => {
+  it('persists visitor onboarding through the account and visitor APIs', async () => {
     const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
@@ -83,15 +97,13 @@ describe('VisitorOnboardingForm', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(mock.updateUser).toHaveBeenCalledWith({ name: 'Sarthak Wade' });
-    expect(JSON.parse(window.localStorage.getItem(VISITOR_ONBOARDING_STORAGE_KEY) ?? '{}')).toEqual(
-      {
-        displayName: 'Sarthak Wade',
+    expect(mock.upsertVisitor).toHaveBeenCalledWith({
+      json: {
         address: '12 Studio Lane, Chennai',
-        phoneNumber: '+919123456789',
-        whatsapp: '+919123456789',
+        whatsappNumber: '+919123456789',
       },
-    );
-    expect(mock.router.push).toHaveBeenCalledWith('/');
+    });
+    expect(mock.router.push).toHaveBeenCalledWith('/home');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
@@ -113,7 +125,43 @@ describe('VisitorOnboardingForm', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Update failed');
-    expect(window.localStorage.getItem(VISITOR_ONBOARDING_STORAGE_KEY)).toBeNull();
+    expect(mock.upsertVisitor).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
+  });
+
+  it('keeps the visitor on onboarding when profile persistence fails', async () => {
+    mock.upsertVisitor.mockResolvedValue(
+      Response.json(
+        { error: { message: 'Visitor profile access is not permitted' } },
+        { status: 403 },
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <VisitorOnboardingForm
+        displayName="Sarthak Wade"
+        signedInAs="+919123456789"
+        initialPhoneNumber="+919123456789"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Visitor profile access is not permitted',
+    );
+    expect(mock.router.push).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a skip control that leaves onboarding incomplete', () => {
+    render(
+      <VisitorOnboardingForm
+        displayName="Sarthak Wade"
+        signedInAs="+919123456789"
+        initialPhoneNumber="+919123456789"
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
   });
 });

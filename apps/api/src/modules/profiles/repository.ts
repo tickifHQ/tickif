@@ -1,5 +1,7 @@
-import { db, schema, eq, and, inArray, isNull, or, sql } from '@repo/db';
+import { db, schema, eq, and, inArray, sql } from '@repo/db';
 import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
   VERIFICATION_APPLICATION_STATUS,
   taxonomyKindSchema,
   type DesignerEntityType,
@@ -14,6 +16,13 @@ import { recordSearchProjectionEvents } from '../search-index/repository.js';
 
 export type DesignerProfileRecord = typeof schema.designerProfile.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export class DesignerOnboardingAccessDeniedError extends Error {
+  constructor() {
+    super('Designer onboarding is not permitted for this account');
+    this.name = 'DesignerOnboardingAccessDeniedError';
+  }
+}
 type ProfileUpdateData = Partial<{
   displayName: string;
   bio: string | null;
@@ -70,10 +79,7 @@ export const profilesRepository = {
       .where(
         and(
           eq(schema.verificationApplication.organizationId, orgId),
-          eq(
-            schema.verificationApplication.status,
-            VERIFICATION_APPLICATION_STATUS.VERIFIED,
-          ),
+          eq(schema.verificationApplication.status, VERIFICATION_APPLICATION_STATUS.VERIFIED),
           sql`${schema.verificationApplication.expiresAt} > now()`,
         ),
       )
@@ -141,10 +147,7 @@ export const profilesRepository = {
   },
 
   /** Count footprint entries via SQL count(*) — no row streaming. */
-  async countFootprintByKind(
-    profileId: string,
-    kind: TaxonomyKind,
-  ): Promise<number> {
+  async countFootprintByKind(profileId: string, kind: TaxonomyKind): Promise<number> {
     const [row] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.designerProfileFootprint)
@@ -275,8 +278,34 @@ export const profilesRepository = {
     foundedYear: number | null;
     staffCount: number | null;
     footprintIds: { taxonomyId: string }[];
+    allowAdditionalOrganization: boolean;
   }): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect }> {
     return await db.transaction(async (tx) => {
+      const [account] = await tx
+        .select({
+          role: schema.user.role,
+          status: schema.user.status,
+          banned: schema.user.banned,
+          banExpires: schema.user.banExpires,
+        })
+        .from(schema.user)
+        .where(eq(schema.user.id, data.userId))
+        .limit(1)
+        .for('update');
+      const isBanned =
+        account?.banned === true && (!account.banExpires || account.banExpires > new Date());
+      const canCreateAdditionalOrganization =
+        account?.status === ACCOUNT_STATUS.ACTIVE &&
+        (account.role === PLATFORM_ROLE.DESIGNER ||
+          account.role === PLATFORM_ROLE.ADMIN ||
+          account.role === PLATFORM_ROLE.SUPERADMIN);
+      const canOnboard =
+        !isBanned &&
+        (data.allowAdditionalOrganization
+          ? canCreateAdditionalOrganization
+          : account?.role === PLATFORM_ROLE.VISITOR && account.status === ACCOUNT_STATUS.PENDING);
+      if (!canOnboard) throw new DesignerOnboardingAccessDeniedError();
+
       const [org] = await tx
         .insert(schema.organization)
         .values({
@@ -336,11 +365,12 @@ export const profilesRepository = {
       // Only set role + status — don't overwrite user.name from signup/SSO
       await tx
         .update(schema.user)
-        .set({ role: 'designer', status: 'active' })
+        .set({ role: PLATFORM_ROLE.DESIGNER, status: ACCOUNT_STATUS.ACTIVE })
         .where(
           and(
             eq(schema.user.id, data.userId),
-            or(eq(schema.user.role, 'visitor'), isNull(schema.user.role)),
+            eq(schema.user.role, PLATFORM_ROLE.VISITOR),
+            eq(schema.user.status, ACCOUNT_STATUS.PENDING),
           ),
         );
 

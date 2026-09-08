@@ -67,7 +67,10 @@ test('email OTP creates a real session through a local Resend delivery double', 
     await page.getByRole('button', { name: 'Finish later', exact: true }).click();
     await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/home');
+    await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute(
+      'href',
+      '/home',
+    );
     await expect(page).toHaveTitle(/Finish setup later/);
     await page.screenshot({
       path: testInfo.outputPath('email-onboarding-deferred-desktop.png'),
@@ -109,8 +112,9 @@ test('email OTP creates a real session through a local Resend delivery double', 
     await page.getByRole('button', { name: /Just me/ }).click();
     await page.getByLabel('Display name', { exact: true }).fill('Synthetic onboarding studio');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    const onboardingResponse = page.waitForResponse((response) =>
-      response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
+    const onboardingResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
     );
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
@@ -154,7 +158,7 @@ test('Google authorization creates a session through the real callback with a lo
       );
       await route.fulfill({ status: 302, headers: { location: callback.href } });
     });
-    await page.goto('/login');
+    await page.goto('/login?mode=designer');
     await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
     await expect(page).toHaveURL(/\/onboarding/);
     const session = await context.request.get(`${apiUrl}/api/auth/get-session`);

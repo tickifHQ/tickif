@@ -117,7 +117,7 @@ describe('LoginPage', () => {
     );
   });
 
-  it('sends an onboarded designer in personal context to My Tickif', async () => {
+  it('sends an onboarded designer in personal context to the designer dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {
         id: 'u2',
@@ -131,7 +131,7 @@ describe('LoginPage', () => {
     const { default: Page } = await import('../../../app/login/page');
 
     await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
-      'NEXT_REDIRECT:/home',
+      'NEXT_REDIRECT:/designer/dashboard',
     );
   });
 
@@ -161,7 +161,13 @@ describe('LoginPage', () => {
 
   it('keeps the existing home redirect for an authenticated visitor', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u3', name: 'Visitor', email: 'visitor@test.com', role: 'visitor' },
+      user: {
+        id: 'u3',
+        name: 'Visitor',
+        email: 'visitor@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
       session: { id: 's3', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');
@@ -173,7 +179,13 @@ describe('LoginPage', () => {
 
   it('returns an authenticated visitor to a safe next path', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u3', name: 'Visitor', email: 'visitor@test.com', role: 'visitor' },
+      user: {
+        id: 'u3',
+        name: 'Visitor',
+        email: 'visitor@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
       session: { id: 's3', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');
@@ -202,14 +214,20 @@ describe('LoginPage', () => {
 
   it('rejects an unsafe next alias for an authenticated visitor', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u3', name: 'Visitor', email: 'visitor@test.com', role: 'visitor' },
+      user: {
+        id: 'u3',
+        name: 'Visitor',
+        email: 'visitor@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
       session: { id: 's3', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');
 
     await expect(
       Page({ searchParams: Promise.resolve({ next: 'https://example.com' }) }),
-    ).rejects.toThrow('NEXT_REDIRECT:/');
+    ).rejects.toThrow('NEXT_REDIRECT:/home');
   });
 });
 

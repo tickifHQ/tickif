@@ -297,17 +297,19 @@ describe('personal and organization context', () => {
     expect(session).toEqual({ organizationId: null, teamId: null });
   });
 
-  it('lets a visitor create multiple transactional organizations', async () => {
+  it('does not let an active visitor create a designer organization', async () => {
     const account = await createRoleSession('+919800004205', 'visitor');
+    await db
+      .update(schema.user)
+      .set({ status: 'active' })
+      .where(eq(schema.user.id, account.userId));
 
-    for (const userName of ['First Studio', 'Second Studio']) {
-      const response = await app.request('/api/orgs', {
-        method: 'POST',
-        headers: { cookie: account.cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ entityType: 'individual', userName }),
-      });
-      expect(response.status).toBe(201);
-    }
+    const response = await app.request('/api/orgs', {
+      method: 'POST',
+      headers: { cookie: account.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ entityType: 'individual', userName: 'Visitor Studio' }),
+    });
+    expect(response.status).toBe(403);
 
     const [counts] = await db
       .select({
@@ -329,8 +331,8 @@ describe('personal and organization context', () => {
       .select({ role: schema.user.role })
       .from(schema.user)
       .where(eq(schema.user.id, account.userId));
-    expect(counts).toEqual({ memberships: 2, branches: 2, profiles: 2 });
-    expect(user?.role).toBe('designer');
+    expect(counts).toEqual({ memberships: 0, branches: 0, profiles: 0 });
+    expect(user?.role).toBe('visitor');
   });
 
   it('keeps admin and superadmin platform roles when creating organizations', async () => {
@@ -340,6 +342,10 @@ describe('personal and organization context', () => {
     ];
     for (const { role, phone } of accounts) {
       const account = await createRoleSession(phone, role);
+      await db
+        .update(schema.user)
+        .set({ status: 'active' })
+        .where(eq(schema.user.id, account.userId));
 
       const response = await app.request('/api/orgs', {
         method: 'POST',
@@ -354,5 +360,31 @@ describe('personal and organization context', () => {
         .where(eq(schema.user.id, account.userId));
       expect(user?.role).toBe(role);
     }
+  });
+
+  it.each([
+    { role: 'admin' as const, phone: '+919800004213' },
+    { role: 'superadmin' as const, phone: '+919800004214' },
+  ])('does not let a suspended $role create an organization', async ({ role, phone }) => {
+    const account = await createRoleSession(phone, role);
+    await db
+      .update(schema.user)
+      .set({ status: 'suspended' })
+      .where(eq(schema.user.id, account.userId));
+
+    const response = await app.request('/api/orgs', {
+      method: 'POST',
+      headers: { cookie: account.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ entityType: 'individual', userName: `${role} Suspended Studio` }),
+    });
+
+    expect(response.status).toBe(403);
+    const [counts] = await db
+      .select({
+        memberships: sql<number>`count(*)::int`,
+      })
+      .from(schema.member)
+      .where(eq(schema.member.userId, account.userId));
+    expect(counts?.memberships).toBe(0);
   });
 });

@@ -28,26 +28,35 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('AccountMenu', () => {
-  it.each(['visitor', 'designer'])(
-    'offers personal settings for %s in personal context',
-    async (role) => {
-      mock.session = {
-        user: { name: 'Alice', email: null, role },
-        session: { activeOrganizationId: null },
-      };
-      const user = userEvent.setup();
-      render(<AccountMenu />);
-      await user.click(screen.getByRole('button', { name: /open account menu/i }));
-      expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
-        'href',
-        '/home/settings',
-      );
-      expect(screen.getByRole('menuitem', { name: 'My consultations' })).toHaveAttribute(
-        'href',
-        '/home/consultations',
-      );
-    },
-  );
+  it('offers personal settings to a visitor in personal context', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
+      'href',
+      '/home/settings',
+    );
+    expect(screen.getByRole('menuitem', { name: 'My consultations' })).toHaveAttribute(
+      'href',
+      '/home/consultations',
+    );
+  });
+
+  it('does not expose visitor-only pages to a designer in personal context', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'designer' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
+  });
 
   it('keeps organization settings separate from personal settings', async () => {
     mock.session = {

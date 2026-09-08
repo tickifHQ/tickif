@@ -1,11 +1,10 @@
-import { redirect } from 'next/navigation';
 import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { ProjectFeed } from '@/components/project-feed';
 import { PublicHeader } from '@/components/public-header';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
-import { activeContextForSession, getServerSession } from '@/lib/auth-guard';
+import { requireActiveVisitor } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 import {
   FEED_FACET_DEFINITIONS,
@@ -83,13 +82,7 @@ export default async function PersonalHomePage({
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
-  const session = await getServerSession();
-  if (!session) {
-    redirect('/login');
-  }
-  if (activeContextForSession(session).kind === 'organization') {
-    redirect('/designer/dashboard');
-  }
+  const session = await requireActiveVisitor();
 
   const [taxonomyOptions, initialPage] = await Promise.all([
     fetchTaxonomyOptions(),
@@ -112,6 +105,7 @@ export default async function PersonalHomePage({
       <PublicHeader
         isAuthenticated
         userRole={session.user.role ?? null}
+        userStatus={session.user.status ?? null}
         contextSwitcher={
           <div className="w-40 sm:w-48">
             <DesignerOrganizationSwitcher

@@ -84,6 +84,10 @@ export const requiredTests = [
     'verification-lifecycle.spec.ts',
     'verification lifecycle: rejected documents are resubmitted, approved and renewed',
   ],
+  [
+    'visitor-role-boundaries.spec.ts',
+    'visitor settings and designer role boundaries are enforced in the UI and API',
+  ],
 ].map(([file, title]) => ({ file: file!, title: title! }));
 
 const testSchema = z.object({
