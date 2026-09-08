@@ -184,6 +184,20 @@ test('published project edits keep live content through rejection and replace it
       body: await publicPage.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
+    const loginHref = `/login?callbackURL=${encodeURIComponent(publicPath)}`;
+    await expect(publicPage.getByRole('link', { name: 'Sign in to save project' })).toHaveAttribute(
+      'href',
+      loginHref,
+    );
+    const like = publicPage.getByRole('button', { name: 'Sign in to like project' });
+    await expect(like).toBeEnabled();
+    await like.scrollIntoViewIfNeeded();
+    await testInfo.attach('e252-public-actions-mobile', {
+      body: await publicPage.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    await like.click();
+    await expect(publicPage).toHaveURL(`${webUrl}${loginHref}`);
     expect(errors).toEqual([]);
   } finally {
     await Promise.allSettled([designerContext.close(), publicContext.close()]);
