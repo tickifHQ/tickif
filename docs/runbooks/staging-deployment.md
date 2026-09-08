@@ -182,6 +182,38 @@ traffic. Backend ports 3001 and 3000 are explicit in `deploy.labels`.
 - Worker `/livez` and `/readyz` remain private on port 3002; shutdown allows two minutes to drain jobs.
 - Web `/health`: standalone Next.js server is answering.
 
+### Web runtime cache
+
+The web image precreates `/app/apps/web/.next/cache` with sticky mode 1777.
+Each Swarm web replica mounts a private, disposable 128 MiB tmpfs at that path;
+the rest of the image remains read-only. Cache contents disappear on task restart
+and are not shared between replicas. The limit counts toward the existing 768 MiB
+container memory limit, so watch memory usage and cache capacity during staging QA.
+
+Use the long `volumes` syntax with `tmpfs.size`. Docker's legacy Swarm Compose
+converter does not preserve `tmpfs.mode`, `uid` or `gid` settings. The engine's
+mount inherits the image target's mode but starts root-owned. Mode 1777 permits
+the non-root `app` process, UID 1001, to write in its own container. A target with
+mode 0750 fails with EACCES despite its image-layer app ownership. Image-layer
+ownership alone cannot make a read-only root filesystem writable, and it is
+hidden by the runtime mount.
+
+The image/Swarm regression checks the actual mounted filesystem, non-root UID,
+bounded size, cache create/write/rename/read operations and `/health` plus `/login`.
+Operators can run the same read/write probe inside each web replica:
+
+```bash
+docker ps --filter label=com.docker.swarm.service.name=tickif_web
+docker exec -i WEB_CONTAINER_ID node --input-type=module \
+  <infra/staging/scripts/verify-web-cache.mjs
+```
+
+The supplied September 7 logs show cache-directory ENOENT on both web replicas.
+They do not establish a user-visible failure or prove the complete live mount and
+ownership configuration. Local container checks establish the repository fix;
+after deployment, verify both replicas and compare fresh logs during normal
+requests before claiming the staging incident is resolved.
+
 Useful checks:
 
 ```bash
