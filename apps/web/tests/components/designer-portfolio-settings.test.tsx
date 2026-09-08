@@ -903,4 +903,57 @@ describe('DesignerPortfolioSettings', () => {
       expect(screen.getByRole('button', { name: /disconnect/i })).toBeInTheDocument();
     });
   });
+
+  // E-212 #6/#8/#9/#10: display-only Trust & Credentials badge grid.
+  describe('Trust & credentials badge grid', () => {
+    async function expandTrust() {
+      const user = userEvent.setup();
+      await renderSettings();
+      await user.click(screen.getByRole('button', { name: 'Toggle Trust & credentials details' }));
+    }
+
+    it('renders all five badge types regardless of which are earned', async () => {
+      // Only 'verified' is earned in basePortfolio.
+      await expandTrust();
+
+      expect(await screen.findByTestId('portfolio-badge-verified')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-new')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-top-performer')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-established')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-projects-published')).toBeInTheDocument();
+    });
+
+    it('marks earned badges earned and unearned badges locked with their criterion', async () => {
+      await expandTrust();
+
+      const verified = await screen.findByTestId('portfolio-badge-verified');
+      expect(verified).toHaveAttribute('data-earned', 'true');
+      expect(within(verified).getByText('Earned')).toBeInTheDocument();
+
+      const projectsPublished = screen.getByTestId('portfolio-badge-projects-published');
+      expect(projectsPublished).toHaveAttribute('data-earned', 'false');
+      // Criterion mirrors the API threshold (25, not the stale triage value of 10).
+      expect(within(projectsPublished).getByText('Publish 25 projects')).toBeInTheDocument();
+    });
+
+    it('shows a visible label for every badge (not only alt text)', async () => {
+      await expandTrust();
+
+      // Labels are shared with the public page via PORTFOLIO_BADGE_PRESENTATION.
+      expect(await screen.findByText('Identity verified')).toBeInTheDocument();
+      expect(screen.getByText('New on Tickif')).toBeInTheDocument();
+      expect(screen.getByText('Top performer')).toBeInTheDocument();
+      expect(screen.getByText('Established studio')).toBeInTheDocument();
+      expect(screen.getByText('Projects published')).toBeInTheDocument();
+    });
+
+    it('provides no per-badge selection control (badges are earned, not chosen)', async () => {
+      await expandTrust();
+
+      const verified = await screen.findByTestId('portfolio-badge-verified');
+      // No switch/checkbox inside a badge cell.
+      expect(within(verified).queryByRole('switch')).not.toBeInTheDocument();
+      expect(within(verified).queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+  });
 });
