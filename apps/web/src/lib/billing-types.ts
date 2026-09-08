@@ -14,9 +14,13 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
 
 /**
  * Display prices in whole INR (rupees). The subscription table and
- * `payment_transaction.amount` store paise (₹2,999 → 299900). Convert at the
- * API boundary when E-239 provides real billing totals — do not forward these
- * values into `amount`.
+ * `payment_transaction.amount` store paise (₹2,999 → 299900) — never forward
+ * these display values into `amount`.
+ *
+ * These are display-only plan prices, not authoritative billing totals. Tax,
+ * invoices, and payment receipts are an intentional non-goal of the billing UI
+ * (see docs/billing-staging-smoke.md); no ticket surfaces real billing totals
+ * today. (E-239 is the plan-lapse lifecycle engine and does NOT provide totals.)
  */
 export const PLAN_TIER_PRICES: Record<PlanTier, number> = {
   hobby: 0,
