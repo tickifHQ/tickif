@@ -15,10 +15,10 @@ const mock = vi.hoisted(() => ({
   roomPatch: vi.fn(),
   imageMetadataPatch: vi.fn(),
   completenessGet: vi.fn(),
-  submitProject: vi.fn(),
   listImagesGet: vi.fn(),
   deleteRoom: vi.fn(),
   deleteImage: vi.fn(),
+  submitPost: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -38,7 +38,7 @@ vi.mock('@/lib/api', () => ({
           $get: mock.projectGet,
           $patch: mock.projectPatch,
           completeness: { $get: mock.completenessGet },
-          submit: { $post: mock.submitProject },
+          submit: { $post: mock.submitPost },
           images: {
             $get: mock.listImagesGet,
             ':imageId': {
@@ -53,7 +53,9 @@ vi.mock('@/lib/api', () => ({
           },
         },
       },
-      media: { ':imageId': { metadata: { $patch: mock.imageMetadataPatch } } },
+      media: {
+        ':imageId': { metadata: { $patch: mock.imageMetadataPatch } },
+      },
     },
   },
 }));
@@ -432,6 +434,119 @@ describe('DesignerProjectUpload', () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each(['draft', 'submitted', 'in_review', 'changes_requested'] as const)(
+    'shows the published version remains live when pending changes are %s',
+    async (status) => {
+      const response = await mock.projectGet();
+      const project = (await response.json()) as Record<string, unknown>;
+      mock.projectGet.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...project,
+            status,
+            liveStatus: 'published',
+            pendingChanges: true,
+            pendingStatus: status,
+          }),
+        ),
+      );
+
+      render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+      expect(await screen.findByText('Live · Pending changes')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Your approved project remains live at its existing URL/),
+      ).toBeInTheDocument();
+      const submit = screen.getByRole('button', {
+        name:
+          status === 'changes_requested'
+            ? 'Resubmit changes for review'
+            : 'Submit changes for review',
+      });
+      if (status === 'submitted' || status === 'in_review') {
+        expect(submit).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+      } else {
+        expect(submit).toBeEnabled();
+      }
+    },
+  );
+
+  it('saves minor edits to the live project without submitting a review', async () => {
+    const response = await mock.projectGet();
+    const draft = (await response.json()) as Record<string, unknown>;
+    const liveProject = {
+      ...draft,
+      status: 'published',
+      liveStatus: 'published',
+      pendingChanges: false,
+    };
+    mock.projectGet.mockImplementation(async () => Response.json(liveProject));
+    mock.projectPatch.mockImplementation(async () => Response.json(liveProject));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const imagesResponse = await mock.listImagesGet();
+    const images = (await imagesResponse.json()) as { items: unknown[] };
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Live project');
+    await user.click(screen.getByRole('button', { name: 'Submit changes for review' }));
+
+    expect(
+      await screen.findByText('Changes saved to your live project. No review is needed.'),
+    ).toBeInTheDocument();
+    expect(mock.projectPatch).toHaveBeenCalledOnce();
+    expect(mock.submitPost).not.toHaveBeenCalled();
+  });
+
+  it('refreshes pending status when graph edits create a version after the scalar save', async () => {
+    const response = await mock.projectGet();
+    const draft = (await response.json()) as Record<string, unknown>;
+    const liveProject = {
+      ...draft,
+      status: 'published',
+      liveStatus: 'published',
+      pendingChanges: false,
+    };
+    const pendingProject = {
+      ...liveProject,
+      status: 'draft',
+      pendingChanges: true,
+      pendingStatus: 'draft',
+    };
+    mock.projectGet
+      .mockReset()
+      .mockImplementationOnce(async () => Response.json(liveProject))
+      .mockImplementation(async () => Response.json(pendingProject));
+    mock.projectPatch.mockImplementation(async () => Response.json(liveProject));
+    mock.roomPatch.mockImplementation(async () => Response.json({}));
+    const imagesResponse = await mock.listImagesGet();
+    const images = (await imagesResponse.json()) as { items: unknown[] };
+    mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
+    mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
+    mock.completenessGet.mockImplementation(async () =>
+      Response.json({
+        complete: true,
+        score: 100,
+        missing: [],
+        requirements: [],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Live project');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Live · Pending changes')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Changes saved for review. Your approved project remains live.'),
+    ).toBeInTheDocument();
+    expect(mock.submitPost).not.toHaveBeenCalled();
+  });
+
   it('saves the automatic cover before checking readiness and submitting a draft', async () => {
     const user = userEvent.setup();
     const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
@@ -449,7 +564,7 @@ describe('DesignerProjectUpload', () => {
         ],
       }),
     });
-    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({ ...draft, coverImageId: firstImage.id }) });
     mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
     mock.imageMetadataPatch.mockImplementation(
       async ({ param }: { param: { imageId: string } }) => ({
@@ -466,7 +581,7 @@ describe('DesignerProjectUpload', () => {
         requirements: [{ key: 'cover-image', label: 'Cover image selected', complete: true }],
       }),
     });
-    mock.submitProject.mockResolvedValue({
+    mock.submitPost.mockResolvedValue({
       ok: true,
       json: async () => ({
         ...draft,
@@ -482,7 +597,7 @@ describe('DesignerProjectUpload', () => {
     expect(submit).toBeEnabled();
     await user.click(submit);
 
-    await waitFor(() => expect(mock.submitProject).toHaveBeenCalled());
+    await waitFor(() => expect(mock.submitPost).toHaveBeenCalled());
     expect(mock.projectPatch).toHaveBeenCalledWith(
       expect.objectContaining({
         json: expect.objectContaining({ coverImageId: firstImage.id }),
