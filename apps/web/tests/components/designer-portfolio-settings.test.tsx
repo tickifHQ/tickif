@@ -199,6 +199,86 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.queryByRole('status', { name: 'Portfolio visibility' })).not.toBeInTheDocument();
   });
 
+  // E-288: the preview status badge must reflect the actual saved publication
+  // state (server-derived `missingRequiredFields` + `publiclyVisible`), never the
+  // public-link toggle alone. "Live preview" is a heading in the same panel, so
+  // these queries match the badge text exactly to avoid a false positive.
+  describe('preview status badge (E-288)', () => {
+    it('shows "Incomplete" when required fields are missing even though the public link is ON', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: ['logo'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      // The reported bug: it must NOT say "Live" in this state.
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Incomplete" when required fields are missing and the public link is OFF', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: false,
+        missingRequiredFields: ['logo', 'tagline'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Hidden" when the portfolio is complete but the public link is OFF', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: false,
+        missingRequiredFields: [],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Hidden', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Live" when the portfolio is complete and publicly visible', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: [],
+        publiclyVisible: true,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Live', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+    });
+
+    it('does not show "Live" for the reported case: public link ON but tagline/logo incomplete', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        // Reported reproduction: link enabled, required hero fields still blank.
+        missingRequiredFields: ['logo', 'tagline'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+    });
+  });
+
   it('uses the shared Tip callout in portfolio customizations', async () => {
     await renderSettings();
 

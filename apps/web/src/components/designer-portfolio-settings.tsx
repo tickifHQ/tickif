@@ -660,6 +660,20 @@ export function DesignerPortfolioSettings() {
   // the currently-typed slug, giving the designer real-time URL feedback.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
+  // Status badge reflects the actual *saved* publication state from the server,
+  // not the public-link toggle alone. An incomplete portfolio never goes live
+  // even with the link switched on (the `/d/{slug}` gate 404s until required
+  // hero fields are filled), so the toggle by itself would misreport "Live".
+  //   Incomplete — required hero fields still blank (never reaches `active`).
+  //   Hidden     — complete, but the designer has switched the public link off.
+  //   Live        — publicly visible right now (`publiclyVisible`).
+  const publicationStatus: 'Incomplete' | 'Hidden' | 'Live' =
+    portfolio.missingRequiredFields.length > 0
+      ? 'Incomplete'
+      : portfolio.publiclyVisible
+        ? 'Live'
+        : 'Hidden';
+
   // Google connection derived state (default `available` true until first load,
   // so the Connect UI doesn't flicker to "unavailable" on mount).
   const googleConnection = googleReviews?.connection ?? null;
@@ -1401,12 +1415,12 @@ export function DesignerPortfolioSettings() {
               <Badge
                 variant="outline"
                 className={
-                  form.publicLinkEnabled
+                  publicationStatus === 'Live'
                     ? 'border-primary/30 text-xs font-medium text-primary'
                     : 'text-xs font-medium text-muted-foreground'
                 }
               >
-                {form.publicLinkEnabled ? 'Live' : 'Hidden'}
+                {publicationStatus}
               </Badge>
             </div>
 
