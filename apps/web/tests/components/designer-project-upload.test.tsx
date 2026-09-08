@@ -625,6 +625,34 @@ describe('DesignerProjectUpload', () => {
       await waitFor(() => expect(mock.router.push).toHaveBeenCalledWith('/designer/projects'));
     });
 
+    it('announces a submission failure inside the open dialog for screen readers (E-286 review)', async () => {
+      // Review P2: when the submit API rejects, the preview dialog stays open and
+      // the page-level alert is hidden from the a11y tree. The failure must be
+      // announced from inside the dialog via a live region (role="alert").
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      mock.submitProject.mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: { code: 'FORBIDDEN', message: 'Account suspended' } }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm & submit' }));
+
+      await waitFor(() => expect(mock.submitProject).toHaveBeenCalledTimes(1));
+
+      // The dialog stays open, and the error is exposed as an assertive alert so
+      // assistive tech announces it (not just a plain, silent paragraph).
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Account suspended');
+
+      // No success dialog / navigation happened on the failure path.
+      expect(screen.queryByText('Project submitted')).not.toBeInTheDocument();
+      expect(mock.router.push).not.toHaveBeenCalledWith('/designer/projects');
+    });
+
     it('shows persistent Submitted feedback that outlives the transient toast', async () => {
       // NOTE: the async interactions and queries below run under REAL timers.
       // Mixing vi.useFakeTimers() with userEvent + findBy/waitFor (which poll on

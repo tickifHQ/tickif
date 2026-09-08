@@ -3580,7 +3580,18 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
             ) : null}
           </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {/*
+            E-286 review (P2): submission failures (e.g. a 403) keep this dialog
+            open, so the error must be announced from INSIDE the modal. The
+            page-level role="alert" is hidden from the a11y tree while the dialog
+            is open, so it cannot announce here. role="alert" + aria-live make
+            screen readers read the failure the moment it appears.
+          */}
+          {error ? (
+            <p role="alert" aria-live="assertive" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
 
           <DialogFooter>
             <Button
