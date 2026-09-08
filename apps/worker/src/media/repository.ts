@@ -13,6 +13,7 @@ import {
   type DB,
 } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
+import type { ImageFailureReason } from '@repo/contracts';
 
 export type ProcessingImage = {
   id: string;
@@ -165,13 +166,14 @@ export async function listReadyImageIds(imageIds?: readonly string[]): Promise<s
   return rows.map((row) => row.id);
 }
 
-export async function markFailed(imageId: string): Promise<void> {
+export async function markFailed(imageId: string, reason?: ImageFailureReason): Promise<void> {
   await db.transaction(async (tx) => {
     const now = new Date();
     const [image] = await tx
       .update(schema.projectImage)
       .set({
         status: 'failed',
+        failureReason: reason ?? 'processing_failed',
         duplicateOfImageId: null,
         duplicateDistance: null,
         duplicateCheckedAt: null,

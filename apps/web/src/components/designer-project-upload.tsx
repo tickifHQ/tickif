@@ -19,6 +19,7 @@ import {
   Lightbulb,
   Loader2,
   Plus,
+  RefreshCw,
   Search,
   ShieldPlus,
   Star,
@@ -35,8 +36,10 @@ import {
   projectImageSchema,
   projectRoomSchema,
   uploadUrlResponseSchema,
+  imageFailureReason,
   type AllowedImageContentType,
   type CreateProjectRoomInput,
+  type ImageFailureReason,
   type ModerationReasonCode,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
@@ -100,8 +103,7 @@ type ProjectSubtypeOption = {
 };
 
 type BackendProjectSelectionState =
-  | { selection: BackendProjectSelection; error: '' }
-  | { selection: null; error: string };
+  { selection: BackendProjectSelection; error: '' } | { selection: null; error: string };
 
 type RoomTemplate = {
   slug: string;
@@ -142,11 +144,22 @@ type RoomDraft = {
 
 type ProjectImagePreview = Pick<
   ProjectImageDto,
-  'id' | 'status' | 'sortOrder' | 'width' | 'height'
+  'id' | 'status' | 'sortOrder' | 'width' | 'height' | 'failureReason'
 > & {
   fileName: string;
   previewUrl?: string;
   viewerUrl?: string;
+  /**
+   * Original file for local previews only. Retained so a failed tile can
+   * retry the transfer without asking the user to re-select the photo.
+   * Dropped once the tile succeeds or is removed.
+   */
+  file?: File;
+  /**
+   * Client-side transfer failure message for local previews. Server-side
+   * processing failures arrive as `failureReason` instead.
+   */
+  transferError?: string;
 };
 
 type ViewerImage = {
@@ -675,10 +688,37 @@ function toProjectImagePreview(
     sortOrder: image.sortOrder,
     width: image.width,
     height: image.height,
+    failureReason: image.failureReason ?? existing?.failureReason ?? null,
+    transferError: image.failureReason ? undefined : existing?.transferError,
     fileName: existing?.fileName ?? `Image ${index + 1}`,
+    file: image.status === 'failed' ? undefined : existing?.file,
     previewUrl: image.previewUrl ?? existing?.previewUrl,
     viewerUrl: image.viewerUrl ?? existing?.viewerUrl ?? image.previewUrl ?? existing?.previewUrl,
   };
+}
+
+/**
+ * Human-readable explanation for each persisted processing failure code,
+ * rendered on the failed tile next to its recovery action (E-284).
+ */
+const IMAGE_FAILURE_MESSAGES: Record<ImageFailureReason, string> = {
+  too_large: 'This photo was too large to process.',
+  empty: 'This file was empty.',
+  corrupt: 'This file appears damaged and could not be read.',
+  unsupported_format: 'This file format is not supported.',
+  content_type_mismatch: 'The file contents do not match its declared type.',
+  dimensions_exceeded: 'This photo exceeds the maximum dimensions.',
+  decompression_bomb: 'This photo expands to an unsafe size.',
+  duplicate: 'This looks like a duplicate of another photo in this project.',
+  processing_failed: 'Processing failed before it could finish.',
+  upload_failed: 'The upload did not complete.',
+};
+
+function imageFailureMessage(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  const parsed = imageFailureReason.safeParse(reason);
+  if (!parsed.success) return 'Processing failed. Try uploading this photo again.';
+  return IMAGE_FAILURE_MESSAGES[parsed.data];
 }
 
 function mapRoomMetadata(room: RoomDraft) {
@@ -1044,6 +1084,7 @@ type RoomCardProps = {
   onOpenImage: (image: ProjectImagePreview, statusLabel: string) => void;
   onMoveImage: (imageId: string, direction: ProjectImageMoveDirection) => void;
   onRemoveImage: (imageId: string) => void;
+  onRetryImage: (imageId: string) => void;
   coverImageId: string | null;
   allowDelete: boolean;
 };
@@ -1066,10 +1107,13 @@ function RoomCard({
   onOpenImage,
   onMoveImage,
   onRemoveImage,
+  onRetryImage,
   coverImageId,
   allowDelete,
 }: RoomCardProps) {
-  const imageCount = room.images.length;
+  // Failed photos stay visible as actionable tiles but are not usable photos,
+  // matching the photo checklist which also excludes them.
+  const imageCount = room.images.filter((image) => image.status !== 'failed').length;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border/80 bg-background">
@@ -1191,6 +1235,12 @@ function RoomCard({
                         : 'Failed';
                   const canPersistImage = !isLocalPreviewImage(image);
                   const isCover = coverImageId === image.id;
+                  const failureDetail =
+                    image.status === 'failed'
+                      ? (image.transferError ??
+                        imageFailureMessage(image.failureReason) ??
+                        'Processing failed. Try uploading this photo again.')
+                      : null;
 
                   return (
                     <div
@@ -1256,6 +1306,14 @@ function RoomCard({
                           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
                             {statusLabel}
                           </div>
+                          {failureDetail ? (
+                            <p
+                              className={cn(typography.bodySmall, 'mt-1 text-destructive')}
+                              role="status"
+                            >
+                              {failureDetail}
+                            </p>
+                          ) : null}
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             <Button
                               type="button"
@@ -1268,6 +1326,29 @@ function RoomCard({
                               <Star className="size-3" />
                               {isCover ? 'Cover' : 'Set cover'}
                             </Button>
+                            {image.status === 'failed' ? (
+                              image.file && !room.uploading ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => onRetryImage(image.id)}
+                                  className="h-7 px-2 text-[11px]"
+                                >
+                                  <RefreshCw className="size-3" />
+                                  Retry upload
+                                </Button>
+                              ) : (
+                                <p
+                                  className={cn(
+                                    typography.bodySmall,
+                                    'w-full text-muted-foreground',
+                                  )}
+                                >
+                                  Remove this photo and upload it again to recover.
+                                </p>
+                              )
+                            ) : null}
                             <Button
                               type="button"
                               variant="outline"
@@ -1547,7 +1628,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const selectedScopeSlug = selectedScopes[0] ?? '';
 
   const totalImages = useMemo(
-    () => rooms.reduce((count, room) => count + room.images.length, 0),
+    () =>
+      rooms.reduce(
+        (count, room) => count + room.images.filter((image) => image.status !== 'failed').length,
+        0,
+      ),
     [rooms],
   );
   const hasProcessingImages = useMemo(
@@ -1562,9 +1647,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       .flatMap((room) => room.images)
       .filter((image) => !isLocalPreviewImage(image) && image.status !== 'failed');
     return (
-      persistedImages.find((image) => image.id === coverImageId)?.id
-      ?? persistedImages[0]?.id
-      ?? null
+      persistedImages.find((image) => image.id === coverImageId)?.id ??
+      persistedImages[0]?.id ??
+      null
     );
   }, [coverImageId, rooms]);
 
@@ -1921,8 +2006,14 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
     let cancelled = false;
     const timer = window.setInterval(() => {
+      const uploadStateRefreshVersion = beginUploadStateRefresh();
       const imageListRefreshVersion = beginImageListRefresh();
-      refreshProjectImages(projectId, imageListRefreshVersion).catch(() => {
+      // Refresh images and completeness together so Ready/Failed transitions
+      // land without requiring Save or reload (E-285).
+      void Promise.all([
+        refreshProjectImages(projectId, imageListRefreshVersion),
+        fetchCompleteness(projectId, uploadStateRefreshVersion),
+      ]).catch(() => {
         if (!cancelled && isCurrentImageListRefresh(imageListRefreshVersion)) {
           setError(
             'Could not refresh image processing status. Save the draft or refresh the page in a moment.',
@@ -2590,6 +2681,207 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     void handleUploadFiles(room, files);
   }
 
+  type SingleImageUploadResult = { ok: true; imageId: string } | { ok: false; message: string };
+
+  /**
+   * Transfers one file end to end (upload-url → R2 PUT → commit → link → metadata)
+   * and settles its tile to the server state or a retryable failed state.
+   * A reserved-but-unfinished server row is deleted best-effort so it can never
+   * linger as a phantom Processing tile after reload (E-280).
+   */
+  async function uploadSingleImage(input: {
+    roomClientId: string;
+    projectId: string;
+    roomId: string;
+    room: RoomDraft;
+    file: File;
+    previewId: string;
+    previewUrl?: string;
+    sortOrder: number;
+  }): Promise<SingleImageUploadResult> {
+    const { roomClientId, projectId, roomId, room, file, previewId, previewUrl, sortOrder } = input;
+    let reservedImageId: string | null = null;
+    try {
+      const uploadResponse = await api.api.media['upload-url'].$post({
+        json: {
+          projectId,
+          contentType: file.type as AllowedImageContentType,
+          size: file.size,
+        },
+      });
+      const uploadPayload = await uploadResponse.json();
+
+      if (!uploadResponse.ok) {
+        throw new Error(
+          extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`),
+        );
+      }
+
+      const uploaded = parseApiPayload(
+        uploadPayload,
+        uploadUrlResponseSchema,
+        `Could not prepare upload for ${file.name}.`,
+      );
+      reservedImageId = uploaded.imageId;
+
+      const storageResponse = await fetch(uploaded.uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      });
+
+      if (!storageResponse.ok) {
+        throw new Error(`Could not upload ${file.name}.`);
+      }
+
+      const commitResponse = await api.api.media[':imageId'].commit.$post({
+        param: { imageId: uploaded.imageId },
+      });
+      if (!commitResponse.ok) {
+        const commitPayload = await commitResponse.json();
+        throw new Error(extractApiMessage(commitPayload, `Could not commit ${file.name}.`));
+      }
+
+      const linkResponse = await api.api.projects[':id'].images[':imageId'].$patch({
+        param: { id: projectId, imageId: uploaded.imageId },
+        json: { roomId, sortOrder },
+      });
+      const linkedPayload = await linkResponse.json();
+
+      if (!linkResponse.ok) {
+        throw new Error(
+          extractApiMessage(linkedPayload, `Could not attach ${file.name} to ${room.title}.`),
+        );
+      }
+
+      const linkedImage = parseApiPayload(
+        linkedPayload,
+        projectImageAttachmentSchema,
+        `Could not attach ${file.name} to ${room.title}.`,
+      );
+      const metadataResponse = await api.api.media[':imageId'].metadata.$patch({
+        param: { imageId: linkedImage.id },
+        json: buildImageMetadata(room, roomId, sortOrder),
+      });
+      const metadataPayload = await metadataResponse.json();
+
+      if (!metadataResponse.ok) {
+        throw new Error(extractApiMessage(metadataPayload, `Could not tag ${file.name}.`));
+      }
+
+      const updatedImage = parseApiPayload(
+        metadataPayload,
+        projectImageSchema,
+        `Could not tag ${file.name}.`,
+      );
+      setCoverImageId((current) => current ?? linkedImage.id);
+
+      updateRoom(roomClientId, (current) => ({
+        ...current,
+        id: roomId,
+        images: current.images.map((currentImage) =>
+          currentImage.id === previewId
+            ? {
+                id: linkedImage.id,
+                status: updatedImage.status,
+                sortOrder: updatedImage.sortOrder,
+                width: updatedImage.width,
+                height: updatedImage.height,
+                failureReason: updatedImage.failureReason,
+                transferError: undefined,
+                fileName: file.name,
+                file: undefined,
+                previewUrl,
+                viewerUrl: previewUrl,
+              }
+            : currentImage,
+        ),
+      }));
+      return { ok: true, imageId: linkedImage.id };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Could not upload ${file.name}.`;
+      if (reservedImageId) {
+        await api.api.projects[':id'].images[':imageId']
+          .$delete({ param: { id: projectId, imageId: reservedImageId } })
+          .catch(() => undefined);
+      }
+      updateRoom(roomClientId, (current) => ({
+        ...current,
+        images: current.images.map((currentImage) =>
+          currentImage.id === previewId
+            ? { ...currentImage, status: 'failed', transferError: message }
+            : currentImage,
+        ),
+      }));
+      return { ok: false, message };
+    }
+  }
+
+  async function handleRetryImage(roomClientId: string, previewId: string) {
+    const room = rooms.find((item) => item.clientId === roomClientId);
+    const image = room?.images.find((item) => item.id === previewId);
+    if (!room || !image?.file || room.uploading || uploadingRoomIdsRef.current.has(roomClientId)) {
+      return;
+    }
+
+    setError('');
+    updateRoom(roomClientId, (current) => ({
+      ...current,
+      uploading: true,
+      uploadError: '',
+      images: current.images.map((currentImage) =>
+        currentImage.id === previewId
+          ? { ...currentImage, status: 'processing', transferError: undefined }
+          : currentImage,
+      ),
+    }));
+    uploadingRoomIdsRef.current.add(roomClientId);
+    try {
+      const { projectId: currentProjectId, rooms: currentRooms } = await ensureProject();
+      const attachedRoom = currentRooms.find((item) => item.clientId === roomClientId) ?? room;
+      const roomId = await syncRoomRecord(
+        currentProjectId,
+        attachedRoom,
+        currentRooms.findIndex((item) => item.clientId === roomClientId),
+      );
+      const result = await uploadSingleImage({
+        roomClientId,
+        projectId: currentProjectId,
+        roomId,
+        room: attachedRoom,
+        file: image.file,
+        previewId,
+        previewUrl: image.previewUrl,
+        sortOrder: image.sortOrder,
+      });
+      if (result.ok) {
+        refreshUploadStateInBackground(currentProjectId);
+        setNotice(
+          'Images uploaded and linked to the draft. Processing will continue in the background.',
+        );
+      } else {
+        updateRoom(roomClientId, (current) => ({ ...current, uploadError: result.message }));
+      }
+    } catch (retryError) {
+      const message =
+        retryError instanceof Error ? retryError.message : 'Could not retry this upload.';
+      updateRoom(roomClientId, (current) => ({
+        ...current,
+        uploadError: message,
+        images: current.images.map((currentImage) =>
+          currentImage.id === previewId
+            ? { ...currentImage, status: 'failed', transferError: message }
+            : currentImage,
+        ),
+      }));
+    } finally {
+      uploadingRoomIdsRef.current.delete(roomClientId);
+      updateRoom(roomClientId, (current) => ({ ...current, uploading: false }));
+    }
+  }
+
   async function handleUploadFiles(room: RoomDraft, files: File[]) {
     if (room.uploading || uploadingRoomIdsRef.current.has(room.clientId)) {
       return;
@@ -2620,7 +2912,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
             sortOrder: room.images.length + index,
             width: null,
             height: null,
+            failureReason: null,
             fileName: file.name,
+            file,
             previewUrl,
             viewerUrl: previewUrl,
           },
@@ -2658,123 +2952,46 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         currentRooms.findIndex((item) => item.clientId === room.clientId),
       );
 
+      let failures = 0;
       for (const [index, upload] of pendingUploads.entries()) {
-        const { file, preview } = upload;
-        try {
-          const uploadResponse = await api.api.media['upload-url'].$post({
-            json: {
-              projectId: currentProjectId,
-              contentType: file.type as AllowedImageContentType,
-              size: file.size,
-            },
-          });
-          const uploadPayload = await uploadResponse.json();
-
-          if (!uploadResponse.ok) {
-            throw new Error(
-              extractApiMessage(uploadPayload, `Could not prepare upload for ${file.name}.`),
-            );
-          }
-
-          const uploaded = parseApiPayload(
-            uploadPayload,
-            uploadUrlResponseSchema,
-            `Could not prepare upload for ${file.name}.`,
-          );
-
-          const storageResponse = await fetch(uploaded.uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': file.type,
-            },
-            body: file,
-          });
-
-          if (!storageResponse.ok) {
-            throw new Error(`Could not upload ${file.name}.`);
-          }
-
-          const commitResponse = await api.api.media[':imageId'].commit.$post({
-            param: { imageId: uploaded.imageId },
-          });
-          if (!commitResponse.ok) {
-            const commitPayload = await commitResponse.json();
-            throw new Error(extractApiMessage(commitPayload, `Could not commit ${file.name}.`));
-          }
-
-          const sortOrder = room.images.length + index;
-          const linkResponse = await api.api.projects[':id'].images[':imageId'].$patch({
-            param: { id: currentProjectId, imageId: uploaded.imageId },
-            json: { roomId, sortOrder },
-          });
-          const linkedPayload = await linkResponse.json();
-
-          if (!linkResponse.ok) {
-            throw new Error(
-              extractApiMessage(linkedPayload, `Could not attach ${file.name} to ${room.title}.`),
-            );
-          }
-
-          const linkedImage = parseApiPayload(
-            linkedPayload,
-            projectImageAttachmentSchema,
-            `Could not attach ${file.name} to ${room.title}.`,
-          );
-          const metadataResponse = await api.api.media[':imageId'].metadata.$patch({
-            param: { imageId: linkedImage.id },
-            json: buildImageMetadata(room, roomId, sortOrder),
-          });
-          const metadataPayload = await metadataResponse.json();
-
-          if (!metadataResponse.ok) {
-            throw new Error(extractApiMessage(metadataPayload, `Could not tag ${file.name}.`));
-          }
-
-          const updatedImage = parseApiPayload(
-            metadataPayload,
-            projectImageSchema,
-            `Could not tag ${file.name}.`,
-          );
-          setCoverImageId((current) => current ?? linkedImage.id);
-
-          updateRoom(room.clientId, (current) => ({
-            ...current,
-            id: roomId,
-            images: current.images.map((currentImage) =>
-              currentImage.id === preview.id
-                ? {
-                    id: linkedImage.id,
-                    status: updatedImage.status,
-                    sortOrder: updatedImage.sortOrder,
-                    width: updatedImage.width,
-                    height: updatedImage.height,
-                    fileName: file.name,
-                    previewUrl: preview.previewUrl,
-                    viewerUrl: preview.previewUrl,
-                  }
-                : currentImage,
-            ),
-          }));
-        } catch (fileUploadError) {
-          updateRoom(room.clientId, (current) => ({
-            ...current,
-            images: current.images.map((currentImage) =>
-              currentImage.id === preview.id ? { ...currentImage, status: 'failed' } : currentImage,
-            ),
-          }));
-          throw fileUploadError;
-        }
+        const result = await uploadSingleImage({
+          roomClientId: room.clientId,
+          projectId: currentProjectId,
+          roomId,
+          room: attachedRoom,
+          file: upload.file,
+          previewId: upload.preview.id,
+          previewUrl: upload.preview.previewUrl,
+          sortOrder: room.images.length + index,
+        });
+        if (!result.ok) failures += 1;
       }
 
       refreshUploadStateInBackground(currentProjectId);
-      setNotice(
-        'Images uploaded and linked to the draft. Processing will continue in the background.',
-      );
+      if (failures === 0) {
+        setNotice(
+          'Images uploaded and linked to the draft. Processing will continue in the background.',
+        );
+      } else {
+        updateRoom(room.clientId, (current) => ({
+          ...current,
+          uploadError: `${failures} of ${pendingUploads.length} photos failed — retry them below or remove them.`,
+        }));
+      }
     } catch (uploadError) {
+      const message =
+        uploadError instanceof Error ? uploadError.message : 'Could not upload images.';
+      // ensureProject/syncRoom failed before any transfer started: settle every
+      // queued preview as failed so none reads Processing forever (E-280).
+      const batchIds = new Set(pendingUploads.map((upload) => upload.preview.id));
       updateRoom(room.clientId, (current) => ({
         ...current,
-        uploadError:
-          uploadError instanceof Error ? uploadError.message : 'Could not upload images.',
+        uploadError: message,
+        images: current.images.map((currentImage) =>
+          batchIds.has(currentImage.id) && currentImage.status === 'processing'
+            ? { ...currentImage, status: 'failed', transferError: message }
+            : currentImage,
+        ),
       }));
     } finally {
       uploadingRoomIdsRef.current.delete(room.clientId);
@@ -3202,6 +3419,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                       fileName: image.fileName,
                     });
                   }}
+                  onRetryImage={(imageId) => void handleRetryImage(room.clientId, imageId)}
                   coverImageId={selectedCoverImageId}
                   allowDelete={!requiredDefaultRoomIds.has(room.clientId)}
                 />
@@ -3281,7 +3499,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               reasonCodes={
                 rejectionReasonCodes.length > 0
                   ? rejectionReasonCodes
-                  : rejectionReasonCode ? [rejectionReasonCode] : []
+                  : rejectionReasonCode
+                    ? [rejectionReasonCode]
+                    : []
               }
             />
           ) : null}

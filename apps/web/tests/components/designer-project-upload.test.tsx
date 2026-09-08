@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
@@ -19,6 +19,9 @@ const mock = vi.hoisted(() => ({
   listImagesGet: vi.fn(),
   deleteRoom: vi.fn(),
   deleteImage: vi.fn(),
+  uploadUrlPost: vi.fn(),
+  commitPost: vi.fn(),
+  linkImagePatch: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -43,6 +46,7 @@ vi.mock('@/lib/api', () => ({
             $get: mock.listImagesGet,
             ':imageId': {
               $delete: mock.deleteImage,
+              $patch: mock.linkImagePatch,
             },
           },
           rooms: {
@@ -53,7 +57,13 @@ vi.mock('@/lib/api', () => ({
           },
         },
       },
-      media: { ':imageId': { metadata: { $patch: mock.imageMetadataPatch } } },
+      media: {
+        'upload-url': { $post: mock.uploadUrlPost },
+        ':imageId': {
+          commit: { $post: mock.commitPost },
+          metadata: { $patch: mock.imageMetadataPatch },
+        },
+      },
     },
   },
 }));
@@ -613,4 +623,293 @@ describe('DesignerProjectUpload', () => {
       expect(screen.queryByText(/add new room type/i)).not.toBeInTheDocument();
     });
   });
+});
+
+describe('DesignerProjectUpload batch recovery', () => {
+  beforeEach(() => {
+    // Reset accumulated calls from earlier blocks (implementations persist).
+    vi.clearAllMocks();
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:project-image-preview');
+    // Fresh single-use Response objects per test: the shared mocks from the
+    // block above are already consumed by earlier renders.
+    mock.taxonomyGet.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ terms: [] }),
+    }));
+    mock.projectGet.mockImplementation(async () => projectDraftResponse());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function projectDraftResponse() {
+    return new Response(
+      JSON.stringify({
+        id: '11111111-1111-4111-8111-111111111111',
+        designerId: '22222222-2222-4222-8222-222222222222',
+        responsibleMemberId: null,
+        title: '2 BHK in Adyar',
+        slug: '2-bhk-in-adyar',
+        description: null,
+        status: 'draft',
+        archiveReason: null,
+        rejectionReasonCode: null,
+        rejectionReasonCodes: [],
+        moderationNote: null,
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+        scopeSlug: 'construction',
+        bhkSlug: '2-bhk',
+        sizeSqft: 1400,
+        citySlug: 'chennai',
+        localitySlug: 'adyar',
+        buildingName: 'Maitri Apartments',
+        budgetBandSlug: '20l-30l',
+        completedMonth: '2026-03',
+        durationMonths: 4,
+        coverImageId: null,
+        metadata: {},
+        publishedAt: null,
+        submittedAt: null,
+        reviewComments: [],
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        rooms: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            projectId: '11111111-1111-4111-8111-111111111111',
+            roomTypeId: '44444444-4444-4444-8444-444444444444',
+            name: 'Living Room',
+            description: null,
+            sortOrder: 0,
+            metadata: {},
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  const projectId = '11111111-1111-4111-8111-111111111111';
+  const roomId = '33333333-3333-4333-8333-333333333333';
+  const readyImageId = '55555555-5555-4555-8555-555555555555';
+
+  const readyItem = {
+    id: readyImageId,
+    roomId,
+    status: 'ready',
+    sortOrder: 0,
+    themeSlugs: ['modern'],
+    materialSlugs: [],
+    finishSlugs: ['matte'],
+    tagSlugs: [],
+    width: 1600,
+    height: 1200,
+    derivatives: [],
+    previewUrl: 'https://example.com/thumb.webp',
+    viewerUrl: 'https://example.com/large.webp',
+  };
+
+  function mockImageList(items: unknown[]) {
+    mock.listImagesGet.mockReset().mockImplementation(async () => imageListResponse(items));
+  }
+
+  function imageListResponse(items: unknown[]) {
+    return new Response(JSON.stringify({ items }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  function mockSuccessfulLookups() {
+    mock.roomPatch.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    mock.completenessGet.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            complete: false,
+            score: 40,
+            missing: [],
+            requirements: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    mockImageList([readyItem]);
+  }
+
+  function mockTransferPipeline(putResults: boolean[]) {
+    let urlCount = 0;
+    const imageIds = [
+      'a1111111-1111-4111-8111-111111111111',
+      'a2222222-2222-4222-8222-222222222222',
+      'a3333333-3333-4333-8333-333333333333',
+    ];
+    mock.uploadUrlPost.mockImplementation(async () => {
+      const imageId = imageIds[urlCount % imageIds.length]!;
+      urlCount += 1;
+      return {
+        ok: true,
+        json: async () => ({
+          imageId,
+          uploadUrl: `https://example.com/upload-${urlCount}`,
+          key: `originals/${projectId}/${imageId}`,
+        }),
+      };
+    });
+    const putQueue = [...putResults];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: putQueue.length > 0 ? putQueue.shift()! : true })),
+    );
+    mock.commitPost.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.linkImagePatch.mockImplementation(async ({ param }: { param: { imageId: string } }) => ({
+      ok: true,
+      json: async () => ({
+        id: param.imageId,
+        projectId,
+        roomId,
+        status: 'processing',
+        sortOrder: 1,
+      }),
+    }));
+    mock.imageMetadataPatch.mockImplementation(
+      async ({ param }: { param: { imageId: string } }) => ({
+        ok: true,
+        json: async () => ({
+          id: param.imageId,
+          roomId,
+          status: 'processing',
+          sortOrder: 1,
+          themeSlugs: [],
+          materialSlugs: [],
+          finishSlugs: [],
+          tagSlugs: [],
+          width: null,
+          height: null,
+          failureReason: null,
+          derivatives: [],
+          previewUrl: null,
+          viewerUrl: null,
+        }),
+      }),
+    );
+  }
+
+  async function dropFiles(names: Array<{ name: string; type?: string }>) {
+    const dropCopy = await screen.findByText(/drag and drop files here or click to upload/i);
+    const dropZone = dropCopy.closest('label');
+    if (!dropZone) throw new Error('Upload drop zone was not rendered');
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        files: names.map(
+          (entry) => new File(['image'], entry.name, { type: entry.type ?? 'image/jpeg' }),
+        ),
+      },
+    } as unknown as EventInit);
+  }
+
+  it('settles every batch item when the first transfer fails instead of stalling the rest', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([false, true]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await dropFiles([{ name: 'first.jpg' }, { name: 'second.jpg' }]);
+
+    await waitFor(() => expect(mock.uploadUrlPost).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText(/1 of 2 photos failed/i)).toBeInTheDocument());
+
+    // The failed tile names the transfer error and offers a retry.
+    expect(screen.getByText('Could not upload first.jpg.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry upload/i })).toBeInTheDocument();
+    // The half-transferred server row is cleaned up best-effort.
+    await waitFor(() =>
+      expect(mock.deleteImage).toHaveBeenCalledWith({
+        param: { id: projectId, imageId: 'a1111111-1111-4111-8111-111111111111' },
+      }),
+    );
+    // The second file transferred fully instead of stalling at Processing.
+    await waitFor(() => expect(mock.linkImagePatch).toHaveBeenCalled());
+    expect(screen.queryByText('second.jpg · Processing')).not.toBeInTheDocument();
+  });
+
+  it('retries a failed tile with its original file', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([false]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await dropFiles([{ name: 'first.jpg' }]);
+    await screen.findByRole('button', { name: /retry upload/i });
+
+    mockTransferPipeline([true]);
+    await userEvent.setup().click(screen.getByRole('button', { name: /retry upload/i }));
+
+    await waitFor(() => expect(mock.uploadUrlPost).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /retry upload/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('shows the persisted processing reason on failed tiles with a recovery path', async () => {
+    mockSuccessfulLookups();
+    mockImageList([
+      readyItem,
+      {
+        id: 'b1111111-1111-4111-8111-111111111111',
+        roomId,
+        status: 'failed',
+        sortOrder: 1,
+        themeSlugs: [],
+        materialSlugs: [],
+        finishSlugs: [],
+        tagSlugs: [],
+        width: null,
+        height: null,
+        failureReason: 'duplicate',
+        derivatives: [],
+        previewUrl: null,
+        viewerUrl: null,
+      },
+    ]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await screen.findByText(/looks like a duplicate of another photo/i);
+    expect(
+      screen.getByText(/remove this photo and upload it again to recover/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /retry upload/i })).not.toBeInTheDocument();
+    // The room header counts usable photos only, matching the photo checklist.
+    expect(screen.getByText('1 photo added')).toBeInTheDocument();
+  });
+
+  it('refreshes completeness automatically while images are processing', async () => {
+    mockSuccessfulLookups();
+    mockImageList([
+      readyItem,
+      {
+        ...readyItem,
+        id: 'c1111111-1111-4111-8111-111111111111',
+        status: 'processing',
+      },
+    ]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await screen.findByText('Living Room');
+    const initialCompletenessCalls = mock.completenessGet.mock.calls.length;
+
+    await waitFor(() => expect(mock.listImagesGet.mock.calls.length).toBeGreaterThan(1), {
+      timeout: 9000,
+    });
+    expect(mock.completenessGet.mock.calls.length).toBeGreaterThan(initialCompletenessCalls);
+  }, 15000);
 });
