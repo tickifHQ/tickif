@@ -1,5 +1,4 @@
 import { and, asc, db, eq, isNotNull, schema, sql } from '@repo/db';
-import type { DbTransaction } from '@repo/db';
 import { VERIFICATION_APPLICATION_STATUS } from '@repo/contracts';
 import type { DesignerSearchSource, ProjectSearchSource } from './mapper.js';
 
@@ -30,18 +29,8 @@ function metadataLabels(metadata: typeof schema.projectRoom.$inferSelect.metadat
 export async function findProjectSearchSource(
   projectId: string,
 ): Promise<ProjectSearchSource | null> {
-  return db.transaction((tx) => readProjectSearchSource(projectId, tx), {
-    isolationLevel: 'repeatable read',
-    accessMode: 'read only',
-  });
-}
-
-async function readProjectSearchSource(
-  projectId: string,
-  reader: DbTransaction,
-): Promise<ProjectSearchSource | null> {
   const cover = schema.projectImage;
-  const [base] = await reader
+  const [base] = await db
     .select({
       project: {
         id: schema.project.id,
@@ -75,7 +64,7 @@ async function readProjectSearchSource(
     .from(schema.project)
     .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
     .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
-    .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
+    .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
     .where(
       and(
         eq(schema.project.id, projectId),
@@ -88,32 +77,30 @@ async function readProjectSearchSource(
 
   if (!base || !base.project.publishedAt) return null;
 
-  const rooms = await reader
-    .select({
-      slug: schema.taxonomy.slug,
-      label: schema.taxonomy.label,
-      name: schema.projectRoom.name,
-      metadata: schema.projectRoom.metadata,
-    })
-    .from(schema.projectRoom)
-    .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
-    .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.isLive, true)))
-    .orderBy(asc(schema.projectRoom.sortOrder), asc(schema.projectRoom.id));
-  const images = await reader
-    .select({
-      themeSlugs: schema.projectImage.themeSlugs,
-      materialSlugs: schema.projectImage.materialSlugs,
-      finishSlugs: schema.projectImage.finishSlugs,
-      tagSlugs: schema.projectImage.tagSlugs,
-    })
-    .from(schema.projectImage)
-    .where(
-      and(
-        eq(schema.projectImage.projectId, projectId),
-        eq(schema.projectImage.status, 'ready'),
-        eq(schema.projectImage.isLive, true),
+  const [rooms, images] = await Promise.all([
+    db
+      .select({
+        slug: schema.taxonomy.slug,
+        label: schema.taxonomy.label,
+        name: schema.projectRoom.name,
+        metadata: schema.projectRoom.metadata,
+      })
+      .from(schema.projectRoom)
+      .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
+      .where(eq(schema.projectRoom.projectId, projectId))
+      .orderBy(asc(schema.projectRoom.sortOrder), asc(schema.projectRoom.id)),
+    db
+      .select({
+        themeSlugs: schema.projectImage.themeSlugs,
+        materialSlugs: schema.projectImage.materialSlugs,
+        finishSlugs: schema.projectImage.finishSlugs,
+        tagSlugs: schema.projectImage.tagSlugs,
+      })
+      .from(schema.projectImage)
+      .where(
+        and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.status, 'ready')),
       ),
-    );
+  ]);
 
   return {
     project: { ...base.project, publishedAt: base.project.publishedAt },

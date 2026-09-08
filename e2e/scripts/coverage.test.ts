@@ -33,15 +33,6 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
-  it('requires the published-project version review journey', () => {
-    const title =
-      'published project edits keep live content through rejection and replace it only on approval';
-    expect(requiredTests).toContainEqual({ file: 'project-versions.spec.ts', title });
-    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(
-      /project-versions/,
-    );
-  });
-
   it('requires the moderation categories and designer feedback journey', () => {
     const title = 'E-254 categories persist and reach designer feedback on desktop and mobile';
     expect(requiredTests).toContainEqual({ file: 'project-moderation.spec.ts', title });

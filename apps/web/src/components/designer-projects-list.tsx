@@ -314,12 +314,6 @@ export function DesignerProjectsList({
                     <ProjectTypeBadge label={project.propertyType} />
                   </TableCell>
                   <TableCell>
-                    {project.liveStatus === 'published' && project.pendingChanges ? (
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <StatusBadge status="published" />
-                        <span className="text-xs text-muted-foreground">Pending changes</span>
-                      </div>
-                    ) : null}
                     <StatusBadgeWithFeedback
                       status={project.status}
                       moderationNote={project.moderationNote}

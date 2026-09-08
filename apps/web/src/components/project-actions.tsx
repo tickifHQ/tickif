@@ -7,7 +7,6 @@ import { Button } from '@repo/ui/components/button';
 import { Bookmark, Check, Share2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { useHydrated } from '@/lib/use-hydrated';
 import { ProjectLikeButton } from '@/components/project-like-button';
 
 export function ProjectActions({
@@ -20,7 +19,6 @@ export function ProjectActions({
   canonicalUrl: string;
 }) {
   const { data: session, isPending: isSessionPending } = authClient.useSession();
-  const hydrated = useHydrated();
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [loadedSaveStateKey, setLoadedSaveStateKey] = useState<string | null>(null);
@@ -104,7 +102,7 @@ export function ProjectActions({
     <div className="flex flex-col gap-2">
       <div className="flex gap-1">
         <ProjectLikeButton projectId={projectId} loginHref={loginHref} />
-        {!hydrated || isSessionPending || isSaveStateLoading ? (
+        {isSessionPending || isSaveStateLoading ? (
           <Button
             type="button"
             variant="secondary"

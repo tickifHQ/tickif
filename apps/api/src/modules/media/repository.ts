@@ -2,17 +2,11 @@ import { inArray } from 'drizzle-orm';
 import { db, schema, eq, and, asc, sql } from '@repo/db';
 import { config } from '@repo/config';
 import type { UpdateImageMetadataInput } from '@repo/contracts';
-import {
-  getPendingProject,
-  readProjectAggregate,
-  mutateProjectAggregate,
-  writePendingAggregate,
-} from '../project-versions/repository.js';
 
 /**
  * Data-access for media. The ONLY media layer that imports Drizzle.
  */
-export type ProjectImageRecord = Omit<typeof schema.projectImage.$inferSelect, 'isLive'>;
+export type ProjectImageRecord = typeof schema.projectImage.$inferSelect;
 export type ProjectImageListItem = Pick<
   ProjectImageRecord,
   | 'id'
@@ -43,8 +37,7 @@ export const mediaRepository = {
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, projectId))
       .limit(1);
-    const pending = row ? await getPendingProject(projectId) : null;
-    return row ? { ...row, projectStatus: pending?.status ?? row.projectStatus } : null;
+    return row ?? null;
   },
 
   async createProcessing(input: {
@@ -73,16 +66,9 @@ export const mediaRepository = {
         .where(eq(schema.project.id, input.projectId))
         .for('update', { of: schema.project })
         .limit(1);
-      if (
-        !project ||
-        !['draft', 'changes_requested', 'rejected', 'published'].includes(project.status)
-      ) {
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status)) {
         return null;
       }
-      const state =
-        project.status === 'published' ? await readProjectAggregate(input.projectId, tx) : null;
-      if (state?.pending && !['draft', 'changes_requested'].includes(state.pending.status))
-        return null;
       const [retention] = await tx
         .select({ organizationId: schema.organizationRetention.organizationId })
         .from(schema.organizationRetention)
@@ -95,25 +81,9 @@ export const mediaRepository = {
           projectId: input.projectId,
           originalKey: input.originalKey,
           contentType: input.contentType,
-          isLive: project.status !== 'published',
         })
         .returning();
       if (!row) throw new Error('insert returned no row');
-      if (state) {
-        const aggregate = state.current;
-        aggregate.project.approvedImageIds ??= state.live.images.map((image) => image.id);
-        aggregate.images.push(row);
-        aggregate.project.status = state.pending?.status ?? 'draft';
-        if (!state.pending) {
-          aggregate.project.reviewedBy = null;
-          aggregate.project.submittedAt = null;
-          aggregate.project.reviewStartedAt = null;
-          aggregate.project.moderationNote = null;
-          aggregate.project.rejectionReasonCode = null;
-          aggregate.project.rejectionReasonCodes = [];
-        }
-        await writePendingAggregate(tx, aggregate, (state.pending?.revision ?? 0) + 1);
-      }
       await tx.insert(schema.organizationUploadLease).values({
         resourceKey: input.originalKey,
         organizationId: project.organizationId,
@@ -155,16 +125,10 @@ export const mediaRepository = {
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.projectImage.id, imageId))
       .limit(1);
-    const state = row ? await readProjectAggregate(row.projectId) : null;
-    if (row && state && !state.current.images.some((image) => image.id === imageId)) return null;
-    return row
-      ? { ...row, projectStatus: state?.current.project.status ?? row.projectStatus }
-      : null;
+    return row ?? null;
   },
 
   async roomBelongsToProject(roomId: string, projectId: string): Promise<boolean> {
-    const state = await readProjectAggregate(projectId);
-    if (state) return state.current.rooms.some((room) => room.id === roomId);
     const [row] = await db
       .select({ id: schema.projectRoom.id })
       .from(schema.projectRoom)
@@ -191,30 +155,39 @@ export const mediaRepository = {
     imageId: string,
     input: UpdateImageMetadataInput,
   ): Promise<ProjectImageRecord | null> {
-    const [asset] = await db
-      .select({ projectId: schema.projectImage.projectId })
-      .from(schema.projectImage)
-      .where(eq(schema.projectImage.id, imageId))
-      .limit(1);
-    if (!asset) return null;
-    const versioned = await mutateProjectAggregate(asset.projectId, (aggregate) => {
-      const image = aggregate.images.find((candidate) => candidate.id === imageId);
-      if (!image) return null;
-      Object.assign(image, input);
-      return image;
+    const patch: Partial<typeof schema.projectImage.$inferInsert> = {};
+    if (input.roomId !== undefined) patch.roomId = input.roomId;
+    if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
+    if (input.themeSlugs !== undefined) patch.themeSlugs = input.themeSlugs;
+    if (input.materialSlugs !== undefined) patch.materialSlugs = input.materialSlugs;
+    if (input.finishSlugs !== undefined) patch.finishSlugs = input.finishSlugs;
+    if (input.tagSlugs !== undefined) patch.tagSlugs = input.tagSlugs;
+
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ id: schema.project.id, status: schema.project.status })
+        .from(schema.project)
+        .innerJoin(schema.projectImage, eq(schema.projectImage.projectId, schema.project.id))
+        .where(eq(schema.projectImage.id, imageId))
+        .for('update', { of: schema.project })
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status))
+        return null;
+      const [row] = await tx
+        .update(schema.projectImage)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(
+          and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.projectId, project.id)),
+        )
+        .returning();
+      return row ?? null;
     });
-    return versioned?.value ?? null;
   },
 
   async listByProject(
     projectId: string,
     page: { limit: number; offset: number },
   ): Promise<ProjectImageListItem[]> {
-    const state = await readProjectAggregate(projectId);
-    if (state)
-      return state.current.images
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime())
-        .slice(page.offset, page.offset + page.limit);
     return db
       .select({
         id: schema.projectImage.id,
