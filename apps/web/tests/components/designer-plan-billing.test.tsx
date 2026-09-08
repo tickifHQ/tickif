@@ -95,6 +95,35 @@ describe('DesignerPlanBilling', () => {
     it('shows renewal date for active paid plans', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByText(/renews on/)).toBeInTheDocument();
+      expect(screen.getByText('Next Billing Date')).toBeInTheDocument();
+      // A renewing plan must not use cancellation wording.
+      expect(screen.queryByText(/ends on/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Access until')).not.toBeInTheDocument();
+    });
+
+    // E-290: a subscription scheduled for cancellation is still `active`, so the
+    // period-end date must be shown as an expiry, not a renewal/next-payment.
+    describe('scheduled cancellation (E-290)', () => {
+      const cancellingBilling = makeBilling({ cancellationScheduled: true });
+
+      it('shows "Your plan ends on" instead of "renews on" in the current plan card', () => {
+        render(<DesignerPlanBilling billing={cancellingBilling} />);
+        expect(screen.getByText(/Your plan ends on/)).toBeInTheDocument();
+        expect(screen.queryByText(/renews on/)).not.toBeInTheDocument();
+      });
+
+      it('labels the billing summary date "Access until" instead of "Next Billing Date"', () => {
+        render(<DesignerPlanBilling billing={cancellingBilling} />);
+        expect(screen.getByText('Access until')).toBeInTheDocument();
+        expect(screen.queryByText('Next Billing Date')).not.toBeInTheDocument();
+      });
+
+      it('still renders the same period-end date, only re-labelled', () => {
+        render(<DesignerPlanBilling billing={cancellingBilling} />);
+        // renewalDate + billing.nextBillingDate both map to currentPeriodEnd
+        // ('2099-12-12'), formatted en-IN / Asia/Kolkata as "12 Dec 2099".
+        expect(screen.getAllByText('12 Dec 2099').length).toBeGreaterThan(0);
+      });
     });
 
     it('does not show "Popular" badge', () => {
