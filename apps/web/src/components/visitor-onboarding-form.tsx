@@ -5,13 +5,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
+import { upsertVisitorProfileSchema, visitorProfileResponseSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { Checkbox } from '@repo/ui/components/checkbox';
 import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { InitialsAvatar } from '@/components/initials-avatar';
+import { api } from '@/lib/api';
+import { readApiErrorMessage } from '@/lib/api-response';
 import { authClient } from '@/lib/auth-client';
-import { saveVisitorOnboardingPreferences } from '@/lib/visitor-onboarding';
 
 type VisitorOnboardingFormProps = {
   displayName: string;
@@ -40,6 +42,14 @@ export function VisitorOnboardingForm({
       setError('Enter a display name between 2 and 100 characters');
       return;
     }
+    const profileInput = upsertVisitorProfileSchema.safeParse({
+      address: address.trim() || null,
+      whatsappNumber: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim() || null,
+    });
+    if (!profileInput.success) {
+      setError('Enter a valid address and WhatsApp number with country code.');
+      return;
+    }
 
     setError('');
     setIsSaving(true);
@@ -52,13 +62,24 @@ export function VisitorOnboardingForm({
         return;
       }
 
-      saveVisitorOnboardingPreferences({
-        displayName: normalizedDisplayName,
-        address: address.trim(),
-        phoneNumber: phoneNumber.trim(),
-        whatsapp: (usePhoneForWhatsapp ? phoneNumber : whatsapp).trim(),
-      });
-      router.push('/');
+      const response = await api.api.visitors.me.$put({ json: profileInput.data });
+      if (!response.ok) {
+        setError(
+          await readApiErrorMessage(
+            response,
+            'Could not complete your profile setup. Please try again.',
+          ),
+        );
+        return;
+      }
+      const parsed = visitorProfileResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        setError('Could not confirm your profile setup. Please try again.');
+        return;
+      }
+
+      await authClient.getSession({ query: { disableCookieCache: true } }).catch(() => undefined);
+      router.replace('/home');
       router.refresh();
     } catch {
       setError('Could not save your name. Please try again.');

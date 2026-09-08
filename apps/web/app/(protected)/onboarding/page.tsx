@@ -1,9 +1,7 @@
 import Image from 'next/image';
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { PLATFORM_ROLE } from '@repo/contracts';
+import { ACCOUNT_STATUS, accountStatusSchema, PLATFORM_ROLE } from '@repo/contracts';
 import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
-import { VISITOR_ONBOARDED_COOKIE } from '@/lib/visitor-onboarding';
 import { VisitorOnboardingForm } from '@/components/visitor-onboarding-form';
 
 export const metadata = {
@@ -17,9 +15,15 @@ export default async function VisitorOnboardingPage() {
     redirect('/designer/dashboard');
   }
 
-  const cookieStore = await cookies();
-  if (cookieStore.has(VISITOR_ONBOARDED_COOKIE)) {
-    redirect('/');
+  const accountStatus = accountStatusSchema.safeParse(session.user.status);
+  if (!accountStatus.success) {
+    redirect('/unauthorized');
+  }
+  if (accountStatus.data === ACCOUNT_STATUS.ACTIVE) {
+    redirect('/home');
+  }
+  if (accountStatus.data !== ACCOUNT_STATUS.PENDING) {
+    redirect('/unauthorized');
   }
 
   const phoneNumber = session.user.phoneNumber?.trim() ?? '';

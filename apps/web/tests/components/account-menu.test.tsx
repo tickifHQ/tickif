@@ -6,7 +6,7 @@ import { AccountMenu } from '../../src/components/account-menu';
 const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
   session: null as {
-    user: { name: string; email: string | null; role?: string };
+    user: { name: string | null; email: string | null; role?: string; status?: string };
     session?: { activeOrganizationId?: string | null };
   } | null,
   isPending: false,
@@ -32,7 +32,7 @@ describe('AccountMenu', () => {
     'offers personal settings for %s in personal context',
     async (role) => {
       mock.session = {
-        user: { name: 'Alice', email: null, role },
+        user: { name: 'Alice', email: null, role, status: 'active' },
         session: { activeOrganizationId: null },
       };
       const user = userEvent.setup();
@@ -42,16 +42,13 @@ describe('AccountMenu', () => {
         'href',
         '/home/settings',
       );
-      expect(screen.getByRole('menuitem', { name: 'My consultations' })).toHaveAttribute(
-        'href',
-        '/home/consultations',
-      );
+      expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
     },
   );
 
   it('keeps organization settings separate from personal settings', async () => {
     mock.session = {
-      user: { name: 'Alice', email: null, role: 'designer' },
+      user: { name: 'Alice', email: null, role: 'designer', status: 'active' },
       session: { activeOrganizationId: 'org' },
     };
     const user = userEvent.setup();
@@ -62,6 +59,22 @@ describe('AccountMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Profile & settings' })).toHaveAttribute(
       'href',
       '/designer/profile',
+    );
+  });
+
+  it('sends pending visitors back to setup instead of exposing inaccessible settings', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'pending' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+
+    expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Complete setup' })).toHaveAttribute(
+      'href',
+      '/onboarding',
     );
   });
   beforeEach(() => {
@@ -84,7 +97,10 @@ describe('AccountMenu', () => {
   });
 
   it('renders a generated avatar trigger when authenticated', () => {
-    mock.session = { user: { name: 'Alice', email: 'alice@test.com' } };
+    mock.session = {
+      user: { name: 'Alice', email: 'alice@test.com' },
+      session: { activeOrganizationId: null },
+    };
     render(<AccountMenu />);
     expect(
       screen.getByRole('button', { name: /open account menu for alice/i }),
@@ -92,7 +108,10 @@ describe('AccountMenu', () => {
   });
 
   it('keeps the labelled workspace trigger accessible when its label collapses on mobile', () => {
-    mock.session = { user: { name: 'Alice Example', email: 'alice@test.com' } };
+    mock.session = {
+      user: { name: 'Alice Example', email: 'alice@test.com' },
+      session: { activeOrganizationId: null },
+    };
     render(<AccountMenu showLabel />);
 
     const trigger = screen.getByRole('button', { name: /open account menu for alice example/i });
@@ -100,19 +119,47 @@ describe('AccountMenu', () => {
     expect(screen.getByText('Alice')).toHaveClass('hidden', 'sm:inline');
   });
 
+  it('does not expose a generated phone-auth identity in the labelled designer account menu', async () => {
+    mock.session = {
+      user: {
+        name: '',
+        email: '919876543210@phone.tickif.local',
+        role: 'designer',
+        status: 'active',
+      },
+      session: { activeOrganizationId: 'org' },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu showLabel showProfileSettings />);
+
+    expect(screen.getByText('Account')).toBeInTheDocument();
+    expect(screen.queryByText('919876543210@phone.tickif.local')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByText('919876543210@phone.tickif.local')).not.toBeInTheDocument();
+  });
+
   it('calls signOut on sign-out click', async () => {
-    mock.session = { user: { name: 'Alice', email: null } };
+    mock.session = {
+      user: { name: 'Alice', email: null },
+      session: { activeOrganizationId: null },
+    };
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
-    await user.click(screen.getByText('Sign out'));
+    const signOut = screen.getByRole('menuitem', { name: 'Sign out' });
+    expect(signOut.querySelector('svg')).toHaveClass('lucide-log-out');
+    await user.click(signOut);
     expect(mock.signOut).toHaveBeenCalledTimes(1);
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('places the designer profile link immediately before sign out and closes on selection', async () => {
-    mock.session = { user: { name: 'Alice', email: null } };
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'designer', status: 'active' },
+      session: { activeOrganizationId: 'org' },
+    };
     const user = userEvent.setup();
     render(<AccountMenu showLabel showProfileSettings />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
@@ -128,7 +175,10 @@ describe('AccountMenu', () => {
   });
 
   it('does not expose designer settings in other account menus', async () => {
-    mock.session = { user: { name: 'Alice', email: null } };
+    mock.session = {
+      user: { name: 'Alice', email: null },
+      session: { activeOrganizationId: null },
+    };
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
@@ -138,7 +188,10 @@ describe('AccountMenu', () => {
   it.each([true, false])(
     'shows tab focus and supports keyboard navigation with showLabel=%s',
     async (showLabel) => {
-      mock.session = { user: { name: 'Alice', email: null } };
+      mock.session = {
+        user: { name: 'Alice', email: null, role: 'designer', status: 'active' },
+        session: { activeOrganizationId: 'org' },
+      };
       const user = userEvent.setup();
       render(<AccountMenu showProfileSettings showLabel={showLabel} />);
       const trigger = screen.getByRole('button', { name: /open account menu for alice/i });
@@ -159,7 +212,10 @@ describe('AccountMenu', () => {
   );
 
   it('still redirects to login even when signOut rejects', async () => {
-    mock.session = { user: { name: 'Alice', email: null } };
+    mock.session = {
+      user: { name: 'Alice', email: null },
+      session: { activeOrganizationId: null },
+    };
     mock.signOut.mockRejectedValue(new Error('Network error'));
     const user = userEvent.setup();
     render(<AccountMenu />);

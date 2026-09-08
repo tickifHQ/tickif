@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, Loader2, Plus, UserRound } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { InitialsAvatar } from '@/components/initials-avatar';
@@ -65,27 +65,6 @@ export function DesignerOrganizationSwitcher({
     }
   }
 
-  async function handlePersonalSwitch() {
-    if (!activeOrganizationId || isBusy) return;
-
-    setSwitchError(null);
-    setSwitchingId('personal');
-    try {
-      const response = await api.api.orgs.context.$put({ json: { kind: 'personal' } });
-      if (!response.ok) {
-        setSwitchError('Could not switch to My Tickif. Please try again.');
-        return;
-      }
-
-      setOpen(false);
-      router.push('/home');
-    } catch {
-      setSwitchError('Could not switch to My Tickif. Please try again.');
-    } finally {
-      setSwitchingId(null);
-    }
-  }
-
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -122,36 +101,6 @@ export function DesignerOrganizationSwitcher({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="bottom" className="w-56">
         <DropdownMenuLabel>Your studios</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={!activeOrganizationId || isBusy}
-          className="cursor-pointer data-[disabled]:cursor-not-allowed"
-          onSelect={(event) => {
-            event.preventDefault();
-            void handlePersonalSwitch();
-          }}
-        >
-          <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">My Tickif</span>
-          {!activeOrganizationId ? (
-            <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Check className="size-3.5" />
-              Current
-            </span>
-          ) : switchingId === 'personal' ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"
-            >
-              <Loader2
-                aria-hidden="true"
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-              />
-              Switching…
-            </span>
-          ) : null}
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isPending ? (
           <DropdownMenuItem disabled>Loading organizations…</DropdownMenuItem>
@@ -198,7 +147,7 @@ export function DesignerOrganizationSwitcher({
           })
         ) : (
           <p className="px-2 py-2 text-sm leading-relaxed text-muted-foreground">
-            No studios yet. Start with My Tickif above, or create your first organisation below.
+            No studios yet. Create your first organisation below.
           </p>
         )}
         <DropdownMenuSeparator />

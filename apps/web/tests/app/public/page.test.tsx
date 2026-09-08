@@ -17,12 +17,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: mock.getServerSession,
-  activeContextForSession: (session: {
-    session: { activeOrganizationId?: string | null; activeTeamId?: string | null };
-  }) =>
-    session.session.activeOrganizationId && session.session.activeTeamId
-      ? { kind: 'organization' }
-      : { kind: 'personal' },
 }));
 
 vi.mock('next/link', () => ({
@@ -47,9 +41,9 @@ describe('PublicHomePage', () => {
     mock.getServerSession.mockResolvedValue(null);
   });
 
-  it('sends designers to their personal home instead of the visitor page', async () => {
+  it('sends signed-in visitors to their personal home', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
       session: {
         id: 's1',
         token: 't',
@@ -64,21 +58,58 @@ describe('PublicHomePage', () => {
     );
   });
 
-  it('lets an organization-context designer browse the public discovery page', async () => {
+  it.each([null, 'org-1'])('sends designers to their dashboard', async (organizationId) => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
       session: {
         id: 's1',
         token: 't',
         expiresAt: new Date().toISOString(),
-        activeOrganizationId: 'org-1',
-        activeTeamId: 'team-1',
+        activeOrganizationId: organizationId,
+        activeTeamId: organizationId ? 'team-1' : null,
       },
     });
 
-    render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
+    await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/designer/dashboard',
+    );
+  });
 
-    expect(screen.getByRole('heading', { name: 'Explore home projects' })).toBeInTheDocument();
+  it.each(['admin', 'superadmin'])(
+    'sends signed-in %s users to the admin dashboard',
+    async (role) => {
+      mock.getServerSession.mockResolvedValue({
+        user: { id: 'u1', name: 'Asha', email: 'a@x.com', role },
+        session: {
+          id: 's1',
+          token: 't',
+          expiresAt: new Date().toISOString(),
+          activeOrganizationId: null,
+          activeTeamId: null,
+        },
+      });
+
+      await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+        'NEXT_REDIRECT:/dashboard',
+      );
+    },
+  );
+
+  it('fails closed for an authenticated user with an invalid role', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'unknown' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
+    });
+
+    await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/unauthorized',
+    );
   });
 
   it('still renders the visitor homepage for signed-out users', async () => {

@@ -14,7 +14,6 @@ import {
   X,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
-import { hasCompletedVisitorOnboarding } from '@/lib/visitor-onboarding';
 import { Avatar, AvatarFallback } from '@repo/ui/components/avatar';
 import { Button } from '@repo/ui/components/button';
 import { cn } from '@repo/ui/lib/utils';
@@ -32,7 +31,7 @@ import {
   toE164PhoneNumber,
   type Country,
 } from '@/components/phone-number-input';
-import { DESIGNER_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
+import { DESIGNER_AUTH_CONTINUE_PATH, VISITOR_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
 
 type LoginMode = 'browsing' | 'designer';
 
@@ -92,10 +91,6 @@ const browsingFeatures = [
   { icon: MessageSquare, title: 'Message designers' },
   { icon: Calendar, title: 'Book free consultations' },
 ] as const;
-
-function visitorPostLoginPath() {
-  return hasCompletedVisitorOnboarding() ? '/' : '/onboarding';
-}
 
 const designerFeatures = [
   { icon: Bookmark, title: 'Share your work anywhere' },
@@ -158,11 +153,9 @@ export function LoginCard({
     }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
-    if (loginMode === 'designer') {
-      router.replace(DESIGNER_AUTH_CONTINUE_PATH);
-    } else {
-      router.push(visitorPostLoginPath());
-    }
+    router.replace(
+      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH,
+    );
   }, [success, loginMode, router, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
@@ -281,7 +274,7 @@ export function LoginCard({
       ? `${window.location.origin}${callbackPath}`
       : loginMode === 'designer'
         ? `${window.location.origin}${DESIGNER_AUTH_CONTINUE_PATH}`
-        : `${window.location.origin}${visitorPostLoginPath()}`;
+        : `${window.location.origin}${VISITOR_AUTH_CONTINUE_PATH}`;
     try {
       const result = await authClient.signIn.social({ provider: 'google', callbackURL });
       if (result?.error) setError("Couldn't sign in with Google");

@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
-import { listTaxonomyResponseSchema } from '@repo/contracts';
-import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
+import { listTaxonomyResponseSchema, PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { ProjectFeed } from '@/components/project-feed';
+import { PublicFooter } from '@/components/public-footer';
 import { PublicHeader } from '@/components/public-header';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
-import { activeContextForSession, getServerSession } from '@/lib/auth-guard';
+import { getServerSession } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 import {
   FEED_FACET_DEFINITIONS,
@@ -83,12 +83,20 @@ export default async function PersonalHomePage({
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
-  const session = await getServerSession();
+  const session = await getServerSession({ disableCookieCache: true });
   if (!session) {
     redirect('/login');
   }
-  if (activeContextForSession(session).kind === 'organization') {
+
+  const parsedRole = platformRoleSchema.safeParse(session.user.role);
+  if (!parsedRole.success) {
+    redirect('/unauthorized');
+  }
+  if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
     redirect('/designer/dashboard');
+  }
+  if (parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN) {
+    redirect('/dashboard');
   }
 
   const [taxonomyOptions, initialPage] = await Promise.all([
@@ -106,22 +114,10 @@ export default async function PersonalHomePage({
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1, '/home') : null;
 
   return (
-    <div className="bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
-      <PublicHeader
-        isAuthenticated
-        userRole={session.user.role ?? null}
-        contextSwitcher={
-          <div className="w-40 sm:w-48">
-            <DesignerOrganizationSwitcher
-              activeOrganizationId={null}
-              studioName={session.user.name?.trim() || session.user.email || 'My Tickif'}
-              studioLocation="My Tickif"
-            />
-          </div>
-        }
-      />
+      <PublicHeader isAuthenticated userRole={session.user.role ?? null} showListYourWork={false} />
       <main className="w-full space-y-8 px-5 py-10 sm:px-8 lg:py-12">
         <header className="space-y-1.5">
           <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
@@ -154,6 +150,7 @@ export default async function PersonalHomePage({
           </div>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

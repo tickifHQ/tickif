@@ -242,7 +242,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await visitor.getByLabel('Address', { exact: true }).fill('Mumbai');
     await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(visitor).toHaveURL(`${webUrl}/`);
+    await expect(visitor).toHaveURL(`${webUrl}/home`);
     const [persistedVisitor] = await db
       .select()
       .from(schema.user)
