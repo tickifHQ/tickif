@@ -45,7 +45,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
     }
     if (accountStatus.data === ACCOUNT_STATUS.ACTIVE) {
       if (session.user.role === PLATFORM_ROLE.DESIGNER) {
-        redirect('/designer/dashboard');
+        redirect(session.session.activeOrganizationId ? '/designer/dashboard' : '/home');
       }
       if (session.user.role === PLATFORM_ROLE.VISITOR) {
         redirect('/home');

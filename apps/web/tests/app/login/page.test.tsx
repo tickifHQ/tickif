@@ -107,7 +107,7 @@ describe('LoginPage', () => {
     );
   });
 
-  it('sends an onboarded designer without restored organization context to the dashboard', async () => {
+  it('sends an onboarded designer without restored organization context to personal home', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {
         id: 'u2',
@@ -121,7 +121,7 @@ describe('LoginPage', () => {
     const { default: Page } = await import('../../../app/login/page');
 
     await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
-      'NEXT_REDIRECT:/designer/dashboard',
+      'NEXT_REDIRECT:/home',
     );
   });
 

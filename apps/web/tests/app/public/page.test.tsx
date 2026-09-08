@@ -58,20 +58,37 @@ describe('PublicHomePage', () => {
     );
   });
 
-  it.each([null, 'org-1'])('sends designers to their dashboard', async (organizationId) => {
+  it('sends designers with an active studio to their dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
       session: {
         id: 's1',
         token: 't',
         expiresAt: new Date().toISOString(),
-        activeOrganizationId: organizationId,
-        activeTeamId: organizationId ? 'team-1' : null,
+        activeOrganizationId: 'org-1',
+        activeTeamId: 'team-1',
       },
     });
 
     await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       'NEXT_REDIRECT:/designer/dashboard',
+    );
+  });
+
+  it('sends designers without an active studio to personal home', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
+      session: {
+        id: 's1',
+        token: 't',
+        expiresAt: new Date().toISOString(),
+        activeOrganizationId: null,
+        activeTeamId: null,
+      },
+    });
+
+    await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/home',
     );
   });
 

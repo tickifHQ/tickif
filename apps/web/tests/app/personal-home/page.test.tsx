@@ -95,13 +95,24 @@ describe('PersonalHomePage', () => {
     expect(screen.getByText(/© \d{4} Tickif/)).toBeInTheDocument();
   });
 
-  it('redirects designers to the designer dashboard', async () => {
+  it('redirects designers with an active studio to the designer dashboard', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
+      session: { activeOrganizationId: 'org-1', activeTeamId: 'team-1' },
+    });
+
+    await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/designer/dashboard');
+  });
+
+  it('keeps designers without an active studio on personal home', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
       session: { activeOrganizationId: null, activeTeamId: null },
     });
 
-    await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/designer/dashboard');
+    render(await PersonalHomePage());
+
+    expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
   });
 
   it.each(['admin', 'superadmin'])('redirects %s users to the admin dashboard', async (role) => {

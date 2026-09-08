@@ -132,7 +132,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       redirect('/home');
     }
     if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      redirect('/designer/dashboard');
+      redirect(session.session.activeOrganizationId ? '/designer/dashboard' : '/home');
     }
     redirect('/dashboard');
   }

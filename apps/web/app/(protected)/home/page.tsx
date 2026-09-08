@@ -92,7 +92,7 @@ export default async function PersonalHomePage({
   if (!parsedRole.success) {
     redirect('/unauthorized');
   }
-  if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+  if (parsedRole.data === PLATFORM_ROLE.DESIGNER && session.session.activeOrganizationId) {
     redirect('/designer/dashboard');
   }
   if (parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN) {
