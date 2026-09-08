@@ -11,8 +11,10 @@ import type {
   ModerationNoteInput,
   ProjectReviewComment,
   RejectProjectInput,
+  RequestChangesProjectInput,
   UpdateProjectReviewCommentInput,
 } from '@repo/contracts';
+import { normalizeModerationReasonCode } from '@repo/contracts';
 import { presignDownload } from '@repo/storage';
 import { isDeepStrictEqual } from 'node:util';
 import { AppError } from '../../lib/errors.js';
@@ -59,7 +61,8 @@ function toProject(row: AdminProjectRecord): AdminModerationProject {
     publishedAt: row.publishedAt?.toISOString() ?? null,
     reviewedBy: row.reviewedBy,
     reviewStartedAt: row.reviewStartedAt?.toISOString() ?? null,
-    rejectionReasonCode: row.rejectionReasonCode,
+    rejectionReasonCode: normalizeModerationReasonCode(row.rejectionReasonCode),
+    rejectionReasonCodes: row.rejectionReasonCodes,
     moderationNote: row.moderationNote,
     featuredAt: row.featuredAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -89,7 +92,8 @@ function toHistory(row: AdminModerationEventRecord): ModerationHistoryItem {
     toStatus: row.toStatus,
     actorLabel: 'Tickif Review Team',
     note: row.note,
-    reasonCode: row.reasonCode,
+    reasonCode: normalizeModerationReasonCode(row.reasonCode),
+    reasonCodes: row.reasonCodes,
     fieldDiff: row.fieldDiff,
     createdAt: row.createdAt.toISOString(),
   };
@@ -289,6 +293,7 @@ export const adminProjectsService = {
           reviewStartedAt: new Date(),
           moderationNote: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
         },
         expectedModerationRevision: project.moderationRevision,
       },
@@ -319,6 +324,7 @@ export const adminProjectsService = {
           publishedAt: project.publishedAt ?? new Date(),
           moderationNote: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
         },
         expectedModerationRevision: project.moderationRevision,
         requireNoUnresolvedReviewComments: true,
@@ -330,7 +336,7 @@ export const adminProjectsService = {
 
   async requestChanges(
     projectId: string,
-    input: ModerationNoteInput,
+    input: RequestChangesProjectInput,
     caller: AdminCaller,
   ): Promise<AdminModerationDetailResponse> {
     const project = await adminProjectsRepository.findById(projectId);
@@ -341,7 +347,13 @@ export const adminProjectsService = {
         projectId,
         toStatus: 'changes_requested',
         note: input.note,
-        patch: { moderationNote: input.note, rejectionReasonCode: null },
+        reasonCode: input.reasonCodes[0],
+        reasonCodes: input.reasonCodes,
+        patch: {
+          moderationNote: input.note,
+          rejectionReasonCode: input.reasonCodes[0],
+          rejectionReasonCodes: input.reasonCodes,
+        },
       },
       caller,
     );
@@ -361,10 +373,12 @@ export const adminProjectsService = {
         projectId,
         toStatus: 'rejected',
         note: input.note,
-        reasonCode: input.reasonCode,
+        reasonCode: input.reasonCodes[0],
+        reasonCodes: input.reasonCodes,
         patch: {
           moderationNote: input.note,
-          rejectionReasonCode: input.reasonCode,
+          rejectionReasonCode: input.reasonCodes[0],
+          rejectionReasonCodes: input.reasonCodes,
         },
       },
       caller,

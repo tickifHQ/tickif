@@ -89,6 +89,7 @@ function project(overrides: Partial<AdminProjectRecord> = {}): AdminProjectRecor
     reviewedBy: admin.userId,
     reviewStartedAt: new Date('2026-07-20T10:05:00.000Z'),
     rejectionReasonCode: null,
+    rejectionReasonCodes: [],
     moderationNote: null,
     featuredAt: null,
     moderationRevision: 0,
@@ -223,12 +224,16 @@ describe('adminProjectsService', () => {
       message: 'Project is assigned to another reviewer',
     });
     await expect(
-      adminProjectsService.requestChanges(project().id, { note: 'Needs work' }, otherAdmin),
+      adminProjectsService.requestChanges(
+        project().id,
+        { note: 'Needs work', reasonCodes: ['other'] },
+        otherAdmin,
+      ),
     ).rejects.toMatchObject({ status: 403 });
     await expect(
       adminProjectsService.reject(
         project().id,
-        { note: 'Not suitable', reasonCode: 'quality' },
+        { note: 'Not suitable', reasonCodes: ['image-quality'] },
         otherAdmin,
       ),
     ).rejects.toMatchObject({ status: 403 });

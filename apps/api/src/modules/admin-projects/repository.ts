@@ -20,6 +20,7 @@ export type AdminQueueRecord = Pick<
   | 'propertyTypeSlug'
   | 'scopeSlug'
   | 'budgetBandSlug'
+  | 'coverImageId'
 > & {
   designerName: string;
   imageCount: number;
@@ -59,6 +60,7 @@ export const adminProjectsRepository = {
         propertyTypeSlug: schema.project.propertyTypeSlug,
         scopeSlug: schema.project.scopeSlug,
         budgetBandSlug: schema.project.budgetBandSlug,
+        coverImageId: schema.project.coverImageId,
         designerName: schema.designerProfile.displayName,
       })
       .from(schema.project)
@@ -100,6 +102,7 @@ export const adminProjectsRepository = {
           propertyTypeSlug: queuePage.propertyTypeSlug,
           scopeSlug: queuePage.scopeSlug,
           budgetBandSlug: queuePage.budgetBandSlug,
+          coverImageId: queuePage.coverImageId,
           designerName: queuePage.designerName,
           imageCount: sql<number>`coalesce(${pageImageCounts.imageCount}, 0)::int`,
           taggedImageCount: sql<number>`coalesce(${pageImageCounts.taggedImageCount}, 0)::int`,

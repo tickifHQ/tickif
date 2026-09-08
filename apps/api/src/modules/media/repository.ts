@@ -154,7 +154,7 @@ export const mediaRepository = {
   async updateMetadata(
     imageId: string,
     input: UpdateImageMetadataInput,
-  ): Promise<ProjectImageRecord> {
+  ): Promise<ProjectImageRecord | null> {
     const patch: Partial<typeof schema.projectImage.$inferInsert> = {};
     if (input.roomId !== undefined) patch.roomId = input.roomId;
     if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
@@ -163,13 +163,25 @@ export const mediaRepository = {
     if (input.finishSlugs !== undefined) patch.finishSlugs = input.finishSlugs;
     if (input.tagSlugs !== undefined) patch.tagSlugs = input.tagSlugs;
 
-    const [row] = await db
-      .update(schema.projectImage)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(schema.projectImage.id, imageId))
-      .returning();
-    if (!row) throw new Error('update returned no row');
-    return row;
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ id: schema.project.id, status: schema.project.status })
+        .from(schema.project)
+        .innerJoin(schema.projectImage, eq(schema.projectImage.projectId, schema.project.id))
+        .where(eq(schema.projectImage.id, imageId))
+        .for('update', { of: schema.project })
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status))
+        return null;
+      const [row] = await tx
+        .update(schema.projectImage)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(
+          and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.projectId, project.id)),
+        )
+        .returning();
+      return row ?? null;
+    });
   },
 
   async listByProject(
