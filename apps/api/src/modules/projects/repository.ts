@@ -445,6 +445,21 @@ export const projectsRepository = {
   async list(
     params: ListProjectsParams,
   ): Promise<{ items: ProjectListItemRecord[]; total: number }> {
+    // Match the pending version shown to its owner before filtering or pagination.
+    // CASE preserves a deliberately cleared locality instead of reviving the live value.
+    const hasPending = and(
+      eq(schema.project.status, 'published'),
+      isNotNull(schema.projectPendingVersion.projectId),
+    );
+    const title = sql<string>`case when ${hasPending}
+      then ${schema.projectPendingVersion.content}->'project'->>'title'
+      else ${schema.project.title} end`;
+    const locality = sql<string>`case when ${hasPending}
+      then ${schema.projectPendingVersion.content}->'project'->>'localitySlug'
+      else ${schema.project.localitySlug} end`;
+    const updatedAt = sql`case when ${hasPending}
+      then (${schema.projectPendingVersion.content}->'project'->>'updatedAt')::timestamptz
+      else ${schema.project.updatedAt} end`;
     const searchPattern = params.q ? `%${escapeLikePattern(params.q)}%` : null;
     const filters = [
       eq(schema.designerProfile.orgId, params.activeOrgId),
@@ -468,30 +483,25 @@ export const projectsRepository = {
           )`
         : undefined,
       params.statuses?.length ? inArray(effectiveProjectStatus, params.statuses) : undefined,
-      searchPattern
-        ? or(
-            ilike(schema.project.title, searchPattern),
-            ilike(schema.project.localitySlug, searchPattern),
-          )
-        : undefined,
+      searchPattern ? or(ilike(title, searchPattern), ilike(locality, searchPattern)) : undefined,
     ].filter((f) => f !== undefined);
 
     const where = filters.length ? and(...filters) : undefined;
     const orderBy = (() => {
       switch (params.sort) {
         case 'updatedAt':
-          return asc(schema.project.updatedAt);
+          return asc(updatedAt);
         case '-createdAt':
           return desc(schema.project.createdAt);
         case 'createdAt':
           return asc(schema.project.createdAt);
         case 'title':
-          return asc(schema.project.title);
+          return asc(title);
         case '-title':
-          return desc(schema.project.title);
+          return desc(title);
         case '-updatedAt':
         default:
-          return desc(schema.project.updatedAt);
+          return desc(updatedAt);
       }
     })();
 
@@ -515,14 +525,22 @@ export const projectsRepository = {
           updatedAt: schema.project.updatedAt,
         })
         .from(schema.project)
+        .leftJoin(
+          schema.projectPendingVersion,
+          eq(schema.projectPendingVersion.projectId, schema.project.id),
+        )
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .where(where)
-        .orderBy(orderBy)
+        .orderBy(orderBy, asc(schema.project.id))
         .limit(params.limit)
         .offset(params.offset),
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
+        .leftJoin(
+          schema.projectPendingVersion,
+          eq(schema.projectPendingVersion.projectId, schema.project.id),
+        )
         .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
         .where(where),
     ]);

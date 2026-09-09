@@ -70,6 +70,70 @@ async function startPendingReview(fixture: Awaited<ReturnType<typeof publishedPr
 }
 
 describe('bounded live project versions', () => {
+  it('filters, counts and paginates the pending title, locality and update date shown in the dashboard', async () => {
+    const fixture = await publishedProject();
+    await db.insert(schema.member).values({
+      id: `owner-${fixture.actor.id}`,
+      userId: fixture.actor.id,
+      organizationId: fixture.designer.orgId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await db
+      .update(schema.project)
+      .set({ localitySlug: 'old-locality', updatedAt: new Date('2020-01-01') })
+      .where(eq(schema.project.id, fixture.project.id));
+    const other = await makeProject({
+      designerId: fixture.designer.id,
+      title: 'Middle home',
+      updatedAt: new Date('2025-01-01'),
+    });
+    await projectsRepository.updateDraft(fixture.project.id, {
+      title: 'Renamed home',
+      localitySlug: 'new-locality',
+    });
+    const params = {
+      userId: fixture.actor.id,
+      activeOrgId: fixture.designer.orgId,
+      activeTeamId: null,
+      limit: 1,
+      offset: 0,
+      sort: 'title' as const,
+    };
+    for (const q of ['Renamed home', 'new-locality']) {
+      const result = await projectsRepository.list({ ...params, q });
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toMatchObject({
+        id: fixture.project.id,
+        title: 'Renamed home',
+        localitySlug: 'new-locality',
+      });
+    }
+    for (const q of ['Approved home', 'old-locality']) {
+      expect(await projectsRepository.list({ ...params, q })).toMatchObject({
+        items: [],
+        total: 0,
+      });
+    }
+    expect((await projectsRepository.list(params)).items[0]?.id).toBe(other.id);
+    const second = await projectsRepository.list({ ...params, offset: 1 });
+    expect(second.total).toBe(2);
+    expect(second.items[0]?.id).toBe(fixture.project.id);
+    for (const sort of ['-title', '-updatedAt'] as const) {
+      expect((await projectsRepository.list({ ...params, sort })).items[0]?.id).toBe(
+        fixture.project.id,
+      );
+    }
+    expect((await projectsRepository.list({ ...params, sort: 'updatedAt' })).items[0]?.id).toBe(
+      other.id,
+    );
+    await projectsRepository.updateDraft(fixture.project.id, { localitySlug: null });
+    expect((await projectsRepository.list({ ...params, q: 'old-locality' })).total).toBe(0);
+    expect(
+      (await projectsRepository.findLiveByIdWithRooms(fixture.project.id))?.project.title,
+    ).toBe('Approved home');
+  });
+
   it('duplicates approved scalar fields and media together while material edits are pending', async () => {
     const fixture = await publishedProject();
     await projectsRepository.updateDraft(fixture.project.id, {
