@@ -2865,15 +2865,6 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         </p>
       </div>
 
-      <DesignerProjectModeration
-        projectId={projectId}
-        status={projectStatus}
-        moderationNote={moderationNote}
-        rejectionReasonCode={rejectionReasonCode}
-        rejectionReasonCodes={rejectionReasonCodes}
-        showFeedbackAlert={projectStatus !== 'changes_requested'}
-      />
-
       {taxonomyError ? (
         <Alert variant="destructive" className="mt-6">
           <AlertCircle className="size-4" />
@@ -3285,6 +3276,21 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               }
             />
           ) : null}
+          {/*
+            E-279: the moderation-history entry point (and rejected/changes
+            feedback alert) sits ABOVE the Tips section, below the Changes Needed
+            summary. Distinct from ChangesNeededCard — this opens the full
+            moderation-history drawer. The feedback alert is suppressed for
+            changes_requested because ChangesNeededCard already shows it above.
+          */}
+          <DesignerProjectModeration
+            projectId={projectId}
+            status={projectStatus}
+            moderationNote={moderationNote}
+            rejectionReasonCode={rejectionReasonCode}
+            rejectionReasonCodes={rejectionReasonCodes}
+            showFeedbackAlert={projectStatus !== 'changes_requested'}
+          />
           <TipsCard />
           <ChecklistCard
             title="REQUIRED INFORMATION"

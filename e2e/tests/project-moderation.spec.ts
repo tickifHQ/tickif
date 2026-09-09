@@ -105,6 +105,32 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
       body: await designerPage.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
+
+    // E-279: the designer opens the moderation-history drawer (right-side),
+    // sees the complete masked timeline for the moderation activity, refreshes
+    // (real refetch, timeline stays visible), and closes it via Escape.
+    await designerPage.setViewportSize({ width: 1440, height: 1000 });
+    await designerPage
+      .getByRole('button', { name: 'View moderation history', exact: true })
+      .click();
+    const historyDrawer = designerPage.getByRole('dialog');
+    await expect(historyDrawer.getByText('Moderation history')).toBeVisible();
+    // Timeline shows the masked, reviewer-safe attribution and the transition.
+    await expect(historyDrawer.getByText('Request Changes').first()).toBeVisible();
+    await expect(historyDrawer.getByText('by Tickif Review Team').first()).toBeVisible();
+    // Refresh performs a real refetch while keeping the timeline visible.
+    await designerPage
+      .getByRole('button', { name: 'Refresh moderation history', exact: true })
+      .click();
+    await expect(historyDrawer.getByText('Request Changes').first()).toBeVisible();
+    await testInfo.attach('e279-designer-moderation-history-drawer', {
+      body: await designerPage.screenshot({ animations: 'disabled' }),
+      contentType: 'image/png',
+    });
+    // Escape closes the drawer.
+    await designerPage.keyboard.press('Escape');
+    await expect(designerPage.getByRole('dialog')).toHaveCount(0);
+
     expect(errors).toEqual([]);
   } finally {
     await designerContext.close();
