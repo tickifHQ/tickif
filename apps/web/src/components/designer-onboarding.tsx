@@ -367,6 +367,7 @@ export function DesignerOnboarding({
       <OnboardingShell signedInAs={displayEmail}>
         <CompletionStep
           onAddProjects={() => router.push('/designer/projects/new')}
+          onCompletePortfolio={() => router.push('/designer/portfolio')}
           onSkip={() => router.push('/designer/dashboard')}
         />
       </OnboardingShell>
@@ -599,18 +600,33 @@ export function DesignerOnboarding({
 
 function CompletionStep({
   onAddProjects,
+  onCompletePortfolio,
   onSkip,
 }: {
   onAddProjects: () => void;
+  onCompletePortfolio: () => void;
   onSkip: () => void;
 }) {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-lg font-medium tracking-[-0.015em]">You&apos;re set up, there! 🎉</h1>
+        {/*
+          E-278: setup is done, but the profile is NOT public yet. The backend
+          publication gate (portfolio-service `missingRequiredFields` +
+          `activateIfComplete`) is EXACTLY the four hero fields — studio logo,
+          studio name, tagline, short bio — and nothing else. A published project
+          is NOT a publication prerequisite, so it is framed only as a separate
+          next step. Don't claim the page is already live; don't expose internal
+          field names.
+        */}
         <p className="max-w-[358px] text-xs font-medium leading-[1.35] text-muted-foreground">
-          One thing stands between you and homeowners: your first project. It&apos;s the only thing
-          that makes your profile public.
+          Your workspace is ready. To make your portfolio public, complete your portfolio with your
+          studio logo, studio name, tagline, and short bio. We&apos;ll show your shareable link once
+          your page is live.
+        </p>
+        <p className="max-w-[358px] text-xs font-medium leading-[1.35] text-muted-foreground">
+          Then add your first project to show homeowners your work.
         </p>
       </div>
 
@@ -621,6 +637,15 @@ function CompletionStep({
           className="h-9 w-full cursor-pointer gap-1 rounded-lg"
         >
           Add your projects
+          <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCompletePortfolio}
+          className="h-9 w-full cursor-pointer gap-1 rounded-lg"
+        >
+          Complete your portfolio
           <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
         </Button>
         <DetailsSecondaryActions onSkip={onSkip} />

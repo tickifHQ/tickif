@@ -26,6 +26,7 @@ const dashboard: ProfileDashboardResponse = {
     new: 0,
   },
   shareUrl: 'https://tickif.com/d/livspace',
+  publiclyVisible: true,
 };
 
 describe('DesignerDashboardOverview', () => {
@@ -55,6 +56,7 @@ describe('DesignerDashboardOverview', () => {
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
         dashboard={dashboard}
       />,
     );
@@ -81,6 +83,61 @@ describe('DesignerDashboardOverview', () => {
       'text-button-fancy-foreground',
       'shadow-button-fancy',
     );
+  });
+
+  // E-278: the share card must not expose a public URL until the portfolio is live.
+  it('exposes the canonical public link and copy action only when publicly visible', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible
+        dashboard={dashboard}
+      />,
+    );
+
+    expect(screen.getByText('tickif.com/d/livspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /complete your portfolio/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the public URL and copy action, showing a readiness CTA, when not publicly visible', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        portfolioPubliclyVisible={false}
+        dashboard={dashboard}
+      />,
+    );
+
+    // No copyable/visible public URL.
+    expect(screen.queryByRole('button', { name: /copy link/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('tickif.com/d/livspace')).not.toBeInTheDocument();
+    expect(screen.getByText(/not public yet/i)).toBeInTheDocument();
+    // Clear CTA to finish the portfolio instead — the canonical Portfolio
+    // Settings route that owns the hero fields (logo, name, tagline, bio).
+    expect(screen.getByRole('link', { name: /complete your portfolio/i })).toHaveAttribute(
+      'href',
+      '/designer/portfolio',
+    );
+  });
+
+  it('never surfaces a placeholder URL as a copyable link when not publicly visible', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/studio"
+        portfolioPubliclyVisible={false}
+        dashboard={{ ...dashboard, shareUrl: 'https://tickif.com/d/studio', publiclyVisible: false }}
+      />,
+    );
+
+    expect(screen.queryByText('tickif.com/d/studio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /copy link/i })).not.toBeInTheDocument();
   });
 
   it('keeps verification non-interactive until that flow ships', () => {

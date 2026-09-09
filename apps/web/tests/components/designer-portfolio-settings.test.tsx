@@ -216,38 +216,100 @@ describe('DesignerPortfolioSettings', () => {
     expect(callout?.querySelector('svg')).toHaveClass('text-primary');
   });
 
-  it('copies the canonical preview URL when the backend portfolio URL is not available yet', async () => {
-    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
+  // E-278: with no canonical backend URL there is nothing publishable to share,
+  // so no copy action is offered (previously it leaked the typed-slug URL).
+  it('does not offer a copy action when the backend portfolio URL is not available', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      portfolioUrl: null,
+      publiclyVisible: false,
+    });
     await renderSettings();
 
-    const user = userEvent.setup();
-    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
-    const copyButton = screen.getByRole('button', { name: 'Copy link' });
-
-    expect(copyButton).toHaveClass(
-      'bg-button-fancy',
-      'text-button-fancy-foreground',
-      'shadow-button-fancy',
-    );
-    await user.click(copyButton);
-
-    expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/mahi-studio');
-    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument();
   });
 
   it('disables the full portfolio control while the public page is unavailable', async () => {
-    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, portfolioUrl: null });
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      portfolioUrl: null,
+      publiclyVisible: false,
+    });
     await renderSettings();
 
     expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
   });
 
-  it('links to the public portfolio when the URL is available', async () => {
+  it('links to the public portfolio when it is publicly visible', async () => {
     await renderSettings();
 
     const link = screen.getByRole('link', { name: 'Open full' });
     expect(link).toHaveAttribute('href', 'https://tickif.com/d/mahi-studio');
     expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  // E-278: URL exposure must follow the backend's saved publication state.
+  describe('public URL gating (E-278)', () => {
+    it('shows no actionable public URL when the portfolio is incomplete', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publiclyVisible: false,
+        missingRequiredFields: ['logo', 'tagline'],
+        portfolioUrl: 'https://tickif.com/d/mahi-studio',
+      });
+      await renderSettings();
+
+      expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+      expect(screen.getByText(/complete the required hero details/i)).toBeInTheDocument();
+    });
+
+    it('shows no actionable public URL when complete but the public link is off', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publiclyVisible: false,
+        publicLinkEnabled: false,
+        missingRequiredFields: [],
+        portfolioUrl: 'https://tickif.com/d/mahi-studio',
+      });
+      await renderSettings();
+
+      expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+      expect(screen.getByText(/turn on the public link/i)).toBeInTheDocument();
+    });
+
+    it('exposes Open full and Copy link using the canonical saved URL when published', async () => {
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+      // Default basePortfolio is publiclyVisible with a canonical portfolioUrl.
+      await renderSettings();
+
+      expect(screen.getByRole('link', { name: 'Open full' })).toHaveAttribute(
+        'href',
+        'https://tickif.com/d/mahi-studio',
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Copy link' }));
+      expect(writeText).toHaveBeenCalledWith('https://tickif.com/d/mahi-studio');
+    });
+
+    it('copies the canonical saved URL, not an unsaved typed slug', async () => {
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+      await renderSettings();
+
+      // Type a new slug in the URL field without saving.
+      const slugInput = screen.getByPlaceholderText('your-studio');
+      await user.clear(slugInput);
+      await user.type(slugInput, 'brand-new-slug');
+
+      // Copy still uses the canonical SAVED backend URL, never the typed slug.
+      await user.click(screen.getByRole('button', { name: 'Copy link' }));
+      expect(writeText).toHaveBeenCalledWith('https://tickif.com/d/mahi-studio');
+      expect(writeText).not.toHaveBeenCalledWith('http://localhost:3000/d/brand-new-slug');
+    });
   });
 
   it('keeps the sticky action bar inset from the viewport bottom', async () => {
@@ -809,6 +871,117 @@ describe('DesignerPortfolioSettings', () => {
         expect(mock.fetchPortfolio).toHaveBeenCalledTimes(2);
       });
       expect(tagline).toHaveValue('My unsaved edit');
+    });
+  });
+
+  // E-278: a logo add/replace/delete must mark the form dirty and enable
+  // "Save changes" (the logo commits via its own endpoint, so it was previously
+  // invisible to the FormState dirty check).
+  describe('logo dirty state (E-278)', () => {
+    async function uploadLogoFile() {
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(fileInput).not.toBeNull();
+      const file = new File(['logo-data'], 'logo.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+    }
+
+    it('enables Save changes after uploading a logo when none existed', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+      });
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      await renderSettings();
+      // Clean saved state → Save disabled.
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+      await uploadLogoFile();
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled(),
+      );
+    });
+
+    it('enables Save changes after replacing an existing logo', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/old-logo.jpg',
+      });
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/replaced-logo.jpg',
+      });
+      mock.uploadLogo.mockResolvedValue({
+        logoUrl: 'https://storage.example.com/replaced-logo.jpg',
+      });
+
+      await renderSettings();
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+      await uploadLogoFile();
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled(),
+      );
+    });
+
+    it('enables Save changes after deleting an existing logo', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/old-logo.jpg',
+      });
+      mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
+      mock.deleteLogo.mockResolvedValue(undefined);
+
+      await renderSettings();
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'Remove logo' }));
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled(),
+      );
+    });
+
+    it('disables Save changes after a logo change is saved', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/new-logo.jpg',
+      });
+      mock.uploadLogo.mockResolvedValue({ logoUrl: 'https://storage.example.com/new-logo.jpg' });
+
+      await renderSettings();
+      await uploadLogoFile();
+
+      const save = await screen.findByRole('button', { name: 'Save changes' });
+      await waitFor(() => expect(save).toBeEnabled());
+
+      // A logo-only change has no field patch; saving reconciles the baseline
+      // without a redundant portfolio PATCH, and the button disables again.
+      const user = userEvent.setup();
+      await user.click(save);
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled(),
+      );
+      expect(mock.updatePortfolio).not.toHaveBeenCalled();
+    });
+
+    it('keeps Save changes disabled when the logo is unchanged (regression guard)', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/existing-logo.jpg',
+      });
+
+      await renderSettings();
+
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     });
   });
 

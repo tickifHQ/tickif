@@ -56,6 +56,14 @@ export const profileDashboardResponseSchema = z
       new: z.number().int(),
     }),
     shareUrl: z.string().url(),
+    /**
+     * E-278: whether `/d/{slug}` actually serves the portfolio right now
+     * (`status === 'active' && publicLinkEnabled`). The dashboard uses this to
+     * decide whether `shareUrl` may be surfaced as a copyable/openable public
+     * link. Mirrors `PortfolioResponse.publiclyVisible`; the frontend must never
+     * expose the URL when this is false.
+     */
+    publiclyVisible: z.boolean(),
   })
   .meta({ id: 'ProfileDashboard' });
 export type ProfileDashboardResponse = z.infer<typeof profileDashboardResponseSchema>;

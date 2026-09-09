@@ -115,6 +115,10 @@ test('email OTP creates a real session through a local Resend delivery double', 
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
     orgId = onboarded.organization.id;
+    // E-278: the completion step must be truthful — setup is done but the
+    // portfolio still needs finishing before it can go public.
+    await expect(page.getByText(/your workspace is ready/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /complete your portfolio/i })).toBeVisible();
     await page.getByRole('button', { name: 'Skip to dashboard', exact: true }).click();
     await expect(page).toHaveURL(/\/designer\/dashboard$/);
     await page.reload();

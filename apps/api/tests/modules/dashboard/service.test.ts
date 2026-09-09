@@ -40,6 +40,8 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   teamId: 'team_1',
   profileSlug: 'studio-noir',
   portfolioSlug: 'studio-noir-portfolio',
+  profileStatus: 'active',
+  publicLinkEnabled: true,
   ...overrides,
 });
 
@@ -97,8 +99,50 @@ describe('dashboardService.getProfileDashboard', () => {
         new: 3,
       },
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
+      publiclyVisible: true,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  // E-278: publiclyVisible mirrors the owner PortfolioResponse / public route rule.
+  it('reports publiclyVisible=true for an active profile with the public link on', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'active', publicLinkEnabled: true }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(true);
+  });
+
+  it('treats a missing portfolio row (null public link) on an active profile as visible', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'active', publicLinkEnabled: null }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(true);
+  });
+
+  it('reports publiclyVisible=false for a draft (incomplete) profile even with the link on', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'draft', publicLinkEnabled: true }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(false);
+  });
+
+  it('reports publiclyVisible=false for an active profile with the public link off', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ profileStatus: 'active', publicLinkEnabled: false }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.publiclyVisible).toBe(false);
   });
 
   it('falls back to the organization slug before a custom portfolio slug is set', async () => {

@@ -22,7 +22,11 @@ const emptyDashboard: ProfileDashboardResponse = {
   profileCompletion: { score: 0, missing: [] },
   projects: { total: 0, published: 0, inReview: 0, draft: 0 },
   leads: { total: 0, new: 0 },
+  // Placeholder used only when the dashboard fetch fails. `publiclyVisible:false`
+  // guarantees the overview never surfaces this non-canonical `/d/studio` URL as
+  // a copyable/openable public link (E-278).
   shareUrl: new URL('/d/studio', env.NEXT_PUBLIC_WEB_URL).toString(),
+  publiclyVisible: false,
 };
 
 async function getDashboardSummary(): Promise<DashboardResult> {
@@ -64,12 +68,17 @@ export default async function DesignerDashboardPage() {
   const studioName = profile?.displayName.trim() || session.user.name?.trim() || 'Your studio';
   const studioLocation = profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
   const portfolioUrl = dashboard.ok ? dashboard.data.shareUrl : (profile?.shareUrl ?? dashboard.data.shareUrl);
+  // E-278: only treat the portfolio as publicly visible when the dashboard
+  // fetch succeeded and the backend says so. On a failed fetch we fall back to
+  // the placeholder, which is never live — so the share card stays gated.
+  const portfolioPubliclyVisible = dashboard.ok && dashboard.data.publiclyVisible;
 
   return (
     <DesignerDashboardOverview
       studioName={studioName}
       studioLocation={studioLocation}
       portfolioUrl={portfolioUrl}
+      portfolioPubliclyVisible={portfolioPubliclyVisible}
       dashboard={dashboard.data}
       completion={completion.data}
       dashboardError={dashboard.ok ? null : dashboard.message}
