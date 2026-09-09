@@ -16,14 +16,61 @@ import {
   DialogTitle,
 } from '@repo/ui/components/dialog';
 import { AlertCircle, Clock3, Loader2, RefreshCw } from 'lucide-react';
+import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 
-function actionLabel(action: ModerationHistoryResponse['items'][number]['action']): string {
+type ModerationHistoryItem = ModerationHistoryResponse['items'][number];
+type ModerationActionValue = ModerationHistoryItem['action'];
+
+function actionLabel(action: ModerationActionValue): string {
   return action
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+// Per-action visual treatment so adjacent events are easy to tell apart at a
+// glance: a colored timeline dot + a matching badge tint. Reviewer decisions
+// (approve/reject/changes) read differently from neutral/self-service steps.
+const actionTone: Record<
+  ModerationActionValue,
+  { dot: string; badge: string }
+> = {
+  submit: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  resubmit: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  withdraw: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  start_review: { dot: 'bg-blue-500', badge: 'bg-blue-500/10 text-blue-600' },
+  request_changes: { dot: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-600' },
+  reject: { dot: 'bg-destructive', badge: 'bg-destructive/10 text-destructive' },
+  unpublish: { dot: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-600' },
+  publish: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
+  metadata_corrected: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  archive: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  restore: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
+  delete: { dot: 'bg-destructive', badge: 'bg-destructive/10 text-destructive' },
+  organization_delist: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  organization_archive: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
+  organization_restore: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
+};
+
+function toneForAction(action: ModerationActionValue) {
+  return actionTone[action] ?? { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' };
+}
+
+const historyDateFormatter = new Intl.DateTimeFormat('en-IN', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZone: 'Asia/Kolkata',
+});
+
+function formatEventTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return historyDateFormatter.format(date);
 }
 
 export function DesignerProjectModeration({
@@ -45,6 +92,9 @@ export function DesignerProjectModeration({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Bumped on every fetch so the spinner icon remounts and its CSS spin
+  // animation restarts each refresh (reusing the same node would not replay it).
+  const [refreshKey, setRefreshKey] = useState(0);
   const isChangesRequested = status === 'changes_requested';
   const isRejected = status === 'rejected';
   const hasFeedback = isChangesRequested || isRejected;
@@ -63,6 +113,7 @@ export function DesignerProjectModeration({
   function fetchHistory() {
     if (!projectId) return;
     setError(null);
+    setRefreshKey((key) => key + 1);
     startTransition(async () => {
       try {
         const response = await api.api.projects[':id']['moderation-history'].$get({
@@ -124,7 +175,7 @@ export function DesignerProjectModeration({
       */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogContent
-          className="left-auto right-0 top-0 h-[100dvh] max-h-none w-full max-w-md translate-x-0 translate-y-0 grid-cols-1 gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0"
+          className="left-auto right-0 top-0 flex h-[100dvh] max-h-none w-full max-w-md translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0"
           overlayClassName="bg-foreground/30"
         >
           <div className="flex items-start justify-between gap-4 border-b border-border p-5">
@@ -146,7 +197,7 @@ export function DesignerProjectModeration({
               className="mr-8 shrink-0"
             >
               {isPending ? (
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 key={refreshKey} className="size-4 animate-spin" />
               ) : (
                 <RefreshCw className="size-4" />
               )}
@@ -184,30 +235,75 @@ export function DesignerProjectModeration({
             ) : null}
 
             {showTimeline ? (
-              <ol className="space-y-3">
-                {history.map((item) => (
-                  <li key={item.id} className="border-l-2 border-border pl-3">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-foreground">
-                      <span>{actionLabel(item.action)}</span>
-                      <span className="text-xs text-muted-foreground">by {item.actorLabel}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {item.fromStatus.replaceAll('_', ' ')} → {item.toStatus.replaceAll('_', ' ')}
-                    </p>
-                    {item.note ? (
-                      <p className="mt-1 text-sm text-foreground">{item.note}</p>
-                    ) : null}
-                    <ProjectModerationReasons
-                      reasonCodes={
-                        item.reasonCodes.length > 0
-                          ? item.reasonCodes
-                          : item.reasonCode
-                            ? [item.reasonCode]
-                            : []
-                      }
-                    />
-                  </li>
-                ))}
+              <ol
+                className={cn(
+                  'relative space-y-4 pl-6',
+                  // Continuous connector line running down the left of the dots.
+                  'before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-border',
+                  isPending && 'opacity-60 transition-opacity',
+                )}
+              >
+                {history.map((item) => {
+                  const tone = toneForAction(item.action);
+                  const reasonCodes =
+                    item.reasonCodes.length > 0
+                      ? item.reasonCodes
+                      : item.reasonCode
+                        ? [item.reasonCode]
+                        : [];
+                  const eventTime = formatEventTime(item.createdAt);
+                  return (
+                    <li key={item.id} className="relative">
+                      {/* Timeline dot, sits on the connector line. */}
+                      <span
+                        className={cn(
+                          'absolute -left-6 top-1 size-[11px] rounded-full ring-4 ring-background',
+                          tone.dot,
+                        )}
+                        aria-hidden="true"
+                      />
+                      <div className="rounded-lg border border-border/70 bg-card p-3 shadow-sm">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
+                              tone.badge,
+                            )}
+                          >
+                            {actionLabel(item.action)}
+                          </span>
+                          {eventTime ? (
+                            <time
+                              className="ml-auto text-[11px] text-muted-foreground"
+                              dateTime={item.createdAt}
+                            >
+                              {eventTime}
+                            </time>
+                          ) : null}
+                        </div>
+                        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                          <span className="capitalize">{item.fromStatus.replaceAll('_', ' ')}</span>
+                          <span aria-hidden="true">→</span>
+                          <span className="capitalize font-medium text-foreground/80">
+                            {item.toStatus.replaceAll('_', ' ')}
+                          </span>
+                          <span className="mx-1 text-border" aria-hidden="true">
+                            ·
+                          </span>
+                          <span>by {item.actorLabel}</span>
+                        </p>
+                        {item.note ? (
+                          <p className="mt-2 text-sm leading-relaxed text-foreground">{item.note}</p>
+                        ) : null}
+                        {reasonCodes.length > 0 ? (
+                          <div className="mt-2">
+                            <ProjectModerationReasons reasonCodes={reasonCodes} />
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
             ) : null}
           </div>
