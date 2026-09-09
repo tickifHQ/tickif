@@ -938,11 +938,19 @@ function ChecklistCard({
               className="flex items-center gap-3 border-b border-border/70 px-4 py-3 last:border-b-0"
             >
               {item.done ? (
-                <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-white">
-                  <Check className="size-3.5" />
+                <span
+                  role="img"
+                  aria-label="Complete"
+                  className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-white"
+                >
+                  <Check className="size-3.5" aria-hidden />
                 </span>
               ) : (
-                <CircleDashed className="size-5 text-muted-foreground" />
+                <CircleDashed
+                  className="size-5 text-muted-foreground"
+                  role="img"
+                  aria-label="Not complete"
+                />
               )}
               <span
                 className={cn(
@@ -1111,9 +1119,19 @@ function RoomCard({
   coverImageId,
   allowDelete,
 }: RoomCardProps) {
-  // Failed photos stay visible as actionable tiles but are not usable photos,
-  // matching the photo checklist which also excludes them.
-  const imageCount = room.images.filter((image) => image.status !== 'failed').length;
+  // Only usable photos count: failed tiles stay visible as actionable errors
+  // but must not inflate the added-photo count, with pending and failed
+  // entries called out separately (E-281).
+  const usableImages = room.images.filter((image) => image.status !== 'failed');
+  const processingCount = room.images.filter((image) => image.status === 'processing').length;
+  const failedCount = room.images.length - usableImages.length;
+  const photoSummary = [
+    usableImages.length > 0
+      ? `${usableImages.length} photo${usableImages.length === 1 ? '' : 's'} added`
+      : 'No photos yet',
+    ...(processingCount > 0 ? [`${processingCount} processing`] : []),
+    ...(failedCount > 0 ? [`${failedCount} failed`] : []),
+  ].join(' · ');
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border/80 bg-background">
@@ -1121,9 +1139,7 @@ function RoomCard({
         <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
           <div className={cn(typography.subsectionTitle, 'text-foreground')}>{room.title}</div>
           <div className={cn(typography.bodySmall, 'mt-1 text-muted-foreground')}>
-            {imageCount > 0
-              ? `${imageCount} photo${imageCount === 1 ? '' : 's'} added`
-              : 'No photos yet'}
+            {photoSummary}
           </div>
         </button>
         <div className="flex items-center gap-2">

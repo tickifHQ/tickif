@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ListProjectImagesResponse, ProjectDetailResponse } from '@repo/contracts';
 import { DesignerProjectUpload } from '../../src/components/designer-project-upload';
@@ -889,7 +889,7 @@ describe('DesignerProjectUpload batch recovery', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /retry upload/i })).not.toBeInTheDocument();
     // The room header counts usable photos only, matching the photo checklist.
-    expect(screen.getByText('1 photo added')).toBeInTheDocument();
+    expect(screen.getByText('1 photo added · 1 failed')).toBeInTheDocument();
   });
 
   it('refreshes completeness automatically while images are processing', async () => {
@@ -912,4 +912,124 @@ describe('DesignerProjectUpload batch recovery', () => {
     });
     expect(mock.completenessGet.mock.calls.length).toBeGreaterThan(initialCompletenessCalls);
   }, 15000);
+});
+
+describe('DesignerProjectUpload photo counts', () => {
+  beforeEach(() => {
+    // Fresh per-test mocks: shared Response bodies are single-use.
+    vi.clearAllMocks();
+    mock.taxonomyGet.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ terms: [] }),
+    }));
+    mock.projectGet.mockImplementation(async () => projectDraftResponse());
+  });
+
+  function projectDraftResponse() {
+    return new Response(
+      JSON.stringify({
+        id: '11111111-1111-4111-8111-111111111111',
+        designerId: '22222222-2222-4222-8222-222222222222',
+        responsibleMemberId: null,
+        title: '2 BHK in Adyar',
+        slug: '2-bhk-in-adyar',
+        description: null,
+        status: 'draft',
+        archiveReason: null,
+        rejectionReasonCode: null,
+        rejectionReasonCodes: [],
+        moderationNote: null,
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+        scopeSlug: 'construction',
+        bhkSlug: '2-bhk',
+        sizeSqft: 1400,
+        citySlug: 'chennai',
+        localitySlug: 'adyar',
+        buildingName: 'Maitri Apartments',
+        budgetBandSlug: '20l-30l',
+        completedMonth: '2026-03',
+        durationMonths: 4,
+        coverImageId: null,
+        metadata: {},
+        publishedAt: null,
+        submittedAt: null,
+        reviewComments: [],
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        rooms: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            projectId: '11111111-1111-4111-8111-111111111111',
+            roomTypeId: '44444444-4444-4444-8444-444444444444',
+            name: 'Living Room',
+            description: null,
+            sortOrder: 0,
+            metadata: {},
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  const projectId = '11111111-1111-4111-8111-111111111111';
+  const roomId = '33333333-3333-4333-8333-333333333333';
+
+  function imageItem(sortOrder: number, status: string, idSuffix: string) {
+    return {
+      id: `c1111111-1111-4111-8111-11111111111${idSuffix}`,
+      roomId,
+      status,
+      sortOrder,
+      themeSlugs: [],
+      materialSlugs: [],
+      finishSlugs: [],
+      tagSlugs: [],
+      width: null,
+      height: null,
+      derivatives: [],
+      previewUrl: null,
+      viewerUrl: null,
+    };
+  }
+
+  function mockImageList(items: unknown[]) {
+    // Fresh single-use Response per call: bodies cannot be read twice.
+    mock.listImagesGet.mockReset().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ items }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+  }
+
+  it('counts usable photos and distinguishes pending and failed entries', async () => {
+    mockImageList([
+      imageItem(0, 'ready', '1'),
+      imageItem(1, 'processing', '2'),
+      imageItem(2, 'failed', '3'),
+    ]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await screen.findByText('2 photos added · 1 processing · 1 failed');
+  });
+
+  it('keeps failed photos out of the submission checklist', async () => {
+    mockImageList([
+      imageItem(0, 'ready', '1'),
+      imageItem(1, 'failed', '2'),
+      imageItem(2, 'failed', '3'),
+    ]);
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await screen.findByText('1 photo added · 2 failed');
+    const row = screen.getByText('At least 3 photos').closest('div');
+    expect(
+      within(row as HTMLElement).getByRole('img', { name: 'Not complete' }),
+    ).toBeInTheDocument();
+  });
 });
