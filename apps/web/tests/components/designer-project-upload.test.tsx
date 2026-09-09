@@ -16,6 +16,7 @@ const mock = vi.hoisted(() => ({
   imageMetadataPatch: vi.fn(),
   completenessGet: vi.fn(),
   submitProject: vi.fn(),
+  createProject: vi.fn(),
   listImagesGet: vi.fn(),
   deleteRoom: vi.fn(),
   deleteImage: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('@/lib/api', () => ({
         },
       },
       projects: {
+        $post: mock.createProject,
         ':id': {
           $get: mock.projectGet,
           $patch: mock.projectPatch,
@@ -889,5 +891,26 @@ describe('DesignerProjectUpload', () => {
     await waitFor(() => {
       expect(screen.queryByText(/add new room type/i)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('DesignerProjectUpload submit validation', () => {
+  it('reports missing requirements without allocating a draft for a blank form', async () => {
+    const user = userEvent.setup();
+    render(<DesignerProjectUpload />);
+
+    await screen.findByRole('button', { name: 'Preview & Submit Project' });
+    await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Project is not ready to submit yet. Missing: Location (city), At least 3 photos, Cover image selected, Room, theme, and finish metadata on each photo, Cost range selected.',
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(mock.createProject).not.toHaveBeenCalled();
+    expect(mock.router.replace).not.toHaveBeenCalled();
+    expect(mock.submitProject).not.toHaveBeenCalled();
   });
 });

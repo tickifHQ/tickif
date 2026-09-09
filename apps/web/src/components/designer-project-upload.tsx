@@ -100,8 +100,7 @@ type ProjectSubtypeOption = {
 };
 
 type BackendProjectSelectionState =
-  | { selection: BackendProjectSelection; error: '' }
-  | { selection: null; error: string };
+  { selection: BackendProjectSelection; error: '' } | { selection: null; error: string };
 
 type RoomTemplate = {
   slug: string;
@@ -1571,9 +1570,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       .flatMap((room) => room.images)
       .filter((image) => !isLocalPreviewImage(image) && image.status !== 'failed');
     return (
-      persistedImages.find((image) => image.id === coverImageId)?.id
-      ?? persistedImages[0]?.id
-      ?? null
+      persistedImages.find((image) => image.id === coverImageId)?.id ??
+      persistedImages[0]?.id ??
+      null
     );
   }, [coverImageId, rooms]);
 
@@ -2556,12 +2555,19 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   async function handleSubmitProject() {
-    // E-286: "Preview & Submit" must NOT submit directly. Persist the draft and
-    // run the same completeness gate as before, then — only if the project is
-    // ready — open the preview/confirmation step. The submit API is deferred to
-    // `confirmSubmitProject`, which the designer triggers explicitly from the
-    // preview. This keeps the existing Ready-image / required-field validation
-    // in front of submission (the preview cannot bypass it).
+    // Validate locally before allocating anything server-side: a blank submit
+    // must surface the missing requirements without creating a draft,
+    // rewriting the URL, or recording moderation history (E-283). The server
+    // completeness check below stays authoritative once the local form passes.
+    const localGaps = localChecklist.filter((item) => !item.done).map((item) => item.label);
+    if (localGaps.length > 0) {
+      setError(`Project is not ready to submit yet. Missing: ${localGaps.join(', ')}.`);
+      requestAnimationFrame(() => {
+        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
+
     setSaving(true);
     setError('');
     setNotice('');
@@ -3379,7 +3385,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               reasonCodes={
                 rejectionReasonCodes.length > 0
                   ? rejectionReasonCodes
-                  : rejectionReasonCode ? [rejectionReasonCode] : []
+                  : rejectionReasonCode
+                    ? [rejectionReasonCode]
+                    : []
               }
             />
           ) : null}
