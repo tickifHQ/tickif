@@ -183,3 +183,31 @@ export async function requireActiveVisitor(): Promise<SessionData> {
 
   return session;
 }
+
+/**
+ * Requester gate for consultation records. Visitors follow the same active
+ * check as My Tickif; designers browsing without a studio keep access to the
+ * bookings they requested as customers, since booking creation legitimately
+ * admits them. Studio sessions belong to the designer inbox instead.
+ */
+export async function requirePersonalRequester(): Promise<SessionData> {
+  const session = await requireAuth();
+  const role = platformRoleSchema.safeParse(session.user.role);
+  if (!role.success) redirect('/unauthorized');
+
+  if (role.data === PLATFORM_ROLE.ADMIN || role.data === PLATFORM_ROLE.SUPERADMIN) {
+    redirect('/dashboard');
+  }
+  if (activeContextForSession(session).kind === 'organization') {
+    redirect('/designer/consultations');
+  }
+  if (role.data === PLATFORM_ROLE.DESIGNER) return session;
+  if (role.data !== PLATFORM_ROLE.VISITOR) redirect('/unauthorized');
+
+  const status = accountStatusSchema.safeParse(session.user.status);
+  if (!status.success) redirect('/unauthorized');
+  if (status.data === ACCOUNT_STATUS.PENDING) redirect('/onboarding');
+  if (status.data !== ACCOUNT_STATUS.ACTIVE) redirect('/unauthorized');
+
+  return session;
+}

@@ -11,7 +11,10 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/bookings-api', () => ({ fetchConsultations: mock.fetchConsultations }));
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: async () => mock.session,
-  requireActiveVisitor: async () => mock.session,
+  requirePersonalRequester: async () => {
+    if (mock.activeOrg) throw new Error('redirect:/designer/consultations');
+    return mock.session;
+  },
   activeContextForSession: () => ({ kind: mock.activeOrg ? 'organization' : 'personal' }),
 }));
 vi.mock('@/lib/current-org-role', () => ({ getCurrentOrgRole: async () => mock.role }));
@@ -100,6 +103,16 @@ describe('consultation pages', () => {
       ConsultationsPage({ scope: 'mine', searchParams: Promise.resolve({}) }),
     ).rejects.toThrow('redirect:/designer/consultations');
     expect(mock.fetchConsultations).not.toHaveBeenCalled();
+  });
+  it('keeps the requester page available to designers browsing without a studio', async () => {
+    mock.session = { user: { role: 'designer' } };
+    render(await ConsultationsPage({ scope: 'mine', searchParams: Promise.resolve({}) }));
+    expect(mock.fetchConsultations).toHaveBeenCalledWith(
+      { status: 'all', page: 1, limit: 12 },
+      'mine',
+      'synthetic-session',
+    );
+    expect(screen.getByRole('heading', { name: 'My consultations' })).toBeInTheDocument();
   });
   it('propagates a failed read to the error boundary instead of showing an empty inbox', async () => {
     mock.fetchConsultations.mockRejectedValue(new Error('Offline'));

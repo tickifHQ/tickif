@@ -9,7 +9,7 @@ import {
 import { Button } from '@repo/ui/components/button';
 import { ConsultationList } from '@/components/consultation-list';
 import { PublicHeader } from '@/components/public-header';
-import { activeContextForSession, getServerSession, requireActiveVisitor } from '@/lib/auth-guard';
+import { getServerSession, requirePersonalRequester } from '@/lib/auth-guard';
 import { getCurrentOrgRole } from '@/lib/current-org-role';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
 import { fetchConsultations } from '@/lib/bookings-api';
@@ -23,13 +23,11 @@ export async function ConsultationsPage({
 }) {
   const personal = scope === 'mine';
   const [session, params, requestHeaders] = await Promise.all([
-    personal ? requireActiveVisitor() : getServerSession(),
+    personal ? requirePersonalRequester() : getServerSession(),
     searchParams,
     headers(),
   ]);
   if (!session) redirect('/login');
-  if (personal && activeContextForSession(session).kind === 'organization')
-    redirect('/designer/consultations');
   if (session.user.role !== 'visitor' && session.user.role !== 'designer') redirect('/dashboard');
   const [profile, role] = personal
     ? [null, null]
