@@ -576,6 +576,11 @@ export function DesignerPortfolioSettings() {
   function handleDiscard() {
     if (savedForm) {
       setForm(savedForm);
+      // E-278: the logo is committed immediately by its own upload/delete
+      // endpoints, so a logo change cannot be rolled back here. Reconcile the
+      // baseline to the already-persisted logo instead of leaving a phantom
+      // "unsaved" state that keeps Save/Discard enabled with nothing to do.
+      setSavedLogoUrl(portfolio?.logoUrl ?? null);
       setSaveError(null);
       setSaveSuccess(false);
       setSlugStatus('idle');

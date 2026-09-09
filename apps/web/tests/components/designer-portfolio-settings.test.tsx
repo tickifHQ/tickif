@@ -586,6 +586,36 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
+  // [P2] Logo add/delete commits immediately via its own endpoint, so Discard
+  // cannot roll it back. Discard must reconcile the baseline to the persisted
+  // logo rather than leaving Save/Discard enabled with nothing to undo.
+  it('discard reconciles a persisted logo deletion and re-disables the controls', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
+    mock.deleteLogo.mockResolvedValue({ success: true });
+    // The delete handler refreshes the portfolio; return the logo-less state.
+    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
+    await renderSettings();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Remove logo' }));
+
+    // Removing the logo persists immediately and marks the form dirty.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+    });
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: /discard changes/i }));
+
+    // Discard accepts the already-persisted deletion instead of offering a
+    // nonfunctional undo: both controls disable, and the logo stays removed.
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeDisabled();
+  });
+
   it('sanitizes slug input: lowercases, strips illegal characters, collapses hyphens', async () => {
     const slugInput = await renderSettings();
 
