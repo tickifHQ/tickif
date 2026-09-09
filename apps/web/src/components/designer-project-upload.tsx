@@ -82,6 +82,7 @@ import {
   roomSlugCandidates,
   roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
+  validateSizeSqft,
   type BackendProjectSelection,
   type ProjectImageMoveDirection,
 } from '@/lib/designer-project-upload';
@@ -100,8 +101,7 @@ type ProjectSubtypeOption = {
 };
 
 type BackendProjectSelectionState =
-  | { selection: BackendProjectSelection; error: '' }
-  | { selection: null; error: string };
+  { selection: BackendProjectSelection; error: '' } | { selection: null; error: string };
 
 type RoomTemplate = {
   slug: string;
@@ -729,6 +729,8 @@ function FormField({
   type = 'text',
   helperText,
   className,
+  error,
+  id,
 }: {
   label: string;
   value: string;
@@ -737,27 +739,42 @@ function FormField({
   type?: 'text' | 'number' | 'month';
   helperText?: string;
   className?: string;
+  error?: string | null;
+  id?: string;
 }) {
+  const errorId = id ? `${id}-error` : undefined;
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label className={cn(typography.label, 'text-foreground')}>{label}</Label>
+      <Label htmlFor={id} className={cn(typography.label, 'text-foreground')}>
+        {label}
+      </Label>
       {type === 'number' ? (
         <NumberInput
+          id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           className={typography.control}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
         />
       ) : (
         <Input
+          id={id}
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           className={typography.control}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
         />
       )}
-      {helperText ? (
+      {error ? (
+        <p id={errorId} className={cn(typography.bodySmall, 'font-medium text-destructive')}>
+          {error}
+        </p>
+      ) : helperText ? (
         <p className={cn(typography.bodySmall, 'text-muted-foreground')}>{helperText}</p>
       ) : null}
     </div>
@@ -1391,6 +1408,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [sizeSqftError, setSizeSqftError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   // E-286: the "Preview & Submit" CTA opens a confirmation step instead of
   // submitting directly. `previewOpen` drives that dialog; `isSubmitting` guards
@@ -1571,9 +1589,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       .flatMap((room) => room.images)
       .filter((image) => !isLocalPreviewImage(image) && image.status !== 'failed');
     return (
-      persistedImages.find((image) => image.id === coverImageId)?.id
-      ?? persistedImages[0]?.id
-      ?? null
+      persistedImages.find((image) => image.id === coverImageId)?.id ??
+      persistedImages[0]?.id ??
+      null
     );
   }, [coverImageId, rooms]);
 
@@ -2528,7 +2546,26 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     return currentProjectId;
   }
 
+  /**
+   * Rejects numeric fields the server would silently drop. An invalid area
+   * reaches the API as null and blanks on reload, so block the save with
+   * field feedback instead (E-282).
+   */
+  function validateNumericFields(): boolean {
+    const areaError = validateSizeSqft(sizeSqft);
+    setSizeSqftError(areaError);
+    if (areaError) {
+      setError('Please fix the highlighted fields.');
+      requestAnimationFrame(() => {
+        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function saveDraft(showSavedNotice = true) {
+    if (!validateNumericFields()) return null;
     setSaving(true);
     setError('');
     setNotice('');
@@ -2556,12 +2593,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   async function handleSubmitProject() {
+<<<<<<< HEAD
     // E-286: "Preview & Submit" must NOT submit directly. Persist the draft and
     // run the same completeness gate as before, then — only if the project is
     // ready — open the preview/confirmation step. The submit API is deferred to
     // `confirmSubmitProject`, which the designer triggers explicitly from the
     // preview. This keeps the existing Ready-image / required-field validation
     // in front of submission (the preview cannot bypass it).
+=======
+    if (!validateNumericFields()) return;
+>>>>>>> 33bd613d (fix(web): reject invalid floor area with field feedback before save)
     setSaving(true);
     setError('');
     setNotice('');
@@ -3066,10 +3107,15 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                   )}
                   <FormField
                     label="Size (sq.ft)"
+                    id="project-size-sqft"
                     value={sizeSqft}
-                    onChange={setSizeSqft}
+                    onChange={(value) => {
+                      setSizeSqft(value);
+                      if (sizeSqftError) setSizeSqftError(null);
+                    }}
                     placeholder="e.g. 1450"
                     type="number"
+                    error={sizeSqftError}
                   />
                 </div>
               </div>
@@ -3379,7 +3425,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               reasonCodes={
                 rejectionReasonCodes.length > 0
                   ? rejectionReasonCodes
-                  : rejectionReasonCode ? [rejectionReasonCode] : []
+                  : rejectionReasonCode
+                    ? [rejectionReasonCode]
+                    : []
               }
             />
           ) : null}

@@ -891,3 +891,161 @@ describe('DesignerProjectUpload', () => {
     });
   });
 });
+
+describe('DesignerProjectUpload floor area', () => {
+  beforeEach(() => {
+    const termsByKind: Record<
+      string,
+      Array<{ id: string; label: string; slug: string; parentId: null }>
+    > = {
+      property_type: [
+        {
+          id: '11111111-1111-4111-8111-111111111101',
+          label: 'Residential',
+          slug: 'residential',
+          parentId: null,
+        },
+      ],
+      property_subtype: [
+        {
+          id: '11111111-1111-4111-8111-111111111103',
+          label: 'Apartment',
+          slug: 'apartment',
+          parentId: null,
+        },
+      ],
+      room: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          label: 'Living Room',
+          slug: 'living-room',
+          parentId: null,
+        },
+      ],
+    };
+    mock.taxonomyGet.mockImplementation(async ({ query }: { query: { kind: string } }) => ({
+      ok: true,
+      json: async () => ({ terms: termsByKind[query.kind] ?? [] }),
+    }));
+    mock.projectGet.mockImplementation(async () => projectDraftResponse());
+    mock.listImagesGet.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+  });
+
+  function projectDraftResponse() {
+    return new Response(
+      JSON.stringify({
+        id: '11111111-1111-4111-8111-111111111111',
+        designerId: '22222222-2222-4222-8222-222222222222',
+        responsibleMemberId: null,
+        title: '2 BHK in Adyar',
+        slug: '2-bhk-in-adyar',
+        description: null,
+        status: 'draft',
+        archiveReason: null,
+        rejectionReasonCode: null,
+        rejectionReasonCodes: [],
+        moderationNote: null,
+        propertyTypeSlug: 'residential',
+        propertySubtypeSlug: 'apartment',
+        scopeSlug: 'construction',
+        bhkSlug: '2-bhk',
+        sizeSqft: 1400,
+        citySlug: 'chennai',
+        localitySlug: 'adyar',
+        buildingName: 'Maitri Apartments',
+        budgetBandSlug: '20l-30l',
+        completedMonth: '2026-03',
+        durationMonths: 4,
+        coverImageId: null,
+        metadata: {},
+        publishedAt: null,
+        submittedAt: null,
+        reviewComments: [],
+        createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        rooms: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            projectId: '11111111-1111-4111-8111-111111111111',
+            roomTypeId: '44444444-4444-4444-8444-444444444444',
+            name: 'Living Room',
+            description: null,
+            sortOrder: 0,
+            metadata: {},
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+
+  async function sizeInput() {
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+    return screen.findByPlaceholderText('e.g. 1450');
+  }
+
+  it('rejects a negative area with field feedback and blocks the save', async () => {
+    const user = userEvent.setup();
+    const input = await sizeInput();
+
+    await user.clear(input);
+    await user.type(input, '-100');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Enter an area between 1 and 100000 sq.ft.')).toBeInTheDocument();
+    });
+    expect(mock.projectPatch).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('blocks submit without allocating a draft when the area is invalid', async () => {
+    const user = userEvent.setup();
+    const input = await sizeInput();
+
+    await user.clear(input);
+    await user.type(input, '-100');
+    await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Enter an area between 1 and 100000 sq.ft.')).toBeInTheDocument();
+    });
+    expect(mock.projectPatch).not.toHaveBeenCalled();
+    expect(mock.submitProject).not.toHaveBeenCalled();
+  });
+
+  it('clears the field error and saves once the area is valid', async () => {
+    const user = userEvent.setup();
+    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.completenessGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({ complete: false, score: 10, missing: [], requirements: [] }),
+    });
+    const input = await sizeInput();
+    await screen.findByText('Living Room');
+
+    await user.clear(input);
+    await user.type(input, '-100');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await screen.findByText('Enter an area between 1 and 100000 sq.ft.');
+
+    await user.clear(input);
+    await user.type(input, '1200');
+    await user.click(screen.getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(mock.projectPatch).toHaveBeenCalled());
+    expect(mock.projectPatch).toHaveBeenCalledWith(
+      expect.objectContaining({ json: expect.objectContaining({ sizeSqft: 1200 }) }),
+    );
+    expect(screen.queryByText('Enter an area between 1 and 100000 sq.ft.')).not.toBeInTheDocument();
+  });
+});
