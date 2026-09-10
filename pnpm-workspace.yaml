@@ -29,7 +29,7 @@ overrides:
   undici: 7.29.0
   ip-address: 10.3.1
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
-  sharp: ^0.35.3
+  sharp: ^0.35.4
   # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
   # GHSA-r28c-9q8g-f849 <=8.5.17): patch every copy, via next and via tsup.
   postcss: ^8.5.18
@@ -75,7 +75,7 @@ catalog:
   # Storage (Cloudflare R2 via S3 API) + image processing
   '@aws-sdk/client-s3': ^3.1101.0
   '@aws-sdk/s3-request-presigner': ^3.1101.0
-  sharp: ^0.35.3
+  sharp: ^0.35.4
 
   # Search
   '@babel/runtime': ^7.29.0
