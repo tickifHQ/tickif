@@ -108,6 +108,10 @@ export const requiredTests = [
     'portfolio-publication.spec.ts',
     'a published portfolio exposes the canonical URL everywhere and resolves publicly (state F + regression G)',
   ],
+  [
+    'visitor-role-boundaries.spec.ts',
+    'visitor settings and designer role boundaries are enforced in the UI and API',
+  ],
 ].map(([file, title]) => ({ file: file!, title: title! }));
 
 const testSchema = z.object({

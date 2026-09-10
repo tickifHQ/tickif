@@ -102,15 +102,15 @@ describe('visitorsService.upsertMine', () => {
 });
 
 describe('visitor profile authorization', () => {
-  it('allows a designer to use the same personal profile', async () => {
-    vi.mocked(visitorsRepository.findByUserId).mockResolvedValue(profile);
-    vi.mocked(visitorsRepository.upsertCompleted).mockResolvedValue(profile);
+  it('rejects a designer before accessing visitor persistence', async () => {
     const designer = { ...pendingVisitor, role: PLATFORM_ROLE.DESIGNER };
 
-    await expect(visitorsService.getMine(designer)).resolves.toBeDefined();
+    await expect(visitorsService.getMine(designer)).rejects.toMatchObject({ status: 403 });
     await expect(
       visitorsService.upsertMine({ address: null, whatsappNumber: null }, designer),
-    ).resolves.toBeDefined();
+    ).rejects.toMatchObject({ status: 403 });
+    expect(visitorsRepository.findByUserId).not.toHaveBeenCalled();
+    expect(visitorsRepository.upsertCompleted).not.toHaveBeenCalled();
   });
 
   it.each([

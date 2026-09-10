@@ -12,12 +12,16 @@ import { ScrollGate } from '@/components/scroll-gate';
  * Omitted entirely for authenticated users.
  */
 export default async function PublicLayout({ children }: { children: ReactNode }) {
-  const session = await getServerSession();
+  const session = await getServerSession({ disableCookieCache: true });
   const isAuthenticated = !!session;
 
   return (
     <div className="flex min-h-screen flex-col">
-      <PublicHeader isAuthenticated={isAuthenticated} userRole={session?.user.role ?? null} />
+      <PublicHeader
+        isAuthenticated={isAuthenticated}
+        userRole={session?.user.role ?? null}
+        userStatus={session?.user.status ?? null}
+      />
       <main className="flex-1">{children}</main>
       <PublicFooter />
       {!isAuthenticated && <ScrollGate />}

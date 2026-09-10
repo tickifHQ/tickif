@@ -43,15 +43,23 @@ describe('personal settings', () => {
     expect(screen.getByText('All changes are saved.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
-
   it('shows the same unsaved-change feedback as the designer profile editor', async () => {
     const user = userEvent.setup();
     render(<PersonalSettingsForm initialAccount={original} />);
-
     await user.type(screen.getByLabelText('Personal address (optional)'), ' edit');
-
     expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+  });
+
+  it('does not present a generated phone-auth identity as a customer email', () => {
+    render(
+      <PersonalSettingsForm
+        initialAccount={{ ...original, email: '+919876543210@phone.tickif.local' }}
+      />,
+    );
+
+    expect(screen.getByText('Not added')).toBeInTheDocument();
+    expect(screen.queryByText(/@phone\.tickif\.local/)).not.toBeInTheDocument();
   });
   it('saves through the API, clears optional data, refreshes identity and reopens with persisted data', async () => {
     const user = userEvent.setup();

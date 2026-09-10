@@ -43,7 +43,7 @@ async function access(
       .for('update');
     if (
       !user ||
-      !['visitor', 'designer'].includes(user.role) ||
+      user.role !== 'visitor' ||
       user.status !== 'active' ||
       (user.banned && (!user.banExpires || user.banExpires > new Date()))
     ) {

@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { listTaxonomyResponseSchema, PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  accountStatusSchema,
+  listTaxonomyResponseSchema,
+  PLATFORM_ROLE,
+  platformRoleSchema,
+} from '@repo/contracts';
 import { api } from '@/lib/api';
 import { HomeHero, type HomeShortcut } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
@@ -122,23 +128,26 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
   const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
 
-  const session = await getServerSession();
+  const session = await getServerSession({ disableCookieCache: true });
   if (session) {
     const parsedRole = platformRoleSchema.safeParse(session.user.role);
     if (!parsedRole.success) {
       redirect('/unauthorized');
     }
     if (parsedRole.data === PLATFORM_ROLE.VISITOR) {
-      redirect(feedPageLink(params, page, '/home'));
-    }
-    if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+      const status = accountStatusSchema.safeParse(session.user.status);
+      if (!status.success) redirect('/unauthorized');
+      if (status.data === ACCOUNT_STATUS.ACTIVE) redirect(feedPageLink(params, page, '/home'));
+      if (status.data !== ACCOUNT_STATUS.PENDING) redirect('/unauthorized');
+      // Deferred designer signups are pending visitors until studio creation.
+      // Let them explore here without activating a visitor account.
+    } else if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
       redirect(
-        session.session.activeOrganizationId
-          ? '/designer/dashboard'
-          : feedPageLink(params, page, '/home'),
+        session.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
       );
+    } else {
+      redirect('/dashboard');
     }
-    redirect('/dashboard');
   }
 
   const taxonomyOptionsPromise = fetchTaxonomyOptions();

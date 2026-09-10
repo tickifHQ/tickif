@@ -1,3 +1,4 @@
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
@@ -16,6 +17,25 @@ vi.mock('@/lib/auth-guard', () => ({
   rolePassesCheck: vi.fn(),
 }));
 
+vi.mock('@/components/designer-organization-switcher', () => ({
+  DesignerOrganizationSwitcher: ({
+    activeOrganizationId,
+    studioName,
+    studioLocation,
+  }: {
+    activeOrganizationId: string | null;
+    studioName: string;
+    studioLocation: string;
+  }) => (
+    <div
+      data-testid="studio-switcher"
+      data-active-organization-id={activeOrganizationId}
+      data-studio-name={studioName}
+      data-studio-location={studioLocation}
+    />
+  ),
+}));
+
 import { rolePassesCheck } from '@/lib/auth-guard';
 
 describe('DesignerSelectStudioPage', () => {
@@ -23,7 +43,7 @@ describe('DesignerSelectStudioPage', () => {
     vi.clearAllMocks();
   });
 
-  it('redirects a designer without an active organization to My Tickif', async () => {
+  it('renders the studio selector for a designer without an active organization', async () => {
     mock.getServerSession.mockResolvedValue({
       session: {
         id: 's1',
@@ -39,8 +59,16 @@ describe('DesignerSelectStudioPage', () => {
 
     const { default: Page } =
       await import('../../../../app/(protected)/designer/select-studio/page');
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/home');
+    render(await Page());
+
+    expect(screen.getByRole('heading', { name: 'Choose your studio' })).toBeInTheDocument();
+    expect(screen.getByText(/Select the studio workspace/)).toBeInTheDocument();
+    expect(screen.getByTestId('studio-switcher')).toHaveAttribute('data-studio-name', 'Mahi');
+    expect(screen.getByTestId('studio-switcher')).toHaveAttribute(
+      'data-studio-location',
+      'Choose a studio',
+    );
+    expect(mock.redirect).not.toHaveBeenCalled();
   });
 
   it('redirects a designer with an active organization to the dashboard', async () => {

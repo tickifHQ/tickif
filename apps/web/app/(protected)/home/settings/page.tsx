@@ -5,13 +5,13 @@ import { personalAccountSchema } from '@repo/contracts';
 import { Container } from '@/components/container';
 import { PublicHeader } from '@/components/public-header';
 import { PersonalSettingsForm } from '@/components/personal-settings-form';
-import { requireAuth } from '@/lib/auth-guard';
+import { requireActiveVisitor } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 
 export const metadata = { title: 'Personal settings · Tickif' };
 
 export default async function PersonalSettingsPage() {
-  const session = await requireAuth({ requiredContext: 'personal' });
+  const session = await requireActiveVisitor();
   const cookie = (await headers()).get('cookie') ?? '';
   const response = await api.api['personal-account'].me.$get(
     {},
@@ -24,7 +24,11 @@ export default async function PersonalSettingsPage() {
   if (!parsed.success) throw new Error('Unable to load personal settings');
   return (
     <>
-      <PublicHeader isAuthenticated userRole={session.user.role} />
+      <PublicHeader
+        isAuthenticated
+        userRole={session.user.role}
+        userStatus={session.user.status ?? null}
+      />
       <Container as="main" className="py-10">
         <Link href="/home" className="text-sm text-muted-foreground underline underline-offset-4">
           Back to My Tickif

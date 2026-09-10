@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
 import { authClient } from '@/lib/auth-client';
+import { visibleAccountEmail } from '@/lib/account-identity';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar } from '@repo/ui/components/avatar';
 import {
@@ -19,8 +20,6 @@ import { Skeleton } from '@repo/ui/components/skeleton';
 import { cn } from '@repo/ui/lib/utils';
 import { ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
-
-const GENERATED_PHONE_EMAIL_SUFFIX = '@phone.tickif.local';
 
 export function AccountMenu({
   showLabel = false,
@@ -63,8 +62,9 @@ export function AccountMenu({
     personalRole === PLATFORM_ROLE.VISITOR || personalRole === PLATFORM_ROLE.DESIGNER;
   const userName = user.name?.trim() || null;
   const email = user.email?.trim() || null;
-  const visibleEmail = email?.endsWith(GENERATED_PHONE_EMAIL_SUFFIX) ? null : email;
-  const displayName = userName ?? visibleEmail ?? 'Account';
+  // Never expose generated phone identities or render an empty account label.
+  const accountEmail = visibleAccountEmail(email);
+  const displayName = userName ?? accountEmail ?? 'Account';
   const firstName = userName?.split(/\s+/, 1)[0] ?? 'Account';
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
@@ -108,14 +108,14 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="truncate">
-          <p className="font-medium">{userName ?? 'Account'}</p>
-          {visibleEmail ? (
-            <p className="text-xs font-normal text-muted-foreground">{visibleEmail}</p>
+          <p className="font-medium">{displayName}</p>
+          {accountEmail ? (
+            <p className="text-xs font-normal text-muted-foreground">{accountEmail}</p>
           ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          {hasPersonalProfileRole &&
+          {personalRole === PLATFORM_ROLE.VISITOR &&
           accountStatus === ACCOUNT_STATUS.ACTIVE &&
           !hasOrganizationContext ? (
             <DropdownMenuItem asChild className="cursor-pointer">

@@ -9,10 +9,22 @@ import type {
   CurrentProfileResponse,
   UpdateProfileInput,
 } from '@repo/contracts';
-import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  ORGANIZATION_CAPABILITY,
+  PLATFORM_ROLE,
+  accountStatusSchema,
+  platformRoleSchema,
+  type AccountStatus,
+  type PlatformRole,
+} from '@repo/contracts';
 import { config } from '@repo/config';
 import { AppError } from '../../lib/errors.js';
-import { profilesRepository, type DesignerProfileRecord } from './repository.js';
+import {
+  DesignerOnboardingAccessDeniedError,
+  profilesRepository,
+  type DesignerProfileRecord,
+} from './repository.js';
 import { orgsService } from '../orgs/service.js';
 
 /**
@@ -44,6 +56,66 @@ type FieldCheckResult = {
   missing: RequiredField[];
 };
 
+export type DesignerOnboardingCaller = {
+  userId: string;
+  role: string | null | undefined;
+  status: string | null | undefined;
+};
+
+type ValidatedDesignerOnboardingCaller = {
+  userId: string;
+  role: PlatformRole;
+  status: AccountStatus;
+};
+
+function validateDesignerOnboardingCaller(
+  caller: DesignerOnboardingCaller,
+): ValidatedDesignerOnboardingCaller {
+  const role = platformRoleSchema.safeParse(caller.role);
+  const status = accountStatusSchema.safeParse(caller.status);
+  if (!role.success || !status.success) {
+    throw AppError.forbidden('Designer onboarding is not permitted for this account');
+  }
+  return { userId: caller.userId, role: role.data, status: status.data };
+}
+
+function canStartDesignerOnboarding(caller: ValidatedDesignerOnboardingCaller): boolean {
+  return caller.role === PLATFORM_ROLE.VISITOR && caller.status === ACCOUNT_STATUS.PENDING;
+}
+
+function canCreateAdditionalOrganization(caller: ValidatedDesignerOnboardingCaller): boolean {
+  return (
+    caller.status === ACCOUNT_STATUS.ACTIVE &&
+    (caller.role === PLATFORM_ROLE.DESIGNER ||
+      caller.role === PLATFORM_ROLE.ADMIN ||
+      caller.role === PLATFORM_ROLE.SUPERADMIN)
+  );
+}
+
+function existingOnboardingResult(
+  existing: NonNullable<Awaited<ReturnType<typeof profilesRepository.findByUserId>>>,
+) {
+  return {
+    data: {
+      profile: {
+        id: existing.profile.id,
+        orgId: existing.profile.orgId,
+        displayName: existing.profile.displayName,
+        entityType: existing.profile.entityType,
+        status: existing.profile.status,
+        createdAt: existing.profile.createdAt.toISOString(),
+      },
+      organization: {
+        id: existing.org.id,
+        name: existing.org.name,
+        slug: existing.org.slug,
+      },
+    },
+    created: false,
+    activeTeamId: existing.profile.teamId,
+  };
+}
+
 function requireActiveTeam(teamId: string | null | undefined): string {
   if (!teamId) {
     throw AppError.unprocessable('No active branch selected');
@@ -72,34 +144,31 @@ export const profilesService = {
   // --- Onboarding (E-35) ---
 
   async onboardDesigner(
-    userId: string,
+    caller: DesignerOnboardingCaller,
     input: OnboardDesignerInput,
     options?: { allowAdditionalOrganization?: boolean },
   ): Promise<{ data: OnboardDesignerResponse; created: boolean; activeTeamId: string }> {
     // 1. Idempotency: check if user already onboarded
-    const existing = options?.allowAdditionalOrganization
+    const validatedCaller = validateDesignerOnboardingCaller(caller);
+    const allowAdditionalOrganization = options?.allowAdditionalOrganization === true;
+    if (allowAdditionalOrganization && !canCreateAdditionalOrganization(validatedCaller)) {
+      throw AppError.forbidden('Designer onboarding is not permitted for this account');
+    }
+
+    const existing = allowAdditionalOrganization
       ? null
-      : await profilesRepository.findByUserId(userId);
+      : await profilesRepository.findByUserId(validatedCaller.userId);
     if (existing) {
-      return {
-        data: {
-          profile: {
-            id: existing.profile.id,
-            orgId: existing.profile.orgId,
-            displayName: existing.profile.displayName,
-            entityType: existing.profile.entityType,
-            status: existing.profile.status,
-            createdAt: existing.profile.createdAt.toISOString(),
-          },
-          organization: {
-            id: existing.org.id,
-            name: existing.org.name,
-            slug: existing.org.slug,
-          },
-        },
-        created: false,
-        activeTeamId: existing.profile.teamId,
-      };
+      if (
+        !canCreateAdditionalOrganization(validatedCaller) &&
+        !canStartDesignerOnboarding(validatedCaller)
+      ) {
+        throw AppError.forbidden('Designer onboarding is not permitted for this account');
+      }
+      return existingOnboardingResult(existing);
+    }
+    if (!allowAdditionalOrganization && !canStartDesignerOnboarding(validatedCaller)) {
+      throw AppError.forbidden('Designer onboarding is not permitted for this account');
     }
 
     // 2. Validate taxonomy IDs (single round-trip, deduped)
@@ -126,14 +195,14 @@ export const profilesService = {
 
     // 5. Execute transaction — catch unique violation for race-safe idempotency
     try {
-      const { profile, org } = await profilesRepository.onboard({
+      const { profile, org, created } = await profilesRepository.onboard({
         orgId,
         orgName,
         orgSlug,
         memberId,
         teamId,
         teamMemberId,
-        userId,
+        userId: validatedCaller.userId,
         displayName,
         entityType: input.entityType,
         bio: input.bio ?? null,
@@ -148,6 +217,7 @@ export const profilesService = {
         foundedYear: input.foundedYear ?? null,
         staffCount: input.staffCount ?? null,
         footprintIds,
+        allowAdditionalOrganization,
       });
 
       return {
@@ -166,7 +236,7 @@ export const profilesService = {
             slug: org.slug,
           },
         },
-        created: true,
+        created,
         activeTeamId: profile.teamId,
       };
     } catch (err: unknown) {
@@ -179,29 +249,14 @@ export const profilesService = {
         err.code === '23505' &&
         'constraint' in err &&
         err.constraint === 'designer_profile_user_id_unique';
-      if (isUniqueViolation && !options?.allowAdditionalOrganization) {
-        const existing = await profilesRepository.findByUserId(userId);
+      if (isUniqueViolation && !allowAdditionalOrganization) {
+        const existing = await profilesRepository.findByUserId(validatedCaller.userId);
         if (existing) {
-          return {
-            data: {
-              profile: {
-                id: existing.profile.id,
-                orgId: existing.profile.orgId,
-                displayName: existing.profile.displayName,
-                entityType: existing.profile.entityType,
-                status: existing.profile.status,
-                createdAt: existing.profile.createdAt.toISOString(),
-              },
-              organization: {
-                id: existing.org.id,
-                name: existing.org.name,
-                slug: existing.org.slug,
-              },
-            },
-            created: false,
-            activeTeamId: existing.profile.teamId,
-          };
+          return existingOnboardingResult(existing);
         }
+      }
+      if (err instanceof DesignerOnboardingAccessDeniedError) {
+        throw AppError.forbidden('Designer onboarding is not permitted for this account');
       }
       throw err;
     }

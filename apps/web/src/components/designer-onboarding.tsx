@@ -35,10 +35,7 @@ import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/compo
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
-import {
-  PROFILE_TAXONOMY_KIND,
-  type ProfileTaxonomyKind,
-} from '@/lib/profile-editor-types';
+import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
 
 type EntityType = OnboardDesignerInput['entityType'];
 
@@ -159,11 +156,9 @@ function teamSizeToStaffCount(teamSize: string) {
 
 async function fetchTaxonomyTerms(kind: TaxonomyKind) {
   const res = await api.api.taxonomy.terms.$get({ query: { kind } });
-  return (await handleApiResponse(
-    res,
-    listTaxonomyResponseSchema,
-    `Could not load ${kind} options.`,
-  )).terms;
+  return (
+    await handleApiResponse(res, listTaxonomyResponseSchema, `Could not load ${kind} options.`)
+  ).terms;
 }
 
 async function submitWithApi(input: OnboardDesignerInput) {
@@ -331,9 +326,7 @@ export function DesignerOnboarding({
           : {}),
         ...(phone ? { phone } : {}),
         ...(normalizedWebsiteUrl ? { websiteUrl: normalizedWebsiteUrl } : {}),
-        ...(normalizedGoogleBusinessUrl
-          ? { googleBusinessUrl: normalizedGoogleBusinessUrl }
-          : {}),
+        ...(normalizedGoogleBusinessUrl ? { googleBusinessUrl: normalizedGoogleBusinessUrl } : {}),
         ...(optionalTrimmed(instagramHandle)
           ? { instagramHandle: optionalTrimmed(instagramHandle) }
           : {}),
@@ -366,6 +359,7 @@ export function DesignerOnboarding({
     return (
       <OnboardingShell signedInAs={displayEmail}>
         <CompletionStep
+          displayName={result.profile.displayName}
           onAddProjects={() => router.push('/designer/projects/new')}
           onCompletePortfolio={() => router.push('/designer/portfolio')}
           onSkip={() => router.push('/designer/dashboard')}
@@ -599,18 +593,25 @@ export function DesignerOnboarding({
 }
 
 function CompletionStep({
+  displayName,
   onAddProjects,
   onCompletePortfolio,
   onSkip,
 }: {
+  displayName: string | null;
   onAddProjects: () => void;
   onCompletePortfolio: () => void;
   onSkip: () => void;
 }) {
+  // Greet with the saved profile name when it exists; otherwise use an
+  // intentional neutral greeting rather than an empty name slot (E-273).
+  const greetingName = displayName?.trim();
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-lg font-medium tracking-[-0.015em]">You&apos;re set up, there! 🎉</h1>
+        <h1 className="text-lg font-medium tracking-[-0.015em]">
+          {greetingName ? `You're set up, ${greetingName}! 🎉` : "You're all set! 🎉"}
+        </h1>
         {/*
           E-278: setup is done, but the profile is NOT public yet. The backend
           publication gate (portfolio-service `missingRequiredFields` +

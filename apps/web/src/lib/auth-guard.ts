@@ -1,7 +1,13 @@
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { PLATFORM_ROLE, platformRoleSchema, type PlatformRole } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  accountStatusSchema,
+  platformRoleSchema,
+  type PlatformRole,
+} from '@repo/contracts';
 import type { ActiveContext } from '@repo/contracts';
 import { env } from '@/env';
 import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
@@ -28,6 +34,7 @@ type SessionUser = {
   email: string;
   phoneNumber?: string | null;
   role: string | null;
+  status?: string | null;
   [key: string]: unknown;
 };
 
@@ -153,6 +160,54 @@ export async function requireAuth(options?: {
   ) {
     redirect('/unauthorized');
   }
+
+  return session;
+}
+
+/** Exact visitor gate for My Tickif pages. Higher platform roles do not inherit access. */
+export async function requireActiveVisitor(): Promise<SessionData> {
+  const session = await requireAuth();
+  const role = platformRoleSchema.safeParse(session.user.role);
+  if (!role.success) redirect('/unauthorized');
+
+  if (role.data === PLATFORM_ROLE.DESIGNER) redirect('/designer/dashboard');
+  if (role.data === PLATFORM_ROLE.ADMIN || role.data === PLATFORM_ROLE.SUPERADMIN) {
+    redirect('/dashboard');
+  }
+
+  const status = accountStatusSchema.safeParse(session.user.status);
+  if (!status.success) redirect('/unauthorized');
+  if (status.data === ACCOUNT_STATUS.PENDING) redirect('/onboarding');
+  if (status.data !== ACCOUNT_STATUS.ACTIVE) redirect('/unauthorized');
+  if (activeContextForSession(session).kind !== 'personal') redirect('/unauthorized');
+
+  return session;
+}
+
+/**
+ * Requester gate for consultation records. Visitors follow the same active
+ * check as My Tickif; designers browsing without a studio keep access to the
+ * bookings they requested as customers, since booking creation legitimately
+ * admits them. Studio sessions belong to the designer inbox instead.
+ */
+export async function requirePersonalRequester(): Promise<SessionData> {
+  const session = await requireAuth();
+  const role = platformRoleSchema.safeParse(session.user.role);
+  if (!role.success) redirect('/unauthorized');
+
+  if (role.data === PLATFORM_ROLE.ADMIN || role.data === PLATFORM_ROLE.SUPERADMIN) {
+    redirect('/dashboard');
+  }
+  if (activeContextForSession(session).kind === 'organization') {
+    redirect('/designer/consultations');
+  }
+  if (role.data === PLATFORM_ROLE.DESIGNER) return session;
+  if (role.data !== PLATFORM_ROLE.VISITOR) redirect('/unauthorized');
+
+  const status = accountStatusSchema.safeParse(session.user.status);
+  if (!status.success) redirect('/unauthorized');
+  if (status.data === ACCOUNT_STATUS.PENDING) redirect('/onboarding');
+  if (status.data !== ACCOUNT_STATUS.ACTIVE) redirect('/unauthorized');
 
   return session;
 }

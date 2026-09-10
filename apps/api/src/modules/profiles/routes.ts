@@ -118,6 +118,10 @@ const onboardRoute = createRoute({
       description: 'Unauthorized or banned',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
+    403: {
+      description: 'Designer onboarding is not permitted for this account',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
     422: {
       description: 'Validation error — invalid taxonomy IDs or missing required fields',
       content: { 'application/json': { schema: errorResponseSchema } },
@@ -125,7 +129,9 @@ const onboardRoute = createRoute({
   },
 });
 
-export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ defaultHook: validationHook })
+export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
+  defaultHook: validationHook,
+})
   .openapi(
     createRoute({
       method: 'get',
@@ -239,7 +245,10 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
   .openapi(onboardRoute, async (c) => {
     const user = c.get('user')!;
     const input = c.req.valid('json');
-    const { data, created, activeTeamId } = await profilesService.onboardDesigner(user.id, input);
+    const { data, created, activeTeamId } = await profilesService.onboardDesigner(
+      { userId: user.id, role: user.role, status: user.status },
+      input,
+    );
     const activeOrganizationResponse = await setActiveOrganization(
       c.req.raw.headers,
       data.organization.id,
@@ -326,10 +335,22 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Portfolio settings with merged profile data and badges',
           content: { 'application/json': { schema: portfolioResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'No active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'No active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -361,11 +382,26 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Updated portfolio settings',
           content: { 'application/json': { schema: portfolioResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
-        409: { description: 'Slug conflict', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        409: {
+          description: 'Slug conflict',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -398,9 +434,18 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Slug availability result',
           content: { 'application/json': { schema: slugAvailabilityResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -433,9 +478,18 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Presigned upload URL and object key',
           content: { 'application/json': { schema: logoUploadUrlResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -468,22 +522,40 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Logo committed successfully with public URL',
           content: { 'application/json': { schema: uploadLogoResponseSchema } },
         },
-        400: { description: 'No uploaded object found in storage', content: { 'application/json': { schema: errorResponseSchema } } },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        409: { description: 'Logo was modified concurrently', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'Validation error', content: { 'application/json': { schema: errorResponseSchema } } },
+        400: {
+          description: 'No uploaded object found in storage',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        409: {
+          description: 'Logo was modified concurrently',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Validation error',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
       const user = c.get('user')!;
       const session = c.get('session');
       const { objectKey } = c.req.valid('json');
-      const result = await portfolioService.commitLogoUpload({ objectKey }, {
-        userId: user.id,
-        activeOrgId: session?.activeOrganizationId ?? null,
-        activeTeamId: session?.activeTeamId ?? null,
-      });
+      const result = await portfolioService.commitLogoUpload(
+        { objectKey },
+        {
+          userId: user.id,
+          activeOrgId: session?.activeOrganizationId ?? null,
+          activeTeamId: session?.activeTeamId ?? null,
+        },
+      );
       return c.json(result, 200);
     },
   )
@@ -499,9 +571,18 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
         204: {
           description: 'Logo deleted successfully',
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No logo exists to delete', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No logo exists to delete',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -529,10 +610,22 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Connection state, availability, and cached reviews',
           content: { 'application/json': { schema: googleReviewsResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'No active organization', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'No active organization',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -562,11 +655,26 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Connection stored (pending first fetch)',
           content: { 'application/json': { schema: googleReviewsResponseSchema } },
         },
-        400: { description: 'Invalid Google Business reference', content: { 'application/json': { schema: errorResponseSchema } } },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
-        422: { description: 'Feature unavailable or location not found', content: { 'application/json': { schema: errorResponseSchema } } },
+        400: {
+          description: 'Invalid Google Business reference',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        422: {
+          description: 'Feature unavailable or location not found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -594,9 +702,18 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
           description: 'Refresh enqueued; returns the current cached state',
           content: { 'application/json': { schema: googleReviewsResponseSchema } },
         },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No Google location connected', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No Google location connected',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {
@@ -620,9 +737,18 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({ de
       middleware: [requireAuth] as const,
       responses: {
         204: { description: 'Disconnected' },
-        401: { description: 'Unauthorized', content: { 'application/json': { schema: errorResponseSchema } } },
-        403: { description: 'Forbidden', content: { 'application/json': { schema: errorResponseSchema } } },
-        404: { description: 'No profile found', content: { 'application/json': { schema: errorResponseSchema } } },
+        401: {
+          description: 'Unauthorized',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        403: {
+          description: 'Forbidden',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
+        404: {
+          description: 'No profile found',
+          content: { 'application/json': { schema: errorResponseSchema } },
+        },
       },
     }),
     async (c) => {

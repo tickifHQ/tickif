@@ -267,7 +267,7 @@ describe('HomePage', () => {
   it('redirects a logged-in visitor to their personalized home before loading discovery data', async () => {
     mock.getServerSession.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-12-31T00:00:00.000Z' },
-      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
+      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor', status: 'active' },
     });
 
     await expect(HomePage()).rejects.toThrow('NEXT_REDIRECT:/home');

@@ -96,10 +96,7 @@ test('email OTP creates a real session through a local Resend delivery double', 
     await page.getByRole('button', { name: 'Finish later', exact: true }).click();
     await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute(
-      'href',
-      '/home',
-    );
+    await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/');
     await expect(page).toHaveTitle(/Finish setup later/);
     await page.screenshot({
       path: testInfo.outputPath('email-onboarding-deferred-desktop.png'),
@@ -123,6 +120,16 @@ test('email OTP creates a real session through a local Resend delivery double', 
     });
     expect(deniedWrite.status()).toBe(403);
     expect((await context.request.get(`${apiUrl}/api/admin/projects`)).status()).toBe(403);
+    // Deferred exploration lands on the public feed without funneling the
+    // pending designer signup into visitor onboarding or activating it.
+    await page.getByRole('link', { name: 'Explore projects' }).click();
+    await expect(page).toHaveURL(`${webUrl}/`);
+    const exploringSession = await context.request.get(`${apiUrl}/api/auth/get-session`);
+    const exploringBody = await exploringSession.json();
+    expect(exploringBody.user.role).toBe('visitor');
+    expect(exploringBody.user.status).toBe('pending');
+    await page.goto('/designer/onboarding/deferred');
+    await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
     await page.goto('/designer/dashboard');
@@ -191,7 +198,7 @@ test('Google authorization creates a session through the real callback with a lo
       );
       await route.fulfill({ status: 302, headers: { location: callback.href } });
     });
-    await page.goto('/login');
+    await page.goto('/login?mode=designer');
     await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
     await expect(page).toHaveURL(/\/onboarding/);
     const session = await context.request.get(`${apiUrl}/api/auth/get-session`);

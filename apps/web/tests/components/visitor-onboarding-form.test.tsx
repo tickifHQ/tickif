@@ -29,6 +29,16 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('VisitorOnboardingForm', () => {
+  it('does not offer a skip control that leaves visitor onboarding incomplete', () => {
+    render(
+      <VisitorOnboardingForm
+        displayName="Visitor"
+        signedInAs="+919123456789"
+        initialPhoneNumber="+919123456789"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mock.updateUser.mockResolvedValue({ data: { status: true }, error: null });

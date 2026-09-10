@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginCard } from '../../src/components/login-card';
 
@@ -83,11 +83,14 @@ describe('LoginCard', () => {
     expect(screen.getByText(/One link to share your work/)).toBeInTheDocument();
   });
 
-  it('shows Google sign-in in browsing mode', () => {
+  it('keeps visitor authentication phone-only', () => {
     render(<LoginCard />);
-    expect(
-      screen.getAllByRole('button', { name: /continue with google/i }).length,
-    ).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+    const browsingPanel = screen
+      .getByRole('button', { name: 'Get OTP' })
+      .closest('[aria-hidden="false"]');
+    expect(browsingPanel).not.toBeNull();
+    expect(within(browsingPanel as HTMLElement).queryByText('OR')).not.toBeInTheDocument();
     expect(screen.getByText(/Tickif's Terms & Privacy/)).toBeInTheDocument();
   });
 
@@ -109,21 +112,6 @@ describe('LoginCard', () => {
       'text-button-fancy-foreground',
       'shadow-button-fancy',
     );
-  });
-
-  it('calls Google signIn with origin callback in browsing mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({
-      error: null,
-      url: 'https://accounts.google.com/...',
-    });
-    const user = userEvent.setup();
-    render(<LoginCard />);
-    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
-    await user.click(googleButtons[0]!);
-    expect(mock.signInSocial).toHaveBeenCalledWith({
-      provider: 'google',
-      callbackURL: 'http://localhost:3000/login?mode=browsing&authenticated=1',
-    });
   });
 
   it('calls Google signIn with onboarding callback in designer mode', async () => {
@@ -173,15 +161,6 @@ describe('LoginCard', () => {
       provider: 'google',
       callbackURL: 'http://localhost:3000/invitations/invitation-1',
     });
-  });
-
-  it('shows error when Google signIn fails in browsing mode', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: 'Provider not found' });
-    const user = userEvent.setup();
-    render(<LoginCard />);
-    const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
-    await user.click(googleButtons[0]!);
-    expect(screen.getByText("Couldn't sign in with Google")).toBeInTheDocument();
   });
 
   it('shows error when Google signIn fails in designer mode', async () => {
@@ -330,9 +309,9 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Signed in')).toBeInTheDocument();
-      await waitFor(() => {
-        expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=browsing&authenticated=1');
-      });
+      await waitFor(() =>
+        expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=browsing&authenticated=1'),
+      );
     });
 
     it('shows error on verify failure', async () => {
