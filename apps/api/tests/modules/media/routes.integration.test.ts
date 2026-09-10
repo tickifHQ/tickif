@@ -108,7 +108,9 @@ describe('POST /api/media/upload-url', () => {
 
 describe('POST /api/media/:imageId/commit', () => {
   it('rejects unauthenticated requests with 401', async () => {
-    const res = await client.api.media[':imageId'].commit.$post({ param: { imageId: RANDOM_UUID } });
+    const res = await client.api.media[':imageId'].commit.$post({
+      param: { imageId: RANDOM_UUID },
+    });
     expect(res.status).toBe(401);
   });
 
@@ -170,6 +172,12 @@ describe('GET /api/projects/:id/images', () => {
       height: 1200,
       derivatives: [{ variant: 'thumb', format: 'webp', key: 'd/t.webp', width: 320, height: 240 }],
     });
+    await makeProjectImage({
+      projectId: project.id,
+      sortOrder: 2,
+      status: 'failed',
+      failureReason: 'duplicate',
+    });
 
     const res = await client.api.projects[':id'].images.$get(
       { param: { id: project.id }, query: {} },
@@ -178,9 +186,10 @@ describe('GET /api/projects/:id/images', () => {
     expect(res.status).toBe(200);
     if (res.status !== 200) throw new Error('expected 200');
     const body = await res.json();
-    expect(body.items).toHaveLength(2);
+    expect(body.items).toHaveLength(3);
     expect(body.items[0]!.sortOrder).toBe(0);
     expect(body.items[0]!.status).toBe('ready');
+    expect(body.items[0]!.failureReason).toBeNull();
     expect(body.items[0]!.derivatives).toHaveLength(1);
     expect(body.items[0]!.previewUrl).toContain('X-Amz-Signature=');
     expect(body.items[0]!.viewerUrl).toContain('X-Amz-Signature=');
@@ -194,6 +203,8 @@ describe('GET /api/projects/:id/images', () => {
     expect(body.items[1]!.status).toBe('processing');
     expect(body.items[1]!.previewUrl).toBeNull();
     expect(body.items[1]!.viewerUrl).toBeNull();
+    expect(body.items[2]!.status).toBe('failed');
+    expect(body.items[2]!.failureReason).toBe('duplicate');
   });
 });
 

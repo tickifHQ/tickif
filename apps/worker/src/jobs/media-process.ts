@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { config } from '@repo/config';
+import type { ImageFailureReason } from '@repo/contracts';
 import {
   getObject,
   putObject,
@@ -41,8 +42,12 @@ type StoredDerivative = {
 const DERIVATIVE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 /** Persist a permanent rejection and drop the now-orphaned original. Cleanup is best-effort. */
-async function failPermanently(imageId: string, originalKey: string): Promise<void> {
-  await markFailed(imageId);
+async function failPermanently(
+  imageId: string,
+  originalKey: string,
+  reason: ImageFailureReason,
+): Promise<void> {
+  await markFailed(imageId, reason);
   await deleteObject(originalKey).catch((err) =>
     console.error(`[worker] media ${imageId}: original cleanup failed`, err),
   );
@@ -106,7 +111,7 @@ async function processMediaWithLease(
   } catch (err) {
     if (err instanceof ObjectTooLargeError) {
       if (isReprocess) return { ok: false, reason: 'too_large' };
-      await failPermanently(imageId, image.originalKey);
+      await failPermanently(imageId, image.originalKey, 'too_large');
       return { ok: false, reason: 'too_large' };
     }
     throw err;
@@ -115,7 +120,8 @@ async function processMediaWithLease(
   const validation = await validateImageBytes(original, image.contentType);
   if (!validation.ok) {
     if (isReprocess) return { ok: false, reason: validation.reason };
-    await failPermanently(imageId, image.originalKey);
+    const reason: ImageFailureReason = validation.reason;
+    await failPermanently(imageId, image.originalKey, reason);
     return { ok: false, reason: validation.reason };
   }
 
@@ -171,7 +177,7 @@ async function processMediaWithLease(
   const candidates = await findProjectPhashes(image.projectId, imageId);
   const duplicate = findNearestDuplicate(phash, candidates, config.MEDIA_DEDUP_HAMMING_THRESHOLD);
   if (duplicate && config.MEDIA_DEDUP_ACTION === 'reject') {
-    await failPermanently(imageId, image.originalKey);
+    await failPermanently(imageId, image.originalKey, 'duplicate');
     return { ok: false, reason: 'duplicate' };
   }
   if (duplicate) {
