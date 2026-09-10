@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
+import type { ComponentProps } from 'react';
 import type {
   ModerationHistoryResponse,
   ModerationReasonCode,
@@ -9,6 +10,7 @@ import type {
 import { moderationHistoryResponseSchema } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
+import { Badge } from '@repo/ui/components/badge';
 import {
   Dialog,
   DialogContent,
@@ -35,27 +37,27 @@ function actionLabel(action: ModerationActionValue): string {
 // (approve/reject/changes) read differently from neutral/self-service steps.
 const actionTone: Record<
   ModerationActionValue,
-  { dot: string; badge: string }
+  { dot: string; badge: ComponentProps<typeof Badge>['variant'] }
 > = {
-  submit: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  resubmit: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  withdraw: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  start_review: { dot: 'bg-blue-500', badge: 'bg-blue-500/10 text-blue-600' },
-  request_changes: { dot: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-600' },
-  reject: { dot: 'bg-destructive', badge: 'bg-destructive/10 text-destructive' },
-  unpublish: { dot: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-600' },
-  publish: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
-  metadata_corrected: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  archive: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  restore: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
-  delete: { dot: 'bg-destructive', badge: 'bg-destructive/10 text-destructive' },
-  organization_delist: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  organization_archive: { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' },
-  organization_restore: { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600' },
+  submit: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  resubmit: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  withdraw: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  start_review: { dot: 'bg-info', badge: 'info' },
+  request_changes: { dot: 'bg-warning', badge: 'warning' },
+  reject: { dot: 'bg-destructive', badge: 'destructive' },
+  unpublish: { dot: 'bg-warning', badge: 'warning' },
+  publish: { dot: 'bg-success', badge: 'success' },
+  metadata_corrected: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  archive: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  restore: { dot: 'bg-success', badge: 'success' },
+  delete: { dot: 'bg-destructive', badge: 'destructive' },
+  organization_delist: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  organization_archive: { dot: 'bg-muted-foreground', badge: 'secondary' },
+  organization_restore: { dot: 'bg-success', badge: 'success' },
 };
 
 function toneForAction(action: ModerationActionValue) {
-  return actionTone[action] ?? { dot: 'bg-muted-foreground', badge: 'bg-muted text-muted-foreground' };
+  return actionTone[action];
 }
 
 const historyDateFormatter = new Intl.DateTimeFormat('en-IN', {
@@ -139,9 +141,9 @@ export function DesignerProjectModeration({
 
   function openDrawer() {
     setDrawerOpen(true);
-    // Fetch on first open; if events are already loaded they stay visible and
-    // the designer can pull fresh events with the in-drawer Refresh control.
-    if (!history) fetchHistory();
+    // Review actions can change while the drawer is closed. Refresh on each
+    // open, preserving loaded events and reusing any request already pending.
+    if (!isPending) fetchHistory();
   }
 
   if (!projectId) return null;
@@ -151,7 +153,7 @@ export function DesignerProjectModeration({
   const showTimeline = !!history && history.length > 0;
 
   return (
-    <div className="mt-6 space-y-3">
+    <div className="mt-6 flex flex-col items-start gap-3">
       {hasFeedback && showFeedbackAlert ? (
         <Alert variant={isRejected ? 'destructive' : 'default'}>
           <AlertCircle className="size-4" />
@@ -167,7 +169,7 @@ export function DesignerProjectModeration({
       ) : null}
 
       <Button ref={triggerRef} type="button" variant="outline" size="sm" onClick={openDrawer}>
-        <Clock3 className="size-4" />
+        <Clock3 data-icon="inline-start" />
         View moderation history
       </Button>
 
@@ -209,16 +211,16 @@ export function DesignerProjectModeration({
               className="mr-8 shrink-0"
             >
               {isPending ? (
-                <Loader2 key={refreshKey} className="size-4 animate-spin" />
+                <Loader2 key={refreshKey} className="animate-spin" />
               ) : (
-                <RefreshCw className="size-4" />
+                <RefreshCw />
               )}
             </Button>
           </div>
 
-          <div className="space-y-3 p-5">
+          <div className="flex flex-col gap-3 p-5">
             {error ? (
-              <div className="space-y-2">
+              <div className="flex flex-col items-start gap-2">
                 <p className="flex items-center gap-2 text-sm text-destructive">
                   <AlertCircle className="size-4 shrink-0" />
                   {error}
@@ -230,7 +232,7 @@ export function DesignerProjectModeration({
                   onClick={fetchHistory}
                   disabled={isPending}
                 >
-                  {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
                   Try again
                 </Button>
               </div>
@@ -249,7 +251,7 @@ export function DesignerProjectModeration({
             {showTimeline ? (
               <ol
                 className={cn(
-                  'relative space-y-4 pl-6',
+                  'relative flex flex-col gap-4 pl-6',
                   // Continuous connector line running down the left of the dots.
                   'before:absolute before:bottom-2 before:left-[5px] before:top-2 before:w-px before:bg-border',
                   isPending && 'opacity-60 transition-opacity',
@@ -276,14 +278,9 @@ export function DesignerProjectModeration({
                       />
                       <div className="rounded-lg border border-border/70 bg-card p-3 shadow-sm">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold',
-                              tone.badge,
-                            )}
-                          >
+                          <Badge variant={tone.badge} shape="square">
                             {actionLabel(item.action)}
-                          </span>
+                          </Badge>
                           {eventTime ? (
                             <time
                               className="ml-auto text-[11px] text-muted-foreground"

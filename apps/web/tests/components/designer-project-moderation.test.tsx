@@ -216,6 +216,24 @@ describe('DesignerProjectModeration', () => {
       expect(await screen.findByText(/no moderation actions yet/i)).toBeInTheDocument();
     });
 
+    it('refetches on reopening after an empty history so new moderation actions are visible', async () => {
+      const user = userEvent.setup();
+      mock.historyGet.mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      );
+      renderModeration();
+
+      await user.click(screen.getByRole('button', { name: /view moderation history/i }));
+      expect(await screen.findByText(/no moderation actions yet/i)).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+      await user.click(screen.getByRole('button', { name: /view moderation history/i }));
+
+      expect(await screen.findByText('Request Changes')).toBeInTheDocument();
+      expect(mock.historyGet).toHaveBeenCalledTimes(2);
+    });
+
     it('shows an error with a retry action that refetches', async () => {
       const user = userEvent.setup();
       mock.historyGet.mockResolvedValueOnce(new Response('nope', { status: 500 }));
