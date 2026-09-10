@@ -492,7 +492,11 @@ describe('DesignerProjectUpload', () => {
     expect(submit).toBeEnabled();
     await user.click(submit);
 
-    await waitFor(() => expect(mock.submitProject).toHaveBeenCalled());
+    // E-286: clicking "Preview & Submit" opens the confirmation step and must
+    // NOT call the submit API yet — but the cover save + completeness check
+    // (which precede opening the preview) have already run.
+    const confirm = await screen.findByRole('button', { name: 'Confirm & submit' });
+    expect(mock.submitProject).not.toHaveBeenCalled();
     expect(mock.projectPatch).toHaveBeenCalledWith(
       expect.objectContaining({
         json: expect.objectContaining({ coverImageId: firstImage.id }),
@@ -501,6 +505,279 @@ describe('DesignerProjectUpload', () => {
     expect(mock.projectPatch.mock.invocationCallOrder[0]).toBeLessThan(
       mock.completenessGet.mock.invocationCallOrder[0]!,
     );
+
+    // The submit API runs only after the explicit confirmation.
+    await user.click(confirm);
+    await waitFor(() => expect(mock.submitProject).toHaveBeenCalledTimes(1));
+  });
+
+  // --- E-286: preview / confirm / persistent submitted state --------------------
+  describe('Preview & Submit confirmation flow (E-286)', () => {
+    async function renderSubmittableDraft() {
+      const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+      const images = (await (await mock.listImagesGet()).json()) as ListProjectImagesResponse;
+      const firstImage = images.items[0]!;
+      const draft = { ...project, coverImageId: firstImage.id };
+      mock.projectGet.mockResolvedValue({ ok: true, json: async () => draft });
+      mock.listImagesGet.mockReset().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          items: [
+            firstImage,
+            { ...firstImage, id: '66666666-6666-4666-8666-666666666666' },
+            { ...firstImage, id: '77777777-7777-4777-8777-777777777777' },
+          ],
+        }),
+      });
+      mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      mock.imageMetadataPatch.mockImplementation(
+        async ({ param }: { param: { imageId: string } }) => ({
+          ok: true,
+          json: async () => ({ ...firstImage, id: param.imageId }),
+        }),
+      );
+      mock.completenessGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          complete: true,
+          score: 100,
+          missing: [],
+          requirements: [{ key: 'cover-image', label: 'Cover image selected', complete: true }],
+        }),
+      });
+      return { project, draft };
+    }
+
+    it('opens the preview and does not call the submit API on the first click', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent('Review before submitting');
+      expect(mock.submitProject).not.toHaveBeenCalled();
+    });
+
+    it('shows the actual project data and ready images in the preview', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+      const dialog = await screen.findByRole('dialog');
+      // The actual project title and photo counts are surfaced from live state.
+      expect(dialog).toHaveTextContent('2 BHK in Adyar');
+      expect(dialog).toHaveTextContent('3 total');
+      expect(dialog).toHaveTextContent('3 ready');
+      // Ready image thumbnails are rendered from the existing image data.
+      expect(within(dialog).getAllByRole('img', { name: /\(Ready\)$/ }).length).toBeGreaterThan(0);
+    });
+
+    it('returns to the form without submitting when Back to edit is clicked', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await screen.findByRole('dialog');
+
+      await user.click(screen.getByRole('button', { name: 'Back to edit' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mock.submitProject).not.toHaveBeenCalled();
+    });
+
+    it('calls the submit API exactly once when confirming', async () => {
+      const user = userEvent.setup();
+      const { project, draft } = await renderSubmittableDraft();
+      mock.submitProject.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...draft, status: 'submitted', submittedAt: '2026-09-07T00:00:00.000Z' }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm & submit' }));
+
+      await waitFor(() => expect(mock.submitProject).toHaveBeenCalledTimes(1));
+    });
+
+    it('shows the success confirmation and routes to the project list after submitting', async () => {
+      const user = userEvent.setup();
+      const { project, draft } = await renderSubmittableDraft();
+      mock.submitProject.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...draft,
+          status: 'submitted',
+          submittedAt: '2026-09-07T00:00:00.000Z',
+        }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm & submit' }));
+
+      // The success dialog with the tick confirmation appears once the API resolves.
+      const success = await screen.findByText('Project submitted');
+      expect(success).toBeInTheDocument();
+
+      // Dismissing it sends the designer back to their projects list.
+      await user.click(screen.getByRole('button', { name: 'Back to projects' }));
+      await waitFor(() => expect(mock.router.push).toHaveBeenCalledWith('/designer/projects'));
+    });
+
+    it('announces a submission failure inside the open dialog for screen readers (E-286 review)', async () => {
+      // Review P2: when the submit API rejects, the preview dialog stays open and
+      // the page-level alert is hidden from the a11y tree. The failure must be
+      // announced from inside the dialog via a live region (role="alert").
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      mock.submitProject.mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: { code: 'FORBIDDEN', message: 'Account suspended' } }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm & submit' }));
+
+      await waitFor(() => expect(mock.submitProject).toHaveBeenCalledTimes(1));
+
+      // The dialog stays open, and the error is exposed as an assertive alert so
+      // assistive tech announces it (not just a plain, silent paragraph).
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Account suspended');
+
+      // No success dialog / navigation happened on the failure path.
+      expect(screen.queryByText('Project submitted')).not.toBeInTheDocument();
+      expect(mock.router.push).not.toHaveBeenCalledWith('/designer/projects');
+    });
+
+    it('shows persistent Submitted feedback that outlives the transient toast', async () => {
+      // NOTE: the async interactions and queries below run under REAL timers.
+      // Mixing vi.useFakeTimers() with userEvent + findBy/waitFor (which poll on
+      // real time) deadlocks, so we only switch to fake timers for the final
+      // "advance past the 3s toast auto-clear" step, where no polling happens.
+      const user = userEvent.setup();
+      const { project, draft } = await renderSubmittableDraft();
+      mock.submitProject.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...draft,
+          status: 'submitted',
+          submittedAt: '2026-09-07T00:00:00.000Z',
+        }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm & submit' }));
+
+      await waitFor(() => expect(mock.submitProject).toHaveBeenCalled());
+
+      // The success dialog is shown first. While it is open Radix marks the rest
+      // of the page aria-hidden, so query the underlying banner/toast by text.
+      await screen.findByText('Project submitted');
+      expect(screen.getByText('Submitted for review')).toBeInTheDocument();
+      expect(screen.getByText('Project submitted for review.')).toBeInTheDocument();
+
+      // Dismissing the dialog restores the page (navigation is mocked here), and
+      // the persistent status banner is exposed to assistive tech again.
+      await user.click(screen.getByRole('button', { name: 'Back to projects' }));
+      const status = await screen.findByRole('status', { name: 'Submission status' });
+      expect(status).toHaveTextContent('Submitted for review');
+
+      // The transient toast still auto-dismisses after the component's 3s timeout.
+      await waitFor(
+        () => expect(screen.queryByText('Project submitted for review.')).not.toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+      expect(
+        screen.getByRole('status', { name: 'Submission status' }),
+      ).toHaveTextContent('Submitted for review');
+    });
+
+    it('represents the backend in_review status when the project is already in review', async () => {
+      const project = (await (await mock.projectGet()).json()) as ProjectDetailResponse;
+      mock.projectGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...project, status: 'in_review' }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      const status = await screen.findByRole('status', { name: 'Submission status' });
+      expect(status).toHaveTextContent('In review');
+    });
+
+    it('does not open the preview when the project is incomplete', async () => {
+      const user = userEvent.setup();
+      const { project } = await renderSubmittableDraft();
+      mock.completenessGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          complete: false,
+          score: 50,
+          missing: ['cover-image'],
+          requirements: [{ key: 'cover-image', label: 'Cover image selected', complete: false }],
+        }),
+      });
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+      await waitFor(() =>
+        expect(screen.getByText(/not ready to submit yet/i)).toBeInTheDocument(),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mock.submitProject).not.toHaveBeenCalled();
+    });
+
+    it('prevents duplicate submissions while a confirmation is in progress', async () => {
+      const user = userEvent.setup();
+      const { project, draft } = await renderSubmittableDraft();
+      const submitControls: { resolve: (() => void) | null } = { resolve: null };
+      mock.submitProject.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            submitControls.resolve = () =>
+              resolve({
+                ok: true,
+                json: async () => ({
+                  ...draft,
+                  status: 'submitted',
+                  submittedAt: '2026-09-07T00:00:00.000Z',
+                }),
+              });
+          }),
+      );
+      render(<DesignerProjectUpload initialProjectId={project.id} />);
+
+      await screen.findByDisplayValue('2 BHK in Adyar');
+      await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+      const confirm = await screen.findByRole('button', { name: 'Confirm & submit' });
+
+      await user.click(confirm);
+      // Button switches to the in-flight state and is disabled; a second click is a no-op.
+      const submitting = await screen.findByRole('button', { name: /submitting/i });
+      expect(submitting).toBeDisabled();
+      await user.click(submitting);
+
+      submitControls.resolve?.();
+      await waitFor(() => expect(mock.submitProject).toHaveBeenCalledTimes(1));
+    });
   });
 
   it('shows changes-needed feedback above the visibility tips for requested changes', async () => {
@@ -858,6 +1135,44 @@ describe('DesignerProjectUpload batch recovery', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /retry upload/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('settles the batch without waiting for orphan cleanup', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([false, true]);
+    mock.deleteImage.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await dropFiles([{ name: 'first.jpg' }, { name: 'second.jpg' }]);
+
+    await waitFor(() => expect(mock.uploadUrlPost).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Could not upload first.jpg.')).toBeInTheDocument();
+    await screen.findByRole('button', { name: /retry upload/i });
+    expect(mock.linkImagePatch).toHaveBeenCalled();
+  });
+
+  it('restores server image state after a failed reorder', async () => {
+    mockSuccessfulLookups();
+    const processingItem = {
+      ...readyItem,
+      id: 'c1111111-1111-4111-8111-111111111111',
+      status: 'processing',
+      sortOrder: 1,
+    };
+    mockImageList([readyItem, processingItem]);
+    mock.linkImagePatch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { message: 'Reorder failed' } }),
+    });
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+    await screen.findByText('Processing');
+
+    // The worker finishes while the failed reorder triggers an image-only refresh.
+    mockImageList([readyItem, { ...processingItem, status: 'ready' }]);
+    await userEvent.setup().click(screen.getByRole('button', { name: /move image 2 earlier/i }));
+
+    await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Ready')).toHaveLength(2);
   });
 
   it('shows the persisted processing reason on failed tiles with a recovery path', async () => {

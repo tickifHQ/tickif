@@ -1,3 +1,4 @@
+import { discoveryRanking } from './query.js';
 import type { CollectionCreateSchema, CollectionFieldSchema } from 'typesense';
 import {
   initialSearchCollectionName,
@@ -31,14 +32,15 @@ export const DESIGNER_QUERY_BY = [
   'localitySlugs',
   'scopeSlugs',
   'themeSlugs',
+  'portfolioTerms',
 ] as const;
 
 export const PROJECT_DEFAULT_SORT = '_text_match:desc,publishedAt:desc';
 export const DESIGNER_DEFAULT_SORT = '_text_match:desc,projectCount:desc,updatedAt:desc';
 
-/** Query-time expiry keeps verification ranking correct without an expiry scheduler. */
+/** Paid coverage expires at query time without relying on a scheduler. */
 export function designerDefaultSort(nowEpochMs: number = Date.now()): string {
-  return `_text_match:desc,_eval(isKycVerified:true && kycExpiresAt:>${nowEpochMs}):desc,updatedAt:desc`;
+  return discoveryRanking(nowEpochMs);
 }
 
 const PROJECT_COLLECTION_FIELDS = [
@@ -67,12 +69,14 @@ const PROJECT_COLLECTION_FIELDS = [
   { name: 'coverImageWidth', type: 'int32', index: false, optional: true },
   { name: 'coverImageHeight', type: 'int32', index: false, optional: true },
   { name: 'featuredAt', type: 'int64', sort: true, optional: true },
+  { name: 'paidUntil', type: 'int64', sort: true, optional: true },
   { name: 'avgRating', type: 'float', sort: true, optional: true },
   { name: 'reviewCount', type: 'int32', sort: true, optional: true },
   { name: 'publishedAt', type: 'int64', sort: true },
 ] satisfies CollectionFieldSchema[];
 
 const DESIGNER_COLLECTION_FIELDS = [
+  { name: 'portfolioTerms', type: 'string[]', optional: true },
   { name: 'slug', type: 'string', index: false, optional: true },
   { name: 'displayName', type: 'string' },
   { name: 'bio', type: 'string', optional: true },
@@ -83,6 +87,7 @@ const DESIGNER_COLLECTION_FIELDS = [
   { name: 'themeSlugs', type: 'string[]', facet: true },
   { name: 'yearsExperience', type: 'int32', sort: true },
   { name: 'projectCount', type: 'int32', sort: true },
+  { name: 'paidUntil', type: 'int64', sort: true, optional: true },
   { name: 'avgRating', type: 'float', sort: true },
   { name: 'reviewCount', type: 'int32', sort: true },
   { name: 'isKycVerified', type: 'bool', sort: true, optional: true },
@@ -108,7 +113,5 @@ export function searchCollectionSchema(
   };
 }
 
-export const PROJECT_SEARCH_SETTINGS: CollectionCreateSchema =
-  searchCollectionSchema('projects');
-export const DESIGNER_SEARCH_SETTINGS: CollectionCreateSchema =
-  searchCollectionSchema('designers');
+export const PROJECT_SEARCH_SETTINGS: CollectionCreateSchema = searchCollectionSchema('projects');
+export const DESIGNER_SEARCH_SETTINGS: CollectionCreateSchema = searchCollectionSchema('designers');

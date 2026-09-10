@@ -33,6 +33,8 @@ export type ProjectSearchDocument = {
   featuredAt: number | null;
   /** Designer's average rating for rating snippet. */
   avgRating: number;
+  /** Paid coverage end in epoch ms. Zero means no paid discovery priority. */
+  paidUntil?: number;
   /** Designer's review count for rating snippet. */
   reviewCount: number;
 };
@@ -43,6 +45,8 @@ export type DesignerSearchDocument = {
   slug: string | null;
   displayName: string;
   bio: string | null;
+  /** Terms from published portfolio content only. */
+  portfolioTerms?: string[];
   entityType: 'individual' | 'company';
   citySlugs: string[];
   localitySlugs: string[];
@@ -51,6 +55,8 @@ export type DesignerSearchDocument = {
   yearsExperience: number;
   projectCount: number;
   avgRating: number;
+  /** Paid coverage end in epoch ms. Zero means no paid discovery priority. */
+  paidUntil?: number;
   reviewCount: number;
   /** Optional while existing Typesense documents are backfilled after schema rollout. */
   isKycVerified?: boolean;

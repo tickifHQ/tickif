@@ -82,7 +82,7 @@ describe('search indexer against Typesense', () => {
     const collectionName = `${searchCollectionName('designers')}_vlegacy_${Date.now()}`;
     temporaryCollections.add(collectionName);
     const expectedSchema = searchCollectionSchema('designers', collectionName);
-    const verificationFieldNames = new Set(['isKycVerified', 'kycExpiresAt']);
+    const verificationFieldNames = new Set(['isKycVerified', 'kycExpiresAt', 'paidUntil']);
     const legacySchema = {
       ...expectedSchema,
       fields: expectedSchema.fields.filter((field) => !verificationFieldNames.has(field.name)),

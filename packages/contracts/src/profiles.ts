@@ -320,6 +320,63 @@ export const portfolioBadgeSchema = z
   .meta({ id: 'PortfolioBadge' });
 export type PortfolioBadge = z.infer<typeof portfolioBadgeSchema>;
 
+/**
+ * The five portfolio badge types in canonical display order. Rendering the full
+ * set (earned + locked) reads from this so the order is stable everywhere.
+ */
+export const PORTFOLIO_BADGE_ORDER = [
+  'verified',
+  'new',
+  'top-performer',
+  'established',
+  'projects-published',
+] as const satisfies readonly PortfolioBadge[];
+
+/**
+ * Single shared presentation source for portfolio badges — label, earning
+ * criterion, and artwork path — consumed by BOTH the settings form (Trust &
+ * Credentials) and the public `/d/{slug}` page so labels/criteria never drift
+ * between the two surfaces (E-212 #9).
+ *
+ * `criterion` mirrors the award thresholds in the API's `computeBadges`
+ * (apps/api/src/modules/profiles/portfolio-service.ts). This is display copy
+ * only — it does NOT drive awarding; the API remains the source of truth for
+ * which badges are earned. Keep the two in sync when thresholds change.
+ *
+ * `imageSrc` is a public path served by the web app (apps/web/public); it is a
+ * plain string so this stays free of any UI/React dependency.
+ */
+export const PORTFOLIO_BADGE_PRESENTATION: Record<
+  PortfolioBadge,
+  { label: string; criterion: string; imageSrc: string }
+> = {
+  verified: {
+    label: 'Identity verified',
+    criterion: 'Complete KYC verification',
+    imageSrc: '/illustrations/badges/verified.svg',
+  },
+  new: {
+    label: 'New on Tickif',
+    criterion: 'Joined in the last 90 days',
+    imageSrc: '/illustrations/badges/new.svg',
+  },
+  'top-performer': {
+    label: 'Top performer',
+    criterion: '4.5★ across 10+ reviews',
+    imageSrc: '/illustrations/badges/top-performer.svg',
+  },
+  established: {
+    label: 'Established studio',
+    criterion: '5+ years of experience',
+    imageSrc: '/illustrations/badges/established.svg',
+  },
+  'projects-published': {
+    label: 'Projects published',
+    criterion: 'Publish 25 projects',
+    imageSrc: '/illustrations/badges/projects-published.svg',
+  },
+};
+
 // --- Google reviews (portfolio Google Business integration) ---
 
 /** Connection lifecycle mirrors the `google_place_status` DB enum. */
