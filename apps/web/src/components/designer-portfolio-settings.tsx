@@ -17,13 +17,14 @@ import {
   Star,
   X,
 } from 'lucide-react';
-import type {
-  GoogleReviewsResponse,
-  PortfolioProjectItem,
-  PortfolioBadge,
-  PortfolioResponse,
-  RequiredPortfolioField,
-  UpdatePortfolioInput,
+import {
+  PORTFOLIO_BADGE_ORDER,
+  PORTFOLIO_BADGE_PRESENTATION,
+  type GoogleReviewsResponse,
+  type PortfolioProjectItem,
+  type PortfolioResponse,
+  type RequiredPortfolioField,
+  type UpdatePortfolioInput,
 } from '@repo/contracts';
 import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collapsible-content';
 import { Badge } from '@repo/ui/components/badge';
@@ -71,7 +72,10 @@ type FormState = {
   publicLinkEnabled: boolean;
   portfolioSlug: string;
   accentColor: string;
-  showHero: boolean;
+  // showHero is intentionally NOT in the form: the design has no Hero
+  // visibility toggle (E-212 #13). It stays on the contract/API/DB (the public
+  // page still honours it), but the form neither reads nor sends it, so we no
+  // longer patch a value the designer can never change.
   showTrustCredentials: boolean;
   showFeaturedTestimonial: boolean;
   showGoogleReviews: boolean;
@@ -125,18 +129,6 @@ type TestimonialProjectOption = {
   value: string;
 };
 
-/** Maps a portfolio badge enum to its display label and illustration. */
-const BADGE_META: Record<PortfolioBadge, { label: string; src: string }> = {
-  verified: { label: 'Identity verified', src: '/illustrations/badges/verified.svg' },
-  new: { label: 'New on Tickif', src: '/illustrations/badges/new.svg' },
-  'top-performer': { label: 'Top performer', src: '/illustrations/badges/top-performer.svg' },
-  established: { label: 'Established studio', src: '/illustrations/badges/established.svg' },
-  'projects-published': {
-    label: 'Projects published',
-    src: '/illustrations/badges/projects-published.svg',
-  },
-};
-
 function formatProjectOption(project: PortfolioProjectItem) {
   const location = [project.locality, project.city].filter(Boolean).join(', ');
   return location ? `${project.title} - ${location}` : project.title;
@@ -151,7 +143,6 @@ function portfolioToForm(data: PortfolioResponse): FormState {
     publicLinkEnabled: data.publicLinkEnabled,
     portfolioSlug: data.portfolioSlug ?? '',
     accentColor: data.accentColor,
-    showHero: data.showHero,
     showTrustCredentials: data.showTrustCredentials,
     showFeaturedTestimonial: data.showFeaturedTestimonial,
     showGoogleReviews: data.reviewSettings.google.showReviews,
@@ -654,6 +645,9 @@ export function DesignerPortfolioSettings() {
         .slice(0, 2)
         .toUpperCase()
     : 'SM';
+  // Earned badge set (server-computed award list). Drives earned/locked state
+  // in the display-only Trust & Credentials grid (E-212 #6).
+  const earnedBadges = new Set(portfolio.badges);
   // The share/copy target. A non-empty slug (saved OR being typed) drives the
   // URL directly, so the preview updates live as the designer edits. When the
   // slug is empty the portfolio still has a canonical URL — the server falls
@@ -665,6 +659,27 @@ export function DesignerPortfolioSettings() {
     ? new URL(`/d/${form.portfolioSlug}`, portfolioWebUrl).toString()
     : (portfolio.portfolioUrl ?? new URL('/d/', portfolioWebUrl).toString());
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
+
+  // Status badge reflects the actual *saved* publication state from the server,
+  // not the public-link toggle alone. An incomplete portfolio never goes live
+  // even with the link switched on (the `/d/{slug}` gate 404s until required
+  // hero fields are filled), so the toggle by itself would misreport "Live".
+  //
+  // Review P2: `publiclyVisible` is the authoritative gate and MUST be checked
+  // first. The server never demotes an already-`active` profile when a required
+  // field is later cleared (e.g. the logo is deleted), so `publiclyVisible: true`
+  // can legitimately coexist with a non-empty `missingRequiredFields` — the API
+  // test `keeps a live portfolio live after a required field is cleared` locks
+  // in that state. Checking completeness first would mislabel such a genuinely
+  // public portfolio as "Incomplete".
+  //   Live       — publicly visible right now (`publiclyVisible`).
+  //   Incomplete — not public yet because required hero fields are still blank.
+  //   Hidden     — complete, but the designer has switched the public link off.
+  const publicationStatus: 'Incomplete' | 'Hidden' | 'Live' = portfolio.publiclyVisible
+    ? 'Live'
+    : portfolio.missingRequiredFields.length > 0
+      ? 'Incomplete'
+      : 'Hidden';
 
   // Google connection derived state (default `available` true until first load,
   // so the Connect UI doesn't flicker to "unavailable" on mount).
@@ -967,24 +982,39 @@ export function DesignerPortfolioSettings() {
                   data-slot="portfolio-section-content"
                   className="mt-0.5 rounded-xl border border-border bg-background p-4 shadow-sm"
                 >
-                  {portfolio.badges.length > 0 ? (
-                    <div className="flex flex-wrap gap-4">
-                      {portfolio.badges.map((badge) => {
-                        const meta = BADGE_META[badge];
-                        if (!meta) return null;
-                        return (
-                          <div key={badge} className="flex flex-col items-center">
-                            <img src={meta.src} alt={meta.label} className="h-22 w-auto" />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Trust badges are awarded automatically as you publish projects and complete
-                      milestones.
-                    </p>
-                  )}
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    Trust badges are awarded automatically as you publish projects and complete
+                    milestones. Earned badges appear on your public portfolio.
+                  </p>
+                  {/* Display-only (E-212 #6/#7): all five badge types render, earned
+                      full-colour and unearned dimmed, each with its label and the
+                      criterion to earn it. Badges are earned, never selectable. */}
+                  <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    {PORTFOLIO_BADGE_ORDER.map((badge) => {
+                      const meta = PORTFOLIO_BADGE_PRESENTATION[badge];
+                      const earned = earnedBadges.has(badge);
+                      return (
+                        <li
+                          key={badge}
+                          data-testid={`portfolio-badge-${badge}`}
+                          data-earned={earned}
+                          className="flex flex-col items-center gap-1.5 text-center"
+                        >
+                          <Image
+                            src={meta.imageSrc}
+                            alt={meta.label}
+                            width={88}
+                            height={88}
+                            className={cn('h-22 w-auto', earned ? '' : 'opacity-40 grayscale')}
+                          />
+                          <span className="text-xs font-medium text-foreground">{meta.label}</span>
+                          <span className="text-2xs leading-tight text-muted-foreground">
+                            {earned ? 'Earned' : meta.criterion}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </ToggleableSection>
 
@@ -1407,12 +1437,12 @@ export function DesignerPortfolioSettings() {
               <Badge
                 variant="outline"
                 className={
-                  form.publicLinkEnabled
+                  publicationStatus === 'Live'
                     ? 'border-primary/30 text-xs font-medium text-primary'
                     : 'text-xs font-medium text-muted-foreground'
                 }
               >
-                {form.publicLinkEnabled ? 'Live' : 'Hidden'}
+                {publicationStatus}
               </Badge>
             </div>
 

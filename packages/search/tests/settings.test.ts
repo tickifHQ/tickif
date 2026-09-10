@@ -17,9 +17,7 @@ describe('search collection configuration', () => {
   it('names collections and the shared synonym set through the environment prefix', () => {
     expect(searchCollectionName('projects', 'tickif_test')).toBe('tickif_test_projects');
     expect(searchCollectionName('designers', 'tickif_test')).toBe('tickif_test_designers');
-    expect(initialSearchCollectionName('projects', 'tickif_test')).toBe(
-      'tickif_test_projects_v1',
-    );
+    expect(initialSearchCollectionName('projects', 'tickif_test')).toBe('tickif_test_projects_v1');
     expect(versionedSearchCollectionName('projects', 1_785_000_000_000, 'tickif_test')).toBe(
       'tickif_test_projects_v1785000000000',
     );
@@ -64,9 +62,9 @@ describe('search collection configuration', () => {
     );
   });
 
-  it('boosts only verification approvals that are current at query time', () => {
+  it('ranks rating before paid coverage and expires paid priority at query time', () => {
     expect(designerDefaultSort(1_786_000_000_000)).toBe(
-      '_text_match:desc,_eval(isKycVerified:true && kycExpiresAt:>1786000000000):desc,updatedAt:desc',
+      '_text_match:desc,avgRating:desc,_eval(paidUntil:>1786000000000):desc',
     );
     expect(DESIGNER_SEARCH_SETTINGS.fields).toEqual(
       expect.arrayContaining([

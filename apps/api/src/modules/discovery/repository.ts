@@ -1,10 +1,12 @@
 import {
   PROJECT_QUERY_BY,
+  discoveryRanking,
+  searchWithDiscoveryFallback,
   searchClient,
   searchCollectionName,
   type ProjectSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, asc, or, inArray, sql } from '@repo/db';
+import { db, schema, eq, and, asc, desc, or, inArray, sql } from '@repo/db';
 import { ilike } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
@@ -186,20 +188,25 @@ export const discoveryRepository = {
   async searchFeed(params: SearchFeedParams): Promise<TypesenseSearchResult> {
     const client = searchClient();
     const sortBy = params.q ? `_text_match:desc,${params.sortBy}` : params.sortBy;
-    const result = await client
+    const documents = client
       .collections<ProjectSearchDocument>(searchCollectionName('projects'))
-      .documents()
-      .search({
-        q: params.q || '*',
-        query_by: PROJECT_QUERY_BY.join(','),
-        filter_by: params.filterBy || undefined,
-        sort_by: sortBy,
-        facet_by: DISCOVERY_FILTER_FIELDS.join(','),
-        max_facet_values: MAX_FACET_VALUES,
-        page: params.page,
-        per_page: params.perPage,
-        include_fields: TYPESENSE_INCLUDE_FIELDS,
-      });
+      .documents();
+    const query = {
+      q: params.q || '*',
+      query_by: PROJECT_QUERY_BY.join(','),
+      filter_by: params.filterBy || undefined,
+      sort_by: sortBy,
+      facet_by: DISCOVERY_FILTER_FIELDS.join(','),
+      max_facet_values: MAX_FACET_VALUES,
+      page: params.page,
+      per_page: params.perPage,
+      include_fields: TYPESENSE_INCLUDE_FIELDS,
+    };
+    const result = await searchWithDiscoveryFallback(
+      (request) => documents.search(request),
+      { ...query, sort_by: params.q ? discoveryRanking() : sortBy },
+      query,
+    );
 
     return {
       hits: result.hits?.map((hit) => hit.document) ?? [],
@@ -244,7 +251,17 @@ export const discoveryRepository = {
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
       .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
       .where(where)
-      .orderBy(...params.sortBy)
+      .orderBy(
+        ...(params.q
+          ? [
+              desc(schema.designerProfile.avgRating),
+              sql`exists (select 1 from subscription s where s.organization_id = ${schema.designerProfile.orgId}
+          and s.plan_tier <> 'hobby' and s.subscription_state not in ('locked', 'downgraded')
+          and s.current_period_end > now()) DESC`,
+              desc(schema.project.id),
+            ]
+          : params.sortBy),
+      )
       .limit(params.limit)
       .offset(params.offset);
 
