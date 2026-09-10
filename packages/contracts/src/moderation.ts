@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { projectCompletenessResponseSchema, projectRoomSchema, projectStatus } from './projects';
 import { projectReviewCommentSchema } from './review-comments';
+import { moderationReasonCodeSchema, moderationReasonCodesSchema } from './moderation-reasons';
 
 export const moderationAction = z
   .enum([
@@ -62,7 +63,8 @@ export const moderationHistoryItemSchema = z
     toStatus: projectStatus,
     actorLabel: z.literal('Tickif Review Team'),
     note: z.string().nullable(),
-    reasonCode: z.string().nullable(),
+    reasonCode: moderationReasonCodeSchema.nullable(),
+    reasonCodes: moderationReasonCodesSchema.default([]),
     fieldDiff: moderationFieldDiff.nullable(),
     createdAt: z.string().datetime(),
   })
@@ -167,7 +169,8 @@ export const adminModerationProjectSchema = z
     publishedAt: z.string().datetime().nullable(),
     reviewedBy: z.string().nullable(),
     reviewStartedAt: z.string().datetime().nullable(),
-    rejectionReasonCode: z.string().nullable(),
+    rejectionReasonCode: moderationReasonCodeSchema.nullable(),
+    rejectionReasonCodes: moderationReasonCodesSchema.default([]),
     moderationNote: z.string().nullable(),
     featuredAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
@@ -197,10 +200,19 @@ export type ModerationNoteInput = z.infer<typeof moderationNoteSchema>;
 
 export const rejectProjectSchema = moderationNoteSchema
   .extend({
-    reasonCode: taxonomySlug,
+    reasonCodes: moderationReasonCodesSchema.refine(
+      (codes) => codes.length > 0,
+      'Select at least one reason category',
+    ),
   })
+  .strict()
   .meta({ id: 'RejectProject' });
 export type RejectProjectInput = z.infer<typeof rejectProjectSchema>;
+
+export const requestChangesProjectSchema = rejectProjectSchema.meta({
+  id: 'RequestChangesProject',
+});
+export type RequestChangesProjectInput = z.infer<typeof requestChangesProjectSchema>;
 
 export const adminCorrectProjectSchema = z
   .object({

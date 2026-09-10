@@ -13,6 +13,7 @@ const project: ProjectResponse = {
   status: 'published',
   archiveReason: null,
   rejectionReasonCode: null,
+  rejectionReasonCodes: [],
   moderationNote: null,
   propertyTypeSlug: null,
   propertySubtypeSlug: null,

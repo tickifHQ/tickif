@@ -1,21 +1,18 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import type { ModerationHistoryResponse, ProjectStatus } from '@repo/contracts';
+import type {
+  ModerationHistoryResponse,
+  ModerationReasonCode,
+  ProjectStatus,
+} from '@repo/contracts';
 import { moderationHistoryResponseSchema } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { AlertCircle, Clock3, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
-
-function humanizeReason(value: string): string {
-  return value
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
+import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 
 function actionLabel(action: ModerationHistoryResponse['items'][number]['action']): string {
   return action
@@ -29,12 +26,14 @@ export function DesignerProjectModeration({
   status,
   moderationNote,
   rejectionReasonCode,
+  rejectionReasonCodes,
   showFeedbackAlert = true,
 }: {
   projectId: string | null;
   status: ProjectStatus | null;
   moderationNote: string | null;
-  rejectionReasonCode: string | null;
+  rejectionReasonCode: ModerationReasonCode | null;
+  rejectionReasonCodes?: ModerationReasonCode[];
   showFeedbackAlert?: boolean;
 }) {
   const [history, setHistory] = useState<ModerationHistoryResponse['items'] | null>(null);
@@ -44,6 +43,9 @@ export function DesignerProjectModeration({
   const isChangesRequested = status === 'changes_requested';
   const isRejected = status === 'rejected';
   const hasFeedback = isChangesRequested || isRejected;
+  const feedbackReasons = rejectionReasonCodes?.length
+    ? rejectionReasonCodes
+    : rejectionReasonCode ? [rejectionReasonCode] : [];
 
   function loadHistory() {
     if (!projectId) return;
@@ -78,13 +80,9 @@ export function DesignerProjectModeration({
           <AlertCircle className="size-4" />
           <AlertTitle>{isRejected ? 'This project was rejected' : 'Needs Change'}</AlertTitle>
           <AlertDescription>
-            {rejectionReasonCode ? (
-              <span className="block font-medium">
-                Reason: {humanizeReason(rejectionReasonCode)}
-              </span>
-            ) : null}
+            <ProjectModerationReasons reasonCodes={feedbackReasons} />
             {moderationNote ? <span className="mt-1 block">{moderationNote}</span> : null}
-            {!moderationNote && !rejectionReasonCode ? (
+            {!moderationNote && feedbackReasons.length === 0 ? (
               <span>Review feedback is available in the moderation history.</span>
             ) : null}
           </AlertDescription>
@@ -123,6 +121,13 @@ export function DesignerProjectModeration({
                     {item.fromStatus.replaceAll('_', ' ')} → {item.toStatus.replaceAll('_', ' ')}
                   </p>
                   {item.note ? <p className="mt-1 text-sm text-foreground">{item.note}</p> : null}
+                  <ProjectModerationReasons
+                    reasonCodes={
+                      item.reasonCodes.length > 0
+                        ? item.reasonCodes
+                        : item.reasonCode ? [item.reasonCode] : []
+                    }
+                  />
                 </li>
               ))}
             </ol>

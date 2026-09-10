@@ -37,6 +37,7 @@ import {
   uploadUrlResponseSchema,
   type AllowedImageContentType,
   type CreateProjectRoomInput,
+  type ModerationReasonCode,
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
   type ProjectImageDto,
@@ -70,6 +71,7 @@ import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { api } from '@/lib/api';
 import { DesignerProjectModeration } from '@/components/designer-project-moderation';
+import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import {
   buildCreateProjectPayload as buildCreateProjectPayloadInput,
   canonicalTaxonomySlug,
@@ -952,8 +954,14 @@ function TipsCard() {
   );
 }
 
-function ChangesNeededCard({ note }: { note: string }) {
-  const noteItems = note
+function ChangesNeededCard({
+  note,
+  reasonCodes,
+}: {
+  note: string | null;
+  reasonCodes: ModerationReasonCode[];
+}) {
+  const noteItems = (note ?? '')
     .split(/\r?\n/)
     .map((item) => item.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
     .filter(Boolean);
@@ -971,6 +979,7 @@ function ChangesNeededCard({ note }: { note: string }) {
       </div>
       <Card radius="xl" className="border-destructive/10 bg-destructive/5">
         <div className="space-y-2 p-2">
+          <ProjectModerationReasons reasonCodes={reasonCodes} />
           {noteItems.map((item, index) => (
             <div key={`${item}-${index}`} className="flex items-start gap-2">
               <ChevronRight className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -1347,7 +1356,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<ProjectDetailResponse['status'] | null>(null);
   const [moderationNote, setModerationNote] = useState<string | null>(null);
-  const [rejectionReasonCode, setRejectionReasonCode] = useState<string | null>(null);
+  const [rejectionReasonCode, setRejectionReasonCode] = useState<ModerationReasonCode | null>(null);
+  const [rejectionReasonCodes, setRejectionReasonCodes] = useState<ModerationReasonCode[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
@@ -1382,6 +1392,15 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // E-286: the "Preview & Submit" CTA opens a confirmation step instead of
+  // submitting directly. `previewOpen` drives that dialog; `isSubmitting` guards
+  // the confirm action so the submit API can only fire once per confirmation.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Drives the post-submit success dialog. Once the submit API resolves we swap
+  // the review dialog for a confirmation with a tick, then send the designer
+  // back to the projects list.
+  const [submittedOpen, setSubmittedOpen] = useState(false);
   const [completion, setCompletion] = useState<ProjectCompletenessResponse | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
   const uploadingRoomIdsRef = useRef(new Set<string>());
@@ -1547,6 +1566,38 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       ),
     [rooms],
   );
+  const selectedCoverImageId = useMemo(() => {
+    const persistedImages = rooms
+      .flatMap((room) => room.images)
+      .filter((image) => !isLocalPreviewImage(image) && image.status !== 'failed');
+    return (
+      persistedImages.find((image) => image.id === coverImageId)?.id
+      ?? persistedImages[0]?.id
+      ?? null
+    );
+  }, [coverImageId, rooms]);
+
+  // E-286: derived values for the submit preview — the Ready images (with the
+  // cover first) and human-readable scope labels. Reuses existing room/image
+  // state so the preview reflects exactly what will be submitted.
+  const previewImages = useMemo(() => {
+    const readyImages = rooms
+      .flatMap((room) => room.images)
+      .filter((image) => image.status === 'ready');
+    return [...readyImages].sort((left, right) => {
+      if (left.id === selectedCoverImageId) return -1;
+      if (right.id === selectedCoverImageId) return 1;
+      return 0;
+    });
+  }, [rooms, selectedCoverImageId]);
+  const readyImageCount = previewImages.length;
+  const selectedScopeLabels = useMemo(
+    () =>
+      selectedScopes
+        .map((scope) => scopeOptions.find((option) => option.value === scope)?.label ?? scope)
+        .filter(Boolean),
+    [selectedScopes, scopeOptions],
+  );
 
   const localChecklist = useMemo(
     () => [
@@ -1555,6 +1606,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       { label: 'Project type', done: projectType.length > 0 },
       { label: 'Scope (Design / Execution)', done: selectedScopes.length > 0 },
       { label: 'At least 3 photos', done: totalImages >= 3 },
+      { label: 'Cover image selected', done: selectedCoverImageId !== null },
       {
         label: 'Room, theme, and finish metadata on each photo',
         done:
@@ -1567,7 +1619,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       },
       { label: 'Cost range selected', done: budgetBandSlug.length > 0 },
     ],
-    [budgetBandSlug, citySlug, projectName, projectType, rooms, selectedScopes.length, totalImages],
+    [
+      budgetBandSlug,
+      citySlug,
+      projectName,
+      projectType,
+      rooms,
+      selectedCoverImageId,
+      selectedScopes.length,
+      totalImages,
+    ],
   );
   const requiredChecklist = useMemo(
     () =>
@@ -1792,6 +1853,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         setProjectStatus(project.status);
         setModerationNote(project.moderationNote);
         setRejectionReasonCode(project.rejectionReasonCode);
+        setRejectionReasonCodes(project.rejectionReasonCodes);
         setProjectName(project.title);
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
@@ -2245,9 +2307,6 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
 
   function buildUpdateProjectPayload(): UpdateProjectInput {
     const createPayload = buildCreateProjectPayload();
-    const fallbackCoverImageId =
-      rooms.flatMap((room) => room.images).find((image) => !isLocalPreviewImage(image))?.id ?? null;
-
     return {
       title: createPayload.title,
       description: aboutProject.trim() || null,
@@ -2262,7 +2321,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       budgetBandSlug: createPayload.budgetBandSlug ?? null,
       completedMonth: createPayload.completedMonth ?? null,
       durationMonths: createPayload.durationMonths ?? null,
-      coverImageId: coverImageId ?? fallbackCoverImageId,
+      coverImageId: selectedCoverImageId,
       metadata: createPayload.metadata,
     };
   }
@@ -2293,6 +2352,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setProjectStatus(detail.status);
       setModerationNote(detail.moderationNote);
       setRejectionReasonCode(detail.rejectionReasonCode);
+      setRejectionReasonCodes(detail.rejectionReasonCodes);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
@@ -2496,6 +2556,12 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   async function handleSubmitProject() {
+    // E-286: "Preview & Submit" must NOT submit directly. Persist the draft and
+    // run the same completeness gate as before, then — only if the project is
+    // ready — open the preview/confirmation step. The submit API is deferred to
+    // `confirmSubmitProject`, which the designer triggers explicitly from the
+    // preview. This keeps the existing Ready-image / required-field validation
+    // in front of submission (the preview cannot bypass it).
     setSaving(true);
     setError('');
     setNotice('');
@@ -2520,8 +2586,36 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         return;
       }
 
+      setPreviewOpen(true);
+    } catch (previewError) {
+      setError(
+        previewError instanceof Error
+          ? previewError.message
+          : 'Could not prepare this project for review.',
+      );
+      requestAnimationFrame(() => {
+        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmSubmitProject() {
+    // Only reached via the explicit "Confirm & submit" action in the preview.
+    // `isSubmitting` guards against a double-click firing the submit API twice.
+    if (isSubmitting) return;
+    if (!projectId) {
+      setError('Could not submit this project.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
       const response = await api.api.projects[':id'].submit.$post({
-        param: { id: currentProjectId },
+        param: { id: projectId },
       });
       const payload = await response.json();
 
@@ -2534,24 +2628,32 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         projectDetailResponseSchema,
         'Could not submit this project.',
       );
+      setProjectStatus(submittedProject.status);
+      setModerationNote(submittedProject.moderationNote);
+      setRejectionReasonCode(submittedProject.rejectionReasonCode);
+      setRejectionReasonCodes(submittedProject.rejectionReasonCodes);
       setNotice(
         submittedProject.submittedAt
           ? 'Project submitted for review.'
           : 'Project submitted. Review status will update shortly.',
       );
-      setProjectStatus(submittedProject.status);
-      setModerationNote(submittedProject.moderationNote);
-      setRejectionReasonCode(submittedProject.rejectionReasonCode);
+      // Swap the review dialog for the success confirmation. Navigation to the
+      // projects list happens when the designer dismisses that dialog.
+      setPreviewOpen(false);
+      setSubmittedOpen(true);
     } catch (submitError) {
+      // Keep the preview open so the designer can retry; surface the error there.
       setError(
         submitError instanceof Error ? submitError.message : 'Could not submit this project.',
       );
-      requestAnimationFrame(() => {
-        errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
     } finally {
-      setSaving(false);
+      setIsSubmitting(false);
     }
+  }
+
+  function goToProjectList() {
+    setSubmittedOpen(false);
+    router.push('/designer/projects');
   }
 
   function handleUpload(room: RoomDraft, event: ChangeEvent<HTMLInputElement>) {
@@ -2840,8 +2942,35 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         status={projectStatus}
         moderationNote={moderationNote}
         rejectionReasonCode={rejectionReasonCode}
+        rejectionReasonCodes={rejectionReasonCodes}
         showFeedbackAlert={projectStatus !== 'changes_requested'}
       />
+
+      {/*
+        E-286: persistent submission status. Driven by the backend project
+        status (not a hardcoded assumption), so it survives after the transient
+        success toast auto-dismisses. Covers both `submitted` (designer just
+        submitted) and `in_review` (an admin has begun reviewing), since the
+        form can receive either when reopening an existing project.
+      */}
+      {projectStatus === 'submitted' || projectStatus === 'in_review' ? (
+        <Alert
+          variant="success"
+          role="status"
+          aria-label="Submission status"
+          className="mt-6 border-success/40 [&>svg]:text-success"
+        >
+          <Check className="size-4" />
+          <AlertTitle>
+            {projectStatus === 'in_review' ? 'In review' : 'Submitted for review'}
+          </AlertTitle>
+          <AlertDescription>
+            {projectStatus === 'in_review'
+              ? 'Our team is reviewing this project. You’ll be notified once the review is complete.'
+              : 'This project has been submitted and is queued for review. No further action is needed — you can track its status here, in Your projects, or in the moderation history above.'}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {taxonomyError ? (
         <Alert variant="destructive" className="mt-6">
@@ -3171,7 +3300,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                       fileName: image.fileName,
                     });
                   }}
-                  coverImageId={coverImageId}
+                  coverImageId={selectedCoverImageId}
                   allowDelete={!requiredDefaultRoomIds.has(room.clientId)}
                 />
               ))}
@@ -3243,8 +3372,16 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-8 xl:self-start">
-          {projectStatus === 'changes_requested' && moderationNote ? (
-            <ChangesNeededCard note={moderationNote} />
+          {projectStatus === 'changes_requested' &&
+          (moderationNote || rejectionReasonCodes.length > 0 || rejectionReasonCode) ? (
+            <ChangesNeededCard
+              note={moderationNote}
+              reasonCodes={
+                rejectionReasonCodes.length > 0
+                  ? rejectionReasonCodes
+                  : rejectionReasonCode ? [rejectionReasonCode] : []
+              }
+            />
           ) : null}
           <TipsCard />
           <ChecklistCard
@@ -3361,6 +3498,158 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        E-286: preview / confirmation step. Opened by "Preview & Submit Project"
+        only after the completeness gate passes. It reuses the draft data
+        already in component state (no refetch, no mock data) so the designer
+        reviews exactly what will be submitted, then either goes back to edit or
+        explicitly confirms. The submit API runs only from "Confirm & submit".
+      */}
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          // Closing the dialog (X, overlay, Esc, or "Back to edit") returns to
+          // the form without submitting. Block closing mid-submit.
+          if (!open && !isSubmitting) setPreviewOpen(false);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review before submitting</DialogTitle>
+            <DialogDescription>
+              Confirm the details below. Once submitted, your project goes to our team for review.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4" data-slot="submit-preview">
+            <div className="space-y-1">
+              <p className={cn(typography.label, 'text-muted-foreground')}>Project</p>
+              <p className={cn(typography.bodyMedium, 'text-foreground')}>
+                {projectName.trim() || 'Untitled project'}
+              </p>
+              <p className={cn(typography.bodySmall, 'text-muted-foreground')}>
+                {[
+                  selectedProjectTypeLabel,
+                  cities.find((city) => city.slug === citySlug)?.label ?? null,
+                  locality.trim() || null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-0.5">
+                <p className={cn(typography.label, 'text-muted-foreground')}>Photos</p>
+                <p className={cn(typography.bodyMedium, 'text-foreground')}>
+                  {totalImages} total · {readyImageCount} ready
+                </p>
+              </div>
+              {selectedScopeLabels.length > 0 ? (
+                <div className="space-y-0.5">
+                  <p className={cn(typography.label, 'text-muted-foreground')}>Scope</p>
+                  <p className={cn(typography.bodyMedium, 'text-foreground')}>
+                    {selectedScopeLabels.join(', ')}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            {previewImages.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className={cn(typography.label, 'text-muted-foreground')}>Ready images</p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {previewImages.map((image) => (
+                    <div
+                      key={image.id}
+                      role="img"
+                      aria-label={`${image.fileName} (Ready)`}
+                      className="aspect-square rounded-lg border border-border bg-muted bg-cover bg-center"
+                      style={
+                        image.previewUrl
+                          ? { backgroundImage: `url(${image.previewUrl})` }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/*
+            E-286 review (P2): submission failures (e.g. a 403) keep this dialog
+            open, so the error must be announced from INSIDE the modal. The
+            page-level role="alert" is hidden from the a11y tree while the dialog
+            is open, so it cannot announce here. role="alert" + aria-live make
+            screen readers read the failure the moment it appears.
+          */}
+          {error ? (
+            <p role="alert" aria-live="assertive" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => setPreviewOpen(false)}
+            >
+              Back to edit
+            </Button>
+            <Button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => void confirmSubmitProject()}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <Check className="size-4" />
+                  Confirm &amp; submit
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        Post-submit confirmation. Shown after the submit API resolves. Dismissing
+        it (button, X, overlay, or Esc) always routes back to the projects list so
+        the designer sees their newly submitted project in context.
+      */}
+      <Dialog
+        open={submittedOpen}
+        onOpenChange={(open) => {
+          if (!open) goToProjectList();
+        }}
+      >
+        <DialogContent className="sm:max-w-md" data-slot="submit-success">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+              <Check className="size-6" aria-hidden="true" />
+            </div>
+            <DialogTitle className="text-center">Project submitted</DialogTitle>
+            <DialogDescription className="text-center">
+              Your project has been submitted for review. Our team will take a look and update its
+              status shortly.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button type="button" onClick={goToProjectList}>
+              Back to projects
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

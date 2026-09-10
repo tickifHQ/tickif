@@ -106,6 +106,7 @@ const portfolioProjects: PortfolioProjectsResponse = {
       archiveReason: null,
       statusGroup: 'published',
       rejectionReasonCode: null,
+      rejectionReasonCodes: [],
       moderationNote: null,
       reviewComments: [],
       coverImageUrl: null,
@@ -196,6 +197,106 @@ describe('DesignerPortfolioSettings', () => {
     await renderSettings();
 
     expect(screen.queryByRole('status', { name: 'Portfolio visibility' })).not.toBeInTheDocument();
+  });
+
+  // E-288: the preview status badge must reflect the actual saved publication
+  // state (server-derived `missingRequiredFields` + `publiclyVisible`), never the
+  // public-link toggle alone. "Live preview" is a heading in the same panel, so
+  // these queries match the badge text exactly to avoid a false positive.
+  describe('preview status badge (E-288)', () => {
+    it('shows "Incomplete" when required fields are missing even though the public link is ON', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: ['logo'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      // The reported bug: it must NOT say "Live" in this state.
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Incomplete" when required fields are missing and the public link is OFF', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: false,
+        missingRequiredFields: ['logo', 'tagline'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Hidden" when the portfolio is complete but the public link is OFF', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: false,
+        missingRequiredFields: [],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Hidden', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows "Live" when the portfolio is complete and publicly visible', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: [],
+        publiclyVisible: true,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Live', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+    });
+
+    it('does not show "Live" for the reported case: public link ON but tagline/logo incomplete', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        // Reported reproduction: link enabled, required hero fields still blank.
+        missingRequiredFields: ['logo', 'tagline'],
+        publiclyVisible: false,
+      });
+      await renderSettings();
+
+      expect(
+        screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+    });
+
+    it('keeps showing "Live" for an already-public portfolio after a required field is cleared (review P2)', async () => {
+      // The server never demotes an active profile when a required field is later
+      // cleared (e.g. the logo is deleted), so publiclyVisible stays true while
+      // missingRequiredFields is non-empty (API test:
+      // "keeps a live portfolio live after a required field is cleared"). The
+      // badge must trust publiclyVisible and NOT mislabel this as "Incomplete".
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        publicLinkEnabled: true,
+        missingRequiredFields: ['logo'],
+        publiclyVisible: true,
+      });
+      await renderSettings();
+
+      expect(screen.getByText('Live', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.queryByText('Incomplete', { selector: '[data-slot="badge"]' }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('uses the shared Tip callout in portfolio customizations', async () => {
@@ -901,6 +1002,59 @@ describe('DesignerPortfolioSettings', () => {
       // Refresh/disconnect controls remain available so the designer can recover.
       expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /disconnect/i })).toBeInTheDocument();
+    });
+  });
+
+  // E-212 #6/#8/#9/#10: display-only Trust & Credentials badge grid.
+  describe('Trust & credentials badge grid', () => {
+    async function expandTrust() {
+      const user = userEvent.setup();
+      await renderSettings();
+      await user.click(screen.getByRole('button', { name: 'Toggle Trust & credentials details' }));
+    }
+
+    it('renders all five badge types regardless of which are earned', async () => {
+      // Only 'verified' is earned in basePortfolio.
+      await expandTrust();
+
+      expect(await screen.findByTestId('portfolio-badge-verified')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-new')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-top-performer')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-established')).toBeInTheDocument();
+      expect(screen.getByTestId('portfolio-badge-projects-published')).toBeInTheDocument();
+    });
+
+    it('marks earned badges earned and unearned badges locked with their criterion', async () => {
+      await expandTrust();
+
+      const verified = await screen.findByTestId('portfolio-badge-verified');
+      expect(verified).toHaveAttribute('data-earned', 'true');
+      expect(within(verified).getByText('Earned')).toBeInTheDocument();
+
+      const projectsPublished = screen.getByTestId('portfolio-badge-projects-published');
+      expect(projectsPublished).toHaveAttribute('data-earned', 'false');
+      // Criterion mirrors the API threshold (25, not the stale triage value of 10).
+      expect(within(projectsPublished).getByText('Publish 25 projects')).toBeInTheDocument();
+    });
+
+    it('shows a visible label for every badge (not only alt text)', async () => {
+      await expandTrust();
+
+      // Labels are shared with the public page via PORTFOLIO_BADGE_PRESENTATION.
+      expect(await screen.findByText('Identity verified')).toBeInTheDocument();
+      expect(screen.getByText('New on Tickif')).toBeInTheDocument();
+      expect(screen.getByText('Top performer')).toBeInTheDocument();
+      expect(screen.getByText('Established studio')).toBeInTheDocument();
+      expect(screen.getByText('Projects published')).toBeInTheDocument();
+    });
+
+    it('provides no per-badge selection control (badges are earned, not chosen)', async () => {
+      await expandTrust();
+
+      const verified = await screen.findByTestId('portfolio-badge-verified');
+      // No switch/checkbox inside a badge cell.
+      expect(within(verified).queryByRole('switch')).not.toBeInTheDocument();
+      expect(within(verified).queryByRole('checkbox')).not.toBeInTheDocument();
     });
   });
 });

@@ -190,6 +190,8 @@ export const mediaService = {
       throw AppError.unprocessable('Invalid materialSlugs');
     }
 
-    return toImageDto(await mediaRepository.updateMetadata(input.imageId, input.metadata));
+    const updated = await mediaRepository.updateMetadata(input.imageId, input.metadata);
+    if (!updated) throw AppError.conflict('Project media is no longer editable');
+    return toImageDto(updated);
   },
 };

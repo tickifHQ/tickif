@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { PLATFORM_ROLE, platformRoleSchema, type PlatformRole } from '@repo/contracts';
 import type { ActiveContext } from '@repo/contracts';
 import { env } from '@/env';
+import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
 
 export type RequiredPlatformRole = Exclude<PlatformRole, typeof PLATFORM_ROLE.VISITOR>;
 
@@ -134,6 +135,14 @@ export async function requireAuth(options?: {
 
   if (options?.requiredRole) {
     if (!rolePassesCheck(session.user.role, options.requiredRole)) {
+      // A fresh signup remains a visitor until valid onboarding creates its
+      // workspace. Offer setup without admitting it to designer-only pages.
+      if (
+        options.requiredRole === PLATFORM_ROLE.DESIGNER &&
+        (session.user.role === PLATFORM_ROLE.VISITOR || session.user.role === null)
+      ) {
+        redirect(DESIGNER_ONBOARDING_DEFERRED_PATH);
+      }
       redirect('/unauthorized');
     }
   }

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { config } from '@repo/config';
 import type { Derivative, DiscoveryFeedResponse } from '@repo/contracts';
+
+const originalSearchConfigured = config.TYPESENSE_SEARCH_CONFIGURED;
+afterEach(() => {
+  config.TYPESENSE_SEARCH_CONFIGURED = originalSearchConfigured;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock Setup
@@ -186,8 +192,7 @@ const createPostgresRow = (
 
 describe('Property 1: Input Validation Correctness', () => {
   beforeEach(() => {
-    vi.stubEnv('TYPESENSE_HOST', '');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    config.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
   });
 
@@ -282,8 +287,7 @@ describe('Property 1: Input Validation Correctness', () => {
 
 describe('Property 2: Pagination Limit Enforcement', () => {
   beforeEach(() => {
-    vi.stubEnv('TYPESENSE_HOST', '');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    config.TYPESENSE_SEARCH_CONFIGURED = false;
     vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
   });
 
@@ -328,8 +332,7 @@ describe('Property 2: Pagination Limit Enforcement', () => {
 
   describe('identical behavior for Typesense and Postgres paths', () => {
     it('returns 422 for page × limit > 1000 on Typesense path', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
 
       const res = await app.request('/api/discovery/feed?page=42&limit=24&sort=recent');
       expect(res.status).toBe(422);
@@ -339,8 +342,7 @@ describe('Property 2: Pagination Limit Enforcement', () => {
     });
 
     it('returns 422 for page × limit > 1000 on Postgres path', async () => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
 
       const res = await app.request('/api/discovery/feed?page=42&limit=24&sort=recent');
       expect(res.status).toBe(422);
@@ -370,8 +372,7 @@ describe('Property 3: Sort Order Correctness', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    vi.stubEnv('TYPESENSE_HOST', '');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+    config.TYPESENSE_SEARCH_CONFIGURED = false;
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.clearAllMocks();
   });
@@ -383,8 +384,7 @@ describe('Property 3: Sort Order Correctness', () => {
 
   describe('recent sort orders by publishedAt descending', () => {
     it('Typesense path uses publishedAt:desc sort', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
 
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [createTypesenseHit('project-1', 1700000000000)],
@@ -406,8 +406,7 @@ describe('Property 3: Sort Order Correctness', () => {
         createTypesenseHit('older', 1700000001000),
       ];
 
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits, found: 2 });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -420,8 +419,7 @@ describe('Property 3: Sort Order Correctness', () => {
 
   describe('featured sort orders by featuredAt desc, then publishedAt desc', () => {
     it('Typesense path uses featuredAt:desc,publishedAt:desc sort', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
 
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [createTypesenseHit('project-1', 1700000000000, 1700000000000)],
@@ -443,8 +441,7 @@ describe('Property 3: Sort Order Correctness', () => {
         createTypesenseHit('not-featured', 1700000002000, null),
       ];
 
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits, found: 2 });
 
       const res = await app.request('/api/discovery/feed?sort=featured');
@@ -465,8 +462,7 @@ describe('Property 3: Sort Order Correctness', () => {
         createTypesenseHit('project-c', sameTime),
       ];
 
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits, found: 3 });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -488,8 +484,7 @@ describe('Property 3: Sort Order Correctness', () => {
         createTypesenseHit('not-featured-2', 1700000002500, null),
       ];
 
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits, found: 4 });
 
       const res = await app.request('/api/discovery/feed?sort=featured');
@@ -507,8 +502,7 @@ describe('Property 3: Sort Order Correctness', () => {
   describe('identical ordering for Typesense and Postgres paths', () => {
     it('both paths use equivalent sort logic for recent', async () => {
       // Postgres path
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
       await app.request('/api/discovery/feed?sort=recent');
@@ -522,8 +516,7 @@ describe('Property 3: Sort Order Correctness', () => {
 
     it('both paths use equivalent sort logic for featured', async () => {
       // Postgres path
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
       await app.request('/api/discovery/feed?sort=featured');
@@ -546,8 +539,7 @@ describe('Property 4: Filter AND/OR Semantics', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    vi.stubEnv('TYPESENSE_HOST', 'localhost');
-    vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+    config.TYPESENSE_SEARCH_CONFIGURED = true;
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.clearAllMocks();
   });
@@ -707,8 +699,7 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('response structure from Typesense path', () => {
     beforeEach(() => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
     });
 
     it('returns required response fields with source: search', async () => {
@@ -756,8 +747,7 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('response structure from Postgres path', () => {
     beforeEach(() => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
     });
 
     it('returns required response fields with source: db', async () => {
@@ -807,8 +797,7 @@ describe('Property 5: Response Contract Identity', () => {
       const postgresRow = createPostgresRow('test-project');
 
       // Get Typesense response
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [typesenseHit],
         found: 1,
@@ -818,8 +807,7 @@ describe('Property 5: Response Contract Identity', () => {
       const typesenseBody = (await typesenseRes.json()) as DiscoveryFeedResponse;
 
       // Get Postgres response
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
         rows: [postgresRow],
       });
@@ -845,8 +833,7 @@ describe('Property 5: Response Contract Identity', () => {
 
     it('pagination metadata is consistent between paths', async () => {
       // Typesense path
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [createTypesenseHit('project-1', 1700000000000)],
         found: 100,
@@ -859,8 +846,7 @@ describe('Property 5: Response Contract Identity', () => {
       expect(typesenseBody.limit).toBe(10);
 
       // Postgres path
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
         rows: [createPostgresRow('project-1')],
       });
@@ -879,8 +865,7 @@ describe('Property 5: Response Contract Identity', () => {
         await import('../../../src/modules/discovery/mapper.js');
 
       // Typesense path
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [createTypesenseHit('project-1', 1700000000000)],
         found: 1,
@@ -894,8 +879,7 @@ describe('Property 5: Response Contract Identity', () => {
       vi.clearAllMocks();
 
       // Postgres path
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
         rows: [createPostgresRow('project-1')],
       });
@@ -909,8 +893,7 @@ describe('Property 5: Response Contract Identity', () => {
 
   describe('empty results', () => {
     it('Typesense path returns empty items array for no results', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -922,8 +905,7 @@ describe('Property 5: Response Contract Identity', () => {
     });
 
     it('Postgres path returns empty items array for no results', async () => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -957,8 +939,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
   describe('cache header present on 200 responses from Typesense path', () => {
     beforeEach(() => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
     });
 
     it('sets Cache-Control header on successful Typesense response', async () => {
@@ -997,8 +978,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
   describe('cache header present on 200 responses from Postgres path', () => {
     beforeEach(() => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
     });
 
     it('sets Cache-Control header on successful Postgres response', async () => {
@@ -1035,8 +1015,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
   describe('cache header value exactly matches expected string', () => {
     it('Typesense path: header value is exact match', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -1050,8 +1029,7 @@ describe('Property 8: Cache Header Consistency', () => {
     });
 
     it('Postgres path: header value is exact match', async () => {
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({ rows: [] });
 
       const res = await app.request('/api/discovery/feed?sort=recent');
@@ -1068,8 +1046,7 @@ describe('Property 8: Cache Header Consistency', () => {
   describe('cache header identical for both paths', () => {
     it('Typesense and Postgres paths return identical Cache-Control headers', async () => {
       // Typesense path
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({
         hits: [createTypesenseHit('project-1', 1700000000000)],
         found: 1,
@@ -1079,8 +1056,7 @@ describe('Property 8: Cache Header Consistency', () => {
       const typesenseCacheControl = typesenseRes.headers.get('Cache-Control');
 
       // Postgres path
-      vi.stubEnv('TYPESENSE_HOST', '');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', '');
+      config.TYPESENSE_SEARCH_CONFIGURED = false;
       vi.mocked(discoveryRepository.listFeedFallback).mockResolvedValue({
         rows: [createPostgresRow('project-1')],
       });
@@ -1095,8 +1071,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
     it('headers identical regardless of sort parameter', async () => {
       // Typesense with recent sort
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
 
       const recentRes = await app.request('/api/discovery/feed?sort=recent');
@@ -1109,8 +1084,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
   describe('cache header set regardless of filter/sort params', () => {
     beforeEach(() => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
       vi.mocked(discoveryRepository.searchFeed).mockResolvedValue({ hits: [], found: 0 });
     });
 
@@ -1158,8 +1132,7 @@ describe('Property 8: Cache Header Consistency', () => {
 
   describe('cache header on fallback after Typesense error', () => {
     it('sets Cache-Control when falling back to Postgres after Typesense error', async () => {
-      vi.stubEnv('TYPESENSE_HOST', 'localhost');
-      vi.stubEnv('TYPESENSE_SEARCH_API_KEY', 'test-key');
+      config.TYPESENSE_SEARCH_CONFIGURED = true;
 
       // Typesense fails, triggering fallback
       vi.mocked(discoveryRepository.searchFeed).mockRejectedValue(new Error('Typesense timeout'));

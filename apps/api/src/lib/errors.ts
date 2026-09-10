@@ -57,6 +57,19 @@ export class AppError extends Error {
   static badGateway(message: string, details?: unknown) {
     return new AppError('upstream_error', message, 502, details);
   }
+
+  /**
+   * E-289: the billing provider rejected an in-place plan change because the
+   * subscription's payment mode (e.g. a domestic card) does not support it.
+   * This is an actionable client condition, not an upstream outage, so it is a
+   * 422 with a stable code the web app matches on to render the capability-aware
+   * flow. The code string mirrors contracts' BILLING_ERROR_CODE
+   * (`payment_mode_change_unsupported`); kept as a literal here so this generic
+   * error module stays free of billing-contract imports.
+   */
+  static paymentModeChangeUnsupported(message: string, details?: unknown) {
+    return new AppError('payment_mode_change_unsupported', message, 422, details);
+  }
 }
 
 /** Central error handler — single place that converts errors to the API envelope. */

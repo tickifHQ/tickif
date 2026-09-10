@@ -77,6 +77,23 @@ export const RAZORPAY_EVENT_VALUES = [
 export const razorpayEventSchema = z.enum(RAZORPAY_EVENT_VALUES).meta({ id: 'RazorpayEvent' });
 export type RazorpayEvent = z.infer<typeof razorpayEventSchema>;
 
+/**
+ * Stable, machine-readable billing error codes shared by the API and web app.
+ *
+ * `PAYMENT_MODE_CHANGE_UNSUPPORTED` (E-289): Razorpay refuses an in-place plan
+ * change (PATCH plan_id) for subscriptions authorized with a domestic card —
+ * only offers can be updated for those mandates. The API classifies that
+ * specific rejection to this code so the web app can render a capability-aware
+ * flow (schedule cancellation, then resubscribe) instead of a generic error.
+ * The web app MUST match on this code, never on the Razorpay description text.
+ */
+export const BILLING_ERROR_CODE = {
+  PAYMENT_MODE_CHANGE_UNSUPPORTED: 'payment_mode_change_unsupported',
+} as const;
+
+export type BillingErrorCode =
+  (typeof BILLING_ERROR_CODE)[keyof typeof BILLING_ERROR_CODE];
+
 /** Razorpay payment entity creation time in Unix seconds. */
 export const razorpayPaymentCreatedAtSchema = z
   .number()

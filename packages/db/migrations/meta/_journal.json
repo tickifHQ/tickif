@@ -421,6 +421,13 @@
       "when": 1788625330825,
       "tag": "0061_bizarre_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1788814998047,
+      "tag": "0062_secret_annihilus",
+      "breakpoints": true
     }
   ]
 }

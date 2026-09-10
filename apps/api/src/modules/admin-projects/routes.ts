@@ -11,6 +11,7 @@ import {
   projectReviewCommentParamsSchema,
   projectReviewCommentSchema,
   rejectProjectSchema,
+  requestChangesProjectSchema,
   updateProjectReviewCommentSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
@@ -138,10 +139,14 @@ function noteRoute(path: '/{id}/request-changes' | '/{id}/unpublish', summary: s
   });
 }
 
-const requestChangesRoute = noteRoute(
-  '/{id}/request-changes',
-  'Return a project to the designer with requested changes',
-);
+const requestChangesRoute = createRoute({
+  ...noteRoute('/{id}/request-changes', 'Return a project to the designer with requested changes'),
+  path: '/{id}/request-changes',
+  request: {
+    params: projectIdParamSchema,
+    body: { content: { 'application/json': { schema: requestChangesProjectSchema } } },
+  },
+});
 const unpublishRoute = noteRoute('/{id}/unpublish', 'Unpublish a project and return it to review');
 
 const rejectRoute = createRoute({

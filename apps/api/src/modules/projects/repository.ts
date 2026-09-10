@@ -10,6 +10,7 @@ import type {
   LinkProjectImageInput,
   ModerationAction,
   ModerationFieldDiff,
+  ModerationReasonCode,
   ProjectMotifKind,
   ProjectListSort,
   ProjectStatus,
@@ -74,6 +75,7 @@ export type SubmitWithUploadCountsResult = {
   project: ProjectRecord | null;
   counts: UploadImageCounts;
   submitted: ProjectRecord | null;
+  missingCover?: boolean;
 };
 
 export type ProjectModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
@@ -87,6 +89,7 @@ export type ProjectTransitionPatch = Partial<
     | 'reviewedBy'
     | 'reviewStartedAt'
     | 'rejectionReasonCode'
+    | 'rejectionReasonCodes'
     | 'moderationNote'
     | 'featuredAt'
     | 'archiveReason'
@@ -101,6 +104,7 @@ export type TransitionProjectParams = {
   action: ModerationAction;
   note?: string | null;
   reasonCode?: string | null;
+  reasonCodes?: ModerationReasonCode[];
   fieldDiff?: ModerationFieldDiff | null;
   patch?: ProjectTransitionPatch;
   expectedModerationRevision?: number;
@@ -147,6 +151,7 @@ export type ProjectListItemRecord = Pick<
   | 'status'
   | 'archiveReason'
   | 'rejectionReasonCode'
+  | 'rejectionReasonCodes'
   | 'moderationNote'
   | 'coverImageId'
   | 'createdAt'
@@ -474,6 +479,7 @@ export const projectsRepository = {
           status: schema.project.status,
           archiveReason: schema.project.archiveReason,
           rejectionReasonCode: schema.project.rejectionReasonCode,
+          rejectionReasonCodes: schema.project.rejectionReasonCodes,
           moderationNote: schema.project.moderationNote,
           coverImageId: schema.project.coverImageId,
           createdAt: schema.project.createdAt,
@@ -885,7 +891,12 @@ export const projectsRepository = {
     const [row] = await db
       .update(schema.project)
       .set({ ...patch, updatedAt: new Date() })
-      .where(eq(schema.project.id, id))
+      .where(
+        and(
+          eq(schema.project.id, id),
+          inArray(schema.project.status, ['draft', 'changes_requested', 'rejected']),
+        ),
+      )
       .returning();
     return row ?? null;
   },
@@ -973,7 +984,33 @@ export const projectsRepository = {
         counts.imageCount >= requirements.minImageCount &&
         counts.taggedImageCount === counts.imageCount;
 
-      if (!hasRequiredImages) {
+      // Cover selection and deletion also update the project row, so this check
+      // runs under their shared lock. Fresh processing images remain eligible.
+      const [cover] = project.coverImageId
+        ? await tx
+            .select({ id: schema.projectImage.id })
+            .from(schema.projectImage)
+            .where(
+              and(
+                eq(schema.projectImage.projectId, id),
+                eq(schema.projectImage.id, project.coverImageId),
+                freshProcessingImageFilter,
+                isNotNull(schema.projectImage.roomId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (!cover) return { project, counts, submitted: null, missingCover: true };
+
+      // Recheck the scalar requirements from the locked snapshot, not the
+      // service's earlier read, before recording the submission transition.
+      const hasRequiredMetadata =
+        project.title.trim().length > 0 &&
+        !!project.citySlug &&
+        !!project.propertyTypeSlug &&
+        !!project.scopeSlug &&
+        !!project.budgetBandSlug;
+      if (!hasRequiredImages || !hasRequiredMetadata) {
         return { project, counts, submitted: null };
       }
 
@@ -986,6 +1023,7 @@ export const projectsRepository = {
           reviewedBy: null,
           reviewStartedAt: null,
           rejectionReasonCode: null,
+          rejectionReasonCodes: [],
           moderationNote: null,
           updatedAt: now,
         })
@@ -1080,6 +1118,7 @@ export const projectsRepository = {
         toStatus: params.toStatus,
         note: params.note ?? null,
         reasonCode: params.reasonCode ?? null,
+        reasonCodes: params.reasonCodes ?? [],
         fieldDiff: params.fieldDiff ?? null,
       });
 
@@ -1423,11 +1462,21 @@ export const projectsRepository = {
   },
 
   async deleteRoom(projectId: string, roomId: string): Promise<boolean> {
-    const rows = await db
-      .delete(schema.projectRoom)
-      .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, roomId)))
-      .returning({ id: schema.projectRoom.id });
-    return rows.length > 0;
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ status: schema.project.status })
+        .from(schema.project)
+        .where(eq(schema.project.id, projectId))
+        .for('update')
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status))
+        return false;
+      const rows = await tx
+        .delete(schema.projectRoom)
+        .where(and(eq(schema.projectRoom.projectId, projectId), eq(schema.projectRoom.id, roomId)))
+        .returning({ id: schema.projectRoom.id });
+      return rows.length > 0;
+    });
   },
 
   async findImage(
@@ -1457,18 +1506,30 @@ export const projectsRepository = {
     if (input.roomId !== undefined) patch.roomId = input.roomId;
     if (input.sortOrder !== undefined) patch.sortOrder = input.sortOrder;
 
-    const [row] = await db
-      .update(schema.projectImage)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)))
-      .returning({
-        id: schema.projectImage.id,
-        projectId: schema.projectImage.projectId,
-        roomId: schema.projectImage.roomId,
-        status: schema.projectImage.status,
-        sortOrder: schema.projectImage.sortOrder,
-      });
-    return row ?? null;
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ status: schema.project.status })
+        .from(schema.project)
+        .where(eq(schema.project.id, projectId))
+        .for('update')
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status))
+        return null;
+      const [row] = await tx
+        .update(schema.projectImage)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(
+          and(eq(schema.projectImage.projectId, projectId), eq(schema.projectImage.id, imageId)),
+        )
+        .returning({
+          id: schema.projectImage.id,
+          projectId: schema.projectImage.projectId,
+          roomId: schema.projectImage.roomId,
+          status: schema.projectImage.status,
+          sortOrder: schema.projectImage.sortOrder,
+        });
+      return row ?? null;
+    });
   },
 
   async deleteImage(
@@ -1476,6 +1537,14 @@ export const projectsRepository = {
     imageId: string,
   ): Promise<ProjectImageDeletionRecord | null> {
     return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select({ status: schema.project.status })
+        .from(schema.project)
+        .where(eq(schema.project.id, projectId))
+        .for('update')
+        .limit(1);
+      if (!project || !['draft', 'changes_requested', 'rejected'].includes(project.status))
+        return null;
       const [image] = await tx
         .select({
           id: schema.projectImage.id,

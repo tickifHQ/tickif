@@ -18,6 +18,7 @@ API_IMAGE=$(docker image inspect "localhost:5000/tickif/api:$revision" --format 
 WEB_IMAGE=$(docker image inspect "localhost:5000/tickif/web:$revision" --format '{{index .RepoDigests 0}}')
 WORKER_IMAGE=$(docker image inspect "localhost:5000/tickif/worker:$revision" --format '{{index .RepoDigests 0}}')
 OPERATIONS_IMAGE=$(docker image inspect "localhost:5000/tickif/operations:$revision" --format '{{index .RepoDigests 0}}')
+bash infra/staging/scripts/test-worker-fonts.sh "$WORKER_IMAGE"
 export GOOGLE_CLIENT_ID=synthetic.apps.googleusercontent.com RAZORPAY_KEY_ID=rzp_test_synthetic
 export RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS=plan_synthetic_professional_plus
 export RAZORPAY_PLAN_ID_CORPORATE=plan_synthetic_corporate
@@ -123,6 +124,13 @@ for service in api worker web; do
   [[ "$service" == web ]] && { port=3000; route=health; }
   container=$(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_$service")
   docker exec "$container" node -e "fetch('http://127.0.0.1:$port/$route').then(r=>{if(!r.ok)process.exit(1)})"
+done
+# Verify the real Swarm mount, not just Compose parsing or image-layer ownership.
+mapfile -t web_containers < <(docker ps -q --filter "label=com.docker.swarm.service.name=${STACK_NAME}_web")
+(( ${#web_containers[@]} > 0 )) || { echo 'No web replica found for cache verification' >&2; exit 1; }
+for web_container in "${web_containers[@]}"; do
+  [[ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$web_container")" == true ]]
+  docker exec -i "$web_container" node --input-type=module <infra/staging/scripts/verify-web-cache.mjs
 done
 # Keep production strict SNI enabled, using a disposable certificate only in this fixture.
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=staging.invalid \

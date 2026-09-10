@@ -27,6 +27,7 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
+import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
 import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
@@ -586,7 +587,10 @@ export function DesignerOnboarding({
               </>
             )}
           </Button>
-          <DetailsSecondaryActions onSkip={() => router.push('/designer/dashboard')} />
+          <DetailsSecondaryActions
+            onSkip={() => router.push(DESIGNER_ONBOARDING_DEFERRED_PATH)}
+            skipLabel="Finish later"
+          />
         </div>
       </form>
     </OnboardingShell>
@@ -1141,7 +1145,13 @@ function OnboardingSecondaryActions() {
   );
 }
 
-function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
+function DetailsSecondaryActions({
+  onSkip,
+  skipLabel = 'Skip to dashboard',
+}: {
+  onSkip: () => void;
+  skipLabel?: string;
+}) {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
       <a
@@ -1156,7 +1166,7 @@ function DetailsSecondaryActions({ onSkip }: { onSkip: () => void }) {
         onClick={onSkip}
         className="cursor-pointer font-medium text-foreground hover:underline"
       >
-        Skip to dashboard
+        {skipLabel}
       </button>
     </div>
   );

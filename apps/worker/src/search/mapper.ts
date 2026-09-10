@@ -30,6 +30,7 @@ export type ProjectSearchSource = {
     slug: string | null;
     displayName: string;
     avgRating: string;
+    paidUntil?: number;
     reviewCount: number;
   };
   cover: {
@@ -62,12 +63,14 @@ export type DesignerSearchSource = {
     yearsExperience: number;
     projectCount: number;
     avgRating: string;
+    paidUntil?: number;
     reviewCount: number;
     logoImageId: string | null;
     updatedAt: Date;
     isKycVerified: boolean;
     kycExpiresAt: Date | null;
   };
+  portfolioTerms?: string[];
   footprint: Array<{
     kind: string;
     slug: string;
@@ -82,20 +85,21 @@ function uniqueSorted(values: Iterable<string>): string[] {
 
 function pickCoverDerivative(derivatives: SearchImageDerivative[]): SearchImageDerivative | null {
   return (
-    derivatives.find((derivative) => derivative.variant === 'small' && derivative.format === 'webp')
-      ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
+    ) ??
     derivatives.find((derivative) => derivative.variant === 'small') ??
-    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
-      ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
+    ) ??
     derivatives.find((derivative) => derivative.variant === 'thumb') ??
     null
   );
 }
 
 export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSearchDocument {
-  const cover = source.cover?.status === 'ready'
-    ? pickCoverDerivative(source.cover.derivatives)
-    : null;
+  const cover =
+    source.cover?.status === 'ready' ? pickCoverDerivative(source.cover.derivatives) : null;
   return {
     id: source.project.id,
     slug: source.project.slug,
@@ -132,6 +136,7 @@ export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSe
     publishedAt: source.project.publishedAt.getTime(),
     featuredAt: source.project.featuredAt?.getTime() ?? null,
     avgRating: Number(source.designer.avgRating),
+    paidUntil: Number(source.designer.paidUntil ?? 0),
     reviewCount: source.designer.reviewCount,
   };
 }
@@ -153,6 +158,8 @@ export function mapDesignerSearchDocument(source: DesignerSearchSource): Designe
     yearsExperience: source.profile.yearsExperience,
     projectCount: source.profile.projectCount,
     avgRating: Number(source.profile.avgRating),
+    paidUntil: Number(source.profile.paidUntil ?? 0),
+    portfolioTerms: uniqueSorted(source.portfolioTerms ?? []),
     reviewCount: source.profile.reviewCount,
     isKycVerified: source.profile.isKycVerified,
     kycExpiresAt: source.profile.kycExpiresAt?.getTime() ?? 0,

@@ -3,6 +3,7 @@ import type {
   DiscoveryFeedResponse,
   ProjectSearchFallback,
 } from '@repo/contracts';
+import { config } from '@repo/config';
 import { discoveryRepository } from './repository.js';
 import { buildDiscoveryFilter } from './filter-builder.js';
 import {
@@ -38,16 +39,11 @@ import { FALLBACK_DROP_ORDER } from '../search/constants.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Check if Typesense is explicitly configured via environment variables.
- *
- * Returns true only when BOTH TYPESENSE_HOST and TYPESENSE_SEARCH_API_KEY
- * are explicitly set in the environment. This enables local development
- * without Typesense — the Postgres fallback activates automatically.
- *
- * @see Requirement 5.1, 5.2, 5.3
+ * Use startup-validated configuration, including mounted credentials. Local
+ * defaults alone keep discovery on Postgres when search was not configured.
  */
 export function isTypesenseConfigured(): boolean {
-  return !!(process.env.TYPESENSE_HOST && process.env.TYPESENSE_SEARCH_API_KEY);
+  return config.TYPESENSE_SEARCH_CONFIGURED;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -164,6 +164,13 @@ services:
     volumes:
       - type: tmpfs
         target: /tmp
+      # Each replica gets disposable cache storage without making the image writable.
+      # Swarm's legacy Compose loader supports size, but ignores tmpfs.mode/uid/gid.
+      # The image target's sticky mode (1777) allows the non-root app user to write.
+      - type: tmpfs
+        target: /app/apps/web/.next/cache
+        tmpfs:
+          size: 134217728 # 128 MiB, counted within the web replica's memory limit.
     cap_drop:
       - ALL
     security_opt:

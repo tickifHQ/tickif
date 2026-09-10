@@ -31,6 +31,7 @@ import {
   VERIFICATION_NOTIFICATION_EVENT_VALUES,
   VERIFICATION_REVIEW_ACTION_VALUES,
   OWNERSHIP_TRANSFER_STATUS_VALUES,
+  MODERATION_REASON_CODE_VALUES,
 } from '@repo/contracts';
 import { user, organization, member, team } from './auth.js';
 
@@ -60,6 +61,11 @@ export const projectArchiveReasonEnum = pgEnum('project_archive_reason', [
   'manual',
   'organization_retention',
 ]);
+
+export const projectModerationReasonEnum = pgEnum(
+  'project_moderation_reason',
+  MODERATION_REASON_CODE_VALUES,
+);
 
 export const interactionEventTypeEnum = pgEnum(
   'interaction_event_type',
@@ -399,6 +405,10 @@ export const project = pgTable(
     reviewedBy: text('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
     reviewStartedAt: timestamp('review_started_at'),
     rejectionReasonCode: text('rejection_reason_code'),
+    rejectionReasonCodes: projectModerationReasonEnum('rejection_reason_codes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::project_moderation_reason[]`),
     moderationNote: text('moderation_note'),
     featuredAt: timestamp('featured_at'),
     moderationRevision: integer('moderation_revision').default(0).notNull(),
@@ -545,6 +555,10 @@ export const projectModerationEvent = pgTable(
     toStatus: projectStatusEnum('to_status').notNull(),
     note: text('note'),
     reasonCode: text('reason_code'),
+    reasonCodes: projectModerationReasonEnum('reason_codes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::project_moderation_reason[]`),
     fieldDiff: jsonb('field_diff').$type<ModerationFieldDiff>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
