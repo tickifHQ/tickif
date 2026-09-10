@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import type {
   ModerationHistoryResponse,
   ModerationReasonCode,
@@ -95,6 +95,11 @@ export function DesignerProjectModeration({
   // Bumped on every fetch so the spinner icon remounts and its CSS spin
   // animation restarts each refresh (reusing the same node would not replay it).
   const [refreshKey, setRefreshKey] = useState(0);
+  // The opener lives outside the dialog and is not a DialogTrigger, so Radix
+  // won't restore focus to it on close (it would land on document.body). We
+  // keep a ref and restore focus explicitly in onCloseAutoFocus so keyboard
+  // users return to their place in the long upload form.
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const isChangesRequested = status === 'changes_requested';
   const isRejected = status === 'rejected';
   const hasFeedback = isChangesRequested || isRejected;
@@ -161,7 +166,7 @@ export function DesignerProjectModeration({
         </Alert>
       ) : null}
 
-      <Button type="button" variant="outline" size="sm" onClick={openDrawer}>
+      <Button ref={triggerRef} type="button" variant="outline" size="sm" onClick={openDrawer}>
         <Clock3 className="size-4" />
         View moderation history
       </Button>
@@ -177,6 +182,13 @@ export function DesignerProjectModeration({
         <DialogContent
           className="left-auto right-0 top-0 flex h-[100dvh] max-h-none w-full max-w-md translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-y-0 border-r-0 p-0"
           overlayClassName="bg-foreground/30"
+          onCloseAutoFocus={(event) => {
+            // The opener isn't a DialogTrigger, so Radix's default focus
+            // restoration would drop focus on document.body. Prevent that and
+            // return focus to the opener for both Close and Escape.
+            event.preventDefault();
+            triggerRef.current?.focus();
+          }}
         >
           <div className="flex items-start justify-between gap-4 border-b border-border p-5">
             <div className="min-w-0">

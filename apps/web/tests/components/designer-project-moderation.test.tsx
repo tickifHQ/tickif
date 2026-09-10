@@ -133,20 +133,23 @@ describe('DesignerProjectModeration', () => {
 
       await user.click(within(drawer).getByRole('button', { name: /close/i }));
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-      // Radix returns focus to the trigger on close (validated end-to-end); here
-      // we assert the trigger remains mounted and reachable so that can happen.
-      expect(screen.getByRole('button', { name: /view moderation history/i })).toBe(trigger);
+      // Focus must return to the opener so keyboard users keep their place in
+      // the long upload form (onCloseAutoFocus restores it since the opener is
+      // not a DialogTrigger).
+      await waitFor(() => expect(trigger).toHaveFocus());
     });
 
-    it('closes when Escape is pressed', async () => {
+    it('closes when Escape is pressed and returns focus to the opener', async () => {
       const user = userEvent.setup();
       renderModeration();
 
-      await user.click(screen.getByRole('button', { name: /view moderation history/i }));
+      const trigger = screen.getByRole('button', { name: /view moderation history/i });
+      await user.click(trigger);
       await screen.findByRole('dialog');
 
       await user.keyboard('{Escape}');
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(trigger).toHaveFocus());
     });
 
     it('refresh performs a real refetch and keeps existing history visible while pending', async () => {
