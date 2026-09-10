@@ -2547,8 +2547,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   /**
-   * Rejects numeric fields the server would silently drop. An invalid area
-   * reaches the API as null and blanks on reload, so block the save with
+   * Rejects numeric fields the client would silently drop. An invalid area
+   * can reach the API as null and blank on reload, so block the save with
    * field feedback instead (E-282).
    */
   function validateNumericFields(): boolean {
