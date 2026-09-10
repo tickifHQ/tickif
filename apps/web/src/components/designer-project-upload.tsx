@@ -2593,16 +2593,13 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   }
 
   async function handleSubmitProject() {
-<<<<<<< HEAD
     // E-286: "Preview & Submit" must NOT submit directly. Persist the draft and
     // run the same completeness gate as before, then — only if the project is
     // ready — open the preview/confirmation step. The submit API is deferred to
     // `confirmSubmitProject`, which the designer triggers explicitly from the
     // preview. This keeps the existing Ready-image / required-field validation
     // in front of submission (the preview cannot bypass it).
-=======
     if (!validateNumericFields()) return;
->>>>>>> 33bd613d (fix(web): reject invalid floor area with field feedback before save)
     setSaving(true);
     setError('');
     setNotice('');
