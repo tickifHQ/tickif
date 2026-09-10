@@ -127,9 +127,13 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
       body: await designerPage.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
-    // Escape closes the drawer.
+    // Escape closes the drawer and focus returns to the opener so keyboard
+    // users keep their place in the long upload form (E-279 focus restoration).
     await designerPage.keyboard.press('Escape');
     await expect(designerPage.getByRole('dialog')).toHaveCount(0);
+    await expect(
+      designerPage.getByRole('button', { name: 'View moderation history', exact: true }),
+    ).toBeFocused();
 
     expect(errors).toEqual([]);
   } finally {
