@@ -117,6 +117,7 @@ function image(overrides: Partial<AdminImageRecord> = {}): AdminImageRecord {
     duplicateOfImageId: null,
     duplicateDistance: null,
     duplicateCheckedAt: new Date('2026-07-20T09:35:00.000Z'),
+    failureReason: null,
     status: 'ready',
     sortOrder: 0,
     createdAt: new Date('2026-07-20T09:30:00.000Z'),

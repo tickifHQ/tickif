@@ -50,6 +50,26 @@ export type UploadUrlResponse = z.infer<typeof uploadUrlResponseSchema>;
 export const imageStatus = z.enum(['processing', 'ready', 'failed']);
 export type ImageStatus = z.infer<typeof imageStatus>;
 
+/**
+ * Machine-readable processing failure codes persisted on the image row.
+ * Rendered with a human message + recovery action on the failed tile (E-284).
+ */
+export const imageFailureReason = z
+  .enum([
+    'too_large',
+    'empty',
+    'corrupt',
+    'unsupported_format',
+    'content_type_mismatch',
+    'dimensions_exceeded',
+    'decompression_bomb',
+    'duplicate',
+    'processing_failed',
+    'upload_failed',
+  ])
+  .meta({ id: 'ImageFailureReason' });
+export type ImageFailureReason = z.infer<typeof imageFailureReason>;
+
 export const derivativeSchema = z.object({
   variant: z.string(),
   format: z.string(),
@@ -80,6 +100,7 @@ export const projectImageSchema = z
     tagSlugs: z.array(z.string()),
     width: z.number().int().nullable(),
     height: z.number().int().nullable(),
+    failureReason: imageFailureReason.nullable().default(null),
     derivatives: z.array(derivativeSchema),
     previewUrl: z.url().nullable().default(null),
     viewerUrl: z.url().nullable().default(null),

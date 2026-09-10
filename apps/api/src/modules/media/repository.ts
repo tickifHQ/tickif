@@ -19,6 +19,7 @@ export type ProjectImageListItem = Pick<
   | 'tagSlugs'
   | 'width'
   | 'height'
+  | 'failureReason'
   | 'derivatives'
 >;
 
@@ -200,6 +201,7 @@ export const mediaRepository = {
         tagSlugs: schema.projectImage.tagSlugs,
         width: schema.projectImage.width,
         height: schema.projectImage.height,
+        failureReason: schema.projectImage.failureReason,
         derivatives: schema.projectImage.derivatives,
       })
       .from(schema.projectImage)

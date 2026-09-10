@@ -169,6 +169,7 @@ describe('media pipeline (integration)', () => {
     expect(result).toEqual({ ok: false, reason: 'corrupt' });
 
     expect(await reload(imageId).then((r) => r.status)).toBe('failed');
+    expect(await reload(imageId).then((r) => r.failureReason)).toBe('corrupt');
     expect([...r2.keys()].some((k) => k.startsWith(`derivatives/${projectId}/${imageId}`))).toBe(
       false,
     );
@@ -268,5 +269,6 @@ describe('media pipeline (integration)', () => {
     const result = await processMedia(job(image.id));
     expect(result).toEqual({ ok: false, reason: 'duplicate' });
     expect(await reload(image.id).then((r) => r.status)).toBe('failed');
+    expect(await reload(image.id).then((r) => r.failureReason)).toBe('duplicate');
   });
 });

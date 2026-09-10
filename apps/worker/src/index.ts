@@ -171,7 +171,7 @@ mediaWorker.on('failed', async (job, err) => {
   console.error(`[worker] media failed job ${job?.id}:`, err);
   // Persist 'failed' only once retries are exhausted, so a transient error doesn't flap the status.
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-    await markFailed(job.data.imageId).catch((e) =>
+    await markFailed(job.data.imageId, 'processing_failed').catch((e) =>
       console.error(`[worker] media ${job.data.imageId}: terminal markFailed failed`, e),
     );
   }
