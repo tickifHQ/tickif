@@ -26,7 +26,12 @@ describe('search projection mapper', () => {
         publishedAt: new Date('2026-07-01T00:00:00.000Z'),
         featuredAt: null,
       },
-      designer: { slug: 'studio-one', displayName: 'Studio One', avgRating: '4.75', reviewCount: 16 },
+      designer: {
+        slug: 'studio-one',
+        displayName: 'Studio One',
+        avgRating: '4.75',
+        reviewCount: 16,
+      },
       cover: {
         id: '11111111-1111-4111-8111-111111111111',
         status: 'ready',
@@ -91,6 +96,7 @@ describe('search projection mapper', () => {
       publishedAt: new Date('2026-07-01T00:00:00.000Z').getTime(),
       featuredAt: null,
       avgRating: 4.75,
+      paidUntil: 0,
       reviewCount: 16,
     });
   });
@@ -164,6 +170,7 @@ describe('search projection mapper', () => {
       slug: 'studio-one',
       displayName: 'Studio One',
       bio: 'Residential interiors',
+      portfolioTerms: [],
       entityType: 'company',
       citySlugs: ['mumbai'],
       localitySlugs: [],
@@ -172,6 +179,7 @@ describe('search projection mapper', () => {
       yearsExperience: 8,
       projectCount: 12,
       avgRating: 4.75,
+      paidUntil: 0,
       reviewCount: 16,
       isKycVerified: false,
       kycExpiresAt: 0,

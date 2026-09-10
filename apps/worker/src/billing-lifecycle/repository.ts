@@ -1,4 +1,5 @@
 import {
+  SEARCH_PROJECTION_ADVISORY_LOCK_KEY,
   and,
   asc,
   db,
@@ -94,7 +95,10 @@ export async function findLockedExpired(
 export async function transitionGraceToLocked(subscriptionId: string, now: Date): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ state: schema.subscription.subscriptionState })
+      .select({
+        state: schema.subscription.subscriptionState,
+        organizationId: schema.subscription.organizationId,
+      })
       .from(schema.subscription)
       .where(eq(schema.subscription.id, subscriptionId))
       .for('update')
@@ -112,6 +116,7 @@ export async function transitionGraceToLocked(subscriptionId: string, now: Date)
           eq(schema.subscription.subscriptionState, 'grace'),
         ),
       );
+    await recordRankingChange(tx, row.organizationId, now);
     return true;
   });
 }
@@ -163,11 +168,31 @@ export async function transitionLockedToDowngraded(
       activeLimit: branchLimit('hobby', 'active'),
       now,
     });
+    await recordRankingChange(tx, row.organizationId, now);
     return true;
   });
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function recordRankingChange(tx: Tx, organizationId: string, now: Date): Promise<void> {
+  const profiles = await tx
+    .select({ id: schema.designerProfile.id })
+    .from(schema.designerProfile)
+    .where(eq(schema.designerProfile.orgId, organizationId));
+  if (profiles.length === 0) return;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
+  );
+  await tx.insert(schema.searchProjectionOutbox).values(
+    profiles.map((profile) => ({
+      entityKind: 'designer' as const,
+      entityId: profile.id,
+      operation: 'index' as const,
+      sourceUpdatedAt: now,
+    })),
+  );
+}
 
 async function freezeBranchesToLimitOnTx(
   tx: Tx,
@@ -178,9 +203,7 @@ async function freezeBranchesToLimitOnTx(
   const activeBranches = await tx
     .select({ id: schema.team.id })
     .from(schema.team)
-    .where(
-      and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)),
-    )
+    .where(and(eq(schema.team.organizationId, input.organizationId), eq(schema.team.frozen, false)))
     .orderBy(desc(schema.team.createdAt), desc(schema.team.id))
     .for('update');
   const ids = activeBranches

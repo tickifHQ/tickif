@@ -14,6 +14,8 @@ import {
   PROJECT_DEFAULT_SORT,
   DESIGNER_DEFAULT_SORT,
   designerDefaultSort,
+  discoveryRanking,
+  searchWithDiscoveryFallback,
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
@@ -105,9 +107,8 @@ export interface TypesenseSearchParams {
 function pickCoverDerivativeKey(derivatives: Derivative[] | null): string | null {
   if (!derivatives) return null;
   return (
-    derivatives.find(
-      (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
-    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
     derivatives[0]?.key ??
     null
@@ -135,27 +136,6 @@ function extractFacetDistribution(
   return result;
 }
 
-/**
- * A field missing from inside `_eval(...)` does NOT surface as the named "Could not find a
- * field" error. Typesense 30.2 answers `400 Error parsing eval expression in sort_by clause.`,
- * which names neither field — verified against the running 30.2 image with both verification
- * fields absent and with only `kycExpiresAt` absent. The named 404 form only appears for a bare
- * `sort_by=isKycVerified:desc`, which this path never emits; it is kept as a belt-and-braces
- * match in case a future version reports the eval case that way.
- *
- * Matching the generic parse error is safe: the retry is already gated on the verification
- * ranking path and falls back to the static default sort, so the worst case is unranked-but-
- * correct results instead of a 500 on the primary discovery endpoint.
- */
-function isMissingVerificationSortField(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  if (error.message.includes('Error parsing eval expression')) return true;
-  return (
-    error.message.includes('Could not find a field named') &&
-    (error.message.includes('isKycVerified') || error.message.includes('kycExpiresAt'))
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Repository Methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,9 +144,7 @@ function isMissingVerificationSortField(error: unknown): boolean {
  * Search projects in Typesense.
  * Returns domain type ProjectSearchResult, not raw Typesense SearchResponse.
  */
-export async function searchProjects(
-  params: TypesenseSearchParams,
-): Promise<ProjectSearchResult> {
+export async function searchProjects(params: TypesenseSearchParams): Promise<ProjectSearchResult> {
   const client = searchClient();
   const collectionName = searchCollectionName('projects');
 
@@ -174,22 +152,22 @@ export async function searchProjects(
     q: params.q,
     query_by: params.query_by || PROJECT_QUERY_BY.join(','),
     filter_by: params.filter_by,
-    sort_by: params.sort_by || PROJECT_DEFAULT_SORT,
+    sort_by: params.sort_by || discoveryRanking(),
     facet_by: params.facet_by || PROJECT_FACET_FIELDS.join(','),
     include_fields: params.include_fields,
     page: params.page,
     per_page: params.per_page,
   };
 
-  const result = await client
-    .collections<ProjectSearchDocument>(collectionName)
-    .documents()
-    .search(searchParams);
+  const documents = client.collections<ProjectSearchDocument>(collectionName).documents();
+  const result = await searchWithDiscoveryFallback(
+    (query) => documents.search(query),
+    searchParams,
+    { ...searchParams, sort_by: params.sort_by || PROJECT_DEFAULT_SORT },
+  );
 
   return {
-    hits: (result.hits ?? []).map(
-      (hit: { document: ProjectSearchDocument }) => hit.document,
-    ),
+    hits: (result.hits ?? []).map((hit: { document: ProjectSearchDocument }) => hit.document),
     estimatedTotalHits: result.found ?? 0,
     facetDistribution: extractFacetDistribution(result.facet_counts),
     processingTimeMs: result.search_time_ms ?? 0,
@@ -205,13 +183,15 @@ export async function searchDesigners(
 ): Promise<DesignerSearchResult> {
   const client = searchClient();
   const collectionName = searchCollectionName('designers');
-  const usesVerificationRanking = !params.sort_by;
 
   const searchParams = {
     q: params.q,
     query_by: params.query_by || DESIGNER_QUERY_BY.join(','),
     filter_by: params.filter_by,
-    sort_by: params.sort_by || designerDefaultSort(),
+    sort_by:
+      params.sort_by === 'avgRating:desc'
+        ? discoveryRanking(Date.now(), true)
+        : params.sort_by || designerDefaultSort(),
     facet_by: params.facet_by || DESIGNER_FACET_FIELDS.join(','),
     include_fields: params.include_fields,
     page: params.page,
@@ -219,21 +199,21 @@ export async function searchDesigners(
   };
 
   const documents = client.collections<DesignerSearchDocument>(collectionName).documents();
-  let result;
-  try {
-    result = await documents.search(searchParams);
-  } catch (error) {
-    if (!usesVerificationRanking || !isMissingVerificationSortField(error)) throw error;
-    result = await documents.search({
+  const result = await searchWithDiscoveryFallback(
+    (query) => documents.search(query),
+    searchParams,
+    {
       ...searchParams,
-      sort_by: DESIGNER_DEFAULT_SORT,
-    });
-  }
+      query_by: searchParams.query_by
+        .split(',')
+        .filter((field) => field !== 'portfolioTerms')
+        .join(','),
+      sort_by: params.sort_by || DESIGNER_DEFAULT_SORT,
+    },
+  );
 
   return {
-    hits: (result.hits ?? []).map(
-      (hit: { document: DesignerSearchDocument }) => hit.document,
-    ),
+    hits: (result.hits ?? []).map((hit: { document: DesignerSearchDocument }) => hit.document),
     estimatedTotalHits: result.found ?? 0,
     facetDistribution: extractFacetDistribution(result.facet_counts),
     processingTimeMs: result.search_time_ms ?? 0,
@@ -250,9 +230,7 @@ export async function multiSearch(q: string): Promise<MultiSearchResult> {
   const projectCollectionName = searchCollectionName('projects');
   const designerCollectionName = searchCollectionName('designers');
 
-  const result = await client.multiSearch.perform<
-    [ProjectSearchDocument, DesignerSearchDocument]
-  >(
+  const result = await client.multiSearch.perform<[ProjectSearchDocument, DesignerSearchDocument]>(
     {
       searches: [
         {
@@ -265,7 +243,8 @@ export async function multiSearch(q: string): Promise<MultiSearchResult> {
         {
           collection: designerCollectionName,
           q,
-          query_by: DESIGNER_QUERY_BY.join(','),
+          // Suggestions retain the profile-only fields for old-schema compatibility.
+          query_by: DESIGNER_QUERY_BY.filter((field) => field !== 'portfolioTerms').join(','),
           include_fields: DESIGNER_SUGGEST_FIELDS.join(','),
           per_page: 3,
         },
@@ -319,14 +298,8 @@ export async function recentProjectsInCity(
       publishedAt: schema.project.publishedAt,
     })
     .from(schema.project)
-    .innerJoin(
-      schema.designerProfile,
-      eq(schema.project.designerId, schema.designerProfile.id),
-    )
-    .innerJoin(
-      schema.organization,
-      eq(schema.designerProfile.orgId, schema.organization.id),
-    )
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
     .where(
       and(
         eq(schema.project.status, 'published'),
@@ -344,9 +317,7 @@ export async function recentProjectsInCity(
 
   // Fetch project IDs and cover image IDs for additional data lookups
   const projectIds = rows.map((r) => r.id);
-  const coverImageIds = rows
-    .filter((r) => r.coverImageId != null)
-    .map((r) => r.coverImageId!);
+  const coverImageIds = rows.filter((r) => r.coverImageId != null).map((r) => r.coverImageId!);
 
   // Fetch room slugs and image tags for each project in parallel
   const [roomsData, imagesData, coverData] = await Promise.all([
@@ -357,10 +328,7 @@ export async function recentProjectsInCity(
         slug: schema.taxonomy.slug,
       })
       .from(schema.projectRoom)
-      .innerJoin(
-        schema.taxonomy,
-        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
-      )
+      .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
       .where(inArray(schema.projectRoom.projectId, projectIds)),
 
     // Fetch themes, materials, finishes from project images
@@ -429,9 +397,7 @@ export async function recentProjectsInCity(
   // Map rows to RecentProject domain type
   return rows.map((row) => {
     const tags = imageTagsByProject.get(row.id);
-    const coverDerivatives = row.coverImageId
-      ? coverById.get(row.coverImageId)
-      : null;
+    const coverDerivatives = row.coverImageId ? coverById.get(row.coverImageId) : null;
     // Mirror the indexer's cover policy (apps/worker/src/search/mapper.ts →
     // pickCoverDerivative) so a Postgres fallback hit renders the same image the
     // Typesense document would have carried.
