@@ -43,3 +43,5 @@ export {
   type SearchDocumentsByKind,
   type SearchWriteOperations,
 } from './write.js';
+
+export { discoveryRanking, searchWithDiscoveryFallback } from './query.js';

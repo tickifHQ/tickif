@@ -32,7 +32,7 @@ describe('search repository designer ranking compatibility', () => {
   });
 
   // Verbatim from Typesense 30.2 (`typesense-js` prefixes the server message) when the
-  // collection predates the optional verification fields. It names neither field, which is why
+  // collection predates the optional paid fields. It names neither field, which is why
   // the "Could not find a field named" match alone never fires on the rollout path.
   const EVAL_PARSE_ERROR =
     'Request failed with HTTP code 400 | Server said: Error parsing eval expression in sort_by clause.';
@@ -41,9 +41,9 @@ describe('search repository designer ranking compatibility', () => {
     ['the eval expression cannot be parsed', EVAL_PARSE_ERROR],
     [
       'a sort field is reported missing by name',
-      'Request failed with HTTP code 404 | Server said: Could not find a field named `isKycVerified` in the schema for sorting.',
+      'Request failed with HTTP code 404 | Server said: Could not find a field named `paidUntil` in the schema for sorting.',
     ],
-  ])('retries default discovery without verification ranking when %s', async (_label, message) => {
+  ])('retries default discovery without paid ranking when %s', async (_label, message) => {
     mocks.search.mockRejectedValueOnce(new Error(message)).mockResolvedValueOnce({
       hits: [],
       found: 0,
@@ -56,7 +56,7 @@ describe('search repository designer ranking compatibility', () => {
       estimatedTotalHits: 0,
     });
     expect(mocks.search).toHaveBeenCalledTimes(2);
-    expect(mocks.search.mock.calls[0]?.[0].sort_by).toContain('_eval(isKycVerified:true');
+    expect(mocks.search.mock.calls[0]?.[0].sort_by).toContain('_eval(paidUntil:>');
     expect(mocks.search.mock.calls[1]?.[0].sort_by).toBe(DESIGNER_DEFAULT_SORT);
   });
 

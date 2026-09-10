@@ -196,3 +196,48 @@ add:
 - bounded background bootstrap retries with backoff;
 - a degraded search state on health diagnostics without failing liveness;
 - a fallback-activation counter that distinguishes unavailable from slow search.
+
+## Rating and paid discovery ranking
+
+Text searches order by Typesense text relevance, then designer average rating,
+then unexpired paid subscription coverage. For equally relevant matches, a free
+5-star designer precedes a paid 4-star designer; a paid 5-star designer precedes
+a free 5-star designer. The explicit designer rating sort puts rating first,
+then paid coverage, then relevance. Empty home feeds keep their existing recent
+or featured order, and other explicit sort selections remain available.
+
+Both collections now project `paidUntil`. Paid means a non-Hobby subscription
+that is neither locked nor downgraded, with a future `currentPeriodEnd`.
+Scheduled cancellation keeps priority until that boundary. The query evaluates
+expiry against the current time, so delayed lifecycle jobs cannot extend it.
+Subscription changes enqueue a designer projection, which refreshes its projects.
+KYC remains a filter and badge, but no longer determines default result order.
+
+Designer `portfolioTerms` contains published project titles, descriptions and
+room names/types. Draft and archived projects do not contribute. Publish and
+unpublish transitions refresh the designer projection. Suggestions continue to
+search profile fields only.
+
+A three-letter alphabetic query that has zero matches gets one retry allowing
+one typo, with token dropping disabled. Thus `bad` can recover `bed`/`bedroom`
+when there is no literal match. Existing matches, filters and pagination are
+preserved. Shorter, numeric and multiword queries keep ordinary Typesense rules.
+
+Deploy the worker and API, then apply schema updates and rebuild both collections
+using the commands above. A missing new schema field falls back to the previous
+query until bootstrap completes. Existing documents gain paid and portfolio
+signals only after reindexing. No Postgres migration is required. The Postgres
+home-feed fallback orders matching rows by rating and paid coverage, but still
+uses its existing substring matching without Typesense typo/portfolio semantics.
+
+Verify `bedroom`, `bed`, `bad`, `bedrom`, `bed room`, `kitchen` and an unmatched
+term on `/api/discovery/feed`, `/api/search` and `/api/search/designers`. Check
+`source: "search"` on discovery, a second page, and both rated paid/free fixtures.
+Typesense permits three explicit sort keys; equal relevance, rating and paid
+status use its final insertion-order tie-break, which can change after a rebuild.
+
+The staging audit on 2026-09-08 found 11 bedroom projects but only two matching
+designer profiles, and four kitchen projects but no matching profiles. `bad`
+returned zero results. All sampled ratings were zero, so staging alone could not
+prove the paid/rating ordering. The regression suite uses real Typesense and
+Postgres fixtures with unequal ratings and paid coverage to verify that order.

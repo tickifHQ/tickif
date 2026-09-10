@@ -361,10 +361,8 @@ async function handleCharged(
 
     await tx.update(schema.subscription).set(updates).where(eq(schema.subscription.id, current.id));
 
-    const nextTier = (updates.planTier ?? current.planTier) as PlanTier;
-    if (nextTier !== current.planTier) {
-      await queueDesignerReindex(tx, current.organizationId);
-    }
+    // Every captured cycle refreshes paid coverage, even when the tier is unchanged.
+    await queueDesignerReindex(tx, current.organizationId);
 
     // Restore both resource types inside the subscription transaction. If either
     // reconciliation fails, the webhook can retry the rolled-back state change.
@@ -554,7 +552,7 @@ async function handlePending(
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * Queue a designer profile reindex when their subscription tier changes.
+ * Queue designer profile reindexing when subscription tier or paid coverage changes.
  * Resolves every branch profile in the org, then inserts into the search outbox.
  */
 async function queueDesignerReindex(tx: Transaction, organizationId: string): Promise<void> {
