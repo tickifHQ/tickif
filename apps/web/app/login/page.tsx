@@ -48,9 +48,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps): Promi
     const status = accountStatusSchema.safeParse(session.user.status);
     if (!role.success || !status.success) redirect('/unauthorized');
     if (role.data === PLATFORM_ROLE.DESIGNER) {
-      redirect(
-        status.data === ACCOUNT_STATUS.PENDING ? '/designer/onboarding' : '/designer/dashboard',
-      );
+      if (status.data === ACCOUNT_STATUS.PENDING) redirect('/designer/onboarding');
+      if (status.data === ACCOUNT_STATUS.ACTIVE) redirect('/designer/dashboard');
+      redirect('/unauthorized');
     }
     if (role.data !== PLATFORM_ROLE.VISITOR) redirect('/unauthorized');
     if (status.data === ACCOUNT_STATUS.ACTIVE) redirect('/home');

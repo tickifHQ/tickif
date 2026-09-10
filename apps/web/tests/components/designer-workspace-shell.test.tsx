@@ -14,8 +14,18 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: ({ showProfileSettings }: { showProfileSettings?: boolean }) => (
-    <div data-testid="account-menu" data-profile-settings={showProfileSettings} />
+  AccountMenu: ({
+    showLabel,
+    showProfileSettings,
+  }: {
+    showLabel?: boolean;
+    showProfileSettings?: boolean;
+  }) => (
+    <div
+      data-testid="account-menu"
+      data-show-label={showLabel ? 'true' : 'false'}
+      data-profile-settings={showProfileSettings ? 'true' : 'false'}
+    />
   ),
 }));
 
@@ -231,6 +241,30 @@ describe('DesignerWorkspaceShell', () => {
     const header = screen.getByRole('banner');
     expect(header).toHaveTextContent('Profile & settings');
     expect(header.querySelector('svg.lucide-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'true');
+  });
+
+  it.each([
+    '/designer/dashboard',
+    '/designer/projects',
+    '/designer/leads',
+    '/designer/analytics',
+    '/designer/verification',
+  ])('keeps the same labelled account menu actions on %s', (pathname) => {
+    mock.pathname = pathname;
+
+    render(
+      <DesignerWorkspaceShell
+        isOwner
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getByTestId('account-menu')).toHaveAttribute('data-show-label', 'true');
     expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'true');
   });
 

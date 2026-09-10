@@ -31,7 +31,7 @@ import {
   toE164PhoneNumber,
   type Country,
 } from '@/components/phone-number-input';
-import { DESIGNER_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
+import { DESIGNER_AUTH_CONTINUE_PATH, VISITOR_AUTH_CONTINUE_PATH } from '@/lib/auth-paths';
 
 type LoginMode = 'browsing' | 'designer';
 
@@ -153,11 +153,9 @@ export function LoginCard({
     }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
-    if (loginMode === 'designer') {
-      router.replace(DESIGNER_AUTH_CONTINUE_PATH);
-    } else {
-      router.push('/onboarding');
-    }
+    router.replace(
+      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH,
+    );
   }, [success, loginMode, router, callbackPath, onSuccess]);
 
   // Phone OTP cooldown

@@ -309,7 +309,9 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Signed in')).toBeInTheDocument();
-      await waitFor(() => expect(mock.router.push).toHaveBeenCalledWith('/onboarding'));
+      await waitFor(() =>
+        expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=browsing&authenticated=1'),
+      );
     });
 
     it('shows error on verify failure', async () => {

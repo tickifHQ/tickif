@@ -14,16 +14,6 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/auth-guard', () => ({
   getServerSession: mock.getServerSession,
   rolePassesCheck: mock.rolePassesCheck,
-  activeContextForSession: (session: {
-    session: { activeOrganizationId?: string | null; activeTeamId?: string | null };
-  }) =>
-    session.session.activeOrganizationId && session.session.activeTeamId
-      ? {
-          kind: 'organization',
-          organizationId: session.session.activeOrganizationId,
-          teamId: session.session.activeTeamId,
-        }
-      : { kind: 'personal' },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -117,6 +107,40 @@ describe('LoginPage', () => {
     );
   });
 
+  it('routes a fresh designer-tab signup to designer onboarding on the server', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u4',
+        name: 'New Designer',
+        email: 'new-designer@test.com',
+        role: 'visitor',
+        status: 'pending',
+      },
+      session: { id: 's4', token: 'token', expiresAt: new Date().toISOString() },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+    await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
+      'NEXT_REDIRECT:/designer/onboarding',
+    );
+  });
+
+  it('rejects a suspended designer instead of routing into a workspace', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u4',
+        name: 'Designer',
+        email: 'designer@test.com',
+        role: 'designer',
+        status: 'suspended',
+      },
+      session: { id: 's4', token: 'token', expiresAt: '2027-01-01T00:00:00.000Z' },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/unauthorized',
+    );
+  });
+
   it('sends an onboarded designer in personal context to the designer dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {
@@ -159,7 +183,7 @@ describe('LoginPage', () => {
     );
   });
 
-  it('keeps the existing home redirect for an authenticated visitor', async () => {
+  it('sends an active authenticated visitor to personal home', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {
         id: 'u3',
@@ -174,6 +198,24 @@ describe('LoginPage', () => {
 
     await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       'NEXT_REDIRECT:/home',
+    );
+  });
+
+  it('sends a pending authenticated visitor to visitor onboarding', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u3',
+        name: 'Visitor',
+        email: 'visitor@test.com',
+        role: 'visitor',
+        status: 'pending',
+      },
+      session: { id: 's3', token: 'token', expiresAt: new Date().toISOString() },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/onboarding',
     );
   });
 

@@ -10,7 +10,6 @@ const adminLinks = [
   { href: '/moderation', label: 'Moderation' },
   { href: '/review-moderation', label: 'Review moderation' },
   { href: '/verifications', label: 'Profile verification' },
-  { href: '/', label: 'View site' },
 ];
 
 /** Admin console chrome. Requires role: admin or superadmin (redirects to /unauthorized). */

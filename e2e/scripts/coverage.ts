@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 export const requiredTests = [
-  ['authentication.spec.ts', 'phone OTP creates a real visitor session and rejects a wrong code'],
+  [
+    'authentication.spec.ts',
+    'phone OTP creates a visitor session, completes onboarding, and opens personal settings',
+  ],
   [
     'authentication.spec.ts',
     'email OTP creates a real session through a local Resend delivery double',
