@@ -279,7 +279,11 @@ export const profilesRepository = {
     staffCount: number | null;
     footprintIds: { taxonomyId: string }[];
     allowAdditionalOrganization: boolean;
-  }): Promise<{ profile: DesignerProfileRecord; org: typeof schema.organization.$inferSelect }> {
+  }): Promise<{
+    profile: DesignerProfileRecord;
+    org: typeof schema.organization.$inferSelect;
+    created: boolean;
+  }> {
     return await db.transaction(async (tx) => {
       const [account] = await tx
         .select({
@@ -299,6 +303,23 @@ export const profilesRepository = {
         (account.role === PLATFORM_ROLE.DESIGNER ||
           account.role === PLATFORM_ROLE.ADMIN ||
           account.role === PLATFORM_ROLE.SUPERADMIN);
+      // A competing first-onboarding request can finish while this request waits
+      // for the account lock. Reuse its result without admitting active visitors
+      // or creating another organization from a repeated first-onboarding call.
+      if (
+        !data.allowAdditionalOrganization &&
+        !isBanned &&
+        account?.role === PLATFORM_ROLE.DESIGNER &&
+        account.status === ACCOUNT_STATUS.ACTIVE
+      ) {
+        const [existing] = await tx
+          .select({ profile: schema.designerProfile, org: schema.organization })
+          .from(schema.designerProfile)
+          .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+          .where(eq(schema.designerProfile.userId, data.userId))
+          .limit(1);
+        if (existing) return { ...existing, created: false };
+      }
       const canOnboard =
         !isBanned &&
         (data.allowAdditionalOrganization
@@ -383,7 +404,7 @@ export const profilesRepository = {
         );
       }
 
-      return { profile: profile!, org: org! };
+      return { profile: profile!, org: org!, created: true };
     });
   },
 

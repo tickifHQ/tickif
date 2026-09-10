@@ -107,6 +107,28 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.organization).toBeDefined();
   });
 
+  it('keeps overlapping onboarding submissions idempotent', async () => {
+    const { cookie, userId } = await createAuthedSession('+919800001099');
+    const responses = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        request('POST', '/api/profiles/me', {
+          cookie,
+          body: { entityType: 'individual', userName: 'Concurrent Designer' },
+        }),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+    const [first, second] = await Promise.all(responses.map(json));
+    expect(first.profile.id).toBe(second.profile.id);
+    expect(first.organization.id).toBe(second.organization.id);
+    const memberships = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(eq(schema.member.userId, userId));
+    expect(memberships).toHaveLength(1);
+  });
+
   it('rejects an active visitor without creating designer resources', async () => {
     const { cookie, userId } = await createRoleSession('+919800001002', PLATFORM_ROLE.VISITOR);
     await db
