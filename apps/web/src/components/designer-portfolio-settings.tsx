@@ -654,6 +654,27 @@ export function DesignerPortfolioSettings() {
   // the currently-typed slug, giving the designer real-time URL feedback.
   const previewUrl = copyUrl.replace(/^https?:\/\//, '');
 
+  // Status badge reflects the actual *saved* publication state from the server,
+  // not the public-link toggle alone. An incomplete portfolio never goes live
+  // even with the link switched on (the `/d/{slug}` gate 404s until required
+  // hero fields are filled), so the toggle by itself would misreport "Live".
+  //
+  // Review P2: `publiclyVisible` is the authoritative gate and MUST be checked
+  // first. The server never demotes an already-`active` profile when a required
+  // field is later cleared (e.g. the logo is deleted), so `publiclyVisible: true`
+  // can legitimately coexist with a non-empty `missingRequiredFields` — the API
+  // test `keeps a live portfolio live after a required field is cleared` locks
+  // in that state. Checking completeness first would mislabel such a genuinely
+  // public portfolio as "Incomplete".
+  //   Live       — publicly visible right now (`publiclyVisible`).
+  //   Incomplete — not public yet because required hero fields are still blank.
+  //   Hidden     — complete, but the designer has switched the public link off.
+  const publicationStatus: 'Incomplete' | 'Hidden' | 'Live' = portfolio.publiclyVisible
+    ? 'Live'
+    : portfolio.missingRequiredFields.length > 0
+      ? 'Incomplete'
+      : 'Hidden';
+
   // Google connection derived state (default `available` true until first load,
   // so the Connect UI doesn't flicker to "unavailable" on mount).
   const googleConnection = googleReviews?.connection ?? null;
@@ -1410,12 +1431,12 @@ export function DesignerPortfolioSettings() {
               <Badge
                 variant="outline"
                 className={
-                  form.publicLinkEnabled
+                  publicationStatus === 'Live'
                     ? 'border-primary/30 text-xs font-medium text-primary'
                     : 'text-xs font-medium text-muted-foreground'
                 }
               >
-                {form.publicLinkEnabled ? 'Live' : 'Hidden'}
+                {publicationStatus}
               </Badge>
             </div>
 
