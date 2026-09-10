@@ -14,7 +14,7 @@ type Transaction = Parameters<Parameters<DB['transaction']>[0]>[0];
  * The shared advisory lock participates in the full-rebuild snapshot barrier.
  */
 export async function recordSearchProjectionEvents(
-  tx: Transaction,
+  tx: Pick<Transaction, 'execute' | 'insert'>,
   events: SearchProjectionEvent[],
 ): Promise<void> {
   if (events.length === 0) return;

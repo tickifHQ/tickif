@@ -455,3 +455,81 @@ describe('PublicDesignerProfile', () => {
     expect(screen.getByText(/no published projects yet/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * E-212 #4: the hero "Verified" chip and the story-card "KYC verified" line are
+ * independent trust signals. Turning off the Trust & Credentials section makes
+ * the API send `badges: []`, but a KYC-verified designer must keep those two
+ * signals — they now read the dedicated `isKycVerified` field, not the
+ * section-gated badge array.
+ */
+describe('PublicDesignerProfile — KYC signals independent of Trust & Credentials section (E-212 #4)', () => {
+  /** Trust section OFF => API returns badges: [] (mirrors public-portfolio-service). */
+  function trustOffButVerified() {
+    const base = makePublicPortfolio();
+    return {
+      ...base,
+      isKycVerified: true,
+      badges: [],
+      sections: { ...base.sections, trustCredentials: false },
+    };
+  }
+
+  it('keeps the hero Verified chip and story KYC line when Trust & Credentials is off', () => {
+    render(<PublicDesignerProfile portfolio={trustOffButVerified()} />);
+
+    // Credentials section is gone (its heading "Verified on Tickif" is absent),
+    // so the only exact-"Verified" text node left is the hero chip.
+    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
+    expect(screen.getByText('Verified', { selector: 'span' })).toBeInTheDocument();
+    // Story-card independent KYC line.
+    expect(screen.getByText('KYC verified')).toBeInTheDocument();
+    // The tickif verified tick (gated by sections.tickifBadge && isKycVerified) also remains.
+    expect(screen.getAllByLabelText('Verified studio').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the Trust & Credentials section and the KYC signals when it is on', () => {
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
+    // With the section on, "Verified" appears in both the hero chip and the
+    // section heading — assert the hero chip signal is present among them.
+    expect(screen.getAllByText('Verified', { selector: 'span' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('KYC verified')).toBeInTheDocument();
+  });
+
+  it('shows no KYC signals when the designer is not verified, even with the section on', () => {
+    render(
+      <PublicDesignerProfile
+        portfolio={makePublicPortfolio({ isKycVerified: false, badges: ['new'] })}
+      />,
+    );
+
+    expect(screen.queryByText('KYC verified')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Verified studio')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * E-212 #14: the bio must not render more than twice — the hero strapline
+ * fallback and the Studio details "about" copy. It was previously also rendered
+ * in the Portfolio section, producing up to three copies.
+ */
+describe('PublicDesignerProfile — bio is not duplicated across sections (E-212 #14)', () => {
+  it('renders the bio at most twice (hero fallback + studio details), not in the Portfolio section', () => {
+    const bio = 'A boutique residential design studio led by Anika Subramanian.';
+    // With a tagline present, the hero uses the tagline (not the bio), so the
+    // bio appears exactly once — in Studio details.
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ bio })} />);
+
+    expect(screen.getAllByText(bio)).toHaveLength(1);
+  });
+
+  it('shows the bio at most twice when it is also the hero fallback (no tagline)', () => {
+    const bio = 'A boutique residential design studio led by Anika Subramanian.';
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ bio, tagline: null })} />);
+
+    // Hero strapline fallback + Studio details = 2; never 3 (Portfolio section removed).
+    expect(screen.getAllByText(bio).length).toBeLessThanOrEqual(2);
+  });
+});

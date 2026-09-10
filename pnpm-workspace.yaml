@@ -7,7 +7,7 @@ packages:
 # package.json `pnpm` field (which newer pnpm silently ignores).
 overrides:
   esbuild: 0.28.1
-  hono: ^4.12.34
+  hono: ^4.13.5
   # Keep Vite's peer graph on one Node type instance. Floating peer resolution
   # produced parallel Vite trees (26.0.0 and 26.4.0) and broke CI typechecking.
   '@types/node': 26.4.0
@@ -15,8 +15,8 @@ overrides:
   # brace-expansion DoS advisories through 5.0.8. One line for every copy —
   # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
   brace-expansion: 5.0.9
-  # js-yaml CPU exhaustion in !!omap resolution: keep within the patched 4.x line.
-  'js-yaml@>=4.0.0 <4.3.1': 4.3.1
+  # js-yaml CPU exhaustion, including empty merge sources (GHSA-2883-xcg3-v3hh).
+  'js-yaml@>=4.0.0 <4.3.2': 4.3.2
   # nanoid generator loop advisories: patch each installed major independently.
   # GHSA-2v37-7h3g-55p8 widened the affected 3.x range to <3.3.18, which left the
   # previous `<3.3.17: 3.3.17` pin resolving to an affected version itself.
@@ -29,7 +29,7 @@ overrides:
   undici: 7.29.0
   ip-address: 10.3.1
   # sharp (GHSA-f88m-g3jw-g9cj): patch every copy, incl. next's bundled sharp.
-  sharp: ^0.35.3
+  sharp: ^0.35.4
   # postcss sourceMappingURL file disclosure (GHSA-6g55-p6wh-862q <=8.5.11,
   # GHSA-r28c-9q8g-f849 <=8.5.17): patch every copy, via next and via tsup.
   postcss: ^8.5.18
@@ -52,7 +52,7 @@ catalog:
   '@t3-oss/env-nextjs': ^0.13.8
 
   # Hono stack
-  hono: ^4.12.34
+  hono: ^4.13.5
   '@hono/node-server': ^2.0.5
   '@hono/zod-openapi': ^1.4.0
   '@scalar/hono-api-reference': ^0.10.20
@@ -75,14 +75,14 @@ catalog:
   # Storage (Cloudflare R2 via S3 API) + image processing
   '@aws-sdk/client-s3': ^3.1101.0
   '@aws-sdk/s3-request-presigner': ^3.1101.0
-  sharp: ^0.35.3
+  sharp: ^0.35.4
 
   # Search
   '@babel/runtime': ^7.29.0
   typesense: ^3.0.6
 
   # Frontend
-  next: ^16.2.11
+  next: ^16.3.3
   react: ^19.0.0
   react-dom: ^19.0.0
   '@types/react': ^19.2.17
@@ -117,7 +117,7 @@ catalog:
   vitest: ^4.1.11
   '@vitest/coverage-v8': ^4.1.11
   '@testing-library/react': ^16.3.2
-  '@testing-library/user-event': ^14.6.1
+  '@testing-library/user-event': ^14.6.7
   '@testing-library/jest-dom': ^6.9.1
   happy-dom: ^20.11.6
   '@vitejs/plugin-react': ^6.0.2

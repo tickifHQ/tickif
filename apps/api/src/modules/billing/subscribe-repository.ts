@@ -1,10 +1,11 @@
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
+import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { AppError } from '../../lib/errors.js';
 
 export type SubscriptionUpdate = Partial<typeof schema.subscription.$inferInsert>;
 
-function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert'>) {
+function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert' | 'execute'>) {
   return {
     async find(organizationId: string) {
       const [row] = await connection
@@ -15,10 +16,31 @@ function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert'>) {
       return row;
     },
     async update(id: string, updates: SubscriptionUpdate) {
-      await connection
+      const [changed] = await connection
         .update(schema.subscription)
         .set(updates)
-        .where(eq(schema.subscription.id, id));
+        .where(eq(schema.subscription.id, id))
+        .returning({ organizationId: schema.subscription.organizationId });
+      if (
+        changed &&
+        (updates.planTier !== undefined ||
+          updates.subscriptionState !== undefined ||
+          updates.currentPeriodEnd !== undefined)
+      ) {
+        const profiles = await connection
+          .select({ id: schema.designerProfile.id })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.orgId, changed.organizationId));
+        await recordSearchProjectionEvents(
+          connection,
+          profiles.map((profile) => ({
+            entityKind: 'designer',
+            entityId: profile.id,
+            operation: 'index',
+            sourceUpdatedAt: new Date(),
+          })),
+        );
+      }
     },
     async create(values: typeof schema.subscription.$inferInsert) {
       await connection.insert(schema.subscription).values(values);
@@ -52,6 +74,9 @@ function queries(connection: Pick<typeof db, 'select' | 'update' | 'insert'>) {
 
 export const subscribeRepository = {
   ...queries(db),
+  async update(id: string, updates: SubscriptionUpdate) {
+    await db.transaction((tx) => queries(tx).update(id, updates));
+  },
   async withOrganizationLock<T>(
     organizationId: string,
     action: (repository: ReturnType<typeof queries>) => Promise<T>,
