@@ -7,6 +7,12 @@ export type DashboardProfileContext = {
   teamId: string;
   profileSlug: string;
   portfolioSlug: string | null;
+  // E-278: publication inputs so the service can derive `publiclyVisible`
+  // (status === 'active' && publicLinkEnabled) without a second query. The
+  // portfolio row is a left join, so `publicLinkEnabled` is null when the
+  // designer has never opened portfolio settings.
+  profileStatus: (typeof schema.profileStatusEnum.enumValues)[number];
+  publicLinkEnabled: boolean | null;
 };
 
 export type ProjectStatusCount = {
@@ -28,6 +34,8 @@ export const dashboardRepository = {
         teamId: schema.designerProfile.teamId,
         profileSlug: schema.designerProfile.slug,
         portfolioSlug: schema.designerPortfolio.portfolioSlug,
+        profileStatus: schema.designerProfile.status,
+        publicLinkEnabled: schema.designerPortfolio.publicLinkEnabled,
       })
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))

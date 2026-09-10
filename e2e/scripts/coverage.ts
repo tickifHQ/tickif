@@ -87,6 +87,23 @@ export const requiredTests = [
     'verification-lifecycle.spec.ts',
     'verification lifecycle: rejected documents are resubmitted, approved and renewed',
   ],
+  // E-278: designer onboarding completion + portfolio publication readiness.
+  [
+    'designer-onboarding.spec.ts',
+    'company designer completes onboarding and can proceed to portfolio settings',
+  ],
+  [
+    'portfolio-publication.spec.ts',
+    'an incomplete portfolio never exposes an actionable public URL (state D)',
+  ],
+  [
+    'portfolio-publication.spec.ts',
+    'a complete portfolio with the public link off stays private (state E)',
+  ],
+  [
+    'portfolio-publication.spec.ts',
+    'a published portfolio exposes the canonical URL everywhere and resolves publicly (state F + regression G)',
+  ],
 ].map(([file, title]) => ({ file: file!, title: title! }));
 
 const testSchema = z.object({

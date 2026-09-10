@@ -334,6 +334,9 @@ describe('GET /api/profiles/me/dashboard', () => {
         new: 1,
       },
       shareUrl: expect.any(String),
+      // E-278: this fixture is missing hero fields (bio, logo) so the profile
+      // never reaches `active` — the dashboard reports it as not publicly visible.
+      publiclyVisible: false,
     });
     const shareUrl = new URL(body.shareUrl);
     expect(shareUrl.origin).toBe(new URL(config.PUBLIC_WEB_URL).origin);
