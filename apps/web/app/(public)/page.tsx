@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { listTaxonomyResponseSchema, PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  accountStatusSchema,
+  listTaxonomyResponseSchema,
+  PLATFORM_ROLE,
+  platformRoleSchema,
+} from '@repo/contracts';
 import { api } from '@/lib/api';
 import { HomeHero, type HomeShortcut } from '@/components/home-hero';
 import { TrustStrip } from '@/components/trust-strip';
-import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
-import { activeContextForSession, getServerSession } from '@/lib/auth-guard';
+import { getServerSession } from '@/lib/auth-guard';
 import {
   FEED_FACET_DEFINITIONS,
   FEED_FILTER_KEYS,
@@ -123,7 +128,28 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
   const isDefaultFeed = page === 1 && !query && !hasFilters(filters);
 
-  const sessionPromise = getServerSession();
+  const session = await getServerSession({ disableCookieCache: true });
+  if (session) {
+    const parsedRole = platformRoleSchema.safeParse(session.user.role);
+    if (!parsedRole.success) {
+      redirect('/unauthorized');
+    }
+    if (parsedRole.data === PLATFORM_ROLE.VISITOR) {
+      const status = accountStatusSchema.safeParse(session.user.status);
+      if (!status.success) redirect('/unauthorized');
+      if (status.data === ACCOUNT_STATUS.ACTIVE) redirect(feedPageLink(params, page, '/home'));
+      if (status.data !== ACCOUNT_STATUS.PENDING) redirect('/unauthorized');
+      // Deferred designer signups are pending visitors until studio creation.
+      // Let them explore here without activating a visitor account.
+    } else if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
+      redirect(
+        session.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
+      );
+    } else {
+      redirect('/dashboard');
+    }
+  }
+
   const taxonomyOptionsPromise = fetchTaxonomyOptions();
   // One request per feed, always at the real page size: `hasMore` and the
   // rel=prev/next hints have to describe the 24-per-page scheme the links use.
@@ -133,20 +159,8 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       })
     : fetchFeedSafely(baseRequest, page);
   const featuredPagePromise = isDefaultFeed
-    ? sessionPromise.then((session) =>
-        session
-          ? emptyHomeFeedPage(1)
-          : fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1),
-      )
+    ? fetchFeedSafely({ filters, query: '', sort: 'featured' }, 1)
     : Promise.resolve(emptyHomeFeedPage(1));
-  const session = await sessionPromise;
-  if (session) {
-    const parsedRole = platformRoleSchema.safeParse(session.user.role);
-    if (parsedRole.success && parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      const context = activeContextForSession(session);
-      if (context.kind === 'personal') redirect('/home');
-    }
-  }
 
   const [taxonomyOptions, initialPage, featuredPage] = await Promise.all([
     taxonomyOptionsPromise,
@@ -163,33 +177,6 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
   const previousHref = page > 1 ? feedPageLink(params, page - 1) : null;
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1) : null;
-
-  if (session) {
-    return (
-      <div className="bg-background">
-        {previousHref ? <link rel="prev" href={previousHref} /> : null}
-        {nextHref ? <link rel="next" href={nextHref} /> : null}
-        <section className="w-full px-5 py-6 sm:px-6">
-          <h1 className="sr-only">Explore home projects</h1>
-          <HomeSearchBar initialQuery={query} />
-          <div className="mt-5">
-            <FeedFilters
-              options={taxonomyOptions}
-              facetDistribution={initialPage.facetDistribution}
-            />
-          </div>
-          <div className="mt-4">
-            <ProjectFeed
-              initialPage={initialPage}
-              request={request}
-              filterSuggestions={filterSuggestions}
-              paginationParams={paginationParams}
-            />
-          </div>
-        </section>
-      </div>
-    );
-  }
 
   return (
     <>

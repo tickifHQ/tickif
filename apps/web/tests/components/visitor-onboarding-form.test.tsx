@@ -5,9 +5,10 @@ import { VisitorOnboardingForm } from '../../src/components/visitor-onboarding-f
 
 const mock = vi.hoisted(() => ({
   updateUser: vi.fn(),
+  getSession: vi.fn(),
   upsertVisitor: vi.fn(),
   router: {
-    push: vi.fn(),
+    replace: vi.fn(),
     refresh: vi.fn(),
   },
 }));
@@ -15,6 +16,7 @@ const mock = vi.hoisted(() => ({
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
     updateUser: mock.updateUser,
+    getSession: mock.getSession,
   },
 }));
 
@@ -27,17 +29,31 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('VisitorOnboardingForm', () => {
+  it('does not offer a skip control that leaves visitor onboarding incomplete', () => {
+    render(
+      <VisitorOnboardingForm
+        displayName="Visitor"
+        signedInAs="+919123456789"
+        initialPhoneNumber="+919123456789"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mock.updateUser.mockResolvedValue({ data: { status: true }, error: null });
+    mock.getSession.mockResolvedValue({ data: null, error: null });
     mock.upsertVisitor.mockResolvedValue(
-      Response.json({
-        address: '12 Studio Lane, Chennai',
-        whatsappNumber: '+919123456789',
-        onboardingCompletedAt: '2026-09-08T10:00:00.000Z',
-        createdAt: '2026-09-08T10:00:00.000Z',
-        updatedAt: '2026-09-08T10:00:00.000Z',
-      }),
+      new Response(
+        JSON.stringify({
+          address: '12 Studio Lane, Chennai',
+          whatsappNumber: '+919123456789',
+          onboardingCompletedAt: '2026-09-08T07:00:00.000Z',
+          createdAt: '2026-09-08T07:00:00.000Z',
+          updatedAt: '2026-09-08T07:00:00.000Z',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
     );
   });
 
@@ -67,7 +83,8 @@ describe('VisitorOnboardingForm', () => {
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('+919123456789');
   });
 
-  it('does not present an editable sign-in phone when the account has none', () => {
+  it('keeps sign-in identity read-only and saves a Google visitor contact number as WhatsApp', async () => {
+    const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
         displayName="Sarthak Wade"
@@ -78,10 +95,19 @@ describe('VisitorOnboardingForm', () => {
 
     expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('readonly');
     expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('placeholder', 'Not added');
     expect(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i })).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/whatsapp number/i), '+919123456789');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(mock.upsertVisitor).toHaveBeenCalledWith({
+      json: { address: null, whatsappNumber: '+919123456789' },
+    });
+    expect(mock.router.replace).toHaveBeenCalledWith('/home');
   });
 
-  it('persists visitor onboarding through the account and visitor APIs', async () => {
+  it('persists onboarding through the visitor API before entering personal home', async () => {
     const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
@@ -103,7 +129,8 @@ describe('VisitorOnboardingForm', () => {
         whatsappNumber: '+919123456789',
       },
     });
-    expect(mock.router.push).toHaveBeenCalledWith('/home');
+    expect(mock.getSession).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+    expect(mock.router.replace).toHaveBeenCalledWith('/home');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
   });
 
@@ -126,42 +153,29 @@ describe('VisitorOnboardingForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Update failed');
     expect(mock.upsertVisitor).not.toHaveBeenCalled();
-    expect(mock.router.push).not.toHaveBeenCalled();
+    expect(mock.router.replace).not.toHaveBeenCalled();
   });
 
   it('keeps the visitor on onboarding when profile persistence fails', async () => {
     mock.upsertVisitor.mockResolvedValue(
-      Response.json(
-        { error: { message: 'Visitor profile access is not permitted' } },
-        { status: 403 },
-      ),
+      new Response(JSON.stringify({ error: { message: 'Could not save visitor profile' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
     const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
-        displayName="Sarthak Wade"
+        displayName=""
         signedInAs="+919123456789"
         initialPhoneNumber="+919123456789"
       />,
     );
 
+    await user.type(screen.getByLabelText(/display name/i), 'Sarthak Wade');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Visitor profile access is not permitted',
-    );
-    expect(mock.router.push).not.toHaveBeenCalled();
-  });
-
-  it('does not offer a skip control that leaves onboarding incomplete', () => {
-    render(
-      <VisitorOnboardingForm
-        displayName="Sarthak Wade"
-        signedInAs="+919123456789"
-        initialPhoneNumber="+919123456789"
-      />,
-    );
-
-    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save visitor profile');
+    expect(mock.router.replace).not.toHaveBeenCalled();
   });
 });

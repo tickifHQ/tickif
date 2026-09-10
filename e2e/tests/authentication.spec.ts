@@ -1,12 +1,13 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { ACCOUNT_STATUS } from '@repo/contracts';
 import { db, eq, schema } from '@repo/db';
 import { assertTestDb } from '@repo/db/testing';
 import { onboardDesignerResponseSchema } from '@repo/contracts';
 import { apiUrl, webUrl } from '../lib/environment';
 import { emailCode, phoneCode, removeSyntheticUserByPhone } from '../lib/auth';
 
-test('phone OTP creates a real visitor session and rejects a wrong code', async ({
+test('phone OTP creates a visitor session, completes onboarding, and opens personal settings', async ({
   page,
   context,
 }, testInfo) => {
@@ -29,8 +30,36 @@ test('phone OTP creates a real visitor session and rejects a wrong code', async 
     expect(body.user.phoneNumber).toBe(phoneNumber);
     expect(body.user.phoneNumberVerified).toBe(true);
     expect(body.user.role).toBe('visitor');
+
+    await page.getByLabel('Display name').fill('Synthetic Visitor');
+    await page.getByLabel('Address').fill('Bandra West, Mumbai');
+    await page.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page).toHaveURL(/\/home$/);
+    await page.getByRole('button', { name: /Open account menu/ }).click();
+    const settings = page.getByRole('menuitem', { name: 'Personal settings' });
+    await expect(settings).toBeVisible();
+    await settings.click();
+    await expect(page).toHaveURL(/\/home\/settings$/);
+
+    const [account] = await db
+      .select({ status: schema.user.status })
+      .from(schema.user)
+      .where(eq(schema.user.phoneNumber, phoneNumber));
+    expect(account?.status).toBe(ACCOUNT_STATUS.ACTIVE);
+    const [profile] = await db
+      .select({
+        address: schema.visitorProfile.address,
+        whatsappNumber: schema.visitorProfile.whatsappNumber,
+      })
+      .from(schema.visitorProfile)
+      .where(eq(schema.visitorProfile.userId, body.user.id));
+    expect(profile).toEqual({
+      address: 'Bandra West, Mumbai',
+      whatsappNumber: phoneNumber,
+    });
     await page.screenshot({
-      path: testInfo.outputPath('phone-onboarding.png'),
+      path: testInfo.outputPath('phone-personal-settings.png'),
       animations: 'disabled',
     });
   } finally {
@@ -57,7 +86,7 @@ test('email OTP creates a real session through a local Resend delivery double', 
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await emailCode(context, email));
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page).toHaveURL(/\/onboarding/);
+    await expect(page).toHaveURL(/\/designer\/onboarding/);
     const session = await context.request.get(`${apiUrl}/api/auth/get-session`);
     const body = await session.json();
     expect(body.user.email).toBe(email);

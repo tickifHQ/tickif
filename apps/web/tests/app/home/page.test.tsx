@@ -4,9 +4,13 @@ import { render, screen, within } from '@testing-library/react';
 const mock = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   push: vi.fn(),
+  redirect: vi.fn((path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
+  redirect: mock.redirect,
   usePathname: () => '/',
   useRouter: () => ({ push: mock.push }),
   useSearchParams: () => new URLSearchParams(),
@@ -260,24 +264,14 @@ describe('HomePage', () => {
     expect(screen.getAllByText('No projects found')).toHaveLength(2);
   });
 
-  it('renders the logged-in search, filters, and real feed without logged-out chrome', async () => {
+  it('redirects a logged-in visitor to their personalized home before loading discovery data', async () => {
     mock.getServerSession.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-12-31T00:00:00.000Z' },
-      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
+      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor', status: 'active' },
     });
 
-    render(await HomePage());
-
-    expect(screen.getByRole('search')).toBeInTheDocument();
-    expect(screen.queryByText('No commissions · No middlemen')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Featured projects' })).not.toBeInTheDocument();
-    expect(screen.getByText('Test Project')).toBeInTheDocument();
-    expect(screen.getAllByText('Filters').length).toBeGreaterThan(0);
-    expect(
-      (fetch as ReturnType<typeof vi.fn>).mock.calls.some(([input]) =>
-        String(input).includes('sort=featured'),
-      ),
-    ).toBe(false);
+    await expect(HomePage()).rejects.toThrow('NEXT_REDIRECT:/home');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('SSR-renders a deep-linked discovery page with filters', async () => {

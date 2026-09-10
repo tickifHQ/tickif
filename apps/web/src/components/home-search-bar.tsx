@@ -45,10 +45,20 @@ function writeRecentSearches(searches: string[]) {
 type HomeSearchBarProps = {
   initialQuery?: string;
   variant?: 'default' | 'hero';
+  /**
+   * Feed base the search navigates to. The shared bar also renders inside the
+   * signed-in /home workspace, where searches must stay on /home instead of
+   * round-tripping through the public homepage redirect.
+   */
+  basePath?: string;
 };
 
 /** Homepage search entry with blended project/designer suggestions after a 150 ms debounce. */
-export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSearchBarProps) {
+export function HomeSearchBar({
+  initialQuery = '',
+  variant = 'default',
+  basePath = '/',
+}: HomeSearchBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const listboxId = useId();
@@ -124,7 +134,7 @@ export function HomeSearchBar({ initialQuery = '', variant = 'default' }: HomeSe
     if (normalizedQuery) params.set('q', normalizedQuery);
     else params.delete('q');
     params.delete('page');
-    router.push(params.size > 0 ? `/?${params.toString()}` : '/');
+    router.push(params.size > 0 ? `${basePath}?${params.toString()}` : basePath);
     setIsFocused(false);
   }
 

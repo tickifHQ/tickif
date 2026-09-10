@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
 import { authClient } from '@/lib/auth-client';
 import { visibleAccountEmail } from '@/lib/account-identity';
 import { InitialsAvatar } from '@/components/initials-avatar';
@@ -17,7 +18,7 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { cn } from '@repo/ui/lib/utils';
-import { ChevronDown, Settings } from 'lucide-react';
+import { ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export function AccountMenu({
@@ -55,11 +56,16 @@ export function AccountMenu({
 
   const user = session.user;
   const personalRole = 'role' in user ? user.role : null;
-  // Never an empty label: fall back to a visible email, then a neutral name.
-  // Generated phone identities are internal only and never shown (E-273).
-  const accountEmail = visibleAccountEmail(user.email);
-  const displayName = user.name?.trim() || accountEmail || 'Account';
-  const firstName = (user.name ?? '').split(' ')[0] || displayName;
+  const accountStatus = 'status' in user ? user.status : null;
+  const hasOrganizationContext = Boolean(session.session.activeOrganizationId);
+  const hasPersonalProfileRole =
+    personalRole === PLATFORM_ROLE.VISITOR || personalRole === PLATFORM_ROLE.DESIGNER;
+  const userName = user.name?.trim() || null;
+  const email = user.email?.trim() || null;
+  // Never expose generated phone identities or render an empty account label.
+  const accountEmail = visibleAccountEmail(email);
+  const displayName = userName ?? accountEmail ?? 'Account';
+  const firstName = userName?.split(/\s+/, 1)[0] ?? 'Account';
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
   async function handleSignOut() {
@@ -103,13 +109,15 @@ export function AccountMenu({
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="truncate">
           <p className="font-medium">{displayName}</p>
-          {accountEmail && (
+          {accountEmail ? (
             <p className="text-xs font-normal text-muted-foreground">{accountEmail}</p>
-          )}
+          ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          {personalRole === 'visitor' && !session.session.activeOrganizationId ? (
+          {personalRole === PLATFORM_ROLE.VISITOR &&
+          accountStatus === ACCOUNT_STATUS.ACTIVE &&
+          !hasOrganizationContext ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/home/settings">
                 <Settings aria-hidden="true" />
@@ -117,12 +125,24 @@ export function AccountMenu({
               </Link>
             </DropdownMenuItem>
           ) : null}
-          {personalRole === 'visitor' && !session.session.activeOrganizationId ? (
+          {hasPersonalProfileRole &&
+          accountStatus === ACCOUNT_STATUS.PENDING &&
+          !hasOrganizationContext ? (
             <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href="/home/consultations">My consultations</Link>
+              <Link
+                href={
+                  personalRole === PLATFORM_ROLE.DESIGNER ? '/designer/onboarding' : '/onboarding'
+                }
+              >
+                <Settings aria-hidden="true" />
+                Complete setup
+              </Link>
             </DropdownMenuItem>
           ) : null}
-          {showProfileSettings ? (
+          {showProfileSettings &&
+          personalRole === PLATFORM_ROLE.DESIGNER &&
+          accountStatus === ACCOUNT_STATUS.ACTIVE &&
+          hasOrganizationContext ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href="/designer/profile">
                 <Settings aria-hidden="true" />
@@ -135,6 +155,7 @@ export function AccountMenu({
             variant="destructive"
             className="cursor-pointer"
           >
+            <LogOut aria-hidden="true" />
             Sign out
           </DropdownMenuItem>
         </DropdownMenuGroup>

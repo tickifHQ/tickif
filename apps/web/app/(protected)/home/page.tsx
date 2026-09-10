@@ -1,6 +1,6 @@
 import { listTaxonomyResponseSchema } from '@repo/contracts';
-import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { ProjectFeed } from '@/components/project-feed';
+import { PublicFooter } from '@/components/public-footer';
 import { PublicHeader } from '@/components/public-header';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
@@ -99,22 +99,13 @@ export default async function PersonalHomePage({
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1, '/home') : null;
 
   return (
-    <div className="bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
       <PublicHeader
         isAuthenticated
         userRole={session.user.role ?? null}
         userStatus={session.user.status ?? null}
-        contextSwitcher={
-          <div className="w-40 sm:w-48">
-            <DesignerOrganizationSwitcher
-              activeOrganizationId={null}
-              studioName={session.user.name?.trim() || session.user.email || 'My Tickif'}
-              studioLocation="My Tickif"
-            />
-          </div>
-        }
       />
       <main className="w-full space-y-8 px-5 py-10 sm:px-8 lg:py-12">
         <header className="space-y-1.5">
@@ -131,7 +122,7 @@ export default async function PersonalHomePage({
 
         <section className="w-full" aria-label="Discover">
           <h2 className="sr-only">Explore home projects</h2>
-          <HomeSearchBar initialQuery={query} />
+          <HomeSearchBar initialQuery={query} basePath="/home" />
           <div className="mt-5">
             <FeedFilters
               options={taxonomyOptions}
@@ -144,10 +135,12 @@ export default async function PersonalHomePage({
               request={request}
               filterSuggestions={filterSuggestions}
               paginationParams={paginationParams}
+              paginationBase="/home"
             />
           </div>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }

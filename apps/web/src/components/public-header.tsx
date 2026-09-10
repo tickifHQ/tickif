@@ -16,11 +16,13 @@ import { PublicNavigation } from '@/components/public-navigation';
 export function PublicHeader({
   contextSwitcher,
   isAuthenticated = false,
+  showListYourWork = true,
   userRole = null,
   userStatus = null,
 }: {
   contextSwitcher?: ReactNode;
   isAuthenticated?: boolean;
+  showListYourWork?: boolean;
   userRole?: string | null;
   userStatus?: string | null;
 }) {
@@ -38,14 +40,16 @@ export function PublicHeader({
 
         <div className="flex items-center gap-2.5">
           {contextSwitcher}
-          <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
-            <Link href={listYourWorkHref}>
-              <ListChevronsUpDown className="size-4" aria-hidden />
-              List your work
-            </Link>
-          </Button>
+          {showListYourWork ? (
+            <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
+              <Link href={listYourWorkHref}>
+                <ListChevronsUpDown className="size-4" aria-hidden />
+                List your work
+              </Link>
+            </Button>
+          ) : null}
           {isAuthenticated ? (
-            <AccountMenu />
+            <AccountMenu showProfileSettings={userRole === PLATFORM_ROLE.DESIGNER} />
           ) : (
             <Button asChild variant="inverted" size="compact">
               <Link href="/login">

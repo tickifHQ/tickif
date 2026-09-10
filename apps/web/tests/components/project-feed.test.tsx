@@ -361,6 +361,57 @@ describe('ProjectFeed', () => {
     expect(within(pagination).getByText('Page 3')).toBeInTheDocument();
   });
 
+  it('keeps visible pagination on the configured feed base', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project')],
+          page: 3,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{ city: 'mumbai' }}
+        paginationBase="/home"
+      />,
+    );
+
+    const pagination = screen.getByRole('navigation', { name: 'Feed pages' });
+    expect(within(pagination).getByRole('link', { name: 'Previous page' })).toHaveAttribute(
+      'href',
+      '/home?city=mumbai&page=2',
+    );
+    expect(within(pagination).getByRole('link', { name: 'Next page' })).toHaveAttribute(
+      'href',
+      '/home?city=mumbai&page=4',
+    );
+  });
+
+  it('keeps the empty-state reset on the configured feed base', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [],
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '', sort: 'recent' }}
+        paginationParams={{}}
+        paginationBase="/home"
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Clear search and filters' })).toHaveAttribute(
+      'href',
+      '/home',
+    );
+  });
+
   it('omits the pagination control on page one of an exhausted feed', () => {
     render(
       <ProjectFeed

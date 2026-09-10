@@ -45,5 +45,6 @@ describe('AdminLayout', () => {
       'href',
       '/verifications',
     );
+    expect(screen.queryByRole('link', { name: 'View site' })).not.toBeInTheDocument();
   });
 });

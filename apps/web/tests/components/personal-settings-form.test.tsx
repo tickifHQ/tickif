@@ -33,13 +33,24 @@ beforeEach(() => {
 describe('personal settings', () => {
   it('loads persisted values and displays contact verification without editable identities', () => {
     render(<PersonalSettingsForm initialAccount={original} />);
+    expect(screen.getByRole('heading', { name: 'Personal details' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sign-in details' })).toBeInTheDocument();
     expect(screen.getByLabelText('Display name')).toHaveValue(original.name);
     expect(screen.getByLabelText('Personal address (optional)')).toHaveValue(original.address);
     expect(screen.getByText('person@example.com (Verified)')).toBeInTheDocument();
     expect(screen.getByText('+919876543210 (Verified)')).toBeInTheDocument();
     expect(screen.getAllByRole('textbox')).toHaveLength(3);
+    expect(screen.getByText('All changes are saved.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
   });
+  it('shows the same unsaved-change feedback as the designer profile editor', async () => {
+    const user = userEvent.setup();
+    render(<PersonalSettingsForm initialAccount={original} />);
+    await user.type(screen.getByLabelText('Personal address (optional)'), ' edit');
+    expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+  });
+
   it('does not present a generated phone-auth identity as a customer email', () => {
     render(
       <PersonalSettingsForm

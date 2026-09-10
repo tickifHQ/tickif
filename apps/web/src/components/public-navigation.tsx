@@ -4,14 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@repo/ui/lib/utils';
 
-type PublicNavigationItem = { href: string; label: string } | { href?: never; label: string };
+type PublicNavigationItem = { href: string; label: string };
 
 const navigationItems = [
   { href: '/', label: 'Explore' },
   { href: '/designers', label: 'Designers' },
-  { label: 'Cost Calculator' },
   { href: '/enquiries', label: 'Your Enquiries' },
-  { label: 'For you' },
 ] as const satisfies ReadonlyArray<PublicNavigationItem>;
 const mobileNavigationItems = navigationItems.slice(0, 2);
 
@@ -30,20 +28,6 @@ export function PublicNavigation({ mobile = false }: { mobile?: boolean }) {
       }
     >
       {items.map((item) => {
-        if (!('href' in item)) {
-          return (
-            // Spans are not focusable, so unavailable items are skipped when tabbing.
-            <span
-              key={item.label}
-              aria-label={`${item.label}, coming soon`}
-              title="Coming soon"
-              className={cn(itemClassName, 'cursor-default opacity-60')}
-            >
-              {item.label}
-            </span>
-          );
-        }
-
         if (isCurrentPath(pathname, item.href)) {
           return (
             <span

@@ -1,26 +1,29 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import { PublicFooter } from '../../src/components/public-footer';
 
 describe('PublicFooter', () => {
-  it('renders the copyright with the current year and Tickif branding (E-292)', () => {
+  it('renders inside a contentinfo landmark with the current copyright year', () => {
     render(<PublicFooter />);
-    const year = new Date().getFullYear();
-    expect(screen.getByText(new RegExp(`${year} Tickif`))).toBeInTheDocument();
-  });
 
-  it('does not render the stale Homefolio branding (E-292)', () => {
-    render(<PublicFooter />);
-    expect(screen.queryByText(/Homefolio/i)).not.toBeInTheDocument();
-  });
-
-  it('renders inside a contentinfo landmark', () => {
-    render(<PublicFooter />);
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
+    expect(screen.getByText(`© ${new Date().getFullYear()} Tickif`)).toBeInTheDocument();
   });
 
-  it('links to the designers discovery page', () => {
+  it('keeps supported destinations and removes the discontinued navigation entries', () => {
     render(<PublicFooter />);
-    expect(screen.getByRole('link', { name: 'Designers' })).toHaveAttribute('href', '/designers');
+
+    const navigation = screen.getByRole('navigation');
+
+    expect(within(navigation).getByRole('link', { name: 'Browse' })).toHaveAttribute('href', '/');
+    expect(
+      within(navigation).queryByRole('link', { name: 'For designers' }),
+    ).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: 'Designers' })).not.toBeInTheDocument();
+    expect(
+      within(navigation).queryByRole('link', { name: 'Cost Calculator' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/© \d{4} Tickif/)).toBeInTheDocument();
+    expect(screen.queryByText(/Homefolio/)).not.toBeInTheDocument();
   });
 });
