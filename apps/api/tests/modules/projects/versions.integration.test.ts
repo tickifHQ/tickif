@@ -75,7 +75,9 @@ describe('bounded live project versions', () => {
     async (edit) => {
       const fixture = await publishedProject();
       if (edit === 'minor edit') {
-        await projectsRepository.updateDraft(fixture.project.id, { description: 'Fresh public terms' });
+        await projectsRepository.updateDraft(fixture.project.id, {
+          description: 'Fresh public terms',
+        });
       } else {
         await startPendingReview(fixture);
         await projectsRepository.transition({
@@ -83,15 +85,25 @@ describe('bounded live project versions', () => {
           fromStatus: 'in_review',
           toStatus: 'published',
           actorUserId: fixture.actor.id,
-          action: 'approve',
+          action: 'publish',
           requireNoUnresolvedReviewComments: true,
         });
       }
       const events = await db.select().from(schema.searchProjectionOutbox);
-      expect(events).toEqual(expect.arrayContaining([
-        expect.objectContaining({ entityKind: 'project', entityId: fixture.project.id, operation: 'index' }),
-        expect.objectContaining({ entityKind: 'designer', entityId: fixture.designer.id, operation: 'index' }),
-      ]));
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            entityKind: 'project',
+            entityId: fixture.project.id,
+            operation: 'index',
+          }),
+          expect.objectContaining({
+            entityKind: 'designer',
+            entityId: fixture.designer.id,
+            operation: 'index',
+          }),
+        ]),
+      );
     },
   );
   it('filters, counts and paginates the pending title, locality and update date shown in the dashboard', async () => {
