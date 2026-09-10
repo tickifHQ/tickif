@@ -11,6 +11,7 @@ export function CopyLinkButton({
   className,
   label = 'Copy link',
   icon = 'copy',
+  disabled = false,
 }: {
   value: string;
   variant?: 'default' | 'emphasis' | 'outline' | 'secondary' | 'ghost' | 'link' | 'fancy';
@@ -18,6 +19,7 @@ export function CopyLinkButton({
   className?: string;
   label?: string;
   icon?: 'copy' | 'share';
+  disabled?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const IdleIcon = icon === 'share' ? Share2 : Copy;
@@ -33,7 +35,14 @@ export function CopyLinkButton({
   }
 
   return (
-    <Button type="button" variant={variant} size={size} onClick={handleCopy} className={className}>
+    <Button
+      type="button"
+      variant={variant}
+      size={size}
+      onClick={handleCopy}
+      className={className}
+      disabled={disabled}
+    >
       {copied ? <Check className="size-4" /> : <IdleIcon className="size-4" />}
       {copied ? 'Copied' : label}
     </Button>

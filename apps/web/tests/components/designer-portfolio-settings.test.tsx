@@ -213,7 +213,9 @@ describe('DesignerPortfolioSettings', () => {
       });
       await renderSettings();
 
-      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.getByText('Incomplete', { selector: '[data-slot="badge"]' }),
+      ).toBeInTheDocument();
       // The reported bug: it must NOT say "Live" in this state.
       expect(
         screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
@@ -229,7 +231,9 @@ describe('DesignerPortfolioSettings', () => {
       });
       await renderSettings();
 
-      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.getByText('Incomplete', { selector: '[data-slot="badge"]' }),
+      ).toBeInTheDocument();
       expect(
         screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
       ).not.toBeInTheDocument();
@@ -275,7 +279,9 @@ describe('DesignerPortfolioSettings', () => {
       expect(
         screen.queryByText('Live', { selector: '[data-slot="badge"]' }),
       ).not.toBeInTheDocument();
-      expect(screen.getByText('Incomplete', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
+      expect(
+        screen.getByText('Incomplete', { selector: '[data-slot="badge"]' }),
+      ).toBeInTheDocument();
     });
 
     it('keeps showing "Live" for an already-public portfolio after a required field is cleared (review P2)', async () => {
@@ -362,9 +368,7 @@ describe('DesignerPortfolioSettings', () => {
       await user.click(screen.getByRole('button', { name: 'Copy link' }));
 
       expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/mahi-studio-org');
-      expect(writeText).not.toHaveBeenCalledWith(
-        expect.stringContaining('your-studio'),
-      );
+      expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('your-studio'));
     });
 
     it('keeps the "your-studio" placeholder on the empty slug input', async () => {
@@ -383,6 +387,51 @@ describe('DesignerPortfolioSettings', () => {
       fireEvent.change(slugInput, { target: { value: 'typed-slug' } });
 
       expect(screen.getAllByText(/\/d\/typed-slug/).length).toBeGreaterThan(0);
+    });
+
+    it('uses the saved canonical URL while clearing a custom slug, then the org URL after saving', async () => {
+      mock.updatePortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      const slugInput = await renderSettings();
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+
+      await user.clear(slugInput);
+      await user.click(screen.getByRole('button', { name: 'Copy link' }));
+      expect(writeText).toHaveBeenLastCalledWith(basePortfolio.portfolioUrl);
+
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
+      expect(mock.updatePortfolio).toHaveBeenCalledWith({ portfolioSlug: null });
+      expect(screen.getByRole('link', { name: 'Open full' })).toHaveAttribute(
+        'href',
+        noSlugPortfolio.portfolioUrl,
+      );
+      await user.click(screen.getByRole('button', { name: /Copy link|Copied/ }));
+      expect(writeText).toHaveBeenLastCalledWith(noSlugPortfolio.portfolioUrl);
+      expect(screen.getAllByText('localhost:3000/d/mahi-studio-org').length).toBeGreaterThan(0);
+    });
+
+    it('restores the canonical org URL when a typed slug is discarded', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce(noSlugPortfolio);
+      const slugInput = await renderSettings();
+      const user = userEvent.setup();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+
+      fireEvent.change(slugInput, { target: { value: 'typed-slug' } });
+      await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+      await user.click(screen.getByRole('button', { name: 'Copy link' }));
+
+      expect(slugInput).toHaveValue('');
+      expect(writeText).toHaveBeenCalledWith(noSlugPortfolio.portfolioUrl);
+    });
+
+    it('does not offer a dead link when neither a custom slug nor canonical URL is available', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({ ...noSlugPortfolio, portfolioUrl: null });
+      await renderSettings();
+
+      expect(screen.getByRole('button', { name: 'Copy link' })).toBeDisabled();
+      expect(screen.getAllByText('Portfolio URL unavailable').length).toBeGreaterThan(0);
+      expect(screen.queryByRole('link', { name: 'Open full' })).not.toBeInTheDocument();
     });
   });
 

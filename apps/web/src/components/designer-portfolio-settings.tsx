@@ -648,17 +648,12 @@ export function DesignerPortfolioSettings() {
   // Earned badge set (server-computed award list). Drives earned/locked state
   // in the display-only Trust & Credentials grid (E-212 #6).
   const earnedBadges = new Set(portfolio.badges);
-  // The share/copy target. A non-empty slug (saved OR being typed) drives the
-  // URL directly, so the preview updates live as the designer edits. When the
-  // slug is empty the portfolio still has a canonical URL — the server falls
-  // back to the organization slug (`portfolio.portfolioUrl`), which is the same
-  // URL "Open full" uses. Using that here keeps Preview = Copy = Open full and
-  // avoids minting a dead `/d/your-studio` link ('your-studio' is only the
-  // input placeholder, never a real slug).
+  // Preview typed slugs live; otherwise use the saved canonical URL.
+  // If neither exists, disable sharing instead of inventing a dead URL.
   const copyUrl = form.portfolioSlug
     ? new URL(`/d/${form.portfolioSlug}`, portfolioWebUrl).toString()
-    : (portfolio.portfolioUrl ?? new URL('/d/', portfolioWebUrl).toString());
-  const previewUrl = copyUrl.replace(/^https?:\/\//, '');
+    : portfolio.portfolioUrl;
+  const previewUrl = copyUrl?.replace(/^https?:\/\//, '') ?? 'Portfolio URL unavailable';
 
   // Status badge reflects the actual *saved* publication state from the server,
   // not the public-link toggle alone. An incomplete portfolio never goes live
@@ -1492,7 +1487,8 @@ export function DesignerPortfolioSettings() {
                   Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
                 </p>
                 <CopyLinkButton
-                  value={copyUrl}
+                  value={copyUrl ?? ''}
+                  disabled={!copyUrl}
                   variant="fancy"
                   size="fancy"
                   className="mt-4 w-full cursor-pointer"
