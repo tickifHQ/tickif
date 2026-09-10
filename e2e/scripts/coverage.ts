@@ -69,6 +69,10 @@ export const requiredTests = [
     'project moderation lifecycle: admin paginates, claims, comments, resolves and completes decisions',
   ],
   [
+    'project-versions.spec.ts',
+    'published project edits keep live content through rejection and replace it only on approval',
+  ],
+  [
     'review-moderation.spec.ts',
     'review moderation requires a session and retains the selected queue on login',
   ],

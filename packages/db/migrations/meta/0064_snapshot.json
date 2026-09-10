@@ -1,6 +1,6 @@
 {
-  "id": "7f2a0288-f464-4140-bd56-45c77f83c2f1",
-  "prevId": "2a6881d4-743a-4eef-80f5-75a5f5e2bd96",
+  "id": "aa910a3e-903f-4ce5-b6b5-c3f94727549d",
+  "prevId": "7f2a0288-f464-4140-bd56-45c77f83c2f1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -663,6 +663,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "member_count": {
+          "name": "member_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "organization_id": {
           "name": "organization_id",
           "type": "text",
@@ -798,6 +805,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "membership_key": {
+          "name": "membership_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "team_id": {
           "name": "team_id",
           "type": "text",
@@ -900,7 +913,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "team_member_membership_key_unique": {
+          "name": "team_member_membership_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "membership_key"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

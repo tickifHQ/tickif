@@ -85,13 +85,17 @@ describe('transactional cover submit gate', () => {
       await projectsRepository.updateDraft(project.id, { coverImageId: cover.id });
       expect((await submit()).submitted?.status).toBe('submitted');
       if (operation === 'deleteRoom') {
-        expect(await projectsRepository.deleteRoom(project.id, room.id)).toBe(false);
+        await expect(projectsRepository.deleteRoom(project.id, room.id)).rejects.toMatchObject({
+          status: 409,
+        });
       } else if (operation === 'updateImageLink') {
-        expect(
-          await projectsRepository.updateImageLink(project.id, cover.id, { roomId: null }),
-        ).toBeNull();
+        await expect(
+          projectsRepository.updateImageLink(project.id, cover.id, { roomId: null }),
+        ).rejects.toMatchObject({ status: 409 });
       } else {
-        expect(await mediaRepository.updateMetadata(cover.id, { roomId: null })).toBeNull();
+        await expect(
+          mediaRepository.updateMetadata(cover.id, { roomId: null }),
+        ).rejects.toMatchObject({ status: 409 });
       }
       expect(await projectsRepository.findImage(project.id, cover.id)).toMatchObject({
         roomId: room.id,
@@ -126,7 +130,9 @@ describe('transactional cover submit gate', () => {
     const { project, images, submit } = await completeDraft();
     await projectsRepository.updateDraft(project.id, { coverImageId: images[0]!.id });
     expect((await submit()).submitted?.status).toBe('submitted');
-    expect(await projectsRepository.updateDraft(project.id, { coverImageId: null })).toBeNull();
+    await expect(
+      projectsRepository.updateDraft(project.id, { coverImageId: null }),
+    ).rejects.toMatchObject({ status: 409 });
   });
   it('blocks a complete image set without a selected cover and records no transition', async () => {
     const { project, submit } = await completeDraft();
@@ -161,7 +167,13 @@ describe('transactional cover submit gate', () => {
       .update(schema.project)
       .set({ coverImageId: cover.id })
       .where(eq(schema.project.id, project.id));
-    await Promise.all([submit(), projectsRepository.deleteImage(project.id, cover.id)]);
+    const results = await Promise.allSettled([
+      submit(),
+      projectsRepository.deleteImage(project.id, cover.id),
+    ]);
+    for (const result of results) {
+      if (result.status === 'rejected') expect(result.reason).toMatchObject({ status: 409 });
+    }
     const [stored] = await db
       .select()
       .from(schema.project)
