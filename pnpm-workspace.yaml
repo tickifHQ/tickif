@@ -7,7 +7,7 @@ packages:
 # package.json `pnpm` field (which newer pnpm silently ignores).
 overrides:
   esbuild: 0.28.1
-  hono: ^4.12.34
+  hono: ^4.13.5
   # Keep Vite's peer graph on one Node type instance. Floating peer resolution
   # produced parallel Vite trees (26.0.0 and 26.4.0) and broke CI typechecking.
   '@types/node': 26.4.0
@@ -52,7 +52,7 @@ catalog:
   '@t3-oss/env-nextjs': ^0.13.8
 
   # Hono stack
-  hono: ^4.12.34
+  hono: ^4.13.5
   '@hono/node-server': ^2.0.5
   '@hono/zod-openapi': ^1.4.0
   '@scalar/hono-api-reference': ^0.10.20
