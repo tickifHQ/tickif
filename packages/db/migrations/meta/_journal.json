@@ -428,6 +428,13 @@
       "when": 1788814998047,
       "tag": "0062_secret_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788818891503,
+      "tag": "0063_parched_may_parker",
+      "breakpoints": true
     }
   ]
 }

@@ -206,6 +206,10 @@ export type ProjectResponse = z.infer<typeof projectResponseSchema>;
 export const projectDetailResponseSchema = projectResponseSchema
   .extend({
     rooms: z.array(projectRoomSchema),
+    liveStatus: z.literal('published').optional(),
+    pendingChanges: z.boolean().optional(),
+    pendingStatus: projectStatus.nullable().optional(),
+    liveVersion: projectResponseSchema.optional(),
   })
   .meta({ id: 'ProjectDetail' });
 export type ProjectDetailResponse = z.infer<typeof projectDetailResponseSchema>;
@@ -259,6 +263,9 @@ export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
 export const projectListItemSchema = z
   .object({
+    liveStatus: z.literal('published').optional(),
+    pendingChanges: z.boolean().optional(),
+    pendingStatus: projectStatus.nullable().optional(),
     id: z.uuid(),
     slug: z.string(),
     title: z.string(),
@@ -665,6 +672,10 @@ export type PublicProjectRecommendations = z.infer<typeof publicProjectRecommend
  */
 export const publicProjectDetailResponseSchema = projectDetailResponseSchema
   .omit({
+    liveStatus: true,
+    pendingChanges: true,
+    pendingStatus: true,
+    liveVersion: true,
     designerId: true,
     archiveReason: true,
     responsibleMemberId: true,

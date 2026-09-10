@@ -69,7 +69,12 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
 }
 
 function assertEditableProject(status: string): void {
-  if (status !== 'draft' && status !== 'changes_requested' && status !== 'rejected') {
+  if (
+    status !== 'draft' &&
+    status !== 'changes_requested' &&
+    status !== 'rejected' &&
+    status !== 'published'
+  ) {
     throw AppError.conflict(
       'Only draft, changes-requested, or rejected project media can be edited',
     );
