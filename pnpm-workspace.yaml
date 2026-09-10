@@ -58,7 +58,7 @@ catalog:
   '@scalar/hono-api-reference': ^0.10.20
 
   # Auth
-  better-auth: ^1.6.22
+  better-auth: ^1.7.3
   resend: ^4.1.0
   react-email: ^6.9.3
 
