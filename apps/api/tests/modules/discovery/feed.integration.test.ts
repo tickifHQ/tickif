@@ -1040,3 +1040,34 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
     });
   });
 });
+
+describe('rating and paid coverage in the database fallback', () => {
+  it('sorts before pagination and never promotes a paid lower-rated studio over a higher rating', async () => {
+    config.TYPESENSE_SEARCH_CONFIGURED = false;
+    const ids: string[] = [];
+    for (const [rating, paid] of [
+      ['5.00', true],
+      ['5.00', false],
+      ['4.00', true],
+    ] as const) {
+      const designer = await activeDesigner({ avgRating: rating });
+      const project = await makePublishedProject(designer.id, { title: 'Bedroom' });
+      ids.push(project.id);
+      if (paid)
+        await db.insert(schema.subscription).values({
+          organizationId: designer.orgId,
+          planTier: 'professional_plus',
+          subscriptionState: 'active',
+          currentPeriodEnd: new Date(Date.now() + 86400000),
+        });
+    }
+    const responses = await Promise.all(
+      [1, 2].map((page) => app.request(`/api/discovery/feed?q=bed&limit=2&page=${page}`)),
+    );
+    const bodies = await Promise.all(
+      responses.map((response) => response.json() as Promise<DiscoveryFeedResponse>),
+    );
+    expect(bodies.flatMap((body) => body.items.map((item) => item.id))).toEqual(ids);
+    expect(bodies.every((body) => body.source === 'db')).toBe(true);
+  });
+});

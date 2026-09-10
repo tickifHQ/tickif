@@ -13,11 +13,11 @@ import {
   Sparkle,
   Star,
 } from 'lucide-react';
-import type {
-  PortfolioBadge,
-  PublicPortfolioResponse,
-  PublicPortfolioReview,
-  PublicPortfolioStats,
+import {
+  PORTFOLIO_BADGE_PRESENTATION,
+  type PublicPortfolioResponse,
+  type PublicPortfolioReview,
+  type PublicPortfolioStats,
 } from '@repo/contracts';
 import { Badge } from '@repo/ui/components/badge';
 import { Card } from '@repo/ui/components/card';
@@ -47,18 +47,6 @@ import {
   studioType,
   websiteLabel,
 } from '@/lib/public-portfolio-view';
-
-/** Badge artwork + alt text, keyed by the `PortfolioBadge` values the API awards. */
-const BADGE_PRESENTATION: Record<PortfolioBadge, { label: string; imageSrc: string }> = {
-  verified: { label: 'Identity verified', imageSrc: '/illustrations/badges/verified.svg' },
-  new: { label: 'New on Tickif', imageSrc: '/illustrations/badges/new.svg' },
-  'top-performer': { label: 'Top performer', imageSrc: '/illustrations/badges/top-performer.svg' },
-  established: { label: 'Established studio', imageSrc: '/illustrations/badges/established.svg' },
-  'projects-published': {
-    label: 'Projects published',
-    imageSrc: '/illustrations/badges/projects-published.svg',
-  },
-};
 
 const profileTrustItems = [
   { icon: Check, label: 'Every project verified before it goes live' },
@@ -267,7 +255,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
                 ) : null}
               </div>
             </div>
-            {portfolio.badges.includes('verified') ? (
+            {portfolio.isKycVerified ? (
               <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-3 text-xs">
                 <Shield className="size-3" />
                 Verified
@@ -362,7 +350,7 @@ function CredentialsSection({ portfolio }: SectionProps) {
         </div>
         <ul className="mt-12 flex flex-wrap items-center justify-center gap-10">
           {portfolio.badges.map((badge) => {
-            const { label, imageSrc } = BADGE_PRESENTATION[badge];
+            const { label, imageSrc } = PORTFOLIO_BADGE_PRESENTATION[badge];
             return (
               <li key={badge}>
                 <Image src={imageSrc} alt={label} width={160} height={176} className="h-44 w-40" />
@@ -393,9 +381,10 @@ function PortfolioSection({ portfolio, view }: SectionProps) {
               {portfolio.stats.projectCount}{' '}
               <span className="font-normal text-muted-foreground">published</span>
             </p>
-            {portfolio.bio ? (
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{portfolio.bio}</p>
-            ) : null}
+            {/* Bio intentionally omitted here (E-212 #14): it is the hero
+                strapline fallback and the Studio details "about" copy. Repeating
+                it in the Portfolio section produced up to three renders of the
+                same text. */}
           </div>
         </div>
 
@@ -493,7 +482,7 @@ function StorySection({ portfolio, view }: SectionProps) {
                         />
                       ) : null}
                     </p>
-                    {portfolio.badges.includes('verified') ? (
+                    {portfolio.isKycVerified ? (
                       <p className="mt-1 flex items-center gap-1 font-mono text-2xs tracking-wider uppercase">
                         <Shield className="size-2.5" />
                         KYC verified

@@ -27,6 +27,22 @@ export function isPublicPath(pathname: string): boolean {
   );
 }
 
+/**
+ * Designer-persona route tree. Every designer workspace and onboarding route
+ * lives under `/designer/` (the `(designer)` group plus the `(protected)/designer`
+ * onboarding subtree: select-studio, new-organization, manage-membership).
+ *
+ * E-272: when the login wall fires for one of these, the login page must open in
+ * designer mode so the persona/copy matches the destination. The trailing-slash
+ * boundary keeps the public `/designers` discovery route (already a public path)
+ * and any future `/designerlike` route from matching. Non-designer protected
+ * routes (`/home`, `/onboarding`, `/dashboard`, `/moderation`, `/settings`) are
+ * deliberately excluded so their login keeps the default browsing persona.
+ */
+export function isDesignerPersonaPath(pathname: string): boolean {
+  return pathname === '/designer' || pathname.startsWith('/designer/');
+}
+
 const PUBLIC_PROJECT_PATH =
   /^\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i;
 
@@ -66,6 +82,13 @@ export async function proxy(req: NextRequest) {
   if (!hasSession && !isPublicPath(pathname)) {
     const loginUrl = new URL('/login', req.url);
     loginUrl.searchParams.set('callbackURL', `${pathname}${req.nextUrl.search}`);
+    // E-272: preserve the designer persona for protected /designer/* routes so
+    // the login page opens in designer mode (not the default browsing copy).
+    // The callbackURL above already carries the intended route for post-login
+    // return, and it is a server-derived same-origin pathname — never user input.
+    if (isDesignerPersonaPath(pathname)) {
+      loginUrl.searchParams.set('mode', 'designer');
+    }
     return NextResponse.redirect(loginUrl);
   }
 
