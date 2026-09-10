@@ -108,7 +108,7 @@ describe('POST /api/profiles/me — onboarding', () => {
   });
 
   it('keeps overlapping onboarding submissions idempotent', async () => {
-    const { cookie, userId } = await createAuthedSession('+919800001099');
+    const { cookie, userId } = await createRoleSession('+919800001099', PLATFORM_ROLE.VISITOR);
     const responses = await Promise.all(
       Array.from({ length: 2 }, () =>
         request('POST', '/api/profiles/me', {
