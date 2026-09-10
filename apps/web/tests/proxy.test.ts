@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { isPublicPath, proxy } from '../proxy';
+import { isDesignerPersonaPath, isPublicPath, proxy } from '../proxy';
 
 describe('isPublicPath', () => {
   it('allows the directory without exposing similarly prefixed workspace routes', () => {
@@ -55,6 +55,77 @@ describe('isPublicPath', () => {
     if (!location) throw new Error('Expected proxy to provide a login redirect location.');
     expect(new URL(location).pathname).toBe('/login');
     expect(new URL(location).searchParams.get('callbackURL')).toBe('/enquiries?status=open&page=2');
+  });
+
+  it('preserves designer persona and callback for unauthenticated /designer/dashboard (E-272)', async () => {
+    const response = await proxy(new NextRequest('http://localhost:3000/designer/dashboard'));
+    const location = response.headers.get('location');
+
+    expect(response.status).toBe(307);
+    if (!location) throw new Error('Expected proxy to provide a login redirect location.');
+    const url = new URL(location);
+    expect(url.pathname).toBe('/login');
+    expect(url.searchParams.get('mode')).toBe('designer');
+    expect(url.searchParams.get('callbackURL')).toBe('/designer/dashboard');
+  });
+
+  it('preserves designer persona and callback for unauthenticated /designer/onboarding (E-272)', async () => {
+    const response = await proxy(new NextRequest('http://localhost:3000/designer/onboarding'));
+    const location = response.headers.get('location');
+
+    expect(response.status).toBe(307);
+    if (!location) throw new Error('Expected proxy to provide a login redirect location.');
+    const url = new URL(location);
+    expect(url.pathname).toBe('/login');
+    expect(url.searchParams.get('mode')).toBe('designer');
+    expect(url.searchParams.get('callbackURL')).toBe('/designer/onboarding');
+  });
+
+  it('keeps the designer persona and query intact for nested designer routes (E-272)', async () => {
+    const response = await proxy(
+      new NextRequest('http://localhost:3000/designer/projects?status=submitted'),
+    );
+    const location = response.headers.get('location');
+
+    if (!location) throw new Error('Expected proxy to provide a login redirect location.');
+    const url = new URL(location);
+    expect(url.searchParams.get('mode')).toBe('designer');
+    expect(url.searchParams.get('callbackURL')).toBe('/designer/projects?status=submitted');
+  });
+
+  it('does NOT apply designer persona to non-designer protected routes (E-272)', async () => {
+    for (const path of ['/home', '/onboarding', '/dashboard', '/moderation']) {
+      const response = await proxy(new NextRequest(`http://localhost:3000${path}`));
+      const location = response.headers.get('location');
+
+      if (!location) throw new Error(`Expected proxy to redirect ${path} to login.`);
+      const url = new URL(location);
+      expect(url.pathname).toBe('/login');
+      expect(url.searchParams.get('mode')).toBeNull();
+      expect(url.searchParams.get('callbackURL')).toBe(path);
+    }
+  });
+});
+
+describe('isDesignerPersonaPath', () => {
+  it('matches designer workspace and onboarding routes', () => {
+    expect(isDesignerPersonaPath('/designer/dashboard')).toBe(true);
+    expect(isDesignerPersonaPath('/designer/onboarding')).toBe(true);
+    expect(isDesignerPersonaPath('/designer/select-studio')).toBe(true);
+    expect(isDesignerPersonaPath('/designer')).toBe(true);
+  });
+
+  it('does not match the public /designers directory or similarly prefixed routes', () => {
+    expect(isDesignerPersonaPath('/designers')).toBe(false);
+    expect(isDesignerPersonaPath('/designers/anika')).toBe(false);
+    expect(isDesignerPersonaPath('/designerlike')).toBe(false);
+  });
+
+  it('does not match non-designer protected routes', () => {
+    expect(isDesignerPersonaPath('/home')).toBe(false);
+    expect(isDesignerPersonaPath('/onboarding')).toBe(false);
+    expect(isDesignerPersonaPath('/dashboard')).toBe(false);
+    expect(isDesignerPersonaPath('/moderation')).toBe(false);
   });
 
   it('returns 410 at the public Next.js URL when the API marks a project deleted', async () => {

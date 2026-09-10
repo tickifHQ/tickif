@@ -195,7 +195,7 @@ export const profilesService = {
 
     // 5. Execute transaction — catch unique violation for race-safe idempotency
     try {
-      const { profile, org } = await profilesRepository.onboard({
+      const { profile, org, created } = await profilesRepository.onboard({
         orgId,
         orgName,
         orgSlug,
@@ -236,7 +236,7 @@ export const profilesService = {
             slug: org.slug,
           },
         },
-        created: true,
+        created,
         activeTeamId: profile.teamId,
       };
     } catch (err: unknown) {
