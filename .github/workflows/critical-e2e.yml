@@ -82,7 +82,7 @@ jobs:
       - name: Assert every critical journey ran and passed
         if: always()
         run: pnpm --filter @repo/e2e exec tsx scripts/assert-coverage.ts
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: critical-e2e-evidence

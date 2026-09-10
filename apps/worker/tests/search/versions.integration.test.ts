@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectImage, makeProjectRoom } from '@repo/db/testing';
-import { findProjectSearchSource } from '../../src/search/repository.js';
+import { findDesignerSearchSource, findProjectSearchSource } from '../../src/search/repository.js';
 
 describe('live project search projection', () => {
   it('omits pending scalar changes, rooms and image taxonomy from indexing and rebuild sources', async () => {
@@ -56,5 +56,8 @@ describe('live project search projection', () => {
     expect(source?.images.flatMap((item) => item.themeSlugs)).toEqual(['approved-theme']);
     expect(JSON.stringify(source)).not.toContain('secret-pending');
     expect(source).not.toHaveProperty('pendingChanges');
+    const designerSource = await findDesignerSearchSource(designer.id);
+    expect(designerSource?.portfolioTerms).toContain('Approved room');
+    expect(designerSource?.portfolioTerms).not.toContain('Secret pending room');
   });
 });

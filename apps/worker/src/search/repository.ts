@@ -5,6 +5,13 @@ import type { DesignerSearchSource, ProjectSearchSource } from './mapper.js';
 
 const PAGE_LIMIT_MAX = 500;
 
+// Coverage expiry prevents stale paid boosts if a lifecycle/index job is delayed.
+function paidUntilProjection() {
+  return sql<number>`coalesce((select extract(epoch from s.current_period_end) * 1000
+    from subscription s where s.organization_id = ${schema.designerProfile.orgId}
+    and s.plan_tier <> 'hobby' and s.subscription_state not in ('locked', 'downgraded')), 0)`;
+}
+
 function boundedLimit(limit: number): number {
   return Math.max(1, Math.min(Math.floor(limit), PAGE_LIMIT_MAX));
 }
@@ -64,6 +71,7 @@ async function readProjectSearchSource(
         slug: schema.designerProfile.slug,
         displayName: schema.designerProfile.displayName,
         avgRating: schema.designerProfile.avgRating,
+        paidUntil: paidUntilProjection(),
         reviewCount: schema.designerProfile.reviewCount,
       },
       cover: {
@@ -143,6 +151,7 @@ export async function findDesignerSearchSource(
       yearsExperience: schema.designerProfile.yearsExperience,
       projectCount: schema.designerProfile.projectCount,
       avgRating: schema.designerProfile.avgRating,
+      paidUntil: paidUntilProjection(),
       reviewCount: schema.designerProfile.reviewCount,
       logoImageId: schema.designerProfile.logoImageId,
       updatedAt: schema.designerProfile.updatedAt,
@@ -176,7 +185,32 @@ export async function findDesignerSearchSource(
     .innerJoin(schema.taxonomy, eq(schema.designerProfileFootprint.taxonomyId, schema.taxonomy.id))
     .where(eq(schema.designerProfileFootprint.profileId, profileId));
 
-  return { profile, footprint };
+  // Only published projects contribute terms; drafts and private edits are excluded.
+  const portfolio = await db
+    .select({
+      title: schema.project.title,
+      description: schema.project.description,
+      roomName: schema.projectRoom.name,
+      roomSlug: schema.taxonomy.slug,
+      roomLabel: schema.taxonomy.label,
+    })
+    .from(schema.project)
+    .leftJoin(
+      schema.projectRoom,
+      and(eq(schema.projectRoom.projectId, schema.project.id), eq(schema.projectRoom.isLive, true)),
+    )
+    .leftJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
+    .where(
+      and(
+        eq(schema.project.designerId, profileId),
+        eq(schema.project.status, 'published'),
+        isNotNull(schema.project.publishedAt),
+      ),
+    );
+  const portfolioTerms = portfolio.flatMap((row) =>
+    Object.values(row).filter((value): value is string => Boolean(value)),
+  );
+  return { profile, footprint, portfolioTerms };
 }
 
 export async function listSearchableProjectIds(

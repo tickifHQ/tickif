@@ -92,6 +92,8 @@ test('published project edits keep live content through rejection and replace it
     await designerPage
       .getByRole('button', { name: 'Submit changes for review', exact: true })
       .click();
+    await expect.poll(async () => (await readInternal()).status).toBe('draft');
+    await designerPage.getByRole('button', { name: 'Confirm & submit', exact: true }).click();
     await expect.poll(async () => (await readInternal()).status).toBe('submitted');
     await designerPage.reload();
     await expect(designerPage.getByText(/Editing is paused during review/)).toBeVisible();

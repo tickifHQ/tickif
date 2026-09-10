@@ -263,6 +263,12 @@ export async function applyLiveAggregate(
   if (updated.status === 'published') {
     await recordSearchProjectionEvents(tx, [
       { entityKind: 'project', entityId: id, operation: 'index', sourceUpdatedAt: now },
+      {
+        entityKind: 'designer',
+        entityId: updated.designerId,
+        operation: 'index',
+        sourceUpdatedAt: now,
+      },
     ]);
   }
   return updated;

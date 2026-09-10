@@ -154,7 +154,9 @@ function CurrentPlanCard({
             )}
             {billing.renewalDate && billing.lifecycle === 'active' && billing.tier !== 'hobby' && (
               <p className="mt-3 text-sm text-muted-foreground">
-                Your plan renews on {formatDate(billing.renewalDate)}
+                {billing.cancellationScheduled
+                  ? `Your plan ends on ${formatDate(billing.renewalDate)}`
+                  : `Your plan renews on ${formatDate(billing.renewalDate)}`}
               </p>
             )}
             {billing.subscriptionId && (
@@ -313,7 +315,9 @@ function BillingSummary({
         <div className="mt-5 grid gap-6 sm:grid-cols-2">
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground">Next Billing Date</p>
+              <p className="text-xs text-muted-foreground">
+                {billing.cancellationScheduled ? 'Access until' : 'Next Billing Date'}
+              </p>
               <p className="mt-0.5 text-lg font-semibold text-foreground">
                 {formatDate(info.nextBillingDate)}
               </p>

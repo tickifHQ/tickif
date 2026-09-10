@@ -29,7 +29,7 @@ export function PublicFooter() {
           ))}
         </nav>
         <span className="text-xs font-medium text-surface-inverse-foreground/50">
-          © {year} Homefolio
+          © {year} Tickif
         </span>
       </div>
     </footer>
