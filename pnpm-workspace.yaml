@@ -48,7 +48,7 @@ catalog:
   eslint-config-prettier: ^10.1.8
 
   # Validation (zod v4 — required by @hono/zod-openapi v1)
-  zod: ^4.4.3
+  zod: ^4.5.4
   '@t3-oss/env-nextjs': ^0.13.8
 
   # Hono stack
