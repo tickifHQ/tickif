@@ -894,6 +894,8 @@ describe('DesignerProjectUpload', () => {
 
 describe('DesignerProjectUpload floor area', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+
     const termsByKind: Record<
       string,
       Array<{ id: string; label: string; slug: string; parentId: null }>
