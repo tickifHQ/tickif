@@ -1222,6 +1222,9 @@ export const projectImage = pgTable(
     duplicateOfImageId: uuid('duplicate_of_image_id'),
     duplicateDistance: integer('duplicate_distance'),
     duplicateCheckedAt: timestamp('duplicate_checked_at'),
+    // Machine-readable processing failure code (too_large, corrupt, duplicate, ...).
+    // Surfaced on the failed tile so the owner gets the actual reason + recovery path.
+    failureReason: text('failure_reason'),
     status: projectImageStatusEnum('status').default('processing').notNull(),
     sortOrder: integer('sort_order').default(0).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
