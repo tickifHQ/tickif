@@ -117,6 +117,7 @@ export function DesignerDashboardOverview({
   studioName,
   studioLocation,
   portfolioUrl,
+  portfolioPubliclyVisible = false,
   dashboard,
   completion,
   dashboardError,
@@ -124,6 +125,13 @@ export function DesignerDashboardOverview({
   studioName: string;
   studioLocation: string;
   portfolioUrl: string;
+  /**
+   * E-278: whether `/d/{slug}` serves the portfolio right now (backend
+   * `publiclyVisible`). The share card only exposes `portfolioUrl` as a
+   * copyable/openable link when this is true; otherwise it shows a readiness
+   * prompt so an unpublished/placeholder URL is never surfaced.
+   */
+  portfolioPubliclyVisible?: boolean;
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
   dashboardError?: string | null;
@@ -377,10 +385,19 @@ export function DesignerDashboardOverview({
                     <div className="text-lg font-medium text-foreground">{studioName}</div>
                     <div className="mt-1 text-sm text-muted-foreground">{studioLocation}</div>
                   </div>
-                  <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
-                    <Copy className="size-3.5 shrink-0" />
-                    <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
-                  </div>
+                  {/* E-278: only reveal the public URL chip once the portfolio is
+                      actually live. Otherwise show a neutral "not public yet" chip
+                      so no unpublished/placeholder link leaks. */}
+                  {portfolioPubliclyVisible ? (
+                    <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
+                      <Copy className="size-3.5 shrink-0" />
+                      <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
+                    </div>
+                  ) : (
+                    <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      <span className="truncate">Not public yet</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -391,15 +408,38 @@ export function DesignerDashboardOverview({
               <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
                 A portfolio worth <span className="text-primary">sharing.</span>
               </div>
-              <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
-              </p>
-              <CopyLinkButton
-                value={portfolioUrl}
-                variant="fancy"
-                size="fancy"
-                className="mt-6 w-full cursor-pointer"
-              />
+              {/*
+                E-278: the copyable public link is only offered once the portfolio
+                is genuinely live (backend `publiclyVisible`). Until then the card
+                explains what's left and links to Portfolio Settings — it never
+                exposes an unpublished or placeholder `/d/{slug}` URL to copy.
+              */}
+              {portfolioPubliclyVisible ? (
+                <>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
+                  </p>
+                  <CopyLinkButton
+                    value={portfolioUrl}
+                    variant="fancy"
+                    size="fancy"
+                    className="mt-6 w-full cursor-pointer"
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    Finish your portfolio to unlock a public link you can share anywhere. We&apos;ll
+                    show it here the moment your page goes live.
+                  </p>
+                  <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
+                    <Link href="/designer/portfolio">
+                      Complete your portfolio
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         </div>

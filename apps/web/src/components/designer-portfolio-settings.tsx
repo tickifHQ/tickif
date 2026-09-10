@@ -242,6 +242,12 @@ export function DesignerPortfolioSettings() {
   // Form state
   const [form, setForm] = useState<FormState | null>(null);
   const [savedForm, setSavedForm] = useState<FormState | null>(null);
+  // E-278: the logo is committed to the server by its own upload/delete
+  // endpoints (not part of FormState), so it needs a separate saved baseline to
+  // participate in the dirty check. `savedLogoUrl` is the logo as of load / last
+  // save; the live logo is `portfolio.logoUrl`. A difference means an unsaved
+  // logo change and must enable "Save changes".
+  const [savedLogoUrl, setSavedLogoUrl] = useState<string | null>(null);
 
   // Save / discard
   const [isSaving, startSaveTransition] = useTransition();
@@ -302,6 +308,7 @@ export function DesignerPortfolioSettings() {
       const formData = portfolioToForm(data);
       setForm(formData);
       setSavedForm(formData);
+      setSavedLogoUrl(data.logoUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load portfolio settings.');
     } finally {
@@ -426,8 +433,15 @@ export function DesignerPortfolioSettings() {
   // Dirty state
   // -------------------------------------------------------------------------
 
+  // E-278: a logo add/replace/delete is an unsaved change too. The live logo
+  // (`portfolio.logoUrl`) differing from the saved baseline (`savedLogoUrl`)
+  // marks the form dirty; reverting to the baseline clears it, and a successful
+  // save re-syncs the baseline.
+  const logoChanged = (portfolio?.logoUrl ?? null) !== savedLogoUrl;
   const isDirty =
-    form !== null && savedForm !== null && JSON.stringify(form) !== JSON.stringify(savedForm);
+    form !== null &&
+    savedForm !== null &&
+    (JSON.stringify(form) !== JSON.stringify(savedForm) || logoChanged);
 
   // -------------------------------------------------------------------------
   // Form handlers
@@ -506,7 +520,16 @@ export function DesignerPortfolioSettings() {
   function handleSave() {
     if (!form || !savedForm) return;
     const patch = computeChangedFields(form, savedForm);
-    if (!patch) return;
+    // E-278: the logo commits through its own endpoint, so a logo-only change
+    // has no field patch. Reconcile the logo baseline (clearing the dirty
+    // state) without a redundant portfolio PATCH.
+    if (!patch) {
+      if (logoChanged) {
+        setSavedLogoUrl(portfolio?.logoUrl ?? null);
+        setSaveSuccess(true);
+      }
+      return;
+    }
 
     const revisionAtSave = formRevisionRef.current;
 
@@ -521,12 +544,14 @@ export function DesignerPortfolioSettings() {
           const newForm = portfolioToForm(updated);
           setForm(newForm);
           setSavedForm(newForm);
+          setSavedLogoUrl(updated.logoUrl);
           setSaveSuccess(true);
           setSlugStatus('idle');
         } else {
           // Edits happened during save — update savedForm (server state) but keep user's edits
           setPortfolio(updated);
           setSavedForm(portfolioToForm(updated));
+          setSavedLogoUrl(updated.logoUrl);
           setSaveSuccess(true);
         }
       } catch (err) {
@@ -542,6 +567,11 @@ export function DesignerPortfolioSettings() {
   function handleDiscard() {
     if (savedForm) {
       setForm(savedForm);
+      // E-278: the logo is committed immediately by its own upload/delete
+      // endpoints, so a logo change cannot be rolled back here. Reconcile the
+      // baseline to the already-persisted logo instead of leaving a phantom
+      // "unsaved" state that keeps Save/Discard enabled with nothing to do.
+      setSavedLogoUrl(portfolio?.logoUrl ?? null);
       setSaveError(null);
       setSaveSuccess(false);
       setSlugStatus('idle');
@@ -649,11 +679,11 @@ export function DesignerPortfolioSettings() {
   // in the display-only Trust & Credentials grid (E-212 #6).
   const earnedBadges = new Set(portfolio.badges);
   // Preview typed slugs live; otherwise use the saved canonical URL.
-  // If neither exists, disable sharing instead of inventing a dead URL.
-  const copyUrl = form.portfolioSlug
+  // If neither exists, show an unavailable state instead of inventing a dead URL.
+  const previewTargetUrl = form.portfolioSlug
     ? new URL(`/d/${form.portfolioSlug}`, portfolioWebUrl).toString()
     : portfolio.portfolioUrl;
-  const previewUrl = copyUrl?.replace(/^https?:\/\//, '') ?? 'Portfolio URL unavailable';
+  const previewUrl = previewTargetUrl?.replace(/^https?:\/\//, '') ?? 'Portfolio URL unavailable';
 
   // Status badge reflects the actual *saved* publication state from the server,
   // not the public-link toggle alone. An incomplete portfolio never goes live
@@ -1408,7 +1438,14 @@ export function DesignerPortfolioSettings() {
                   Live preview
                 </span>
               </div>
-              {portfolio.portfolioUrl ? (
+              {/*
+                E-278: "Open full" opens the real public page, so it must be gated
+                on the backend's saved publication state (publiclyVisible) and use
+                the canonical saved URL (portfolio.portfolioUrl) — never the typed,
+                possibly-unsaved slug preview. When the portfolio is not live the
+                link is inert so we never point at a `/d/{slug}` that 404s.
+              */}
+              {portfolio.publiclyVisible && portfolio.portfolioUrl ? (
                 <a
                   href={portfolio.portfolioUrl}
                   target="_blank"
@@ -1483,16 +1520,32 @@ export function DesignerPortfolioSettings() {
                 <div className="mt-2 text-2xl font-medium tracking-tight text-foreground">
                   A portfolio worth <span className="text-primary">sharing.</span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
-                </p>
-                <CopyLinkButton
-                  value={copyUrl ?? ''}
-                  disabled={!copyUrl}
-                  variant="fancy"
-                  size="fancy"
-                  className="mt-4 w-full cursor-pointer"
-                />
+                {/*
+                  E-278: only offer a copyable public link once the portfolio is
+                  genuinely live (backend publiclyVisible), and copy the canonical
+                  SAVED url (portfolio.portfolioUrl) — never the typed-slug preview
+                  (previewTargetUrl) which may be unsaved or point at an unpublished page.
+                  Until then, explain what's left instead of exposing a link.
+                */}
+                {portfolio.publiclyVisible && portfolio.portfolioUrl ? (
+                  <>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
+                    </p>
+                    <CopyLinkButton
+                      value={portfolio.portfolioUrl}
+                      variant="fancy"
+                      size="fancy"
+                      className="mt-4 w-full cursor-pointer"
+                    />
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {portfolio.missingRequiredFields.length > 0
+                      ? 'Complete the required Hero details above and save to publish your portfolio. Your shareable link appears here once it goes live.'
+                      : 'Turn on the public link above to publish your portfolio. Your shareable link appears here once it goes live.'}
+                  </p>
+                )}
               </div>
             </Card>
           </div>
