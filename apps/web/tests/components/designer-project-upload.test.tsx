@@ -913,4 +913,134 @@ describe('DesignerProjectUpload submit validation', () => {
     expect(mock.router.replace).not.toHaveBeenCalled();
     expect(mock.submitProject).not.toHaveBeenCalled();
   });
+
+  it('ignores failed-only rooms when gating submit on photo metadata', async () => {
+    const user = userEvent.setup();
+    const firstRoom = {
+      id: '33333333-3333-4333-8333-333333333333',
+      projectId: '11111111-1111-4111-8111-111111111111',
+      roomTypeId: '44444444-4444-4444-8444-444444444444',
+      name: 'Living Room',
+      description: null,
+      sortOrder: 0,
+      metadata: {},
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    };
+    const secondRoom = {
+      ...firstRoom,
+      id: '33333333-3333-4333-8333-333333333334',
+      name: 'Kitchen',
+      sortOrder: 1,
+    };
+    mock.projectGet.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: '11111111-1111-4111-8111-111111111111',
+            designerId: '22222222-2222-4222-8222-222222222222',
+            responsibleMemberId: null,
+            title: '2 BHK in Adyar',
+            slug: '2-bhk-in-adyar',
+            description: null,
+            status: 'draft',
+            archiveReason: null,
+            rejectionReasonCode: null,
+            rejectionReasonCodes: [],
+            moderationNote: null,
+            propertyTypeSlug: 'residential',
+            propertySubtypeSlug: 'apartment',
+            scopeSlug: 'construction',
+            bhkSlug: '2-bhk',
+            sizeSqft: 1400,
+            citySlug: 'chennai',
+            localitySlug: 'adyar',
+            buildingName: 'Maitri Apartments',
+            budgetBandSlug: '20l-30l',
+            completedMonth: '2026-03',
+            durationMonths: 4,
+            coverImageId: '55555555-5555-4555-8555-555555555555',
+            metadata: {
+              uiProjectTypeSlug: 'apartment',
+              projectSubtypeSlug: 'apartment',
+              localityLabel: 'Adyar',
+              scopeSlugs: ['construction'],
+            },
+            publishedAt: null,
+            submittedAt: null,
+            reviewComments: [],
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            rooms: [firstRoom, secondRoom],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const readyImage = {
+      id: '55555555-5555-4555-8555-555555555555',
+      roomId: firstRoom.id,
+      status: 'ready',
+      sortOrder: 0,
+      themeSlugs: ['modern'],
+      materialSlugs: [],
+      finishSlugs: ['matte'],
+      tagSlugs: [],
+      width: 1600,
+      height: 1200,
+      derivatives: [],
+      previewUrl: 'https://example.com/thumb.webp',
+      viewerUrl: 'https://example.com/large.webp',
+    };
+    mock.listImagesGet.mockReset().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              { ...readyImage, sortOrder: 0 },
+              { ...readyImage, id: '66666666-6666-4666-8666-666666666666', sortOrder: 1 },
+              { ...readyImage, id: '77777777-7777-4777-8777-777777777777', sortOrder: 2 },
+              {
+                ...readyImage,
+                id: '88888888-8888-4888-8888-888888888888',
+                roomId: secondRoom.id,
+                status: 'failed',
+                sortOrder: 0,
+                themeSlugs: [],
+                finishSlugs: [],
+                width: null,
+                height: null,
+                previewUrl: null,
+                viewerUrl: null,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mock.imageMetadataPatch.mockImplementation(
+      async ({ param }: { param: { imageId: string } }) => ({
+        ok: true,
+        json: async () => ({ ...readyImage, id: param.imageId }),
+      }),
+    );
+    mock.completenessGet.mockResolvedValue({
+      ok: true,
+      json: async () => ({ complete: false, score: 80, missing: [], requirements: [] }),
+    });
+    render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByDisplayValue('2 BHK in Adyar');
+    await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
+
+    // The untagged failed image must not block submission: the gate passes
+    // and the server completeness check runs.
+    await waitFor(() => expect(mock.completenessGet).toHaveBeenCalled());
+    expect(
+      screen.queryByText(
+        'Project is not ready to submit yet. Missing: Room, theme, and finish metadata on each photo.',
+      ),
+    ).not.toBeInTheDocument();
+  });
 });

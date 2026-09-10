@@ -1612,7 +1612,9 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           totalImages >= 3 &&
           rooms.every(
             (room) =>
-              room.images.length === 0 ||
+              // Rooms holding only failed images are not submission-eligible,
+              // matching the server completeness rules, so they cannot block.
+              room.images.filter((image) => image.status !== 'failed').length === 0 ||
               (room.designStyle.length > 0 && room.materialFinish.length > 0),
           ),
       },
