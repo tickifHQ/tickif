@@ -73,8 +73,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.1101.0
-  '@aws-sdk/s3-request-presigner': ^3.1101.0
+  '@aws-sdk/client-s3': ^3.1127.0
+  '@aws-sdk/s3-request-presigner': ^3.1127.0
   sharp: ^0.35.4
 
   # Search

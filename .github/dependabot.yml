@@ -11,6 +11,11 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
     open-pull-requests-limit: 5
+    # The S3 client and presigner share Smithy middleware types and must move together.
+    groups:
+      aws-sdk:
+        patterns:
+          - "@aws-sdk/*"
     reviewers:
       - "shikharx06"
 
