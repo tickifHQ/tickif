@@ -597,7 +597,20 @@ describe('bounded live project versions', () => {
       slug: fixture.project.slug,
       publishedAt: fixture.project.publishedAt,
     });
-    expect(await db.select().from(schema.searchProjectionOutbox)).toHaveLength(1);
+    const projectionEvents = await db
+      .select({
+        entityKind: schema.searchProjectionOutbox.entityKind,
+        entityId: schema.searchProjectionOutbox.entityId,
+        operation: schema.searchProjectionOutbox.operation,
+      })
+      .from(schema.searchProjectionOutbox);
+    expect(projectionEvents).toHaveLength(2);
+    expect(projectionEvents).toEqual(
+      expect.arrayContaining([
+        { entityKind: 'project', entityId: fixture.project.id, operation: 'index' },
+        { entityKind: 'designer', entityId: fixture.designer.id, operation: 'index' },
+      ]),
+    );
     const [designer] = await db
       .select()
       .from(schema.designerProfile)
