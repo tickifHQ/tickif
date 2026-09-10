@@ -82,7 +82,7 @@ export function VisitorOnboardingForm({
       router.replace('/home');
       router.refresh();
     } catch {
-      setError('Could not save your name. Please try again.');
+      setError('Could not save your visitor profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -221,13 +221,6 @@ export function VisitorOnboardingForm({
               className="font-medium text-foreground underline-offset-2 hover:underline"
             >
               Contact support
-            </Link>
-            <span>|</span>
-            <Link
-              href="/"
-              className="font-medium text-foreground underline-offset-2 hover:underline"
-            >
-              Skip
             </Link>
           </div>
         </div>

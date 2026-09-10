@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const mock = vi.hoisted(() => ({
-  getServerSession: vi.fn(),
+  requireActiveVisitor: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`NEXT_REDIRECT:${path}`);
   }),
@@ -32,9 +32,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-vi.mock('@/lib/auth-guard', () => ({
-  getServerSession: mock.getServerSession,
-}));
+vi.mock('@/lib/auth-guard', () => ({ requireActiveVisitor: mock.requireActiveVisitor }));
 
 vi.mock('@/lib/home-feed', () => ({
   emptyHomeFeedPage: (page: number) => ({
@@ -80,74 +78,27 @@ import PersonalHomePage from '../../../app/(protected)/home/page';
 describe('PersonalHomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'visitor' },
+    mock.requireActiveVisitor.mockResolvedValue({
+      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'visitor', status: 'active' },
       session: { activeOrganizationId: null, activeTeamId: null },
     });
   });
 
-  it('renders the visitor workspace without organization controls or List your work', async () => {
+  it('renders the visitor workspace with List your work and without organization controls', async () => {
     render(await PersonalHomePage());
 
     expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
     expect(screen.getAllByText('My Tickif')).not.toHaveLength(0);
     expect(screen.getByTestId('project-feed')).toBeInTheDocument();
-    expect(screen.getByTestId('public-header')).toHaveAttribute(
-      'data-show-list-your-work',
-      'false',
-    );
+    expect(screen.getByTestId('public-header')).toHaveAttribute('data-show-list-your-work', 'true');
     expect(screen.queryByRole('button', { name: 'Switch context' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Analytics/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Team & Roles/i)).not.toBeInTheDocument();
     expect(screen.getByText(/© \d{4} Tickif/)).toBeInTheDocument();
   });
 
-  it('redirects designers with an active studio to the designer dashboard', async () => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
-      session: { activeOrganizationId: 'org-1', activeTeamId: 'team-1' },
-    });
-
+  it('honors the visitor guard before rendering the personal workspace', async () => {
+    mock.requireActiveVisitor.mockRejectedValue(new Error('NEXT_REDIRECT:/designer/dashboard'));
     await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/designer/dashboard');
-  });
-
-  it('keeps designers without an active studio on personal home', async () => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
-      session: { activeOrganizationId: null, activeTeamId: null },
-    });
-
-    render(await PersonalHomePage());
-
-    expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
-  });
-
-  it('keeps the studio picker for designers restored into personal context', async () => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'designer' },
-      session: { activeOrganizationId: null, activeTeamId: null },
-    });
-
-    render(await PersonalHomePage());
-
-    expect(screen.getByRole('button', { name: 'Switch context' })).toBeInTheDocument();
-  });
-
-  it.each(['admin', 'superadmin'])('redirects %s users to the admin dashboard', async (role) => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role },
-      session: { activeOrganizationId: null, activeTeamId: null },
-    });
-
-    await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/dashboard');
-  });
-
-  it('fails closed when the session has an invalid role', async () => {
-    mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha Rao', email: 'a@x.com', role: 'unknown' },
-      session: { activeOrganizationId: null, activeTeamId: null },
-    });
-
-    await expect(PersonalHomePage()).rejects.toThrow('NEXT_REDIRECT:/unauthorized');
   });
 });

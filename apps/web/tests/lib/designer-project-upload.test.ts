@@ -8,6 +8,7 @@ import {
   roomSlugCandidates,
   roomSlugsMatch,
   shouldRefreshPristineDefaultRooms,
+  validateSizeSqft,
 } from '../../src/lib/designer-project-upload';
 
 const propertyTypes = new Set([
@@ -317,4 +318,21 @@ describe('designer project upload helpers', () => {
 
     expect(shouldRefreshPristineDefaultRooms(currentRooms, nextDefaultRooms)).toBe(true);
   });
+});
+
+describe('validateSizeSqft', () => {
+  it.each(['', '   '])('accepts a blank value %s (area is optional)', (value) => {
+    expect(validateSizeSqft(value)).toBeNull();
+  });
+
+  it.each(['1', '1200', '100000', ' 1450 '])('accepts a valid area %s', (value) => {
+    expect(validateSizeSqft(value)).toBeNull();
+  });
+
+  it.each(['-100', '0', '12.5', '1e3', 'abc', '100001'])(
+    'rejects an invalid area %s with field feedback',
+    (value) => {
+      expect(validateSizeSqft(value)).toBe('Enter an area between 1 and 100000 sq.ft.');
+    },
+  );
 });

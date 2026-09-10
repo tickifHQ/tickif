@@ -20,9 +20,7 @@ export type VisitorCaller = {
 function assertEligibleVisitor(caller: VisitorCaller): void {
   const hasActiveLifecycle =
     caller.status === ACCOUNT_STATUS.PENDING || caller.status === ACCOUNT_STATUS.ACTIVE;
-  const hasPersonalProfileRole =
-    caller.role === PLATFORM_ROLE.VISITOR || caller.role === PLATFORM_ROLE.DESIGNER;
-  if (caller.isBanned || !hasPersonalProfileRole || !hasActiveLifecycle) {
+  if (caller.isBanned || caller.role !== PLATFORM_ROLE.VISITOR || !hasActiveLifecycle) {
     throw AppError.forbidden('Visitor profile access is not permitted');
   }
 }

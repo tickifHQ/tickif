@@ -2,13 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PLATFORM_ROLE } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@repo/ui/components/card';
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
 
@@ -49,7 +43,7 @@ export default async function DeferredDesignerOnboardingPage() {
             <Link href="/designer/onboarding">Continue setup</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/home">Explore projects</Link>
+            <Link href="/">Explore projects</Link>
           </Button>
         </CardFooter>
       </Card>

@@ -150,6 +150,7 @@ const createOrganizationRoute = createRoute({
       content: { 'application/json': { schema: onboardDesignerResponseSchema } },
     },
     401: errorJson('Unauthorized'),
+    403: errorJson('Designer account required'),
     422: errorJson('Invalid organization profile'),
     502: errorJson('Context session update failed'),
   },
@@ -224,7 +225,7 @@ export const orgsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
   .openapi(createOrganizationRoute, async (c) => {
     const user = c.get('user')!;
     const { data, activeTeamId } = await profilesService.onboardDesigner(
-      user.id,
+      { userId: user.id, role: user.role, status: user.status },
       c.req.valid('json'),
       { allowAdditionalOrganization: true },
     );

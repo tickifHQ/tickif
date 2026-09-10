@@ -34,10 +34,7 @@ describe('Deferred designer onboarding', () => {
         'href',
         '/designer/onboarding',
       );
-      expect(screen.getByRole('link', { name: 'Explore projects' })).toHaveAttribute(
-        'href',
-        '/home',
-      );
+      expect(screen.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/');
       expect(mock.redirect).not.toHaveBeenCalled();
     },
   );

@@ -6,6 +6,7 @@ import type {
   ProjectImageDto,
   UpdateImageMetadataInput,
 } from '@repo/contracts';
+import { imageFailureReason } from '@repo/contracts';
 import { config } from '@repo/config';
 import { buildOriginalKey, presignDownload, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
@@ -40,6 +41,10 @@ function pickViewerDerivative(row: ProjectImageListItem): string | null {
 async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
   const previewKey = row.status === 'ready' ? pickPreviewDerivative(row) : null;
   const viewerKey = row.status === 'ready' ? pickViewerDerivative(row) : null;
+  // The column is free-text at the DB level; only known codes reach the client
+  // so a legacy or unexpected value degrades to an unknown failure, never a leak.
+  const parsedReason =
+    row.status === 'failed' ? imageFailureReason.safeParse(row.failureReason) : null;
   return {
     id: row.id,
     roomId: row.roomId,
@@ -51,6 +56,7 @@ async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
     tagSlugs: row.tagSlugs,
     width: row.width,
     height: row.height,
+    failureReason: parsedReason && parsedReason.success ? parsedReason.data : null,
     derivatives: row.derivatives,
     previewUrl: previewKey ? await presignDownload({ key: previewKey }) : null,
     viewerUrl: viewerKey ? await presignDownload({ key: viewerKey }) : null,
@@ -69,7 +75,12 @@ function assertAccess(ownerUserId: string | null, caller: Caller): void {
 }
 
 function assertEditableProject(status: string): void {
-  if (status !== 'draft' && status !== 'changes_requested' && status !== 'rejected') {
+  if (
+    status !== 'draft' &&
+    status !== 'changes_requested' &&
+    status !== 'rejected' &&
+    status !== 'published'
+  ) {
     throw AppError.conflict(
       'Only draft, changes-requested, or rejected project media can be edited',
     );

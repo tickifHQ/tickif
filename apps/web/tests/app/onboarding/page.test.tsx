@@ -18,10 +18,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth-guard', () => ({
   requireAuth: mock.requireAuth,
-  rolePassesCheck: vi.fn(),
 }));
-
-import { rolePassesCheck } from '@/lib/auth-guard';
 
 describe('VisitorOnboardingPage', () => {
   beforeEach(() => {
@@ -40,7 +37,6 @@ describe('VisitorOnboardingPage', () => {
         status: 'pending',
       },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(false);
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     const page = await Page();
@@ -51,7 +47,7 @@ describe('VisitorOnboardingPage', () => {
     expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('+919123456789');
     expect(screen.getByLabelText(/^address$/i)).toHaveValue('');
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
-    expect(screen.getByRole('link', { name: 'Skip' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
   });
 
@@ -60,14 +56,13 @@ describe('VisitorOnboardingPage', () => {
       session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(true);
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
 
-  it('redirects active visitors to personal home using server account state', async () => {
+  it('redirects completed visitors to My Tickif using server account state', async () => {
     mock.requireAuth.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
       user: {
@@ -78,10 +73,23 @@ describe('VisitorOnboardingPage', () => {
         status: 'active',
       },
     });
-    vi.mocked(rolePassesCheck).mockReturnValue(false);
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/home');
+  });
+
+  it.each([
+    ['admin', '/dashboard'],
+    ['superadmin', '/dashboard'],
+  ] as const)('redirects %s accounts to the admin dashboard', async (role, destination) => {
+    mock.requireAuth.mockResolvedValue({
+      session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
+      user: { id: 'u1', name: 'Admin', email: 'admin@test.com', role, status: 'active' },
+    });
+
+    const { default: Page } = await import('../../../app/(protected)/onboarding/page');
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith(destination);
   });
 });

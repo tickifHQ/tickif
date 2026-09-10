@@ -41,9 +41,26 @@ describe('PublicHomePage', () => {
     mock.getServerSession.mockResolvedValue(null);
   });
 
+  it('lets a pending visitor explore publicly without entering visitor onboarding', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u1',
+        name: 'Pending Designer',
+        email: 'a@x.com',
+        role: 'visitor',
+        status: 'pending',
+      },
+      session: { id: 's1', token: 't', expiresAt: '2027-01-01T00:00:00.000Z' },
+    });
+    render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole('heading', { name: /Inspire from homes/i })).toBeInTheDocument();
+    expect(mock.getServerSession).toHaveBeenCalledWith({ disableCookieCache: true });
+    expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
   it('sends signed-in visitors to their personal home', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor', status: 'active' },
       session: {
         id: 's1',
         token: 't',
@@ -60,7 +77,7 @@ describe('PublicHomePage', () => {
 
   it('preserves feed parameters when sending signed-in visitors to personal home', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor', status: 'active' },
       session: {
         id: 's1',
         token: 't',
@@ -77,7 +94,7 @@ describe('PublicHomePage', () => {
 
   it('preserves the feed page when sending signed-in visitors to personal home', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor' },
+      user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'visitor', status: 'active' },
       session: {
         id: 's1',
         token: 't',
@@ -92,7 +109,7 @@ describe('PublicHomePage', () => {
     );
   });
 
-  it('preserves feed parameters for designers without an active studio', async () => {
+  it('routes designers without an active studio to the studio selector', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
       session: {
@@ -106,7 +123,7 @@ describe('PublicHomePage', () => {
 
     await expect(
       PublicHomePage({ searchParams: Promise.resolve({ q: 'kitchen' }) }),
-    ).rejects.toThrow('NEXT_REDIRECT:/home?q=kitchen');
+    ).rejects.toThrow('NEXT_REDIRECT:/designer/select-studio');
   });
   it('sends designers with an active studio to their dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
@@ -125,7 +142,7 @@ describe('PublicHomePage', () => {
     );
   });
 
-  it('sends designers without an active studio to personal home', async () => {
+  it('sends designers without an active studio to the studio selector', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
       session: {
@@ -138,7 +155,7 @@ describe('PublicHomePage', () => {
     });
 
     await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
-      'NEXT_REDIRECT:/home',
+      'NEXT_REDIRECT:/designer/select-studio',
     );
   });
 

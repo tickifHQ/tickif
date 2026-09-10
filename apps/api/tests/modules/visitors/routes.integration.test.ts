@@ -139,16 +139,18 @@ describe('/api/visitors/me', () => {
     expect(count?.value).toBe(0);
   });
 
-  it('keeps the personal visitor profile available to a designer account', async () => {
+  it('rejects visitor-profile access from a designer account', async () => {
     const { cookie } = await createRoleSession('+919800005005', PLATFORM_ROLE.DESIGNER);
 
-    const write = await requestJson('PUT', cookie, {
-      address: 'Personal designer address',
-      whatsappNumber: '+919800005005',
-    });
-
-    expect(write.status).toBe(200);
-    expect((await requestJson('GET', cookie)).status).toBe(200);
+    expect((await requestJson('GET', cookie)).status).toBe(403);
+    expect(
+      (
+        await requestJson('PUT', cookie, {
+          address: 'Personal designer address',
+          whatsappNumber: '+919800005005',
+        })
+      ).status,
+    ).toBe(403);
   });
 
   it.each([

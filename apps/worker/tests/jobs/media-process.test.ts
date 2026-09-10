@@ -240,7 +240,7 @@ describe('processMedia', () => {
     const result = await processMedia(job('img-1'));
 
     expect(result).toEqual({ ok: false, reason: 'corrupt' });
-    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1', 'corrupt');
     expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
     expect(repoMock.markReady).not.toHaveBeenCalled();
     expect(putObjectMock).not.toHaveBeenCalled();
@@ -253,7 +253,7 @@ describe('processMedia', () => {
     const result = await processMedia(job('img-1'));
 
     expect(result).toEqual({ ok: false, reason: 'too_large' });
-    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1', 'too_large');
     expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
   });
 
@@ -267,7 +267,7 @@ describe('processMedia', () => {
     const result = await processMedia(job('img-1'));
 
     expect(result).toEqual({ ok: false, reason: 'duplicate' });
-    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1');
+    expect(repoMock.markFailed).toHaveBeenCalledWith('img-1', 'duplicate');
     expect(deleteObjectMock).toHaveBeenCalledWith(processing.originalKey);
     expect(repoMock.markReady).not.toHaveBeenCalled();
   });

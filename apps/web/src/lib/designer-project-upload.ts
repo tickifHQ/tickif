@@ -1,4 +1,8 @@
-import type { CreateProjectInput, UpdateImageMetadataInput } from '@repo/contracts';
+import {
+  createProjectSchema,
+  type CreateProjectInput,
+  type UpdateImageMetadataInput,
+} from '@repo/contracts';
 
 export type BackendProjectSelection = {
   propertyTypeSlug: string;
@@ -163,6 +167,21 @@ export function deriveDefaultProjectTitle(input: {
 function parsePositiveInteger(value: string) {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+const sizeSqftSchema = createProjectSchema.shape.sizeSqft.unwrap();
+
+/**
+ * Field feedback for the floor-area input. Blank is valid (area is optional);
+ * anything else must be a whole number in the contract range. Reject invalid
+ * input before payload conversion can drop or truncate it (E-282).
+ */
+export function validateSizeSqft(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed) || !sizeSqftSchema.safeParse(Number(trimmed)).success)
+    return `Enter an area between 1 and ${sizeSqftSchema.maxValue} sq.ft.`;
+  return null;
 }
 
 function parseDurationMonths(value: string) {

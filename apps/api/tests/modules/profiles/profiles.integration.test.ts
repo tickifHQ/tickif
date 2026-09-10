@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
 import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
 import { makeDesigner, makeLead, makeOrganization, makeProject, makeTeam } from '@repo/db/testing';
@@ -104,6 +105,58 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.profile.displayName).toBe('OTP Designer');
     expect(body.profile.entityType).toBe('individual');
     expect(body.organization).toBeDefined();
+  });
+
+  it('keeps overlapping onboarding submissions idempotent', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001099', PLATFORM_ROLE.VISITOR);
+    const responses = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        request('POST', '/api/profiles/me', {
+          cookie,
+          body: { entityType: 'individual', userName: 'Concurrent Designer' },
+        }),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+    const [first, second] = await Promise.all(responses.map(json));
+    expect(first.profile.id).toBe(second.profile.id);
+    expect(first.organization.id).toBe(second.organization.id);
+    const memberships = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(eq(schema.member.userId, userId));
+    expect(memberships).toHaveLength(1);
+  });
+
+  it('rejects an active visitor without creating designer resources', async () => {
+    const { cookie, userId } = await createRoleSession('+919800001002', PLATFORM_ROLE.VISITOR);
+    await db
+      .update(schema.user)
+      .set({ status: ACCOUNT_STATUS.ACTIVE })
+      .where(eq(schema.user.id, userId));
+
+    const res = await request('POST', '/api/profiles/me', {
+      cookie,
+      body: { entityType: 'individual', userName: 'Must Stay Visitor' },
+    });
+
+    expect(res.status).toBe(403);
+    const [profile] = await db
+      .select({ id: schema.designerProfile.id })
+      .from(schema.designerProfile)
+      .where(eq(schema.designerProfile.userId, userId));
+    const [membership] = await db
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(eq(schema.member.userId, userId));
+    const [account] = await db
+      .select({ role: schema.user.role, status: schema.user.status })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId));
+    expect(profile).toBeUndefined();
+    expect(membership).toBeUndefined();
+    expect(account).toEqual({ role: PLATFORM_ROLE.VISITOR, status: ACCOUNT_STATUS.ACTIVE });
   });
 
   it('rejects unauthenticated (401)', async () => {
@@ -334,6 +387,9 @@ describe('GET /api/profiles/me/dashboard', () => {
         new: 1,
       },
       shareUrl: expect.any(String),
+      // E-278: this fixture is missing hero fields (bio, logo) so the profile
+      // never reaches `active` — the dashboard reports it as not publicly visible.
+      publiclyVisible: false,
     });
     const shareUrl = new URL(body.shareUrl);
     expect(shareUrl.origin).toBe(new URL(config.PUBLIC_WEB_URL).origin);

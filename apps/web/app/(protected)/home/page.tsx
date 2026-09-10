@@ -1,12 +1,10 @@
-import { redirect } from 'next/navigation';
-import { listTaxonomyResponseSchema, PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
-import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
+import { listTaxonomyResponseSchema } from '@repo/contracts';
 import { ProjectFeed } from '@/components/project-feed';
 import { PublicFooter } from '@/components/public-footer';
 import { PublicHeader } from '@/components/public-header';
 import { HomeSearchBar } from '@/components/home-search-bar';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
-import { getServerSession } from '@/lib/auth-guard';
+import { requireActiveVisitor } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 import {
   FEED_FACET_DEFINITIONS,
@@ -84,21 +82,7 @@ export default async function PersonalHomePage({
   const query = parseFeedQuery(params.q);
   const filters = parseFeedParams(params);
   const baseRequest: HomeFeedRequest = { filters, query, sort: 'recent' };
-  const session = await getServerSession({ disableCookieCache: true });
-  if (!session) {
-    redirect('/login');
-  }
-
-  const parsedRole = platformRoleSchema.safeParse(session.user.role);
-  if (!parsedRole.success) {
-    redirect('/unauthorized');
-  }
-  if (parsedRole.data === PLATFORM_ROLE.DESIGNER && session.session.activeOrganizationId) {
-    redirect('/designer/dashboard');
-  }
-  if (parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN) {
-    redirect('/dashboard');
-  }
+  const session = await requireActiveVisitor();
 
   const [taxonomyOptions, initialPage] = await Promise.all([
     fetchTaxonomyOptions(),
@@ -113,9 +97,6 @@ export default async function PersonalHomePage({
   const paginationParams = canonicalFeedParams(params, 1);
   const previousHref = page > 1 ? feedPageLink(params, page - 1, '/home') : null;
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1, '/home') : null;
-  // Designers restored into personal context can still own studios. Keep their
-  // working studio-selection entry: /designer/select-studio only redirects here.
-  const isPersonalDesigner = parsedRole.data === PLATFORM_ROLE.DESIGNER;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -124,18 +105,7 @@ export default async function PersonalHomePage({
       <PublicHeader
         isAuthenticated
         userRole={session.user.role ?? null}
-        showListYourWork={false}
-        contextSwitcher={
-          isPersonalDesigner ? (
-            <div className="w-40 sm:w-48">
-              <DesignerOrganizationSwitcher
-                activeOrganizationId={null}
-                studioName={session.user.name?.trim() || session.user.email || 'My Tickif'}
-                studioLocation="My Tickif"
-              />
-            </div>
-          ) : undefined
-        }
+        userStatus={session.user.status ?? null}
       />
       <main className="w-full space-y-8 px-5 py-10 sm:px-8 lg:py-12">
         <header className="space-y-1.5">

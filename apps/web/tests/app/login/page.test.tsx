@@ -119,13 +119,29 @@ describe('LoginPage', () => {
       session: { id: 's4', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');
-
     await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
       'NEXT_REDIRECT:/designer/onboarding',
     );
   });
 
-  it('sends an onboarded designer without restored organization context to personal home', async () => {
+  it('rejects a suspended designer instead of routing into a workspace', async () => {
+    mock.getServerSession.mockResolvedValue({
+      user: {
+        id: 'u4',
+        name: 'Designer',
+        email: 'designer@test.com',
+        role: 'designer',
+        status: 'suspended',
+      },
+      session: { id: 's4', token: 'token', expiresAt: '2027-01-01T00:00:00.000Z' },
+    });
+    const { default: Page } = await import('../../../app/login/page');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'NEXT_REDIRECT:/unauthorized',
+    );
+  });
+
+  it('sends an onboarded designer in personal context to the designer dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       user: {
         id: 'u2',
@@ -139,7 +155,7 @@ describe('LoginPage', () => {
     const { default: Page } = await import('../../../app/login/page');
 
     await expect(Page({ searchParams: Promise.resolve({ mode: 'designer' }) })).rejects.toThrow(
-      'NEXT_REDIRECT:/home',
+      'NEXT_REDIRECT:/designer/dashboard',
     );
   });
 
@@ -205,7 +221,13 @@ describe('LoginPage', () => {
 
   it('returns an authenticated visitor to a safe next path', async () => {
     mock.getServerSession.mockResolvedValue({
-      user: { id: 'u3', name: 'Visitor', email: 'visitor@test.com', role: 'visitor' },
+      user: {
+        id: 'u3',
+        name: 'Visitor',
+        email: 'visitor@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
       session: { id: 's3', token: 'token', expiresAt: new Date().toISOString() },
     });
     const { default: Page } = await import('../../../app/login/page');

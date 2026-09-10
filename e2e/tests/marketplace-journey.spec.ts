@@ -25,7 +25,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     name: 'New Studio Owner',
     email: `owner-${suffix}@test.local`,
     role: 'visitor',
-    status: 'active',
+    status: 'pending',
     phoneNumber: `+9191${randomInt(10_000_000, 99_999_999)}`,
     phoneNumberVerified: true,
   });
@@ -248,17 +248,27 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .from(schema.user)
       .where(eq(schema.user.phoneNumber, visitorPhone));
     expect(persistedVisitor?.name).toBe(`Journey Visitor ${suffix}`);
+    expect(persistedVisitor?.status).toBe('active');
+    const [persistedVisitorProfile] = await db
+      .select()
+      .from(schema.visitorProfile)
+      .where(eq(schema.visitorProfile.userId, persistedVisitor!.id));
+    expect(persistedVisitorProfile).toMatchObject({
+      address: 'Mumbai',
+      whatsappNumber: visitorPhone,
+    });
     await visitor.goto(`/designers?q=${encodeURIComponent(`Journey Studio ${suffix}`)}`);
     await visitor.getByRole('combobox', { name: 'Designer type' }).selectOption('individual');
     await visitor.getByRole('button', { name: 'Find designers', exact: true }).click();
     await expect(visitor).toHaveURL(/entityType=individual/);
-    await expect(
-      visitor.getByRole('link', { name: new RegExp(`Journey Studio ${suffix}`) }).first(),
-    ).toBeVisible({ timeout: 20_000 });
-    await visitor
+    const studioLink = visitor
       .getByRole('link', { name: new RegExp(`Journey Studio ${suffix}`) })
-      .first()
-      .click();
+      .first();
+    await expect(async () => {
+      await visitor.reload();
+      await expect(studioLink).toBeVisible();
+    }).toPass({ timeout: 45_000 });
+    await studioLink.click();
     await expect(visitor).toHaveURL(/\/d\//);
     const publicProfileUrl = visitor.url();
     await visitor.goto(`/projects/${project.id}`);

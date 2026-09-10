@@ -249,7 +249,7 @@ export const discoveryRepository = {
       .from(schema.project)
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
-      .leftJoin(cover, eq(schema.project.coverImageId, cover.id))
+      .leftJoin(cover, and(eq(schema.project.coverImageId, cover.id), eq(cover.isLive, true)))
       .where(where)
       .orderBy(
         ...(params.q
@@ -285,6 +285,7 @@ export const discoveryRepository = {
         and(
           inArray(schema.projectImage.projectId, projectIds),
           eq(schema.projectImage.status, 'ready'),
+          eq(schema.projectImage.isLive, true),
         ),
       );
 
@@ -383,6 +384,7 @@ export const discoveryRepository = {
       select 'roomSlugs', room_type.slug, count(distinct visible.id)::int
         from visible
         inner join ${schema.projectRoom} on ${schema.projectRoom.projectId} = visible.id
+          and ${schema.projectRoom.isLive} = true
         inner join ${schema.taxonomy} as room_type
           on room_type.id = ${schema.projectRoom.roomTypeId} and room_type.kind = 'room'
         group by room_type.slug
@@ -391,6 +393,7 @@ export const discoveryRepository = {
         from visible
         inner join ${schema.projectImage} on ${schema.projectImage.projectId} = visible.id
           and ${schema.projectImage.status} = 'ready'
+          and ${schema.projectImage.isLive} = true
         cross join lateral jsonb_array_elements_text(${schema.projectImage.themeSlugs}) as theme(slug)
         group by theme.slug
     `);

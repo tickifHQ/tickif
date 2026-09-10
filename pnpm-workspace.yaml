@@ -48,7 +48,7 @@ catalog:
   eslint-config-prettier: ^10.1.8
 
   # Validation (zod v4 — required by @hono/zod-openapi v1)
-  zod: ^4.4.3
+  zod: ^4.5.4
   '@t3-oss/env-nextjs': ^0.13.8
 
   # Hono stack
@@ -58,7 +58,7 @@ catalog:
   '@scalar/hono-api-reference': ^0.10.20
 
   # Auth
-  better-auth: ^1.6.22
+  better-auth: ^1.7.3
   resend: ^4.1.0
   react-email: ^6.9.3
 
@@ -73,8 +73,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.1101.0
-  '@aws-sdk/s3-request-presigner': ^3.1101.0
+  '@aws-sdk/client-s3': ^3.1127.0
+  '@aws-sdk/s3-request-presigner': ^3.1127.0
   sharp: ^0.35.4
 
   # Search

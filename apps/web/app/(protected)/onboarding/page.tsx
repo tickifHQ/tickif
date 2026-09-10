@@ -1,7 +1,12 @@
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
-import { ACCOUNT_STATUS, accountStatusSchema, PLATFORM_ROLE } from '@repo/contracts';
-import { requireAuth, rolePassesCheck } from '@/lib/auth-guard';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  accountStatusSchema,
+  platformRoleSchema,
+} from '@repo/contracts';
+import { requireAuth } from '@/lib/auth-guard';
 import { VisitorOnboardingForm } from '@/components/visitor-onboarding-form';
 
 export const metadata = {
@@ -11,20 +16,16 @@ export const metadata = {
 export default async function VisitorOnboardingPage() {
   const session = await requireAuth();
 
-  if (rolePassesCheck(session.user.role, PLATFORM_ROLE.DESIGNER)) {
-    redirect('/designer/dashboard');
+  const role = platformRoleSchema.safeParse(session.user.role);
+  if (!role.success) redirect('/unauthorized');
+  if (role.data === PLATFORM_ROLE.DESIGNER) redirect('/designer/dashboard');
+  if (role.data === PLATFORM_ROLE.ADMIN || role.data === PLATFORM_ROLE.SUPERADMIN) {
+    redirect('/dashboard');
   }
-
-  const accountStatus = accountStatusSchema.safeParse(session.user.status);
-  if (!accountStatus.success) {
-    redirect('/unauthorized');
-  }
-  if (accountStatus.data === ACCOUNT_STATUS.ACTIVE) {
-    redirect('/home');
-  }
-  if (accountStatus.data !== ACCOUNT_STATUS.PENDING) {
-    redirect('/unauthorized');
-  }
+  const status = accountStatusSchema.safeParse(session.user.status);
+  if (!status.success) redirect('/unauthorized');
+  if (status.data === ACCOUNT_STATUS.ACTIVE) redirect('/home');
+  if (status.data !== ACCOUNT_STATUS.PENDING) redirect('/unauthorized');
 
   const phoneNumber = session.user.phoneNumber?.trim() ?? '';
   const sessionName = session.user.name?.trim() ?? '';

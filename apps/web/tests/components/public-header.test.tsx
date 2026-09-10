@@ -100,8 +100,8 @@ describe('PublicHeader', () => {
     expect(signInLink.querySelector('.lucide-user-round')).toBeInTheDocument();
   });
 
-  it('sends signed-in visitors to designer onboarding', () => {
-    render(<PublicHeader isAuthenticated userRole="visitor" />);
+  it('sends pending visitors who selected designer registration to designer onboarding', () => {
+    render(<PublicHeader isAuthenticated userRole="visitor" userStatus="pending" />);
 
     expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
       'href',
@@ -123,14 +123,49 @@ describe('PublicHeader', () => {
     expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'true');
   });
 
-  it.each(['designer', 'admin', 'superadmin'])(
-    'sends signed-in %s users to the designer dashboard',
+  it('sends active visitors to a role-safe explanation instead of designer onboarding', () => {
+    render(
+      <PublicHeader
+        isAuthenticated
+        userRole="visitor"
+        userStatus="active"
+        contextSwitcher={<div>Context switcher</div>}
+      />,
+    );
+
+    expect(screen.getByText('Context switcher')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
+      'href',
+      '/home/list-your-work',
+    );
+  });
+
+  it('does not route a suspended visitor into a protected visitor flow', () => {
+    render(<PublicHeader isAuthenticated userRole="visitor" userStatus="suspended" />);
+
+    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
+      'href',
+      '/unauthorized',
+    );
+  });
+
+  it('sends signed-in designers to the designer dashboard', () => {
+    render(<PublicHeader isAuthenticated userRole="designer" />);
+
+    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
+      'href',
+      '/designer/dashboard',
+    );
+  });
+
+  it.each(['admin', 'superadmin'])(
+    'sends signed-in %s users to the admin dashboard',
     (userRole) => {
       render(<PublicHeader isAuthenticated userRole={userRole} />);
 
       expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
         'href',
-        '/designer/dashboard',
+        '/dashboard',
       );
     },
   );

@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
-import { PLATFORM_ROLE } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  accountStatusSchema,
+  platformRoleSchema,
+} from '@repo/contracts';
 import { DesignerOnboarding } from '@/components/designer-onboarding';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
 import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
@@ -20,6 +25,15 @@ export default async function DesignerOnboardingPage() {
     redirect(
       session?.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
     );
+  }
+
+  if (session) {
+    const role = platformRoleSchema.safeParse(userRole);
+    const status = accountStatusSchema.safeParse(session.user.status);
+    if (!role.success || !status.success) redirect('/unauthorized');
+    if (role.data !== PLATFORM_ROLE.VISITOR) redirect('/unauthorized');
+    if (status.data === ACCOUNT_STATUS.ACTIVE) redirect('/home/list-your-work');
+    if (status.data !== ACCOUNT_STATUS.PENDING) redirect('/unauthorized');
   }
 
   return (

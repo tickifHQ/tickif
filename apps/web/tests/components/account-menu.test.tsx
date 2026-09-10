@@ -28,23 +28,32 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('AccountMenu', () => {
-  it.each(['visitor', 'designer'])(
-    'offers personal settings for %s in personal context',
-    async (role) => {
-      mock.session = {
-        user: { name: 'Alice', email: null, role, status: 'active' },
-        session: { activeOrganizationId: null },
-      };
-      const user = userEvent.setup();
-      render(<AccountMenu />);
-      await user.click(screen.getByRole('button', { name: /open account menu/i }));
-      expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
-        'href',
-        '/home/settings',
-      );
-      expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
-    },
-  );
+  it('offers personal settings to a visitor in personal context', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'visitor', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.getByRole('menuitem', { name: 'Personal settings' })).toHaveAttribute(
+      'href',
+      '/home/settings',
+    );
+    expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
+  });
+
+  it('does not expose visitor-only pages to a designer in personal context', async () => {
+    mock.session = {
+      user: { name: 'Alice', email: null, role: 'designer', status: 'active' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'My consultations' })).not.toBeInTheDocument();
+  });
 
   it('keeps organization settings separate from personal settings', async () => {
     mock.session = {
@@ -223,5 +232,39 @@ describe('AccountMenu', () => {
     await user.click(screen.getByText('Sign out'));
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('never renders a blank account label when the user name is missing', async () => {
+    mock.session = {
+      user: { name: null, email: null, role: 'designer' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu for account/i }));
+    const label = screen.getByText('Account');
+    expect(label.textContent?.trim().length).toBeGreaterThan(0);
+  });
+
+  it('hides generated phone identities instead of presenting them as email', async () => {
+    mock.session = {
+      user: { name: null, email: '+91981000001@phone.tickif.local', role: 'designer' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByText(/@phone\.tickif\.local/i)).not.toBeInTheDocument();
+  });
+
+  it('still shows a real login email as read-only identity detail', async () => {
+    mock.session = {
+      user: { name: null, email: 'mahi@test.com', role: 'designer' },
+      session: { activeOrganizationId: null },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.getByText('mahi@test.com', { selector: 'p.text-xs' })).toBeInTheDocument();
   });
 });

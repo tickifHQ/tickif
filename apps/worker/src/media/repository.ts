@@ -13,6 +13,7 @@ import {
   type DB,
 } from '@repo/db';
 import { PHASH_HEX_LEN, type PhashCandidate } from './phash.js';
+import type { ImageFailureReason } from '@repo/contracts';
 
 export type ProcessingImage = {
   id: string;
@@ -129,6 +130,7 @@ export async function refreshReadyDerivatives(
       .returning({
         id: schema.projectImage.id,
         projectId: schema.projectImage.projectId,
+        isLive: schema.projectImage.isLive,
       });
     if (!image) return false;
 
@@ -137,7 +139,7 @@ export async function refreshReadyDerivatives(
       .from(schema.project)
       .where(eq(schema.project.id, image.projectId))
       .limit(1);
-    if (project?.status === 'published') {
+    if (project?.status === 'published' && image.isLive) {
       await tx.execute(
         sql`select pg_advisory_xact_lock_shared(${SEARCH_PROJECTION_ADVISORY_LOCK_KEY})`,
       );
@@ -165,22 +167,15 @@ export async function listReadyImageIds(imageIds?: readonly string[]): Promise<s
   return rows.map((row) => row.id);
 }
 
-export async function markFailed(imageId: string): Promise<void> {
+export async function markFailed(imageId: string, reason?: ImageFailureReason): Promise<void> {
   await db.transaction(async (tx) => {
-    const now = new Date();
-    const [image] = await tx
-      .update(schema.projectImage)
-      .set({
-        status: 'failed',
-        duplicateOfImageId: null,
-        duplicateDistance: null,
-        duplicateCheckedAt: null,
-        updatedAt: now,
-      })
-      .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
-      .returning({ id: schema.projectImage.id, projectId: schema.projectImage.projectId });
-
-    if (!image) return;
+    const [candidate] = await tx
+      .select({ projectId: schema.projectImage.projectId })
+      .from(schema.projectImage)
+      .where(eq(schema.projectImage.id, imageId))
+      .limit(1);
+    if (!candidate) return;
+    // Designer edits and approval lock the canonical project before its images.
     const [project] = await tx
       .select({
         id: schema.project.id,
@@ -188,10 +183,30 @@ export async function markFailed(imageId: string): Promise<void> {
         status: schema.project.status,
       })
       .from(schema.project)
-      .where(eq(schema.project.id, image.projectId))
+      .where(eq(schema.project.id, candidate.projectId))
       .for('update')
       .limit(1);
     if (!project) return;
+
+    const now = new Date();
+    const [image] = await tx
+      .update(schema.projectImage)
+      .set({
+        status: 'failed',
+        failureReason: reason ?? 'processing_failed',
+        duplicateOfImageId: null,
+        duplicateDistance: null,
+        duplicateCheckedAt: null,
+        updatedAt: now,
+      })
+      .where(and(eq(schema.projectImage.id, imageId), eq(schema.projectImage.status, 'processing')))
+      .returning({
+        id: schema.projectImage.id,
+        projectId: schema.projectImage.projectId,
+        isLive: schema.projectImage.isLive,
+      });
+
+    if (!image) return;
 
     const failureMetadata = {
       mediaProcessingFailure: {
@@ -201,6 +216,42 @@ export async function markFailed(imageId: string): Promise<void> {
         recordedAt: now.toISOString(),
       },
     };
+
+    if (!image.isLive) {
+      const [pending] = await tx
+        .select()
+        .from(schema.projectPendingVersion)
+        .where(eq(schema.projectPendingVersion.projectId, project.id))
+        .limit(1);
+      if (
+        project.status === 'published' &&
+        pending &&
+        ['submitted', 'in_review'].includes(pending.status) &&
+        pending.content.images.some((item) => item.id === image.id)
+      ) {
+        await tx
+          .update(schema.projectPendingVersion)
+          .set({
+            status: 'changes_requested',
+            revision: pending.revision + 1,
+            updatedAt: now,
+            content: {
+              ...pending.content,
+              project: {
+                ...pending.content.project,
+                status: 'changes_requested',
+                moderationRevision: pending.revision + 1,
+                submittedAt: null,
+                metadata: { ...pending.content.project.metadata, ...failureMetadata },
+                updatedAt: now,
+              },
+            },
+          })
+          .where(eq(schema.projectPendingVersion.projectId, project.id));
+      }
+      // Draft failures remain editable; removed/discarded assets cannot affect the live project.
+      return;
+    }
 
     const transitioned = await tx
       .update(schema.project)

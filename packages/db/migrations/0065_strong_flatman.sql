@@ -1,0 +1,1 @@
+ALTER TABLE "project_image" ADD COLUMN "failure_reason" text;

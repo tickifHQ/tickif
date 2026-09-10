@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   activeContextForSession,
   getServerSession,
+  requireActiveVisitor,
   requireAuth,
+  requirePersonalRequester,
   rolePassesCheck,
 } from '../../src/lib/auth-guard';
 
@@ -161,40 +163,52 @@ describe('getServerSession', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
 
-  it.each(['visitor', null])('gives an unfinished %s account a path to finish designer setup', async (role) => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-        user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role },
-      }),
-    }));
+  it.each(['visitor', null])(
+    'gives an unfinished %s account a path to finish designer setup',
+    async (role) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+            user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role },
+          }),
+        }),
+      );
 
-    await expect(requireAuth({ requiredRole: 'designer' })).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding/deferred');
-  });
+      await expect(requireAuth({ requiredRole: 'designer' })).rejects.toThrow('NEXT_REDIRECT');
+      expect(mock.redirect).toHaveBeenCalledWith('/designer/onboarding/deferred');
+    },
+  );
 
   it.each(['visitor', null, 'unknown'])('keeps %s accounts out of admin pages', async (role) => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-        user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role },
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role },
+        }),
       }),
-    }));
+    );
 
     await expect(requireAuth({ requiredRole: 'admin' })).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
 
   it('does not treat unknown roles as unfinished designer accounts', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
-        user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'unknown' },
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: { id: 'user-1', name: 'Mahi', email: 'mahi@test.com', role: 'unknown' },
+        }),
       }),
-    }));
+    );
 
     await expect(requireAuth({ requiredRole: 'designer' })).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
@@ -210,4 +224,136 @@ describe('getServerSession', () => {
     ).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
   });
+
+  it('allows only active visitors into My Tickif', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: {
+            id: 'visitor-1',
+            name: 'Visitor',
+            email: 'visitor@test.com',
+            role: 'visitor',
+            status: 'active',
+          },
+        }),
+      }),
+    );
+
+    await expect(requireActiveVisitor()).resolves.toMatchObject({
+      user: { role: 'visitor', status: 'active' },
+    });
+    expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['designer', 'active', '/designer/dashboard'],
+    ['admin', 'active', '/dashboard'],
+    ['superadmin', 'active', '/dashboard'],
+    ['visitor', 'pending', '/onboarding'],
+    ['visitor', 'suspended', '/unauthorized'],
+  ] as const)('redirects a %s/%s account away from My Tickif', async (role, status, path) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: { id: 'session-1', token: 'token-1', expiresAt: '2026-06-19T00:00:00.000Z' },
+          user: { id: 'user-1', name: 'User', email: 'user@test.com', role, status },
+        }),
+      }),
+    );
+
+    await expect(requireActiveVisitor()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith(path);
+  });
+
+  it('rejects a visitor carrying organization context', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: {
+            id: 'session-1',
+            token: 'token-1',
+            expiresAt: '2026-06-19T00:00:00.000Z',
+            activeOrganizationId: 'org-1',
+          },
+          user: {
+            id: 'visitor-1',
+            name: 'Visitor',
+            email: 'visitor@test.com',
+            role: 'visitor',
+            status: 'active',
+          },
+        }),
+      }),
+    );
+
+    await expect(requireActiveVisitor()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');
+  });
+});
+
+describe('requirePersonalRequester', () => {
+  beforeEach(() => {
+    mock.redirect.mockClear();
+  });
+
+  function sessionFor(role: string, status: string, activeOrganizationId: string | null = null) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          session: {
+            id: 'session-1',
+            token: 'token-1',
+            expiresAt: '2026-06-19T00:00:00.000Z',
+            activeOrganizationId,
+          },
+          user: { id: 'user-1', name: 'User', email: 'user@test.com', role, status },
+        }),
+      }),
+    );
+  }
+
+  it('admits an active visitor in personal context', async () => {
+    sessionFor('visitor', 'active');
+
+    await expect(requirePersonalRequester()).resolves.toMatchObject({
+      user: { role: 'visitor', status: 'active' },
+    });
+    expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it('keeps a designer browsing without a studio on their own requester records', async () => {
+    sessionFor('designer', 'active');
+
+    await expect(requirePersonalRequester()).resolves.toMatchObject({
+      user: { role: 'designer' },
+    });
+    expect(mock.redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['designer', 'active', 'org-1', '/designer/consultations'],
+    ['visitor', 'active', 'org-1', '/designer/consultations'],
+    ['admin', 'active', null, '/dashboard'],
+    ['superadmin', 'active', null, '/dashboard'],
+    ['visitor', 'pending', null, '/onboarding'],
+    ['visitor', 'suspended', null, '/unauthorized'],
+  ] as const)(
+    'redirects a %s/%s account away from requester records to %s',
+    async (role, status, activeOrganizationId, path) => {
+      sessionFor(role, status, activeOrganizationId);
+
+      await expect(requirePersonalRequester()).rejects.toThrow('NEXT_REDIRECT');
+      expect(mock.redirect).toHaveBeenCalledWith(path);
+    },
+  );
 });

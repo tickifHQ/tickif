@@ -62,10 +62,12 @@ describe('DesignerOnboarding', () => {
     mock.signOut.mockClear();
     mock.signOut.mockResolvedValue(undefined);
     mock.taxonomyGet.mockReset();
-    mock.taxonomyGet.mockImplementation(async ({ query }: { query: { kind?: keyof typeof taxonomyFixtures } }) => ({
-      ok: true,
-      json: async () => ({ terms: query.kind ? taxonomyFixtures[query.kind] : [] }),
-    }));
+    mock.taxonomyGet.mockImplementation(
+      async ({ query }: { query: { kind?: keyof typeof taxonomyFixtures } }) => ({
+        ok: true,
+        json: async () => ({ terms: query.kind ? taxonomyFixtures[query.kind] : [] }),
+      }),
+    );
     window.history.pushState({}, '', '/designer/onboarding');
   });
 
@@ -103,7 +105,9 @@ describe('DesignerOnboarding', () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
-    expect(screen.queryByRole('button', { name: /signed in as mahi@test\.com/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /signed in as mahi@test\.com/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('mahi@test.com')).toBeInTheDocument();
 
     await user.click(screen.getByText('mahi@test.com'));
@@ -140,7 +144,9 @@ describe('DesignerOnboarding', () => {
 
   it('renders generated initials avatars for individual and company details', async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />);
+    const { unmount } = render(
+      <DesignerOnboarding signedInAs="Sarthak Wade" signedInName="Sarthak Wade" />,
+    );
 
     await user.click(screen.getByRole('button', { name: /just me/i }));
 
@@ -174,7 +180,6 @@ describe('DesignerOnboarding', () => {
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
-
   });
 
   it('keeps the user on completion when the header is clicked', async () => {
@@ -205,16 +210,48 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(await screen.findByText(/You're set up, there/i)).toBeInTheDocument();
+    expect(await screen.findByText("You're set up, Mahi Studio! 🎉")).toBeInTheDocument();
 
     await user.click(screen.getByText('mahi@test.com'));
 
-    expect(screen.getByText(/You're set up, there/i)).toBeInTheDocument();
+    expect(screen.getByText("You're set up, Mahi Studio! 🎉")).toBeInTheDocument();
     expect(screen.queryByLabelText(/website/i)).not.toBeInTheDocument();
     expect(mock.signOut).not.toHaveBeenCalled();
     expect(mock.router.push).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /skip to dashboard/i }));
     expect(mock.router.push).toHaveBeenCalledWith('/designer/dashboard');
+  });
+
+  it('falls back to a neutral greeting when the saved profile name is blank', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: '   ',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: {
+          id: 'org-1',
+          name: 'Mahi Studio',
+          slug: 'mahi-studio',
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByText("You're all set! 🎉")).toBeInTheDocument();
+    expect(screen.queryByText(/there/i)).not.toBeInTheDocument();
   });
 
   it('opens project upload from the completion add-projects CTA', async () => {
@@ -247,6 +284,51 @@ describe('DesignerOnboarding', () => {
     await user.click(await screen.findByRole('button', { name: /add your projects/i }));
 
     expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/new');
+  });
+
+  it('completion messaging is truthful about publication and offers a portfolio CTA (E-278)', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: 'profile-1',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // Completion copy must not claim the profile is already public, and should
+    // name the remaining hero requirements in user-facing language.
+    // The publication gate is named accurately (the four hero fields), in
+    // user-facing terms, and does not claim the page is already live.
+    expect(await screen.findByText(/your workspace is ready/i)).toBeInTheDocument();
+    const publicationCopy = screen.getByText(/to make your portfolio public/i);
+    expect(publicationCopy).toHaveTextContent(/studio logo/i);
+    expect(publicationCopy).toHaveTextContent(/studio name/i);
+    expect(publicationCopy).toHaveTextContent(/tagline/i);
+    expect(publicationCopy).toHaveTextContent(/short bio/i);
+    // A published project is framed as a SEPARATE next step, never as part of
+    // the publication gate (the backend gate is hero-only).
+    expect(publicationCopy).not.toHaveTextContent(/project/i);
+    expect(screen.getByText(/then add your first project/i)).toBeInTheDocument();
+
+    // A clear CTA routes to the canonical Portfolio Settings route (the page
+    // that owns the hero fields), not the separate profile editor.
+    await user.click(screen.getByRole('button', { name: /complete your portfolio/i }));
+    expect(mock.router.push).toHaveBeenCalledWith('/designer/portfolio');
   });
 
   it('walks through the company flow, submits the supported payload, and shows completion', async () => {
@@ -296,9 +378,7 @@ describe('DesignerOnboarding', () => {
     await user.click(await screen.findByRole('menuitemcheckbox', { name: /full home interiors/i }));
     await user.click(screen.getByRole('menuitemcheckbox', { name: /modular kitchen/i }));
     const servicesSelect = screen.getByLabelText(/services offered/i);
-    expect(servicesSelect).toHaveTextContent(
-      /Full Home Interiors, Modular Kitchen/i,
-    );
+    expect(servicesSelect).toHaveTextContent(/Full Home Interiors, Modular Kitchen/i);
     await user.keyboard('{Escape}');
 
     await user.click(screen.getByLabelText(/design themes/i));
@@ -313,17 +393,14 @@ describe('DesignerOnboarding', () => {
         userName: 'Antika Interiors',
         companyName: 'Antika Interiors',
         address: '12 Studio Lane, Chennai',
-        scopeIds: [
-          '22222222-2222-4222-8222-222222222222',
-          '33333333-3333-4333-8333-333333333333',
-        ],
+        scopeIds: ['22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333'],
         themeIds: ['44444444-4444-4444-8444-444444444444'],
         firmType: 'Private Limited',
         foundedYear: 2021,
         staffCount: 10,
       });
     });
-    expect(await screen.findByText(/You're set up, there/i)).toBeInTheDocument();
+    expect(await screen.findByText("You're set up, Antika Interiors! 🎉")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add your projects/i })).toBeInTheDocument();
   });
 
@@ -410,7 +487,9 @@ describe('DesignerOnboarding', () => {
   });
 
   it('surfaces API errors inline', async () => {
-    const submit = vi.fn().mockRejectedValue(new Error('Google SSO required for designer onboarding'));
+    const submit = vi
+      .fn()
+      .mockRejectedValue(new Error('Google SSO required for designer onboarding'));
     const user = userEvent.setup();
 
     render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);

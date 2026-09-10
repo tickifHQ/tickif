@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
+import {
+  ACCOUNT_STATUS,
+  PLATFORM_ROLE,
+  accountStatusSchema,
+  platformRoleSchema,
+} from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
@@ -13,13 +18,15 @@ export function PublicHeader({
   isAuthenticated = false,
   showListYourWork = true,
   userRole = null,
+  userStatus = null,
 }: {
   contextSwitcher?: ReactNode;
   isAuthenticated?: boolean;
   showListYourWork?: boolean;
   userRole?: string | null;
+  userStatus?: string | null;
 }) {
-  const listYourWorkHref = getListYourWorkHref({ isAuthenticated, userRole });
+  const listYourWorkHref = getListYourWorkHref({ isAuthenticated, userRole, userStatus });
 
   return (
     <header className="border-b border-border bg-background">
@@ -33,7 +40,7 @@ export function PublicHeader({
 
         <div className="flex items-center gap-2.5">
           {contextSwitcher}
-          {showListYourWork && !contextSwitcher ? (
+          {showListYourWork ? (
             <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
               <Link href={listYourWorkHref}>
                 <ListChevronsUpDown className="size-4" aria-hidden />
@@ -61,18 +68,28 @@ export function PublicHeader({
 function getListYourWorkHref({
   isAuthenticated,
   userRole,
+  userStatus,
 }: {
   isAuthenticated: boolean;
   userRole: string | null;
+  userStatus: string | null;
 }) {
   if (!isAuthenticated) {
     return '/login?mode=designer';
   }
 
   const parsedRole = platformRoleSchema.safeParse(userRole);
-  if (parsedRole.success && parsedRole.data !== PLATFORM_ROLE.VISITOR) {
+  if (!parsedRole.success) return '/unauthorized';
+  if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
     return '/designer/dashboard';
   }
+  if (parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN) {
+    return '/dashboard';
+  }
 
-  return '/designer/onboarding';
+  const parsedStatus = accountStatusSchema.safeParse(userStatus);
+  if (!parsedStatus.success) return '/unauthorized';
+  if (parsedStatus.data === ACCOUNT_STATUS.PENDING) return '/designer/onboarding';
+  if (parsedStatus.data !== ACCOUNT_STATUS.ACTIVE) return '/unauthorized';
+  return '/home/list-your-work';
 }

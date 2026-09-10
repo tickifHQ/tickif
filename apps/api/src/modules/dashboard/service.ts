@@ -64,6 +64,11 @@ export const dashboardService = {
         new: leadCounts.new,
       },
       shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
+      // E-278: same rule the owner PortfolioResponse and the public /d/{slug}
+      // route use — a portfolio is publicly visible only when the profile is
+      // active AND the public link is on. A missing portfolio row coalesces to
+      // enabled (matching the public route's `coalesce(public_link_enabled, true)`).
+      publiclyVisible: profile.profileStatus === 'active' && (profile.publicLinkEnabled ?? true),
     };
   },
 };
