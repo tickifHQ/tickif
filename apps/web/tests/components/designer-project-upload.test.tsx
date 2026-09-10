@@ -634,7 +634,7 @@ describe('DesignerProjectUpload', () => {
           ],
         }),
       });
-      mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      mock.projectPatch.mockResolvedValue({ ok: true, json: async () => draft });
       mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
       mock.imageMetadataPatch.mockImplementation(
         async ({ param }: { param: { imageId: string } }) => ({
