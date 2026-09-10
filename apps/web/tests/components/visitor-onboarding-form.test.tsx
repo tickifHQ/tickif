@@ -73,7 +73,8 @@ describe('VisitorOnboardingForm', () => {
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('+919123456789');
   });
 
-  it('keeps the phone field editable when the account has no authenticated phone number', () => {
+  it('keeps sign-in identity read-only and saves a Google visitor contact number as WhatsApp', async () => {
+    const user = userEvent.setup();
     render(
       <VisitorOnboardingForm
         displayName="Sarthak Wade"
@@ -82,7 +83,18 @@ describe('VisitorOnboardingForm', () => {
       />,
     );
 
-    expect(screen.getByLabelText(/^phone number$/i)).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^phone number$/i)).toHaveAttribute('placeholder', 'Not added');
+    expect(screen.getByRole('checkbox', { name: /use phone number for whatsapp/i })).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/whatsapp number/i), '+919123456789');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(mock.upsertVisitor).toHaveBeenCalledWith({
+      json: { address: null, whatsappNumber: '+919123456789' },
+    });
+    expect(mock.router.replace).toHaveBeenCalledWith('/home');
   });
 
   it('persists onboarding through the visitor API before entering personal home', async () => {

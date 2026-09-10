@@ -29,7 +29,7 @@ export function VisitorOnboardingForm({
   const router = useRouter();
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [address, setAddress] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
+  const phoneNumber = initialPhoneNumber;
   const [whatsapp, setWhatsapp] = useState('');
   const [usePhoneForWhatsapp, setUsePhoneForWhatsapp] = useState(false);
   const [error, setError] = useState('');
@@ -154,12 +154,16 @@ export function VisitorOnboardingForm({
             id="visitor-phone-number"
             type="tel"
             value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-            placeholder="+91 9123456789"
+            placeholder="Not added"
             autoComplete="tel"
-            readOnly={Boolean(initialPhoneNumber)}
+            readOnly
+            aria-describedby="visitor-phone-help"
             className="read-only:cursor-default read-only:bg-muted read-only:text-muted-foreground"
           />
+          <p id="visitor-phone-help" className="text-xs text-muted-foreground">
+            Your sign-in phone cannot be changed here. Add a contact number in the WhatsApp field
+            below.
+          </p>
         </div>
 
         <div className="space-y-1.5">
@@ -179,6 +183,7 @@ export function VisitorOnboardingForm({
             <Checkbox
               id="visitor-use-phone-for-whatsapp"
               checked={usePhoneForWhatsapp}
+              disabled={!phoneNumber}
               onCheckedChange={(checked) => handleUsePhoneForWhatsappChange(checked === true)}
             />
             <Label
