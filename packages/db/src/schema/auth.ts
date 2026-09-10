@@ -147,6 +147,8 @@ export const team = pgTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
+    // Better Auth 1.7 reserves team seats atomically and reconciles legacy counts.
+    memberCount: integer('member_count').default(0).notNull(),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
@@ -175,6 +177,8 @@ export const teamMember = pgTable(
   'team_member',
   {
     id: text('id').primaryKey(),
+    // Nullable for pre-1.7 and app-owned memberships; the pair index also protects them.
+    membershipKey: text('membership_key').unique(),
     teamId: text('team_id')
       .notNull()
       .references(() => team.id, { onDelete: 'cascade' }),
