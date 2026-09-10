@@ -9,7 +9,9 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: () => <div>Account menu</div>,
+  AccountMenu: ({ showProfileSettings }: { showProfileSettings?: boolean }) => (
+    <div data-profile-settings={String(showProfileSettings ?? false)}>Account menu</div>
+  ),
 }));
 
 describe('PublicHeader', () => {
@@ -36,13 +38,10 @@ describe('PublicHeader', () => {
     ).toHaveAttribute('href', '/designers');
 
     for (const label of ['Cost Calculator', 'For you']) {
-      const item = within(nav).getByText(label);
-
-      expect(item.closest('a')).toBeNull();
-      expect(item).not.toHaveAttribute('aria-disabled');
-      expect(item).not.toHaveAttribute('tabindex');
-      expect(item).toHaveAccessibleName(`${label}, coming soon`);
-      expect(item).toHaveAttribute('title', 'Coming soon');
+      expect(within(nav).queryByText(label)).not.toBeInTheDocument();
+      expect(
+        within(screen.getByRole('navigation', { name: 'Mobile primary' })).queryByText(label),
+      ).not.toBeInTheDocument();
     }
 
     expect(within(nav).getByRole('link', { name: 'Your Enquiries' })).toHaveAttribute(
@@ -108,6 +107,20 @@ describe('PublicHeader', () => {
       'href',
       '/designer/onboarding',
     );
+    expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'false');
+  });
+
+  it('can hide List your work while preserving the authenticated account menu', () => {
+    render(<PublicHeader isAuthenticated userRole="visitor" showListYourWork={false} />);
+
+    expect(screen.queryByRole('link', { name: /list your work/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Account menu')).toBeInTheDocument();
+  });
+
+  it('makes designer profile settings available from public pages', () => {
+    render(<PublicHeader isAuthenticated userRole="designer" />);
+
+    expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'true');
   });
 
   it.each(['designer', 'admin', 'superadmin'])(

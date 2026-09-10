@@ -6,7 +6,6 @@ const mock = vi.hoisted(() => ({
     throw new Error('NEXT_REDIRECT');
   }),
   requireAuth: vi.fn(),
-  cookies: vi.fn(),
   router: {
     push: vi.fn(),
   },
@@ -15,10 +14,6 @@ const mock = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({
   redirect: mock.redirect,
   useRouter: () => mock.router,
-}));
-
-vi.mock('next/headers', () => ({
-  cookies: mock.cookies,
 }));
 
 vi.mock('@/lib/auth-guard', () => ({
@@ -31,7 +26,6 @@ import { rolePassesCheck } from '@/lib/auth-guard';
 describe('VisitorOnboardingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mock.cookies.mockResolvedValue({ has: vi.fn().mockReturnValue(false) });
   });
 
   it('renders the visitor onboarding profile setup for signed-in visitors', async () => {
@@ -43,6 +37,7 @@ describe('VisitorOnboardingPage', () => {
         email: 'mahi@test.com',
         phoneNumber: '+919123456789',
         role: 'visitor',
+        status: 'pending',
       },
     });
     vi.mocked(rolePassesCheck).mockReturnValue(false);
@@ -72,16 +67,21 @@ describe('VisitorOnboardingPage', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
 
-  it('redirects completed visitors to the homepage', async () => {
+  it('redirects active visitors to personal home using server account state', async () => {
     mock.requireAuth.mockResolvedValue({
       session: { id: 's1', token: 't1', expiresAt: '2026-07-02T00:00:00.000Z' },
-      user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'visitor' },
+      user: {
+        id: 'u1',
+        name: 'Mahi',
+        email: 'mahi@test.com',
+        role: 'visitor',
+        status: 'active',
+      },
     });
     vi.mocked(rolePassesCheck).mockReturnValue(false);
-    mock.cookies.mockResolvedValue({ has: vi.fn().mockReturnValue(true) });
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
-    expect(mock.redirect).toHaveBeenCalledWith('/');
+    expect(mock.redirect).toHaveBeenCalledWith('/home');
   });
 });

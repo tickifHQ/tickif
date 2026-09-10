@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { personalAccountSchema } from '@repo/contracts';
+import { Container } from '@/components/container';
 import { PublicHeader } from '@/components/public-header';
 import { PersonalSettingsForm } from '@/components/personal-settings-form';
 import { requireAuth } from '@/lib/auth-guard';
@@ -24,19 +25,20 @@ export default async function PersonalSettingsPage() {
   return (
     <>
       <PublicHeader isAuthenticated userRole={session.user.role} />
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5 py-10 sm:px-8">
+      <Container as="main" className="py-10">
         <Link href="/home" className="text-sm text-muted-foreground underline underline-offset-4">
           Back to My Tickif
         </Link>
-        <header className="flex flex-col gap-2">
-          <h1 className="font-display text-2xl font-medium">Personal settings</h1>
-          <p className="text-sm text-muted-foreground">
+        <header className="mb-8 mt-6 max-w-2xl">
+          <p className="text-sm font-medium text-primary">Personal account</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Personal settings</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Manage your personal details. Your studio profile and organization settings are managed
             separately.
           </p>
         </header>
         <PersonalSettingsForm initialAccount={parsed.data} />
-      </main>
+      </Container>
     </>
   );
 }

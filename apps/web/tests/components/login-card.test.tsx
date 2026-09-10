@@ -30,8 +30,6 @@ vi.mock('@/lib/auth-client', () => ({
 describe('LoginCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.localStorage.clear();
-    document.cookie = 'tickif_visitor_onboarded=; Max-Age=0; Path=/';
   });
 
   it('renders trusted-by badge, welcome title, and phone input', () => {
@@ -124,25 +122,7 @@ describe('LoginCard', () => {
     await user.click(googleButtons[0]!);
     expect(mock.signInSocial).toHaveBeenCalledWith({
       provider: 'google',
-      callbackURL: 'http://localhost:3000/onboarding',
-    });
-  });
-
-  it('sends completed visitors home after Google sign in', async () => {
-    window.localStorage.setItem(
-      'tickif.visitorOnboarding',
-      JSON.stringify({ displayName: 'Mahi', address: '12 Studio Lane, Chennai' }),
-    );
-    mock.signInSocial.mockResolvedValueOnce({
-      error: null,
-      url: 'https://accounts.google.com/...',
-    });
-    const user = userEvent.setup();
-    render(<LoginCard />);
-    await user.click(screen.getByRole('button', { name: /continue with google/i }));
-    expect(mock.signInSocial).toHaveBeenCalledWith({
-      provider: 'google',
-      callbackURL: 'http://localhost:3000/',
+      callbackURL: 'http://localhost:3000/login?mode=browsing&authenticated=1',
     });
   });
 
@@ -176,14 +156,15 @@ describe('LoginCard', () => {
     await user.click(screen.getByRole('button', { name: 'Verify' }));
 
     await waitFor(() => {
-      expect(mock.router.replace).toHaveBeenCalledWith(
-        '/login?mode=designer&authenticated=1',
-      );
+      expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=designer&authenticated=1');
     });
   });
 
   it('uses a safe callback path for Google sign in', async () => {
-    mock.signInSocial.mockResolvedValueOnce({ error: null, url: 'https://accounts.google.com/...' });
+    mock.signInSocial.mockResolvedValueOnce({
+      error: null,
+      url: 'https://accounts.google.com/...',
+    });
     const user = userEvent.setup();
     render(<LoginCard initialMode="designer" callbackPath="/invitations/invitation-1" />);
     const googleButtons = screen.getAllByRole('button', { name: /continue with google/i });
@@ -349,6 +330,9 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Signed in')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=browsing&authenticated=1');
+      });
     });
 
     it('shows error on verify failure', async () => {

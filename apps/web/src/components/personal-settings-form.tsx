@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
   personalAccountSchema,
@@ -9,6 +10,7 @@ import {
 } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Button } from '@repo/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { Input } from '@repo/ui/components/input';
 import { Field, FieldGroup, FieldLabel, FieldDescription } from '@repo/ui/components/field';
 import { api } from '@/lib/api';
@@ -114,112 +116,129 @@ export function PersonalSettingsForm({ initialAccount }: { initialAccount: Perso
   }
 
   return (
-    <form
-      onSubmit={save}
-      className="flex flex-col gap-6"
-      aria-label="Personal settings"
-      aria-busy={busy}
-    >
-      <fieldset disabled={busy} className="flex flex-col gap-6">
+    <form onSubmit={save} className="grid gap-6" aria-label="Personal settings" aria-busy={busy}>
+      <fieldset disabled={busy} className="grid gap-6">
         <legend className="sr-only">Personal details</legend>
-        <FieldGroup>
-          <Field data-invalid={invalidFields.includes('name')}>
-            <FieldLabel htmlFor="personal-name">Display name</FieldLabel>
-            <Input
-              id="personal-name"
-              autoComplete="name"
-              required
-              minLength={2}
-              maxLength={100}
-              value={name}
-              aria-invalid={invalidFields.includes('name')}
-              onChange={(e) => {
-                setName(e.target.value);
-                setSaved(false);
-              }}
-            />
-          </Field>
-          <Field data-invalid={invalidFields.includes('address')}>
-            <FieldLabel htmlFor="personal-address">Personal address (optional)</FieldLabel>
-            <Input
-              id="personal-address"
-              autoComplete="street-address"
-              maxLength={300}
-              value={address}
-              aria-invalid={invalidFields.includes('address')}
-              onChange={(e) => {
-                setAddress(e.target.value);
-                setSaved(false);
-              }}
-            />
-          </Field>
-          <Field data-invalid={invalidFields.includes('whatsappNumber')}>
-            <FieldLabel htmlFor="personal-whatsapp">WhatsApp number (optional)</FieldLabel>
-            <Input
-              id="personal-whatsapp"
-              type="tel"
-              autoComplete="tel"
-              maxLength={16}
-              value={whatsappNumber}
-              aria-invalid={invalidFields.includes('whatsappNumber')}
-              aria-describedby="whatsapp-help"
-              onChange={(e) => {
-                setWhatsappNumber(e.target.value);
-                setSaved(false);
-              }}
-            />
-            <FieldDescription id="whatsapp-help">
-              Include the country code, for example +919876543210. This does not change your sign-in
-              phone.
-            </FieldDescription>
-          </Field>
-        </FieldGroup>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h2>Personal details</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup className="grid gap-5 sm:grid-cols-2">
+              <Field data-invalid={invalidFields.includes('name')}>
+                <FieldLabel htmlFor="personal-name">Display name</FieldLabel>
+                <Input
+                  id="personal-name"
+                  autoComplete="name"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  value={name}
+                  aria-invalid={invalidFields.includes('name')}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setSaved(false);
+                  }}
+                />
+              </Field>
+              <Field data-invalid={invalidFields.includes('address')}>
+                <FieldLabel htmlFor="personal-address">Personal address (optional)</FieldLabel>
+                <Input
+                  id="personal-address"
+                  autoComplete="street-address"
+                  maxLength={300}
+                  value={address}
+                  aria-invalid={invalidFields.includes('address')}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setSaved(false);
+                  }}
+                />
+              </Field>
+              <Field
+                className="sm:col-span-2"
+                data-invalid={invalidFields.includes('whatsappNumber')}
+              >
+                <FieldLabel htmlFor="personal-whatsapp">WhatsApp number (optional)</FieldLabel>
+                <Input
+                  id="personal-whatsapp"
+                  type="tel"
+                  autoComplete="tel"
+                  maxLength={16}
+                  value={whatsappNumber}
+                  aria-invalid={invalidFields.includes('whatsappNumber')}
+                  aria-describedby="whatsapp-help"
+                  onChange={(e) => {
+                    setWhatsappNumber(e.target.value);
+                    setSaved(false);
+                  }}
+                />
+                <FieldDescription id="whatsapp-help">
+                  Include the country code, for example +919876543210. This does not change your
+                  sign-in phone.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          </CardContent>
+        </Card>
       </fieldset>
-      <section aria-labelledby="sign-in-details" className="flex flex-col gap-3">
-        <h2 id="sign-in-details" className="text-sm font-medium">
-          Sign-in details
-        </h2>
-        <dl className="flex flex-col gap-3 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Email</dt>
-            <dd className="break-all">
-              {account.email.endsWith('@phone.tickif.local')
-                ? 'Not added'
-                : `${account.email} (${account.emailVerified ? 'Verified' : 'Unverified'})`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Phone number</dt>
-            <dd>
-              {account.phoneNumber
-                ? `${account.phoneNumber} (${account.phoneNumberVerified ? 'Verified' : 'Unverified'})`
-                : 'Not added'}
-            </dd>
-          </div>
-        </dl>
-        <p className="text-sm text-muted-foreground">
-          Sign-in email and phone cannot be changed here.
-        </p>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <h2 id="sign-in-details">Sign-in details</h2>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <dl className="grid gap-5 text-sm sm:grid-cols-2">
+            <div className="grid min-w-0 gap-2">
+              <dt className="font-medium">Email</dt>
+              <dd className="flex min-h-10 items-center rounded-md border border-input bg-muted/30 px-3 py-2 text-muted-foreground shadow-xs break-all">
+                {account.email.endsWith('@phone.tickif.local')
+                  ? 'Not added'
+                  : `${account.email} (${account.emailVerified ? 'Verified' : 'Unverified'})`}
+              </dd>
+            </div>
+            <div className="grid min-w-0 gap-2">
+              <dt className="font-medium">Phone number</dt>
+              <dd className="flex min-h-10 items-center rounded-md border border-input bg-muted/30 px-3 py-2 text-muted-foreground shadow-xs break-all">
+                {account.phoneNumber
+                  ? `${account.phoneNumber} (${account.phoneNumberVerified ? 'Verified' : 'Unverified'})`
+                  : 'Not added'}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-sm text-muted-foreground">
+            Sign-in email and phone cannot be changed here.
+          </p>
+        </CardContent>
+      </Card>
       {error ? (
         <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
       {saved ? (
-        <p role="status" className="text-sm">
-          Personal settings saved.
-        </p>
+        <Alert variant="success" role="status">
+          <CheckCircle2 aria-hidden="true" />
+          <AlertDescription>Personal settings saved.</AlertDescription>
+        </Alert>
       ) : null}
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" disabled={busy || !dirty || conflict}>
-          {busy ? 'Please wait…' : 'Save changes'}
-        </Button>
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <p className="mr-auto text-xs text-muted-foreground">
+          {dirty ? 'You have unsaved changes.' : 'All changes are saved.'}
+        </p>
         {conflict ? (
           <Button type="button" variant="outline" disabled={busy} onClick={reloadLatest}>
             Reload latest settings
           </Button>
         ) : null}
+        <Button type="submit" disabled={busy || !dirty || conflict} className="sm:min-w-36">
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
+          {busy ? 'Saving...' : 'Save changes'}
+        </Button>
       </div>
       {conflict ? (
         <p className="text-sm text-muted-foreground">
