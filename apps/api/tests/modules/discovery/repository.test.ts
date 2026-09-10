@@ -16,7 +16,8 @@ const mockSearchClient = {
   })),
 };
 
-vi.mock('@repo/search', () => ({
+vi.mock('@repo/search', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   PROJECT_QUERY_BY: ['title'],
   searchClient: vi.fn(() => mockSearchClient),
   searchCollectionName: vi.fn((name: string) => `${name}_alias`),
@@ -196,7 +197,9 @@ describe('discoveryRepository.searchFeed', () => {
       q: 'calm home',
       query_by: 'title',
       filter_by: 'citySlug:[mumbai] && bhkSlug:[3-bhk]',
-      sort_by: '_text_match:desc,featuredAt:desc,publishedAt:desc',
+      sort_by: expect.stringMatching(
+        /^_text_match:desc,avgRating:desc,_eval\(paidUntil:>\d+\):desc$/,
+      ),
       facet_by:
         'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
       max_facet_values: 250,

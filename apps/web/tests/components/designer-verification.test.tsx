@@ -434,6 +434,38 @@ describe('DesignerVerification', () => {
     expect(screen.queryByText('Account owner phone · OTP verified')).not.toBeInTheDocument();
   });
 
+  it('does not claim the phone is tied to an Aadhaar-linked mobile (E-275)', () => {
+    // The backend has no Aadhaar-linkage concept, so the Personal identity copy
+    // must not assert one. Guards against regressing the removed claim.
+    render(<DesignerVerification initialState={verifiedState} />);
+
+    expect(screen.queryByText(/Aadhaar-linked/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/tied to your Aadhaar-linked mobile/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not claim OTP verification when phoneVerified.met is false even if a phone is stored (E-275)', () => {
+    // Edge case: a phone number is present on the record but the authoritative
+    // verified flag is false. The "OTP verified" claim must depend on the flag,
+    // never merely on the stored phone number.
+    render(
+      <DesignerVerification
+        initialState={draftState({
+          identity: { ...verifiedState.identity, ownerPhone: '+919843211210' },
+          eligibility: {
+            ...verifiedState.eligibility,
+            eligible: false,
+            phoneVerified: { met: false, label: 'Phone verified' },
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/· OTP verified/)).not.toBeInTheDocument();
+    expect(screen.queryByText('+91 9843211210 · OTP verified')).not.toBeInTheDocument();
+  });
+
   it('shows the authoritative project count and disables submission when incomplete', () => {
     const initialState = draftState({
       eligibility: {
