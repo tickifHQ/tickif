@@ -412,6 +412,8 @@ export const project = pgTable(
     moderationNote: text('moderation_note'),
     featuredAt: timestamp('featured_at'),
     moderationRevision: integer('moderation_revision').default(0).notNull(),
+    // Approval baseline survives minor image edits, so repeated autosaves cannot evade review.
+    approvedImageIds: jsonb('approved_image_ids').$type<string[]>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -1163,6 +1165,7 @@ export const projectRoom = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
+    isLive: boolean('is_live').default(true).notNull(),
     // Taxonomy terms are controlled vocabulary: deleting an in-use room type should be blocked.
     // E-102 validates that referenced terms have kind = 'room' at the service boundary.
     roomTypeId: uuid('room_type_id')
@@ -1205,6 +1208,7 @@ export const projectImage = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
+    isLive: boolean('is_live').default(true).notNull(),
     roomId: uuid('room_id').references(() => projectRoom.id, { onDelete: 'set null' }),
     originalKey: text('original_key').notNull(),
     // Declared content-type pinned at mint (E-106); the worker re-validates bytes against it (E-107).
@@ -1236,6 +1240,33 @@ export const projectImage = pgTable(
     check(
       'project_image_duplicate_distance_nonnegative',
       sql`${t.duplicateDistance} is null or ${t.duplicateDistance} >= 0`,
+    ),
+  ],
+);
+
+/** One mutable review aggregate alongside the canonical live project graph. */
+export type ProjectPendingContent = {
+  project: typeof project.$inferSelect;
+  rooms: (typeof projectRoom.$inferSelect)[];
+  images: (typeof projectImage.$inferSelect)[];
+};
+
+export const projectPendingVersion = pgTable(
+  'project_pending_version',
+  {
+    projectId: uuid('project_id')
+      .primaryKey()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    content: jsonb('content').$type<ProjectPendingContent>().notNull(),
+    status: projectStatusEnum('status').default('draft').notNull(),
+    revision: integer('revision').default(0).notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('project_pending_version_status_idx').on(t.status),
+    check(
+      'project_pending_version_status_valid',
+      sql`${t.status}::text in ('draft', 'submitted', 'in_review', 'changes_requested')`,
     ),
   ],
 );

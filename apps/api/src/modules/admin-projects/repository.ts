@@ -1,12 +1,20 @@
-import { db, schema, eq, and, asc, isNotNull, sql } from '@repo/db';
+import { db, schema, eq, and, asc, inArray, isNotNull, sql } from '@repo/db';
 import type {
   AdminCorrectProjectInput,
   AdminModerationQueueQuery,
   ModerationFieldDiff,
 } from '@repo/contracts';
+import {
+  getPendingProject,
+  getPendingProjects,
+  readProjectAggregate,
+  writePendingAggregate,
+  type VersionedProject,
+} from '../project-versions/repository.js';
 
-export type AdminProjectRecord = typeof schema.project.$inferSelect & {
+export type AdminProjectRecord = VersionedProject & {
   designerName: string;
+  pendingChanges?: boolean;
 };
 
 export type AdminQueueRecord = Pick<
@@ -27,8 +35,8 @@ export type AdminQueueRecord = Pick<
   taggedImageCount: number;
 };
 
-export type AdminImageRecord = typeof schema.projectImage.$inferSelect;
-export type AdminRoomRecord = typeof schema.projectRoom.$inferSelect;
+export type AdminImageRecord = Omit<typeof schema.projectImage.$inferSelect, 'isLive'>;
+export type AdminRoomRecord = Omit<typeof schema.projectRoom.$inferSelect, 'isLive'>;
 export type AdminModerationEventRecord = typeof schema.projectModerationEvent.$inferSelect;
 export type AdminReviewCommentRecord = typeof schema.projectReviewComment.$inferSelect;
 export type AdminReviewCommentMutationResult =
@@ -41,20 +49,30 @@ type CorrectionPatch = Omit<AdminCorrectProjectInput, 'featuredAt'> & {
 };
 
 export const adminProjectsRepository = {
+  async findLiveVersion(projectId: string) {
+    const state = await readProjectAggregate(projectId);
+    return state?.pending ? state.live : null;
+  },
   async list(
     query: AdminModerationQueueQuery,
     reviewerId?: string,
   ): Promise<{ items: AdminQueueRecord[]; total: number }> {
+    const submittedAt = sql<Date | null>`case
+      when ${schema.projectPendingVersion.projectId} is not null
+        then (${schema.projectPendingVersion.content}->'project'->>'submittedAt')::timestamp
+      else ${schema.project.submittedAt} end`.mapWith(schema.project.submittedAt);
     const where = and(
-      eq(schema.project.status, query.status),
-      reviewerId ? eq(schema.project.reviewedBy, reviewerId) : undefined,
+      sql`coalesce(${schema.projectPendingVersion.status}, ${schema.project.status}) = ${query.status}`,
+      reviewerId
+        ? sql`case when ${schema.projectPendingVersion.projectId} is not null then ${schema.projectPendingVersion.content}->'project'->>'reviewedBy' else ${schema.project.reviewedBy} end = ${reviewerId}`
+        : undefined,
     );
     const queuePage = db
       .select({
         id: schema.project.id,
         title: schema.project.title,
         status: schema.project.status,
-        submittedAt: schema.project.submittedAt,
+        submittedAt: submittedAt.as('queue_submitted_at'),
         reviewedBy: schema.project.reviewedBy,
         citySlug: schema.project.citySlug,
         propertyTypeSlug: schema.project.propertyTypeSlug,
@@ -62,11 +80,19 @@ export const adminProjectsRepository = {
         budgetBandSlug: schema.project.budgetBandSlug,
         coverImageId: schema.project.coverImageId,
         designerName: schema.designerProfile.displayName,
+        pendingContent: schema.projectPendingVersion.content,
       })
       .from(schema.project)
+      .leftJoin(
+        schema.projectPendingVersion,
+        and(
+          eq(schema.projectPendingVersion.projectId, schema.project.id),
+          eq(schema.project.status, 'published'),
+        ),
+      )
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(where)
-      .orderBy(sql`${schema.project.submittedAt} asc nulls last`, asc(schema.project.id))
+      .orderBy(sql`${submittedAt} asc nulls last`, asc(schema.project.id))
       .limit(query.limit)
       .offset((query.page - 1) * query.limit)
       .as('queue_page');
@@ -104,6 +130,7 @@ export const adminProjectsRepository = {
           budgetBandSlug: queuePage.budgetBandSlug,
           coverImageId: queuePage.coverImageId,
           designerName: queuePage.designerName,
+          pendingContent: queuePage.pendingContent,
           imageCount: sql<number>`coalesce(${pageImageCounts.imageCount}, 0)::int`,
           taggedImageCount: sql<number>`coalesce(${pageImageCounts.taggedImageCount}, 0)::int`,
         })
@@ -113,12 +140,48 @@ export const adminProjectsRepository = {
       db
         .select({ value: sql<number>`count(*)::int` })
         .from(schema.project)
+        .leftJoin(
+          schema.projectPendingVersion,
+          and(
+            eq(schema.projectPendingVersion.projectId, schema.project.id),
+            eq(schema.project.status, 'published'),
+          ),
+        )
         .where(where),
     ]);
-    return { items: rows, total: count?.value ?? 0 };
+    const pending = await getPendingProjects(rows.map((row) => row.id));
+    const readyImages = pending.size
+      ? await db
+          .select({ id: schema.projectImage.id })
+          .from(schema.projectImage)
+          .where(
+            and(
+              inArray(schema.projectImage.projectId, [...pending.keys()]),
+              eq(schema.projectImage.status, 'ready'),
+            ),
+          )
+      : [];
+    const readyIds = new Set(readyImages.map((image) => image.id));
+    const items = rows.map(({ pendingContent, ...row }) => {
+      const version = pending.get(row.id);
+      if (!version || !pendingContent) return row;
+      return {
+        ...row,
+        ...version,
+        imageCount: pendingContent.images.length,
+        taggedImageCount: pendingContent.images.filter(
+          (image) =>
+            readyIds.has(image.id) &&
+            image.roomId &&
+            image.themeSlugs.length &&
+            image.finishSlugs.length,
+        ).length,
+      };
+    });
+    return { items, total: count?.value ?? 0 };
   },
 
-  async findById(id: string): Promise<AdminProjectRecord | null> {
+  async findById(id: string, version: 'current' | 'live' = 'current'): Promise<AdminProjectRecord | null> {
     const [row] = await db
       .select({
         project: schema.project,
@@ -128,10 +191,13 @@ export const adminProjectsRepository = {
       .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
       .where(eq(schema.project.id, id))
       .limit(1);
-    return row ? { ...row.project, designerName: row.designerName } : null;
+    const pending = row && version === 'current' ? await getPendingProject(id) : null;
+    return row ? { ...row.project, ...pending, designerName: row.designerName } : null;
   },
 
   async listRooms(projectId: string): Promise<AdminRoomRecord[]> {
+    const state = await readProjectAggregate(projectId);
+    if (state) return state.current.rooms;
     return db
       .select()
       .from(schema.projectRoom)
@@ -140,6 +206,8 @@ export const adminProjectsRepository = {
   },
 
   async listImages(projectId: string): Promise<AdminImageRecord[]> {
+    const state = await readProjectAggregate(projectId);
+    if (state) return state.current.images;
     return db
       .select()
       .from(schema.projectImage)
@@ -150,6 +218,18 @@ export const adminProjectsRepository = {
   async getReadyImageCounts(
     projectId: string,
   ): Promise<{ imageCount: number; taggedImageCount: number }> {
+    const state = await readProjectAggregate(projectId);
+    if (state) {
+      const eligible = state.current.images.filter(
+        (image) => image.status === 'ready' && image.roomId,
+      );
+      return {
+        imageCount: state.pending ? state.current.images.length : eligible.length,
+        taggedImageCount: eligible.filter(
+          (image) => image.themeSlugs.length && image.finishSlugs.length,
+        ).length,
+      };
+    }
     const [row] = await db
       .select({
         imageCount: sql<number>`count(*)::int`,
@@ -212,12 +292,7 @@ export const adminProjectsRepository = {
     expectedReviewerId: string | null;
   }): Promise<AdminReviewCommentMutationResult> {
     return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ status: schema.project.status, reviewedBy: schema.project.reviewedBy })
-        .from(schema.project)
-        .where(eq(schema.project.id, input.projectId))
-        .for('update')
-        .limit(1);
+      const project = (await readProjectAggregate(input.projectId, tx, true))?.current.project;
       if (
         !project ||
         project.status !== input.expectedStatus ||
@@ -242,12 +317,7 @@ export const adminProjectsRepository = {
     expectedReviewerId: string | null;
   }): Promise<AdminReviewCommentMutationResult> {
     return db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ status: schema.project.status, reviewedBy: schema.project.reviewedBy })
-        .from(schema.project)
-        .where(eq(schema.project.id, input.projectId))
-        .for('update')
-        .limit(1);
+      const project = (await readProjectAggregate(input.projectId, tx, true))?.current.project;
       if (
         !project ||
         project.status !== input.expectedStatus ||
@@ -278,6 +348,41 @@ export const adminProjectsRepository = {
     expectedRevision: number;
   }): Promise<AdminProjectRecord | null> {
     return db.transaction(async (tx) => {
+      const state = await readProjectAggregate(input.projectId, tx, true);
+      if (state?.pending) {
+        if (
+          state.pending.status !== 'in_review' ||
+          state.pending.revision !== input.expectedRevision
+        )
+          return null;
+        const aggregate = state.current;
+        aggregate.project = {
+          ...aggregate.project,
+          ...input.patch,
+          metadata:
+            input.patch.metadata === undefined
+              ? aggregate.project.metadata
+              : { ...aggregate.project.metadata, ...input.patch.metadata },
+          moderationRevision: state.pending.revision + 1,
+          updatedAt: new Date(),
+        };
+        await writePendingAggregate(tx, aggregate, aggregate.project.moderationRevision);
+        await tx.insert(schema.projectModerationEvent).values({
+          projectId: input.projectId,
+          actorUserId: input.actorUserId,
+          action: 'metadata_corrected',
+          fromStatus: 'in_review',
+          toStatus: 'in_review',
+          fieldDiff: input.fieldDiff,
+        });
+        const [designer] = await tx
+          .select({ designerName: schema.designerProfile.displayName })
+          .from(schema.designerProfile)
+          .where(eq(schema.designerProfile.id, aggregate.project.designerId))
+          .limit(1);
+        if (!designer) return null;
+        return { ...aggregate.project, designerName: designer.designerName };
+      }
       const { metadata, ...patch } = input.patch;
       const [updated] = await tx
         .update(schema.project)

@@ -328,8 +328,13 @@ export async function recentProjectsInCity(
         slug: schema.taxonomy.slug,
       })
       .from(schema.projectRoom)
-      .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
-      .where(inArray(schema.projectRoom.projectId, projectIds)),
+      .innerJoin(
+        schema.taxonomy,
+        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
+      )
+      .where(
+        and(inArray(schema.projectRoom.projectId, projectIds), eq(schema.projectRoom.isLive, true)),
+      ),
 
     // Fetch themes, materials, finishes from project images
     db
@@ -344,6 +349,7 @@ export async function recentProjectsInCity(
         and(
           inArray(schema.projectImage.projectId, projectIds),
           eq(schema.projectImage.status, 'ready'),
+          eq(schema.projectImage.isLive, true),
         ),
       ),
 
@@ -359,6 +365,7 @@ export async function recentProjectsInCity(
             and(
               inArray(schema.projectImage.id, coverImageIds),
               eq(schema.projectImage.status, 'ready'),
+              eq(schema.projectImage.isLive, true),
             ),
           )
       : Promise.resolve([]),

@@ -1731,7 +1731,7 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('does not mutate published projects through draft routes', async () => {
+  it('stages material edits to a published project without mutating its live row', async () => {
     const { cookie, designer } = await makeDesignerSession('+919800002009');
     const project = await makeProject({ designerId: designer.id, status: 'published' });
 
@@ -1739,7 +1739,15 @@ describe('Project draft CRUD + rooms (E-102)', () => {
       title: 'Nope',
     });
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      status: 'draft',
+      pendingChanges: true,
+      liveStatus: 'published',
+      title: 'Nope',
+    });
+    const [live] = await db.select().from(schema.project).where(eq(schema.project.id, project.id));
+    expect(live).toMatchObject({ status: 'published', title: project.title });
   });
 
   it('allows changes-requested projects to be edited', async () => {

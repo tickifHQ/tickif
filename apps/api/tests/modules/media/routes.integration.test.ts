@@ -160,7 +160,7 @@ describe('GET /api/projects/:id/images', () => {
   it('returns the owner’s images ordered by sortOrder with status + derivatives', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id });
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
     await makeProjectImage({ projectId: project.id, sortOrder: 1, status: 'processing' });
     await makeProjectImage({
       projectId: project.id,
@@ -224,10 +224,10 @@ describe('PATCH /api/media/:imageId/metadata', () => {
     expect(res.status).toBe(403);
   });
 
-  it('409s when metadata is changed after the project leaves draft', async () => {
+  it('409s when metadata is changed while the project is in review', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id, status: 'published' });
+    const project = await makeProject({ designerId: designer.id, status: 'in_review' });
     const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
 
     const res = await client.api.media[':imageId'].metadata.$patch(
@@ -361,10 +361,10 @@ describe('PATCH /api/media/:imageId/metadata', () => {
     expect(res.status).toBe(403);
   });
 
-  it('409s when metadata is changed after the project leaves draft', async () => {
+  it('409s when metadata is changed while the project is submitted', async () => {
     const { cookie } = await createAuthedSession();
     const designer = await makeDesigner({ userId: await sessionUserId() });
-    const project = await makeProject({ designerId: designer.id, status: 'published' });
+    const project = await makeProject({ designerId: designer.id, status: 'submitted' });
     const image = await makeProjectImage({ projectId: project.id, status: 'ready' });
 
     const res = await client.api.media[':imageId'].metadata.$patch(
