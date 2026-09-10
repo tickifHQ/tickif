@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { visibleAccountEmail } from '@/lib/account-identity';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { Avatar } from '@repo/ui/components/avatar';
 import {
@@ -54,7 +55,10 @@ export function AccountMenu({
 
   const user = session.user;
   const personalRole = 'role' in user ? user.role : null;
-  const displayName = user.name ?? user.email ?? 'Account';
+  // Never an empty label: fall back to a visible email, then a neutral name.
+  // Generated phone identities are internal only and never shown (E-273).
+  const accountEmail = visibleAccountEmail(user.email);
+  const displayName = user.name?.trim() || accountEmail || 'Account';
   const firstName = (user.name ?? '').split(' ')[0] || displayName;
   const resolvedAvatarSeed = avatarSeed?.trim() || displayName;
 
@@ -98,8 +102,10 @@ export function AccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="truncate">
-          <p className="font-medium">{user.name}</p>
-          {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
+          <p className="font-medium">{displayName}</p>
+          {accountEmail && (
+            <p className="text-xs font-normal text-muted-foreground">{accountEmail}</p>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

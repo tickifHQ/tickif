@@ -6,7 +6,7 @@ import { AccountMenu } from '../../src/components/account-menu';
 const mock = vi.hoisted(() => ({
   signOut: vi.fn(),
   session: null as {
-    user: { name: string; email: string | null; role?: string };
+    user: { name: string | null; email: string | null; role?: string };
     session?: { activeOrganizationId?: string | null };
   } | null,
   isPending: false,
@@ -176,5 +176,32 @@ describe('AccountMenu', () => {
     await user.click(screen.getByText('Sign out'));
     expect(mock.router.replace).toHaveBeenCalledWith('/login');
     expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('never renders a blank account label when the user name is missing', async () => {
+    mock.session = { user: { name: null, email: null, role: 'designer' } };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu for account/i }));
+    const label = screen.getByText('Account');
+    expect(label.textContent?.trim().length).toBeGreaterThan(0);
+  });
+
+  it('hides generated phone identities instead of presenting them as email', async () => {
+    mock.session = {
+      user: { name: null, email: '+91981000001@phone.tickif.local', role: 'designer' },
+    };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.queryByText(/@phone\.tickif\.local/i)).not.toBeInTheDocument();
+  });
+
+  it('still shows a real login email as read-only identity detail', async () => {
+    mock.session = { user: { name: null, email: 'mahi@test.com', role: 'designer' } };
+    const user = userEvent.setup();
+    render(<AccountMenu />);
+    await user.click(screen.getByRole('button', { name: /open account menu/i }));
+    expect(screen.getByText('mahi@test.com', { selector: 'p.text-xs' })).toBeInTheDocument();
   });
 });
