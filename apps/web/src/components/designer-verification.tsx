@@ -230,11 +230,15 @@ export function DesignerVerification({
   const verifiedPhone = persistedPhone.phone
     ? `${persistedPhone.country.code} ${persistedPhone.phone}`
     : 'Account owner phone';
-  const verifiedPhoneDescription = state.identity.ownerPhone
-    ? `${verifiedPhone} · OTP verified`
-    : state.eligibility.phoneVerified.met
-      ? 'Verified by the account owner'
-      : 'Account owner phone';
+  // E-275: the "OTP verified" claim must depend on the authoritative backend
+  // flag (eligibility.phoneVerified.met), never merely on a stored phone number.
+  // Only when verified do we show the OTP-verified copy; members who cannot read
+  // the owner phone see the privacy-safe verified label without the number.
+  const verifiedPhoneDescription = state.eligibility.phoneVerified.met
+    ? state.identity.ownerPhone
+      ? `${verifiedPhone} · OTP verified`
+      : 'Verified by the account owner'
+    : 'Account owner phone';
   const phoneNumberIsValid = toE164PhoneNumber(selectedCountry, phone) !== null;
   const expiredAt = state.expiresAt ? expiryDateFormatter.format(new Date(state.expiresAt)) : null;
 
@@ -377,7 +381,7 @@ export function DesignerVerification({
         <div className="space-y-4">
           <VerificationSection
             title="Personal identity"
-            description="Your phone number is OTP-verified and tied to your Aadhaar-linked mobile. No separate upload needed."
+            description="Verify the account owner's phone number with a one-time code. No separate document upload needed."
             status={personalIdentityVerified ? <VerifiedStatusBadge /> : null}
           >
             {!applicationEditable ? (
