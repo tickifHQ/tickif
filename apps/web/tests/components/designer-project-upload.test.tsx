@@ -512,7 +512,13 @@ describe('DesignerProjectUpload', () => {
     mock.projectPatch.mockImplementation(async () => Response.json(liveProject));
     mock.roomPatch.mockImplementation(async () => Response.json({}));
     const imagesResponse = await mock.listImagesGet();
-    const images = (await imagesResponse.json()) as { items: unknown[] };
+    const images = (await imagesResponse.json()) as ListProjectImagesResponse;
+    const firstImage = images.items[0]!;
+    images.items = [
+      firstImage,
+      { ...firstImage, id: '66666666-6666-4666-8666-666666666666', sortOrder: 1 },
+      { ...firstImage, id: '77777777-7777-4777-8777-777777777777', sortOrder: 2 },
+    ];
     mock.listImagesGet.mockReset().mockImplementation(async () => Response.json(images));
     mock.imageMetadataPatch.mockImplementation(async () => Response.json(images.items[0]));
     const user = userEvent.setup();
@@ -1156,7 +1162,7 @@ describe('DesignerProjectUpload', () => {
             { status: 200, headers: { 'content-type': 'application/json' } },
           ),
       );
-      mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      mock.projectPatch.mockImplementation(async () => mock.projectGet());
       mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
       mock.imageMetadataPatch.mockImplementation(
         async ({ param }: { param: { imageId: string } }) => ({
