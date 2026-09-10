@@ -1137,6 +1137,44 @@ describe('DesignerProjectUpload batch recovery', () => {
     );
   });
 
+  it('settles the batch without waiting for orphan cleanup', async () => {
+    mockSuccessfulLookups();
+    mockTransferPipeline([false, true]);
+    mock.deleteImage.mockImplementationOnce(() => new Promise<Response>(() => {}));
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+
+    await dropFiles([{ name: 'first.jpg' }, { name: 'second.jpg' }]);
+
+    await waitFor(() => expect(mock.uploadUrlPost).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Could not upload first.jpg.')).toBeInTheDocument();
+    await screen.findByRole('button', { name: /retry upload/i });
+    expect(mock.linkImagePatch).toHaveBeenCalled();
+  });
+
+  it('restores server image state after a failed reorder', async () => {
+    mockSuccessfulLookups();
+    const processingItem = {
+      ...readyItem,
+      id: 'c1111111-1111-4111-8111-111111111111',
+      status: 'processing',
+      sortOrder: 1,
+    };
+    mockImageList([readyItem, processingItem]);
+    mock.linkImagePatch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { message: 'Reorder failed' } }),
+    });
+    render(<DesignerProjectUpload initialProjectId={projectId} />);
+    await screen.findByText('Processing');
+
+    // The worker finishes while the failed reorder triggers an image-only refresh.
+    mockImageList([readyItem, { ...processingItem, status: 'ready' }]);
+    await userEvent.setup().click(screen.getByRole('button', { name: /move image 2 earlier/i }));
+
+    await waitFor(() => expect(screen.queryByText('Processing')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Ready')).toHaveLength(2);
+  });
+
   it('shows the persisted processing reason on failed tiles with a recovery path', async () => {
     mockSuccessfulLookups();
     mockImageList([

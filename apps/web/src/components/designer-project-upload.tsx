@@ -2139,7 +2139,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       'Could not refresh image processing status.',
     );
     const images = imagePayload.items ?? [];
-    if (refreshVersion !== undefined && !isCurrentUploadStateRefresh(refreshVersion)) return images;
+    if (refreshVersion !== undefined && !isCurrentImageListRefresh(refreshVersion)) return images;
     mergeServerImages(images);
     return images;
   }
@@ -2875,7 +2875,8 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
     } catch (error) {
       const message = error instanceof Error ? error.message : `Could not upload ${file.name}.`;
       if (reservedImageId) {
-        await api.api.projects[':id'].images[':imageId']
+        // Cleanup must not delay settling this tile or starting its siblings.
+        void api.api.projects[':id'].images[':imageId']
           .$delete({ param: { id: projectId, imageId: reservedImageId } })
           .catch(() => undefined);
       }
