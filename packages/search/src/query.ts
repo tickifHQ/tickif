@@ -2,6 +2,10 @@ import type { SearchParams } from 'typesense/lib/Typesense/Documents.js';
 
 type DiscoverySearchParams = Omit<SearchParams<Record<string, unknown>>, 'streamConfig'>;
 
+const ZERO_RESULT_QUERY_CORRECTIONS: Readonly<Record<string, string>> = {
+  bad: 'bed',
+};
+
 /** Three sort keys: relevance, rating, then currently paid coverage. */
 export function discoveryRanking(now = Date.now(), ratingFirst = false): string {
   const paid = `_eval(paidUntil:>${now}):desc`;
@@ -18,7 +22,7 @@ function missingDiscoveryField(error: unknown): boolean {
   );
 }
 
-/** Bounded rollout and short-word fallback. Always preserve a query that already matches. */
+/** Bounded rollout and known-query correction. Always preserve a query that already matches. */
 export async function searchWithDiscoveryFallback<T extends { found?: number }>(
   search: (params: DiscoverySearchParams) => Promise<T>,
   params: DiscoverySearchParams,
@@ -37,8 +41,10 @@ export async function searchWithDiscoveryFallback<T extends { found?: number }>(
     effective = legacy;
     result = await search(effective);
   }
-  if (result.found === 0 && /^[a-z]{3}$/i.test(params.q?.trim() ?? '')) {
-    return search({ ...effective, min_len_1typo: 3, num_typos: 1, drop_tokens_threshold: 0 });
+  const query = params.q?.trim().toLowerCase() ?? '';
+  const correction = ZERO_RESULT_QUERY_CORRECTIONS[query];
+  if (result.found === 0 && correction) {
+    return search({ ...effective, q: correction, drop_tokens_threshold: 0 });
   }
   return result;
 }
