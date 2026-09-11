@@ -8,7 +8,7 @@ describe('bounded discovery query recovery', () => {
     await searchWithDiscoveryFallback(search, query, legacy);
     expect(search).toHaveBeenCalledTimes(1);
   });
-  it('tries one short-word correction only after zero matches, preserving filters and pagination', async () => {
+  it('corrects bad to bed only after zero matches, preserving filters and pagination', async () => {
     const search = vi.fn().mockResolvedValueOnce({ found: 0 }).mockResolvedValueOnce({ found: 3 });
     await expect(
       searchWithDiscoveryFallback(
@@ -18,19 +18,22 @@ describe('bounded discovery query recovery', () => {
       ),
     ).resolves.toEqual({ found: 3 });
     expect(search.mock.calls[1]?.[0]).toMatchObject({
-      q: 'bad',
+      q: 'bed',
       page: 2,
       filter_by: 'citySlug:=pune',
-      min_len_1typo: 3,
-      num_typos: 1,
       drop_tokens_threshold: 0,
     });
+    expect(search.mock.calls[1]?.[0]).not.toHaveProperty('min_len_1typo');
+    expect(search.mock.calls[1]?.[0]).not.toHaveProperty('num_typos');
   });
-  it.each(['ba', 'a', '123', 'bad kitchen', 'zzzxqv'])('does not broaden %s', async (q) => {
-    const search = vi.fn().mockResolvedValue({ found: 0 });
-    await searchWithDiscoveryFallback(search, { ...query, q }, legacy);
-    expect(search).toHaveBeenCalledTimes(1);
-  });
+  it.each(['ba', 'a', '123', 'bag', 'bar', 'bad kitchen', 'zzzxqv'])(
+    'does not broaden %s',
+    async (q) => {
+      const search = vi.fn().mockResolvedValue({ found: 0 });
+      await searchWithDiscoveryFallback(search, { ...query, q }, legacy);
+      expect(search).toHaveBeenCalledTimes(1);
+    },
+  );
   it('uses old fields during rollout, then still recovers a short query', async () => {
     const search = vi
       .fn()
@@ -38,7 +41,7 @@ describe('bounded discovery query recovery', () => {
       .mockResolvedValueOnce({ found: 0 })
       .mockResolvedValueOnce({ found: 2 });
     await searchWithDiscoveryFallback(search, query, legacy);
-    expect(search.mock.calls[2]?.[0]).toMatchObject({ sort_by: legacy.sort_by, min_len_1typo: 3 });
+    expect(search.mock.calls[2]?.[0]).toMatchObject({ sort_by: legacy.sort_by, q: 'bed' });
   });
   it('propagates network failure instead of hiding it as empty results', async () => {
     const search = vi.fn().mockRejectedValue(new Error('unavailable'));
