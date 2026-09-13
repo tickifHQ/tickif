@@ -43,6 +43,17 @@ describe('bounded discovery query recovery', () => {
     await searchWithDiscoveryFallback(search, query, legacy);
     expect(search.mock.calls[2]?.[0]).toMatchObject({ sort_by: legacy.sort_by, q: 'bed' });
   });
+  it.each(['constructor', '__proto__', ' CONSTRUCTOR ', ' __PROTO__ '])(
+    'preserves the empty result for inherited property name %s',
+    async (q) => {
+      const empty = { found: 0 };
+      const search = vi.fn().mockResolvedValue(empty);
+      await expect(searchWithDiscoveryFallback(search, { ...query, q }, legacy)).resolves.toBe(
+        empty,
+      );
+      expect(search).toHaveBeenCalledTimes(1);
+    },
+  );
   it('propagates network failure instead of hiding it as empty results', async () => {
     const search = vi.fn().mockRejectedValue(new Error('unavailable'));
     await expect(searchWithDiscoveryFallback(search, query, legacy)).rejects.toThrow('unavailable');

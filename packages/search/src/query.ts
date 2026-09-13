@@ -42,7 +42,9 @@ export async function searchWithDiscoveryFallback<T extends { found?: number }>(
     result = await search(effective);
   }
   const query = params.q?.trim().toLowerCase() ?? '';
-  const correction = ZERO_RESULT_QUERY_CORRECTIONS[query];
+  const correction = Object.hasOwn(ZERO_RESULT_QUERY_CORRECTIONS, query)
+    ? ZERO_RESULT_QUERY_CORRECTIONS[query]
+    : undefined;
   if (result.found === 0 && correction) {
     return search({ ...effective, q: correction, drop_tokens_threshold: 0 });
   }
