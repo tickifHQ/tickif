@@ -30,7 +30,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { DesignerListControls } from '@/components/designer-list-controls';
-import { DesignerListPagination } from '@/components/designer-list-pagination';
+import { UrlListPagination } from '@/components/list-pagination';
 import { DesignerProjectRowActions } from '@/components/designer-project-row-actions';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
 import { cn } from '@repo/ui/lib/utils';
@@ -114,9 +114,12 @@ function StatusBadgeWithFeedback({
   rejectionReasonCodes: ModerationReasonCode[];
   updatedAt: string;
 }) {
-  const reasonCodes = rejectionReasonCodes.length > 0
-    ? rejectionReasonCodes
-    : rejectionReasonCode ? [rejectionReasonCode] : [];
+  const reasonCodes =
+    rejectionReasonCodes.length > 0
+      ? rejectionReasonCodes
+      : rejectionReasonCode
+        ? [rejectionReasonCode]
+        : [];
   const hasFeedback =
     (status === 'changes_requested' || status === 'rejected') &&
     (moderationNote || reasonCodes.length > 0);
@@ -370,7 +373,7 @@ export function DesignerProjectsList({
         </Table>
       </div>
 
-      <DesignerListPagination
+      <UrlListPagination
         page={projects.page}
         totalPages={projects.totalPages}
         total={projects.total}

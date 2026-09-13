@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { FeedProject, PublicProjectGalleryImage, PublicProjectDesigner, PublicProjectNarrative, PublicImageDetailProject } from '@repo/contracts';
+import type {
+  FeedProject,
+  PublicProjectGalleryImage,
+  PublicProjectDesigner,
+  PublicProjectNarrative,
+  PublicImageDetailProject,
+} from '@repo/contracts';
 import {
   Bookmark,
   ChevronLeft,
@@ -16,6 +22,7 @@ import {
 import { ShowcaseCard } from '@/components/showcase-card';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectLikeButton } from '@/components/project-like-button';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 import { env } from '@/env';
 
 interface ImageDetailViewProps {
@@ -77,6 +84,7 @@ export function ImageDetailView({
   const router = useRouter();
   const [selectedImageId, setSelectedImageId] = useState(activeImageId);
   const [bookmarked, setBookmarked] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [bookmarkPending, startBookmarkTransition] = useTransition();
   const savedStateVersion = useRef(0);
 
@@ -179,7 +187,7 @@ export function ImageDetailView({
   // Finding #2: Bookmark handler — uses callbackURL (not next=)
   function handleBookmark() {
     if (!isAuthenticated) {
-      router.push(`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`);
+      setLoginOpen(true);
       return;
     }
 
@@ -262,7 +270,15 @@ export function ImageDetailView({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-muted">
-                  <svg data-testid="image-placeholder" viewBox="0 0 24 24" className="size-12 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                  <svg
+                    data-testid="image-placeholder"
+                    viewBox="0 0 24 24"
+                    className="size-12 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    aria-hidden
+                  >
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <circle cx="9" cy="9" r="1.5" />
                     <path d="m21 15-5-5L5 21" />
@@ -300,15 +316,17 @@ export function ImageDetailView({
                 <div className="flex items-center gap-3">
                   <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                     {designer.logoUrl ? (
-                      <img src={designer.logoUrl} alt="" className="size-11 rounded-full object-cover" />
+                      <img
+                        src={designer.logoUrl}
+                        alt=""
+                        className="size-11 rounded-full object-cover"
+                      />
                     ) : (
                       designer.displayName.charAt(0)
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold">
-                      {designer.displayName}
-                    </p>
+                    <p className="text-sm font-semibold">{designer.displayName}</p>
                     {hasRating ? (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Star className="size-3 fill-primary text-primary" aria-hidden />
@@ -364,7 +382,10 @@ export function ImageDetailView({
 
               {/* Action buttons: bookmark + share */}
               <div className="flex items-center gap-3">
-                <ProjectLikeButton projectId={project.id} loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`} />
+                <ProjectLikeButton
+                  projectId={project.id}
+                  loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
+                />
                 <button
                   type="button"
                   onClick={handleBookmark}
@@ -395,9 +416,7 @@ export function ImageDetailView({
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     About this project
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {aboutText}
-                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{aboutText}</p>
                 </div>
               ) : null}
 
@@ -414,7 +433,11 @@ export function ImageDetailView({
 
         {/* Finding #7: Gallery strip — use aria-current instead of incomplete tab pattern */}
         {gallery.length > 1 ? (
-          <div className="mt-6 flex gap-3 overflow-x-auto p-1 pb-2 scrollbar-none" role="group" aria-label="Project gallery">
+          <div
+            className="mt-6 flex gap-3 overflow-x-auto p-1 pb-2 scrollbar-none"
+            role="group"
+            aria-label="Project gallery"
+          >
             {gallery.map((image, index) => (
               <button
                 key={image.id}
@@ -456,6 +479,11 @@ export function ImageDetailView({
           </div>
         </section>
       ) : null}
+      <ActionLoginDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
+      />
     </div>
   );
 }

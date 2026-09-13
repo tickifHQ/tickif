@@ -13,6 +13,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { authClient } from '@/lib/auth-client';
 import { requestConsultation } from '@/lib/bookings-api';
 import { userFacingErrorMessage } from '@/lib/user-facing-error';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 function istDay(days: number) {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000 + days * 86400000).toISOString().slice(0, 10);
@@ -39,12 +40,18 @@ export function BookingCta({
     () => false,
   );
   const [open, setOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const userRole = session && 'role' in session.user ? session.user.role : null;
   return (
     <>
-      <Button variant="outline" disabled={!hydrated || isPending} onClick={() => setOpen(true)}>
+      <Button
+        variant="outline"
+        disabled={!hydrated || isPending}
+        onClick={() => (session ? setOpen(true) : setLoginOpen(true))}
+      >
         Book consultation
       </Button>
+      <ActionLoginDialog open={loginOpen} onOpenChange={setLoginOpen} loginHref={loginHref} />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogTitle>Consultation with {designerName}</DialogTitle>
@@ -52,23 +59,19 @@ export function BookingCta({
             Suggest up to three dates and time windows in India Standard Time. The studio will
             confirm one.
           </DialogDescription>
-          {!session ? (
-            <Button asChild>
-              <Link href={loginHref}>Sign in to book</Link>
-            </Button>
-          ) : session.session.activeOrganizationId ? (
+          {session?.session.activeOrganizationId ? (
             <p>Switch to My Tickif using the workspace menu to book a personal consultation.</p>
-          ) : userRole !== 'visitor' && userRole !== 'designer' ? (
+          ) : session && userRole !== 'visitor' && userRole !== 'designer' ? (
             <p>A personal or designer account is required to book.</p>
-          ) : !session.user.phoneNumberVerified ? (
+          ) : session && !session.user.phoneNumberVerified ? (
             <p>Verify your phone number before requesting a consultation.</p>
-          ) : (
+          ) : session ? (
             <BookingForm
               key={`${session.user.id}:${designerProfileId}`}
               designerProfileId={designerProfileId}
               referredProjectId={referredProjectId}
             />
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

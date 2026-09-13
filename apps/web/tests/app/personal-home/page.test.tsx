@@ -55,7 +55,11 @@ vi.mock('@/lib/home-feed', () => ({
 }));
 
 vi.mock('@/components/project-feed', () => ({
-  ProjectFeed: () => <div data-testid="project-feed">feed</div>,
+  ProjectFeed: ({ infinite }: { infinite?: boolean }) => (
+    <div data-testid="project-feed" data-infinite={String(infinite)}>
+      feed
+    </div>
+  ),
 }));
 
 vi.mock('@/components/public-header', () => ({
@@ -90,6 +94,7 @@ describe('PersonalHomePage', () => {
     expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
     expect(screen.getAllByText('My Tickif')).not.toHaveLength(0);
     expect(screen.getByTestId('project-feed')).toBeInTheDocument();
+    expect(screen.getByTestId('project-feed')).toHaveAttribute('data-infinite', 'true');
     expect(screen.getByTestId('public-header')).toHaveAttribute('data-show-list-your-work', 'true');
     expect(screen.queryByRole('button', { name: 'Switch context' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Analytics/i)).not.toBeInTheDocument();

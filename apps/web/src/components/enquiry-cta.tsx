@@ -19,6 +19,7 @@ import { MessageSquare } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { EnquiryDialog } from '@/components/enquiry-dialog';
 import { api } from '@/lib/api';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 type EnquiryContext =
   | {
@@ -50,9 +51,7 @@ type Props = {
 const subscribeToHydration = () => () => undefined;
 
 type AvailabilityState =
-  | { status: 'checking' }
-  | { status: 'error' }
-  | { status: 'ready'; result: CheckEnquiryResponse };
+  { status: 'checking' } | { status: 'error' } | { status: 'ready'; result: CheckEnquiryResponse };
 
 type EnquiryAvailabilityContextValue = {
   state: AvailabilityState;
@@ -147,7 +146,7 @@ export function EnquiryAvailabilityProvider({
 /**
  * Login-gated enquiry CTA.
  *
- * - Not logged in → links to login page (preserving redirect).
+ * - Not logged in → opens the shared login dialog and preserves the post-login destination.
  * - Logged in + no existing enquiry → opens the enquiry dialog.
  * - Logged in + existing enquiry → shows "already sent" modal with link to Your Enquiries.
  */
@@ -174,16 +173,22 @@ export function EnquiryCta({
   const [alreadySentOpen, setAlreadySentOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [selfUnavailable, setSelfUnavailable] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   if (!hydrated || !session) {
     return (
-      <Link
-        href={loginHref}
-        aria-label={ariaLabel}
-        className={cn(buttonVariants({ variant, size }), className)}
-      >
-        {children}
-      </Link>
+      <>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className={cn(buttonVariants({ variant, size }), className)}
+          disabled={!hydrated}
+          onClick={() => setLoginOpen(true)}
+        >
+          {children}
+        </button>
+        <ActionLoginDialog open={loginOpen} onOpenChange={setLoginOpen} loginHref={loginHref} />
+      </>
     );
   }
 

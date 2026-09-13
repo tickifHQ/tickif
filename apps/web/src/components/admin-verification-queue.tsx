@@ -58,6 +58,7 @@ import {
   rejectAdminVerification,
   revokeAdminVerification,
 } from '@/lib/admin-verification-api';
+import { ListPagination } from '@/components/list-pagination';
 
 type ReviewIntent = 'approve' | 'request_changes' | 'revoke';
 
@@ -934,11 +935,17 @@ export function AdminVerificationQueue({
           <TabsList aria-label="Profile verification queues">
             {ADMIN_VERIFICATION_QUEUE_TAB_VALUES.map((tab) => (
               <TabsTrigger key={tab} value={tab} disabled={loadingTab !== null}>
-                {loadingTab === tab ? (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                ) : null}
                 {tabLabels[tab]}
-                <span className="ml-1 text-xs text-muted-foreground">{tabCounts[tab]}</span>
+                <span className="ml-1 inline-flex min-w-4 items-center justify-center text-xs text-muted-foreground">
+                  {loadingTab === tab ? (
+                    <Loader2
+                      className="size-3.5 animate-spin"
+                      aria-label={`Loading ${tabLabels[tab]} count`}
+                    />
+                  ) : (
+                    tabCounts[tab]
+                  )}
+                </span>
               </TabsTrigger>
             ))}
           </TabsList>
@@ -955,31 +962,17 @@ export function AdminVerificationQueue({
       </Tabs>
 
       {activeQueue.totalPages > 1 ? (
-        <div className="mt-5 flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Page {activeQueue.page} of {activeQueue.totalPages}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void loadPage(activeTab, activeQueue.page - 1)}
-              disabled={loadingTab !== null || activeQueue.page <= 1}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void loadPage(activeTab, activeQueue.page + 1)}
-              disabled={loadingTab !== null || activeQueue.page >= activeQueue.totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <ListPagination
+          page={activeQueue.page}
+          totalPages={activeQueue.totalPages}
+          total={activeQueue.total}
+          limit={activeQueue.limit}
+          itemName="application"
+          showPageSize={false}
+          disabled={loadingTab !== null}
+          onPageChange={(page) => void loadPage(activeTab, page)}
+          className="mt-5"
+        />
       ) : null}
 
       <Dialog open={selectedApplicationId !== null} onOpenChange={(open) => !open && closeDetail()}>

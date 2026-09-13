@@ -61,6 +61,72 @@ describe('AdminReviewQueue', () => {
     mocks.detail.mockResolvedValue(detail);
     mocks.queue.mockResolvedValue({ ...queue, items: [], total: 0, totalPages: 0 });
   });
+  it('matches the shared moderation tabs and keeps both queue counts visible', async () => {
+    render(
+      <AdminReviewQueue
+        initialQueue={queue}
+        initialCounts={{ pending: 4, disputed: 2 }}
+        status="pending"
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: 'Pending 4' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Disputed 2' })).toHaveAttribute(
+      'data-state',
+      'inactive',
+    );
+    expect(screen.getByText('1 pending review')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'Disputed 2' }));
+    expect(mocks.push).toHaveBeenCalledWith('/review-moderation?status=disputed&page=1');
+  });
+  it('shows refresh queue as an icon button with a tooltip and refreshes every queue count', async () => {
+    mocks.queue.mockImplementation(({ status }: { status: 'pending' | 'disputed' }) =>
+      Promise.resolve({
+        ...queue,
+        items: status === 'pending' ? queue.items : [],
+        total: status === 'pending' ? 3 : 5,
+        totalPages: 1,
+      }),
+    );
+    render(
+      <AdminReviewQueue
+        initialQueue={queue}
+        initialCounts={{ pending: 1, disputed: 2 }}
+        status="pending"
+      />,
+    );
+    const refreshButton = screen.getByRole('button', { name: 'Refresh queue' });
+
+    expect(refreshButton).not.toHaveTextContent('Refresh queue');
+    expect(refreshButton.querySelector('svg')).toBeInTheDocument();
+    await userEvent.hover(refreshButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Refresh queue');
+    await userEvent.click(refreshButton);
+    await waitFor(() => {
+      expect(mocks.queue).toHaveBeenCalledWith({ status: 'pending', page: 1, limit: 20 });
+      expect(mocks.queue).toHaveBeenCalledWith({ status: 'disputed', page: 1, limit: 20 });
+    });
+    expect(screen.getByRole('tab', { name: 'Pending 3' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Disputed 5' })).toBeInTheDocument();
+  });
+  it('uses the warning badge for a pending review', async () => {
+    render(<AdminReviewQueue initialQueue={queue} status="pending" />);
+
+    await openReview();
+
+    expect(screen.getByText('pending', { exact: true })).toHaveClass('bg-warning');
+  });
+  it('shows refresh details as an icon button with a tooltip', async () => {
+    render(<AdminReviewQueue initialQueue={queue} status="pending" />);
+
+    await openReview();
+    const refreshButton = screen.getByRole('button', { name: 'Refresh details' });
+
+    expect(refreshButton).not.toHaveTextContent('Refresh details');
+    expect(refreshButton.querySelector('svg')).toBeInTheDocument();
+    await userEvent.hover(refreshButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Refresh details');
+  });
   it('requires a rejection reason and note, then removes the decided review', async () => {
     render(<AdminReviewQueue initialQueue={queue} status="pending" />);
     await openReview();
@@ -144,9 +210,9 @@ describe('AdminReviewQueue', () => {
         status="disputed"
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(mocks.push).toHaveBeenCalledWith('/review-moderation?status=disputed&page=3');
-    await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Previous page' }));
     expect(mocks.push).toHaveBeenCalledWith('/review-moderation?status=disputed&page=1');
   });
   it('returns to the last valid page after deciding its final review', async () => {

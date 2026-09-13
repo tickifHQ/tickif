@@ -16,7 +16,7 @@ import { DesignerLeadDetailDialog } from '@/components/designer-lead-detail-dial
 import { DesignerLeadMoreMenu } from '@/components/designer-lead-more-menu';
 import { DesignerLeadStatusBadge } from '@/components/designer-lead-status';
 import { DesignerListControls, type DesignerListTab } from '@/components/designer-list-controls';
-import { DesignerListPagination } from '@/components/designer-list-pagination';
+import { UrlListPagination } from '@/components/list-pagination';
 import { SortableHeader } from '@/components/sortable-header';
 
 const leadTabs: Array<DesignerListTab<LeadListStatus>> = [
@@ -105,6 +105,7 @@ export function DesignerLeadsList({
       <DesignerListControls
         tabs={leadTabs.map((tab) => ({
           ...tab,
+          count: tabCounts?.[tab.value],
         }))}
         activeTab={activeStatus}
         searchValue={query}
@@ -121,15 +122,30 @@ export function DesignerLeadsList({
           <TableHeader>
             <TableRow className="border-0 bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[15.625rem] rounded-l-lg">
-                <SortableHeader field="name" label="Lead" currentSort={sortBy} currentOrder={sortOrder} />
+                <SortableHeader
+                  field="name"
+                  label="Lead"
+                  currentSort={sortBy}
+                  currentOrder={sortOrder}
+                />
               </TableHead>
               <TableHead className="w-60">Referred project</TableHead>
               <TableHead className="w-48">Contact number</TableHead>
               <TableHead className="w-28">
-                <SortableHeader field="budget" label="Budget" currentSort={sortBy} currentOrder={sortOrder} />
+                <SortableHeader
+                  field="budget"
+                  label="Budget"
+                  currentSort={sortBy}
+                  currentOrder={sortOrder}
+                />
               </TableHead>
               <TableHead className="w-36">
-                <SortableHeader field="receivedAt" label="Received on" currentSort={sortBy} currentOrder={sortOrder} />
+                <SortableHeader
+                  field="receivedAt"
+                  label="Received on"
+                  currentSort={sortBy}
+                  currentOrder={sortOrder}
+                />
               </TableHead>
               <TableHead className="w-44">Response</TableHead>
               <TableHead className="w-20 rounded-r-lg text-right">Actions</TableHead>
@@ -142,7 +158,9 @@ export function DesignerLeadsList({
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="size-8 bg-primary text-primary-foreground">
-                        <span className="flex size-full items-center justify-center text-xs font-bold">{initials(lead.name)}</span>
+                        <span className="flex size-full items-center justify-center text-xs font-bold">
+                          {initials(lead.name)}
+                        </span>
                       </Avatar>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium text-foreground">
@@ -218,7 +236,7 @@ export function DesignerLeadsList({
         </Table>
       </div>
 
-      <DesignerListPagination
+      <UrlListPagination
         page={leads.page}
         totalPages={leads.totalPages}
         total={leads.total}

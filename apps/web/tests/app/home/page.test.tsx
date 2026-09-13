@@ -45,7 +45,15 @@ function response(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 500, json: async () => body };
 }
 
-function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
+function mockApi({
+  items = [discoveryCard],
+  hasMore = false,
+  facetDistribution = {},
+}: {
+  items?: (typeof discoveryCard)[];
+  hasMore?: boolean;
+  facetDistribution?: Record<string, Record<string, number>>;
+} = {}) {
   (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes('/api/taxonomy/terms')) {
@@ -98,6 +106,18 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           ],
         });
       }
+      if (kind === 'theme') {
+        return response({
+          terms: [
+            {
+              id: '77777777-7777-4777-8777-777777777777',
+              label: 'Modern',
+              slug: 'modern',
+              parentId: null,
+            },
+          ],
+        });
+      }
       return response({ terms: [] });
     }
     if (url.includes('/api/search?')) {
@@ -127,7 +147,7 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
           publishedAt: 1_700_000_000_000,
         })),
         estimatedTotalHits: items.length,
-        facetDistribution: {},
+        facetDistribution,
         processingTimeMs: 2,
         page,
         limit: 24,
@@ -144,7 +164,7 @@ function mockApi({ items = [discoveryCard], hasMore = false } = {}) {
         limit: Number(requestUrl.searchParams.get('limit') ?? '24'),
         hasMore,
         source: 'db',
-        facetDistribution: {},
+        facetDistribution,
         fallback: 'none',
         relaxedFilters: [],
       });
@@ -214,16 +234,17 @@ describe('HomePage', () => {
     expect(screen.queryByRole('link', { name: 'Next page' })).not.toBeInTheDocument();
   });
 
-  it('renders a visible next-page control on the logged-out default feed', async () => {
+  it('keeps crawl metadata without showing pagination in the infinite feed', async () => {
     mockApi({ hasMore: true });
 
     render(await HomePage());
 
     expect(document.querySelector('link[rel="next"]')).toHaveAttribute('href', '/?page=2');
-    expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=2');
+    expect(screen.queryByRole('navigation', { name: 'Feed pages' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more projects' })).toBeInTheDocument();
   });
 
-  it('renders the taxonomy-driven try-filter card in the logged-out featured feed', async () => {
+  it('renders multi-category taxonomy-driven suggestions in the logged-out feed', async () => {
     const items = Array.from({ length: 14 }, (_, index) => ({
       ...discoveryCard,
       id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
@@ -239,6 +260,27 @@ describe('HomePage', () => {
       'href',
       '/?budgetBand=upscale',
     );
+    expect(screen.getByRole('link', { name: 'Modern' })).toHaveAttribute('href', '/?theme=modern');
+    expect(screen.getByRole('link', { name: 'Living Room' })).toHaveAttribute(
+      'href',
+      '/?room=living-room',
+    );
+  });
+
+  it('does not suggest a budget band with no live matching projects', async () => {
+    const items = Array.from({ length: 14 }, (_, index) => ({
+      ...discoveryCard,
+      id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, '0')}`,
+      slug: `test-project-${index + 1}`,
+      title: `Test Project ${index + 1}`,
+    }));
+    mockApi({ items, facetDistribution: { budgetBandSlug: { upscale: 0 } } });
+
+    render(await HomePage());
+
+    expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '₹15–35L' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Modern' })).toBeInTheDocument();
   });
 
   it('renders a useful zero-result state', async () => {
@@ -300,16 +342,10 @@ describe('HomePage', () => {
       '/?city=mumbai%2Cpune&page=3',
     );
 
-    // …and the same hrefs are reachable as real controls, not just <link> hints.
-    const pagination = screen.getByRole('navigation', { name: 'Feed pages' });
-    expect(within(pagination).getByRole('link', { name: 'Previous page' })).toHaveAttribute(
-      'href',
-      '/?city=mumbai%2Cpune',
-    );
-    expect(within(pagination).getByRole('link', { name: 'Next page' })).toHaveAttribute(
-      'href',
-      '/?city=mumbai%2Cpune&page=3',
-    );
+    // Crawl metadata remains available, while the rendered feed uses one
+    // interaction model: infinite masonry with a load-more fallback.
+    expect(screen.queryByRole('navigation', { name: 'Feed pages' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more projects' })).toBeInTheDocument();
   });
 
   it('revalidates taxonomy requests instead of refetching them on every render', async () => {
@@ -430,8 +466,9 @@ describe('HomePage', () => {
 
     render(await HomePage({ searchParams: Promise.resolve({ budgetBand: 'upscale' }) }));
 
-    expect(screen.queryByRole('heading', { name: 'Try a filter' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Try a filter' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '₹15–35L' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Modern' })).toBeInTheDocument();
   });
 
   it('generates a canonical URL for the crawlable page', async () => {

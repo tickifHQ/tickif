@@ -193,6 +193,32 @@ describe('AdminVerificationQueue', () => {
     expect(mock.fetchQueue).not.toHaveBeenCalled();
   });
 
+  it('replaces the selected count with its loader without shifting the tab label', async () => {
+    let resolveQueue: ((value: AdminVerificationQueueResponse) => void) | undefined;
+    mock.fetchQueue.mockReturnValueOnce(
+      new Promise<AdminVerificationQueueResponse>((resolve) => {
+        resolveQueue = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AdminVerificationQueue
+        initialQueue={queue}
+        initialCounts={{ new: 1, re_review: 2, accepted: 7, changes_requested: 3, expired: 0 }}
+      />,
+    );
+
+    const acceptedTab = screen.getByRole('tab', { name: /accepted/i });
+    await user.click(acceptedTab);
+
+    expect(within(acceptedTab).getByText('Accepted')).toBeVisible();
+    expect(within(acceptedTab).queryByText('7')).not.toBeInTheDocument();
+    expect(within(acceptedTab).getByLabelText('Loading Accepted count')).toBeVisible();
+
+    resolveQueue?.({ ...queue, tab: 'accepted', items: [], total: 7 });
+    await waitFor(() => expect(within(acceptedTab).getByText('7')).toBeVisible());
+  });
+
   it('opens the submitted application and allows the document to be reviewed', async () => {
     const user = userEvent.setup();
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -386,23 +412,23 @@ describe('AdminVerificationQueue', () => {
     );
     render(<AdminVerificationQueue initialQueue={firstPage} />);
 
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    expect(screen.getByText('Page 1 of 2 · 21 applications')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled();
 
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
 
     expect(await screen.findByText('Studio South')).toBeInTheDocument();
     expect(mock.fetchQueue).toHaveBeenLastCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 2);
-    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(screen.getByText('Page 2 of 2 · 21 applications')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
 
     expect(await screen.findByText('Studio North')).toBeInTheDocument();
     expect(mock.fetchQueue).toHaveBeenLastCalledWith(ADMIN_VERIFICATION_QUEUE_TAB.NEW, 1);
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 2 · 21 applications')).toBeInTheDocument();
   });
 
   it('keeps accepted verification history protected from pending-only actions', async () => {

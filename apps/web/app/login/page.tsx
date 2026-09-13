@@ -8,7 +8,9 @@ import {
 } from '@repo/contracts';
 import { LoginCard } from '@/components/login-card';
 import { getServerSession, rolePassesCheck } from '@/lib/auth-guard';
-import { ADMIN_DASHBOARD_PATH } from '@/lib/auth-paths';
+import { ADMIN_DASHBOARD_PATH, safeCallbackPath } from '@/lib/auth-paths';
+
+export { safeCallbackPath } from '@/lib/auth-paths';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -17,14 +19,6 @@ type LoginPageProps = {
     next?: string | string[];
   }>;
 };
-
-export function safeCallbackPath(value: string | string[] | undefined): string | undefined {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  if (!candidate?.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) {
-    return undefined;
-  }
-  return candidate;
-}
 
 export default async function LoginPage({ searchParams }: LoginPageProps): Promise<ReactNode> {
   const [params, session] = await Promise.all([

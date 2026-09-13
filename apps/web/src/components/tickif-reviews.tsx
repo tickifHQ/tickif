@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import type { ParticipantReview, PublishedReviewsResponse, ReviewResponse } from '@repo/contracts';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import { Badge } from '@repo/ui/components/badge';
@@ -9,6 +8,7 @@ import { Button } from '@repo/ui/components/button';
 import { ReviewEditor } from '@/components/review-editor';
 import { fetchOwnReview, fetchTickifReviews } from '@/lib/reviews-api';
 import { userFacingErrorMessage } from '@/lib/user-facing-error';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 export function TickifReviews({
   designerProfileId,
@@ -35,6 +35,7 @@ export function TickifReviews({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   async function reload(targetPage = page?.page ?? 1) {
     setBusy(true);
     setError('');
@@ -206,9 +207,12 @@ export function TickifReviews({
           </p>
         ) : null}
         {loginHref ? (
-          <Button asChild>
-            <Link href={loginHref}>Sign in to write a review</Link>
+          <Button type="button" onClick={() => setLoginOpen(true)}>
+            Sign in to write a review
           </Button>
+        ) : null}
+        {loginHref ? (
+          <ActionLoginDialog open={loginOpen} onOpenChange={setLoginOpen} loginHref={loginHref} />
         ) : null}
         {viewerMessage ? <p className="text-sm text-muted-foreground">{viewerMessage}</p> : null}
         {own ? (

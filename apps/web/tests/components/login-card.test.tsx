@@ -102,6 +102,13 @@ describe('LoginCard', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('returns to the public home page when the standalone card is closed', async () => {
+    const user = userEvent.setup();
+    render(<LoginCard />);
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(mock.router.push).toHaveBeenCalledWith('/');
+  });
+
   it('shows Google sign-in and email input in designer mode', async () => {
     const user = userEvent.setup();
     render(<LoginCard />);

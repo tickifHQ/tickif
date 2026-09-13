@@ -252,7 +252,9 @@ describe('AdminModerationQueue', () => {
     await user.click(await screen.findByRole('button', { name: 'Request changes' }));
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
-    expect(await screen.findByText('A note between 1 and 2,000 characters is required for this action.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('A note between 1 and 2,000 characters is required for this action.'),
+    ).toBeInTheDocument();
     expect(mocks.requestChanges).not.toHaveBeenCalled();
   });
 
@@ -265,9 +267,14 @@ describe('AdminModerationQueue', () => {
       mocks.reject.mockResolvedValue(detail({ status: 'rejected' }));
       renderQueue();
 
-      await user.click(screen.getByRole('button', { name: /open review for a calm coastal home/i }));
+      await user.click(
+        screen.getByRole('button', { name: /open review for a calm coastal home/i }),
+      );
       await user.click(await screen.findByRole('button', { name: action }));
-      await user.type(screen.getByRole('textbox', { name: 'Note' }), 'Use clear images and correct room labels.');
+      await user.type(
+        screen.getByRole('textbox', { name: 'Note' }),
+        'Use clear images and correct room labels.',
+      );
       await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
       expect(mocks.requestChanges).not.toHaveBeenCalled();
@@ -281,7 +288,10 @@ describe('AdminModerationQueue', () => {
       await waitFor(() => {
         expect(action === 'Reject' ? mocks.reject : mocks.requestChanges).toHaveBeenCalledWith(
           projectId,
-          { note: 'Use clear images and correct room labels.', reasonCodes: ['image-quality', 'room-tagging'] },
+          {
+            note: 'Use clear images and correct room labels.',
+            reasonCodes: ['image-quality', 'room-tagging'],
+          },
         );
       });
     },
@@ -316,8 +326,8 @@ describe('AdminModerationQueue', () => {
         currentUserRole="admin"
       />,
     );
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
     expect(mocks.push).toHaveBeenCalledWith('/moderation?status=submitted&page=2');
     await user.click(screen.getByRole('tab', { name: /Published/ }));
     expect(mocks.push).toHaveBeenCalledWith('/moderation?status=published&page=1');
@@ -336,11 +346,11 @@ describe('AdminModerationQueue', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Refresh queue' }));
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
     await user.click(screen.getByRole('tab', { name: /Published/ }));
 
     expect(mocks.push).toHaveBeenCalledWith('/moderation?status=published&page=1');
-    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled();
   });
 
   it('keeps deep-linked tab and page, and corrects a page emptied by a decision', async () => {
@@ -366,7 +376,7 @@ describe('AdminModerationQueue', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: /Open review/ }));
     await user.click(await screen.findByRole('button', { name: 'Approve' }));
     await waitFor(() => expect(mocks.fetchQueue).toHaveBeenCalledWith('in_review', 2));

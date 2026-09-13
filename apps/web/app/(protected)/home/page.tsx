@@ -13,7 +13,8 @@ import {
   parseFeedQuery,
 } from '@/lib/feed-params';
 import {
-  budgetSuggestions,
+  feedFilterCardPlacementSeed,
+  feedFilterSuggestions,
   canonicalFeedParams,
   feedPageLink,
   searchLabelMaps,
@@ -93,7 +94,10 @@ export default async function PersonalHomePage({
     ...baseRequest,
     ...searchLabelMaps(taxonomyOptions),
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions, params, '/home');
+  const filterSuggestions = feedFilterSuggestions(taxonomyOptions, params, {
+    base: '/home',
+    facetDistribution: initialPage.facetDistribution,
+  });
   const paginationParams = canonicalFeedParams(params, 1);
   const previousHref = page > 1 ? feedPageLink(params, page - 1, '/home') : null;
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1, '/home') : null;
@@ -133,7 +137,9 @@ export default async function PersonalHomePage({
             <ProjectFeed
               initialPage={initialPage}
               request={request}
+              infinite
               filterSuggestions={filterSuggestions}
+              filterCardPlacementSeed={feedFilterCardPlacementSeed()}
               paginationParams={paginationParams}
               paginationBase="/home"
             />

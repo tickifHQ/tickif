@@ -4,6 +4,7 @@ import type { DiscoveryCard } from '@repo/contracts';
 
 const mock = vi.hoisted(() => ({
   fetchHomeFeedPage: vi.fn(),
+  observerOptions: [] as IntersectionObserverInit[],
 }));
 
 vi.mock('@/lib/home-feed', () => ({
@@ -11,6 +12,7 @@ vi.mock('@/lib/home-feed', () => ({
 }));
 
 import { ProjectFeed } from '../../src/components/project-feed';
+import type { FeedFilterSuggestion } from '../../src/components/try-filter-card';
 import { MAX_HOME_FEED_PAGE, type FeedFilterState } from '../../src/lib/feed-params';
 import type { HomeFeedPage } from '../../src/lib/home-feed';
 
@@ -43,13 +45,25 @@ function card(id: string, title: string): DiscoveryCard {
   };
 }
 
+function filterSuggestion(index: number): FeedFilterSuggestion {
+  return {
+    href: `/home?theme=theme-${index}`,
+    label: `Theme ${index}`,
+    facet: 'theme',
+    facetLabel: 'Theme',
+  };
+}
+
 describe('ProjectFeed', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mock.observerOptions.length = 0;
     Object.defineProperty(globalThis, 'IntersectionObserver', {
       configurable: true,
       value: class {
-        constructor(_callback: IntersectionObserverCallback) {}
+        constructor(_callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+          mock.observerOptions.push(options ?? {});
+        }
         observe() {}
         disconnect() {}
         unobserve() {}
@@ -61,6 +75,25 @@ describe('ProjectFeed', () => {
         thresholds = [];
       },
     });
+  });
+
+  it('preloads another masonry page shortly before the feed boundary is visible', () => {
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: [card('project-1', 'First Project')],
+          page: 1,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+      />,
+    );
+
+    expect(mock.observerOptions).toContainEqual({ rootMargin: '600px 0px' });
+    expect(mock.fetchHomeFeedPage).not.toHaveBeenCalled();
   });
 
   it('keeps all 26 cards after equivalent server props arrive following page two', async () => {
@@ -267,6 +300,64 @@ describe('ProjectFeed', () => {
     expect(document.querySelectorAll('[data-masonry-feed]')).toHaveLength(1);
   });
 
+  it('keeps existing cards in their masonry columns when another page is appended', async () => {
+    const getComputedStyle = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      getPropertyValue: (property: string) => (property === '--masonry-columns' ? '3' : ''),
+    } as CSSStyleDeclaration);
+    const firstPageItems = Array.from({ length: 12 }, (_, index) =>
+      card(`project-${index}`, `Project ${index}`),
+    );
+    mock.fetchHomeFeedPage.mockResolvedValue({
+      items: Array.from({ length: 6 }, (_, index) =>
+        card(`project-${index + 12}`, `Project ${index + 12}`),
+      ),
+      page: 2,
+      hasMore: false,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    });
+
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: firstPageItems,
+          page: 1,
+          hasMore: true,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+      />,
+    );
+
+    expect(document.querySelector('[data-masonry-mode="stable"]')).toBeInTheDocument();
+    const originalColumns = new Map(
+      firstPageItems.map((project) => [
+        project.id,
+        screen
+          .getByText(project.title)
+          .closest('[data-feed-column]')
+          ?.getAttribute('data-feed-column'),
+      ]),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(18));
+
+    for (const project of firstPageItems) {
+      expect(
+        screen
+          .getByText(project.title)
+          .closest('[data-feed-column]')
+          ?.getAttribute('data-feed-column'),
+      ).toBe(originalColumns.get(project.id));
+    }
+    expect(document.querySelectorAll('[data-masonry-feed]')).toHaveLength(1);
+    getComputedStyle.mockRestore();
+  });
+
   it('declares the masonry column count in CSS so server markup is correct at every breakpoint', () => {
     render(
       <ProjectFeed
@@ -293,6 +384,118 @@ describe('ProjectFeed', () => {
       expect.stringContaining('First Project'),
       expect.stringContaining('Second Project'),
     ]);
+  });
+
+  it('places two filter cards in separated variable positions without moving them on refresh', () => {
+    const initialPage: HomeFeedPage = {
+      items: Array.from({ length: 24 }, (_, index) => card(`project-${index}`, `Project ${index}`)),
+      page: 1,
+      hasMore: true,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    const filterSuggestions = Array.from({ length: 10 }, (_, index) => filterSuggestion(index));
+    const request = { filters, query: '' };
+    const { rerender } = render(
+      <ProjectFeed
+        initialPage={initialPage}
+        request={request}
+        infinite={false}
+        filterSuggestions={filterSuggestions}
+        filterCardPlacementSeed={123}
+      />,
+    );
+
+    const masonry = document.querySelector('[data-masonry-feed]');
+    const placementIndexes = () =>
+      Array.from(masonry?.children ?? []).flatMap((child, index) =>
+        child.hasAttribute('data-try-filter-card') ? [index] : [],
+      );
+    const initialPlacementIndexes = placementIndexes();
+
+    expect(screen.getAllByRole('heading', { name: 'Try a filter' })).toHaveLength(2);
+    expect(document.querySelectorAll('[data-try-filter-card]')).toHaveLength(2);
+    expect(initialPlacementIndexes[1]! - initialPlacementIndexes[0]!).toBeGreaterThan(2);
+    for (const suggestion of filterSuggestions) {
+      expect(screen.getAllByRole('link', { name: suggestion.label })).toHaveLength(1);
+    }
+
+    // An equivalent RSC refresh can carry a new random seed, but an already
+    // visible feed keeps the seed from its first render and does not jump.
+    rerender(
+      <ProjectFeed
+        initialPage={structuredClone(initialPage)}
+        request={{ ...request }}
+        infinite={false}
+        filterSuggestions={structuredClone(filterSuggestions)}
+        filterCardPlacementSeed={987_654}
+      />,
+    );
+
+    expect(placementIndexes()).toEqual(initialPlacementIndexes);
+  });
+
+  it('uses the placement seed to vary filter card positions between page loads', () => {
+    const initialPage: HomeFeedPage = {
+      items: Array.from({ length: 24 }, (_, index) => card(`project-${index}`, `Project ${index}`)),
+      page: 1,
+      hasMore: false,
+      facetDistribution: {},
+      fallback: 'none',
+      relaxedFilters: [],
+    };
+    const props = {
+      initialPage,
+      request: { filters, query: '' },
+      infinite: false,
+      filterSuggestions: Array.from({ length: 10 }, (_, index) => filterSuggestion(index)),
+    } as const;
+    const positionsForSeed = (seed: number) => {
+      const { unmount } = render(<ProjectFeed {...props} filterCardPlacementSeed={seed} />);
+      const masonry = document.querySelector('[data-masonry-feed]');
+      const indexes = Array.from(masonry?.children ?? []).flatMap((child, index) =>
+        child.hasAttribute('data-try-filter-card') ? [index] : [],
+      );
+      unmount();
+      return indexes;
+    };
+
+    const placements = new Set(
+      [1, 2, 3, 4, 5].map((seed) => JSON.stringify(positionsForSeed(seed))),
+    );
+    expect(placements.size).toBeGreaterThan(1);
+  });
+
+  it('keeps multiple filter cards in separate masonry columns', () => {
+    const getComputedStyle = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+      getPropertyValue: (property: string) => (property === '--masonry-columns' ? '3' : ''),
+    } as CSSStyleDeclaration);
+
+    render(
+      <ProjectFeed
+        initialPage={{
+          items: Array.from({ length: 24 }, (_, index) =>
+            card(`project-${index}`, `Project ${index}`),
+          ),
+          page: 1,
+          hasMore: false,
+          facetDistribution: {},
+          fallback: 'none',
+          relaxedFilters: [],
+        }}
+        request={{ filters, query: '' }}
+        filterSuggestions={Array.from({ length: 10 }, (_, index) => filterSuggestion(index))}
+        filterCardPlacementSeed={123}
+      />,
+    );
+
+    const filterColumns = [...document.querySelectorAll('[data-try-filter-card]')].map((card) =>
+      card.closest('[data-feed-column]')?.getAttribute('data-feed-column'),
+    );
+    expect(filterColumns).toHaveLength(2);
+    expect(new Set(filterColumns).size).toBe(2);
+    getComputedStyle.mockRestore();
   });
 
   it('explains when search results were broadened', () => {
@@ -345,6 +548,7 @@ describe('ProjectFeed', () => {
           relaxedFilters: [],
         }}
         request={{ filters, query: '', sort: 'recent' }}
+        infinite={false}
         paginationParams={{ city: 'mumbai' }}
       />,
     );
@@ -373,6 +577,7 @@ describe('ProjectFeed', () => {
           relaxedFilters: [],
         }}
         request={{ filters, query: '', sort: 'recent' }}
+        infinite={false}
         paginationParams={{ city: 'mumbai' }}
         paginationBase="/home"
       />,
@@ -401,6 +606,7 @@ describe('ProjectFeed', () => {
           relaxedFilters: [],
         }}
         request={{ filters, query: '', sort: 'recent' }}
+        infinite={false}
         paginationParams={{}}
         paginationBase="/home"
       />,
@@ -456,13 +662,12 @@ describe('ProjectFeed', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=2');
+    expect(screen.queryByRole('navigation', { name: 'Feed pages' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Load more projects' }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute('href', '/?page=3'),
-    );
+    await waitFor(() => expect(screen.getByText('Second Project')).toBeInTheDocument());
+    expect(screen.queryByRole('navigation', { name: 'Feed pages' })).not.toBeInTheDocument();
   });
 
   it('keeps a way back when a deep page has no results', () => {
@@ -477,6 +682,7 @@ describe('ProjectFeed', () => {
           relaxedFilters: [],
         }}
         request={{ filters, query: '', sort: 'recent' }}
+        infinite={false}
         paginationParams={{}}
       />,
     );

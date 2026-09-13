@@ -28,6 +28,11 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
+
 const { EnquiryAvailabilityProvider, EnquiryCta } =
   await import('../../src/components/enquiry-cta');
 
@@ -64,6 +69,16 @@ describe('EnquiryCta', () => {
   afterEach(() => {
     mocks.session = null;
     vi.clearAllMocks();
+  });
+
+  it('opens the shared login dialog in place for a signed-out visitor', async () => {
+    render(<EnquiryCta {...props}>Enquire</EnquiryCta>);
+
+    const trigger = await screen.findByRole('button', { name: 'Enquire with Studio North' });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(window.location.pathname).not.toBe('/login');
   });
 
   it('opens the enquiry form in place for a signed-in visitor', async () => {

@@ -7,6 +7,11 @@ vi.mock('@/components/project-like-button', () => ({
   ProjectLikeButton: () => <button>Like</button>,
 }));
 
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
+
 const mocks = vi.hoisted(() => ({
   session: null as { user: { id: string } } | null,
   isPending: false,
@@ -80,8 +85,8 @@ describe('ProjectActions', () => {
       try {
         if (identity === 'anonymous') {
           expect(
-            await screen.findByRole('link', { name: 'Sign in to save project' }),
-          ).toHaveAttribute('href', '/login');
+            await screen.findByRole('button', { name: 'Sign in to save project' }),
+          ).toBeEnabled();
         } else {
           await waitFor(() =>
             expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled(),
@@ -97,7 +102,7 @@ describe('ProjectActions', () => {
     },
   );
 
-  it('routes signed-out visitors to login before saving', () => {
+  it('opens login in place for signed-out visitors before saving', async () => {
     render(
       <ProjectActions
         projectId="11111111-1111-4111-8111-111111111111"
@@ -106,10 +111,8 @@ describe('ProjectActions', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'Sign in to save project' })).toHaveAttribute(
-      'href',
-      '/login?callbackURL=%2Fprojects%2F11111111-1111-4111-8111-111111111111',
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to save project' }));
+    expect(await screen.findByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(mocks.getSavedState).not.toHaveBeenCalled();
   });
 

@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicDesignerProfile } from '../../src/components/public-designer-profile';
 import { makeProjects, makePublicPortfolio, makeReview } from '../fixtures/public-portfolio';
 
-vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+vi.mock('@/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button>Like</button>,
+}));
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
 
 const mocks = vi.hoisted(() => ({
   session: null as {
@@ -392,22 +398,14 @@ describe('PublicDesignerProfile', () => {
     expect(writeText).toHaveBeenCalledWith('http://localhost:3000/d/anika-spaces');
   });
 
-  it('routes signed-out enquiry actions through login with a profile return path', () => {
+  it('opens login in place for signed-out profile actions', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 
-    expect(screen.getByRole('link', { name: 'Start a conversation' })).toHaveAttribute(
-      'href',
-      '/login?callbackURL=%2Fd%2Fanika-spaces',
-    );
-    screen
-      .getAllByRole('link', { name: 'Enquire' })
-      .forEach((link) =>
-        expect(link).toHaveAttribute('href', '/login?callbackURL=%2Fd%2Fanika-spaces'),
-      );
-    expect(screen.getByRole('link', { name: 'Get free consultation' })).toHaveAttribute(
-      'href',
-      '/login?callbackURL=%2Fd%2Fanika-spaces',
-    );
+    expect(screen.getByRole('button', { name: 'Start a conversation' })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Enquire' })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Get free consultation' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Start a conversation' }));
+    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Save profile' })).not.toBeInTheDocument();
   });
 

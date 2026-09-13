@@ -1,26 +1,16 @@
 import type { ReactNode } from 'react';
 import { PLATFORM_ROLE } from '@repo/contracts';
-import { SiteNav } from '@/components/site-nav';
-import { SiteFooter } from '@/components/site-footer';
+import { AdminWorkspaceShell } from '@/components/admin-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 
-const adminLinks = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/moderation', label: 'Moderation' },
-  { href: '/review-moderation', label: 'Review moderation' },
-  { href: '/verifications', label: 'Profile verification' },
-];
-
 /** Admin console chrome. Requires role: admin or superadmin (redirects to /unauthorized). */
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  await requireAuth({ requiredRole: PLATFORM_ROLE.ADMIN });
+  const session = await requireAuth({ requiredRole: PLATFORM_ROLE.ADMIN });
   return (
-    <div className="flex min-h-screen flex-col">
+    <AdminWorkspaceShell adminName={session.user.name?.trim() || 'Admin'}>
       <ProtectedBfcacheGuard />
-      <SiteNav brand="Tickif · Admin" brandHref="/dashboard" links={adminLinks} />
-      <main className="flex-1">{children}</main>
-      <SiteFooter />
-    </div>
+      {children}
+    </AdminWorkspaceShell>
   );
 }
