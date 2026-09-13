@@ -218,10 +218,10 @@ room names/types. Draft and archived projects do not contribute. Publish and
 unpublish transitions refresh the designer projection. Suggestions continue to
 search profile fields only.
 
-A three-letter alphabetic query that has zero matches gets one retry allowing
-one typo, with token dropping disabled. Thus `bad` can recover `bed`/`bedroom`
-when there is no literal match. Existing matches, filters and pagination are
-preserved. Shorter, numeric and multiword queries keep ordinary Typesense rules.
+The known query `bad` gets one retry as `bed` when it has zero literal matches,
+with token dropping disabled. Existing matches, filters and pagination are
+preserved. Other short queries keep ordinary Typesense rules. This narrow map
+avoids treating unrelated three-letter words as arbitrary one-edit typos.
 
 Deploy the worker and API, then apply schema updates and rebuild both collections
 using the commands above. A missing new schema field falls back to the previous

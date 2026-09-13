@@ -92,6 +92,17 @@ describe('discovery ranking against Typesense', () => {
       'free-five',
       'paid-four',
     ]);
+
+    const unrelated = await searchWithDiscoveryFallback(
+      (params) =>
+        client
+          .collections<Record<string, unknown> & { id: string }>(collection)
+          .documents()
+          .search(params),
+      { ...query, q: 'bar' },
+      { ...query, q: 'bar' },
+    );
+    expect(unrelated.found).toBe(0);
   });
   it('stops paid priority at the coverage boundary', async () => {
     const result = await client
@@ -105,24 +116,21 @@ describe('discovery ranking against Typesense', () => {
     ]);
   });
   it('keeps an exact bad match instead of replacing it with bedroom results', async () => {
-    await client
-      .collections(collection)
-      .documents()
-      .create({
-        id: 'exact-bad',
-        title: 'Bad',
-        designerId: 'literal',
-        designerName: 'Studio',
-        themes: [],
-        materials: [],
-        finishes: [],
-        roomSlugs: [],
-        roomLabels: [],
-        tags: [],
-        avgRating: 3,
-        paidUntil: 0,
-        publishedAt: 0,
-      });
+    await client.collections(collection).documents().create({
+      id: 'exact-bad',
+      title: 'Bad',
+      designerId: 'literal',
+      designerName: 'Studio',
+      themes: [],
+      materials: [],
+      finishes: [],
+      roomSlugs: [],
+      roomLabels: [],
+      tags: [],
+      avgRating: 3,
+      paidUntil: 0,
+      publishedAt: 0,
+    });
     try {
       const query = { q: 'bad', query_by: 'title', sort_by: discoveryRanking(1900000000000) };
       const result = await searchWithDiscoveryFallback(
