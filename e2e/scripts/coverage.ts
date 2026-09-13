@@ -38,10 +38,7 @@ export const requiredTests = [
     'is reachable on mobile and contains cards and filters without horizontal overflow',
   ],
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
-  [
-    'homepage-feed.spec.ts',
-    'walks back from a deep-linked result page with the pagination control',
-  ],
+  ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
   [
     'marketplace-journey.spec.ts',
     'designer onboarding and media processing connects to visitor onboarding and discovery, enquiry and lead management',
