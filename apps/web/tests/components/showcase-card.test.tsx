@@ -80,13 +80,21 @@ describe('ShowcaseCard', () => {
     expect(screen.getByText('4.8')).toBeInTheDocument();
   });
 
-  it('reserves fallback dimensions without forcing the loaded image ratio', () => {
+  it('enforces the allocator fallback ratio when source dimensions are unavailable', () => {
     render(<ShowcaseCard project={{ ...discoveryProject, imageWidth: null, imageHeight: null }} />);
 
     const image = screen.getByRole('img', { name: discoveryProject.title });
     expect(image).toHaveAttribute('width', '480');
     expect(image).toHaveAttribute('height', '600');
-    expect(image).not.toHaveStyle({ aspectRatio: '480 / 600' });
+    expect(image).toHaveStyle({ aspectRatio: '480 / 600' });
+  });
+
+  it('keeps the natural ratio when source dimensions are available', () => {
+    render(<ShowcaseCard project={discoveryProject} />);
+
+    expect(screen.getByRole('img', { name: discoveryProject.title })).not.toHaveStyle({
+      aspectRatio: '480 / 600',
+    });
   });
 
   it('hides the rating on search-sourced cards that carry no reviews', () => {

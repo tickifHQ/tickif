@@ -40,6 +40,10 @@ describe('AdminDashboardPage', () => {
     expect(screen.getByText('Review moderation')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /open queue/i })).toHaveLength(3);
     expect(screen.getByRole('link', { name: /new 4/i })).toHaveAttribute('href', '/verifications');
+    expect(screen.getByRole('link', { name: /re-review 2/i })).toHaveAttribute(
+      'href',
+      '/verifications?tab=re_review',
+    );
     expect(screen.getByRole('region', { name: 'Queue workload' })).toBeInTheDocument();
     expect(screen.getByText('15 active items')).toBeInTheDocument();
     expect(screen.getByText('20%')).toBeInTheDocument();

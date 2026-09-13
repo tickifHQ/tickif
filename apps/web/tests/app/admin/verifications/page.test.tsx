@@ -14,14 +14,16 @@ vi.mock('@/lib/admin-verification-api', () => ({
 }));
 vi.mock('@/components/admin-verification-queue', () => ({
   AdminVerificationQueue: ({
+    initialQueue,
     initialCounts,
     initialError,
   }: {
+    initialQueue: { tab: string };
     initialCounts?: Record<string, number>;
     initialError?: string;
   }) => (
     <div data-testid="admin-verification-queue">
-      {initialError ?? 'loaded'} {JSON.stringify(initialCounts)}
+      {initialError ?? 'loaded'} {initialQueue.tab} {JSON.stringify(initialCounts)}
     </div>
   ),
 }));
@@ -54,8 +56,16 @@ describe('AdminVerificationsPage', () => {
       });
     }
     expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent(
-      'loaded {"new":2,"re_review":3,"accepted":4,"changes_requested":5,"expired":0}',
+      'loaded new {"new":2,"re_review":3,"accepted":4,"changes_requested":5,"expired":0}',
     );
+  });
+
+  it('initializes the requested lifecycle tab from a validated search parameter', async () => {
+    const { default: Page } = await import('../../../../app/(admin)/verifications/page');
+
+    render(await Page({ searchParams: Promise.resolve({ tab: 're_review' }) }));
+
+    expect(screen.getByTestId('admin-verification-queue')).toHaveTextContent('loaded re_review');
   });
 
   it('shows a safe retryable error without exposing infrastructure details', async () => {

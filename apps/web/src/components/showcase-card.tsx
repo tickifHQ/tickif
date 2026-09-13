@@ -47,6 +47,11 @@ export function ShowcaseCard({
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
             className="h-auto w-full select-none object-cover"
+            style={
+              hasImageDimensions
+                ? undefined
+                : { aspectRatio: `${FALLBACK_WIDTH} / ${FALLBACK_HEIGHT}` }
+            }
           />
         ) : (
           <div

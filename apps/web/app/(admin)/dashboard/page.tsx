@@ -65,7 +65,11 @@ async function loadDashboardData(cookie: string): Promise<DashboardData> {
         icon: UserShield,
         links: [
           { label: 'New', href: '/verifications', count: newVerifications.total },
-          { label: 'Re-review', href: '/verifications', count: reReviews.total },
+          {
+            label: 'Re-review',
+            href: '/verifications?tab=re_review',
+            count: reReviews.total,
+          },
         ],
       },
       {
