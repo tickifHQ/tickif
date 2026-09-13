@@ -120,8 +120,9 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
     await expect(historyDrawer.getByText('by Tickif Review Team').first()).toBeVisible();
     // Refresh performs a real refetch while keeping the timeline visible.
     const historyRefreshed = designerPage.waitForResponse(
-      (response) => response.url().endsWith(`/api/projects/${target.id}/moderation-history`)
-        && response.request().method() === 'GET',
+      (response) =>
+        response.url().endsWith(`/api/projects/${target.id}/moderation-history`) &&
+        response.request().method() === 'GET',
     );
     await designerPage
       .getByRole('button', { name: 'Refresh moderation history', exact: true })
@@ -143,22 +144,26 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
     // Reopening must also refetch, including when the earlier result was cached.
     await designerPage.setViewportSize({ width: 390, height: 844 });
     const historyReopened = designerPage.waitForResponse(
-      (response) => response.url().endsWith(`/api/projects/${target.id}/moderation-history`)
-        && response.request().method() === 'GET',
+      (response) =>
+        response.url().endsWith(`/api/projects/${target.id}/moderation-history`) &&
+        response.request().method() === 'GET',
     );
-    await designerPage.getByRole('button', { name: 'View moderation history', exact: true }).click();
+    await designerPage
+      .getByRole('button', { name: 'View moderation history', exact: true })
+      .click();
     expect((await historyReopened).ok()).toBeTruthy();
     await expect(historyDrawer.getByText('Request Changes').first()).toBeVisible();
-    await expect.poll(() => historyDrawer.evaluate((element) =>
-      element.scrollWidth <= element.clientWidth,
-    )).toBe(true);
+    await expect
+      .poll(() => historyDrawer.evaluate((element) => element.scrollWidth <= element.clientWidth))
+      .toBe(true);
     await testInfo.attach('e279-designer-moderation-history-drawer-mobile', {
       body: await designerPage.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
     await historyDrawer.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(designerPage.getByRole('button', { name: 'View moderation history', exact: true }))
-      .toBeFocused();
+    await expect(
+      designerPage.getByRole('button', { name: 'View moderation history', exact: true }),
+    ).toBeFocused();
 
     expect(errors).toEqual([]);
   } finally {
@@ -198,7 +203,7 @@ test('project moderation lifecycle: admin paginates, claims, comments, resolves 
     await page.goto('/moderation');
     await expect(page).toHaveTitle('Moderation queue · Tickif');
     await expect(page.getByRole('heading', { name: 'Moderation queue' })).toBeVisible();
-    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Next page', exact: true }).click();
     await expect(page).toHaveURL(/status=submitted&page=2/);
     await expect(page.getByText(target.title, { exact: true })).toBeVisible();
     await page.reload();
