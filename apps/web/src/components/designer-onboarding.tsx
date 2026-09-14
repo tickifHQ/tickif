@@ -57,7 +57,10 @@ type DesignerOnboardingProps = {
   initialDraft?: OnboardingDraftResponse | null;
   onSubmitOnboarding?: SubmitOnboarding;
   /** Overridable for tests; defaults call the real draft API. */
-  onSaveDraft?: (input: { step: OnboardingStep; fields: OnboardingDraftFields }) => Promise<unknown>;
+  onSaveDraft?: (input: {
+    step: OnboardingStep;
+    fields: OnboardingDraftFields;
+  }) => Promise<unknown>;
   onClearDraft?: () => Promise<unknown>;
 };
 
@@ -316,26 +319,23 @@ export function DesignerOnboarding({
     initialDraft ? JSON.stringify({ step: initialDraft.step, fields: initialDraft.fields }) : '',
   );
   const completedRef = useRef(false);
-  // Tracks an in-flight save so a flush can await it even when the current
-  // snapshot is "not dirty" (the debounce may have started a PUT that hasn't
-  // resolved yet). This closes the race where Finish later could navigate before
-  // an already-started save completed.
+  // Serialize writes: every waiter rechecks the latest payload after the active
+  // request settles, so an older snapshot can never overwrite a newer save.
   const pendingSaveRef = useRef<Promise<unknown> | null>(null);
 
   const flushDraft = useCallback(async () => {
+    while (pendingSaveRef.current) {
+      await pendingSaveRef.current.catch(() => undefined);
+    }
     if (completedRef.current) return;
     const payload = draftPayloadRef.current;
     const snapshot = JSON.stringify(payload);
-    if (snapshot === savedSnapshotRef.current) {
-      // Nothing new to persist, but a previous save may still be in flight.
-      if (pendingSaveRef.current) await pendingSaveRef.current.catch(() => undefined);
-      return;
-    }
-    savedSnapshotRef.current = snapshot;
-    const save = Promise.resolve(onSaveDraft(payload));
+    if (snapshot === savedSnapshotRef.current) return;
+    const save = Promise.resolve().then(() => onSaveDraft(payload));
     pendingSaveRef.current = save;
     try {
       await save;
+      savedSnapshotRef.current = snapshot;
     } catch {
       // Best-effort: a failed save must never block onboarding. Allow a later
       // retry by clearing the snapshot so the next change re-attempts.
@@ -361,7 +361,7 @@ export function DesignerOnboarding({
   useEffect(() => {
     if (completedRef.current) return;
     const snapshot = JSON.stringify({ step, fields: draftFields });
-    if (snapshot === savedSnapshotRef.current) return;
+    if (snapshot === savedSnapshotRef.current && !pendingSaveRef.current) return;
     const timer = setTimeout(() => {
       void flushDraft();
     }, 600);
@@ -737,10 +737,7 @@ export function DesignerOnboarding({
               </>
             )}
           </Button>
-          <DetailsSecondaryActions
-            onSkip={handleFinishLater}
-            skipLabel="Finish later"
-          />
+          <DetailsSecondaryActions onSkip={handleFinishLater} skipLabel="Finish later" />
         </div>
       </form>
     </OnboardingShell>

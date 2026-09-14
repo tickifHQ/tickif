@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
 import {
   ACCOUNT_STATUS,
   PLATFORM_ROLE,
@@ -41,16 +42,27 @@ export default async function DesignerOnboardingPage() {
 
   // E-298: resume account-level onboarding progress. Fetched server-side so the
   // wizard's first paint already shows the saved step/fields (no flash of step 1).
-  // A failed/absent draft simply yields null → the wizard starts fresh as before.
+  // Only a successful read can establish that it is safe to start a fresh draft.
   let initialDraft: OnboardingDraftResponse | null = null;
   if (session) {
     const cookie = (await headers()).get('cookie') ?? undefined;
-    if (cookie) {
-      try {
-        initialDraft = await fetchOnboardingDraft(cookie);
-      } catch {
-        initialDraft = null;
-      }
+    try {
+      if (!cookie) throw new Error('Missing session cookie');
+      initialDraft = await fetchOnboardingDraft(cookie);
+    } catch {
+      return (
+        <div className="mx-auto max-w-lg px-6 py-12">
+          <Alert variant="destructive">
+            <AlertTitle>Could not load your saved progress</AlertTitle>
+            <AlertDescription>
+              <p>Please try again to continue your setup.</p>
+              <a href="/designer/onboarding" className="underline underline-offset-4">
+                Try again
+              </a>
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
     }
   }
 

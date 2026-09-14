@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DesignerOnboarding } from '../../src/components/designer-onboarding';
+
+function deferredSave() {
+  let resolve!: () => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 const mock = vi.hoisted(() => ({
   router: { push: vi.fn() },
@@ -61,7 +71,11 @@ vi.mock('@/lib/api', () => ({
             $get: vi.fn(async () => ({ ok: true, json: async () => ({ draft: null }) })),
             $put: vi.fn(async () => ({
               ok: true,
-              json: async () => ({ step: 'entity', fields: {}, updatedAt: '2026-01-01T00:00:00.000Z' }),
+              json: async () => ({
+                step: 'entity',
+                fields: {},
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              }),
             })),
             $delete: vi.fn(async () => ({ ok: true, status: 204 })),
           },
@@ -528,6 +542,76 @@ describe('DesignerOnboarding', () => {
 });
 
 describe('DesignerOnboarding — E-298 draft persistence', () => {
+  it('autosaves a return to the previously saved value while a changed value is in flight', async () => {
+    vi.useFakeTimers();
+    const pending = deferredSave();
+    const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+    const view = render(
+      <DesignerOnboarding
+        initialDraft={{ step: 'details', updatedAt: '2026-02-01T00:00:00.000Z', fields: {} }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+    try {
+      const name = screen.getByLabelText(/display name/i);
+      fireEvent.change(name, { target: { value: 'Original' } });
+      await act(() => vi.advanceTimersByTimeAsync(600));
+      onSaveDraft.mockReturnValueOnce(pending.promise);
+      fireEvent.change(name, { target: { value: 'Changed' } });
+      await act(() => vi.advanceTimersByTimeAsync(600));
+      fireEvent.change(name, { target: { value: 'Original' } });
+      await act(() => vi.advanceTimersByTimeAsync(600));
+      await act(async () => pending.resolve());
+      expect(onSaveDraft).toHaveBeenCalledTimes(3);
+      expect(onSaveDraft).toHaveBeenLastCalledWith(
+        expect.objectContaining({ fields: expect.objectContaining({ userName: 'Original' }) }),
+      );
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'serializes changed drafts and waits for the latest save after an earlier save %ss',
+    async (outcome) => {
+      vi.useFakeTimers();
+      const first = deferredSave();
+      const last = deferredSave();
+      const onSaveDraft = vi.fn().mockReturnValueOnce(first.promise).mockReturnValue(last.promise);
+      const view = render(
+        <DesignerOnboarding
+          initialDraft={{ step: 'details', updatedAt: '2026-02-01T00:00:00.000Z', fields: {} }}
+          onSaveDraft={onSaveDraft}
+        />,
+      );
+      try {
+        fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'Older' } });
+        await act(() => vi.advanceTimersByTimeAsync(600));
+        expect(onSaveDraft).toHaveBeenCalledTimes(1);
+        fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'Latest' } });
+        await act(() => vi.advanceTimersByTimeAsync(600));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish later' }));
+        expect(onSaveDraft).toHaveBeenCalledTimes(1);
+        expect(mock.router.push).not.toHaveBeenCalled();
+        await act(async () => {
+          if (outcome === 'resolve') first.resolve();
+          else first.reject(new Error('Save failed'));
+        });
+        expect(onSaveDraft).toHaveBeenCalledTimes(2);
+        expect(onSaveDraft).toHaveBeenLastCalledWith(
+          expect.objectContaining({ fields: expect.objectContaining({ userName: 'Latest' }) }),
+        );
+        expect(mock.router.push).not.toHaveBeenCalled();
+        await act(async () => last.resolve());
+        expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred');
+      } finally {
+        view.unmount();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   beforeEach(() => {
     // reset (not just clear) so a per-test push implementation never leaks.
     mock.router.push.mockReset();
