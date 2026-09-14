@@ -288,7 +288,7 @@ describe('DesignerWorkspaceShell', () => {
     expect(screen.getByRole('banner').querySelector('.lucide-shield')).toBeInTheDocument();
   });
 
-  it('places the organization switcher below Explore Tickif without moving the header account menu', () => {
+  it('omits the inaccessible Explore Tickif action without moving the header account menu', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
@@ -302,18 +302,12 @@ describe('DesignerWorkspaceShell', () => {
       </DesignerWorkspaceShell>,
     );
 
-    const exploreTickif = screen.getByRole('link', { name: /explore tickif/i });
     const organizationSwitcher = screen.getByTestId('organization-switcher');
     const accountMenu = screen.getByTestId('account-menu');
     const addProject = screen.getByRole('link', { name: /add new project/i });
 
-    expect(exploreTickif.querySelector('img')).toHaveAttribute('src', '/icon.svg');
-    expect(exploreTickif.querySelector('.lucide-external-link')).toBeInTheDocument();
-    expect(exploreTickif.querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument();
-    expect(
-      exploreTickif.compareDocumentPosition(organizationSwitcher) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /explore tickif/i })).not.toBeInTheDocument();
+    expect(organizationSwitcher).toBeInTheDocument();
     expect(accountMenu.closest('header')).toContainElement(addProject);
     expect(
       addProject.compareDocumentPosition(accountMenu) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -361,6 +355,7 @@ describe('DesignerWorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Open navigation' }));
     expect(screen.getByRole('dialog', { name: 'Designer navigation' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /profile & settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /explore tickif/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Close navigation' }));
     expect(screen.queryByRole('dialog', { name: 'Designer navigation' })).not.toBeInTheDocument();

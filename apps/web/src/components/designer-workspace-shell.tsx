@@ -14,7 +14,6 @@ import {
   ChartLine,
   CalendarDays,
   CreditCard,
-  ExternalLink,
   FileUser,
   Building2,
   Layers,
@@ -207,14 +206,6 @@ function SidebarContent({
             >
               <MessageSquareMore className="size-4" />
               <span>Contact support</span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
-              <span>Explore Tickif</span>
-              <ExternalLink className="ml-auto size-4" />
             </Link>
           </div>
 
