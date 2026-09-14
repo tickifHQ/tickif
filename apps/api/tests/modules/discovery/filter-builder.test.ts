@@ -51,15 +51,19 @@ describe('escapeFilterValue', () => {
 });
 
 describe('buildDiscoveryFilter', () => {
+  it('uses exact matching for taxonomy slugs', () => {
+    expect(buildDiscoveryFilter({ roomSlugs: 'bedroom' })).toBe('roomSlugs:=[bedroom]');
+  });
+
   describe('OR logic within single facet', () => {
     it('produces OR syntax for multiple values in citySlug', () => {
       const result = buildDiscoveryFilter({ citySlug: ['mumbai', 'pune'] });
-      expect(result).toBe('citySlug:[mumbai,pune]');
+      expect(result).toBe('citySlug:=[mumbai,pune]');
     });
 
     it('produces OR syntax for multiple values in bhkSlug', () => {
       const result = buildDiscoveryFilter({ bhkSlug: ['2-bhk', '3-bhk'] });
-      expect(result).toBe('bhkSlug:[2-bhk,3-bhk]');
+      expect(result).toBe('bhkSlug:=[2-bhk,3-bhk]');
     });
   });
 
@@ -69,7 +73,7 @@ describe('buildDiscoveryFilter', () => {
         citySlug: 'mumbai',
         bhkSlug: '3-bhk',
       });
-      expect(result).toBe('citySlug:[mumbai] && bhkSlug:[3-bhk]');
+      expect(result).toBe('citySlug:=[mumbai] && bhkSlug:=[3-bhk]');
     });
 
     it('combines OR within facets and AND between facets', () => {
@@ -78,7 +82,9 @@ describe('buildDiscoveryFilter', () => {
         scopeSlug: 'full-home',
         bhkSlug: ['2-bhk', '3-bhk'],
       });
-      expect(result).toBe('citySlug:[mumbai,pune] && scopeSlug:[full-home] && bhkSlug:[2-bhk,3-bhk]');
+      expect(result).toBe(
+        'citySlug:=[mumbai,pune] && scopeSlug:=[full-home] && bhkSlug:=[2-bhk,3-bhk]',
+      );
     });
   });
 
@@ -92,7 +98,7 @@ describe('buildDiscoveryFilter', () => {
       } as unknown as Parameters<typeof buildDiscoveryFilter>[0];
 
       const result = buildDiscoveryFilter(filters);
-      expect(result).toBe('citySlug:[mumbai]');
+      expect(result).toBe('citySlug:=[mumbai]');
       expect(result).not.toContain('unknownKey');
       expect(result).not.toContain('anotherUnknown');
     });
@@ -133,12 +139,12 @@ describe('buildDiscoveryFilter', () => {
   describe('single value handling', () => {
     it('wraps single string value in array syntax', () => {
       const result = buildDiscoveryFilter({ citySlug: 'mumbai' });
-      expect(result).toBe('citySlug:[mumbai]');
+      expect(result).toBe('citySlug:=[mumbai]');
     });
 
     it('handles single-element array same as string', () => {
       const result = buildDiscoveryFilter({ citySlug: ['mumbai'] });
-      expect(result).toBe('citySlug:[mumbai]');
+      expect(result).toBe('citySlug:=[mumbai]');
     });
   });
 
@@ -155,7 +161,7 @@ describe('buildDiscoveryFilter', () => {
       });
 
       expect(result).toBe(
-        'citySlug:[mumbai] && localitySlug:[bandra] && propertyTypeSlug:[residential] && propertySubtypeSlug:[apartment] && scopeSlug:[full-home] && bhkSlug:[3-bhk] && budgetBandSlug:[20-40-lakh]',
+        'citySlug:=[mumbai] && localitySlug:=[bandra] && propertyTypeSlug:=[residential] && propertySubtypeSlug:=[apartment] && scopeSlug:=[full-home] && bhkSlug:=[3-bhk] && budgetBandSlug:=[20-40-lakh]',
       );
     });
   });
@@ -165,14 +171,14 @@ describe('buildDiscoveryFilter', () => {
       const result = buildDiscoveryFilter({
         citySlug: 'new delhi',
       });
-      expect(result).toBe('citySlug:[new\\ delhi]');
+      expect(result).toBe('citySlug:=[new\\ delhi]');
     });
 
     it('escapes special characters in multiple values', () => {
       const result = buildDiscoveryFilter({
         citySlug: ['new delhi', 'san:francisco'],
       });
-      expect(result).toBe('citySlug:[new\\ delhi,san\\:francisco]');
+      expect(result).toBe('citySlug:=[new\\ delhi,san\\:francisco]');
     });
   });
 });

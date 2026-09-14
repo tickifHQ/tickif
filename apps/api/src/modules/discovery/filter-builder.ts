@@ -25,8 +25,8 @@ export function buildDiscoveryFilter(filters: DiscoveryFeedFilters): string {
     if (values.length === 0) continue;
 
     const escaped = values.map(escapeFilterValue);
-    // OR within facet: citySlug:[mumbai,pune]
-    clauses.push(`${key}:[${escaped.join(',')}]`);
+    // Exact OR within facet: citySlug:=[mumbai,pune]
+    clauses.push(`${key}:=[${escaped.join(',')}]`);
   }
 
   // AND between facets
