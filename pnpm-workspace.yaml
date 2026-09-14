@@ -105,7 +105,7 @@ catalog:
   react-is: ^19.2.8
   recharts: ^3.10.1
   '@dicebear/core': ^10.3.0
-  '@dicebear/styles': ^10.2.0
+  '@dicebear/styles': ^10.6.0
   libphonenumber-js: 1.13.9
   shadcn: ^4.12.0
   '@tailwindcss/postcss': ^4.3.3
