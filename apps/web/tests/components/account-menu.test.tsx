@@ -71,7 +71,10 @@ describe('AccountMenu', () => {
     );
   });
 
-  it('sends pending visitors back to setup instead of exposing inaccessible settings', async () => {
+  it('resumes designer onboarding for a pending (deferred designer) account', async () => {
+    // E-298: a deferred designer signup is role=visitor + status=pending until a
+    // studio is created. "Complete setup" must resume the designer onboarding flow
+    // (matching public-header's List-your-work rule), not the visitor form.
     mock.session = {
       user: { name: 'Alice', email: null, role: 'visitor', status: 'pending' },
       session: { activeOrganizationId: null },
@@ -83,7 +86,7 @@ describe('AccountMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Personal settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Complete setup' })).toHaveAttribute(
       'href',
-      '/onboarding',
+      '/designer/onboarding',
     );
   });
   beforeEach(() => {

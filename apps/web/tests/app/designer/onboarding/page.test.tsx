@@ -6,10 +6,22 @@ const mock = vi.hoisted(() => ({
     throw new Error('NEXT_REDIRECT');
   }),
   getServerSession: vi.fn(),
+  headers: vi.fn(),
+  fetchOnboardingDraft: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
   redirect: mock.redirect,
+}));
+
+// The page server-fetches the E-298 onboarding draft, which reads the request
+// `cookie` via next/headers. Mock it so the render path has a request scope.
+vi.mock('next/headers', () => ({
+  headers: mock.headers,
+}));
+
+vi.mock('@/lib/onboarding-draft-api', () => ({
+  fetchOnboardingDraft: mock.fetchOnboardingDraft,
 }));
 
 vi.mock('@/lib/auth-guard', () => ({
@@ -24,8 +36,26 @@ vi.mock('@/components/designer-onboarding', () => ({
 import { rolePassesCheck } from '@/lib/auth-guard';
 
 describe('DesignerOnboardingPage', () => {
+  it('keeps the writable wizard unmounted after a failed draft load and offers retry', async () => {
+    mock.getServerSession.mockResolvedValue({
+      session: { id: 's1' },
+      user: { role: 'visitor', status: 'pending', email: 'mahi@test.com' },
+    });
+    vi.mocked(rolePassesCheck).mockReturnValue(false);
+    mock.fetchOnboardingDraft.mockRejectedValue(new Error('Network unavailable'));
+    const { default: Page } = await import('../../../../app/(protected)/designer/onboarding/page');
+    render(await Page());
+    expect(screen.queryByTestId('designer-onboarding')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /try again/i })).toHaveAttribute(
+      'href',
+      '/designer/onboarding',
+    );
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.headers.mockResolvedValue(new Headers({ cookie: 'session=abc' }));
+    mock.fetchOnboardingDraft.mockResolvedValue(null);
   });
 
   it('redirects to dashboard when user is already a designer', async () => {

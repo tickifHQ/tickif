@@ -4,6 +4,9 @@ import {
   profileDashboardResponseSchema,
   onboardDesignerSchema,
   onboardDesignerResponseSchema,
+  onboardingDraftSchema,
+  onboardingDraftResponseSchema,
+  onboardingDraftGetResponseSchema,
   profilePublicResponseSchema,
   profileOwnerResponseSchema,
   currentProfileResponseSchema,
@@ -124,6 +127,77 @@ const onboardRoute = createRoute({
     },
     422: {
       description: 'Validation error — invalid taxonomy IDs or missing required fields',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+  },
+});
+
+// --- Onboarding draft (E-298): resumable, account-scoped onboarding progress ---
+
+const getOnboardingDraftRoute = createRoute({
+  method: 'get',
+  path: '/me/onboarding-draft',
+  tags: ['Profiles'],
+  summary: 'Get the caller’s resumable onboarding draft',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    200: {
+      description: 'The stored draft, or { draft: null } when none exists',
+      content: { 'application/json': { schema: onboardingDraftGetResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+  },
+});
+
+const putOnboardingDraftRoute = createRoute({
+  method: 'put',
+  path: '/me/onboarding-draft',
+  tags: ['Profiles'],
+  summary: 'Create or update the caller’s onboarding draft (visitor + pending only)',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  request: {
+    body: {
+      content: { 'application/json': { schema: onboardingDraftSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The saved draft',
+      content: { 'application/json': { schema: onboardingDraftResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    403: {
+      description: 'Only a pending visitor may save an onboarding draft',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+    422: {
+      description: 'Invalid draft payload',
+      content: { 'application/json': { schema: errorResponseSchema } },
+    },
+  },
+});
+
+const deleteOnboardingDraftRoute = createRoute({
+  method: 'delete',
+  path: '/me/onboarding-draft',
+  tags: ['Profiles'],
+  summary: 'Clear the caller’s onboarding draft (idempotent)',
+  security: [{ cookieAuth: [] }],
+  middleware: [requireAuth] as const,
+  responses: {
+    204: {
+      description: 'Draft cleared (or was already absent)',
+    },
+    401: {
+      description: 'Unauthorized',
       content: { 'application/json': { schema: errorResponseSchema } },
     },
   },
@@ -272,6 +346,25 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       teamId: activeTeamId,
     });
     return c.json(data, created ? 201 : 200);
+  })
+  .openapi(getOnboardingDraftRoute, async (c) => {
+    const user = c.get('user')!;
+    const draft = await profilesService.getOnboardingDraft(user.id);
+    return c.json({ draft }, 200);
+  })
+  .openapi(putOnboardingDraftRoute, async (c) => {
+    const user = c.get('user')!;
+    const input = c.req.valid('json');
+    const draft = await profilesService.saveOnboardingDraft(
+      { userId: user.id, role: user.role, status: user.status },
+      input,
+    );
+    return c.json(draft, 200);
+  })
+  .openapi(deleteOnboardingDraftRoute, async (c) => {
+    const user = c.get('user')!;
+    await profilesService.clearOnboardingDraft(user.id);
+    return c.body(null, 204);
   })
   .openapi(
     createRoute({

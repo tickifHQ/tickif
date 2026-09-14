@@ -109,6 +109,18 @@ export const requiredTests = [
     'visitor-role-boundaries.spec.ts',
     'visitor settings and designer role boundaries are enforced in the UI and API',
   ],
+  // E-298: account-level onboarding draft — resume across leave/re-entry, resume
+  // in a fresh browser context (proves it is account-level, not browser-local),
+  // and mid-onboarding refresh recovery.
+  [
+    'onboarding-resume.spec.ts',
+    'designer onboarding progress resumes across leave/re-entry, then completes and clears the draft',
+  ],
+  [
+    'onboarding-resume.spec.ts',
+    'same account resumes the draft in a FRESH browser context (account-level, not browser-local)',
+  ],
+  ['onboarding-resume.spec.ts', 'a refresh mid-onboarding preserves progress'],
 ].map(([file, title]) => ({ file: file!, title: title! }));
 
 const testSchema = z.object({

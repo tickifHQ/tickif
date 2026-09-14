@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent, ReactNode } from 'react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { BriefcaseBusiness, ChevronRight, ChevronsUpDown, Loader2, UserRound } from 'lucide-react';
@@ -13,6 +13,9 @@ import {
   onboardDesignerResponseSchema,
   type OnboardDesignerInput,
   type OnboardDesignerResponse,
+  type OnboardingDraftFields,
+  type OnboardingDraftResponse,
+  type OnboardingStep,
   type TaxonomyTerm,
 } from '@repo/contracts';
 import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
@@ -30,6 +33,10 @@ import { authClient } from '@/lib/auth-client';
 import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
+import {
+  clearOnboardingDraft,
+  saveOnboardingDraft as saveOnboardingDraftApi,
+} from '@/lib/onboarding-draft-api';
 import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
@@ -46,7 +53,15 @@ type SubmitOnboarding = (
 type DesignerOnboardingProps = {
   signedInName?: string | null;
   signedInAs?: string | null;
+  /** E-298: server-side saved progress used to resume the wizard on mount. */
+  initialDraft?: OnboardingDraftResponse | null;
   onSubmitOnboarding?: SubmitOnboarding;
+  /** Overridable for tests; defaults call the real draft API. */
+  onSaveDraft?: (input: {
+    step: OnboardingStep;
+    fields: OnboardingDraftFields;
+  }) => Promise<unknown>;
+  onClearDraft?: () => Promise<unknown>;
 };
 
 const entityOptions: Array<{
@@ -78,7 +93,8 @@ const onboardingIllustrations = {
   panel: '/illustrations/onboarding-living-room.svg',
 } as const;
 
-type OnboardingStep = 'entity' | 'details' | 'presence' | 'services';
+// OnboardingStep is imported from @repo/contracts (single source of truth); the
+// wizard's step union and the persisted draft step are intentionally identical.
 type TaxonomyKind = Extract<
   ProfileTaxonomyKind,
   typeof PROFILE_TAXONOMY_KIND.SCOPE | typeof PROFILE_TAXONOMY_KIND.THEME
@@ -111,6 +127,18 @@ const emptyTaxonomyOptions: TaxonomyOptions = {
   scope: [],
   theme: [],
 };
+
+/** Resolve a persisted country (by stable ISO code) back to a `countries` entry. */
+function countryFromIsoCode(isoCode: string | undefined) {
+  if (!isoCode) return countries[0]!;
+  return countries.find((country) => country.isoCode === isoCode) ?? countries[0]!;
+}
+
+/** Draft steps use the same union as the wizard; keep a runtime guard for safety. */
+const ONBOARDING_STEPS: readonly OnboardingStep[] = ['entity', 'details', 'presence', 'services'];
+function isOnboardingStep(value: unknown): value is OnboardingStep {
+  return typeof value === 'string' && (ONBOARDING_STEPS as readonly string[]).includes(value);
+}
 
 function optionalTrimmed(value: string) {
   const trimmed = value.trim();
@@ -180,29 +208,42 @@ async function signOutToLogin() {
 export function DesignerOnboarding({
   signedInName,
   signedInAs,
+  initialDraft,
   onSubmitOnboarding = submitWithApi,
+  onSaveDraft = saveOnboardingDraftApi,
+  onClearDraft = clearOnboardingDraft,
 }: DesignerOnboardingProps) {
   const router = useRouter();
   const formId = useId();
-  const [step, setStep] = useState<OnboardingStep>('entity');
-  const [entityType, setEntityType] = useState<EntityType>(designerEntityType.enum.individual);
-  const [userName, setUserName] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [address, setAddress] = useState('');
-  const [firmType, setFirmType] = useState('Private Limited');
-  const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [whatsappCountry, setWhatsappCountry] = useState(countries[0]!);
-  const [websiteUrl, setWebsiteUrl] = useState('');
-  const [googleBusinessUrl, setGoogleBusinessUrl] = useState('');
+  // E-298: seed every field from the server-side draft so re-entry (even from a
+  // different device) resumes at the saved step with the saved values. Absent
+  // draft → the original empty defaults, preserving behavior for new designers.
+  const seedFields = initialDraft?.fields;
+  const [step, setStep] = useState<OnboardingStep>(
+    isOnboardingStep(initialDraft?.step) ? initialDraft.step : 'entity',
+  );
+  const [entityType, setEntityType] = useState<EntityType>(
+    seedFields?.entityType ?? designerEntityType.enum.individual,
+  );
+  const [userName, setUserName] = useState(seedFields?.userName ?? '');
+  const [companyName, setCompanyName] = useState(seedFields?.companyName ?? '');
+  const [address, setAddress] = useState(seedFields?.address ?? '');
+  const [firmType, setFirmType] = useState(seedFields?.firmType ?? 'Private Limited');
+  const [whatsappNumber, setWhatsappNumber] = useState(seedFields?.phoneNumber ?? '');
+  const [whatsappCountry, setWhatsappCountry] = useState(
+    countryFromIsoCode(seedFields?.phoneCountry),
+  );
+  const [websiteUrl, setWebsiteUrl] = useState(seedFields?.websiteUrl ?? '');
+  const [googleBusinessUrl, setGoogleBusinessUrl] = useState(seedFields?.googleBusinessUrl ?? '');
   const [websiteUrlError, setWebsiteUrlError] = useState('');
   const [googleBusinessUrlError, setGoogleBusinessUrlError] = useState('');
-  const [instagramHandle, setInstagramHandle] = useState('');
-  const [linkedinHandle, setLinkedinHandle] = useState('');
-  const [youtubeHandle, setYoutubeHandle] = useState('');
-  const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>([]);
-  const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>([]);
-  const [foundedYear, setFoundedYear] = useState('2021');
-  const [teamSize, setTeamSize] = useState('2-10');
+  const [instagramHandle, setInstagramHandle] = useState(seedFields?.instagramHandle ?? '');
+  const [linkedinHandle, setLinkedinHandle] = useState(seedFields?.linkedinHandle ?? '');
+  const [youtubeHandle, setYoutubeHandle] = useState(seedFields?.youtubeHandle ?? '');
+  const [selectedScopeIds, setSelectedScopeIds] = useState<string[]>(seedFields?.scopeIds ?? []);
+  const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>(seedFields?.themeIds ?? []);
+  const [foundedYear, setFoundedYear] = useState(seedFields?.foundedYear ?? '2021');
+  const [teamSize, setTeamSize] = useState(seedFields?.teamSize ?? '2-10');
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOptions>(emptyTaxonomyOptions);
   const [taxonomyLoading, setTaxonomyLoading] = useState(true);
   const [taxonomyError, setTaxonomyError] = useState('');
@@ -224,6 +265,109 @@ export function DesignerOnboarding({
     return hasIndividualName && hasCompany && !submitting;
   }, [companyName, entityType, submitting, userName]);
 
+  // --- E-298: account-level draft autosave ------------------------------------
+  // Snapshot the persistable state; only non-empty fields are sent so the stored
+  // draft stays a faithful partial. `phoneCountry` is the stable ISO code so it
+  // survives dial-code changes.
+  const draftFields = useMemo<OnboardingDraftFields>(() => {
+    const optional = (value: string) => {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+    return {
+      entityType,
+      userName: optional(userName),
+      companyName: optional(companyName),
+      address: optional(address),
+      firmType: optional(firmType),
+      phoneCountry: whatsappCountry.isoCode,
+      phoneNumber: optional(whatsappNumber),
+      websiteUrl: optional(websiteUrl),
+      googleBusinessUrl: optional(googleBusinessUrl),
+      instagramHandle: optional(instagramHandle),
+      linkedinHandle: optional(linkedinHandle),
+      youtubeHandle: optional(youtubeHandle),
+      foundedYear: optional(foundedYear),
+      teamSize: optional(teamSize),
+      scopeIds: selectedScopeIds.length > 0 ? selectedScopeIds : undefined,
+      themeIds: selectedThemeIds.length > 0 ? selectedThemeIds : undefined,
+    };
+  }, [
+    entityType,
+    userName,
+    companyName,
+    address,
+    firmType,
+    whatsappCountry,
+    whatsappNumber,
+    websiteUrl,
+    googleBusinessUrl,
+    instagramHandle,
+    linkedinHandle,
+    youtubeHandle,
+    foundedYear,
+    teamSize,
+    selectedScopeIds,
+    selectedThemeIds,
+  ]);
+
+  // Latest values for the flush/debounce callbacks without re-subscribing effects.
+  const draftPayloadRef = useRef({ step, fields: draftFields });
+  draftPayloadRef.current = { step, fields: draftFields };
+  // Serialized last-saved snapshot for dirty checking (avoids redundant writes).
+  const savedSnapshotRef = useRef<string>(
+    initialDraft ? JSON.stringify({ step: initialDraft.step, fields: initialDraft.fields }) : '',
+  );
+  const completedRef = useRef(false);
+  // Serialize writes: every waiter rechecks the latest payload after the active
+  // request settles, so an older snapshot can never overwrite a newer save.
+  const pendingSaveRef = useRef<Promise<unknown> | null>(null);
+
+  const flushDraft = useCallback(async () => {
+    while (pendingSaveRef.current) {
+      await pendingSaveRef.current.catch(() => undefined);
+    }
+    if (completedRef.current) return;
+    const payload = draftPayloadRef.current;
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === savedSnapshotRef.current) return;
+    const save = Promise.resolve().then(() => onSaveDraft(payload));
+    pendingSaveRef.current = save;
+    try {
+      await save;
+      savedSnapshotRef.current = snapshot;
+    } catch {
+      // Best-effort: a failed save must never block onboarding. Allow a later
+      // retry by clearing the snapshot so the next change re-attempts.
+      savedSnapshotRef.current = '';
+    } finally {
+      if (pendingSaveRef.current === save) pendingSaveRef.current = null;
+    }
+  }, [onSaveDraft]);
+
+  // E-298: "Finish later" leaves onboarding entirely, so flush the very latest
+  // state before navigating (the debounce may not have fired yet). This awaits
+  // the save (success OR failure) so navigation never races ahead of the PUT.
+  // The action is "leave regardless" by design — a failed save must not trap the
+  // user on the form — but it is never invoked before the save has been awaited,
+  // so we never navigate as if persistence succeeded while a PUT is still pending.
+  const handleFinishLater = useCallback(() => {
+    void flushDraft().finally(() => {
+      router.push(DESIGNER_ONBOARDING_DEFERRED_PATH);
+    });
+  }, [flushDraft, router]);
+
+  // Debounced dirty autosave. Coalesces rapid edits into ~one write per pause.
+  useEffect(() => {
+    if (completedRef.current) return;
+    const snapshot = JSON.stringify({ step, fields: draftFields });
+    if (snapshot === savedSnapshotRef.current && !pendingSaveRef.current) return;
+    const timer = setTimeout(() => {
+      void flushDraft();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [step, draftFields, flushDraft]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -239,6 +383,12 @@ export function DesignerOnboarding({
 
         if (!cancelled) {
           setTaxonomyOptions({ scope, theme });
+          // E-298: drop any restored taxonomy IDs that no longer exist so a stale
+          // draft can never submit an invalid ID (the server would 422 otherwise).
+          const scopeIds = new Set(scope.map((term) => term.id));
+          const themeIds = new Set(theme.map((term) => term.id));
+          setSelectedScopeIds((current) => current.filter((id) => scopeIds.has(id)));
+          setSelectedThemeIds((current) => current.filter((id) => themeIds.has(id)));
         }
       } catch (err) {
         if (!cancelled) {
@@ -345,6 +495,11 @@ export function DesignerOnboarding({
         ...(entityType === designerEntityType.enum.company && staffCount ? { staffCount } : {}),
       };
       const response = await onSubmitOnboarding(payload);
+      // E-298: onboarding succeeded. The server already deletes the draft inside
+      // the onboard transaction; clear here too (belt-and-suspenders) and stop
+      // autosave so a late debounce can't recreate a draft for the now-designer.
+      completedRef.current = true;
+      void onClearDraft().catch(() => undefined);
       setResult(response.data);
     } catch (err) {
       setError(
@@ -582,10 +737,7 @@ export function DesignerOnboarding({
               </>
             )}
           </Button>
-          <DetailsSecondaryActions
-            onSkip={() => router.push(DESIGNER_ONBOARDING_DEFERRED_PATH)}
-            skipLabel="Finish later"
-          />
+          <DetailsSecondaryActions onSkip={handleFinishLater} skipLabel="Finish later" />
         </div>
       </form>
     </OnboardingShell>

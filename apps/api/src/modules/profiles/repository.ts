@@ -6,8 +6,11 @@ import {
   taxonomyKindSchema,
   type DesignerEntityType,
   type TaxonomyKind,
+  type OnboardingDraftInput,
 } from '@repo/contracts';
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
+
+export type OnboardingDraftRecord = typeof schema.onboardingDraft.$inferSelect;
 
 /**
  * Data-access for profile completion checks.
@@ -404,8 +407,45 @@ export const profilesRepository = {
         );
       }
 
+      // E-298: consume the resumable onboarding draft in the SAME transaction as
+      // the profile/org creation, so a completed designer can never be left with a
+      // lingering draft (even on a crash between commit and a separate delete).
+      await tx
+        .delete(schema.onboardingDraft)
+        .where(eq(schema.onboardingDraft.userId, data.userId));
+
       return { profile: profile!, org: org!, created: true };
     });
+  },
+
+  // --- Onboarding draft (E-298) ---
+
+  /** Read the caller's resumable onboarding draft, or null when none is stored. */
+  async findDraftByUserId(userId: string): Promise<OnboardingDraftRecord | null> {
+    const [row] = await db
+      .select()
+      .from(schema.onboardingDraft)
+      .where(eq(schema.onboardingDraft.userId, userId))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** Upsert the caller's draft (one row per user; last write wins). */
+  async upsertDraft(userId: string, input: OnboardingDraftInput): Promise<OnboardingDraftRecord> {
+    const [row] = await db
+      .insert(schema.onboardingDraft)
+      .values({ userId, step: input.step, fields: input.fields })
+      .onConflictDoUpdate({
+        target: schema.onboardingDraft.userId,
+        set: { step: input.step, fields: input.fields, updatedAt: new Date() },
+      })
+      .returning();
+    return row!;
+  },
+
+  /** Idempotently clear the caller's draft. */
+  async deleteDraft(userId: string): Promise<void> {
+    await db.delete(schema.onboardingDraft).where(eq(schema.onboardingDraft.userId, userId));
   },
 
   // --- Read/Update (E-37) ---
