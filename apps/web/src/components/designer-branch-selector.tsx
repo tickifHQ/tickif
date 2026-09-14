@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import {
   organizationBranchesResponseSchema,
   type OrganizationBranchesResponse,
@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -109,18 +110,16 @@ export function DesignerBranchSelector({ organizationId }: { organizationId: str
           aria-label="Switch branch"
           aria-busy={isBusy}
           disabled={isBusy}
-          className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm leading-none font-medium text-foreground">
+          <Building2 aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-xs leading-4 text-muted-foreground">Branch</span>
+            <span
+              className="truncate text-sm leading-5 font-medium text-foreground"
+              title={activeBranch?.name}
+            >
               {activeBranch?.name ?? 'Select branch'}
-            </span>
-            <span className="mt-1 block truncate text-xs leading-none text-muted-foreground">
-              {branches.branchUsage} of{' '}
-              {Number.isFinite(branches.branchLimit) && branches.branchLimit >= 0
-                ? branches.branchLimit
-                : 'Unlimited'}{' '}
-              branches
             </span>
           </span>
           {isBusy ? (
@@ -133,45 +132,56 @@ export function DesignerBranchSelector({ organizationId }: { organizationId: str
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="bottom" className="w-56">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        className="w-(--radix-dropdown-menu-trigger-width)"
+      >
         <DropdownMenuLabel>Your branches</DropdownMenuLabel>
+        <p className="px-2 pb-2 text-xs text-muted-foreground">
+          {Number.isFinite(branches.branchLimit) && branches.branchLimit >= 0
+            ? `${branches.branchUsage} of ${branches.branchLimit} branches used`
+            : `${branches.branchUsage} branches · Unlimited plan`}
+        </p>
         <DropdownMenuSeparator />
-        {branches.branches.map((branch) => {
-          const isActive = branch.id === branches.activeTeamId;
-          const isSwitching = switchingId === branch.id;
+        <DropdownMenuGroup>
+          {branches.branches.map((branch) => {
+            const isActive = branch.id === branches.activeTeamId;
+            const isSwitching = switchingId === branch.id;
 
-          return (
-            <DropdownMenuItem
-              key={branch.id}
-              disabled={isActive || isBusy}
-              className="cursor-pointer data-[disabled]:cursor-not-allowed"
-              onSelect={(event) => {
-                event.preventDefault();
-                void handleSwitch(branch.id);
-              }}
-            >
-              <span className="min-w-0 flex-1 truncate">{branch.name}</span>
-              {isActive ? (
-                <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Check className="size-3.5" />
-                  Current
-                </span>
-              ) : isSwitching ? (
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"
-                >
-                  <Loader2
-                    aria-hidden="true"
-                    className="size-3.5 animate-spin motion-reduce:animate-none"
-                  />
-                  Switching…
-                </span>
-              ) : null}
-            </DropdownMenuItem>
-          );
-        })}
+            return (
+              <DropdownMenuItem
+                key={branch.id}
+                disabled={isActive || isBusy}
+                className="cursor-pointer data-[disabled]:cursor-not-allowed"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void handleSwitch(branch.id);
+                }}
+              >
+                <span className="min-w-0 flex-1 truncate">{branch.name}</span>
+                {isActive ? (
+                  <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Check className="size-3.5" />
+                    Current
+                  </span>
+                ) : isSwitching ? (
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"
+                  >
+                    <Loader2
+                      aria-hidden="true"
+                      className="size-3.5 animate-spin motion-reduce:animate-none"
+                    />
+                    Switching…
+                  </span>
+                ) : null}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuGroup>
         {switchError ? (
           <div role="alert" className="px-2 py-2 text-sm text-destructive">
             {switchError}

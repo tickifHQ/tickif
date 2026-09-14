@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrganizationBranchesResponse } from '@repo/contracts';
@@ -96,6 +96,29 @@ describe('DesignerBranchSelector', () => {
     expect(container).toBeEmptyDOMElement();
     expect(mocks.branchesGet).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [-1, '2 branches · Unlimited plan'],
+    [5, '2 of 5 branches used'],
+  ])(
+    'labels the branch control and keeps usage in the menu (limit %s)',
+    async (branchLimit, usage) => {
+      mocks.branchesGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...structuredClone(branchesPayload), branchLimit }),
+      });
+      const user = userEvent.setup();
+      render(<DesignerBranchSelector organizationId="org-1" />);
+
+      const trigger = await screen.findByRole('button', { name: 'Switch branch' });
+      expect(within(trigger).getByText('Branch')).toBeVisible();
+      expect(trigger).toHaveTextContent('Andheri');
+      expect(trigger).not.toHaveTextContent(/Unlimited|branches used/);
+
+      await user.click(trigger);
+      expect(screen.getByRole('menu')).toHaveTextContent(usage);
+    },
+  );
 
   it('stays hidden with a single branch', async () => {
     mocks.branchesGet.mockResolvedValue({
