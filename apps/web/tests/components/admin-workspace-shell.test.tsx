@@ -42,7 +42,7 @@ describe('AdminWorkspaceShell', () => {
       name: 'Profile verification',
     })[0];
     expect(profileVerificationLink).toHaveAttribute('href', '/verifications');
-    expect(profileVerificationLink?.querySelector('.lucide-user-shield')).toBeInTheDocument();
+    expect(profileVerificationLink?.querySelector('.lucide-shield-user')).toBeInTheDocument();
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
     expect(screen.getByText('Admin User')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Explore Tickif/i })).not.toBeInTheDocument();

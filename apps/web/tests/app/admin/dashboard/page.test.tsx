@@ -48,7 +48,7 @@ describe('AdminDashboardPage', () => {
     expect(screen.getByText('15 active items')).toBeInTheDocument();
     expect(screen.getByText('20%')).toBeInTheDocument();
     expect(container.querySelector('.lucide-square-chart-gantt')).toBeInTheDocument();
-    expect(container.querySelector('.lucide-user-shield')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-shield-user')).toBeInTheDocument();
     expect(mocks.fetchProjects).toHaveBeenCalledWith('submitted', 1, {
       headers: { cookie: 'session=valid' },
     });

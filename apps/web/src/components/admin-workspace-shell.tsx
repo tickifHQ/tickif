@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { ComponentType, ReactNode } from 'react';
 import { AccountMenu } from '@/components/account-menu';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
-import { LayoutDashboard, MessageSquareMore, SquareChartGantt, UserShield } from 'lucide-react';
+import { LayoutDashboard, MessageSquareMore, ShieldUser, SquareChartGantt } from 'lucide-react';
 
 type AdminNavItem = {
   label: string;
@@ -18,7 +18,7 @@ const adminItems: AdminNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Project moderation', href: '/moderation', icon: SquareChartGantt },
   { label: 'Review moderation', href: '/review-moderation', icon: MessageSquareMore },
-  { label: 'Profile verification', href: '/verifications', icon: UserShield },
+  { label: 'Profile verification', href: '/verifications', icon: ShieldUser },
 ];
 
 function isActive(pathname: string, href: string) {

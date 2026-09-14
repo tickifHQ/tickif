@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components/card';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { ArrowRight, MessageSquareWarning, SquareChartGantt, UserShield } from 'lucide-react';
+import { ArrowRight, MessageSquareWarning, ShieldUser, SquareChartGantt } from 'lucide-react';
 import { fetchAdminModerationQueue } from '@/lib/admin-moderation-api';
 import { fetchAdminReviews } from '@/lib/admin-review-api';
 import { fetchAdminVerificationQueue } from '@/lib/admin-verification-api';
@@ -62,7 +62,7 @@ async function loadDashboardData(cookie: string): Promise<DashboardData> {
         description: 'Designer applications requiring an approval decision.',
         href: '/verifications',
         count: newVerifications.total + reReviews.total,
-        icon: UserShield,
+        icon: ShieldUser,
         links: [
           { label: 'New', href: '/verifications', count: newVerifications.total },
           {
