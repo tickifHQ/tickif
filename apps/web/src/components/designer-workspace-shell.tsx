@@ -199,7 +199,7 @@ function SidebarContent({
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1">
+          <div className="flex flex-col gap-3">
             <DesignerBranchSelector
               key={activeOrganizationId}
               organizationId={activeOrganizationId}
