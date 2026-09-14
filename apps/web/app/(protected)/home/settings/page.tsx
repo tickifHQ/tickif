@@ -24,11 +24,7 @@ export default async function PersonalSettingsPage() {
   if (!parsed.success) throw new Error('Unable to load personal settings');
   return (
     <>
-      <PublicHeader
-        isAuthenticated
-        userRole={session.user.role}
-        userStatus={session.user.status ?? null}
-      />
+      <PublicHeader isAuthenticated userRole={session.user.role} />
       <Container as="main" className="py-10">
         <Link href="/home" className="text-sm text-muted-foreground underline underline-offset-4">
           Back to My Tickif

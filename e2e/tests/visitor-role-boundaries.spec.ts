@@ -104,8 +104,8 @@ test('visitor settings and designer role boundaries are enforced in the UI and A
     const visitorPage = await contexts[0]!.newPage();
     await visitorPage.goto('/home');
     await expect(visitorPage).toHaveURL(`${webUrl}/home`);
-    await visitorPage.getByRole('link', { name: 'List your work' }).click();
-    await expect(visitorPage).toHaveURL(`${webUrl}/home/list-your-work`);
+    await expect(visitorPage.getByRole('link', { name: 'List your work' })).toHaveCount(0);
+    await visitorPage.goto('/home/list-your-work');
     await expect(
       visitorPage.getByRole('heading', { name: 'Use a separate designer account' }),
     ).toBeVisible();

@@ -106,11 +106,7 @@ export default async function PersonalHomePage({
     <div className="flex min-h-screen flex-col bg-background">
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
-      <PublicHeader
-        isAuthenticated
-        userRole={session.user.role ?? null}
-        userStatus={session.user.status ?? null}
-      />
+      <PublicHeader isAuthenticated userRole={session.user.role ?? null} />
       <main className="w-full space-y-8 px-5 py-10 sm:px-8 lg:py-12">
         <header className="space-y-1.5">
           <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">

@@ -12,11 +12,7 @@ export default async function ListYourWorkPage() {
 
   return (
     <>
-      <PublicHeader
-        isAuthenticated
-        userRole={session.user.role}
-        userStatus={session.user.status ?? null}
-      />
+      <PublicHeader isAuthenticated userRole={session.user.role} />
       <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-xl items-center px-5 py-10 sm:px-8">
         <Card className="w-full">
           <CardHeader className="items-center text-center">

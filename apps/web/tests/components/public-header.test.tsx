@@ -100,53 +100,24 @@ describe('PublicHeader', () => {
     expect(signInLink.querySelector('.lucide-user-round')).toBeInTheDocument();
   });
 
-  it('sends pending visitors who selected designer registration to designer onboarding', () => {
-    render(<PublicHeader isAuthenticated userRole="visitor" userStatus="pending" />);
-
-    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
-      'href',
-      '/designer/onboarding',
+  it('hides List your work for a signed-in visitor', () => {
+    render(
+      <PublicHeader
+        isAuthenticated
+        userRole="visitor"
+        contextSwitcher={<div>Context switcher</div>}
+      />,
     );
-    expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'false');
-  });
-
-  it('can hide List your work while preserving the authenticated account menu', () => {
-    render(<PublicHeader isAuthenticated userRole="visitor" showListYourWork={false} />);
 
     expect(screen.queryByRole('link', { name: /list your work/i })).not.toBeInTheDocument();
-    expect(screen.getByText('Account menu')).toBeInTheDocument();
+    expect(screen.getByText('Context switcher')).toBeInTheDocument();
+    expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'false');
   });
 
   it('makes designer profile settings available from public pages', () => {
     render(<PublicHeader isAuthenticated userRole="designer" />);
 
     expect(screen.getByText('Account menu')).toHaveAttribute('data-profile-settings', 'true');
-  });
-
-  it('sends active visitors to a role-safe explanation instead of designer onboarding', () => {
-    render(
-      <PublicHeader
-        isAuthenticated
-        userRole="visitor"
-        userStatus="active"
-        contextSwitcher={<div>Context switcher</div>}
-      />,
-    );
-
-    expect(screen.getByText('Context switcher')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
-      'href',
-      '/home/list-your-work',
-    );
-  });
-
-  it('does not route a suspended visitor into a protected visitor flow', () => {
-    render(<PublicHeader isAuthenticated userRole="visitor" userStatus="suspended" />);
-
-    expect(screen.getByRole('link', { name: /list your work/i })).toHaveAttribute(
-      'href',
-      '/unauthorized',
-    );
   });
 
   it('sends signed-in designers to the designer dashboard', () => {
