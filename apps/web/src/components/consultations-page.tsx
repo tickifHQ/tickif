@@ -43,13 +43,7 @@ export async function ConsultationsPage({
   if (data.page > 1 && data.page > data.totalPages) redirect(href(Math.max(1, data.totalPages)));
   return (
     <>
-      {personal ? (
-        <PublicHeader
-          isAuthenticated
-          userRole={session.user.role ?? null}
-          userStatus={session.user.status ?? null}
-        />
-      ) : null}
+      {personal ? <PublicHeader isAuthenticated userRole={session.user.role ?? null} /> : null}
       <main className="mx-auto flex max-w-4xl flex-col gap-6 p-5 sm:p-8">
         <header className="flex flex-col gap-2">
           {personal ? (

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { FeedProject } from '@repo/contracts';
+import { cn } from '@repo/ui/lib/utils';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
 
 const FALLBACK_WIDTH = 480;
@@ -29,9 +30,10 @@ export function ShowcaseCard({
   // Search-sourced cards have no aggregate rating, so 0 reviews means "no score yet".
   const rating = project.reviewCount > 0 ? project.rating.toFixed(1) : null;
   const budgetLabel = project.budget ? formatCompactBudgetLabel(project.budget) : null;
+  const isShallowCard = placeholderHeight / placeholderWidth < 0.75;
 
   return (
-    <article className="group relative mb-4 break-inside-avoid overflow-hidden rounded-xl bg-muted">
+    <article className="group @container relative mb-4 break-inside-avoid overflow-hidden rounded-xl bg-muted">
       <Link href={href} className="block">
         {project.coverImageUrl ? (
           <img
@@ -45,6 +47,11 @@ export function ShowcaseCard({
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
             className="h-auto w-full select-none object-cover"
+            style={
+              hasImageDimensions
+                ? undefined
+                : { aspectRatio: `${FALLBACK_WIDTH} / ${FALLBACK_HEIGHT}` }
+            }
           />
         ) : (
           <div
@@ -63,20 +70,20 @@ export function ShowcaseCard({
           </span>
         ) : null}
 
-        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-[18px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-          <h3 className="font-display text-xl leading-tight tracking-tight text-background">
+        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-3 opacity-100 transition-opacity @min-[14rem]:p-4 sm:opacity-0 sm:group-hover:opacity-100">
+          <h3 className="line-clamp-2 font-display text-sm leading-tight tracking-tight text-background @min-[14rem]:text-lg">
             {project.title}
           </h3>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-background/90">
-            <span className="whitespace-nowrap">{project.studio}</span>
+          <div className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-background/90 @min-[14rem]:text-xs">
+            <span className="truncate">{project.studio}</span>
             {location ? (
               <>
                 <span className="text-background/50">·</span>
-                <span className="whitespace-nowrap">{location}</span>
+                <span className="truncate">{location}</span>
               </>
             ) : null}
             {rating ? (
-              <span className="whitespace-nowrap">
+              <span className="shrink-0 whitespace-nowrap">
                 <span className="text-background/50">·</span>{' '}
                 <span aria-hidden className="text-primary">
                   ★
@@ -86,11 +93,16 @@ export function ShowcaseCard({
             ) : null}
           </div>
           {tags.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap gap-1">
+            <div
+              className={cn(
+                'mt-2 hidden flex-wrap gap-1 @min-[14rem]:flex',
+                isShallowCard && '@min-[14rem]:hidden',
+              )}
+            >
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-background/20 px-2 py-[3px] text-[10.5px] font-medium tracking-[0.21px] text-background backdrop-blur-sm"
+                  className="rounded-full bg-background/20 px-2 py-0.5 text-2xs font-medium tracking-wide text-background backdrop-blur-sm"
                 >
                   {tag}
                 </span>
@@ -99,53 +111,6 @@ export function ShowcaseCard({
           ) : null}
         </div>
       </Link>
-
-      {/*
-        Save/Share are still visual placeholders. Until they are wired up they stay
-        out of the accessibility tree and out of the tab order (`inert`), so keyboard
-        and screen-reader users are not offered controls that do nothing.
-      */}
-      <div
-        inert
-        aria-hidden
-        className="absolute right-3 top-3 z-10 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-      >
-        <button
-          type="button"
-          aria-label="Save"
-          className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <path d="M12 21s-7-4.35-9.5-8.5C.5 9 2 5.5 5.5 5.5c2 0 3.5 1.5 6.5 4.5 3-3 4.5-4.5 6.5-4.5C22 5.5 23.5 9 21.5 12.5 19 16.65 12 21 12 21Z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          aria-label="Share"
-          className="grid size-8 place-items-center rounded-full bg-background/95 text-foreground shadow-md backdrop-blur"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="size-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden
-          >
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
-          </svg>
-        </button>
-      </div>
     </article>
   );
 }

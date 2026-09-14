@@ -23,7 +23,8 @@ import {
   type FeedFilterState,
 } from '@/lib/feed-params';
 import {
-  budgetSuggestions,
+  feedFilterCardPlacementSeed,
+  feedFilterSuggestions,
   canonicalFeedParams,
   feedPageLink,
   searchLabelMaps,
@@ -172,7 +173,9 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     ...baseRequest,
     ...labelMaps,
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions, params);
+  const filterSuggestions = feedFilterSuggestions(taxonomyOptions, params, {
+    facetDistribution: initialPage.facetDistribution,
+  });
   const paginationParams = canonicalFeedParams(params, 1);
 
   const previousHref = page > 1 ? feedPageLink(params, page - 1) : null;
@@ -223,6 +226,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
                   request={{ filters, query: '', sort: 'featured' }}
                   infinite={false}
                   filterSuggestions={filterSuggestions}
+                  filterCardPlacementSeed={feedFilterCardPlacementSeed()}
                 />
               </div>
             </section>
@@ -273,7 +277,9 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
               <ProjectFeed
                 initialPage={initialPage}
                 request={request}
+                infinite
                 filterSuggestions={filterSuggestions}
+                filterCardPlacementSeed={feedFilterCardPlacementSeed()}
                 paginationParams={paginationParams}
               />
             </div>

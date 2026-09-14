@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SearchX } from 'lucide-react';
 import { EmptyState } from '@repo/ui/components/empty-state';
 import { Button } from '@repo/ui/components/button';
@@ -10,13 +10,14 @@ import { TryFilterCard, type FeedFilterSuggestion } from '@/components/try-filte
 import { feedPageHref, FEED_FILTER_KEYS, MAX_HOME_FEED_PAGE } from '@/lib/feed-params';
 import { fetchHomeFeedPage, type HomeFeedPage, type HomeFeedRequest } from '@/lib/home-feed';
 
-const TRY_FILTER_INDEX = 13;
-/**
- * CSS multi-column masonry. The column count is declared per breakpoint so the
- * server-rendered markup is already correct — no measuring pass, and the layout
- * survives with JavaScript disabled.
- */
-const MASONRY_CLASS_NAME = 'columns-2 gap-x-4 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6';
+const MAX_FILTER_CARDS = 2;
+const MIN_PROJECTS_PER_FILTER_CARD = 8;
+const MIN_SUGGESTIONS_PER_FILTER_CARD = 2;
+const FIRST_CARD_MIN_INDEX = 4;
+const MASONRY_FALLBACK_CLASS_NAME =
+  'columns-2 gap-x-4 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6';
+const MASONRY_COLUMN_COUNT_CLASS_NAME =
+  '[--masonry-columns:2] md:[--masonry-columns:3] lg:[--masonry-columns:4] xl:[--masonry-columns:5] 2xl:[--masonry-columns:6]';
 
 const FILTER_LABELS: Record<string, string> = {
   budgetBandSlug: 'budget',
@@ -35,13 +36,19 @@ type ProjectFeedProps = {
   showTryFilter?: boolean;
   filterSuggestions?: FeedFilterSuggestion[];
   /**
-   * Canonical query params (query + filters, no `page`) for the crawlable feed.
-   * Supplying them renders the visible prev/next control; omit them for
-   * secondary strips such as the featured rail.
+   * Generated on the server for each navigation. The results component keeps
+   * the initial value so equivalent RSC refreshes cannot move cards while the
+   * visitor is reading or scrolling the feed.
+   */
+  filterCardPlacementSeed?: number;
+  /**
+   * Canonical query params (query + filters, no `page`) for finite feeds.
+   * Infinite discovery feeds intentionally omit visible pagination even when
+   * these params are present for server-owned crawl metadata.
    */
   paginationParams?: Record<string, string | string[] | undefined>;
   /**
-   * Feed base for the crawlable prev/next links and the empty-state reset.
+   * Feed base for finite prev/next links and the empty-state reset.
    * The shared feed also renders inside the signed-in /home workspace, where
    * those links must stay on /home instead of pointing at the public homepage.
    */
@@ -57,7 +64,178 @@ type FeedEntry =
       priority: boolean;
       project: HomeFeedPage['items'][number];
     }
-  | { kind: 'try-filter' };
+  | { id: string; kind: 'try-filter'; suggestions: FeedFilterSuggestion[] };
+
+type FilterCardPlacement = {
+  id: string;
+  index: number;
+  suggestions: FeedFilterSuggestion[];
+};
+
+function seededIndex(seed: number, salt: number, start: number, end: number): number {
+  const range = end - start + 1;
+  if (range <= 1) return start;
+
+  // Integer mixing gives each placement band an independent value without
+  // calling Math.random during client rendering.
+  let value = (seed ^ Math.imul(salt + 1, 0x9e3779b1)) >>> 0;
+  value = Math.imul(value ^ (value >>> 16), 0x21f0aaad) >>> 0;
+  value = Math.imul(value ^ (value >>> 15), 0x735a2d97) >>> 0;
+  value ^= value >>> 15;
+  return start + ((value >>> 0) % range);
+}
+
+function filterCardPlacements(
+  projectCount: number,
+  suggestions: FeedFilterSuggestion[],
+  seed: number,
+): FilterCardPlacement[] {
+  const possibleCardCount = Math.floor(projectCount / MIN_PROJECTS_PER_FILTER_CARD);
+  const suggestionCardCount = Math.floor(suggestions.length / MIN_SUGGESTIONS_PER_FILTER_CARD);
+  const cardCount = Math.min(MAX_FILTER_CARDS, possibleCardCount, suggestionCardCount);
+  if (cardCount === 0) return [];
+
+  const suggestionsPerCard = Math.ceil(suggestions.length / cardCount);
+  const midpoint = Math.floor(projectCount / 2);
+
+  return Array.from({ length: cardCount }, (_, cardIndex) => {
+    const isFirstOfTwo = cardCount === 2 && cardIndex === 0;
+    const isSecondOfTwo = cardCount === 2 && cardIndex === 1;
+    const start = isSecondOfTwo ? midpoint + 2 : FIRST_CARD_MIN_INDEX;
+    const end = isFirstOfTwo ? midpoint - 2 : projectCount - 1;
+
+    return {
+      id: `try-filter-${cardIndex + 1}`,
+      index: seededIndex(seed, cardIndex, start, end),
+      suggestions: suggestions.slice(
+        cardIndex * suggestionsPerCard,
+        (cardIndex + 1) * suggestionsPerCard,
+      ),
+    };
+  });
+}
+
+function estimatedEntryHeight(entry: FeedEntry): number {
+  if (entry.kind === 'try-filter') return 0.8 + entry.suggestions.length * 0.16;
+
+  const width = entry.project.imageWidth;
+  const height = entry.project.imageHeight;
+  return width !== null && width > 0 && height !== null && height > 0 ? height / width : 1.25;
+}
+
+function distributeEntries(entries: FeedEntry[], columnCount: number): FeedEntry[][] {
+  const columns = Array.from({ length: columnCount }, () => [] as FeedEntry[]);
+  const columnHeights = Array.from({ length: columnCount }, () => 0);
+  const filterCardColumns = new Set<number>();
+
+  for (const entry of entries) {
+    const availableColumns = Array.from({ length: columnCount }, (_, index) => index).filter(
+      (index) => entry.kind !== 'try-filter' || !filterCardColumns.has(index),
+    );
+    const candidateColumns = availableColumns.length > 0 ? availableColumns : [0];
+    let shortestColumn = candidateColumns[0]!;
+    for (const index of candidateColumns.slice(1)) {
+      if (columnHeights[index]! < columnHeights[shortestColumn]!) shortestColumn = index;
+    }
+    columns[shortestColumn]!.push(entry);
+    columnHeights[shortestColumn]! += estimatedEntryHeight(entry);
+    if (entry.kind === 'try-filter') filterCardColumns.add(shortestColumn);
+  }
+
+  return columns;
+}
+
+function FeedEntryCard({
+  entry,
+  hasActiveCriteria,
+}: {
+  entry: FeedEntry;
+  hasActiveCriteria: boolean;
+}) {
+  return entry.kind === 'try-filter' ? (
+    <TryFilterCard suggestions={entry.suggestions} hasActiveCriteria={hasActiveCriteria} />
+  ) : (
+    <div data-feed-page={entry.page} className="break-inside-avoid">
+      <ShowcaseCard project={entry.project} priority={entry.priority} />
+    </div>
+  );
+}
+
+function StableMasonry({
+  entries,
+  hasActiveCriteria,
+}: {
+  entries: FeedEntry[];
+  hasActiveCriteria: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [columnCount, setColumnCount] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateColumnCount = () => {
+      const nextColumnCount = Number.parseInt(
+        window.getComputedStyle(container).getPropertyValue('--masonry-columns'),
+        10,
+      );
+      if (Number.isFinite(nextColumnCount) && nextColumnCount > 0) {
+        setColumnCount((current) => (current === nextColumnCount ? current : nextColumnCount));
+      }
+    };
+
+    updateColumnCount();
+    const observer = new ResizeObserver(updateColumnCount);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const columns = useMemo(
+    () => (columnCount === null ? null : distributeEntries(entries, columnCount)),
+    [columnCount, entries],
+  );
+
+  if (columns === null) {
+    return (
+      <div
+        ref={containerRef}
+        data-masonry-feed
+        className={`${MASONRY_FALLBACK_CLASS_NAME} ${MASONRY_COLUMN_COUNT_CLASS_NAME}`}
+      >
+        {entries.map((entry) => (
+          <FeedEntryCard
+            key={entry.kind === 'try-filter' ? entry.id : entry.project.id}
+            entry={entry}
+            hasActiveCriteria={hasActiveCriteria}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      data-masonry-feed
+      data-masonry-mode="stable"
+      className={`grid gap-x-4 ${MASONRY_COLUMN_COUNT_CLASS_NAME}`}
+      style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+    >
+      {columns.map((column, columnIndex) => (
+        <div key={columnIndex} data-feed-column={columnIndex} className="min-w-0">
+          {column.map((entry) => (
+            <FeedEntryCard
+              key={entry.kind === 'try-filter' ? entry.id : entry.project.id}
+              entry={entry}
+              hasActiveCriteria={hasActiveCriteria}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function relaxedFilterMessage(filters: string[]): string {
   const labels = filters.map((filter) => FILTER_LABELS[filter] ?? filter);
@@ -113,6 +291,7 @@ function ProjectFeedResults({
   infinite = true,
   showTryFilter = true,
   filterSuggestions = [],
+  filterCardPlacementSeed = 0,
   paginationParams,
   paginationBase = '/',
 }: ProjectFeedProps) {
@@ -121,6 +300,7 @@ function ProjectFeedResults({
   const [hasMore, setHasMore] = useState(initialPage.hasMore);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [stableFilterCardPlacementSeed] = useState(filterCardPlacementSeed);
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const canLoadMore = infinite && hasMore && page < MAX_HOME_FEED_PAGE;
@@ -130,8 +310,8 @@ function ProjectFeedResults({
     { items: initialPage.items, page: initialPage.page },
     ...appendedPages,
   ];
-  // `page` tracks the newest page already appended, so "Next page" never links at
-  // something the visitor is already looking at.
+  // Finite feeds retain reusable server pagination. Infinite discovery feeds use
+  // only their sentinel and load-more fallback so the UI exposes one navigation model.
   const previousHref =
     paginationParams && initialPage.page > 1
       ? feedPageHref(paginationParams, initialPage.page - 1, paginationBase)
@@ -146,6 +326,8 @@ function ProjectFeedResults({
       : initialPage.fallback === 'relaxed'
         ? relaxedFilterMessage(initialPage.relaxedFilters)
         : '';
+  const hasActiveCriteria =
+    request.query.length > 0 || FEED_FILTER_KEYS.some((key) => request.filters[key].length > 0);
 
   const loadNextPage = useCallback(async () => {
     if (!canLoadMore || loadingRef.current) return;
@@ -189,6 +371,8 @@ function ProjectFeedResults({
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) void loadNextPage();
       },
+      // Begin before the visitor reaches the boundary so the next stable masonry
+      // entries are usually ready by the time they scroll into view.
       { rootMargin: '600px 0px' },
     );
 
@@ -214,12 +398,21 @@ function ProjectFeedResults({
             </Button>
           }
         />
-        {/* An over-run page still needs a way back to the results. */}
-        <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={null} />
+        {!infinite ? (
+          <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={null} />
+        ) : null}
       </div>
     );
   }
 
+  const placements = showTryFilter
+    ? filterCardPlacements(
+        initialPage.items.length,
+        filterSuggestions,
+        stableFilterCardPlacementSeed,
+      )
+    : [];
+  const placementsByIndex = new Map(placements.map((placement) => [placement.index, placement]));
   const entries = renderedPages.flatMap((renderedPage, pageIndex) =>
     renderedPage.items.flatMap((project, index): FeedEntry[] => {
       const projectEntry: FeedEntry = {
@@ -229,11 +422,16 @@ function ProjectFeedResults({
         project,
       };
 
-      return pageIndex === 0 &&
-        showTryFilter &&
-        filterSuggestions.length > 0 &&
-        index === TRY_FILTER_INDEX
-        ? [{ kind: 'try-filter' }, projectEntry]
+      const placement = pageIndex === 0 ? placementsByIndex.get(index) : undefined;
+      return placement
+        ? [
+            {
+              id: placement.id,
+              kind: 'try-filter',
+              suggestions: placement.suggestions,
+            },
+            projectEntry,
+          ]
         : [projectEntry];
     }),
   );
@@ -249,17 +447,7 @@ function ProjectFeedResults({
         </p>
       ) : null}
 
-      <div data-masonry-feed className={MASONRY_CLASS_NAME}>
-        {entries.map((entry) =>
-          entry.kind === 'try-filter' ? (
-            <TryFilterCard key="try-filter" suggestions={filterSuggestions} />
-          ) : (
-            <div key={entry.project.id} data-feed-page={entry.page} className="break-inside-avoid">
-              <ShowcaseCard project={entry.project} priority={entry.priority} />
-            </div>
-          ),
-        )}
-      </div>
+      <StableMasonry entries={entries} hasActiveCriteria={hasActiveCriteria} />
 
       {canLoadMore ? (
         <div
@@ -285,7 +473,9 @@ function ProjectFeedResults({
         </p>
       ) : null}
 
-      <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={nextHref} />
+      {!infinite ? (
+        <FeedPagination page={initialPage.page} previousHref={previousHref} nextHref={nextHref} />
+      ) : null}
     </div>
   );
 }

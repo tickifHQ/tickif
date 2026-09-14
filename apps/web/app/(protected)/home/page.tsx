@@ -13,7 +13,8 @@ import {
   parseFeedQuery,
 } from '@/lib/feed-params';
 import {
-  budgetSuggestions,
+  feedFilterCardPlacementSeed,
+  feedFilterSuggestions,
   canonicalFeedParams,
   feedPageLink,
   searchLabelMaps,
@@ -93,7 +94,10 @@ export default async function PersonalHomePage({
     ...baseRequest,
     ...searchLabelMaps(taxonomyOptions),
   };
-  const filterSuggestions = budgetSuggestions(taxonomyOptions, params, '/home');
+  const filterSuggestions = feedFilterSuggestions(taxonomyOptions, params, {
+    base: '/home',
+    facetDistribution: initialPage.facetDistribution,
+  });
   const paginationParams = canonicalFeedParams(params, 1);
   const previousHref = page > 1 ? feedPageLink(params, page - 1, '/home') : null;
   const nextHref = initialPage.hasMore ? feedPageLink(params, page + 1, '/home') : null;
@@ -102,11 +106,7 @@ export default async function PersonalHomePage({
     <div className="flex min-h-screen flex-col bg-background">
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
-      <PublicHeader
-        isAuthenticated
-        userRole={session.user.role ?? null}
-        userStatus={session.user.status ?? null}
-      />
+      <PublicHeader isAuthenticated userRole={session.user.role ?? null} />
       <main className="w-full space-y-8 px-5 py-10 sm:px-8 lg:py-12">
         <header className="space-y-1.5">
           <p className="font-mono text-xs tracking-wider text-foreground-disabled uppercase">
@@ -133,7 +133,9 @@ export default async function PersonalHomePage({
             <ProjectFeed
               initialPage={initialPage}
               request={request}
+              infinite
               filterSuggestions={filterSuggestions}
+              filterCardPlacementSeed={feedFilterCardPlacementSeed()}
               paginationParams={paginationParams}
               paginationBase="/home"
             />

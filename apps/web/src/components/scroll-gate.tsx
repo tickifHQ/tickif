@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { LoginCard } from '@/components/login-card';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 import { env } from '@/env';
 
 /**
@@ -10,7 +10,7 @@ import { env } from '@/env';
  * Scroll tracking approach: accumulates downward scroll distance.
  * Every 400px of cumulative downward scroll = 1 scroll-unit.
  * Upward scroll does NOT decrement the counter.
- * Once the limit is reached, the gate is irreversible for this mount lifecycle.
+ * Once the limit is reached, the gate opens a dismissible sign-in dialog.
  *
  * This component does NOT render on the server (hydration-safe).
  * The parent layout decides whether to mount it based on auth state.
@@ -61,15 +61,11 @@ export function ScrollGate() {
   if (!gated) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral-900/80 p-4 backdrop-blur-sm"
-      aria-modal="true"
-      role="dialog"
-      aria-label="Sign in required"
-    >
-      <div className="max-h-[calc(100vh-2rem)] w-full max-w-[760px] overflow-y-auto">
-        <LoginCard onSuccess={() => window.location.reload()} />
-      </div>
-    </div>
+    <ActionLoginDialog
+      open={gated}
+      onOpenChange={setGated}
+      loginHref="/login"
+      title="Sign in required"
+    />
   );
 }

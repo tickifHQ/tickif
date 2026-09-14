@@ -1,9 +1,19 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PublicProjectGalleryImage, PublicProjectDesigner, PublicImageDetailProject } from '@repo/contracts';
+import type {
+  PublicProjectGalleryImage,
+  PublicProjectDesigner,
+  PublicImageDetailProject,
+} from '@repo/contracts';
 import { ImageDetailView } from '../../src/components/image-detail-view';
 
-vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+vi.mock('@/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button>Like</button>,
+}));
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
 
 const push = vi.fn();
 
@@ -148,18 +158,16 @@ describe('ImageDetailView', () => {
   it('renders the enquiry CTA with inverted styling and callbackURL', () => {
     renderComponent();
 
-    const enquire = screen.getByRole('link', { name: /enquire/i });
+    const enquire = screen.getByRole('button', { name: /enquire/i });
     expect(enquire).toHaveClass('h-9', 'bg-button-inverted', 'text-button-inverted-foreground');
-    expect(enquire).toHaveAttribute(
-      'href',
-      expect.stringContaining('/login?callbackURL='),
-    );
   });
 
   it('displays the real project description', () => {
     renderComponent();
 
-    expect(screen.getByText('A modern apartment with clean lines and natural light.')).toBeInTheDocument();
+    expect(
+      screen.getByText('A modern apartment with clean lines and natural light.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/beautifully designed space/i)).not.toBeInTheDocument();
   });
 
@@ -197,13 +205,12 @@ describe('ImageDetailView', () => {
 
   // --- Finding #2: Login redirect uses callbackURL ---
 
-  it('redirects to login with callbackURL when anonymous user clicks bookmark', () => {
+  it('opens login in place when an anonymous user clicks bookmark', async () => {
     renderComponent({ isAuthenticated: false });
 
     fireEvent.click(screen.getByRole('button', { name: /bookmark/i }));
-    expect(push).toHaveBeenCalledWith(
-      expect.stringMatching(/\/login\?callbackURL=%2Fimage%2F/),
-    );
+    expect(await screen.findByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
   });
 
   // --- Finding #6: View profile link ---
@@ -275,10 +282,9 @@ describe('ImageDetailView', () => {
     renderComponent({ activeImageId: gallery[0]!.id });
 
     fireEvent.keyDown(document, { key: 'ArrowLeft' });
-    expect(push).toHaveBeenCalledWith(
-      `/image/${gallery[gallery.length - 1]!.id}`,
-      { scroll: false },
-    );
+    expect(push).toHaveBeenCalledWith(`/image/${gallery[gallery.length - 1]!.id}`, {
+      scroll: false,
+    });
   });
 
   it('wraps to the first image when ArrowRight is pressed on the last', () => {
@@ -407,9 +413,7 @@ describe('ImageDetailView', () => {
       fireEvent.click(screen.getByRole('button', { name: /share/i }));
     });
 
-    expect(writeText).toHaveBeenCalledWith(
-      `${window.location.origin}/image/${gallery[0]!.id}`,
-    );
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/image/${gallery[0]!.id}`);
   });
 
   it('does not raise when neither share nor clipboard exists (insecure context)', async () => {
@@ -468,9 +472,7 @@ describe('ImageDetailView', () => {
     renderComponent();
 
     const buttons = screen.getAllByRole('button', { name: /living room|kitchen/i });
-    const activeButton = buttons.find(
-      (btn) => btn.getAttribute('aria-current') === 'true',
-    );
+    const activeButton = buttons.find((btn) => btn.getAttribute('aria-current') === 'true');
     expect(activeButton).toBeDefined();
 
     // Should NOT use role="tab"

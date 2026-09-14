@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { projectLikeStateSchema, type ProjectLikeState } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { Heart } from 'lucide-react';
@@ -16,6 +15,7 @@ import {
   publishProjectLikeState,
   subscribeProjectLikeState,
 } from '@/lib/project-likes-state';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 export function ProjectLikeButton({
   projectId,
@@ -24,7 +24,6 @@ export function ProjectLikeButton({
   projectId: string;
   loginHref: string;
 }) {
-  const router = useRouter();
   const errorId = useId();
   const countId = useId();
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -35,6 +34,7 @@ export function ProjectLikeButton({
   currentKey.current = stateKey;
   const requestPending = useRef(false);
   const [pending, setPending] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [resolved, setResolved] = useState<{
     key: string;
@@ -75,7 +75,7 @@ export function ProjectLikeButton({
   async function toggleLike() {
     if (sessionPending || requestPending.current) return;
     if (!session) {
-      router.push(loginHref);
+      setLoginOpen(true);
       return;
     }
     if (!state) {
@@ -104,7 +104,7 @@ export function ProjectLikeButton({
       )
         return;
       if (response.status === 401) {
-        router.push(loginHref);
+        setLoginOpen(true);
         return;
       }
       if (response.status === 403)
@@ -170,6 +170,7 @@ export function ProjectLikeButton({
           {result.error}
         </p>
       ) : null}
+      <ActionLoginDialog open={loginOpen} onOpenChange={setLoginOpen} loginHref={loginHref} />
     </div>
   );
 }

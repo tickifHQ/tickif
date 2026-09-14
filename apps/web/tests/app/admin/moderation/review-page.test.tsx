@@ -5,14 +5,32 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers({ cookie: 'ses
 vi.mock('@/lib/auth-guard', () => ({ requireAuth: mocks.requireAuth }));
 vi.mock('@/lib/admin-review-api', () => ({ fetchAdminReviews: mocks.queue }));
 vi.mock('@/components/admin-review-queue', () => ({
-  AdminReviewQueue: ({ status }: { status: string }) => <div>{status}</div>,
+  AdminReviewQueue: ({
+    status,
+    initialCounts,
+  }: {
+    status: string;
+    initialCounts: { pending: number; disputed: number };
+  }) => (
+    <div>
+      {status}:{initialCounts.pending}:{initialCounts.disputed}
+    </div>
+  ),
 }));
 import Page from '../../../../app/(admin)/review-moderation/page';
 
 describe('review moderation page', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.queue.mockResolvedValue({ items: [], page: 2, limit: 20, total: 0, totalPages: 0 });
+    mocks.queue.mockImplementation(({ status }: { status: string }) =>
+      Promise.resolve({
+        items: [],
+        page: status === 'disputed' ? 2 : 1,
+        limit: 20,
+        total: status === 'disputed' ? 2 : 4,
+        totalPages: 1,
+      }),
+    );
   });
   it('checks admin access before loading private data and respects URL pagination', async () => {
     render(await Page({ searchParams: Promise.resolve({ status: 'disputed', page: '2' }) }));
@@ -21,7 +39,7 @@ describe('review moderation page', () => {
       { status: 'disputed', page: 2, limit: 20 },
       'session=admin',
     );
-    expect(screen.getByText('disputed')).toBeInTheDocument();
+    expect(screen.getByText('disputed:4:2')).toBeInTheDocument();
   });
   it('does not load review data if the role guard rejects the session', async () => {
     mocks.requireAuth.mockRejectedValue(new Error('unauthorized'));

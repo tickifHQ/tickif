@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import {
-  ACCOUNT_STATUS,
-  PLATFORM_ROLE,
-  accountStatusSchema,
-  platformRoleSchema,
-} from '@repo/contracts';
+import { PLATFORM_ROLE, platformRoleSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { ListChevronsUpDown, UserRound } from 'lucide-react';
 import { AccountMenu } from '@/components/account-menu';
@@ -16,17 +11,16 @@ import { PublicNavigation } from '@/components/public-navigation';
 export function PublicHeader({
   contextSwitcher,
   isAuthenticated = false,
-  showListYourWork = true,
   userRole = null,
-  userStatus = null,
 }: {
   contextSwitcher?: ReactNode;
   isAuthenticated?: boolean;
-  showListYourWork?: boolean;
   userRole?: string | null;
-  userStatus?: string | null;
 }) {
-  const listYourWorkHref = getListYourWorkHref({ isAuthenticated, userRole, userStatus });
+  const listYourWorkHref =
+    isAuthenticated && userRole === PLATFORM_ROLE.VISITOR
+      ? null
+      : getListYourWorkHref({ isAuthenticated, userRole });
 
   return (
     <header className="border-b border-border bg-background">
@@ -40,7 +34,7 @@ export function PublicHeader({
 
         <div className="flex items-center gap-2.5">
           {contextSwitcher}
-          {showListYourWork ? (
+          {listYourWorkHref ? (
             <Button asChild variant="neutral" size="xs" className="hidden w-32 sm:inline-flex">
               <Link href={listYourWorkHref}>
                 <ListChevronsUpDown className="size-4" aria-hidden />
@@ -68,11 +62,9 @@ export function PublicHeader({
 function getListYourWorkHref({
   isAuthenticated,
   userRole,
-  userStatus,
 }: {
   isAuthenticated: boolean;
   userRole: string | null;
-  userStatus: string | null;
 }) {
   if (!isAuthenticated) {
     return '/login?mode=designer';
@@ -86,10 +78,5 @@ function getListYourWorkHref({
   if (parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN) {
     return '/dashboard';
   }
-
-  const parsedStatus = accountStatusSchema.safeParse(userStatus);
-  if (!parsedStatus.success) return '/unauthorized';
-  if (parsedStatus.data === ACCOUNT_STATUS.PENDING) return '/designer/onboarding';
-  if (parsedStatus.data !== ACCOUNT_STATUS.ACTIVE) return '/unauthorized';
-  return '/home/list-your-work';
+  return '/unauthorized';
 }

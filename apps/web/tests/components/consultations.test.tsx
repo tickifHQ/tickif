@@ -22,6 +22,10 @@ vi.mock('@/lib/auth-client', () => ({
   authClient: { useSession: () => ({ data: mock.session, isPending: mock.isPending }) },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
 const profileId = '11111111-1111-4111-8111-111111111111';
 const projectId = '22222222-2222-4222-8222-222222222222';
 const booking: BookingResponse = {
@@ -149,7 +153,7 @@ describe('consultation request', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('unique');
     expect(mock.requestConsultation).not.toHaveBeenCalled();
   });
-  it('preserves the public login callback', async () => {
+  it('opens the shared login dialog in place for signed-out visitors', async () => {
     const user = userEvent.setup();
     render(
       <BookingCta
@@ -159,10 +163,10 @@ describe('consultation request', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Book consultation' }));
-    expect(screen.getByRole('link', { name: 'Sign in to book' })).toHaveAttribute(
-      'href',
-      '/login?callbackUrl=%2Fd%2Fstudio',
-    );
+    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('dialog', { name: 'Consultation with Studio' }),
+    ).not.toBeInTheDocument();
   });
 });
 describe('consultation lifecycle', () => {

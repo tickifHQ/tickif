@@ -28,6 +28,10 @@ vi.mock('@/lib/api', () => ({
     },
   },
 }));
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
 const { ProjectLikeButton } = await import('../../src/components/project-like-button');
 const projectId = '11111111-1111-4111-8111-111111111111';
 const loginHref = `/login?callbackURL=${encodeURIComponent(`/projects/${projectId}`)}`;
@@ -82,11 +86,12 @@ describe('ProjectLikeButton', () => {
     },
   );
 
-  it('shows public count and sends anonymous visitors to login with the exact return path', async () => {
+  it('shows public count and opens login in place for anonymous visitors', async () => {
     render(view());
     expect(await screen.findByText('2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in to like project' }));
-    expect(mocks.push).toHaveBeenCalledWith(loginHref);
+    expect(await screen.findByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.put).not.toHaveBeenCalled();
   });
   it('loads persistent state and updates count with the server result after like and unlike', async () => {
@@ -178,13 +183,14 @@ describe('ProjectLikeButton', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Switch to your personal account');
     expect(mocks.put).not.toHaveBeenCalled();
   });
-  it('prompts login again after the session expires', async () => {
+  it('prompts login in place after the session expires', async () => {
     signIn();
     mocks.put.mockResolvedValue(response({}, 401));
     render(view());
     await screen.findByText('2');
     fireEvent.click(screen.getByRole('button', { name: 'Like project' }));
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(loginHref));
+    expect(await screen.findByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
   it('ignores a late response after switching accounts', async () => {
     signIn();

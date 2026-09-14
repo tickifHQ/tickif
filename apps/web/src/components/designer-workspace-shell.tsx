@@ -8,26 +8,23 @@ import { AccountMenu } from '@/components/account-menu';
 import { DesignerBranchSelector } from '@/components/designer-branch-selector';
 import { DesignerOrganizationSwitcher } from '@/components/designer-organization-switcher';
 import { Button } from '@repo/ui/components/button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Skeleton } from '@repo/ui/components/skeleton';
+import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
 import {
   ChartLine,
   CalendarDays,
   CreditCard,
-  ExternalLink,
   FileUser,
   Building2,
   Layers,
   LayoutDashboard,
   Link as LinkIcon,
-  Menu,
   MessageSquareMore,
   Plus,
   Settings,
   Shield,
   ShieldCheck,
   UsersRound,
-  X,
 } from 'lucide-react';
 
 type NavItem = {
@@ -202,21 +199,17 @@ function SidebarContent({
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1">
+          <div className="flex flex-col gap-3">
+            <DesignerBranchSelector
+              key={activeOrganizationId}
+              organizationId={activeOrganizationId}
+            />
             <Link
               href="mailto:support@tickif.in"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <MessageSquareMore className="size-4" />
               <span>Contact support</span>
-            </Link>
-            <Link
-              href="/"
-              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Image src="/icon.svg" alt="" width={16} height={16} className="size-4" aria-hidden />
-              <span>Explore Tickif</span>
-              <ExternalLink className="ml-auto size-4" />
             </Link>
           </div>
 
@@ -227,10 +220,6 @@ function SidebarContent({
               studioLocation={studioLocation}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
-            />
-            <DesignerBranchSelector
-              key={activeOrganizationId}
-              organizationId={activeOrganizationId}
             />
           </div>
         </div>
@@ -274,14 +263,9 @@ export function DesignerWorkspaceShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [refreshingOrganizationId, setRefreshingOrganizationId] = useState<string | null>(null);
   const [isRefreshPending, startRefreshTransition] = useTransition();
   const isWorkspaceRefreshing = refreshingOrganizationId !== null || isRefreshPending;
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (refreshingOrganizationId === activeOrganizationId) {
@@ -297,91 +281,44 @@ export function DesignerWorkspaceShell({
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-muted/30">
-      <div className="flex h-full overflow-hidden bg-muted/20">
-        <aside className="hidden h-full w-64 shrink-0 flex-col lg:flex">
-          <SidebarContent
-            activeOrganizationId={activeOrganizationId}
-            studioName={studioName}
-            studioLocation={studioLocation}
-            pathname={pathname}
-            isWorkspaceRefreshing={isWorkspaceRefreshing}
-            onSwitchSuccess={handleSwitchSuccess}
-            isOwner={isOwner}
-          />
-        </aside>
-
-        <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <DialogContent
-            aria-describedby={undefined}
-            showCloseButton={false}
-            overlayClassName="lg:hidden"
-            className="left-0 top-0 flex h-full w-4/5 max-w-72 translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-y-0 border-l-0 border-r border-border bg-background p-0 shadow-xl lg:hidden"
-          >
-            <DialogTitle className="sr-only">Designer navigation</DialogTitle>
-            <DialogClose asChild>
-              <button
-                type="button"
-                aria-label="Close navigation"
-                autoFocus
-                className="absolute top-4 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <X className="size-4" />
-              </button>
-            </DialogClose>
-            <SidebarContent
-              activeOrganizationId={activeOrganizationId}
-              studioName={studioName}
-              studioLocation={studioLocation}
-              pathname={pathname}
-              isWorkspaceRefreshing={isWorkspaceRefreshing}
-              onSwitchSuccess={handleSwitchSuccess}
-              isOwner={isOwner}
-            />
-          </DialogContent>
-        </Dialog>
-
-        <div className="flex min-w-0 flex-1 flex-col p-2">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between rounded-t-3xl border border-border/80 bg-background/80 px-6 backdrop-blur">
-            <div className="flex min-w-0 items-center gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-9 cursor-pointer lg:hidden"
-                aria-label="Open navigation"
-                onClick={() => setMobileNavOpen(true)}
-              >
-                <Menu className="size-4" />
-              </Button>
-              <WorkspaceHeaderTitle pathname={pathname} />
-            </div>
-            <div className="flex items-center gap-2.5">
-              {pathname === '/designer/dashboard' ||
-              pathname === '/designer/projects' ||
-              pathname === '/designer/leads' ? (
-                <Button
-                  asChild
-                  variant="inverted"
-                  size="compact"
-                  className="size-10 cursor-pointer rounded-full p-0 sm:h-8 sm:w-auto sm:rounded-md sm:px-2.5"
-                >
-                  <Link href="/designer/projects/new" aria-label="Add new project">
-                    <Plus className="size-4" />
-                    <span className="hidden sm:inline">Add new project</span>
-                  </Link>
-                </Button>
-              ) : null}
-              <AccountMenu showLabel showProfileSettings avatarSeed={studioName} />
-            </div>
-          </header>
-          <section className="min-h-0 flex-1 overflow-hidden rounded-b-3xl border-x border-b border-border/80 bg-background shadow-sm">
-            <main className="h-full min-w-0 overflow-y-auto" aria-busy={isWorkspaceRefreshing}>
-              {isWorkspaceRefreshing ? <WorkspaceContentSkeleton /> : children}
-            </main>
-          </section>
-        </div>
-      </div>
-    </div>
+    <WorkspaceShellFrame
+      navigationLabel="Designer navigation"
+      renderSidebar={() => (
+        <SidebarContent
+          activeOrganizationId={activeOrganizationId}
+          studioName={studioName}
+          studioLocation={studioLocation}
+          pathname={pathname}
+          isWorkspaceRefreshing={isWorkspaceRefreshing}
+          onSwitchSuccess={handleSwitchSuccess}
+          isOwner={isOwner}
+        />
+      )}
+      headerTitle={<WorkspaceHeaderTitle pathname={pathname} />}
+      headerActions={
+        <>
+          {pathname === '/designer/dashboard' ||
+          pathname === '/designer/projects' ||
+          pathname === '/designer/leads' ? (
+            <Button
+              asChild
+              variant="inverted"
+              size="compact"
+              className="size-10 cursor-pointer rounded-full p-0 sm:h-8 sm:w-auto sm:rounded-md sm:px-2.5"
+            >
+              <Link href="/designer/projects/new" aria-label="Add new project">
+                <Plus className="size-4" />
+                <span className="hidden sm:inline">Add new project</span>
+              </Link>
+            </Button>
+          ) : null}
+          <AccountMenu showLabel showProfileSettings avatarSeed={studioName} />
+        </>
+      }
+      busy={isWorkspaceRefreshing}
+      busyFallback={<WorkspaceContentSkeleton />}
+    >
+      {children}
+    </WorkspaceShellFrame>
   );
 }

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import {
   ADMIN_VERIFICATION_QUEUE_TAB,
   ADMIN_VERIFICATION_QUEUE_TAB_VALUES,
+  adminVerificationQueueQuerySchema,
   type AdminVerificationQueueResponse,
   type AdminVerificationQueueTab,
 } from '@repo/contracts';
@@ -22,11 +23,18 @@ const emptyQueue: AdminVerificationQueueResponse = {
   tab: ADMIN_VERIFICATION_QUEUE_TAB.NEW,
 };
 
-export default async function AdminVerificationsPage() {
+export default async function AdminVerificationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
   await requireAuth({ requiredRole: 'admin' });
+  const params = (await searchParams) ?? {};
+  const parsedTab = adminVerificationQueueQuerySchema.shape.tab.safeParse(params.tab);
+  const initialTab = parsedTab.success ? parsedTab.data : ADMIN_VERIFICATION_QUEUE_TAB.NEW;
   const cookie = (await headers()).get('cookie');
 
-  let queue = emptyQueue;
+  let queue = { ...emptyQueue, tab: initialTab };
   const initialCounts: Record<AdminVerificationQueueTab, number> = {
     new: 0,
     re_review: 0,
@@ -45,7 +53,7 @@ export default async function AdminVerificationsPage() {
       );
       for (const [tab, loadedQueue] of queues) {
         initialCounts[tab] = loadedQueue.total;
-        if (tab === ADMIN_VERIFICATION_QUEUE_TAB.NEW) queue = loadedQueue;
+        if (tab === initialTab) queue = loadedQueue;
       }
     } catch {
       error = 'Could not load submitted verifications. Try refreshing the page.';

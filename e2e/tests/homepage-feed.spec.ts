@@ -88,24 +88,14 @@ test.describe('homepage search feed', () => {
     await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
   });
 
-  test('walks back from a deep-linked result page with the pagination control', async ({
-    page,
-  }) => {
+  test('keeps a deep-linked result page in the infinite feed model', async ({ page }) => {
     await page.goto(`/?q=${SEARCH_TERM}&page=2`);
 
-    const pagination = page.getByRole('navigation', { name: 'Feed pages' });
-    await expect(pagination).toBeVisible();
-    await expect(pagination.getByText('Page 2')).toBeVisible();
-    // 26 fixtures at 24 per page: page 2 is the last page.
-    await expect(pagination.getByRole('link', { name: 'Next page' })).toHaveCount(0);
-
-    // Reachable by keyboard, not just by pointer.
-    const previous = pagination.getByRole('link', { name: 'Previous page' });
-    await previous.focus();
-    await expect(previous).toBeFocused();
-    await previous.press('Enter');
-
-    await expect(page).toHaveURL(`/?q=${SEARCH_TERM}`);
-    await expect(page.getByRole('article')).toHaveCount(24);
+    await expect(page).toHaveURL(`/?q=${SEARCH_TERM}&page=2`);
+    await expect(page.getByRole('heading', { name: `Results for “${SEARCH_TERM}”` })).toBeVisible();
+    await expect(page.getByRole('article')).toHaveCount(PROJECT_COUNT - 24);
+    await expect(page.locator('[data-feed-page="2"]')).toHaveCount(PROJECT_COUNT - 24);
+    await expect(page.getByRole('navigation', { name: 'Feed pages' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Load more projects' })).toHaveCount(0);
   });
 });

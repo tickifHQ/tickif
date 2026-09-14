@@ -17,6 +17,10 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/reviews-api', () => mock);
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
+vi.mock('@/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Sign in to continue" /> : null,
+}));
 const profileId = '11111111-1111-4111-8111-111111111111';
 const own: ParticipantReview = {
   review: {
@@ -103,6 +107,21 @@ describe('review submission and editing', () => {
 });
 
 describe('Tickif review display', () => {
+  it('opens the shared login dialog in place before a signed-out review', async () => {
+    const user = userEvent.setup();
+    render(
+      <TickifReviews
+        designerProfileId={profileId}
+        initialPage={page}
+        initialOwn={null}
+        canWrite={false}
+        loginHref="/login?callbackURL=%2Fd%2Fstudio"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Sign in to write a review' }));
+    expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+  });
   it('shows private pending state and respects the server edit cutoff', () => {
     const view = render(
       <TickifReviews designerProfileId={profileId} initialPage={page} initialOwn={own} canWrite />,

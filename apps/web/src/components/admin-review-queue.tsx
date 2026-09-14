@@ -1,7 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import Link from 'next/link';
+import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   rejectReviewSchema,
@@ -23,6 +22,8 @@ import { Label } from '@repo/ui/components/label';
 import { Input } from '@repo/ui/components/input';
 import { Textarea } from '@repo/ui/components/textarea';
 import { EmptyState } from '@repo/ui/components/empty-state';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@repo/ui/components/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components/tooltip';
 import {
   Table,
   TableBody,
@@ -31,7 +32,8 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components/table';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, RefreshCw } from 'lucide-react';
+import { ListPagination } from '@/components/list-pagination';
 import {
   fetchAdminReview,
   fetchAdminReviews,
@@ -42,6 +44,8 @@ import {
 
 type QueueStatus = 'pending' | 'disputed';
 type Decision = 'publish' | 'reject' | 'remove';
+const QUEUE_STATUSES = ['pending', 'disputed'] as const satisfies readonly QueueStatus[];
+
 function queueUrl(status: QueueStatus, page: number) {
   return `/review-moderation?status=${status}&page=${page}`;
 }
@@ -51,18 +55,63 @@ function message(error: unknown) {
 function date(value: string) {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 }
+function reviewCountLabel(total: number, status: QueueStatus) {
+  return `${total} ${status} ${total === 1 ? 'review' : 'reviews'}`;
+}
+
+function RefreshIconButton({
+  label,
+  disabled = false,
+  loading = false,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="ml-auto shrink-0"
+          aria-label={label}
+          aria-busy={loading}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function AdminReviewQueue({
   initialQueue,
+  initialCounts,
   status,
   initialError,
 }: {
   initialQueue: AdminReviewsResponse;
+  initialCounts?: Record<QueueStatus, number>;
   status: QueueStatus;
   initialError?: string;
 }) {
   const router = useRouter();
+  const [navigating, startNavigation] = useTransition();
   const [queue, setQueue] = useState(initialQueue);
+  const [tabCounts, setTabCounts] = useState<Record<QueueStatus, number>>(
+    () =>
+      initialCounts ?? {
+        pending: status === 'pending' ? initialQueue.total : 0,
+        disputed: status === 'disputed' ? initialQueue.total : 0,
+      },
+  );
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -70,25 +119,67 @@ export function AdminReviewQueue({
   const [detailError, setDetailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [note, setNote] = useState('');
   const [reasonCode, setReasonCode] = useState('');
-  const request = useRef(0);
+  const detailRequest = useRef(0);
+  const queueRequest = useRef(0);
 
   async function refreshQueue() {
+    const token = ++queueRequest.current;
+    setRefreshing(true);
     setError(undefined);
-    try {
-      const next = await fetchAdminReviews({ status, page: queue.page, limit: queue.limit });
-      if (next.page > Math.max(1, next.totalPages)) {
-        router.replace(queueUrl(status, Math.max(1, next.totalPages)));
-      } else setQueue(next);
-    } catch (cause) {
-      setError(message(cause));
-    }
+    const results = await Promise.allSettled(
+      QUEUE_STATUSES.map((queueStatus) =>
+        fetchAdminReviews({
+          status: queueStatus,
+          page: queueStatus === status ? queue.page : 1,
+          limit: queue.limit,
+        }),
+      ),
+    );
+    if (queueRequest.current !== token) return;
+
+    let refreshError: string | undefined;
+    results.forEach((result, index) => {
+      const queueStatus = QUEUE_STATUSES[index]!;
+      if (result.status === 'fulfilled') {
+        if (queueStatus === status) {
+          const lastPage = Math.max(1, result.value.totalPages);
+          if (result.value.page > lastPage) {
+            router.replace(queueUrl(status, lastPage));
+          } else {
+            setQueue(result.value);
+          }
+        }
+      } else {
+        refreshError = message(result.reason);
+      }
+    });
+    setTabCounts((current) => {
+      const nextCounts = { ...current };
+      results.forEach((result, index) => {
+        const queueStatus = QUEUE_STATUSES[index]!;
+        if (result.status === 'fulfilled') {
+          nextCounts[queueStatus] = result.value.total;
+        }
+      });
+      return nextCounts;
+    });
+    setError(refreshError);
+    setRefreshing(false);
+  }
+
+  function navigate(nextStatus: QueueStatus, page = 1) {
+    if (nextStatus === status && page === queue.page) return;
+    queueRequest.current++;
+    setRefreshing(false);
+    startNavigation(() => router.push(queueUrl(nextStatus, page)));
   }
 
   async function loadDetail(id: string) {
-    const token = ++request.current;
+    const token = ++detailRequest.current;
     setOpenId(id);
     setDetail(null);
     setLoading(true);
@@ -98,11 +189,11 @@ export function AdminReviewQueue({
     setNeedsRefresh(false);
     try {
       const next = await fetchAdminReview(id);
-      if (request.current === token) setDetail(next);
+      if (detailRequest.current === token) setDetail(next);
     } catch (cause) {
-      if (request.current === token) setDetailError(message(cause));
+      if (detailRequest.current === token) setDetailError(message(cause));
     } finally {
-      if (request.current === token) setLoading(false);
+      if (detailRequest.current === token) setLoading(false);
     }
   }
 
@@ -160,104 +251,103 @@ export function AdminReviewQueue({
             Review visitor feedback and resolve designer disputes. All times are in IST.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void refreshQueue()}>
-          Refresh queue
-        </Button>
-      </div>
-      <nav aria-label="Review queues" className="flex gap-2">
-        {(['pending', 'disputed'] as const).map((tab) => (
-          <Button key={tab} asChild variant={status === tab ? 'default' : 'outline'}>
-            <Link aria-current={status === tab ? 'page' : undefined} href={queueUrl(tab, 1)}>
-              {tab === 'pending' ? 'Pending' : 'Disputed'}
-            </Link>
-          </Button>
-        ))}
-      </nav>
-      {error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {notice ? (
-        <p role="status" className="text-sm">
-          {notice}
-        </p>
-      ) : null}
-      <p className="text-sm text-muted-foreground">
-        {queue.total} {status} reviews
-      </p>
-      {queue.items.length ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Reviewer</TableHead>
-              <TableHead>Rating / project</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead>
-                <span className="sr-only">Action</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {queue.items.map((review) => (
-              <TableRow key={review.id}>
-                <TableCell>
-                  <p>{review.author.name}</p>
-                  <p className="max-w-xs truncate text-muted-foreground">
-                    {review.body ?? 'Rating only'}
-                  </p>
-                </TableCell>
-                <TableCell>
-                  {review.rating} / 5
-                  <p className="text-muted-foreground">
-                    {review.project?.title ?? 'Designer review'}
-                  </p>
-                </TableCell>
-                <TableCell>{date(review.updatedAt)}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    onClick={() => void loadDetail(review.id)}
-                    aria-label={`Review feedback by ${review.author.name}`}
-                  >
-                    Review
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      ) : !error ? (
-        <EmptyState
-          icon={<MessageSquare />}
-          title={`No ${status} reviews`}
-          description="New reviews will appear here when they need your attention."
+        <RefreshIconButton
+          label="Refresh queue"
+          disabled={navigating || refreshing}
+          loading={refreshing}
+          onClick={() => void refreshQueue()}
         />
-      ) : null}
-      <nav aria-label="Review pagination" className="flex items-center justify-between gap-3">
-        <Button
-          variant="outline"
-          disabled={queue.page <= 1}
-          onClick={() => router.push(queueUrl(status, queue.page - 1))}
+      </div>
+      <Tabs value={status} onValueChange={(value) => navigate(value as QueueStatus)}>
+        <TabsList aria-label="Review queues">
+          {(['pending', 'disputed'] as const).map((tab) => (
+            <TabsTrigger key={tab} value={tab} disabled={navigating || refreshing}>
+              {tab === 'pending' ? 'Pending' : 'Disputed'}
+              <span className="ml-1 text-xs text-muted-foreground">{tabCounts[tab]}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent
+          value={status}
+          className="flex flex-col gap-6"
+          aria-busy={navigating || refreshing}
         >
-          Previous
-        </Button>
-        <p className="text-sm">
-          Page {queue.page} of {Math.max(1, queue.totalPages)}
-        </p>
-        <Button
-          variant="outline"
-          disabled={queue.page >= queue.totalPages}
-          onClick={() => router.push(queueUrl(status, queue.page + 1))}
-        >
-          Next
-        </Button>
-      </nav>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-sm">
+              {notice}
+            </p>
+          ) : null}
+          <p className="text-sm text-muted-foreground">{reviewCountLabel(queue.total, status)}</p>
+          {queue.items.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reviewer</TableHead>
+                  <TableHead>Rating / project</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Action</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {queue.items.map((review) => (
+                  <TableRow key={review.id}>
+                    <TableCell>
+                      <p>{review.author.name}</p>
+                      <p className="max-w-xs truncate text-muted-foreground">
+                        {review.body ?? 'Rating only'}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      {review.rating} / 5
+                      <p className="text-muted-foreground">
+                        {review.project?.title ?? 'Designer review'}
+                      </p>
+                    </TableCell>
+                    <TableCell>{date(review.updatedAt)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        onClick={() => void loadDetail(review.id)}
+                        aria-label={`Review feedback by ${review.author.name}`}
+                      >
+                        Review
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : !error ? (
+            <EmptyState
+              icon={<MessageSquare />}
+              title={`No ${status} reviews`}
+              description="New reviews will appear here when they need your attention."
+            />
+          ) : null}
+          <ListPagination
+            page={queue.page}
+            totalPages={queue.totalPages}
+            total={queue.total}
+            limit={queue.limit}
+            itemName="review"
+            showPageSize={false}
+            disabled={navigating || refreshing}
+            onPageChange={(page) => navigate(status, page)}
+          />
+        </TabsContent>
+      </Tabs>
       <Dialog
         open={openId !== null}
         onOpenChange={(open) => {
           if (!open && !saving) {
-            ++request.current;
+            ++detailRequest.current;
             setOpenId(null);
             setDetail(null);
           }
@@ -276,19 +366,30 @@ export function AdminReviewQueue({
               <AlertDescription>{detailError}</AlertDescription>
             </Alert>
           ) : null}
-          {!loading && openId ? (
-            <Button variant="outline" disabled={saving} onClick={() => void loadDetail(openId)}>
-              Refresh details
-            </Button>
+          {!loading && openId && !detail ? (
+            <div className="flex justify-end">
+              <RefreshIconButton
+                label="Refresh details"
+                disabled={saving}
+                onClick={() => void loadDetail(openId)}
+              />
+            </div>
           ) : null}
           {detail ? (
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge>{detail.review.status}</Badge>
+                <Badge variant={detail.review.status === 'pending' ? 'warning' : undefined}>
+                  {detail.review.status}
+                </Badge>
                 <span>{detail.review.rating} / 5</span>
                 {detail.review.verifiedConsultation ? (
                   <Badge variant="secondary">Verified consultation</Badge>
                 ) : null}
+                <RefreshIconButton
+                  label="Refresh details"
+                  disabled={saving}
+                  onClick={() => void loadDetail(detail.review.id)}
+                />
               </div>
               <dl className="grid gap-2 text-sm">
                 <div>

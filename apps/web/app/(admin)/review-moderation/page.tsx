@@ -25,11 +25,31 @@ export default async function ReviewModerationPage({
     total: 0,
     totalPages: 0,
   };
+  let counts = { pending: 0, disputed: 0 };
   let error: string | undefined;
   const cookie = (await headers()).get('cookie');
   try {
     if (!cookie) throw new Error('Your admin session could not be found. Sign in again.');
-    queue = await fetchAdminReviews(query, cookie);
+    const [pending, disputed] = await Promise.all([
+      fetchAdminReviews(
+        {
+          status: 'pending',
+          page: query.status === 'pending' ? query.page : 1,
+          limit: query.limit,
+        },
+        cookie,
+      ),
+      fetchAdminReviews(
+        {
+          status: 'disputed',
+          page: query.status === 'disputed' ? query.page : 1,
+          limit: query.limit,
+        },
+        cookie,
+      ),
+    ]);
+    queue = query.status === 'pending' ? pending : disputed;
+    counts = { pending: pending.total, disputed: disputed.total };
   } catch (cause) {
     error = cause instanceof Error ? cause.message : 'Could not load reviews.';
   }
@@ -37,6 +57,7 @@ export default async function ReviewModerationPage({
     <AdminReviewQueue
       key={`${query.status}:${query.page}`}
       initialQueue={queue}
+      initialCounts={counts}
       status={query.status}
       initialError={error}
     />

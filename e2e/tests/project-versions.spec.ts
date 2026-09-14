@@ -186,11 +186,14 @@ test('published project edits keep live content through rejection and replace it
       body: await publicPage.screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
-    const loginHref = `/login?callbackURL=${encodeURIComponent(publicPath)}`;
-    await expect(publicPage.getByRole('link', { name: 'Sign in to save project' })).toHaveAttribute(
-      'href',
-      loginHref,
-    );
+    const save = publicPage.getByRole('button', { name: 'Sign in to save project' });
+    await expect(save).toBeEnabled();
+    await save.click();
+    const loginDialog = publicPage.getByRole('dialog', { name: 'Sign in to continue' });
+    await expect(loginDialog).toBeVisible();
+    await expect(publicPage).toHaveURL(`${webUrl}${publicPath}`);
+    await loginDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(loginDialog).toBeHidden();
     const like = publicPage.getByRole('button', { name: 'Sign in to like project' });
     await expect(like).toBeEnabled();
     await like.scrollIntoViewIfNeeded();
@@ -199,7 +202,8 @@ test('published project edits keep live content through rejection and replace it
       contentType: 'image/png',
     });
     await like.click();
-    await expect(publicPage).toHaveURL(`${webUrl}${loginHref}`);
+    await expect(loginDialog).toBeVisible();
+    await expect(publicPage).toHaveURL(`${webUrl}${publicPath}`);
     expect(errors).toEqual([]);
   } finally {
     await Promise.allSettled([designerContext.close(), publicContext.close()]);

@@ -257,7 +257,7 @@ describe('AccountMenu', () => {
     expect(screen.queryByText(/@phone\.tickif\.local/i)).not.toBeInTheDocument();
   });
 
-  it('still shows a real login email as read-only identity detail', async () => {
+  it('uses a safe label and hides email when the account has no name', async () => {
     mock.session = {
       user: { name: null, email: 'mahi@test.com', role: 'designer' },
       session: { activeOrganizationId: null },
@@ -265,6 +265,23 @@ describe('AccountMenu', () => {
     const user = userEvent.setup();
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu/i }));
-    expect(screen.getByText('mahi@test.com', { selector: 'p.text-xs' })).toBeInTheDocument();
+    expect(screen.getByText('Account')).toBeInTheDocument();
+    expect(screen.queryByText('mahi@test.com')).not.toBeInTheDocument();
   });
+
+  it.each(['visitor', 'designer', 'admin', 'superadmin'])(
+    'hides email from the %s account dropdown',
+    async (role) => {
+      mock.session = {
+        user: { name: 'Account User', email: 'account@test.com', role },
+        session: { activeOrganizationId: null },
+      };
+      const user = userEvent.setup();
+      render(<AccountMenu showLabel />);
+      await user.click(screen.getByRole('button', { name: /open account menu for account user/i }));
+
+      expect(screen.getByText('Account User')).toBeInTheDocument();
+      expect(screen.queryByText('account@test.com')).not.toBeInTheDocument();
+    },
+  );
 });

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { savedProjectStateSchema, savedProjectsStateResponseSchema } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { Bookmark, Check, Share2 } from 'lucide-react';
@@ -9,6 +8,7 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useHydrated } from '@/lib/use-hydrated';
 import { ProjectLikeButton } from '@/components/project-like-button';
+import { ActionLoginDialog } from '@/components/action-login-dialog';
 
 export function ProjectActions({
   projectId,
@@ -26,6 +26,7 @@ export function ProjectActions({
   const [loadedSaveStateKey, setLoadedSaveStateKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
+  const [loginOpen, setLoginOpen] = useState(false);
   const sessionUserId = session?.user.id ?? null;
   const saveStateKey = sessionUserId ? `${sessionUserId}:${projectId}` : null;
   const isSaveStateLoading = saveStateKey !== null && loadedSaveStateKey !== saveStateKey;
@@ -135,11 +136,16 @@ export function ProjectActions({
             {isSaving ? 'Saving…' : isSaved ? 'Saved' : 'Save'}
           </Button>
         ) : (
-          <Button asChild variant="secondary" size="compact" className="flex-1">
-            <Link href={loginHref} aria-label="Sign in to save project">
-              <Bookmark aria-hidden data-icon="inline-start" />
-              Save
-            </Link>
+          <Button
+            type="button"
+            variant="secondary"
+            size="compact"
+            className="flex-1"
+            aria-label="Sign in to save project"
+            onClick={() => setLoginOpen(true)}
+          >
+            <Bookmark aria-hidden data-icon="inline-start" />
+            Save
           </Button>
         )}
         <Button
@@ -162,6 +168,7 @@ export function ProjectActions({
           {saveError}
         </p>
       ) : null}
+      <ActionLoginDialog open={loginOpen} onOpenChange={setLoginOpen} loginHref={loginHref} />
     </div>
   );
 }

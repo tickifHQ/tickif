@@ -55,18 +55,22 @@ vi.mock('@/lib/home-feed', () => ({
 }));
 
 vi.mock('@/components/project-feed', () => ({
-  ProjectFeed: () => <div data-testid="project-feed">feed</div>,
+  ProjectFeed: ({ infinite }: { infinite?: boolean }) => (
+    <div data-testid="project-feed" data-infinite={String(infinite)}>
+      feed
+    </div>
+  ),
 }));
 
 vi.mock('@/components/public-header', () => ({
   PublicHeader: ({
-    showListYourWork,
+    userRole,
     contextSwitcher,
   }: {
-    showListYourWork?: boolean;
+    userRole?: string | null;
     contextSwitcher?: React.ReactNode;
   }) => (
-    <div data-testid="public-header" data-show-list-your-work={String(showListYourWork ?? true)}>
+    <div data-testid="public-header" data-user-role={userRole ?? ''}>
       header
       {contextSwitcher}
     </div>
@@ -84,13 +88,14 @@ describe('PersonalHomePage', () => {
     });
   });
 
-  it('renders the visitor workspace with List your work and without organization controls', async () => {
+  it('renders the visitor workspace without organization controls', async () => {
     render(await PersonalHomePage());
 
     expect(screen.getByRole('heading', { name: /Welcome back, Asha/i })).toBeInTheDocument();
     expect(screen.getAllByText('My Tickif')).not.toHaveLength(0);
     expect(screen.getByTestId('project-feed')).toBeInTheDocument();
-    expect(screen.getByTestId('public-header')).toHaveAttribute('data-show-list-your-work', 'true');
+    expect(screen.getByTestId('project-feed')).toHaveAttribute('data-infinite', 'true');
+    expect(screen.getByTestId('public-header')).toHaveAttribute('data-user-role', 'visitor');
     expect(screen.queryByRole('button', { name: 'Switch context' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Analytics/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Team & Roles/i)).not.toBeInTheDocument();

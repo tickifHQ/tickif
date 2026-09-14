@@ -47,8 +47,12 @@ test('visitor likes persist across project and portfolio views independently of 
     await projectActions
       .getByRole('button', { name: 'Sign in to like project', exact: true })
       .click();
-    await expect(page).toHaveURL(/\/login\?callbackURL=/);
-    expect(new URL(page.url()).searchParams.get('callbackURL')).toBe(path);
+    await expect(page).toHaveURL(`${stackWebUrl}${path}`);
+    const loginDialog = page.getByRole('dialog', { name: 'Sign in to continue' });
+    await expect(loginDialog).toBeVisible();
+    await expect(loginDialog.getByRole('heading', { name: 'Login to continue' })).toBeVisible();
+    await loginDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(loginDialog).toBeHidden();
 
     const headers = { origin: stackWebUrl };
     const phoneNumber = visitor.phoneNumber!;

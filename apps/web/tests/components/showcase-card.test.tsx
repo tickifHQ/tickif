@@ -4,7 +4,9 @@ import type { DesignerProjectCard, DiscoveryCard, FeedProject } from '@repo/cont
 import { PublicProjectCard } from '../../src/components/public-project-card';
 import { ShowcaseCard } from '../../src/components/showcase-card';
 
-vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+vi.mock('@/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button>Like</button>,
+}));
 
 const feedProject: FeedProject = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -78,13 +80,21 @@ describe('ShowcaseCard', () => {
     expect(screen.getByText('4.8')).toBeInTheDocument();
   });
 
-  it('reserves fallback dimensions without forcing the loaded image ratio', () => {
+  it('enforces the allocator fallback ratio when source dimensions are unavailable', () => {
     render(<ShowcaseCard project={{ ...discoveryProject, imageWidth: null, imageHeight: null }} />);
 
     const image = screen.getByRole('img', { name: discoveryProject.title });
     expect(image).toHaveAttribute('width', '480');
     expect(image).toHaveAttribute('height', '600');
-    expect(image).not.toHaveStyle({ aspectRatio: '480 / 600' });
+    expect(image).toHaveStyle({ aspectRatio: '480 / 600' });
+  });
+
+  it('keeps the natural ratio when source dimensions are available', () => {
+    render(<ShowcaseCard project={discoveryProject} />);
+
+    expect(screen.getByRole('img', { name: discoveryProject.title })).not.toHaveStyle({
+      aspectRatio: '480 / 600',
+    });
   });
 
   it('hides the rating on search-sourced cards that carry no reviews', () => {
@@ -93,11 +103,21 @@ describe('ShowcaseCard', () => {
     expect(screen.queryByText('0.0')).not.toBeInTheDocument();
   });
 
-  it('keeps the placeholder save and share controls out of the accessibility tree', () => {
-    render(<ShowcaseCard project={discoveryProject} />);
+  it('does not render save or share controls on feed cards', () => {
+    const { container } = render(<ShowcaseCard project={discoveryProject} />);
 
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-label="Save"]')).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-label="Share"]')).not.toBeInTheDocument();
+  });
+
+  it('uses compact responsive typography and hides secondary tags on shallow masonry cards', () => {
+    render(<ShowcaseCard project={{ ...feedProject, imageWidth: 800, imageHeight: 420 }} />);
+
+    expect(screen.getByRole('heading', { name: feedProject.title })).toHaveClass(
+      'text-sm',
+      'line-clamp-2',
+    );
+    expect(screen.getByText('3 BHK').parentElement).toHaveClass('hidden');
   });
 });
 

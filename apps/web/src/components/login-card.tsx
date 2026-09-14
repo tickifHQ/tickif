@@ -121,6 +121,7 @@ export function LoginCard({
   const [cooldown, setCooldown] = useState(0);
   const [success, setSuccess] = useState(false);
   const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
+  const handleClose = onClose ?? (() => router.push('/'));
 
   // Email OTP state (designer tab)
   const [designerEmail, setDesignerEmail] = useState('');
@@ -429,17 +430,15 @@ export function LoginCard({
           <div className="flex flex-col gap-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-base font-medium text-foreground">Login to continue</h3>
-              {onClose && (
-                <Button
-                  onClick={onClose}
-                  aria-label="Close"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <X className="size-4" aria-hidden="true" />
-                </Button>
-              )}
+              <Button
+                onClick={handleClose}
+                aria-label="Close"
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </Button>
             </div>
 
             <div className="flex flex-col gap-4">

@@ -58,6 +58,7 @@ import {
   requestChangesProjectSchema,
 } from '@repo/contracts';
 import { ProjectModerationReasons } from '@/components/project-moderation-reasons';
+import { ListPagination } from '@/components/list-pagination';
 import {
   ADMIN_MODERATION_QUEUE_TABS,
   correctAdminProject,
@@ -741,7 +742,9 @@ function ReviewDetail({
                     reasonCodes={
                       event.reasonCodes.length > 0
                         ? event.reasonCodes
-                        : event.reasonCode ? [event.reasonCode] : []
+                        : event.reasonCode
+                          ? [event.reasonCode]
+                          : []
                     }
                   />
                 </li>
@@ -1040,7 +1043,7 @@ export function AdminModerationQueue({
     void refreshQueues();
   }
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
@@ -1089,33 +1092,17 @@ export function AdminModerationQueue({
           <QueueTable queue={activeQueue} tab={activeTab} onOpen={(id) => void openDetail(id)} />
         </TabsContent>
       </Tabs>
-      <nav
-        aria-label="Moderation pagination"
-        className="mt-4 flex flex-wrap items-center justify-between gap-3"
-      >
-        <p className="text-sm text-muted-foreground" aria-live="polite">
-          Page {activeQueue.page} of {Math.max(1, activeQueue.totalPages)} · {activeQueue.total}{' '}
-          projects
-        </p>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={navigating || refreshing || activeQueue.page <= 1}
-            onClick={() => navigate(activeTab, activeQueue.page - 1)}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={navigating || refreshing || activeQueue.page >= activeQueue.totalPages}
-            onClick={() => navigate(activeTab, activeQueue.page + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </nav>
+      <ListPagination
+        page={activeQueue.page}
+        totalPages={activeQueue.totalPages}
+        total={activeQueue.total}
+        limit={activeQueue.limit}
+        itemName="project"
+        showPageSize={false}
+        disabled={navigating || refreshing}
+        onPageChange={(page) => navigate(activeTab, page)}
+        className="mt-4"
+      />
 
       <Dialog open={selectedProjectId !== null} onOpenChange={(open) => !open && closeDetail()}>
         <DialogContent
@@ -1153,6 +1140,6 @@ export function AdminModerationQueue({
           ) : null}
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScrollGate } from '../../src/components/scroll-gate';
 
@@ -6,16 +6,24 @@ vi.mock('../../src/env', () => ({
   env: { NEXT_PUBLIC_SCROLL_GATE_LIMIT: 1 },
 }));
 
-vi.mock('../../src/components/login-card', () => ({
-  LoginCard: ({ onClose }: { onClose?: () => void }) => (
-    <div data-testid="login-card">
-      {onClose && (
-        <button type="button" onClick={onClose}>
+vi.mock('../../src/components/action-login-dialog', () => ({
+  ActionLoginDialog: ({
+    open,
+    onOpenChange,
+    title,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: string;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={title}>
+        <div data-testid="login-card" />
+        <button type="button" onClick={() => onOpenChange(false)}>
           Close
         </button>
-      )}
-    </div>
-  ),
+      </div>
+    ) : null,
 }));
 
 describe('ScrollGate', () => {
@@ -27,7 +35,7 @@ describe('ScrollGate', () => {
     });
   });
 
-  it('opens an irreversible login gate after the configured scroll limit', async () => {
+  it('opens a dismissible login gate after the configured scroll limit', async () => {
     render(<ScrollGate />);
 
     expect(screen.queryByRole('dialog', { name: 'Sign in required' })).not.toBeInTheDocument();
@@ -41,6 +49,7 @@ describe('ScrollGate', () => {
       expect(screen.getByRole('dialog', { name: 'Sign in required' })).toBeInTheDocument();
     });
     expect(screen.getByTestId('login-card')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Sign in required' })).not.toBeInTheDocument();
   });
 });

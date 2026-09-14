@@ -17,11 +17,7 @@ export default async function PublicLayout({ children }: { children: ReactNode }
 
   return (
     <div className="flex min-h-screen flex-col">
-      <PublicHeader
-        isAuthenticated={isAuthenticated}
-        userRole={session?.user.role ?? null}
-        userStatus={session?.user.status ?? null}
-      />
+      <PublicHeader isAuthenticated={isAuthenticated} userRole={session?.user.role ?? null} />
       <main className="flex-1">{children}</main>
       <PublicFooter />
       {!isAuthenticated && <ScrollGate />}

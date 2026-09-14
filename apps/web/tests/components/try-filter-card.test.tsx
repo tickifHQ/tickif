@@ -7,9 +7,22 @@ describe('TryFilterCard', () => {
     const { container } = render(
       <TryFilterCard
         suggestions={[
-          { href: '/?budgetBand=3l-5l', label: '₹3L - ₹5L' },
-          { href: '/?budgetBand=5l-10l', label: '₹5L - ₹10L' },
+          {
+            href: '/?budgetBand=3l-5l',
+            label: '₹3L - ₹5L',
+            facet: 'budgetBand',
+            facetLabel: 'Budget',
+            resultCount: 4,
+          },
+          {
+            href: '/?theme=modern',
+            label: 'Modern',
+            facet: 'theme',
+            facetLabel: 'Theme',
+            resultCount: 8,
+          },
         ]}
+        hasActiveCriteria
       />,
     );
 
@@ -20,11 +33,15 @@ describe('TryFilterCard', () => {
     expect(heading.querySelector('svg')).toBeInTheDocument();
     expect(heading).not.toHaveTextContent('💡');
     expect(
-      screen.getByText('These came up for explorers with your budget but a different style.'),
+      screen.getByText('Keep your current search and filters, then try another available option.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '₹3–5L' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '₹3–5L, Budget filter, 4 projects' })).toHaveAttribute(
       'href',
       '/?budgetBand=3l-5l',
+    );
+    expect(screen.getByRole('link', { name: 'Modern, Theme filter, 8 projects' })).toHaveAttribute(
+      'href',
+      '/?theme=modern',
     );
     expect(screen.queryByText('₹3L - ₹5L')).not.toBeInTheDocument();
     expect(container.querySelectorAll('a')).toHaveLength(2);
