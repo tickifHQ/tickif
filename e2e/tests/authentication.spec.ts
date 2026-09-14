@@ -145,7 +145,10 @@ test('email OTP creates a real session through a local Resend delivery double', 
     });
 
     await page.getByRole('link', { name: 'Continue setup' }).click();
-    await page.getByRole('button', { name: /Just me/ }).click();
+    // E-298: resuming restores the saved step (the "Just me" entity choice was
+    // persisted before deferring), so the wizard reopens on the details step with
+    // the Display name field — it no longer replays the entity picker.
+    await expect(page.getByLabel('Display name', { exact: true })).toBeVisible();
     await page.getByLabel('Display name', { exact: true }).fill('Synthetic onboarding studio');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboardingResponse = page.waitForResponse(

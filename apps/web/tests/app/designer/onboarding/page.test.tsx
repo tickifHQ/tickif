@@ -6,10 +6,22 @@ const mock = vi.hoisted(() => ({
     throw new Error('NEXT_REDIRECT');
   }),
   getServerSession: vi.fn(),
+  headers: vi.fn(),
+  fetchOnboardingDraft: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
   redirect: mock.redirect,
+}));
+
+// The page server-fetches the E-298 onboarding draft, which reads the request
+// `cookie` via next/headers. Mock it so the render path has a request scope.
+vi.mock('next/headers', () => ({
+  headers: mock.headers,
+}));
+
+vi.mock('@/lib/onboarding-draft-api', () => ({
+  fetchOnboardingDraft: mock.fetchOnboardingDraft,
 }));
 
 vi.mock('@/lib/auth-guard', () => ({
@@ -26,6 +38,8 @@ import { rolePassesCheck } from '@/lib/auth-guard';
 describe('DesignerOnboardingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mock.headers.mockResolvedValue(new Headers({ cookie: 'session=abc' }));
+    mock.fetchOnboardingDraft.mockResolvedValue(null);
   });
 
   it('redirects to dashboard when user is already a designer', async () => {
