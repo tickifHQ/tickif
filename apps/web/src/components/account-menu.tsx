@@ -21,6 +21,22 @@ import { cn } from '@repo/ui/lib/utils';
 import { ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 
+/**
+ * Where "Complete setup" sends a pending account. A deferred designer signup is
+ * role=visitor + status=pending until they create a studio, so we cannot rely on
+ * the DESIGNER role to detect designer intent. Any pending account that reached a
+ * designer-onboarding entry point resumes the designer flow — mirroring
+ * public-header's getListYourWorkHref (status=pending → /designer/onboarding), so
+ * "Complete setup", "List your work", and "Continue setup" all land on the same
+ * resumable onboarding rather than the visitor form. An explicit DESIGNER role
+ * (rare in this pending+no-org state) also routes there.
+ */
+function completeSetupHref(personalRole: string | null): string {
+  return personalRole === PLATFORM_ROLE.VISITOR || personalRole === PLATFORM_ROLE.DESIGNER
+    ? '/designer/onboarding'
+    : '/onboarding';
+}
+
 export function AccountMenu({
   showLabel = false,
   avatarSeed,
@@ -129,11 +145,7 @@ export function AccountMenu({
           accountStatus === ACCOUNT_STATUS.PENDING &&
           !hasOrganizationContext ? (
             <DropdownMenuItem asChild className="cursor-pointer">
-              <Link
-                href={
-                  personalRole === PLATFORM_ROLE.DESIGNER ? '/designer/onboarding' : '/onboarding'
-                }
-              >
+              <Link href={completeSetupHref(personalRole)}>
                 <Settings aria-hidden="true" />
                 Complete setup
               </Link>

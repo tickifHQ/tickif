@@ -32,6 +32,8 @@ import {
   VERIFICATION_REVIEW_ACTION_VALUES,
   OWNERSHIP_TRANSFER_STATUS_VALUES,
   MODERATION_REASON_CODE_VALUES,
+  type OnboardingStep,
+  type OnboardingDraftFields,
 } from '@repo/contracts';
 import { user, organization, member, team } from './auth.js';
 
@@ -1562,3 +1564,31 @@ export const paymentTransaction = pgTable(
     check('payment_transaction_amount_nonnegative', sql`${t.amount} >= 0`),
   ],
 );
+
+// --- Onboarding draft (E-298) ---
+
+/**
+ * Account-scoped, resumable designer-onboarding progress. This is APP-OWNED and
+ * deliberately separate from the better-auth `user` table: it must never
+ * influence the auth adapter or create a partial designer profile/organization.
+ *
+ * One row per user (PK = userId), so a pending designer resumes their in-progress
+ * onboarding from any browser/device once authenticated as the same account. The
+ * row is deleted atomically inside the successful onboarding transaction (see
+ * profiles/repository `onboard`), and cleared idempotently via the draft API.
+ *
+ * `fields` is a loosened/partial snapshot validated by `onboardingDraftFieldsSchema`
+ * at the service boundary; the strict `onboardDesignerSchema` remains the only gate
+ * at final submit.
+ */
+export const onboardingDraft = pgTable('onboarding_draft', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  step: text('step').$type<OnboardingStep>().notNull(),
+  fields: jsonb('fields').$type<OnboardingDraftFields>().default({}).notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});

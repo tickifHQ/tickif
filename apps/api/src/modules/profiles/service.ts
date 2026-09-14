@@ -4,6 +4,8 @@ import type {
   ProfileCompletionResponse,
   OnboardDesignerInput,
   OnboardDesignerResponse,
+  OnboardingDraftInput,
+  OnboardingDraftResponse,
   ProfilePublicResponse,
   ProfileOwnerResponse,
   CurrentProfileResponse,
@@ -260,6 +262,46 @@ export const profilesService = {
       }
       throw err;
     }
+  },
+
+  // --- Onboarding draft (E-298) ---
+
+  /** Read the caller's resumable onboarding draft (owner-only; null when none). */
+  async getOnboardingDraft(userId: string): Promise<OnboardingDraftResponse | null> {
+    const row = await profilesRepository.findDraftByUserId(userId);
+    if (!row) return null;
+    return {
+      step: row.step,
+      fields: row.fields,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  },
+
+  /**
+   * Persist the caller's in-progress onboarding. Only a visitor+pending account
+   * may hold a draft: a completed designer (or any other role/status) is rejected
+   * so stale drafts cannot accumulate after onboarding finishes. The draft never
+   * creates a profile/org — it is pure resumable state.
+   */
+  async saveOnboardingDraft(
+    caller: DesignerOnboardingCaller,
+    input: OnboardingDraftInput,
+  ): Promise<OnboardingDraftResponse> {
+    const validatedCaller = validateDesignerOnboardingCaller(caller);
+    if (!canStartDesignerOnboarding(validatedCaller)) {
+      throw AppError.forbidden('Designer onboarding is not permitted for this account');
+    }
+    const row = await profilesRepository.upsertDraft(validatedCaller.userId, input);
+    return {
+      step: row.step,
+      fields: row.fields,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  },
+
+  /** Idempotently clear the caller's draft (belt-and-suspenders; onboard also deletes it). */
+  async clearOnboardingDraft(userId: string): Promise<void> {
+    await profilesRepository.deleteDraft(userId);
   },
 
   // --- Completion (E-36) ---

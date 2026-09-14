@@ -52,6 +52,21 @@ vi.mock('@/lib/api', () => ({
           $get: mock.taxonomyGet,
         },
       },
+      profiles: {
+        me: {
+          // E-298 draft endpoints. Default: succeed with an empty-ish payload so
+          // tests that don't override onSaveDraft/onClearDraft never crash on the
+          // module-level default client.
+          'onboarding-draft': {
+            $get: vi.fn(async () => ({ ok: true, json: async () => ({ draft: null }) })),
+            $put: vi.fn(async () => ({
+              ok: true,
+              json: async () => ({ step: 'entity', fields: {}, updatedAt: '2026-01-01T00:00:00.000Z' }),
+            })),
+            $delete: vi.fn(async () => ({ ok: true, status: 204 })),
+          },
+        },
+      },
     },
   },
 }));
@@ -137,7 +152,10 @@ describe('DesignerOnboarding', () => {
       await user.click(screen.getByRole('button', { name: entity }));
       await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
-      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred');
+      // E-298: navigation happens after the draft flush resolves.
+      await waitFor(() =>
+        expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
+      );
       expect(submit).not.toHaveBeenCalled();
     },
   );
@@ -506,5 +524,302 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByText(/Google SSO required/i)).toBeInTheDocument();
+  });
+});
+
+describe('DesignerOnboarding — E-298 draft persistence', () => {
+  beforeEach(() => {
+    // reset (not just clear) so a per-test push implementation never leaks.
+    mock.router.push.mockReset();
+    mock.signOut.mockClear();
+    mock.signOut.mockResolvedValue(undefined);
+    mock.taxonomyGet.mockReset();
+    mock.taxonomyGet.mockImplementation(
+      async ({ query }: { query: { kind?: keyof typeof taxonomyFixtures } }) => ({
+        ok: true,
+        json: async () => ({ terms: query.kind ? taxonomyFixtures[query.kind] : [] }),
+      }),
+    );
+    window.history.pushState({}, '', '/designer/onboarding');
+  });
+
+  it('rehydrates the saved step and all field values from initialDraft', async () => {
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'presence',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: {
+            entityType: 'individual',
+            userName: 'Mahi Studio',
+            address: 'Bandra West, Mumbai',
+            websiteUrl: 'https://mahi.example',
+            instagramHandle: 'mahidesigns',
+          },
+        }}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    // Resumes directly on the presence step (not the entity picker or details).
+    expect(await screen.findByLabelText(/website/i)).toHaveValue('https://mahi.example');
+    expect(screen.queryByRole('button', { name: /just me/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
+  });
+
+  it('rehydrates company-only fields and the entity type', async () => {
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'details',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company', companyName: 'Antika Interiors', firmType: 'LLP' },
+        }}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(await screen.findByLabelText(/company name/i)).toHaveValue('Antika Interiors');
+  });
+
+  it('does not carry a draft between accounts (isolation is by which draft is passed in)', async () => {
+    // User B mounts with their own (empty) draft — never sees User A's values.
+    render(
+      <DesignerOnboarding
+        signedInAs="userB@test.com"
+        initialDraft={null}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    // Starts fresh at the entity picker.
+    expect(await screen.findByRole('button', { name: /just me/i })).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Owner A')).not.toBeInTheDocument();
+  });
+
+  it('starts fresh (no crash, entity step) when there is no draft — unchanged behavior', async () => {
+    render(<DesignerOnboarding signedInAs="new@test.com" initialDraft={null} />);
+    expect(await screen.findByRole('button', { name: /just me/i })).toBeInTheDocument();
+  });
+
+  it('autosaves after a debounce and coalesces rapid edits into a single trailing save', async () => {
+    // Real timers (fake timers + userEvent + awaited promises deadlock here).
+    // The debounce is 600ms; type several chars quickly, then wait past the window
+    // and assert exactly one coalesced save carrying the final value.
+    const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{ step: 'details', updatedAt: '2026-02-01T00:00:00.000Z', fields: {} }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+
+    const name = await screen.findByLabelText(/display name/i);
+    await user.type(name, 'Mahi'); // 4 rapid keystrokes
+
+    // One coalesced save eventually fires with the final typed value.
+    await waitFor(
+      () =>
+        expect(onSaveDraft).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            step: 'details',
+            fields: expect.objectContaining({ userName: 'Mahi' }),
+          }),
+        ),
+      { timeout: 4000 },
+    );
+    // Coalesced: far fewer saves than the 4 keystrokes (dirty-check + debounce).
+    expect(onSaveDraft.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('persists a step transition (details -> presence) via a draft save', async () => {
+    const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'details',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'individual', userName: 'Mahi Studio' },
+        }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    // Advancing to presence is persisted.
+    await waitFor(() =>
+      expect(onSaveDraft).toHaveBeenCalledWith(expect.objectContaining({ step: 'presence' })),
+    );
+  });
+
+  it('CRITICAL: Finish later saves the LATEST value and navigates only AFTER the save resolves', async () => {
+    const order: string[] = [];
+    let resolveSave: (() => void) | undefined;
+    const onSaveDraft = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = () => {
+            order.push('save-resolved');
+            resolve();
+          };
+        }),
+    );
+    mock.router.push.mockImplementation((path: string) => order.push(`push:${path}`));
+
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'details',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'individual', userName: 'Mahi' },
+        }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+
+    // Type a fresh value, then IMMEDIATELY click Finish later (debounce has not fired).
+    const name = await screen.findByLabelText(/display name/i);
+    await user.clear(name);
+    await user.type(name, 'Mahi Studio Latest');
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
+
+    // The final flush was invoked with the latest typed value...
+    await waitFor(() => expect(onSaveDraft).toHaveBeenCalled());
+    expect(onSaveDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        fields: expect.objectContaining({ userName: 'Mahi Studio Latest' }),
+      }),
+    );
+    // ...and navigation has NOT happened yet because the save promise is unresolved.
+    expect(mock.router.push).not.toHaveBeenCalled();
+
+    // Resolve the save → navigation follows, strictly after the save.
+    resolveSave?.();
+    await waitFor(() =>
+      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
+    );
+    expect(order).toEqual(['save-resolved', 'push:/designer/onboarding/deferred']);
+  });
+
+  it('Finish later still navigates when the final save FAILS (never traps the user)', async () => {
+    const onSaveDraft = vi.fn().mockRejectedValue(new Error('network down'));
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'details',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'individual', userName: 'Mahi' },
+        }}
+        onSaveDraft={onSaveDraft}
+      />,
+    );
+
+    const name = await screen.findByLabelText(/display name/i);
+    await user.type(name, ' Updated');
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
+
+    await waitFor(() =>
+      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
+    );
+    // Local React state is untouched by the failed save — the field keeps its value.
+    expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi Updated');
+  });
+
+  it('clears the draft after a successful onboarding submit', async () => {
+    const onClearDraft = vi.fn().mockResolvedValue(undefined);
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'details',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'individual', userName: 'Mahi Studio' },
+        }}
+        onSubmitOnboarding={submit}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+        onClearDraft={onClearDraft}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' })); // details -> presence
+    await user.click(await screen.findByRole('button', { name: 'Continue' })); // presence -> submit
+
+    expect(await screen.findByText(/you're set up/i)).toBeInTheDocument();
+    await waitFor(() => expect(onClearDraft).toHaveBeenCalled());
+  });
+
+  it('filters stale scope/theme IDs against the freshly loaded taxonomy', async () => {
+    const onSubmitOnboarding = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Antika Interiors',
+          entityType: 'company',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Antika Interiors', slug: 'antika' },
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <DesignerOnboarding
+        signedInAs="firm@test.com"
+        initialDraft={{
+          step: 'services',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: {
+            entityType: 'company',
+            companyName: 'Antika Interiors',
+            // One valid scope (in taxonomyFixtures) + one stale id that no longer exists.
+            scopeIds: [
+              '22222222-2222-4222-8222-222222222222',
+              '99999999-9999-4999-8999-999999999999',
+            ],
+            themeIds: ['44444444-4444-4444-8444-444444444444'],
+          },
+        }}
+        onSubmitOnboarding={onSubmitOnboarding}
+        onSaveDraft={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    // Wait for taxonomy to load (which triggers the stale-id filter).
+    await waitFor(() => expect(mock.taxonomyGet).toHaveBeenCalledTimes(2));
+    // On the company `services` step the submit button is labeled "Continue".
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(onSubmitOnboarding).toHaveBeenCalled());
+    const payload = onSubmitOnboarding.mock.calls[0]![0];
+    // The stale id is dropped; the valid one survives.
+    expect(payload.scopeIds).toEqual(['22222222-2222-4222-8222-222222222222']);
+    expect(payload.scopeIds).not.toContain('99999999-9999-4999-8999-999999999999');
+    expect(payload.themeIds).toEqual(['44444444-4444-4444-8444-444444444444']);
   });
 });

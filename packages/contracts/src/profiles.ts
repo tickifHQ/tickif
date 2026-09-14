@@ -131,6 +131,76 @@ export const onboardDesignerResponseSchema = z
   .meta({ id: 'OnboardDesignerResponse' });
 export type OnboardDesignerResponse = z.infer<typeof onboardDesignerResponseSchema>;
 
+// --- Onboarding draft (E-298): resume incomplete onboarding across sessions/devices ---
+
+/**
+ * The wizard step a pending designer last reached. Mirrors the web wizard's
+ * `OnboardingStep` union so a saved draft resumes at the correct screen.
+ */
+export const onboardingStepSchema = z
+  .enum(['entity', 'details', 'presence', 'services'])
+  .meta({ id: 'OnboardingStep' });
+export type OnboardingStep = z.infer<typeof onboardingStepSchema>;
+
+/**
+ * Loosened mirror of `onboardDesignerSchema`: every field is optional and the
+ * strict completion gates (min-lengths, company-name refinement) are dropped so
+ * INCOMPLETE progress can be persisted. The authoritative validation still runs
+ * only at final submit via `onboardDesignerSchema` — this never weakens it.
+ *
+ * Unknown keys are stripped (Zod default) so a client cannot smuggle extra state
+ * into the stored draft. `userId` is never part of this shape; it is always taken
+ * from the authenticated session server-side.
+ */
+export const onboardingDraftFieldsSchema = z
+  .object({
+    entityType: designerEntityType.optional(),
+    userName: z.string().trim().max(100).optional(),
+    companyName: z.string().trim().max(100).optional(),
+    address: z.string().trim().max(300).optional(),
+    firmType: z.string().trim().max(60).optional(),
+    phoneCountry: z.string().trim().max(8).optional(),
+    phoneNumber: z.string().trim().max(20).optional(),
+    websiteUrl: z.string().trim().max(200).optional(),
+    googleBusinessUrl: z.string().trim().max(200).optional(),
+    instagramHandle: z.string().trim().max(60).optional(),
+    linkedinHandle: z.string().trim().max(60).optional(),
+    youtubeHandle: z.string().trim().max(60).optional(),
+    foundedYear: z.string().trim().max(4).optional(),
+    teamSize: z.string().trim().max(20).optional(),
+    scopeIds: z.array(z.string().uuid()).max(PROFILE_FOOTPRINT_LIMITS.scope).optional(),
+    themeIds: z.array(z.string().uuid()).max(PROFILE_FOOTPRINT_LIMITS.theme).optional(),
+  })
+  .meta({ id: 'OnboardingDraftFields' });
+export type OnboardingDraftFields = z.infer<typeof onboardingDraftFieldsSchema>;
+
+/** Request body for PUT /api/profiles/me/onboarding-draft. */
+export const onboardingDraftSchema = z
+  .object({
+    step: onboardingStepSchema,
+    fields: onboardingDraftFieldsSchema,
+  })
+  .meta({ id: 'OnboardingDraft' });
+export type OnboardingDraftInput = z.infer<typeof onboardingDraftSchema>;
+
+/** The persisted draft as returned to the owner. */
+export const onboardingDraftResponseSchema = z
+  .object({
+    step: onboardingStepSchema,
+    fields: onboardingDraftFieldsSchema,
+    updatedAt: z.string(),
+  })
+  .meta({ id: 'OnboardingDraftResponse' });
+export type OnboardingDraftResponse = z.infer<typeof onboardingDraftResponseSchema>;
+
+/** GET /api/profiles/me/onboarding-draft — `draft` is null when none is stored. */
+export const onboardingDraftGetResponseSchema = z
+  .object({
+    draft: onboardingDraftResponseSchema.nullable(),
+  })
+  .meta({ id: 'OnboardingDraftGetResponse' });
+export type OnboardingDraftGetResponse = z.infer<typeof onboardingDraftGetResponseSchema>;
+
 // --- Profile Read/Update (E-37) ---
 
 /** Footprint entry in profile responses. */
