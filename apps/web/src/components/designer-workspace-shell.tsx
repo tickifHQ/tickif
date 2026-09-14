@@ -200,6 +200,10 @@ function SidebarContent({
 
         <div className="space-y-3">
           <div className="space-y-1">
+            <DesignerBranchSelector
+              key={activeOrganizationId}
+              organizationId={activeOrganizationId}
+            />
             <Link
               href="mailto:support@tickif.in"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -216,10 +220,6 @@ function SidebarContent({
               studioLocation={studioLocation}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
-            />
-            <DesignerBranchSelector
-              key={activeOrganizationId}
-              organizationId={activeOrganizationId}
             />
           </div>
         </div>

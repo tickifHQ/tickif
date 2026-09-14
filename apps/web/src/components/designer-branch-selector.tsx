@@ -18,11 +18,10 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 
 /**
- * Second, subordinate branch selector rendered directly beneath the
- * My Tickif/organisation selector (E-249 decision). Hidden in personal
- * context and whenever fewer than two branches exist, so it never renders
- * a dead control. There is deliberately no "All branches" option until
- * org-roll-up reads exist.
+ * Subordinate branch selector rendered above Contact support in the lower
+ * navigation group. It stays hidden in personal context and whenever fewer
+ * than two branches exist, so it never renders a dead control. There is
+ * deliberately no "All branches" option until org-roll-up reads exist.
  */
 export function DesignerBranchSelector({ organizationId }: { organizationId: string | null }) {
   const router = useRouter();

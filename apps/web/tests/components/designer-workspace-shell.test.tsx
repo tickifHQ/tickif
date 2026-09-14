@@ -52,6 +52,14 @@ vi.mock('@/components/designer-organization-switcher', () => ({
   ),
 }));
 
+vi.mock('@/components/designer-branch-selector', () => ({
+  DesignerBranchSelector: ({ organizationId }: { organizationId: string | null }) => (
+    <div data-testid="branch-selector" data-organization-id={organizationId}>
+      Branch switcher
+    </div>
+  ),
+}));
+
 describe('DesignerWorkspaceShell', () => {
   it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
     mock.pathname = '/designer/dashboard';
@@ -221,6 +229,32 @@ describe('DesignerWorkspaceShell', () => {
     const supportLink = screen.getByRole('link', { name: /contact support/i });
     expect(supportLink.querySelector('svg')).toHaveClass('lucide-message-square-more');
     expect(document.querySelector('.lucide-badge-help')).not.toBeInTheDocument();
+  });
+
+  it('places the branch switcher above Contact support and keeps the organization switcher last', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        isOwner
+        activeOrganizationId="org-1"
+        studioName="Antika Interiors"
+        studioLocation="Chennai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    const branchSwitcher = screen.getByTestId('branch-selector');
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    const organizationSwitcher = screen.getByTestId('organization-switcher');
+
+    expect(
+      branchSwitcher.compareDocumentPosition(supportLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      supportLink.compareDocumentPosition(organizationSwitcher) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('keeps the profile header and enables settings in the header account menu', () => {
