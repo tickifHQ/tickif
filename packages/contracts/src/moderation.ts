@@ -44,6 +44,45 @@ export const SELF_SERVICE_MODERATION_ACTIONS: readonly ModerationAction[] = [
   'organization_restore',
 ];
 
+/**
+ * E-270: masked labels shown for the actor of a moderation event. Reviewer/admin
+ * identity is always collapsed to the neutral team label; the only distinct label
+ * is the designer's own actions. Neither exposes a real account identity, so
+ * reviewer anonymity is preserved.
+ */
+export const MODERATION_ACTOR_LABEL = {
+  DESIGNER: 'Designer',
+  REVIEW_TEAM: 'Tickif Review Team',
+} as const;
+export type ModerationActorLabel =
+  (typeof MODERATION_ACTOR_LABEL)[keyof typeof MODERATION_ACTOR_LABEL];
+
+/**
+ * Actions the DESIGNER performs on their own project. These are the only events
+ * attributed to the designer; every other action (including admin-initiated
+ * archive/delete/organization retention, which merely overlap with the broader
+ * self-service set) stays masked as the review team. A strict subset of
+ * {@link SELF_SERVICE_MODERATION_ACTIONS} rather than a fresh ad-hoc list.
+ */
+export const DESIGNER_ATTRIBUTED_MODERATION_ACTIONS = [
+  'submit',
+  'resubmit',
+  'withdraw',
+] as const satisfies readonly ModerationAction[];
+
+/**
+ * Masked actor label for a moderation event. The designer's own submit/resubmit/
+ * withdraw read as "Designer"; all reviewer verdicts and admin-initiated actions
+ * stay "Tickif Review Team". Never returns a real identity, so this is safe to
+ * expose to designers and admins alike. Used by every moderation-history mapper
+ * so the same semantics apply wherever history is surfaced.
+ */
+export function moderationActorLabel(action: ModerationAction): ModerationActorLabel {
+  return (DESIGNER_ATTRIBUTED_MODERATION_ACTIONS as readonly ModerationAction[]).includes(action)
+    ? MODERATION_ACTOR_LABEL.DESIGNER
+    : MODERATION_ACTOR_LABEL.REVIEW_TEAM;
+}
+
 export const moderationFieldDiff = z
   .record(
     z.string(),
@@ -61,7 +100,9 @@ export const moderationHistoryItemSchema = z
     action: moderationAction,
     fromStatus: projectStatus,
     toStatus: projectStatus,
-    actorLabel: z.literal('Tickif Review Team'),
+    // E-270: bounded to the two masked labels. Reviewer anonymity is preserved —
+    // the only non-team value is the designer's own actions (never a real identity).
+    actorLabel: z.enum([MODERATION_ACTOR_LABEL.DESIGNER, MODERATION_ACTOR_LABEL.REVIEW_TEAM]),
     note: z.string().nullable(),
     reasonCode: moderationReasonCodeSchema.nullable(),
     reasonCodes: moderationReasonCodesSchema.default([]),

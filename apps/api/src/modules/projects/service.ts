@@ -44,7 +44,11 @@ import type {
   UpdateProjectRoomInput,
   Derivative,
 } from '@repo/contracts';
-import { ORGANIZATION_CAPABILITY, normalizeModerationReasonCode } from '@repo/contracts';
+import {
+  ORGANIZATION_CAPABILITY,
+  moderationActorLabel,
+  normalizeModerationReasonCode,
+} from '@repo/contracts';
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
@@ -729,7 +733,9 @@ function toModerationHistoryItem(
     action: row.action,
     fromStatus: row.fromStatus,
     toStatus: row.toStatus,
-    actorLabel: 'Tickif Review Team',
+    // E-270: designer submit/resubmit/withdraw read as "Designer"; reviewer
+    // verdicts stay masked as the review team. Reviewer identity is never exposed.
+    actorLabel: moderationActorLabel(row.action),
     note: row.note,
     reasonCode: normalizeModerationReasonCode(row.reasonCode),
     reasonCodes: row.reasonCodes,

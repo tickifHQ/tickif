@@ -67,10 +67,96 @@ describe('project moderation transitions', () => {
         action: 'withdraw',
         fromStatus: 'submitted',
         toStatus: 'draft',
-        actorLabel: 'Tickif Review Team',
+        // E-270: withdraw is a designer self-service action, so it is attributed to
+        // the designer — reviewer identity is still never exposed (masked label only).
+        actorLabel: 'Designer',
       }),
     ]);
     expect(body.items[0]).not.toHaveProperty('actorUserId');
+  });
+
+  it('attributes designer actions to the designer and reviewer verdicts to the review team', async () => {
+    const { cookie, userId, designer } = await makeDesignerSession('+919800002099');
+    const admin = await makeUser();
+    const adminCaller = { userId: admin.id, userRole: 'admin' } as const;
+
+    const project = await makeProject({
+      designerId: designer.id,
+      status: 'draft',
+      citySlug: 'mumbai',
+      propertyTypeSlug: 'residential',
+      scopeSlug: 'full-home',
+      budgetBandSlug: 'premium',
+    });
+    const room = await makeProjectRoom({ projectId: project.id });
+    for (let index = 0; index < 3; index += 1) {
+      const image = await makeProjectImage({
+        projectId: project.id,
+        roomId: room.id,
+        status: 'ready',
+        themeSlugs: ['modern'],
+        finishSlugs: ['veneer'],
+      });
+      if (index === 0) {
+        await db
+          .update(schema.project)
+          .set({ coverImageId: image.id })
+          .where(eq(schema.project.id, project.id));
+      }
+    }
+
+    // Designer submits (self-service).
+    const submit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(submit.status).toBe(200);
+
+    // Reviewer verdicts: start review then request changes.
+    await transitionProject({ projectId: project.id, toStatus: 'in_review' }, adminCaller);
+    await transitionProject(
+      { projectId: project.id, toStatus: 'changes_requested', note: 'Add room labels.' },
+      adminCaller,
+    );
+
+    // Designer resubmits the addressed changes (self-service).
+    const resubmit = await app.request(`/api/projects/${project.id}/submit`, {
+      method: 'POST',
+      headers: { cookie },
+    });
+    expect(resubmit.status).toBe(200);
+
+    // Reviewer rejects (verdict).
+    await transitionProject({ projectId: project.id, toStatus: 'in_review' }, adminCaller);
+    await transitionProject(
+      { projectId: project.id, toStatus: 'rejected', note: 'Not a fit.' },
+      adminCaller,
+    );
+
+    const history = await app.request(`/api/projects/${project.id}/moderation-history`, {
+      headers: { cookie },
+    });
+    expect(history.status).toBe(200);
+    const body = (await history.json()) as ModerationHistoryResponse;
+    // History is newest-first; assert per-action attribution regardless of order.
+    const labelByAction = new Map(body.items.map((item) => [item.action, item.actorLabel]));
+    expect(labelByAction.get('submit')).toBe('Designer');
+    expect(labelByAction.get('resubmit')).toBe('Designer');
+    expect(labelByAction.get('start_review')).toBe('Tickif Review Team');
+    expect(labelByAction.get('request_changes')).toBe('Tickif Review Team');
+    expect(labelByAction.get('reject')).toBe('Tickif Review Team');
+    // No event leaks a real actor id — the label is the only actor field.
+    for (const item of body.items) {
+      expect(item).not.toHaveProperty('actorUserId');
+    }
+    // Sanity: the designer's own submit really was recorded under their user id.
+    const events = await db
+      .select()
+      .from(schema.projectModerationEvent)
+      .where(eq(schema.projectModerationEvent.projectId, project.id));
+    expect(events.some((event) => event.action === 'submit' && event.actorUserId === userId)).toBe(
+      true,
+    );
   });
 
   it('allows exactly one of two concurrent withdrawals', async () => {

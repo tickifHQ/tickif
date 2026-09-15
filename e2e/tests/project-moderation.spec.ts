@@ -30,6 +30,16 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
     await expect(page.getByRole('heading', { name: 'Moderation queue' })).toBeVisible();
     await page.getByRole('button', { name: `Open review for ${target.title}` }).click();
     await page.getByRole('button', { name: 'Start review', exact: true }).click();
+    // E-270: leave an individual review comment before requesting changes. It
+    // stays unresolved through the request-changes transition, so the designer
+    // must see it separately from the general decision note.
+    await page
+      .getByLabel('Review comment', { exact: true })
+      .fill('The kitchen photo is blurry — please replace it.');
+    await page.getByRole('button', { name: 'Add comment', exact: true }).click();
+    await expect(
+      page.getByText('The kitchen photo is blurry — please replace it.', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Request changes', exact: true }).click();
     await page
       .getByLabel('Note', { exact: true })
@@ -90,6 +100,21 @@ test('E-254 categories persist and reach designer feedback on desktop and mobile
       designerPage.getByText('Assign each photo to the correct room and check its tags.').first(),
     ).toBeVisible();
     await designerPage.reload();
+    // E-270: the designer sees the individual review comment (masked attribution
+    // + its status) in its own card, distinct from the general decision note.
+    const reviewCommentsCard = designerPage.getByTestId('review-comments-card');
+    await expect(
+      reviewCommentsCard.getByText('The kitchen photo is blurry — please replace it.'),
+    ).toBeVisible();
+    await expect(reviewCommentsCard.getByText('Tickif Review Team')).toBeVisible();
+    await expect(reviewCommentsCard.getByText('unresolved')).toBeVisible();
+    // The general decision note is rendered separately (changes-needed card), and
+    // must not contain the individual comment body.
+    await expect(
+      designerPage
+        .getByTestId('changes-needed-card')
+        .getByText('The kitchen photo is blurry — please replace it.'),
+    ).toHaveCount(0);
     await designerPage.setViewportSize({ width: 390, height: 844 });
     await expect(
       designerPage.getByText('Replace blurred photos and correct room tags.').first(),
