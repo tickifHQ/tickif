@@ -181,3 +181,58 @@ test('invitation acceptance, role changes and studio switching preserve organiza
     if (userIds.length) await db.delete(schema.user).where(inArray(schema.user.id, userIds));
   }
 });
+
+test('a designer recovers a branchless organization session by reselecting the studio', async ({
+  page,
+  context,
+}, testInfo) => {
+  await assertTestDb();
+  const suffix = randomUUID();
+  const owner = await makeUser({
+    name: 'Branch Recovery Owner',
+    email: `branch-recovery-${suffix}@example.test`,
+    phoneNumber: `+9194${randomInt(10_000_000, 100_000_000)}`,
+    phoneNumberVerified: true,
+    role: 'designer',
+    status: 'active',
+  });
+  const organization = await makeOrganization({ name: `Recovery Studio ${suffix}` });
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  try {
+    await makeDesigner({ userId: owner.id, orgId: organization.id });
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      userId: owner.id,
+      organizationId: organization.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await signInPhone(context, owner.phoneNumber);
+    const response = await context.request.put(`${apiUrl}/api/orgs/context`, {
+      headers,
+      data: { kind: 'organization', organizationId: organization.id, teamId: null },
+    });
+    expect(response.status()).toBe(200);
+    expect((await context.request.get(`${apiUrl}/api/profiles/me`)).status()).toBe(422);
+
+    await page.goto('/designer/dashboard');
+    await expect(page).toHaveURL(/\/designer\/select-studio$/);
+    await expect(page.getByRole('heading', { name: 'Choose your studio' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('branch-recovery-selector.png') });
+    await page.getByRole('button', { name: 'Switch context', exact: true }).click();
+    await page.getByRole('menuitem', { name: organization.name, exact: true }).click();
+    await expect(page).toHaveURL(/\/designer\/dashboard$/);
+    await expect(page.getByRole('button', { name: 'Switch context', exact: true })).toBeVisible();
+    expect((await context.request.get(`${apiUrl}/api/profiles/me`)).status()).toBe(200);
+    await page.reload();
+    await expect(page).toHaveURL(/\/designer\/dashboard$/);
+    await expect(page.getByRole('button', { name: 'Switch context', exact: true })).toBeVisible();
+    expect(pageErrors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('branch-recovery-dashboard.png') });
+  } finally {
+    await assertTestDb();
+    await db.delete(schema.organization).where(inArray(schema.organization.id, [organization.id]));
+    await db.delete(schema.user).where(inArray(schema.user.id, [owner.id]));
+  }
+});
