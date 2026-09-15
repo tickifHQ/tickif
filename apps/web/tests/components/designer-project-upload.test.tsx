@@ -1798,4 +1798,76 @@ describe('DesignerProjectUpload floor area', () => {
     );
     expect(screen.queryByText('Enter an area between 1 and 100000 sq.ft.')).not.toBeInTheDocument();
   });
+
+  // --- E-270: designer-visible individual review comments -----------------------
+  describe('review comments (E-270)', () => {
+    async function renderWithReviewComments(
+      reviewComments: Array<Record<string, unknown>>,
+      moderationNote: string | null = 'Please address the notes below.',
+    ) {
+      const project = (await (await mock.projectGet()).json()) as Record<string, unknown>;
+      mock.projectGet.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...project,
+            status: 'changes_requested',
+            moderationNote,
+            rejectionReasonCode: 'image-quality',
+            rejectionReasonCodes: ['image-quality'],
+            reviewComments,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+      render(<DesignerProjectUpload initialProjectId="11111111-1111-4111-8111-111111111111" />);
+      await screen.findByDisplayValue('2 BHK in Adyar');
+    }
+
+    const comment = (overrides: Record<string, unknown> = {}) => ({
+      id: '88888888-8888-4888-8888-888888888888',
+      projectId: '11111111-1111-4111-8111-111111111111',
+      authorLabel: 'Tickif Review Team',
+      body: 'The kitchen photo is blurry — please replace it.',
+      status: 'unresolved',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+      ...overrides,
+    });
+
+    it('renders an unresolved review comment with its body, masked attribution, and status', async () => {
+      await renderWithReviewComments([comment()]);
+
+      const card = screen.getByTestId('review-comments-card');
+      expect(within(card).getByText('The kitchen photo is blurry — please replace it.')).toBeInTheDocument();
+      // Reviewer identity stays masked — the only attribution is the neutral team label.
+      expect(within(card).getByText('Tickif Review Team')).toBeInTheDocument();
+      // The comment's own status is shown.
+      expect(within(card).getByText('unresolved')).toBeInTheDocument();
+    });
+
+    it('keeps the individual comment separate from the general decision note', async () => {
+      await renderWithReviewComments([comment()], 'Please address the notes below.');
+
+      // The general decision note lives in the "Changes needed" card…
+      const decisionCard = screen.getByTestId('changes-needed-card');
+      expect(within(decisionCard).getByText('Please address the notes below.')).toBeInTheDocument();
+      // …and does NOT contain the individual review comment.
+      expect(
+        within(decisionCard).queryByText('The kitchen photo is blurry — please replace it.'),
+      ).not.toBeInTheDocument();
+
+      // The review comment lives in its own distinct card, not in the decision note.
+      const reviewCard = screen.getByTestId('review-comments-card');
+      expect(reviewCard).not.toBe(decisionCard);
+      expect(
+        within(reviewCard).queryByText('Please address the notes below.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders nothing when there are no review comments', async () => {
+      await renderWithReviewComments([]);
+
+      expect(screen.queryByTestId('review-comments-card')).not.toBeInTheDocument();
+    });
+  });
 });

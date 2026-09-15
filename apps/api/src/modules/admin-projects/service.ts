@@ -14,7 +14,7 @@ import type {
   RequestChangesProjectInput,
   UpdateProjectReviewCommentInput,
 } from '@repo/contracts';
-import { normalizeModerationReasonCode } from '@repo/contracts';
+import { moderationActorLabel, normalizeModerationReasonCode } from '@repo/contracts';
 import { presignDownload } from '@repo/storage';
 import { isDeepStrictEqual } from 'node:util';
 import { AppError } from '../../lib/errors.js';
@@ -90,7 +90,9 @@ function toHistory(row: AdminModerationEventRecord): ModerationHistoryItem {
     action: row.action,
     fromStatus: row.fromStatus,
     toStatus: row.toStatus,
-    actorLabel: 'Tickif Review Team',
+    // E-270: shared masked-label semantics — designer actions read as "Designer",
+    // reviewer verdicts stay masked. Same helper the designer-facing mapper uses.
+    actorLabel: moderationActorLabel(row.action),
     note: row.note,
     reasonCode: normalizeModerationReasonCode(row.reasonCode),
     reasonCodes: row.reasonCodes,

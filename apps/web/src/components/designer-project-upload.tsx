@@ -18,6 +18,7 @@ import {
   LayoutList,
   Lightbulb,
   Loader2,
+  MessageSquareText,
   Plus,
   RefreshCw,
   Search,
@@ -44,6 +45,7 @@ import {
   type ProjectCompletenessResponse,
   type ProjectDetailResponse,
   type ProjectImageDto,
+  type ProjectReviewComment,
   type ProjectRoom,
   type TaxonomyTerm,
   type TaxonomyKind,
@@ -1058,6 +1060,56 @@ function ChangesNeededCard({
   );
 }
 
+/**
+ * E-270: individual review comments the reviewer left on this project, shown to
+ * the designer separately from the general "Changes needed" decision note above.
+ * Reviewer identity is masked (the API returns `authorLabel: 'Tickif Review Team'`
+ * and never a real account), and each comment surfaces its own status so the
+ * designer knows what is still outstanding. Renders nothing when there are no
+ * comments, so a clean project shows no empty section.
+ */
+function ReviewCommentsCard({ comments }: { comments: ProjectReviewComment[] }) {
+  if (comments.length === 0) return null;
+
+  return (
+    <div data-testid="review-comments-card">
+      <div
+        className={cn(
+          typography.monoEyebrow,
+          'mb-3 flex items-center gap-2 px-1 font-mono uppercase text-muted-foreground',
+        )}
+      >
+        <MessageSquareText className="size-3.5" />
+        REVIEW COMMENTS
+      </div>
+      <Card radius="xl" className="border-warning/20 bg-warning/5">
+        <ul className="flex flex-col gap-3 p-3">
+          {comments.map((comment) => (
+            <li key={comment.id} className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className={cn(typography.bodySmall, 'font-medium text-foreground')}>
+                  {comment.authorLabel}
+                </span>
+                <span
+                  className={cn(
+                    typography.monoEyebrow,
+                    'rounded-full bg-warning/15 px-2 py-0.5 font-mono uppercase text-warning-foreground',
+                  )}
+                >
+                  {comment.status}
+                </span>
+              </div>
+              <p className={cn(typography.bodySmall, 'whitespace-pre-wrap break-words text-foreground')}>
+                {comment.body}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
 function WhyItMattersCard() {
   return (
     <div>
@@ -1475,6 +1527,10 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
   const [moderationNote, setModerationNote] = useState<string | null>(null);
   const [rejectionReasonCode, setRejectionReasonCode] = useState<ModerationReasonCode | null>(null);
   const [rejectionReasonCodes, setRejectionReasonCodes] = useState<ModerationReasonCode[]>([]);
+  // E-270: unresolved individual review comments the reviewer left on this project.
+  // Supplied by the project detail response (unresolved-only, changes_requested-only)
+  // — no extra request. Shown separately from the general decision note below.
+  const [reviewComments, setReviewComments] = useState<ProjectReviewComment[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
   const [coverImageId, setCoverImageId] = useState<string | null>(null);
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
@@ -1980,6 +2036,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
         setModerationNote(project.moderationNote);
         setRejectionReasonCode(project.rejectionReasonCode);
         setRejectionReasonCodes(project.rejectionReasonCodes);
+        setReviewComments(project.reviewComments);
         setProjectName(project.title);
         projectNameAutoManagedRef.current = false;
         setAboutProject(project.description ?? '');
@@ -2487,6 +2544,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setModerationNote(detail.moderationNote);
       setRejectionReasonCode(detail.rejectionReasonCode);
       setRejectionReasonCodes(detail.rejectionReasonCodes);
+      setReviewComments(detail.reviewComments);
       router.replace(`/designer/projects/upload?projectId=${detail.id}`);
       return { projectId: detail.id, rooms: attachedRooms };
     })().finally(() => {
@@ -2852,6 +2910,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
       setModerationNote(submittedProject.moderationNote);
       setRejectionReasonCode(submittedProject.rejectionReasonCode);
       setRejectionReasonCodes(submittedProject.rejectionReasonCodes);
+      setReviewComments(submittedProject.reviewComments);
       // Swap the review dialog for the success confirmation. Navigation to the
       // projects list happens when the designer dismisses that dialog.
       setPreviewOpen(false);
@@ -3754,6 +3813,11 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               }
             />
           ) : null}
+          {/*
+            E-270: individual review comments, distinct from the general decision
+            note in ChangesNeededCard above. Self-hides when there are none.
+          */}
+          <ReviewCommentsCard comments={reviewComments} />
           {/*
             E-279: the moderation-history entry point (and rejected/changes
             feedback alert) sits ABOVE the Tips section, below the Changes Needed
