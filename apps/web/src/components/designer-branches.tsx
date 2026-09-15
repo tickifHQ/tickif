@@ -44,10 +44,7 @@ import {
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { formatOrganizationMutationError } from '@/lib/organization-errors';
-import {
-  OrganizationRoleBadge,
-  formatSeatLimit,
-} from '@/components/organization-presentation';
+import { OrganizationRoleBadge, formatSeatLimit } from '@/components/organization-presentation';
 
 type Feedback = { tone: 'success' | 'error'; message: string };
 
@@ -342,7 +339,7 @@ export function DesignerBranches({
           return;
         }
         setInviteEmail('');
-        setFeedback({ tone: 'success', message: `Invitation sent to ${normalizedEmail}.` });
+        setFeedback({ tone: 'success', message: `Invitation created for ${normalizedEmail}.` });
         refresh();
       } catch {
         setFeedback({ tone: 'error', message: 'Could not send the invitation.' });
@@ -393,7 +390,9 @@ export function DesignerBranches({
         {!workspace.rbacEnabled ? (
           <Card className="space-y-3 p-5 shadow-none">
             <p className="text-sm font-medium text-foreground">
-              {billingLocked ? 'Branch management is suspended' : 'Branches are a Corporate feature'}
+              {billingLocked
+                ? 'Branch management is suspended'
+                : 'Branches are a Corporate feature'}
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {billingLocked

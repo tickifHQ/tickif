@@ -6,15 +6,27 @@ import type {
   ProjectImageDto,
   UpdateImageMetadataInput,
 } from '@repo/contracts';
-import { imageFailureReason } from '@repo/contracts';
+import { imageFailureReason, ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { config } from '@repo/config';
 import { buildOriginalKey, presignDownload, presignUpload, objectExists } from '@repo/storage';
 import { enqueueMedia } from '@repo/queue';
 import { AppError } from '../../lib/errors.js';
 import { mediaRepository, type ProjectImageListItem } from './repository.js';
+import { orgsService } from '../orgs/service.js';
 
 /** The authenticated caller, as resolved by the route from the session. */
-export type Caller = { userId: string; userRole: string };
+export type Caller = {
+  userId: string;
+  userRole: string;
+  activeOrgId: string | null;
+  activeTeamId: string | null;
+};
+
+type ProjectAccess = {
+  ownerUserId: string | null;
+  organizationId: string;
+  teamId: string;
+};
 
 function pickDerivativeKey(row: ProjectImageListItem, variants: string[]): string | null {
   for (const variant of variants) {
@@ -64,13 +76,24 @@ async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {
 }
 
 /**
- * Single authorization gate for every media use-case. Matches the canonical
- * requireOwnership policy: the resource owner or a superadmin (moderation) may act.
- * Org-member access lands when designer_profile ↔ organization is modeled (E-66).
+ * Single authorization gate for every media use-case. Project media follows the
+ * same live organization capability and selected-branch rules as project edits.
  */
-function assertAccess(ownerUserId: string | null, caller: Caller): void {
+async function assertAccess(project: ProjectAccess, caller: Caller): Promise<void> {
   if (caller.userRole === 'superadmin') return;
-  if (ownerUserId && ownerUserId === caller.userId) return;
+  if (caller.userRole !== 'designer') throw AppError.forbidden('Designer role required');
+  if (caller.activeOrgId !== project.organizationId || caller.activeTeamId !== project.teamId) {
+    throw AppError.forbidden();
+  }
+  if (
+    await orgsService.hasCapability(
+      caller.userId,
+      project.organizationId,
+      ORGANIZATION_CAPABILITY.WRITE_PROJECTS,
+    )
+  ) {
+    return;
+  }
   throw AppError.forbidden();
 }
 
@@ -104,7 +127,7 @@ export const mediaService = {
     const owner = await mediaRepository.findProjectOwner(input.projectId);
     // 404 (not 403) when missing so we don't leak which project ids exist.
     if (!owner) throw AppError.notFound('Project not found');
-    assertAccess(owner.ownerUserId, input);
+    await assertAccess(owner, input);
     assertEditableProject(owner.projectStatus);
 
     const key = buildOriginalKey(input.projectId);
@@ -133,7 +156,7 @@ export const mediaService = {
   async commitUpload(input: { imageId: string } & Caller): Promise<CommitUploadResponse> {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
-    assertAccess(image.ownerUserId, input);
+    await assertAccess(image, input);
     assertEditableProject(image.projectStatus);
     // Only a freshly-minted row may be committed; a replay (already ready/failed) is a no-op conflict.
     if (image.status !== 'processing') {
@@ -153,7 +176,7 @@ export const mediaService = {
   ): Promise<ListProjectImagesResponse> {
     const owner = await mediaRepository.findProjectOwner(input.projectId);
     if (!owner) throw AppError.notFound('Project not found');
-    assertAccess(owner.ownerUserId, input);
+    await assertAccess(owner, input);
 
     const rows = await mediaRepository.listByProject(input.projectId, {
       limit: input.limit,
@@ -167,7 +190,7 @@ export const mediaService = {
   ): Promise<ProjectImageDto> {
     const image = await mediaRepository.findImageWithOwner(input.imageId);
     if (!image) throw AppError.notFound('Image not found');
-    assertAccess(image.ownerUserId, input);
+    await assertAccess(image, input);
     assertEditableProject(image.projectStatus);
 
     const [roomValid, themeValid, finishValid, materialValid] = await Promise.all([

@@ -7,7 +7,7 @@ import {
   type PlatformRole,
   type Session,
 } from '@repo/auth';
-import type { ActiveContext } from '@repo/contracts';
+import { PLATFORM_ROLE, type ActiveContext } from '@repo/contracts';
 import { AppError } from './errors.js';
 import { orgsService } from '../modules/orgs/service.js';
 
@@ -186,6 +186,18 @@ export const withFreshSession: MiddlewareHandler<{ Variables: AuthVariables }> =
   await next();
 };
 
+/** Refresh an optional session and repair its organization or branch selection when present. */
+export const withFreshResolvedSession: MiddlewareHandler<{ Variables: AuthVariables }> = async (
+  c,
+  next,
+) => {
+  await refreshSession(c);
+  if (c.get('user') && c.get('session')) {
+    await resolveActiveContext(c);
+  }
+  await next();
+};
+
 /**
  * Shared guard precondition: an authenticated, non-banned account.
  * 401 when unauthenticated; 403 when banned (until banExpires, if set).
@@ -206,6 +218,18 @@ function assertActiveUser(
 /** Guard: require an authenticated, non-banned user. 401 / 403 otherwise. */
 export const requireAuth: MiddlewareHandler<{ Variables: AuthVariables }> = async (c, next) => {
   await getFreshActiveUser(c);
+  await next();
+};
+
+/** Exact customer-role gate for APIs exposed by the personal browsing UI. */
+export const requireCustomerAccess: MiddlewareHandler<{ Variables: AuthVariables }> = async (
+  c,
+  next,
+) => {
+  const user = await getFreshActiveUser(c);
+  if (user.role !== PLATFORM_ROLE.VISITOR && user.role !== PLATFORM_ROLE.DESIGNER) {
+    throw AppError.forbidden('Customer account required');
+  }
   await next();
 };
 

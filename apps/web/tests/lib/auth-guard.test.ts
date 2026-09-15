@@ -25,13 +25,13 @@ vi.mock('next/navigation', () => ({
 
 describe('rolePassesCheck', () => {
   it.each([
-    // superadmin passes every check
+    // superadmins inherit admin access but do not enter the designer workspace
     ['superadmin', 'superadmin', true],
     ['superadmin', 'admin', true],
-    ['superadmin', 'designer', true],
-    // admin passes admin + designer, not superadmin
+    ['superadmin', 'designer', false],
+    // platform admins stay in the moderation workspace
     ['admin', 'admin', true],
-    ['admin', 'designer', true],
+    ['admin', 'designer', false],
     ['admin', 'superadmin', false],
     // designer passes designer only
     ['designer', 'designer', true],

@@ -244,8 +244,14 @@ export const leadsService = {
     return toDetail(await leadsRepository.create({ ...input, organizationId, teamId, receivedAt }));
   },
 
-  async countForOrganization(organizationId: string, teamId?: string): Promise<LeadCounts> {
-    const counts = toCounts(await leadsRepository.countByStatus(organizationId, undefined, teamId));
+  async countForOrganization(
+    organizationId: string,
+    teamId?: string,
+    assignedMemberIds?: string[],
+  ): Promise<LeadCounts> {
+    const counts = toCounts(
+      await leadsRepository.countByStatus(organizationId, undefined, teamId, assignedMemberIds),
+    );
     return {
       total: counts.total,
       new: counts.new,

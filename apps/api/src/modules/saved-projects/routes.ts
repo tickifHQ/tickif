@@ -7,7 +7,7 @@ import {
   savedProjectsStateResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireCustomerAccess as requireAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { savedProjectsService } from './service.js';
@@ -84,10 +84,7 @@ export const savedProjectsRoutes = new OpenAPIHono<{ Variables: AuthVariables }>
   defaultHook: validationHook,
 })
   .openapi(stateRoute, async (c) => {
-    const result = await savedProjectsService.state(
-      callerId(c.get('user')),
-      c.req.valid('query'),
-    );
+    const result = await savedProjectsService.state(callerId(c.get('user')), c.req.valid('query'));
     return c.json(result, 200);
   })
   .openapi(saveRoute, async (c) => {

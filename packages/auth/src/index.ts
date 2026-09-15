@@ -17,6 +17,7 @@ import {
   validateOrganizationRoleChange,
 } from './organization-policy.js';
 import { sendEmail } from './email.js';
+import { sendNotificationEmail } from './notification-email.js';
 import { renderTickifEmail } from './email-templates.js';
 
 assertProductionEmailConfig();
@@ -613,7 +614,7 @@ export const auth = betterAuth({
           `/invitations/${encodeURIComponent(id)}`,
           config.PUBLIC_WEB_URL,
         );
-        await sendEmail({
+        await sendNotificationEmail('organization-invitation', {
           to: email,
           subject: "You're invited to a Tickif studio",
           ...(await renderTickifEmail(
@@ -740,7 +741,7 @@ export const auth = betterAuth({
             .where(eq(schema.user.id, invitation.inviterId))
             .limit(1);
           if (!inviter) return;
-          await sendEmail({
+          await sendNotificationEmail('organization-invitation-declined', {
             to: inviter.email,
             subject: `Invitation to ${organization.name} declined`,
             idempotencyKey: `organization-invitation-declined-${invitation.id}`,

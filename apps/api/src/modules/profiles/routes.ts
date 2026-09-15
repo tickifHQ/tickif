@@ -29,7 +29,7 @@ import {
 } from '@repo/contracts';
 import { setActiveOrganization, setActiveTeam } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireAuth, requireResolvedAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
@@ -75,7 +75,7 @@ const dashboardRoute = createRoute({
   tags: ['Profiles'],
   summary: 'Get dashboard summary for the active designer organization',
   security: [{ cookieAuth: [] }],
-  middleware: [requireAuth] as const,
+  middleware: [requireResolvedAuth] as const,
   responses: {
     200: {
       description: 'Dashboard summary with completion, project counts, lead counts, and share URL',
@@ -311,6 +311,7 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     const session = c.get('session');
     const result = await dashboardService.getProfileDashboard({
       userId: user.id,
+      userRole: user.role ?? '',
       orgId: session?.activeOrganizationId ?? null,
       teamId: session?.activeTeamId ?? null,
     });

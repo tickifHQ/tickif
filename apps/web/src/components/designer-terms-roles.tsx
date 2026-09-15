@@ -578,7 +578,7 @@ export function DesignerTermsRoles({
           tone: 'success',
           message: pendingInvite
             ? `Invitation to ${normalizedEmail} was replaced with a new 7-day invite.`
-            : `Invitation sent to ${normalizedEmail}.`,
+            : `Invitation created for ${normalizedEmail}.`,
         });
         router.refresh();
       } catch {
