@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { testClient } from 'hono/testing';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type {
   ErrorResponse,
   ListProjectRoomsResponse,
@@ -1099,6 +1099,86 @@ describe('POST /api/projects', () => {
       'Bedroom 2',
       'Bathroom',
     ]);
+  });
+});
+
+describe('stale branch authorization', () => {
+  it('does not treat a platform admin membership as designer project access', async () => {
+    const actor = await createRoleSession('+919800002093', 'admin');
+    const designer = await makeDesigner({ userId: actor.userId });
+    await db.insert(schema.member).values({
+      id: `mem-platform-admin-${actor.userId}`,
+      organizationId: designer.orgId,
+      userId: actor.userId,
+      role: 'admin',
+      createdAt: new Date(),
+    });
+    await makeSubscription({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+    });
+    const cookie = await activateOrganization(actor.cookie, designer.orgId);
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+
+    const response = await app.request(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Platform admin edit' }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('repairs the selected branch before rejecting a mutation after branch removal', async () => {
+    const actor = await createRoleSession('+919800002090', 'designer');
+    const designer = await makeDesigner({ userId: actor.userId });
+    await db.insert(schema.member).values({
+      id: `mem-stale-${actor.userId}`,
+      organizationId: designer.orgId,
+      userId: actor.userId,
+      role: 'member',
+      createdAt: new Date(),
+    });
+    await makeSubscription({
+      organizationId: designer.orgId,
+      planTier: 'corporate',
+      subscriptionState: 'active',
+    });
+    const replacementTeam = await makeTeam({
+      organizationId: designer.orgId,
+      name: 'Replacement Branch',
+      createdAt: new Date('2030-01-01T00:00:00.000Z'),
+    });
+    await db.insert(schema.teamMember).values({
+      id: `tm-replacement-${actor.userId}`,
+      teamId: replacementTeam.id,
+      userId: actor.userId,
+      createdAt: new Date(),
+    });
+    const cookie = await activateOrganization(actor.cookie, designer.orgId);
+    const project = await makeProject({ designerId: designer.id, status: 'draft' });
+    await db
+      .delete(schema.teamMember)
+      .where(
+        and(
+          eq(schema.teamMember.teamId, designer.teamId),
+          eq(schema.teamMember.userId, actor.userId),
+        ),
+      );
+
+    const response = await app.request(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Must remain unchanged' }),
+    });
+
+    expect(response.status).toBe(403);
+    const [stored] = await db
+      .select({ title: schema.project.title })
+      .from(schema.project)
+      .where(eq(schema.project.id, project.id));
+    expect(stored?.title).toBe(project.title);
   });
 });
 

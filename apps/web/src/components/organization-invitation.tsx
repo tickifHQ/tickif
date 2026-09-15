@@ -66,7 +66,7 @@ export function OrganizationInvitation({ invitationId }: { invitationId: string 
 
         {declined ? (
           <p role="status" className="mt-5 text-sm text-muted-foreground">
-            Invitation declined. The studio team has been notified.
+            Invitation declined.
           </p>
         ) : null}
 

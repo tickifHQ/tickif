@@ -21,6 +21,9 @@ vi.mock('@repo/storage', () => ({
   objectExists: vi.fn(async () => true),
 }));
 vi.mock('@repo/queue', () => ({ enqueueMedia: vi.fn(async () => {}) }));
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: { hasCapability: vi.fn(async () => true) },
+}));
 
 import { mediaService } from '../../../src/modules/media/service.js';
 import { mediaRepository } from '../../../src/modules/media/repository.js';
@@ -31,9 +34,22 @@ import { AppError } from '../../../src/lib/errors.js';
 const repo = vi.mocked(mediaRepository);
 const objectExistsMock = vi.mocked(objectExists);
 
-const OWNER = { userId: 'user-1', userRole: 'designer' };
-const STRANGER = { userId: 'user-2', userRole: 'designer' };
-const SUPERADMIN = { userId: 'admin-1', userRole: 'superadmin' };
+const ACCESS_CONTEXT = { activeOrgId: 'org-1', activeTeamId: 'team-1' };
+const OWNER = { userId: 'user-1', userRole: 'designer', ...ACCESS_CONTEXT };
+const STRANGER = {
+  userId: 'user-2',
+  userRole: 'designer',
+  activeOrgId: 'org-2',
+  activeTeamId: 'team-2',
+};
+const SUPERADMIN = { userId: 'admin-1', userRole: 'superadmin', ...ACCESS_CONTEXT };
+const PLATFORM_ADMIN = { userId: 'admin-2', userRole: 'admin', ...ACCESS_CONTEXT };
+const PROJECT_OWNER = {
+  ownerUserId: OWNER.userId,
+  organizationId: 'org-1',
+  teamId: 'team-1',
+  projectStatus: 'draft' as const,
+};
 
 describe('mediaService.createUploadUrl', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -60,7 +76,7 @@ describe('mediaService.createUploadUrl', () => {
   });
 
   it('403s when the caller is neither owner nor superadmin', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     await expect(mediaService.createUploadUrl({ ...input, ...STRANGER })).rejects.toBeInstanceOf(
       AppError,
     );
@@ -71,7 +87,7 @@ describe('mediaService.createUploadUrl', () => {
   });
 
   it('creates a processing row and signs the declared size for the owner', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     repo.createProcessing.mockResolvedValue({
       id: 'img-1',
       originalKey: 'originals/p/uuid',
@@ -97,8 +113,16 @@ describe('mediaService.createUploadUrl', () => {
     });
   });
 
+  it('does not treat a platform admin organization membership as designer media access', async () => {
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
+
+    await expect(
+      mediaService.createUploadUrl({ ...input, ...PLATFORM_ADMIN }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
   it('allows a superadmin (non-owner) — moderation access', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     repo.createProcessing.mockResolvedValue({
       id: 'img-1',
       originalKey: 'originals/p/uuid',
@@ -119,6 +143,8 @@ describe('mediaService.commitUpload', () => {
     status: 'processing' as const,
     projectStatus: 'draft' as const,
     ownerUserId: OWNER.userId,
+    organizationId: 'org-1',
+    teamId: 'team-1',
   };
 
   it('404s when the image is missing', async () => {
@@ -210,7 +236,7 @@ describe('mediaService.listProjectImages', () => {
   };
 
   it('maps rows to DTOs for the owner', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     repo.listByProject.mockResolvedValue([row] as never);
 
     const result = await mediaService.listProjectImages({
@@ -234,14 +260,14 @@ describe('mediaService.listProjectImages', () => {
   });
 
   it('403s for a non-owner who is not superadmin', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     await expect(
       mediaService.listProjectImages({ projectId: 'p', limit: 50, offset: 0, ...STRANGER }),
     ).rejects.toMatchObject({ status: 403 });
   });
 
   it('allows a superadmin to list any project (moderation)', async () => {
-    repo.findProjectOwner.mockResolvedValue({ ownerUserId: OWNER.userId, projectStatus: 'draft' });
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     repo.listByProject.mockResolvedValue([row] as never);
     const result = await mediaService.listProjectImages({
       projectId: 'p',
@@ -266,6 +292,8 @@ describe('mediaService.updateImageMetadata', () => {
     status: 'ready' as const,
     projectStatus: 'draft' as const,
     ownerUserId: OWNER.userId,
+    organizationId: 'org-1',
+    teamId: 'team-1',
   };
 
   it('409s if the image leaves the editable version after the ownership check', async () => {

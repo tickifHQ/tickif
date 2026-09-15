@@ -10,6 +10,7 @@ import { DesignerOrganizationSwitcher } from '@/components/designer-organization
 import { Button } from '@repo/ui/components/button';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
+import type { OrganizationCapabilities } from '@repo/contracts';
 import {
   ChartLine,
   CalendarDays,
@@ -33,30 +34,70 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   headerIcon?: ComponentType<{ className?: string }>;
   comingSoon?: boolean;
-  /** Hide from designers who are not the org owner (billing is owner-only until E-240). */
-  ownerOnly?: boolean;
+  visible?: (capabilities: OrganizationCapabilities) => boolean;
 };
+
+const hasProjectAccess = (capabilities: OrganizationCapabilities) =>
+  capabilities.writeProjects ||
+  (capabilities.analyticsScope !== 'none' && capabilities.analyticsScope !== 'billing');
+const hasLeadAccess = (capabilities: OrganizationCapabilities) => capabilities.leadScope !== 'none';
 
 const studioItems: NavItem[] = [
   { label: 'Overview', href: '/designer/dashboard', icon: LayoutDashboard },
-  { label: 'Projects', href: '/designer/projects', icon: Layers },
-  { label: 'Leads', href: '/designer/leads', icon: FileUser },
-  { label: 'Reviews', href: '/designer/reviews', icon: MessageSquareMore },
-  { label: 'Consultations', href: '/designer/consultations', icon: CalendarDays },
-  { label: 'Analytics', href: '/designer/analytics', icon: ChartLine },
+  { label: 'Projects', href: '/designer/projects', icon: Layers, visible: hasProjectAccess },
+  { label: 'Leads', href: '/designer/leads', icon: FileUser, visible: hasLeadAccess },
+  {
+    label: 'Reviews',
+    href: '/designer/reviews',
+    icon: MessageSquareMore,
+    visible: (capabilities) => capabilities.manageMembers,
+  },
+  {
+    label: 'Consultations',
+    href: '/designer/consultations',
+    icon: CalendarDays,
+    visible: hasLeadAccess,
+  },
+  {
+    label: 'Analytics',
+    href: '/designer/analytics',
+    icon: ChartLine,
+    visible: (capabilities) => capabilities.analyticsScope !== 'none',
+  },
 ];
 
 const growItems: NavItem[] = [
-  { label: 'Portfolio', href: '/designer/portfolio', icon: LinkIcon },
+  {
+    label: 'Portfolio',
+    href: '/designer/portfolio',
+    icon: LinkIcon,
+    visible: (capabilities) => capabilities.editOrganization,
+  },
   {
     label: 'Verification',
     href: '/designer/verification',
     icon: ShieldCheck,
     headerIcon: Shield,
+    visible: (capabilities) => capabilities.manageVerification,
   },
-  { label: 'Team & Roles', href: '/designer/terms-roles', icon: UsersRound },
-  { label: 'Branches', href: '/designer/branches', icon: Building2 },
-  { label: 'Plan & billing', href: '/designer/plan-billing', icon: CreditCard, ownerOnly: true },
+  {
+    label: 'Team & Roles',
+    href: '/designer/terms-roles',
+    icon: UsersRound,
+    visible: (capabilities) => capabilities.manageMembers,
+  },
+  {
+    label: 'Branches',
+    href: '/designer/branches',
+    icon: Building2,
+    visible: (capabilities) => capabilities.manageMembers,
+  },
+  {
+    label: 'Plan & billing',
+    href: '/designer/plan-billing',
+    icon: CreditCard,
+    visible: (capabilities) => capabilities.billing,
+  },
 ];
 
 const headerItems: NavItem[] = [
@@ -102,8 +143,8 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-function visibleItems(items: NavItem[], isOwner: boolean): NavItem[] {
-  return items.filter((item) => !item.ownerOnly || isOwner);
+function visibleItems(items: NavItem[], capabilities: OrganizationCapabilities): NavItem[] {
+  return items.filter((item) => !item.visible || item.visible(capabilities));
 }
 
 function SidebarSection({
@@ -166,7 +207,7 @@ function SidebarContent({
   pathname,
   isWorkspaceRefreshing,
   onSwitchSuccess,
-  isOwner,
+  capabilities,
 }: {
   activeOrganizationId: string;
   studioName: string;
@@ -174,7 +215,7 @@ function SidebarContent({
   pathname: string;
   isWorkspaceRefreshing: boolean;
   onSwitchSuccess: (organizationId: string) => void;
-  isOwner: boolean;
+  capabilities: OrganizationCapabilities;
 }) {
   return (
     <>
@@ -190,10 +231,14 @@ function SidebarContent({
 
       <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-4 py-5">
         <div className="space-y-6">
-          <SidebarSection title="Studio" items={studioItems} pathname={pathname} />
+          <SidebarSection
+            title="Studio"
+            items={visibleItems(studioItems, capabilities)}
+            pathname={pathname}
+          />
           <SidebarSection
             title="Grow"
-            items={visibleItems(growItems, isOwner)}
+            items={visibleItems(growItems, capabilities)}
             pathname={pathname}
           />
         </div>
@@ -252,13 +297,13 @@ export function DesignerWorkspaceShell({
   activeOrganizationId,
   studioName,
   studioLocation,
-  isOwner,
+  capabilities,
   children,
 }: {
   activeOrganizationId: string;
   studioName: string;
   studioLocation: string;
-  isOwner: boolean;
+  capabilities: OrganizationCapabilities;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -291,15 +336,16 @@ export function DesignerWorkspaceShell({
           pathname={pathname}
           isWorkspaceRefreshing={isWorkspaceRefreshing}
           onSwitchSuccess={handleSwitchSuccess}
-          isOwner={isOwner}
+          capabilities={capabilities}
         />
       )}
       headerTitle={<WorkspaceHeaderTitle pathname={pathname} />}
       headerActions={
         <>
-          {pathname === '/designer/dashboard' ||
-          pathname === '/designer/projects' ||
-          pathname === '/designer/leads' ? (
+          {capabilities.writeProjects &&
+          (pathname === '/designer/dashboard' ||
+            pathname === '/designer/projects' ||
+            pathname === '/designer/leads') ? (
             <Button
               asChild
               variant="inverted"
