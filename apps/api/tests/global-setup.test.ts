@@ -43,6 +43,21 @@ describe('API global setup cleanup', () => {
 
   afterEach(() => vi.unstubAllEnvs());
 
+  it('disables inherited email credentials during setup and restores the runner afterwards', async () => {
+    vi.stubEnv('RESEND_API_KEY', 're_runner_credential');
+    vi.stubEnv('RESEND_API_KEY_FILE', '/runner/secrets/resend');
+    mocks.migrateTestDb.mockImplementationOnce(async () => {
+      expect(process.env.RESEND_API_KEY).toBe('');
+      expect(process.env.RESEND_API_KEY_FILE).toBe('');
+    });
+
+    const teardown = await setup(project());
+    expect(process.env.RESEND_API_KEY).toBe('');
+    teardown();
+    expect(process.env.RESEND_API_KEY).toBe('re_runner_credential');
+    expect(process.env.RESEND_API_KEY_FILE).toBe('/runner/secrets/resend');
+  });
+
   it('restores the runner environment when migration fails', async () => {
     mocks.migrateTestDb.mockRejectedValueOnce(new Error('migration failed'));
 
