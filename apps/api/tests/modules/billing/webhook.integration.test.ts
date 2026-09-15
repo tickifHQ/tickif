@@ -5,7 +5,7 @@ import { makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 import { RAZORPAY_EVENT } from '@repo/contracts';
 
 // Mock @repo/config to provide Razorpay plan IDs for the plan_id reverse-lookup tests.
-// In CI, these env vars are not set, so the config singleton has them as undefined.
+// Use synthetic values even when the developer has provider credentials in .env.
 vi.mock('@repo/config', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await importOriginal()) as typeof import('@repo/config');
@@ -13,11 +13,10 @@ vi.mock('@repo/config', async (importOriginal) => {
     ...actual,
     config: {
       ...actual.config,
-      RAZORPAY_KEY_ID: actual.config.RAZORPAY_KEY_ID || 'rzp_test_ci_mock',
-      RAZORPAY_KEY_SECRET: actual.config.RAZORPAY_KEY_SECRET || 'ci_mock_secret',
-      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS:
-        actual.config.RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS || 'plan_test_professional_plus',
-      RAZORPAY_PLAN_ID_CORPORATE: actual.config.RAZORPAY_PLAN_ID_CORPORATE || 'plan_test_corporate',
+      RAZORPAY_KEY_ID: 'rzp_test_ci_mock',
+      RAZORPAY_KEY_SECRET: 'ci_mock_secret',
+      RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: 'plan_test_professional_plus',
+      RAZORPAY_PLAN_ID_CORPORATE: 'plan_test_corporate',
     },
   };
 });

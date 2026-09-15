@@ -1,14 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Ensure subscribe-service's assertBillingConfigured() passes in CI where
-// Razorpay env vars are not set. The config singleton may already be frozen
-// from global-setup, so vi.hoisted alone is insufficient. We mock @repo/config
-// to inject the test values into the already-parsed config object.
-vi.hoisted(() => {
-  process.env.RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_ci_mock';
-  process.env.RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'ci_mock_secret';
-});
-
+// Use synthetic credentials for billing checks regardless of the developer's .env.
+// Mock the parsed config because global setup may have already loaded its singleton.
 vi.mock('@repo/config', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const actual = (await importOriginal()) as typeof import('@repo/config');
@@ -16,8 +9,8 @@ vi.mock('@repo/config', async (importOriginal) => {
     ...actual,
     config: {
       ...actual.config,
-      RAZORPAY_KEY_ID: actual.config.RAZORPAY_KEY_ID || 'rzp_test_ci_mock',
-      RAZORPAY_KEY_SECRET: actual.config.RAZORPAY_KEY_SECRET || 'ci_mock_secret',
+      RAZORPAY_KEY_ID: 'rzp_test_ci_mock',
+      RAZORPAY_KEY_SECRET: 'ci_mock_secret',
     },
   };
 });
