@@ -27,7 +27,9 @@ export default async function DesignerSelectStudioPage() {
     redirect('/designer/onboarding');
   }
 
-  if (session?.session.activeOrganizationId) {
+  // Profile-backed pages need a branch as well as an organization. Keep the
+  // selector available so reselecting a studio can restore its default branch.
+  if (session?.session.activeOrganizationId && session.session.activeTeamId) {
     redirect('/designer/dashboard');
   }
 
