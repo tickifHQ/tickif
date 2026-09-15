@@ -48,6 +48,10 @@ export const requiredTests = [
     'invitation acceptance, role changes and studio switching preserve organization boundaries',
   ],
   [
+    'organization-access.spec.ts',
+    'a designer recovers a branchless organization session by reselecting the studio',
+  ],
+  [
     'organization-workflows.spec.ts',
     'studio workspaces isolate all business surfaces and enforce owner, admin and member capabilities',
   ],
