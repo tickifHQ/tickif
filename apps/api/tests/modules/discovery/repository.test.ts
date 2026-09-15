@@ -597,17 +597,7 @@ describe('discoveryRepository.listFeedFallback', () => {
     });
   });
 
-  /**
-   * Integration tests validate actual query correctness.
-   * These tests document what integration tests should verify:
-   */
-  describe.todo('integration tests should verify', () => {
-    it.todo('joins correctly with designer_profile using designerId');
-    it.todo('joins correctly with organization using orgId');
-    it.todo('left joins cover image using coverImageId');
-    it.todo('filters for status = published');
-    it.todo('filters for designer status = active');
-    it.todo('applies NULLS LAST for featured sort');
-    it.todo('returns correct data types for all fields');
-  });
+  // Database behavior is exercised by feed.integration.test.ts:
+  // cross-organization studio/cover mapping and response schema validation;
+  // published/active visibility; and Postgres featured sorting with NULLS LAST.
 });

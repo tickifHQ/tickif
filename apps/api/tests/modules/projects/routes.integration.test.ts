@@ -1485,6 +1485,69 @@ describe('Project draft CRUD + rooms (E-102)', () => {
     expect(rooms).toHaveLength(1);
   });
 
+  it.each([
+    ['owner', 200],
+    ['admin', 200],
+    ['member', 200],
+    ['billing_admin', 403],
+    ['viewer', 403],
+  ] as const)(
+    'enforces archive and restore permissions for Corporate %s',
+    async (role, expectedStatus) => {
+      const owner = await makeDesignerSession('+919800002070');
+      await makeSubscription({
+        organizationId: owner.designer.orgId,
+        planTier: 'corporate',
+        subscriptionState: 'active',
+      });
+      let cookie = owner.cookie;
+      if (role !== 'owner') {
+        const actor = await createRoleSession('+919800002071', 'designer');
+        await db.insert(schema.member).values({
+          id: `mem-${actor.userId}`,
+          organizationId: owner.designer.orgId,
+          userId: actor.userId,
+          role,
+          createdAt: new Date(),
+        });
+        await db.insert(schema.teamMember).values({
+          id: `team-mem-${actor.userId}`,
+          teamId: owner.designer.teamId,
+          userId: actor.userId,
+          createdAt: new Date(),
+        });
+        cookie = await activateOrganization(actor.cookie, owner.designer.orgId);
+      }
+      const project = await makeProject({ designerId: owner.designer.id, status: 'published' });
+      const archived = await makeProject({
+        designerId: owner.designer.id,
+        status: 'archived',
+        archiveReason: 'manual',
+      });
+
+      const archive = await app.request(`/api/projects/${project.id}/archive`, {
+        method: 'POST',
+        headers: { cookie },
+      });
+      const restore = await app.request(`/api/projects/${archived.id}/restore`, {
+        method: 'POST',
+        headers: { cookie },
+      });
+      expect(archive.status).toBe(expectedStatus);
+      expect(restore.status).toBe(expectedStatus);
+      const [projectState] = await db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.id, project.id));
+      const [archivedState] = await db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.id, archived.id));
+      expect(projectState?.status).toBe(expectedStatus === 200 ? 'archived' : 'published');
+      expect(archivedState?.status).toBe(expectedStatus === 200 ? 'draft' : 'archived');
+    },
+  );
+
   it('allows Corporate Members to archive any project in their org but not delete it', async () => {
     const { designer } = await makeDesignerSession('+919800002061');
     const member = await createRoleSession('+919800002062', 'designer');

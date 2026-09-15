@@ -167,13 +167,9 @@ describe('organization role matrix', () => {
         rbacEnabled: true,
         frozen: true,
       });
-      expect(capabilities).toMatchObject({
-        billing: false,
-        manageMembers: false,
-        writeProjects: false,
-        leadScope: 'none',
-        analyticsScope: 'none',
-      });
+      for (const capability of ORGANIZATION_CAPABILITY_VALUES) {
+        expect(capabilityIsEnabled(capabilities, capability), `${role} ${capability}`).toBe(false);
+      }
     }
   });
 
@@ -191,13 +187,8 @@ describe('organization role matrix', () => {
     expect(admin.billing).toBe(false);
   });
 
-  for (const role of ORGANIZATION_MEMBER_ROLE_VALUES) {
-    it.todo(`${role} archive integration waits for E-253 archived project state`);
-  }
-
-  it.todo('member assigned-only lead filtering waits for the E-255 follow-up');
-
-  for (const role of ORGANIZATION_MEMBER_ROLE_VALUES) {
-    it.todo(`${role} analytics dataset scope is covered by E-246`);
-  }
+  // Database-backed role coverage lives in:
+  // modules/projects/routes.integration.test.ts: Corporate archive/restore role matrix.
+  // modules/leads/routes.integration.test.ts: assigned-only Member reads and denied writes.
+  // modules/reports/routes.integration.test.ts: five-role analytics dataset matrix.
 });
