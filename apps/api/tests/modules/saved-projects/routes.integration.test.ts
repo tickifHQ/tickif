@@ -5,6 +5,21 @@ import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 describe('saved project routes', () => {
+  it.each(['admin', 'superadmin'] as const)(
+    'keeps platform %s accounts out of customer saved-project APIs',
+    async (role) => {
+      const account = await createRoleSession('+919800005109', role);
+      const project = await makeProject({ status: 'published' });
+
+      const response = await app.request(`/api/saved-projects/${project.id}`, {
+        method: 'PUT',
+        headers: { cookie: account.cookie },
+      });
+
+      expect(response.status).toBe(403);
+    },
+  );
+
   it('lets a designer save projects while in personal context', async () => {
     const account = await createRoleSession('+919800005100', 'designer');
     const designer = await makeDesigner({ status: 'active' });

@@ -118,7 +118,9 @@ describe('transactional cover submit gate', () => {
           imageId: cover.id,
           metadata: { roomId: null },
           userId: actor.id,
-          userRole: 'designer',
+          userRole: 'superadmin',
+          activeOrgId: null,
+          activeTeamId: null,
         }),
       ).rejects.toMatchObject({ status: 409 });
     } finally {

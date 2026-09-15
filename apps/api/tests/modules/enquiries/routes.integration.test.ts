@@ -5,6 +5,20 @@ import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 
 describe('enquiry ownership protection', () => {
+  it.each(['admin', 'superadmin'] as const)(
+    'keeps platform %s accounts out of customer enquiry APIs',
+    async (role) => {
+      const account = await createRoleSession('+919800004309', role);
+      const designer = await makeDesigner({ status: 'active' });
+
+      const response = await app.request(`/api/enquiries/check?designerProfileId=${designer.id}`, {
+        headers: { cookie: account.cookie },
+      });
+
+      expect(response.status).toBe(403);
+    },
+  );
+
   it('reports an owned studio as unavailable and rejects a forged self-enquiry', async () => {
     const { cookie, userId } = await createRoleSession('+919800004301', 'designer');
     const creator = await makeUser();

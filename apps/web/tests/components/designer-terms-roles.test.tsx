@@ -424,7 +424,7 @@ describe('DesignerTermsRoles', () => {
       });
     });
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Invitation sent to teammate@example.com.',
+      'Invitation created for teammate@example.com.',
     );
     expect(mocks.refresh).toHaveBeenCalled();
   });
@@ -442,7 +442,7 @@ describe('DesignerTermsRoles', () => {
 
       await vi.waitFor(() => {
         expect(screen.getByRole('status')).toHaveTextContent(
-          'Invitation sent to teammate@example.com.',
+          'Invitation created for teammate@example.com.',
         );
       });
       act(() => {

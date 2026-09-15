@@ -13,7 +13,7 @@ const emailFrom = config.EMAIL_FROM;
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-type SendEmailParams = {
+export type SendEmailParams = {
   to: string;
   subject: string;
   html: string;

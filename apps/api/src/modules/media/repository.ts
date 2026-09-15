@@ -33,11 +33,15 @@ export const mediaRepository = {
   /** Owning user of a project, via its designer profile. Null when the project is missing. */
   async findProjectOwner(projectId: string): Promise<{
     ownerUserId: string | null;
+    organizationId: string;
+    teamId: string;
     projectStatus: typeof schema.project.$inferSelect.status;
   } | null> {
     const [row] = await db
       .select({
         ownerUserId: schema.designerProfile.userId,
+        organizationId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
         projectStatus: schema.project.status,
       })
       .from(schema.project)
@@ -141,6 +145,8 @@ export const mediaRepository = {
     status: ProjectImageRecord['status'];
     projectStatus: typeof schema.project.$inferSelect.status;
     ownerUserId: string | null;
+    organizationId: string;
+    teamId: string;
   } | null> {
     const [row] = await db
       .select({
@@ -150,6 +156,8 @@ export const mediaRepository = {
         status: schema.projectImage.status,
         projectStatus: schema.project.status,
         ownerUserId: schema.designerProfile.userId,
+        organizationId: schema.designerProfile.orgId,
+        teamId: schema.designerProfile.teamId,
       })
       .from(schema.projectImage)
       .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))

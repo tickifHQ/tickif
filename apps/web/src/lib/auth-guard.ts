@@ -14,13 +14,6 @@ import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
 
 export type RequiredPlatformRole = Exclude<PlatformRole, typeof PLATFORM_ROLE.VISITOR>;
 
-const PLATFORM_ROLE_LEVEL: Readonly<Record<PlatformRole, number>> = {
-  [PLATFORM_ROLE.VISITOR]: 0,
-  [PLATFORM_ROLE.DESIGNER]: 1,
-  [PLATFORM_ROLE.ADMIN]: 2,
-  [PLATFORM_ROLE.SUPERADMIN]: 3,
-};
-
 /**
  * Server-side auth utilities for layouts and server components.
  *
@@ -55,11 +48,8 @@ type GetServerSessionOptions = {
 };
 
 /**
- * Role hierarchy:
- * - superadmin passes all checks
- * - admin passes admin + designer checks
- * - designer passes designer check only
- * - null fails all checks
+ * Platform staff inherit the admin workspace only. Designer access is exact so
+ * dual-role organization memberships cannot expose a partly functional workspace.
  */
 export function rolePassesCheck(
   userRole: string | null,
@@ -68,10 +58,13 @@ export function rolePassesCheck(
   const parsedRole = platformRoleSchema.safeParse(userRole);
   if (!parsedRole.success) return false;
 
-  const userLevel = PLATFORM_ROLE_LEVEL[parsedRole.data];
-  const requiredLevel = PLATFORM_ROLE_LEVEL[requiredRole];
-
-  return userLevel >= requiredLevel;
+  if (requiredRole === PLATFORM_ROLE.DESIGNER) {
+    return parsedRole.data === PLATFORM_ROLE.DESIGNER;
+  }
+  if (requiredRole === PLATFORM_ROLE.ADMIN) {
+    return parsedRole.data === PLATFORM_ROLE.ADMIN || parsedRole.data === PLATFORM_ROLE.SUPERADMIN;
+  }
+  return parsedRole.data === PLATFORM_ROLE.SUPERADMIN;
 }
 
 export function activeContextForSession(session: SessionData): ActiveContext {

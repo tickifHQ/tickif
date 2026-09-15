@@ -756,6 +756,7 @@ function requireActiveTeam(caller: Caller): string {
 async function assertAccess(ownership: ProjectOwnership, caller: Caller): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
+  if (caller.userRole !== 'designer') throw AppError.forbidden('Designer role required');
   if (
     caller.activeOrgId === ownership.organizationId &&
     (!caller.activeTeamId || !ownership.teamId || caller.activeTeamId === ownership.teamId) &&
@@ -777,8 +778,9 @@ async function assertProjectCapability(
 ): Promise<void> {
   if (caller.isBanned) throw AppError.forbidden('Account suspended');
   if (caller.userRole === 'superadmin') return;
+  if (caller.userRole !== 'designer') throw AppError.forbidden('Designer role required');
   if (caller.activeOrgId !== ownership.organizationId) throw AppError.forbidden();
-  if (ownership.teamId && requireActiveTeam(caller) !== ownership.teamId) {
+  if (ownership.teamId && caller.activeTeamId !== ownership.teamId) {
     throw AppError.forbidden();
   }
   if (await orgsService.hasCapability(caller.userId, ownership.organizationId, capability)) return;

@@ -86,7 +86,7 @@ test('invitation acceptance, role changes and studio switching preserve organiza
     await page.getByLabel('Work email').fill(guest.email);
     await page.getByLabel('Role', { exact: true }).selectOption('viewer');
     await page.getByRole('button', { name: 'Send invite', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText(`Invitation sent to ${guest.email}`);
+    await expect(page.getByRole('status')).toContainText(`Invitation created for ${guest.email}`);
     const invitation = (await workspace(context)).invitations.find(
       (entry) => entry.email === guest.email,
     );
