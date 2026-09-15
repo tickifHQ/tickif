@@ -18,6 +18,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { config } from '@repo/config';
 import { eq } from 'drizzle-orm';
+import { discoveryFeedResponseSchema } from '@repo/contracts';
 import type { DiscoveryFeedResponse, Derivative } from '@repo/contracts';
 import { db, schema } from '@repo/db';
 import {
@@ -433,6 +434,50 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       const fallbackProject = body.items.find((item) => item.slug === project.slug);
       expect(fallbackProject).toBeDefined();
       expect(fallbackProject?.studio).toBe('Fallback Studio');
+    });
+
+    it('keeps studio data and covers attached to the correct project across organizations', async () => {
+      const first = await activeDesigner({
+        displayName: 'First Studio',
+        avgRating: '4.20',
+        reviewCount: 7,
+      });
+      const second = await activeDesigner({
+        displayName: 'Second Studio',
+        avgRating: '3.50',
+        reviewCount: 2,
+      });
+      expect(first.orgId).not.toBe(second.orgId);
+      const covered = await makePublishedProject(first.id, { title: 'Covered Project' });
+      const uncovered = await makePublishedProject(second.id, { title: 'Uncovered Project' });
+      const cover = await attachReadyCover(covered.id);
+      mockSearchClient.mockRejectedValue(new Error('Search unavailable'));
+
+      const { res, body } = await getFeed();
+      expect(res.status).toBe(200);
+      const parsed = discoveryFeedResponseSchema.parse(body);
+      expect(parsed.source).toBe('db');
+      expect(parsed.items).toHaveLength(2);
+      const firstCard = parsed.items.find((item) => item.id === covered.id);
+      const secondCard = parsed.items.find((item) => item.id === uncovered.id);
+      expect(firstCard).toMatchObject({
+        studio: 'First Studio',
+        rating: 4.2,
+        reviewCount: 7,
+        coverImageId: cover.id,
+        imageWidth: 640,
+        imageHeight: 427,
+      });
+      expect(firstCard?.coverImageUrl).toContain(`derivatives/${covered.id}/small.webp`);
+      expect(secondCard).toMatchObject({
+        studio: 'Second Studio',
+        rating: 3.5,
+        reviewCount: 2,
+        coverImageId: null,
+        coverImageUrl: null,
+        imageWidth: null,
+        imageHeight: null,
+      });
     });
 
     it('falls back on Typesense timeout', async () => {
