@@ -32,6 +32,15 @@ describe('test auth environment', () => {
     expect(preset.test?.env).toEqual({ ...testEnv(), R2_BUCKET: 'test-bucket' });
   });
 
+  it('overrides inherited email OTP delivery but allows explicit provider fixtures', () => {
+    vi.stubEnv('PHONE_OTP_DELIVERY', 'email');
+    const defaultPreset = nodePreset();
+    expect(defaultPreset.test?.env?.PHONE_OTP_DELIVERY).toBe('sms');
+
+    const providerPreset = nodePreset({ env: { PHONE_OTP_DELIVERY: 'email' } });
+    expect(providerPreset.test?.env?.PHONE_OTP_DELIVERY).toBe('email');
+  });
+
   it('binds API and worker databases separately and honors the test Redis target', () => {
     vi.stubEnv('DATABASE_URL_TEST', 'postgresql://test:test@localhost:5432/isolated_test');
     vi.stubEnv('REDIS_URL_TEST', 'redis://localhost:6379/13');
