@@ -67,6 +67,42 @@ test('phone OTP creates a visitor session, completes onboarding, and opens perso
   }
 });
 
+test('visitor onboarding keeps client validation local and persists details after reload', async ({
+  page,
+}) => {
+  const phoneNumber = `+9192${randomInt(10_000_000, 99_999_999)}`;
+  try {
+    await page.goto('/login');
+    await page.getByPlaceholder('9123456789').fill(phoneNumber.slice(3));
+    await page.getByRole('button', { name: 'Get OTP', exact: true }).click();
+    const firstDigit = page.getByRole('textbox', { name: 'OTP digit 1', exact: true });
+    await expect(firstDigit).toBeVisible();
+    await firstDigit.fill(await phoneCode(phoneNumber));
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page).toHaveURL(/\/onboarding$/);
+
+    // Two raw characters satisfy the native minimum while the trimmed name remains invalid.
+    await page.getByLabel('Display name').fill(' A');
+    await page.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByText('Enter a display name between 2 and 100 characters', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/onboarding$/);
+
+    await page.getByLabel('Display name').fill('Reload Visitor');
+    await page.getByLabel('Address').fill('Khar West, Mumbai');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page).toHaveURL(/\/home$/);
+
+    await page.goto('/home/settings');
+    await page.reload();
+    await expect(page.getByLabel('Display name')).toHaveValue('Reload Visitor');
+    await expect(page.getByLabel('Personal address (optional)')).toHaveValue('Khar West, Mumbai');
+    await expect(page.getByLabel('WhatsApp number (optional)')).toHaveValue(phoneNumber);
+  } finally {
+    await removeSyntheticUserByPhone(phoneNumber);
+  }
+});
+
 test('email OTP creates a real session through a local Resend delivery double', async ({
   page,
   context,
