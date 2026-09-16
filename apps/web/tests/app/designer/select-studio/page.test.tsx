@@ -71,13 +71,14 @@ describe('DesignerSelectStudioPage', () => {
     expect(mock.redirect).not.toHaveBeenCalled();
   });
 
-  it('redirects a designer with an active organization to the dashboard', async () => {
+  it('redirects a designer with an active organization and branch to the dashboard', async () => {
     mock.getServerSession.mockResolvedValue({
       session: {
         id: 's1',
         token: 't1',
         expiresAt: '2026-06-30T00:00:00.000Z',
         activeOrganizationId: 'org-1',
+        activeTeamId: 'branch-1',
       },
       user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
     });
@@ -90,6 +91,31 @@ describe('DesignerSelectStudioPage', () => {
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/designer/dashboard');
   });
+
+  it.each([null, undefined])(
+    'keeps recovery available when the active branch is %s',
+    async (activeTeamId) => {
+      mock.getServerSession.mockResolvedValue({
+        session: { activeOrganizationId: 'org-1', activeTeamId },
+        user: { id: 'u1', name: 'Mahi', email: 'mahi@test.com', role: 'designer' },
+      });
+      vi.mocked(rolePassesCheck).mockImplementation(
+        (_role, requiredRole) => requiredRole === 'designer',
+      );
+
+      const { default: Page } =
+        await import('../../../../app/(protected)/designer/select-studio/page');
+      render(await Page());
+
+      expect(mock.redirect).not.toHaveBeenCalled();
+      expect(screen.getByRole('heading', { name: 'Choose your studio' })).toBeInTheDocument();
+      // The current studio must remain selectable to restore its default branch.
+      expect(screen.getByTestId('studio-switcher')).not.toHaveAttribute(
+        'data-active-organization-id',
+      );
+      expect(mock.getServerSession).toHaveBeenCalledWith({ disableCookieCache: true });
+    },
+  );
 
   it('redirects non-designers to designer onboarding', async () => {
     mock.getServerSession.mockResolvedValue({

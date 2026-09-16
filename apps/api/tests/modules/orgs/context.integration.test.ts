@@ -272,6 +272,43 @@ describe('personal and organization context', () => {
     });
   });
 
+  it('reselects the same organization to recover a branchless session', async () => {
+    const account = await createOrganizationContext('+919800004215');
+    expect(
+      (
+        await setContext(account.cookie, {
+          kind: 'organization',
+          organizationId: account.organization.id,
+          teamId: null,
+        })
+      ).status,
+    ).toBe(200);
+
+    const response = await setContext(account.cookie, {
+      kind: 'organization',
+      organizationId: account.organization.id,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: account.team.id,
+      },
+    });
+    const restored = await app.request('/api/orgs/context', {
+      headers: { cookie: account.cookie },
+    });
+    await expect(restored.json()).resolves.toEqual({
+      context: {
+        kind: 'organization',
+        organizationId: account.organization.id,
+        teamId: account.team.id,
+      },
+    });
+  });
+
   it('clears both session ids when personal context is selected', async () => {
     const account = await createOrganizationContext('+919800004207');
     expect(
