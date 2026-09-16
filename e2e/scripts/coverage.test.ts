@@ -33,6 +33,19 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires Corporate branch management and every role navigation journey', () => {
+    expect(requiredTests).toContainEqual({
+      file: 'corporate-branches.spec.ts',
+      title: 'Corporate branch management enforces roles and preserves operational data',
+    });
+    for (const role of ['owner', 'admin', 'member', 'billing_admin', 'viewer']) {
+      expect(requiredTests).toContainEqual({
+        file: 'corporate-role-navigation.spec.ts',
+        title: `Corporate ${role} navigation and direct project creation enforce permissions`,
+      });
+    }
+  });
+
   it('requires the published-project version review journey', () => {
     const title =
       'published project edits keep live content through rejection and replace it only on approval';
