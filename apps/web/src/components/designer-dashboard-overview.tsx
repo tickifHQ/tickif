@@ -121,6 +121,8 @@ export function DesignerDashboardOverview({
   dashboard,
   completion,
   dashboardError,
+  canWriteProjects = false,
+  canEditOrganization = false,
 }: {
   studioName: string;
   studioLocation: string;
@@ -135,6 +137,8 @@ export function DesignerDashboardOverview({
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
   dashboardError?: string | null;
+  canWriteProjects?: boolean;
+  canEditOrganization?: boolean;
 }) {
   const profileDone = completion
     ? completion.steps.some((step) => step.key === 'profile-completed' && step.done)
@@ -156,7 +160,7 @@ export function DesignerDashboardOverview({
 
   function checklistAction(step: CompletionStep) {
     if (step.done) return null;
-    if (step.key === 'profile-completed') {
+    if (step.key === 'profile-completed' && canEditOrganization) {
       return (
         <Button asChild variant="outline">
           <Link href="/designer/profile">
@@ -166,7 +170,7 @@ export function DesignerDashboardOverview({
         </Button>
       );
     }
-    if (step.key === 'first-project-uploaded') {
+    if (step.key === 'first-project-uploaded' && canWriteProjects) {
       return (
         <Button asChild variant="outline">
           <Link href="/designer/projects/new">
@@ -200,14 +204,15 @@ export function DesignerDashboardOverview({
           description:
             'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
           done: projectDone,
-          action: projectDone ? null : (
-            <Button asChild variant="outline">
-              <Link href="/designer/projects/new">
-                <Plus className="size-4" />
-                Add new project
-              </Link>
-            </Button>
-          ),
+          action:
+            projectDone || !canWriteProjects ? null : (
+              <Button asChild variant="outline">
+                <Link href="/designer/projects/new">
+                  <Plus className="size-4" />
+                  Add new project
+                </Link>
+              </Button>
+            ),
         },
         {
           key: 'profile',
@@ -215,14 +220,15 @@ export function DesignerDashboardOverview({
           description:
             'Add your profile tags, social links, short bio, and customize your portfolio.',
           done: profileDone,
-          action: profileDone ? null : (
-            <Button asChild variant="outline">
-              <Link href="/designer/profile">
-                Manage portfolio
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          ),
+          action:
+            profileDone || !canEditOrganization ? null : (
+              <Button asChild variant="outline">
+                <Link href="/designer/profile">
+                  Manage portfolio
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            ),
         },
       ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
@@ -255,8 +261,7 @@ export function DesignerDashboardOverview({
                   Could not load dashboard summary
                 </div>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Refresh the page in a moment. Your dashboard and project upload actions are still
-                  available.
+                  Refresh the page in a moment to try again.
                 </p>
               </div>
             </Card>
@@ -308,40 +313,42 @@ export function DesignerDashboardOverview({
         </div>
 
         <div className="min-w-0 space-y-5">
-          <Card variant="accent" radius="2xl" className="relative overflow-visible">
-            <div className="relative px-4 pt-4 pb-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <Badge
-                    variant="outline"
-                    className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
-                  >
-                    COMPLETE SETUP
-                  </Badge>
-                  <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
-                    Add your first project
+          {canWriteProjects && (
+            <Card variant="accent" radius="2xl" className="relative overflow-visible">
+              <div className="relative px-4 pt-4 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <Badge
+                      variant="outline"
+                      className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
+                    >
+                      COMPLETE SETUP
+                    </Badge>
+                    <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
+                      Add your first project
+                    </div>
+                    <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
+                      It goes public and gets indexed the moment your first project is approved.
+                      Usually 24–48 hours.
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
-                    It goes public and gets indexed the moment your first project is approved.
-                    Usually 24–48 hours.
-                  </p>
+                  <Image
+                    src="/illustrations/onboarding-workspace-desk.svg"
+                    alt=""
+                    width={95}
+                    height={95}
+                    className="absolute -top-[4.25rem] right-3 hidden h-auto w-28 sm:block"
+                  />
                 </div>
-                <Image
-                  src="/illustrations/onboarding-workspace-desk.svg"
-                  alt=""
-                  width={95}
-                  height={95}
-                  className="absolute -top-[4.25rem] right-3 hidden h-auto w-28 sm:block"
-                />
+                <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
+                  <Link href="/designer/projects/new">
+                    <Plus className="size-4" />
+                    Add first project
+                  </Link>
+                </Button>
               </div>
-              <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
-                <Link href="/designer/projects/new">
-                  <Plus className="size-4" />
-                  Add first project
-                </Link>
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           <div>
             <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
@@ -358,7 +365,7 @@ export function DesignerDashboardOverview({
                 icon={<User className="size-4" />}
                 title="Round out your profile"
                 description="Add a bio and tags while you wait."
-                href="/designer/profile"
+                href={canEditOrganization ? '/designer/profile' : undefined}
               />
               <RightRailInfoRow
                 icon={<Shield className="size-4" />}
@@ -432,12 +439,14 @@ export function DesignerDashboardOverview({
                     Finish your portfolio to unlock a public link you can share anywhere. We&apos;ll
                     show it here the moment your page goes live.
                   </p>
-                  <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
-                    <Link href="/designer/portfolio">
-                      Complete your portfolio
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
+                  {canEditOrganization && (
+                    <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
+                      <Link href="/designer/portfolio">
+                        Complete your portfolio
+                        <ArrowRight className="size-4" />
+                      </Link>
+                    </Button>
+                  )}
                 </>
               )}
             </div>
