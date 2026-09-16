@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const requiredTests = [
+const requiredEntries: [file: string, title: string][] = [
   [
     'authentication.spec.ts',
     'phone OTP creates a visitor session, completes onboarding, and opens personal settings',
@@ -24,6 +24,9 @@ export const requiredTests = [
   [
     'billing-management.spec.ts',
     'billing owner sees real payments, recovers an existing mandate, and gets honest refresh errors',
+  ],
+  [
+    'billing-management.spec.ts',
     'fresh Hobby organization shows actual seat and branch usage without a subscription',
   ],
   [
@@ -64,10 +67,12 @@ export const requiredTests = [
     'corporate-branches.spec.ts',
     'Corporate branch management enforces roles and preserves operational data',
   ],
-  ...(['owner', 'admin', 'member', 'billing_admin', 'viewer'] as const).map((role) => [
-    'corporate-role-navigation.spec.ts',
-    `Corporate ${role} navigation and direct project creation enforce permissions`,
-  ]),
+  ...(['owner', 'admin', 'member', 'billing_admin', 'viewer'] as const).map(
+    (role): [string, string] => [
+      'corporate-role-navigation.spec.ts',
+      `Corporate ${role} navigation and direct project creation enforce permissions`,
+    ],
+  ),
   [
     'personal-settings.spec.ts',
     'edits personal details from My Tickif, survives reload, and detects another tab save',
@@ -138,7 +143,9 @@ export const requiredTests = [
     'same account resumes the draft in a FRESH browser context (account-level, not browser-local)',
   ],
   ['onboarding-resume.spec.ts', 'a refresh mid-onboarding preserves progress'],
-].map(([file, title]) => ({ file: file!, title: title! }));
+];
+
+export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));
 
 const testSchema = z.object({
   status: z.string(),
