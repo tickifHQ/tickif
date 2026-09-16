@@ -30,7 +30,12 @@ export function DesignerOrganizationSwitcher({
   onSwitchSuccess?: (organizationId: string) => void;
 }) {
   const router = useRouter();
-  const { data: organizations, isPending, error: listError } = authClient.useListOrganizations();
+  const {
+    data: organizations,
+    isPending,
+    error: listError,
+    refetch,
+  } = authClient.useListOrganizations();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -66,7 +71,15 @@ export function DesignerOrganizationSwitcher({
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(nextOpen) => {
+        // Custom organization creation and invitation endpoints do not invalidate
+        // Better Auth's client cache. Recheck memberships whenever the picker opens.
+        if (nextOpen) void refetch();
+        setOpen(nextOpen);
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
           type="button"

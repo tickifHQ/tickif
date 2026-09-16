@@ -9,6 +9,65 @@ import { apiUrl, webUrl } from '../lib/environment';
 
 const headers = { origin: webUrl };
 
+test('the studio picker refreshes memberships added after its list was cached', async ({
+  page,
+  context,
+}) => {
+  await assertTestDb();
+  const suffix = randomUUID();
+  const owner = await makeUser({
+    name: 'Picker Refresh Owner',
+    email: `picker-refresh-${suffix}@example.test`,
+    phoneNumber: `+9193${randomInt(10_000_000, 100_000_000)}`,
+    phoneNumberVerified: true,
+    role: 'designer',
+    status: 'active',
+  });
+  const organizationIds: string[] = [];
+  try {
+    const first = await makeOrganization({ name: `Original Studio ${suffix}` });
+    organizationIds.push(first.id);
+    await makeDesigner({ userId: owner.id, orgId: first.id });
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      userId: owner.id,
+      organizationId: first.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await signInPhone(context, owner.phoneNumber);
+    await selectOrganization(context, first.id);
+    await page.goto('/designer/dashboard');
+    const picker = page.getByRole('button', { name: 'Switch context', exact: true });
+    await picker.click();
+    await expect(page.getByRole('menuitem', { name: new RegExp(first.name) })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Match a membership committed by the custom creation endpoint, which does
+    // not run Better Auth's browser-side cache invalidation listeners.
+    const second = await makeOrganization({ name: `New Studio ${suffix}` });
+    organizationIds.push(second.id);
+    await makeDesigner({ userId: owner.id, orgId: second.id });
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      userId: owner.id,
+      organizationId: second.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await picker.click();
+    await page.getByRole('menuitem', { name: second.name, exact: true }).click();
+    await expect(picker).toContainText(second.name);
+    expect((await workspace(context)).organization.id).toBe(second.id);
+  } finally {
+    await assertTestDb();
+    if (organizationIds.length) {
+      await db.delete(schema.organization).where(inArray(schema.organization.id, organizationIds));
+    }
+    await db.delete(schema.user).where(inArray(schema.user.id, [owner.id]));
+  }
+});
+
 async function workspace(context: BrowserContext) {
   const response = await context.request.get(`${apiUrl}/api/orgs/current`);
   expect(response.ok()).toBeTruthy();

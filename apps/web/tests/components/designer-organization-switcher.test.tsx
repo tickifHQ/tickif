@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
   ],
   isPending: false,
   error: null as Error | null,
+  refetch: vi.fn(),
   setActive: vi.fn(),
   router: { refresh: vi.fn(), push: vi.fn() },
 }));
@@ -20,6 +21,7 @@ vi.mock('@/lib/auth-client', () => ({
       data: mock.organizations,
       isPending: mock.isPending,
       error: mock.error,
+      refetch: mock.refetch,
     }),
   },
 }));
@@ -40,10 +42,38 @@ describe('DesignerOrganizationSwitcher', () => {
   beforeEach(() => {
     mock.isPending = false;
     mock.error = null;
+    mock.refetch.mockReset();
     mock.setActive.mockReset();
     mock.setActive.mockResolvedValue({ ok: true });
     mock.router.refresh.mockReset();
     mock.router.push.mockReset();
+  });
+
+  it('loads newly created memberships when reopening a previously cached picker', async () => {
+    const previous = mock.organizations;
+    mock.organizations = [previous[0]!];
+    const user = userEvent.setup();
+    try {
+      render(
+        <DesignerOrganizationSwitcher
+          activeOrganizationId="org-1"
+          studioName="Studio One"
+          studioLocation="Mumbai"
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Switch context' }));
+      expect(screen.queryByRole('menuitem', { name: /Studio Two/i })).not.toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      // The server now includes a studio created outside Better Auth's client.
+      mock.refetch.mockImplementation(() => {
+        mock.organizations = previous;
+      });
+      await user.click(screen.getByRole('button', { name: 'Switch context' }));
+      expect(await screen.findByRole('menuitem', { name: /Studio Two/i })).toBeInTheDocument();
+    } finally {
+      mock.organizations = previous;
+    }
   });
 
   it('lists organization memberships without exposing the personal workspace', async () => {
