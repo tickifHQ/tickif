@@ -1,4 +1,5 @@
 import { apiUrl as stackApiUrl, webUrl as stackWebUrl } from '../lib/environment';
+import { signInPhone } from '../lib/auth';
 import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
@@ -167,6 +168,57 @@ test('billing owner sees real payments, recovers an existing mandate, and gets h
     await page.getByRole('button', { name: 'Refresh payments' }).click();
     await expect(page.getByText(/Payment history could not be loaded/)).toBeVisible();
     expect(runtimeErrors).toEqual([]);
+  } finally {
+    await assertTestDb();
+    await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
+    await db.delete(schema.user).where(eq(schema.user.id, user.id));
+  }
+});
+
+test('fresh Hobby organization shows actual seat and branch usage without a subscription', async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(120_000);
+  await assertTestDb();
+  const user = await makeUser({
+    role: 'designer',
+    status: 'active',
+    phoneNumberVerified: true,
+    phoneNumber: `+9196${randomInt(10_000_000, 99_999_999)}`,
+  });
+  const org = await makeOrganization();
+  try {
+    await db.insert(schema.member).values({
+      id: randomUUID(),
+      organizationId: org.id,
+      userId: user.id,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    await makeDesigner({ orgId: org.id, userId: user.id, status: 'active' });
+    await signInPhone(context, user.phoneNumber);
+    expect(
+      (
+        await context.request.put(`${apiUrl}/api/orgs/context`, {
+          headers: { origin: stackWebUrl },
+          data: { kind: 'organization', organizationId: org.id },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await page.goto('/designer/plan-billing');
+    await expect(page.getByRole('heading', { name: 'Plan & Billing' })).toBeVisible();
+    await expect(page.getByText('1 active seats', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 active branches', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('1 active seats', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 active branches', { exact: true })).toBeVisible();
+    expect(
+      await db
+        .select()
+        .from(schema.subscription)
+        .where(eq(schema.subscription.organizationId, org.id)),
+    ).toEqual([]);
   } finally {
     await assertTestDb();
     await db.delete(schema.organization).where(eq(schema.organization.id, org.id));
