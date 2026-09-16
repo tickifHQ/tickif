@@ -56,6 +56,14 @@ export const requiredTests = [
     'studio workspaces isolate all business surfaces and enforce owner, admin and member capabilities',
   ],
   [
+    'corporate-branches.spec.ts',
+    'Corporate branch management enforces roles and preserves operational data',
+  ],
+  ...(['owner', 'admin', 'member', 'billing_admin', 'viewer'] as const).map((role) => [
+    'corporate-role-navigation.spec.ts',
+    `Corporate ${role} navigation and direct project creation enforce permissions`,
+  ]),
+  [
     'personal-settings.spec.ts',
     'edits personal details from My Tickif, survives reload, and detects another tab save',
   ],
