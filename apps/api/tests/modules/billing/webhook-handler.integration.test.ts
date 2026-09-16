@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // Hoist mock functions so they're available when vi.mock factories run.
 const { mockFetchInvoice, mockInvalidateEntitlementCache } = vi.hoisted(() => ({
@@ -379,6 +379,86 @@ describe('E-117: subscription.charged', () => {
 });
 
 describe('E-117: payment.failed', () => {
+  beforeEach(() => {
+    mockFetchInvoice.mockReset();
+  });
+
+  it('ignores a malformed invoice ID without fetching provider data', async () => {
+    const result = await processWebhookEvent('payment.failed' as RazorpayEvent, {
+      event: 'payment.failed',
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_malformed_${Date.now()}`,
+            invoice_id: '../subscriptions/sub_other',
+            created_at: Math.floor(Date.now() / 1000),
+          },
+        },
+      },
+    });
+
+    expect(result.outcome).toBe('ignored');
+    expect(mockFetchInvoice).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: 'a mismatched invoice',
+      remote: { id: 'inv_Different1234', entity: 'invoice', subscription_id: 'sub_Valid1234' },
+    },
+    {
+      name: 'a non-subscription invoice',
+      remote: { id: 'requested', entity: 'invoice', subscription_id: null },
+    },
+  ])('ignores $name returned by the provider', async ({ remote }) => {
+    const invoiceId = `inv_Requested${Date.now()}`;
+    const paymentId = `pay_untrusted_${Date.now()}`;
+    mockFetchInvoice.mockResolvedValueOnce({
+      ...remote,
+      id: remote.id === 'requested' ? invoiceId : remote.id,
+      entity: 'invoice' as const,
+    });
+
+    const result = await processWebhookEvent('payment.failed' as RazorpayEvent, {
+      event: 'payment.failed',
+      payload: {
+        payment: {
+          entity: {
+            id: paymentId,
+            invoice_id: invoiceId,
+            created_at: Math.floor(Date.now() / 1000),
+          },
+        },
+      },
+    });
+
+    expect(result.outcome).toBe('ignored');
+    const [transaction] = await db
+      .select()
+      .from(schema.paymentTransaction)
+      .where(eq(schema.paymentTransaction.razorpayPaymentId, paymentId));
+    expect(transaction).toBeUndefined();
+  });
+
+  it('propagates a transient invoice lookup failure for webhook retry', async () => {
+    mockFetchInvoice.mockRejectedValueOnce(new Error('provider unavailable'));
+
+    await expect(
+      processWebhookEvent('payment.failed' as RazorpayEvent, {
+        event: 'payment.failed',
+        payload: {
+          payment: {
+            entity: {
+              id: `pay_retry_${Date.now()}`,
+              invoice_id: `inv_Retry${Date.now()}`,
+              created_at: Math.floor(Date.now() / 1000),
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow('provider unavailable');
+  });
+
   it('does not apply an invoice linked to an unknown provider subscription', async () => {
     const invoiceId = `inv_Unknown${Date.now()}`;
     const paymentId = `pay_unknown${Date.now()}`;
