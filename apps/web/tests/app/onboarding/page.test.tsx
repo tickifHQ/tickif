@@ -40,7 +40,7 @@ describe('VisitorOnboardingPage', () => {
 
     const { default: Page } = await import('../../../app/(protected)/onboarding/page');
     const page = await Page();
-    render(page);
+    const { container } = render(page);
 
     expect(screen.getByText("Let's set up your space on Tickif")).toBeInTheDocument();
     expect(screen.getByLabelText(/display name/i)).toHaveValue('');
@@ -49,6 +49,10 @@ describe('VisitorOnboardingPage', () => {
     expect(screen.getByLabelText(/whatsapp number/i)).toHaveValue('');
     expect(screen.queryByRole('link', { name: 'Skip' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(container.querySelector('img[src*="onboarding-living-room.svg"]')).toHaveAttribute(
+      'height',
+      '189',
+    );
   });
 
   it('redirects designers into the designer dashboard', async () => {
