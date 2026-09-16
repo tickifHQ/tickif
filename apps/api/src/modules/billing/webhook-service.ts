@@ -14,6 +14,7 @@ import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
 import { recordFailedPayment } from './webhook-repository.js';
+import { fetchInvoice } from './razorpay-client.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -78,7 +79,7 @@ export async function processWebhookEvent(
   event: RazorpayEvent,
   payload: Record<string, unknown>,
 ): Promise<WebhookResult> {
-  const razorpaySubscriptionId = extractSubscriptionId(payload);
+  const razorpaySubscriptionId = await resolveSubscriptionId(event, payload);
   if (!razorpaySubscriptionId) {
     return { outcome: 'ignored', reason: 'No subscription ID in payload' };
   }
@@ -587,6 +588,30 @@ function extractSubscriptionId(payload: Record<string, unknown>): string | null 
     payload as { payload?: { payment?: { entity?: { subscription_id?: string } } } }
   )?.payload?.payment?.entity?.subscription_id;
   return paymentSub ?? null;
+}
+
+async function resolveSubscriptionId(
+  event: RazorpayEvent,
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const embedded = extractSubscriptionId(payload);
+  if (embedded) return embedded;
+  if (event !== RAZORPAY_EVENT.PAYMENT_FAILED) return null;
+
+  const invoiceId = (payload as { payload?: { payment?: { entity?: { invoice_id?: unknown } } } })
+    .payload?.payment?.entity?.invoice_id;
+  if (typeof invoiceId !== 'string' || !/^inv_[A-Za-z0-9]+$/.test(invoiceId)) return null;
+
+  const invoice = await fetchInvoice(invoiceId);
+  if (
+    invoice.id !== invoiceId ||
+    invoice.entity !== 'invoice' ||
+    typeof invoice.subscription_id !== 'string' ||
+    !/^sub_[A-Za-z0-9]+$/.test(invoice.subscription_id)
+  ) {
+    return null;
+  }
+  return invoice.subscription_id;
 }
 
 function extractPaymentId(payload: Record<string, unknown>): string | null {

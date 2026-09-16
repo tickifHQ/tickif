@@ -120,6 +120,12 @@ export type RazorpaySubscription = {
   created_at: number;
 };
 
+export type RazorpayInvoice = {
+  id: string;
+  entity: 'invoice';
+  subscription_id: string | null;
+};
+
 export type RazorpayError = {
   error: { code: string; description: string; source: string; step: string; reason: string };
 };
@@ -129,7 +135,8 @@ type RazorpayOperation =
   | 'createSubscription'
   | 'updateSubscription'
   | 'cancelSubscription'
-  | 'fetchSubscription';
+  | 'fetchSubscription'
+  | 'fetchInvoice';
 
 /**
  * Optional per-operation classifier for provider error responses.
@@ -332,6 +339,15 @@ export async function fetchSubscription(subscriptionId: string): Promise<Razorpa
   return requestRazorpay<RazorpaySubscription>(
     'fetchSubscription',
     `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { method: 'GET' },
+  );
+}
+
+/** Fetch an invoice so payment webhooks can be correlated to a subscription. */
+export async function fetchInvoice(invoiceId: string): Promise<RazorpayInvoice> {
+  return requestRazorpay<RazorpayInvoice>(
+    'fetchInvoice',
+    `/invoices/${encodeURIComponent(invoiceId)}`,
     { method: 'GET' },
   );
 }
