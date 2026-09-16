@@ -11,9 +11,7 @@ vi.mock('../../../src/lib/redis.js', () => ({
   closeRedisCache: vi.fn().mockResolvedValue(undefined),
 }));
 
-const { entitlementService } = await import(
-  '../../../src/modules/billing/entitlement-service.js'
-);
+const { entitlementService } = await import('../../../src/modules/billing/entitlement-service.js');
 
 /**
  * E-119 Entitlement service integration tests.
@@ -36,8 +34,9 @@ async function makeOrgWithOwner() {
 }
 
 describe('E-119: entitlement service integration', () => {
-  it('returns Hobby defaults when no subscription exists', async () => {
+  it('returns Hobby entitlements with actual usage when no subscription exists', async () => {
     const { user, org } = await makeOrgWithOwner();
+    await makeTeam({ organizationId: org.id });
 
     const result = await entitlementService.getSubscription({
       userId: user.id,
@@ -55,8 +54,8 @@ describe('E-119: entitlement service integration', () => {
     expect(result.entitlements.canDisplayVerifiedBadge).toBe(false);
     expect(result.razorpayStatus).toBeNull();
     expect(result.currentPeriodEnd).toBeNull();
-    expect(result.seatUsage).toBeGreaterThanOrEqual(0);
-    expect(result.branchUsage).toBeGreaterThanOrEqual(0);
+    expect(result.seatUsage).toBe(1);
+    expect(result.branchUsage).toBe(1);
   });
 
   it('returns Hobby defaults when activeOrgId is null', async () => {

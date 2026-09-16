@@ -24,6 +24,7 @@ export const requiredTests = [
   [
     'billing-management.spec.ts',
     'billing owner sees real payments, recovers an existing mandate, and gets honest refresh errors',
+    'fresh Hobby organization shows actual seat and branch usage without a subscription',
   ],
   [
     'consultation-participants.spec.ts',

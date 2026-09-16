@@ -53,7 +53,7 @@ export const entitlementService = {
    * Resolution order:
    * 1. Check Redis cache
    * 2. On miss: query subscription table → resolve entitlements → cache → return
-   * 3. No subscription row: return Hobby defaults (no caching needed — deterministic)
+   * 3. No subscription row: return Hobby entitlements with live organization usage.
    */
   async getSubscription(caller: Caller): Promise<SubscriptionResponse> {
     if (!caller.activeOrgId) {
@@ -74,7 +74,11 @@ export const entitlementService = {
     const subscription = await entitlementRepository.findSubscription(caller.activeOrgId);
 
     if (!subscription) {
-      return HOBBY_DEFAULT;
+      const [seatUsage, branchUsage] = await Promise.all([
+        entitlementRepository.countSeats(caller.activeOrgId),
+        entitlementRepository.countBranches(caller.activeOrgId),
+      ]);
+      return { ...HOBBY_DEFAULT, seatUsage, branchUsage };
     }
 
     const tier = subscription.planTier as PlanTier;
