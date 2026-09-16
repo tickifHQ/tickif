@@ -165,7 +165,7 @@ describe('organization privilege boundaries', () => {
   it('admin can invite and change non-owner roles but cannot touch Owner', async () => {
     const organization = await makeOrganization({ slug: 'escalation-admin-studio' });
     await makeTeam({ organizationId: organization.id });
-    await makeOrganizationSession({
+    const owner = await makeOrganizationSession({
       phone: '+919810001004',
       organizationId: organization.id,
       role: 'owner',
@@ -197,8 +197,28 @@ describe('organization privilege boundaries', () => {
       role: 'member',
       organizationId: organization.id,
     });
+    const [ownerMembership] = await db
+      .select({ id: schema.member.id, role: schema.member.role })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.userId, owner.userId),
+          eq(schema.member.organizationId, organization.id),
+        ),
+      );
+    const demoteOwner = await postOrganizationAction('update-member-role', admin.cookie, {
+      memberId: ownerMembership!.id,
+      role: 'member',
+      organizationId: organization.id,
+    });
 
     expect(invite.status, await invite.clone().text()).toBe(200);
     expect(promote.status).toBe(200);
+    expect(demoteOwner.status).toBe(403);
+    const [ownerAfterAttempt] = await db
+      .select({ role: schema.member.role })
+      .from(schema.member)
+      .where(eq(schema.member.id, ownerMembership!.id));
+    expect(ownerAfterAttempt?.role).toBe('owner');
   });
 });
