@@ -67,7 +67,7 @@ export default async function VisitorOnboardingPage() {
           src="/illustrations/onboarding-living-room.svg"
           alt=""
           width={334}
-          height={188}
+          height={189}
           className="absolute bottom-8 right-8 h-auto w-[334px]"
         />
       </aside>

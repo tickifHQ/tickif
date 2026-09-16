@@ -101,7 +101,7 @@ describe('DesignerOnboarding', () => {
   });
 
   it('renders the onboarding shell with signed-in context and entity options', async () => {
-    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+    const { container } = render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
     expect(screen.getByText(/Signed in as/i)).toBeInTheDocument();
     expect(screen.getByText('mahi@test.com')).toBeInTheDocument();
@@ -111,6 +111,10 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByRole('link', { name: /need help\? contact support/i })).toHaveAttribute(
       'href',
       'mailto:support@tickif.in',
+    );
+    expect(container.querySelector('img[src*="onboarding-living-room.svg"]')).toHaveAttribute(
+      'height',
+      '189',
     );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     await waitFor(() => {
