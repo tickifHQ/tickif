@@ -128,6 +128,8 @@ describe('DesignerLeadsList', () => {
     render(<DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />);
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
+    expect(screen.getByLabelText('Homeowner message')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Your notes')).toHaveValue('Follow up after the budget review.');
     expect(screen.getByLabelText('Your notes')).not.toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
@@ -156,8 +158,8 @@ describe('DesignerLeadsList', () => {
     });
     expect(mock.refresh).toHaveBeenCalledOnce();
     rerender(<DesignerLeadsList leads={leads} selectedLead={refreshedLead} activeStatus="all" />);
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
     expect(screen.getByLabelText('Your notes')).toHaveValue('Call after the budget review.');
-    expect(screen.queryByText('Needs a modular kitchen quote.')).not.toBeInTheDocument();
   });
 
   it('focuses lead search when pressing the slash shortcut', async () => {

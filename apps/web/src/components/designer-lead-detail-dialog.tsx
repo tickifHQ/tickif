@@ -228,6 +228,19 @@ export function DesignerLeadDetailDialog({
               />
 
               <div className="mt-5">
+                <label htmlFor="lead-message" className="text-sm font-medium text-foreground">
+                  Homeowner message
+                </label>
+                <Textarea
+                  id="lead-message"
+                  readOnly
+                  value={lead.message ?? ''}
+                  placeholder="No homeowner message."
+                  className="mt-2 min-h-28 resize-none bg-muted/30 text-muted-foreground"
+                />
+              </div>
+
+              <div className="mt-5">
                 <label htmlFor="lead-notes" className="text-sm font-medium text-foreground">
                   Your notes
                 </label>
