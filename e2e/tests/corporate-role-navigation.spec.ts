@@ -52,15 +52,13 @@ for (const policy of cases) {
         orgId: organization.id,
         status: 'active',
       });
-      await db
-        .insert(schema.member)
-        .values({
-          id: randomUUID(),
-          userId: owner.id,
-          organizationId: organization.id,
-          role: 'owner',
-          createdAt: new Date(),
-        });
+      await db.insert(schema.member).values({
+        id: randomUUID(),
+        userId: owner.id,
+        organizationId: organization.id,
+        role: 'owner',
+        createdAt: new Date(),
+      });
       await makeSubscription({ organizationId: organization.id, planTier: 'corporate' });
       const actor =
         policy.role === 'owner'
@@ -73,23 +71,19 @@ for (const policy of cases) {
             });
       if (actor.id !== owner.id) {
         userIds.push(actor.id);
-        await db
-          .insert(schema.member)
-          .values({
-            id: randomUUID(),
-            userId: actor.id,
-            organizationId: organization.id,
-            role: policy.role,
-            createdAt: new Date(),
-          });
-        await db
-          .insert(schema.teamMember)
-          .values({
-            id: randomUUID(),
-            userId: actor.id,
-            teamId: profile.teamId,
-            createdAt: new Date(),
-          });
+        await db.insert(schema.member).values({
+          id: randomUUID(),
+          userId: actor.id,
+          organizationId: organization.id,
+          role: policy.role,
+          createdAt: new Date(),
+        });
+        await db.insert(schema.teamMember).values({
+          id: randomUUID(),
+          userId: actor.id,
+          teamId: profile.teamId,
+          createdAt: new Date(),
+        });
       }
       await signInPhone(context, actor.phoneNumber);
       const selected = await context.request.put(`${apiUrl}/api/orgs/context`, {
@@ -102,6 +96,11 @@ for (const policy of cases) {
       for (const [name, visible] of [
         ['Projects', policy.projects],
         ['Leads', policy.leads],
+        ['Consultations', policy.leads],
+        ['Reviews', policy.manage],
+        ['Analytics', true],
+        ['Portfolio', policy.manage],
+        ['Verification', policy.manage],
         ['Team & Roles', policy.manage],
         ['Branches', policy.manage],
         ['Plan & billing', policy.billing],
@@ -123,6 +122,11 @@ for (const policy of cases) {
       await page.goto('/designer/projects/new');
       if (policy.write) await expect(page).toHaveURL(/\/designer\/projects\/upload$/);
       else await expect(page).toHaveURL(/\/unauthorized$/);
+      for (const destination of ['profile', 'portfolio']) {
+        await page.goto(`/designer/${destination}`);
+        if (policy.manage) await expect(page).toHaveURL(new RegExp(`/designer/${destination}$`));
+        else await expect(page).toHaveURL(/\/unauthorized$/);
+      }
       expect(errors).toEqual([]);
     } finally {
       await assertTestDb();
