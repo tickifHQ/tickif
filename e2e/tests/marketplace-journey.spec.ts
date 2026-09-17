@@ -52,7 +52,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await signInPhone(designerContext, owner.phoneNumber);
     await designer.goto('/designer/onboarding');
     await designer.getByRole('button', { name: /Just me/ }).click();
-    await designer.getByLabel('Display name', { exact: true }).fill(`Journey Studio ${suffix}`);
+    await designer.getByLabel(/^Display name/).fill(`Journey Studio ${suffix}`);
     await designer.getByLabel('Address', { exact: true }).fill('Bandra, Mumbai');
     await designer.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboardingResponse = designer.waitForResponse(
@@ -238,7 +238,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
       .getByRole('textbox', { name: 'OTP digit 1', exact: true })
       .fill(await phoneCode(visitorPhone));
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();
-    await visitor.getByLabel('Display name', { exact: true }).fill(`Journey Visitor ${suffix}`);
+    await visitor.getByLabel(/^Display name/).fill(`Journey Visitor ${suffix}`);
     await visitor.getByLabel('Address', { exact: true }).fill('Mumbai');
     await visitor.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
     await visitor.getByRole('button', { name: 'Continue', exact: true }).click();

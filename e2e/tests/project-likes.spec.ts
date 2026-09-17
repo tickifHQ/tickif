@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test';
 import { config } from '@repo/config';
 import { db, desc, eq, inArray, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeProject, makeUser, migrateTestDb } from '@repo/db/testing';
+import { makePublicPortfolio } from '../lib/public-portfolio';
 
 test('visitor likes persist across project and portfolio views independently of bookmarks', async ({
   page,
@@ -29,7 +30,10 @@ test('visitor likes persist across project and portfolio views independently of 
     status: 'active',
     displayName: 'Synthetic Likes Studio',
     slug: `likes-studio-${randomUUID()}`,
+    bio: 'Synthetic likes studio biography.',
+    logoImageId: 'e2e/public/likes-studio-logo.png',
   });
+  await makePublicPortfolio({ profileId: designer.id, portfolioSlug: designer.slug });
   const project = await makeProject({
     designerId: designer.id,
     status: 'published',

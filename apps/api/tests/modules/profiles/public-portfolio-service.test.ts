@@ -216,24 +216,30 @@ describe('publicPortfolioService.getBySlug — visibility gate', () => {
     });
   });
 
-  it('serves a designer who never opened portfolio settings, using column defaults', async () => {
+  it.each([
+    ['logo', makeProfile({ logoImageId: null }), makePortfolio()],
+    ['display name', makeProfile({ displayName: '   ' }), makePortfolio()],
+    ['tagline', makeProfile(), makePortfolio({ tagline: null })],
+    ['bio', makeProfile({ bio: null }), makePortfolio()],
+  ])(
+    '404s when an active legacy profile is missing its required %s',
+    async (_field, profile, portfolio) => {
+      resolveTo(profile, portfolio);
+
+      await expect(publicPortfolioService.getBySlug('test-studio')).rejects.toMatchObject({
+        status: 404,
+      });
+      expect(projectsService.designerProjects).not.toHaveBeenCalled();
+      expect(reviewsService.listPublished).not.toHaveBeenCalled();
+    },
+  );
+
+  it('404s when the designer never completed portfolio settings', async () => {
     resolveTo(makeProfile(), null);
 
-    const result = await publicPortfolioService.getBySlug('test-studio-a1b2c3');
-
-    expect(result.sections).toEqual({
-      hero: true,
-      trustCredentials: true,
-      featuredTestimonial: true,
-      reviews: true,
-      socialLinks: true,
-      shareBlock: true,
-      overallRating: true,
-      tickifBadge: true,
+    await expect(publicPortfolioService.getBySlug('test-studio-a1b2c3')).rejects.toMatchObject({
+      status: 404,
     });
-    expect(result.accentColor).toBe('#FF8F73');
-    expect(result.tagline).toBeNull();
-    expect(result.publishedAt).toBeNull();
   });
 });
 

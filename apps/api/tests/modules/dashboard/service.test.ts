@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '@repo/config';
 import type { ProfileCompletionResponse } from '@repo/contracts';
 import { AppError } from '../../../src/lib/errors.js';
@@ -40,8 +40,14 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   teamId: 'team_1',
   profileSlug: 'studio-noir',
   portfolioSlug: 'studio-noir-portfolio',
+  logoImageId: 'originals/logos/11111111-1111-4111-8111-111111111111/logo.png',
+  displayName: 'Studio Noir',
+  bio: 'Thoughtful interiors for real homes.',
+  tagline: 'Spaces with depth and warmth',
   profileStatus: 'active',
   publicLinkEnabled: true,
+  verificationStatus: null,
+  verificationExpiresAt: null,
   ...overrides,
 });
 
@@ -67,6 +73,10 @@ beforeEach(() => {
   vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(counts());
   vi.mocked(profilesService.getCompletion).mockResolvedValue(completion());
   vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 0, new: 0 });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('dashboardService.getProfileDashboard', () => {
@@ -100,8 +110,34 @@ describe('dashboardService.getProfileDashboard', () => {
       },
       shareUrl: new URL('/d/studio-noir-portfolio', config.PUBLIC_WEB_URL).toString(),
       publiclyVisible: true,
+      verificationStatus: null,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  it('reports the current verification status without creating an application', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ verificationStatus: 'pending' }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.verificationStatus).toBe('pending');
+  });
+
+  it('reports an approved verification as expired after its expiry date', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-17T12:00:00.000Z'));
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({
+        verificationStatus: 'verified',
+        verificationExpiresAt: new Date('2026-09-16T12:00:00.000Z'),
+      }),
+    );
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.verificationStatus).toBe('expired');
   });
 
   // E-278: publiclyVisible mirrors the owner PortfolioResponse / public route rule.
@@ -115,15 +151,31 @@ describe('dashboardService.getProfileDashboard', () => {
     expect(result.publiclyVisible).toBe(true);
   });
 
-  it('treats a missing portfolio row (null public link) on an active profile as visible', async () => {
+  it('treats a missing portfolio row as incomplete even when the profile is active', async () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
       profile({ profileStatus: 'active', publicLinkEnabled: null }),
     );
 
     const result = await dashboardService.getProfileDashboard(input);
 
-    expect(result.publiclyVisible).toBe(true);
+    expect(result.publiclyVisible).toBe(false);
   });
+
+  it.each<[string, Partial<DashboardProfileContext>]>([
+    ['logo', { logoImageId: null }],
+    ['display name', { displayName: '   ' }],
+    ['tagline', { tagline: null }],
+    ['bio', { bio: null }],
+  ])(
+    'reports publiclyVisible=false for an active profile missing its required %s',
+    async (_field, overrides) => {
+      vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(profile(overrides));
+
+      const result = await dashboardService.getProfileDashboard(input);
+
+      expect(result.publiclyVisible).toBe(false);
+    },
+  );
 
   it('reports publiclyVisible=false for a draft (incomplete) profile even with the link on', async () => {
     vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(

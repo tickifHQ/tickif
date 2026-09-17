@@ -71,7 +71,7 @@ test('email OTP creates a real session through a local Resend delivery double', 
   page,
   context,
 }, testInfo) => {
-  // One sequential journey now includes signup, deferral, recovery and completed onboarding.
+  // One sequential journey includes signup, recovery and completed onboarding.
   test.setTimeout(120_000);
   const email = `email-${randomUUID()}@test.local`;
   const pageErrors: string[] = [];
@@ -93,7 +93,15 @@ test('email OTP creates a real session through a local Resend delivery double', 
     expect(body.user.emailVerified).toBe(true);
     expect(body.user.role).toBe('visitor');
     await page.getByRole('button', { name: /Just me/ }).click();
-    await page.getByRole('button', { name: 'Finish later', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const draft = await context.request.get(`${apiUrl}/api/profiles/me/onboarding-draft`);
+        return (await draft.json())?.draft?.step ?? null;
+      })
+      .toBe('details');
+    // The mandatory details screen no longer exposes a leave action. The legacy
+    // recovery route remains valid for saved drafts and direct navigation.
+    await page.goto('/designer/onboarding/deferred');
     await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
     await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Explore projects' })).toHaveAttribute('href', '/');
@@ -103,7 +111,7 @@ test('email OTP creates a real session through a local Resend delivery double', 
       animations: 'disabled',
     });
 
-    // Skipping keeps the real session but does not create an empty organization,
+    // Leaving mandatory details keeps the real session but does not create an empty organization,
     // change role or grant access to designer/admin writes.
     expect(
       await db.select().from(schema.member).where(eq(schema.member.userId, body.user.id)),
@@ -148,14 +156,14 @@ test('email OTP creates a real session through a local Resend delivery double', 
     // E-298: resuming restores the saved step (the "Just me" entity choice was
     // persisted before deferring), so the wizard reopens on the details step with
     // the Display name field — it no longer replays the entity picker.
-    await expect(page.getByLabel('Display name', { exact: true })).toBeVisible();
-    await page.getByLabel('Display name', { exact: true }).fill('Synthetic onboarding studio');
+    await expect(page.getByLabel(/^Display name/)).toBeVisible();
+    await page.getByLabel(/^Display name/).fill('Synthetic onboarding studio');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     const onboardingResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
     );
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Finish later', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
     orgId = onboarded.organization.id;
     // E-278: the completion step must be truthful — setup is done but the

@@ -1,9 +1,17 @@
-import type { ProfileDashboardResponse } from '@repo/contracts';
+import {
+  VERIFICATION_APPLICATION_STATUS,
+  VERIFICATION_EFFECTIVE_STATUS,
+  type ProfileDashboardResponse,
+} from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 import { leadsService } from '../leads/service.js';
-import { publicPortfolioUrl } from '../profiles/portfolio-service.js';
+import { getPortfolioPublicationState, publicPortfolioUrl } from '../profiles/portfolio-service.js';
 import { profilesService } from '../profiles/service.js';
-import { dashboardRepository, type ProjectStatusCount } from './repository.js';
+import {
+  dashboardRepository,
+  type DashboardProfileContext,
+  type ProjectStatusCount,
+} from './repository.js';
 
 type OverviewInput = {
   userId: string;
@@ -18,6 +26,20 @@ function countProjectBucket(
   return counts
     .filter((count) => statuses.includes(count.status))
     .reduce((sum, count) => sum + count.count, 0);
+}
+
+function effectiveVerificationStatus(
+  profile: Pick<DashboardProfileContext, 'verificationStatus' | 'verificationExpiresAt'>,
+  now = new Date(),
+): ProfileDashboardResponse['verificationStatus'] {
+  if (
+    profile.verificationStatus === VERIFICATION_APPLICATION_STATUS.VERIFIED &&
+    profile.verificationExpiresAt &&
+    profile.verificationExpiresAt <= now
+  ) {
+    return VERIFICATION_EFFECTIVE_STATUS.EXPIRED;
+  }
+  return profile.verificationStatus;
 }
 
 export const dashboardService = {
@@ -47,6 +69,17 @@ export const dashboardService = {
     const published = countProjectBucket(counts, ['published']);
     const inReview = countProjectBucket(counts, ['submitted', 'in_review']);
     const draft = countProjectBucket(counts, ['draft', 'changes_requested']);
+    const publication = getPortfolioPublicationState(
+      {
+        status: profile.profileStatus,
+        logoImageId: profile.logoImageId,
+        displayName: profile.displayName,
+        bio: profile.bio,
+      },
+      profile.publicLinkEnabled === null
+        ? null
+        : { publicLinkEnabled: profile.publicLinkEnabled, tagline: profile.tagline },
+    );
 
     return {
       profileCompletion: {
@@ -64,11 +97,8 @@ export const dashboardService = {
         new: leadCounts.new,
       },
       shareUrl: publicPortfolioUrl(profile.portfolioSlug, profile.profileSlug),
-      // E-278: same rule the owner PortfolioResponse and the public /d/{slug}
-      // route use — a portfolio is publicly visible only when the profile is
-      // active AND the public link is on. A missing portfolio row coalesces to
-      // enabled (matching the public route's `coalesce(public_link_enabled, true)`).
-      publiclyVisible: profile.profileStatus === 'active' && (profile.publicLinkEnabled ?? true),
+      publiclyVisible: publication.publiclyVisible,
+      verificationStatus: effectiveVerificationStatus(profile),
     };
   },
 };

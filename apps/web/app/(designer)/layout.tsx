@@ -4,24 +4,29 @@ import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
-import { getCurrentOrgCapabilities, hasBillingAccess } from '@/lib/current-org-role';
+import {
+  getCurrentOrgCapabilities,
+  getCurrentOrgPlanTier,
+  hasBillingAccess,
+} from '@/lib/current-org-role';
+import { PLAN_TIER_LABELS } from '@/lib/billing-types';
 
 /** Designer workspace chrome. Requires role: designer, admin, or superadmin. */
 export default async function DesignerLayout({ children }: { children: ReactNode }) {
   const session = await requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER });
-  const [profile, orgCapabilities] = await Promise.all([
+  const [profile, orgCapabilities, planTier] = await Promise.all([
     requireCurrentDesignerProfile(),
     getCurrentOrgCapabilities(),
+    getCurrentOrgPlanTier(),
   ]);
   const studioName = profile.displayName.trim() || session.user.name?.trim() || 'Your studio';
-  const studioLocation =
-    profile.address?.trim() || profile.organization.name.trim() || 'Designer workspace';
+  const planLabel = planTier ? `${PLAN_TIER_LABELS[planTier]} plan` : 'Plan unavailable';
 
   return (
     <DesignerWorkspaceShell
       activeOrganizationId={profile.organization.id}
       studioName={studioName}
-      studioLocation={studioLocation}
+      planLabel={planLabel}
       isOwner={hasBillingAccess(orgCapabilities)}
     >
       <ProtectedBfcacheGuard />

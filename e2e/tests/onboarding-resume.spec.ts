@@ -7,8 +7,8 @@ import { emailCode } from '../lib/auth';
 
 /**
  * E-298: designer onboarding progress is ACCOUNT-LEVEL. A pending designer can
- * enter partial data, leave via "Finish later", and resume the same step and
- * values later — including from a fresh browser context (same account) and after
+ * enter partial data, leave the wizard, and resume the same step and values
+ * later, including from a fresh browser context (same account) and after
  * a mid-onboarding refresh. On successful onboarding the draft is deleted and the
  * now-designer is never sent back into onboarding.
  */
@@ -41,7 +41,7 @@ test('designer onboarding progress resumes across leave/re-entry, then completes
 
     // 3. Select entity, 4. enter meaningful data (details), 5. advance to presence.
     await page.getByRole('button', { name: /Just me/ }).click();
-    await page.getByLabel('Display name', { exact: true }).fill(displayName);
+    await page.getByLabel(/^Display name/).fill(displayName);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
     // On the presence step now — enter a website (a presence-step field).
@@ -62,11 +62,7 @@ test('designer onboarding progress resumes across leave/re-entry, then completes
       )
       .toBe(website);
 
-    // 6. Finish later → deferred landing.
-    await page.getByRole('button', { name: 'Finish later', exact: true }).click();
-    await expect(page).toHaveURL(/\/designer\/onboarding\/deferred$/);
-
-    // 7. Leave onboarding entirely (public feed), then 8. re-enter onboarding.
+    // 6-8. Leave onboarding entirely, then re-enter it.
     await page.goto('/');
     await page.goto('/designer/onboarding');
 
@@ -121,13 +117,13 @@ test('same account resumes the draft in a FRESH browser context (account-level, 
   const email = `resume-fresh-${randomUUID()}@test.local`;
   const website = 'https://cross-device.example';
 
-  // First context: sign in, enter data, advance, finish later.
+  // First context: sign in, enter data, advance, then close without completing.
   const ctxA = await browser.newContext();
   const pageA = await ctxA.newPage();
   try {
     await signInAsPendingDesigner(pageA, ctxA, email);
     await pageA.getByRole('button', { name: /Just me/ }).click();
-    await pageA.getByLabel('Display name', { exact: true }).fill('Cross Device Studio');
+    await pageA.getByLabel(/^Display name/).fill('Cross Device Studio');
     await pageA.getByRole('button', { name: 'Continue', exact: true }).click();
     await pageA.getByLabel('Website', { exact: true }).fill(website);
     await expect
@@ -139,9 +135,6 @@ test('same account resumes the draft in a FRESH browser context (account-level, 
         { timeout: 10_000 },
       )
       .toBe(website);
-    await pageA.getByRole('button', { name: 'Finish later', exact: true }).click();
-    await expect(pageA).toHaveURL(/\/designer\/onboarding\/deferred$/);
-
     // Second, FRESH context — same account signs in anew (no shared storage).
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
@@ -168,7 +161,7 @@ test('a refresh mid-onboarding preserves progress', async ({ page, context }) =>
   try {
     await signInAsPendingDesigner(page, context, email);
     await page.getByRole('button', { name: /Just me/ }).click();
-    await page.getByLabel('Display name', { exact: true }).fill('Refresh Studio');
+    await page.getByLabel(/^Display name/).fill('Refresh Studio');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.getByLabel('Website', { exact: true }).fill(website);
 

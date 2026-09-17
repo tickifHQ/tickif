@@ -27,6 +27,7 @@ const emptyDashboard: ProfileDashboardResponse = {
   // a copyable/openable public link (E-278).
   shareUrl: new URL('/d/studio', env.NEXT_PUBLIC_WEB_URL).toString(),
   publiclyVisible: false,
+  verificationStatus: null,
 };
 
 async function getDashboardSummary(): Promise<DashboardResult> {
@@ -66,8 +67,11 @@ export default async function DesignerDashboardPage() {
   ]);
 
   const studioName = profile?.displayName.trim() || session.user.name?.trim() || 'Your studio';
-  const studioLocation = profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
-  const portfolioUrl = dashboard.ok ? dashboard.data.shareUrl : (profile?.shareUrl ?? dashboard.data.shareUrl);
+  const studioLocation =
+    profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
+  const portfolioUrl = dashboard.ok
+    ? dashboard.data.shareUrl
+    : (profile?.shareUrl ?? dashboard.data.shareUrl);
   // E-278: only treat the portfolio as publicly visible when the dashboard
   // fetch succeeded and the backend says so. On a failed fetch we fall back to
   // the placeholder, which is never live — so the share card stays gated.
@@ -82,6 +86,7 @@ export default async function DesignerDashboardPage() {
       dashboard={dashboard.data}
       completion={completion.data}
       dashboardError={dashboard.ok ? null : dashboard.message}
+      workspaceKey={`${profile?.organization.id ?? 'unknown'}:${session.session.activeTeamId ?? 'no-branch'}`}
     />
   );
 }

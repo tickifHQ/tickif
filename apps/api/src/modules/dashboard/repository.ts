@@ -7,12 +7,18 @@ export type DashboardProfileContext = {
   teamId: string;
   profileSlug: string;
   portfolioSlug: string | null;
-  // E-278: publication inputs so the service can derive `publiclyVisible`
-  // (status === 'active' && publicLinkEnabled) without a second query. The
-  // portfolio row is a left join, so `publicLinkEnabled` is null when the
-  // designer has never opened portfolio settings.
+  logoImageId: string | null;
+  displayName: string;
+  bio: string | null;
+  tagline: string | null;
+  // Publication inputs are selected with the dashboard context so the service
+  // can use the same completeness gate as the owner and anonymous portfolio
+  // endpoints without a second query. `publicLinkEnabled` is null only when the
+  // left-joined portfolio row does not exist.
   profileStatus: (typeof schema.profileStatusEnum.enumValues)[number];
   publicLinkEnabled: boolean | null;
+  verificationStatus: (typeof schema.verificationApplicationStatusEnum.enumValues)[number] | null;
+  verificationExpiresAt: Date | null;
 };
 
 export type ProjectStatusCount = {
@@ -34,8 +40,14 @@ export const dashboardRepository = {
         teamId: schema.designerProfile.teamId,
         profileSlug: schema.designerProfile.slug,
         portfolioSlug: schema.designerPortfolio.portfolioSlug,
+        logoImageId: schema.designerProfile.logoImageId,
+        displayName: schema.designerProfile.displayName,
+        bio: schema.designerProfile.bio,
+        tagline: schema.designerPortfolio.tagline,
         profileStatus: schema.designerProfile.status,
         publicLinkEnabled: schema.designerPortfolio.publicLinkEnabled,
+        verificationStatus: schema.verificationApplication.status,
+        verificationExpiresAt: schema.verificationApplication.expiresAt,
       })
       .from(schema.designerProfile)
       .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
@@ -43,6 +55,10 @@ export const dashboardRepository = {
       .leftJoin(
         schema.designerPortfolio,
         eq(schema.designerPortfolio.profileId, schema.designerProfile.id),
+      )
+      .leftJoin(
+        schema.verificationApplication,
+        eq(schema.verificationApplication.organizationId, schema.designerProfile.orgId),
       )
       .where(
         and(

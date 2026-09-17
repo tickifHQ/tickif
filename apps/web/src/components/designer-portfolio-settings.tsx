@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Image from 'next/image';
 import {
   AlertCircle,
@@ -50,11 +50,11 @@ import {
   YouTubeBrandIcon,
 } from '@/components/brand-icons';
 import { CopyLinkButton } from '@/components/copy-link-button';
+import { RequiredFieldIndicator } from '@/components/required-field-indicator';
 import { env } from '@/env';
 import {
   checkSlugAvailability,
   connectGoogleReviews,
-  deleteLogo,
   disconnectGoogleReviews,
   fetchPortfolioProjects,
   fetchGoogleReviews,
@@ -116,13 +116,6 @@ const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
   tagline: 'a tagline',
   bio: 'a bio',
 };
-
-/** "a logo and a bio" — the missing fields as a readable list. */
-function formatMissingFields(fields: RequiredPortfolioField[]): string {
-  const labels = fields.map((field) => REQUIRED_FIELD_LABELS[field]);
-  if (labels.length < 2) return labels.join('');
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
-}
 
 type TestimonialProjectOption = {
   label: string;
@@ -229,6 +222,17 @@ function computeChangedFields(current: FormState, saved: FormState): UpdatePortf
   return Object.keys(patch).length > 0 ? (patch as UpdatePortfolioInput) : null;
 }
 
+function getClearedSavedHeroFields(current: FormState, saved: FormState) {
+  const wasSaved = (value: string): boolean => value.trim().length > 0;
+  const isNowEmpty = (value: string): boolean => value.trim().length === 0;
+
+  return {
+    displayName: wasSaved(saved.displayName) && isNowEmpty(current.displayName),
+    tagline: wasSaved(saved.tagline) && isNowEmpty(current.tagline),
+    bio: wasSaved(saved.bio) && isNowEmpty(current.bio),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -262,9 +266,9 @@ export function DesignerPortfolioSettings() {
 
   // Logo
   const [isUploadingLogo, startLogoUploadTransition] = useTransition();
-  const [isDeletingLogo, startLogoDeleteTransition] = useTransition();
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
   // Google reviews connection (fetched separately from portfolio settings)
   const [googleReviews, setGoogleReviews] = useState<GoogleReviewsResponse | null>(null);
@@ -293,6 +297,13 @@ export function DesignerPortfolioSettings() {
 
   function toggleExpanded(key: SectionKey) {
     setSectionExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function scrollToRequiredField(field: RequiredPortfolioField) {
+    setSectionExpanded((prev) => ({ ...prev, hero: true }));
+    window.setTimeout(() => {
+      heroFieldRefs.current[field]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
   }
 
   // -------------------------------------------------------------------------
@@ -519,6 +530,10 @@ export function DesignerPortfolioSettings() {
 
   function handleSave() {
     if (!form || !savedForm) return;
+    if (Object.values(getClearedSavedHeroFields(form, savedForm)).some(Boolean)) {
+      setSaveError('Saved mandatory Hero fields cannot be empty. Enter a replacement value.');
+      return;
+    }
     const patch = computeChangedFields(form, savedForm);
     // E-278: the logo commits through its own endpoint, so a logo-only change
     // has no field patch. Reconcile the logo baseline (clearing the dirty
@@ -614,23 +629,7 @@ export function DesignerPortfolioSettings() {
   }
 
   function handleLogoDelete() {
-    startLogoDeleteTransition(async () => {
-      setLogoError(null);
-      try {
-        await deleteLogo();
-        try {
-          const refreshed = await fetchPortfolio();
-          setPortfolio(refreshed);
-        } catch {
-          setPortfolio((prev) => (prev ? { ...prev, logoUrl: null } : prev));
-          setLogoError(
-            "Logo removed successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
-          );
-        }
-      } catch (err) {
-        setLogoError(err instanceof Error ? err.message : 'Could not delete logo.');
-      }
-    });
+    setLogoError('Upload a replacement before removing the logo from your saved portfolio.');
   }
 
   // -------------------------------------------------------------------------
@@ -665,7 +664,10 @@ export function DesignerPortfolioSettings() {
     );
   }
 
-  if (!form || !portfolio) return null;
+  if (!form || !savedForm || !portfolio) return null;
+
+  const requiredHeroErrors = getClearedSavedHeroFields(form, savedForm);
+  const hasRequiredHeroErrors = Object.values(requiredHeroErrors).some(Boolean);
 
   const initials = form.displayName
     ? form.displayName
@@ -690,13 +692,9 @@ export function DesignerPortfolioSettings() {
   // even with the link switched on (the `/d/{slug}` gate 404s until required
   // hero fields are filled), so the toggle by itself would misreport "Live".
   //
-  // Review P2: `publiclyVisible` is the authoritative gate and MUST be checked
-  // first. The server never demotes an already-`active` profile when a required
-  // field is later cleared (e.g. the logo is deleted), so `publiclyVisible: true`
-  // can legitimately coexist with a non-empty `missingRequiredFields` — the API
-  // test `keeps a live portfolio live after a required field is cleared` locks
-  // in that state. Checking completeness first would mislabel such a genuinely
-  // public portfolio as "Incomplete".
+  // `publiclyVisible` is the authoritative saved gate. The editor and API now
+  // prevent active portfolios from clearing required Hero fields, while this
+  // ordering remains defensive for any legacy inconsistent row.
   //   Live       — publicly visible right now (`publiclyVisible`).
   //   Incomplete — not public yet because required hero fields are still blank.
   //   Hidden     — complete, but the designer has switched the public link off.
@@ -780,19 +778,25 @@ export function DesignerPortfolioSettings() {
                 {portfolio.missingRequiredFields.length > 0 && (
                   <div
                     data-slot="portfolio-visibility-notice"
-                    className="flex items-start gap-2 border-b border-border bg-muted/40 px-5 py-3"
+                    className="flex items-start gap-2 bg-destructive/5 px-5 py-3"
                     role="status"
                     aria-label="Portfolio visibility"
                   >
-                    <AlertCircle
-                      className="mt-px size-4 shrink-0 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                    <AlertCircle className="mt-px size-4 shrink-0 text-destructive" aria-hidden />
+                    <p className="text-xs leading-relaxed text-foreground">
                       Your portfolio isn&apos;t public yet. Add{' '}
-                      <span className="font-medium text-foreground">
-                        {formatMissingFields(portfolio.missingRequiredFields)}
-                      </span>{' '}
+                      {portfolio.missingRequiredFields.map((field, index, fields) => (
+                        <Fragment key={field}>
+                          {index > 0 ? (index === fields.length - 1 ? ' and ' : ', ') : null}
+                          <button
+                            type="button"
+                            onClick={() => scrollToRequiredField(field)}
+                            className="font-medium text-destructive underline decoration-destructive/40 underline-offset-2 hover:decoration-destructive"
+                          >
+                            {REQUIRED_FIELD_LABELS[field]}
+                          </button>
+                        </Fragment>
+                      ))}{' '}
                       in the Hero section and save to publish it.
                     </p>
                   </div>
@@ -911,84 +915,122 @@ export function DesignerPortfolioSettings() {
                 >
                   <div className="space-y-4">
                     {/* Logo upload + Studio name */}
-                    <div className="flex items-start gap-3">
-                      <div className="relative size-16.5 shrink-0">
-                        <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
-                          {portfolio.logoUrl ? (
-                            <Image
-                              src={portfolio.logoUrl}
-                              alt="Portfolio logo"
-                              fill
-                              unoptimized
-                              className="object-cover"
-                            />
-                          ) : (
+                    <div
+                      ref={(node) => {
+                        heroFieldRefs.current.logo = node;
+                        heroFieldRefs.current.displayName = node;
+                      }}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="flex shrink-0 flex-col gap-1.5">
+                        <Label className="gap-0 text-sm font-medium text-muted-foreground">
+                          Logo
+                          <RequiredFieldIndicator />
+                        </Label>
+                        <div className="relative size-16.5">
+                          <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
+                            {portfolio.logoUrl ? (
+                              <Image
+                                src={portfolio.logoUrl}
+                                alt="Portfolio logo"
+                                fill
+                                unoptimized
+                                className="object-cover"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleLogoUploadClick}
+                                disabled={isUploadingLogo}
+                                className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                                aria-label="Upload logo"
+                              >
+                                {isUploadingLogo ? (
+                                  <Loader2 className="size-6 animate-spin" />
+                                ) : (
+                                  <ImagePlus className="size-6" aria-hidden />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          {portfolio.logoUrl && (
                             <button
                               type="button"
-                              onClick={handleLogoUploadClick}
-                              disabled={isUploadingLogo}
-                              className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                              aria-label="Upload logo"
+                              onClick={handleLogoDelete}
+                              className="absolute -right-1 -top-1 z-10 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white"
+                              aria-label="Remove logo"
                             >
-                              {isUploadingLogo ? (
-                                <Loader2 className="size-6 animate-spin" />
-                              ) : (
-                                <ImagePlus className="size-6" aria-hidden />
-                              )}
+                              <X className="size-2.5" aria-hidden />
                             </button>
                           )}
                         </div>
-                        {portfolio.logoUrl && (
-                          <button
-                            type="button"
-                            onClick={handleLogoDelete}
-                            disabled={isDeletingLogo}
-                            className="absolute -right-1 -top-1 z-10 flex size-4 items-center justify-center rounded-full bg-muted-foreground/80 text-white disabled:opacity-50"
-                            aria-label="Remove logo"
-                          >
-                            {isDeletingLogo ? (
-                              <Loader2 className="size-2.5 animate-spin" />
-                            ) : (
-                              <X className="size-2.5" aria-hidden />
-                            )}
-                          </button>
-                        )}
                       </div>
                       <div className="flex-1 space-y-1.5">
-                        <Label className="text-sm font-medium text-muted-foreground">
+                        <Label className="gap-0 text-sm font-medium text-muted-foreground">
                           Studio name
+                          <RequiredFieldIndicator />
                         </Label>
                         <Input
                           value={form.displayName}
                           onChange={(e) => updateField('displayName', e.target.value)}
                           placeholder="Your studio name"
+                          aria-invalid={requiredHeroErrors.displayName}
                           className="shadow-sm"
                         />
+                        {requiredHeroErrors.displayName && (
+                          <p className="text-xs font-medium text-destructive">
+                            Studio name is required.
+                          </p>
+                        )}
                       </div>
                     </div>
                     {logoError && (
                       <p className="text-[13px] font-medium text-destructive">{logoError}</p>
                     )}
-                    <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-muted-foreground">Tagline</Label>
+                    <div
+                      ref={(node) => {
+                        heroFieldRefs.current.tagline = node;
+                      }}
+                      className="space-y-1.5"
+                    >
+                      <Label className="gap-0 text-sm font-medium text-muted-foreground">
+                        Tagline
+                        <RequiredFieldIndicator />
+                      </Label>
                       <Input
                         value={form.tagline}
                         onChange={(e) => updateField('tagline', e.target.value)}
                         placeholder="A short tagline for your portfolio"
                         maxLength={200}
+                        aria-invalid={requiredHeroErrors.tagline}
                         className="shadow-sm"
                       />
+                      {requiredHeroErrors.tagline && (
+                        <p className="text-xs font-medium text-destructive">Tagline is required.</p>
+                      )}
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm font-medium text-muted-foreground">Bio</Label>
+                    <div
+                      ref={(node) => {
+                        heroFieldRefs.current.bio = node;
+                      }}
+                      className="space-y-1.5"
+                    >
+                      <Label className="gap-0 text-sm font-medium text-muted-foreground">
+                        Bio
+                        <RequiredFieldIndicator />
+                      </Label>
                       <Textarea
                         value={form.bio}
                         onChange={(e) => updateField('bio', e.target.value)}
                         placeholder="Tell visitors about your design philosophy..."
                         maxLength={500}
                         rows={4}
+                        aria-invalid={requiredHeroErrors.bio}
                         className="resize-y shadow-sm"
                       />
+                      {requiredHeroErrors.bio && (
+                        <p className="text-xs font-medium text-destructive">Bio is required.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1579,7 +1621,11 @@ export function DesignerPortfolioSettings() {
             </span>
           )}
         </div>
-        <Button className="gap-1.5" onClick={handleSave} disabled={!isDirty || isSaving}>
+        <Button
+          className="gap-1.5"
+          onClick={handleSave}
+          disabled={!isDirty || isSaving || hasRequiredHeroErrors}
+        >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
           Save changes
         </Button>

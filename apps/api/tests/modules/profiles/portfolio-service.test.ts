@@ -22,7 +22,6 @@ vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
     isReservedSlug: vi.fn(),
     findProjectForDesignerInTx: vi.fn(),
     updateProfileInTx: vi.fn(),
-    clearLogoIfMatch: vi.fn(),
     setLogoIfMatch: vi.fn(),
     reserveLogoUpload: vi.fn(),
     releaseUploadLease: vi.fn(),
@@ -66,19 +65,14 @@ vi.mock('@repo/storage', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService, missingRequiredFields, resolveProfile } = await import(
-  '../../../src/modules/profiles/portfolio-service.js'
-);
-const { portfolioRepository } = await import(
-  '../../../src/modules/profiles/portfolio-repository.js'
-);
-const { profilesRepository } = await import(
-  '../../../src/modules/profiles/repository.js'
-);
+const { portfolioService, missingRequiredFields, resolveProfile } =
+  await import('../../../src/modules/profiles/portfolio-service.js');
+const { portfolioRepository } =
+  await import('../../../src/modules/profiles/portfolio-repository.js');
+const { profilesRepository } = await import('../../../src/modules/profiles/repository.js');
 const { orgsService } = await import('../../../src/modules/orgs/service.js');
-const { presignUpload, presignDownload, objectExists, deleteObject } = await import(
-  '@repo/storage'
-);
+const { presignUpload, presignDownload, objectExists, deleteObject } =
+  await import('@repo/storage');
 
 // --- Factories ---
 
@@ -241,10 +235,7 @@ describe('portfolioService.updatePortfolio', () => {
     vi.mocked(portfolioRepository.findProjectForDesignerInTx).mockResolvedValue(null);
 
     await expect(
-      portfolioService.updatePortfolio(
-        { testimonialProjectId: 'nonexistent-project' },
-        caller,
-      ),
+      portfolioService.updatePortfolio({ testimonialProjectId: 'nonexistent-project' }, caller),
     ).rejects.toMatchObject({
       status: 422,
       message: 'Testimonial project not found or does not belong to you',
@@ -261,10 +252,7 @@ describe('portfolioService.updatePortfolio', () => {
     });
 
     await expect(
-      portfolioService.updatePortfolio(
-        { testimonialProjectId: 'project-1' },
-        caller,
-      ),
+      portfolioService.updatePortfolio({ testimonialProjectId: 'project-1' }, caller),
     ).rejects.toMatchObject({
       status: 422,
       message: 'Testimonial project must be published',
@@ -278,16 +266,16 @@ describe('portfolioService.updatePortfolio', () => {
       makePortfolio({ testimonialProjectId: null }),
     );
 
-    const result = await portfolioService.updatePortfolio(
-      { testimonialProjectId: null },
-      caller,
-    );
+    const result = await portfolioService.updatePortfolio({ testimonialProjectId: null }, caller);
 
     // Verify upsertInTx was called with testimonialUpdatedAt set
     expect(portfolioRepository.upsertInTx).toHaveBeenCalledWith(
       expect.anything(), // tx
       'profile-1',
-      expect.objectContaining({ testimonialProjectId: null, testimonialUpdatedAt: expect.any(Date) }),
+      expect.objectContaining({
+        testimonialProjectId: null,
+        testimonialUpdatedAt: expect.any(Date),
+      }),
     );
     expect(result.testimonialProjectId).toBeNull();
   });
@@ -464,32 +452,28 @@ describe('portfolioService.getPortfolio badges', () => {
   });
 
   it('includes "top-performer" at exactly 4.5 rating and 10 reviews', async () => {
-    expect(
-      await badgesFor({ ...baseline(), avgRating: '4.5', reviewCount: 10 }),
-    ).toContain('top-performer');
+    expect(await badgesFor({ ...baseline(), avgRating: '4.5', reviewCount: 10 })).toContain(
+      'top-performer',
+    );
   });
 
   it('coerces the avgRating string when computing "top-performer"', async () => {
     // avgRating comes back from Postgres numeric as a string
-    expect(
-      await badgesFor({ ...baseline(), avgRating: '4.49', reviewCount: 10 }),
-    ).not.toContain('top-performer');
-    expect(
-      await badgesFor({ ...baseline(), avgRating: '4.90', reviewCount: 9 }),
-    ).not.toContain('top-performer');
+    expect(await badgesFor({ ...baseline(), avgRating: '4.49', reviewCount: 10 })).not.toContain(
+      'top-performer',
+    );
+    expect(await badgesFor({ ...baseline(), avgRating: '4.90', reviewCount: 9 })).not.toContain(
+      'top-performer',
+    );
   });
 
   it('includes "established" at exactly 5 years but not at 4', async () => {
     expect(await badgesFor({ ...baseline(), yearsExperience: 5 })).toContain('established');
-    expect(await badgesFor({ ...baseline(), yearsExperience: 4 })).not.toContain(
-      'established',
-    );
+    expect(await badgesFor({ ...baseline(), yearsExperience: 4 })).not.toContain('established');
   });
 
   it('includes "projects-published" at exactly 25 projects but not at 24', async () => {
-    expect(await badgesFor({ ...baseline(), projectCount: 25 })).toContain(
-      'projects-published',
-    );
+    expect(await badgesFor({ ...baseline(), projectCount: 25 })).toContain('projects-published');
     expect(await badgesFor({ ...baseline(), projectCount: 24 })).not.toContain(
       'projects-published',
     );
@@ -498,15 +482,25 @@ describe('portfolioService.getPortfolio badges', () => {
 
 describe('portfolioService.getPortfolio logo resolution', () => {
   it('returns logoUrl: null when the stored key does not match the profile prefix', async () => {
-    setupResolveProfile(
-      makeProfile({ logoImageId: 'originals/logos/other-profile/stolen-key' }),
-    );
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/other-profile/stolen-key' }));
     setupGetPortfolio();
 
     const result = await portfolioService.getPortfolio(caller);
 
     expect(result.logoUrl).toBeNull();
     expect(presignDownload).not.toHaveBeenCalled();
+  });
+});
+
+describe('portfolioService.getPortfolio publication state', () => {
+  it('does not report an active legacy profile as public when required Hero fields are missing', async () => {
+    setupResolveProfile(makeProfile({ status: 'active', bio: null }));
+    setupGetPortfolio(makePortfolio({ publicLinkEnabled: true, tagline: null }));
+
+    const result = await portfolioService.getPortfolio(caller);
+
+    expect(result.missingRequiredFields).toEqual(['tagline', 'bio']);
+    expect(result.publiclyVisible).toBe(false);
   });
 });
 
@@ -616,10 +610,7 @@ describe('portfolioService.commitLogoUpload', () => {
     vi.mocked(objectExists).mockResolvedValue(false);
 
     await expect(
-      portfolioService.commitLogoUpload(
-        { objectKey: 'originals/logos/profile-1/missing' },
-        caller,
-      ),
+      portfolioService.commitLogoUpload({ objectKey: 'originals/logos/profile-1/missing' }, caller),
     ).rejects.toMatchObject({ status: 400 });
   });
 
@@ -663,11 +654,11 @@ describe('portfolioService.commitLogoUpload', () => {
     vi.mocked(portfolioRepository.setLogoIfMatch).mockResolvedValue(false);
 
     await expect(
-      portfolioService.commitLogoUpload(
-        { objectKey: 'originals/logos/profile-1/new-key' },
-        caller,
-      ),
-    ).rejects.toMatchObject({ status: 409, message: 'Logo was modified concurrently, please retry' });
+      portfolioService.commitLogoUpload({ objectKey: 'originals/logos/profile-1/new-key' }, caller),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: 'Logo was modified concurrently, please retry',
+    });
   });
 });
 
@@ -676,18 +667,16 @@ describe('portfolioService.commitLogoUpload', () => {
 // =============================================================================
 
 describe('portfolioService.deleteLogo', () => {
-  it('clears DB via compare-and-set, then best-effort storage cleanup', async () => {
-    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(true);
-    vi.mocked(deleteObject).mockResolvedValue(undefined);
-
-    await portfolioService.deleteLogo(caller);
-
-    expect(portfolioRepository.clearLogoIfMatch).toHaveBeenCalledWith(
-      'profile-1',
-      'originals/logos/profile-1/key',
+  it('requires a replacement instead of deleting a saved logo from a draft portfolio', async () => {
+    setupResolveProfile(
+      makeProfile({ logoImageId: 'originals/logos/profile-1/key', status: 'draft' }),
     );
-    expect(deleteObject).toHaveBeenCalledWith('originals/logos/profile-1/key');
+
+    await expect(portfolioService.deleteLogo(caller)).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringMatching(/replacement/i),
+    });
+    expect(deleteObject).not.toHaveBeenCalled();
   });
 
   it('throws 404 when no logo exists', async () => {
@@ -699,38 +688,24 @@ describe('portfolioService.deleteLogo', () => {
     });
   });
 
-  it('still succeeds when storage cleanup fails (orphan left)', async () => {
-    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(true);
-    vi.mocked(deleteObject).mockRejectedValue(new Error('S3 network error'));
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    // Should NOT throw — storage failure is best-effort
-    await portfolioService.deleteLogo(caller);
-
-    // DB must still be cleared via CAS
-    expect(portfolioRepository.clearLogoIfMatch).toHaveBeenCalledWith(
-      'profile-1',
-      'originals/logos/profile-1/key',
-    );
-  });
-
-  it('does not delete storage when compare-and-set fails (concurrent modification)', async () => {
-    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
-    vi.mocked(portfolioRepository.clearLogoIfMatch).mockResolvedValue(false);
-
-    await portfolioService.deleteLogo(caller);
-
-    // Storage should NOT be touched since CAS indicated another request already modified
-    expect(deleteObject).not.toHaveBeenCalled();
-  });
-
   it('throws 403 when logo key does not match expected prefix', async () => {
-    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/other-profile/key' }));
+    setupResolveProfile(
+      makeProfile({ logoImageId: 'originals/logos/other-profile/key', status: 'draft' }),
+    );
 
     await expect(portfolioService.deleteLogo(caller)).rejects.toMatchObject({
       status: 403,
     });
+  });
+
+  it('requires a replacement instead of deleting a saved logo from an active portfolio', async () => {
+    setupResolveProfile(makeProfile({ logoImageId: 'originals/logos/profile-1/key' }));
+
+    await expect(portfolioService.deleteLogo(caller)).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringMatching(/replacement/i),
+    });
+    expect(deleteObject).not.toHaveBeenCalled();
   });
 });
 
@@ -916,16 +891,30 @@ describe('portfolioService.updatePortfolio — activation', () => {
     expect(result.publiclyVisible).toBe(false);
   });
 
-  it('keeps a live portfolio live after a required field is cleared', async () => {
-    // One-way by design: editing a field must not silently 404 a public page.
+  it('rejects clearing a required field from an active portfolio', async () => {
     setupResolveProfile(makeProfile({ status: 'active' }));
     setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
-    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(makePortfolio({ tagline: null }));
 
-    const result = await portfolioService.updatePortfolio({ tagline: null }, caller);
+    await expect(portfolioService.updatePortfolio({ tagline: null }, caller)).rejects.toMatchObject(
+      {
+        status: 422,
+        message: expect.stringMatching(/required hero/i),
+      },
+    );
+    expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
+  });
 
-    expect(result.publiclyVisible).toBe(true);
-    expect(result.missingRequiredFields).toEqual(['tagline']);
+  it('rejects clearing a saved tagline while a draft portfolio is still incomplete', async () => {
+    setupResolveProfile(makeProfile({ status: 'draft', logoImageId: null, bio: null }));
+    setupGetPortfolio(makePortfolio({ tagline: 'Warm homes' }));
+
+    await expect(portfolioService.updatePortfolio({ tagline: null }, caller)).rejects.toMatchObject(
+      {
+        status: 422,
+        message: expect.stringMatching(/required hero/i),
+      },
+    );
+    expect(portfolioRepository.upsertInTx).not.toHaveBeenCalled();
   });
 });
 

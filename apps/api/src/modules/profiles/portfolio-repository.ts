@@ -151,10 +151,7 @@ export const portfolioRepository = {
       const [current] = await tx
         .select({ organizationId: schema.designerProfile.orgId })
         .from(schema.designerProfile)
-        .innerJoin(
-          schema.organization,
-          eq(schema.organization.id, schema.designerProfile.orgId),
-        )
+        .innerJoin(schema.organization, eq(schema.organization.id, schema.designerProfile.orgId))
         .where(
           and(
             eq(schema.designerProfile.id, profileId),
@@ -416,11 +413,7 @@ export const portfolioRepository = {
    * Transaction-aware slug availability check. Same logic as `isSlugAvailable`
    * but executes within the provided transaction handle to prevent TOCTOU races.
    */
-  async isSlugAvailableInTx(
-    tx: Tx,
-    slug: string,
-    excludeProfileId?: string,
-  ): Promise<boolean> {
+  async isSlugAvailableInTx(tx: Tx, slug: string, excludeProfileId?: string): Promise<boolean> {
     return slugAvailable(tx, slug, excludeProfileId);
   },
 
@@ -489,10 +482,7 @@ export const portfolioRepository = {
       .update(schema.designerProfile)
       .set({ status: 'active', updatedAt: now })
       .where(
-        and(
-          eq(schema.designerProfile.id, profileId),
-          eq(schema.designerProfile.status, 'draft'),
-        ),
+        and(eq(schema.designerProfile.id, profileId), eq(schema.designerProfile.status, 'draft')),
       )
       .returning({ id: schema.designerProfile.id });
     if (result.length === 0) return false;
@@ -510,36 +500,6 @@ export const portfolioRepository = {
   /** `activateIfDraftInTx` for callers that are not already inside a transaction. */
   async activateIfDraft(profileId: string): Promise<boolean> {
     return db.transaction((tx) => portfolioRepository.activateIfDraftInTx(tx, profileId));
-  },
-
-  /**
-   * Compare-and-set: clear logoImageId only if it still matches the expected value.
-   * Returns true if the update matched a row, false if another request already changed it.
-   */
-  async clearLogoIfMatch(profileId: string, expectedKey: string): Promise<boolean> {
-    return db.transaction(async (tx) => {
-      const now = new Date();
-      const result = await tx
-        .update(schema.designerProfile)
-        .set({ logoImageId: null, updatedAt: now })
-        .where(
-          and(
-            eq(schema.designerProfile.id, profileId),
-            eq(schema.designerProfile.logoImageId, expectedKey),
-          ),
-        )
-        .returning({ id: schema.designerProfile.id });
-      if (result.length === 0) return false;
-      await recordSearchProjectionEvents(tx, [
-        {
-          entityKind: 'designer',
-          entityId: profileId,
-          operation: 'index',
-          sourceUpdatedAt: now,
-        },
-      ]);
-      return true;
-    });
   },
 
   /**

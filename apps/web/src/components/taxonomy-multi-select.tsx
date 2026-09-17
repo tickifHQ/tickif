@@ -9,6 +9,7 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
+import { RequiredFieldIndicator } from '@/components/required-field-indicator';
 
 type TaxonomyOption = { id: string; label: string };
 
@@ -22,6 +23,7 @@ export function TaxonomyMultiSelect({
   limit,
   onValuesChange,
   options,
+  required = false,
   values,
 }: {
   density?: 'compact' | 'default';
@@ -31,6 +33,7 @@ export function TaxonomyMultiSelect({
   label: string;
   labelHint?: string;
   limit?: number;
+  required?: boolean;
   values: string[];
   options: readonly TaxonomyOption[];
   onValuesChange: (values: string[]) => void;
@@ -40,9 +43,9 @@ export function TaxonomyMultiSelect({
     selected.length > 0 ? selected.map((option) => option.label).join(', ') : 'None selected';
   const errorId = `${id}-error`;
   const counterId = `${id}-counter`;
-  const describedBy = [limit === undefined ? null : counterId, error ? errorId : null]
-    .filter(Boolean)
-    .join(' ') || undefined;
+  const describedBy =
+    [limit === undefined ? null : counterId, error ? errorId : null].filter(Boolean).join(' ') ||
+    undefined;
 
   function toggle(optionId: string) {
     onValuesChange(
@@ -57,9 +60,13 @@ export function TaxonomyMultiSelect({
       <div className="flex items-center justify-between gap-3">
         <Label
           htmlFor={id}
-          className={cn(density === 'compact' && 'text-[13px] font-medium leading-relaxed')}
+          className={cn(
+            required && 'gap-0',
+            density === 'compact' && 'text-[13px] font-medium leading-relaxed',
+          )}
         >
-          {label}{' '}
+          {label}
+          {required ? <RequiredFieldIndicator /> : null}{' '}
           {labelHint ? (
             <span className="font-normal text-muted-foreground">({labelHint})</span>
           ) : null}
@@ -80,9 +87,7 @@ export function TaxonomyMultiSelect({
             aria-describedby={describedBy}
             className={cn(
               'flex w-full items-center justify-between gap-3 rounded-md border border-input bg-background text-left shadow-xs outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              density === 'compact'
-                ? 'h-8 px-2 text-[13px] font-medium'
-                : 'h-10 px-3 py-2 text-sm',
+              density === 'compact' ? 'h-8 px-2 text-[13px] font-medium' : 'h-10 px-3 py-2 text-sm',
             )}
           >
             <span className="min-w-0 truncate">{summary}</span>

@@ -32,12 +32,7 @@ export type Caller = {
   activeTeamId?: string | null;
 };
 
-const ALLOWED_LOGO_CONTENT_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/avif',
-]);
+const ALLOWED_LOGO_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 
 const MAX_LOGO_BYTES = 5_000_000;
 
@@ -52,7 +47,7 @@ const BADGE_PROJECTS_PUBLISHED_COUNT = 25;
 type AuditEvent = {
   userId: string;
   activeOrgId: string;
-  action: 'portfolio.updated' | 'portfolio.logo_uploaded' | 'portfolio.logo_deleted';
+  action: 'portfolio.updated' | 'portfolio.logo_uploaded';
   timestamp: string; // ISO-8601
   resourceId: string; // profileId
   changedFields?: string[]; // for updates
@@ -97,10 +92,7 @@ function isUniqueViolation(error: unknown, constraintName?: string): boolean {
  * The slug a public portfolio URL should use: the designer's chosen slug when
  * set, else the owning organization slug (which every profile has from onboarding).
  */
-export function publicPortfolioSlug(
-  portfolioSlug: string | null,
-  orgSlug: string,
-): string {
+export function publicPortfolioSlug(portfolioSlug: string | null, orgSlug: string): string {
   return portfolioSlug ?? orgSlug;
 }
 
@@ -115,9 +107,7 @@ export function publicPortfolioUrl(portfolioSlug: string | null, orgSlug: string
  * The prefix check prevents IDOR: only keys minted for this profile are signed,
  * so a tampered `logo_image_id` can't be used to read another profile's object.
  */
-export async function presignProfileLogo(
-  profile: DesignerProfileRecord,
-): Promise<string | null> {
+export async function presignProfileLogo(profile: DesignerProfileRecord): Promise<string | null> {
   const expectedPrefix = `originals/logos/${profile.id}/`;
   if (!profile.logoImageId || !profile.logoImageId.startsWith(expectedPrefix)) return null;
   return presignDownload({ key: profile.logoImageId });
@@ -129,10 +119,12 @@ export function computeBadges(
 ): PortfolioBadge[] {
   const badges: PortfolioBadge[] = [];
   if (isKycVerified) badges.push('verified');
-  const daysSinceCreation =
-    (Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+  const daysSinceCreation = (Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24);
   if (daysSinceCreation < BADGE_NEW_DAYS) badges.push('new');
-  if (Number(profile.avgRating) >= BADGE_TOP_PERFORMER_RATING && profile.reviewCount >= BADGE_TOP_PERFORMER_REVIEWS)
+  if (
+    Number(profile.avgRating) >= BADGE_TOP_PERFORMER_RATING &&
+    profile.reviewCount >= BADGE_TOP_PERFORMER_REVIEWS
+  )
     badges.push('top-performer');
   if (profile.yearsExperience >= BADGE_ESTABLISHED_YEARS) badges.push('established');
   if (profile.projectCount >= BADGE_PROJECTS_PUBLISHED_COUNT) badges.push('projects-published');
@@ -149,25 +141,42 @@ export function computeBadges(
  */
 export function missingRequiredFields(
   profile: Pick<DesignerProfileRecord, 'logoImageId' | 'displayName' | 'bio'>,
-  portfolio: Pick<PortfolioRecord, 'tagline'>,
+  portfolio: Pick<PortfolioRecord, 'tagline'> | null,
 ): RequiredPortfolioField[] {
-  const filled = (value: string | null): boolean => !!value && value.trim().length > 0;
   const missing: RequiredPortfolioField[] = [];
-  if (!filled(profile.logoImageId)) missing.push('logo');
-  if (!filled(profile.displayName)) missing.push('displayName');
-  if (!filled(portfolio.tagline)) missing.push('tagline');
-  if (!filled(profile.bio)) missing.push('bio');
+  if (!isNonBlank(profile.logoImageId)) missing.push('logo');
+  if (!isNonBlank(profile.displayName)) missing.push('displayName');
+  if (!isNonBlank(portfolio?.tagline)) missing.push('tagline');
+  if (!isNonBlank(profile.bio)) missing.push('bio');
   return missing;
+}
+
+function isNonBlank(value: string | null | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Authoritative publication state shared by owner-facing and anonymous reads.
+ *
+ * A missing portfolio row uses the database default for the link toggle, but is
+ * still incomplete because it cannot contain the required tagline. Keeping the
+ * completeness check here prevents legacy active profiles from bypassing the
+ * public Hero requirements.
+ */
+export function getPortfolioPublicationState(
+  profile: Pick<DesignerProfileRecord, 'status' | 'logoImageId' | 'displayName' | 'bio'>,
+  portfolio: Pick<PortfolioRecord, 'publicLinkEnabled' | 'tagline'> | null,
+): { publiclyVisible: boolean; missingRequiredFields: RequiredPortfolioField[] } {
+  const missing = missingRequiredFields(profile, portfolio);
+  return {
+    publiclyVisible:
+      profile.status === 'active' && (portfolio?.publicLinkEnabled ?? true) && missing.length === 0,
+    missingRequiredFields: missing,
+  };
 }
 
 /**
  * Promote a draft profile whose required fields are now filled.
- *
- * Deliberately one-way: clearing a field later does **not** hide a live
- * portfolio. Un-publishing has a wide blast radius — the public page 404s, the
- * designer's projects drop out of the feed, and the search document is removed —
- * so taking a portfolio offline stays an explicit act via `publicLinkEnabled`
- * rather than a side effect of editing a field.
  *
  * Mutates `profile.status` in place so the caller's response (and the `verified`
  * badge computed from it) reflects the transition without a re-read.
@@ -229,6 +238,7 @@ async function buildPortfolioResponse(
 
   const googleConnection = googleRow ? readState(googleRow).summary : null;
   const portfolioUrl = publicPortfolioUrl(portfolio.portfolioSlug, profile.slug);
+  const publication = getPortfolioPublicationState(profile, portfolio);
 
   return {
     id: portfolio.id,
@@ -252,11 +262,9 @@ async function buildPortfolioResponse(
     testimonialWords: portfolio.testimonialWords,
     testimonialAuthor: portfolio.testimonialAuthor,
     testimonialProjectId: portfolio.testimonialProjectId,
-    showOverallRating:
-      portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
+    showOverallRating: portfolio.showTickifOverallRating || portfolio.showGoogleOverallRating,
     showPositiveReviewsOnly:
-      portfolio.showTickifPositiveReviewsOnly &&
-      portfolio.showGooglePositiveReviewsOnly,
+      portfolio.showTickifPositiveReviewsOnly && portfolio.showGooglePositiveReviewsOnly,
     reviewSettings: {
       tickif: {
         showReviews: portfolio.showTickifReviews,
@@ -273,10 +281,8 @@ async function buildPortfolioResponse(
     badges,
     isKycVerified,
     portfolioUrl,
-    // `publiclyVisible` answers "does /d/{slug} serve a page right now?", so it
-    // carries the designer's own switch as well as the completeness gate.
-    publiclyVisible: profile.status === 'active' && portfolio.publicLinkEnabled,
-    missingRequiredFields: missingRequiredFields(profile, portfolio),
+    publiclyVisible: publication.publiclyVisible,
+    missingRequiredFields: publication.missingRequiredFields,
     googleConnection,
     publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     createdAt: portfolio.createdAt.toISOString(),
@@ -302,10 +308,7 @@ export const portfolioService = {
    * PATCH portfolio. Validates slug uniqueness and testimonial ownership.
    * All validations and writes run inside a single database transaction.
    */
-  async updatePortfolio(
-    input: UpdatePortfolioInput,
-    caller: Caller,
-  ): Promise<PortfolioResponse> {
+  async updatePortfolio(input: UpdatePortfolioInput, caller: Caller): Promise<PortfolioResponse> {
     const profile = await resolveProfile(caller);
 
     const portfolio = await withTransaction(async (tx: Tx) => {
@@ -352,6 +355,21 @@ export const portfolioService = {
         youtubeHandle,
         ...portfolioFields
       } = input;
+
+      // Once a mandatory Hero value has been saved, later edits may replace it
+      // but cannot clear it. Apply this per field even while the rest of a draft
+      // portfolio is incomplete, and reject before either table is written.
+      const clearsSavedRequiredField =
+        (displayName !== undefined &&
+          isNonBlank(profile.displayName) &&
+          !isNonBlank(displayName)) ||
+        (bio !== undefined && isNonBlank(profile.bio) && !isNonBlank(bio)) ||
+        (portfolioFields.tagline !== undefined &&
+          isNonBlank(row.tagline) &&
+          !isNonBlank(portfolioFields.tagline));
+      if (clearsSavedRequiredField) {
+        throw AppError.unprocessable('Required Hero fields cannot be empty once saved');
+      }
 
       // Update profile fields if any provided (inside transaction)
       const profileUpdates: Partial<
@@ -402,8 +420,7 @@ export const portfolioService = {
         portfolioPatch.showSocialLinks = portfolioFields.showSocialLinks;
       if (portfolioFields.showShareBlock !== undefined)
         portfolioPatch.showShareBlock = portfolioFields.showShareBlock;
-      if (portfolioFields.tagline !== undefined)
-        portfolioPatch.tagline = portfolioFields.tagline;
+      if (portfolioFields.tagline !== undefined) portfolioPatch.tagline = portfolioFields.tagline;
       if (portfolioFields.testimonialWords !== undefined)
         portfolioPatch.testimonialWords = portfolioFields.testimonialWords;
       if (portfolioFields.testimonialAuthor !== undefined)
@@ -419,36 +436,28 @@ export const portfolioService = {
       }
       if (portfolioFields.showPositiveReviewsOnly !== undefined) {
         portfolioPatch.showPositiveReviewsOnly = portfolioFields.showPositiveReviewsOnly;
-        portfolioPatch.showTickifPositiveReviewsOnly =
-          portfolioFields.showPositiveReviewsOnly;
-        portfolioPatch.showGooglePositiveReviewsOnly =
-          portfolioFields.showPositiveReviewsOnly;
+        portfolioPatch.showTickifPositiveReviewsOnly = portfolioFields.showPositiveReviewsOnly;
+        portfolioPatch.showGooglePositiveReviewsOnly = portfolioFields.showPositiveReviewsOnly;
       }
       if (portfolioFields.reviewSettings?.tickif?.showReviews !== undefined) {
-        portfolioPatch.showTickifReviews =
-          portfolioFields.reviewSettings.tickif.showReviews;
+        portfolioPatch.showTickifReviews = portfolioFields.reviewSettings.tickif.showReviews;
       }
       if (portfolioFields.reviewSettings?.tickif?.showOverallRating !== undefined) {
         portfolioPatch.showTickifOverallRating =
           portfolioFields.reviewSettings.tickif.showOverallRating;
       }
-      if (
-        portfolioFields.reviewSettings?.tickif?.showPositiveReviewsOnly !== undefined
-      ) {
+      if (portfolioFields.reviewSettings?.tickif?.showPositiveReviewsOnly !== undefined) {
         portfolioPatch.showTickifPositiveReviewsOnly =
           portfolioFields.reviewSettings.tickif.showPositiveReviewsOnly;
       }
       if (portfolioFields.reviewSettings?.google?.showReviews !== undefined) {
-        portfolioPatch.showGoogleReviews =
-          portfolioFields.reviewSettings.google.showReviews;
+        portfolioPatch.showGoogleReviews = portfolioFields.reviewSettings.google.showReviews;
       }
       if (portfolioFields.reviewSettings?.google?.showOverallRating !== undefined) {
         portfolioPatch.showGoogleOverallRating =
           portfolioFields.reviewSettings.google.showOverallRating;
       }
-      if (
-        portfolioFields.reviewSettings?.google?.showPositiveReviewsOnly !== undefined
-      ) {
+      if (portfolioFields.reviewSettings?.google?.showPositiveReviewsOnly !== undefined) {
         portfolioPatch.showGooglePositiveReviewsOnly =
           portfolioFields.reviewSettings.google.showPositiveReviewsOnly;
       }
@@ -496,10 +505,7 @@ export const portfolioService = {
   },
 
   /** Check slug availability for the current designer. */
-  async checkSlugAvailability(
-    slug: string,
-    caller: Caller,
-  ): Promise<SlugAvailabilityResponse> {
+  async checkSlugAvailability(slug: string, caller: Caller): Promise<SlugAvailabilityResponse> {
     const profile = await resolveProfile(caller);
 
     if (portfolioRepository.isReservedSlug(slug)) {
@@ -620,18 +626,13 @@ export const portfolioService = {
     return { logoUrl };
   },
 
-  /**
-   * Delete the current logo from storage and clear the DB association.
-   *
-   * Does not demote an already-live portfolio — see `activateIfComplete`.
-   */
+  /** Delete the current logo from storage and clear the DB association. */
   async deleteLogo(caller: Caller): Promise<void> {
     const profile = await resolveProfile(caller);
 
     if (!profile.logoImageId) {
       throw AppError.notFound('No logo exists to delete');
     }
-
     const keyToDelete = profile.logoImageId;
 
     // Validate prefix before allowing delete (prevent IDOR)
@@ -640,26 +641,8 @@ export const portfolioService = {
       throw AppError.forbidden('Cannot delete logo: invalid key ownership');
     }
 
-    // Compare-and-set: only clear if logoImageId hasn't changed since we read it
-    const updated = await portfolioRepository.clearLogoIfMatch(profile.id, keyToDelete);
-    if (!updated) {
-      // Another request already changed or cleared the logo — nothing to do
-      return;
-    }
-
-    // Best-effort storage cleanup (orphan is acceptable if this fails)
-    try {
-      await deleteObject(keyToDelete);
-    } catch (err) {
-      console.error('[deleteLogo] Storage cleanup failed (orphan left):', err);
-    }
-
-    emitAuditEvent({
-      userId: caller.userId,
-      activeOrgId: caller.activeOrgId!,
-      action: 'portfolio.logo_deleted',
-      timestamp: new Date().toISOString(),
-      resourceId: profile.id,
-    });
+    throw AppError.unprocessable(
+      'Upload a replacement before removing the logo from your saved portfolio',
+    );
   },
 };

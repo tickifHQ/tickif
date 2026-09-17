@@ -102,6 +102,25 @@ async function submitEligibleVerification(phoneNumber: string) {
   };
 }
 
+async function makePortfolioPublishable(profileId: string, slug: string): Promise<void> {
+  await db
+    .update(schema.designerProfile)
+    .set({
+      status: 'active',
+      slug,
+      bio: 'A complete public portfolio used by verification integration tests.',
+      logoImageId: `originals/logos/${profileId}/verification-test-logo`,
+    })
+    .where(eq(schema.designerProfile.id, profileId));
+  await db
+    .insert(schema.designerPortfolio)
+    .values({ profileId, tagline: 'Thoughtful interiors for everyday living' })
+    .onConflictDoUpdate({
+      target: schema.designerPortfolio.profileId,
+      set: { tagline: 'Thoughtful interiors for everyday living' },
+    });
+}
+
 describe('verification route authorization', () => {
   it('requires authentication for designer state', async () => {
     const response = await client.api.verifications.$get();
@@ -464,10 +483,7 @@ describe('verification route authorization', () => {
     });
 
     const publicSlug = 'revoked-verification-test';
-    await db
-      .update(schema.designerProfile)
-      .set({ status: 'active', slug: publicSlug })
-      .where(eq(schema.designerProfile.id, submission.profile.id));
+    await makePortfolioPublishable(submission.profile.id, publicSlug);
     const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
       param: { slug: publicSlug },
     });
@@ -604,10 +620,7 @@ describe('verification route authorization', () => {
       expiresAt: expect.any(String),
     });
     const publicSlug = 'verified-studio-test';
-    await db
-      .update(schema.designerProfile)
-      .set({ status: 'active', slug: publicSlug })
-      .where(eq(schema.designerProfile.id, workspace.profile.id));
+    await makePortfolioPublishable(workspace.profile.id, publicSlug);
     const publicProfileResponse = await client.api.profiles.slug[':slug'].$get({
       param: { slug: publicSlug },
     });

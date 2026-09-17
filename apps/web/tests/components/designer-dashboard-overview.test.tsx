@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProfileDashboardResponse } from '@repo/contracts';
 import { DesignerDashboardOverview } from '../../src/components/designer-dashboard-overview';
 
@@ -27,9 +27,14 @@ const dashboard: ProfileDashboardResponse = {
   },
   shareUrl: 'https://tickif.com/d/livspace',
   publiclyVisible: true,
+  verificationStatus: null,
 };
 
 describe('DesignerDashboardOverview', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
   it('renders the welcome state, progress score, and onboarding checklist', () => {
     render(
       <DesignerDashboardOverview
@@ -73,7 +78,7 @@ describe('DesignerDashboardOverview', () => {
     );
     expect(screen.getByRole('link', { name: /manage portfolio/i })).toHaveAttribute(
       'href',
-      '/designer/profile',
+      '/designer/portfolio',
     );
     const copyButton = screen.getByRole('button', { name: /copy link/i });
 
@@ -99,7 +104,9 @@ describe('DesignerDashboardOverview', () => {
 
     expect(screen.getByText('tickif.com/d/livspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /complete your portfolio/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /complete your portfolio/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('hides the public URL and copy action, showing a readiness CTA, when not publicly visible', () => {
@@ -132,7 +139,11 @@ describe('DesignerDashboardOverview', () => {
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/studio"
         portfolioPubliclyVisible={false}
-        dashboard={{ ...dashboard, shareUrl: 'https://tickif.com/d/studio', publiclyVisible: false }}
+        dashboard={{
+          ...dashboard,
+          shareUrl: 'https://tickif.com/d/studio',
+          publiclyVisible: false,
+        }}
       />,
     );
 
@@ -140,7 +151,7 @@ describe('DesignerDashboardOverview', () => {
     expect(screen.queryByRole('button', { name: /copy link/i })).not.toBeInTheDocument();
   });
 
-  it('keeps verification non-interactive until that flow ships', () => {
+  it('links incomplete profile and unstarted verification prompts to their workflows', () => {
     render(
       <DesignerDashboardOverview
         studioName="Livspace"
@@ -150,8 +161,168 @@ describe('DesignerDashboardOverview', () => {
       />,
     );
 
-    expect(screen.getByText(/start verification/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /start verification/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /round out your profile/i })).toHaveAttribute(
+      'href',
+      '/designer/portfolio',
+    );
+    expect(screen.getByRole('link', { name: /start verification/i })).toHaveAttribute(
+      'href',
+      '/designer/verification',
+    );
+  });
+
+  it('removes the profile prompt once profile completion is done', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{
+          ...dashboard,
+          profileCompletion: { score: 100, missing: [] },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/round out your profile/i)).not.toBeInTheDocument();
+  });
+
+  it('removes the verification prompt once the organization is verified', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{ ...dashboard, verificationStatus: 'verified' }}
+      />,
+    );
+
+    expect(screen.queryByText(/verification/i)).not.toBeInTheDocument();
+  });
+
+  it('hides the whole next-steps section once profile and verification are complete', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        workspaceKey="all-next-steps-complete"
+        dashboard={{
+          ...dashboard,
+          profileCompletion: { score: 100, missing: [] },
+          verificationStatus: 'verified',
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/what happens next/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/we review your project/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-next-steps')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-share-card')).toBeInTheDocument();
+  });
+
+  it('hides first-project setup after a project exists while retaining the illustration', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        workspaceKey="first-project-complete"
+        dashboard={{
+          ...dashboard,
+          projects: { total: 1, published: 0, inReview: 1, draft: 0 },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: /add first project/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-complete-setup')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-workspace-illustration')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-share-card')).toBeInTheDocument();
+  });
+
+  it('keeps remaining next steps above the sharing card after the first project is done', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        workspaceKey="project-done-next-steps-open"
+        dashboard={{
+          ...dashboard,
+          projects: { total: 1, published: 0, inReview: 1, draft: 0 },
+        }}
+      />,
+    );
+
+    const shareCard = screen.getByTestId('dashboard-share-card');
+    const nextSteps = screen.getByTestId('dashboard-next-steps');
+
+    expect(
+      nextSteps.compareDocumentPosition(shareCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('animates newly completed sections once and records the completed state', async () => {
+    const workspaceKey = 'completion-transition';
+    window.sessionStorage.setItem(
+      `tickif:dashboard-right-rail:v1:${workspaceKey}`,
+      JSON.stringify({ projectDone: false, nextStepsDone: false }),
+    );
+
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        workspaceKey={workspaceKey}
+        dashboard={{
+          ...dashboard,
+          profileCompletion: { score: 100, missing: [] },
+          projects: { total: 1, published: 0, inReview: 1, draft: 0 },
+          verificationStatus: 'verified',
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-complete-setup')).toHaveAttribute(
+        'data-state',
+        'closed',
+      );
+      expect(screen.getByTestId('dashboard-next-steps')).toHaveAttribute('data-state', 'closed');
+    });
+
+    expect(window.sessionStorage.getItem(`tickif:dashboard-right-rail:v1:${workspaceKey}`)).toBe(
+      JSON.stringify({ projectDone: true, nextStepsDone: true }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('dashboard-complete-setup')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('dashboard-next-steps')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('dashboard-share-card')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['pending', 'Verification in review', 'Track the review of your submitted documents.'],
+    ['rejected', 'Update verification', 'Review the requested changes and resubmit.'],
+    ['expired', 'Renew verification', 'Update your documents to restore verification.'],
+  ] as const)('shows the correct %s verification follow-up', (status, title, description) => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Livspace"
+        studioLocation="Chennai, Tamilnadu"
+        portfolioUrl="https://tickif.com/d/livspace"
+        dashboard={{ ...dashboard, verificationStatus: status }}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: new RegExp(title, 'i') })).toHaveAttribute(
+      'href',
+      '/designer/verification',
+    );
+    expect(screen.getByText(description)).toBeInTheDocument();
   });
 
   it('uses the requested Lucide icons in the what happens next panel', () => {
