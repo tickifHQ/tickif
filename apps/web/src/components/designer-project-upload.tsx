@@ -3542,6 +3542,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                   <div className="mt-5 max-w-[22.8125rem]">
                     <FormField
                       label={selectedProjectTypeBehavior.buildingNameLabel}
+                      id="project-building-name"
                       value={buildingName}
                       onChange={setBuildingName}
                       placeholder="e.g. Prestige Lakeside"
@@ -3638,15 +3639,20 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
               <div className="space-y-5">
                 <FormField
                   label="Project name"
+                  id="project-name"
                   value={projectName}
                   onChange={handleProjectNameChange}
                   placeholder={defaultProjectName}
                 />
                 <div className="space-y-1.5">
-                  <Label className={cn(typography.label, 'text-foreground')}>
+                  <Label
+                    htmlFor="project-description"
+                    className={cn(typography.label, 'text-foreground')}
+                  >
                     About the project
                   </Label>
                   <Textarea
+                    id="project-description"
                     value={aboutProject}
                     onChange={(event) => setAboutProject(event.target.value)}
                     placeholder="Optional"
