@@ -1398,7 +1398,7 @@ function OnboardingShell({ children, signedInAs }: { children: ReactNode; signed
               src={onboardingIllustrations.panel}
               alt=""
               width={334}
-              height={188}
+              height={189}
               priority
               className="h-auto w-full"
             />
