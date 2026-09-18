@@ -22,8 +22,8 @@ vi.mock('@repo/config', async (importOriginal) => {
     ...actual,
     config: {
       ...actual.config,
-      RAZORPAY_KEY_ID: actual.config.RAZORPAY_KEY_ID || 'rzp_test_ci_mock',
-      RAZORPAY_KEY_SECRET: actual.config.RAZORPAY_KEY_SECRET || 'ci_mock_secret',
+      RAZORPAY_KEY_ID: 'rzp_test_ci_mock',
+      RAZORPAY_KEY_SECRET: 'ci_mock_secret',
       RAZORPAY_WEBHOOK_SECRET: 'test_webhook_secret',
       RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: 'plan_test_pro_plus',
       RAZORPAY_PLAN_ID_CORPORATE: 'plan_test_corporate',

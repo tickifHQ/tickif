@@ -40,6 +40,14 @@ export function testEnv() {
     NODE_ENV: 'test',
     BETTER_AUTH_SECRET: 'tickif-test-only-auth-secret-0000000000000000',
     BETTER_AUTH_URL: 'http://localhost:3000',
+    // dotenv preserves existing values, including empty strings. Clear both
+    // credential sources before config/auth imports so fixtures cannot send
+    // real emails using the developer's .env or mounted secret file.
+    RESEND_API_KEY: '',
+    RESEND_API_KEY_FILE: '',
+    // Test runners must not inherit the staging email-forwarding mode after
+    // the email credentials above are deliberately cleared.
+    PHONE_OTP_DELIVERY: 'sms',
   };
 }
 
