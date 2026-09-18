@@ -380,8 +380,8 @@ importers:
         version: 4.6.2
     devDependencies:
       '@next/env':
-        specifier: ^16.2.11
-        version: 16.2.11
+        specifier: ^16.3.4
+        version: 16.3.4
       '@repo/api':
         specifier: workspace:*
         version: link:../api
@@ -1889,9 +1889,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
-
-  '@next/env@16.2.11':
-    resolution: {integrity: sha512-0do5A3BJ2gxWr0ZCMcD6BhW+e595jyxdTl3rXTS6lOtD8ektMiW6CO+EPwt1Eca1DBnm90r/7GdiKWBKxH++DA==}
 
   '@next/env@16.3.4':
     resolution: {integrity: sha512-cjWZnUUa6jZq2kFaNe/ZyJdZonOZ/QoN0Zka2nz/FLOrfx14pQuM9c5RaSVkWMqgdt4ksgPAMWPyHSs/CyV48Q==}
@@ -7155,8 +7152,6 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.3
     optional: true
-
-  '@next/env@16.2.11': {}
 
   '@next/env@16.3.4': {}
 
