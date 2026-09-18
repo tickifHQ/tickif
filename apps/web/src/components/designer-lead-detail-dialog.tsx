@@ -85,11 +85,13 @@ export function DesignerLeadDetailDialog({
   const searchParams = useSearchParams();
   const open = Boolean(lead || error);
   const [selectedStatus, setSelectedStatus] = useState<LeadStatus>(lead?.status ?? 'new');
+  const [notes, setNotes] = useState(lead?.notes ?? '');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     setSelectedStatus(lead?.status ?? 'new');
+    setNotes(lead?.notes ?? '');
     setSaveError(null);
   }, [lead]);
 
@@ -101,13 +103,16 @@ export function DesignerLeadDetailDialog({
   }
 
   function saveLead() {
-    if (!lead || selectedStatus === lead.status) return;
+    if (!lead || (selectedStatus === lead.status && notes === (lead.notes ?? ''))) return;
     setSaveError(null);
     startTransition(async () => {
       try {
         const response = await api.api.leads[':id'].$patch({
           param: { id: lead.id },
-          json: { status: selectedStatus },
+          json: {
+            ...(selectedStatus !== lead.status ? { status: selectedStatus } : {}),
+            ...(notes !== (lead.notes ?? '') ? { notes } : {}),
+          },
         });
         const payload: unknown = await response.json();
         const parsed = leadDetailResponseSchema.safeParse(payload);
@@ -223,13 +228,26 @@ export function DesignerLeadDetailDialog({
               />
 
               <div className="mt-5">
+                <label htmlFor="lead-message" className="text-sm font-medium text-foreground">
+                  Homeowner message
+                </label>
+                <Textarea
+                  id="lead-message"
+                  readOnly
+                  value={lead.message ?? ''}
+                  placeholder="No homeowner message."
+                  className="mt-2 min-h-28 resize-none bg-muted/30 text-muted-foreground"
+                />
+              </div>
+
+              <div className="mt-5">
                 <label htmlFor="lead-notes" className="text-sm font-medium text-foreground">
                   Your notes
                 </label>
                 <Textarea
                   id="lead-notes"
-                  readOnly
-                  value={lead.message ?? ''}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
                   placeholder="No notes added."
                   className="mt-2 min-h-28 resize-none bg-muted/30 text-muted-foreground"
                 />
@@ -251,7 +269,11 @@ export function DesignerLeadDetailDialog({
             type="button"
             variant="inverted"
             className="min-w-32"
-            disabled={!lead || selectedStatus === lead.status || isPending}
+            disabled={
+              !lead ||
+              (selectedStatus === lead.status && notes === (lead.notes ?? '')) ||
+              isPending
+            }
             onClick={saveLead}
           >
             Save

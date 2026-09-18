@@ -4,12 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LeadDetailResponse, ListLeadsResponse } from '@repo/contracts';
 import { DesignerLeadsList } from '../../src/components/designer-leads-list';
 
+const mock = vi.hoisted(() => ({ patchLead: vi.fn(), refresh: vi.fn(), replace: vi.fn() }));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/designer/leads',
   useRouter: () => ({
-    replace: vi.fn(),
+    refresh: mock.refresh,
+    replace: mock.replace,
   }),
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('@/lib/api', () => ({
+  api: { api: { leads: { ':id': { $patch: mock.patchLead } } } },
 }));
 
 const leads: ListLeadsResponse = {
@@ -58,7 +65,7 @@ const selectedLead: LeadDetailResponse = {
   ...leads.items[0]!,
   referredProjectId: '33333333-3333-4333-8333-333333333333',
   message: 'Needs a modular kitchen quote.',
-  notes: null,
+  notes: 'Follow up after the budget review.',
   source: 'enquiry',
   createdAt: '2026-01-06T00:00:00.000Z',
   updatedAt: '2026-01-06T00:00:00.000Z',
@@ -121,12 +128,38 @@ describe('DesignerLeadsList', () => {
     render(<DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />);
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
-    expect(screen.getByText('Needs a modular kitchen quote.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
+    expect(screen.getByLabelText('Homeowner message')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Your notes')).toHaveValue('Follow up after the budget review.');
+    expect(screen.getByLabelText('Your notes')).not.toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass(
       'h-10',
       'bg-button-inverted',
       'text-button-inverted-foreground',
     );
+  });
+
+  it('edits persisted designer notes without replacing the homeowner message', async () => {
+    const user = userEvent.setup();
+    const refreshedLead = { ...selectedLead, notes: 'Call after the budget review.' };
+    mock.patchLead.mockResolvedValue({ ok: true, json: async () => refreshedLead });
+    const { rerender } = render(
+      <DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />,
+    );
+
+    const notes = screen.getByLabelText('Your notes');
+    await user.clear(notes);
+    await user.type(notes, 'Call after the budget review.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mock.patchLead).toHaveBeenCalledWith({
+      param: { id: selectedLead.id },
+      json: { notes: 'Call after the budget review.' },
+    });
+    expect(mock.refresh).toHaveBeenCalledOnce();
+    rerender(<DesignerLeadsList leads={leads} selectedLead={refreshedLead} activeStatus="all" />);
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
+    expect(screen.getByLabelText('Your notes')).toHaveValue('Call after the budget review.');
   });
 
   it('focuses lead search when pressing the slash shortcut', async () => {
