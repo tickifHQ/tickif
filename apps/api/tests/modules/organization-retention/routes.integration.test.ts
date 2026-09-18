@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { and, db, eq, schema } from '@repo/db';
 import { makeOrganization } from '@repo/db/testing';
+import { setActiveTeam } from '@repo/auth';
 import { app } from '../../../src/app.js';
 import { organizationRetentionRepository } from '../../../src/modules/organization-retention/repository.js';
 import {
   ProjectSlugUnavailableError,
   projectsRepository,
 } from '../../../src/modules/projects/repository.js';
+import { orgsRepository, OWNERSHIP_TRANSFER_RESULT } from '../../../src/modules/orgs/repository.js';
 import {
-  orgsRepository,
-  OWNERSHIP_TRANSFER_RESULT,
-} from '../../../src/modules/orgs/repository.js';
-import { activateOrganization, createRoleSession } from '../../helpers/auth.js';
+  activateOrganization,
+  createRoleSession,
+  mergeResponseCookies,
+} from '../../helpers/auth.js';
 
 async function organizationSession(input: {
   phone: string;
@@ -61,6 +63,9 @@ async function seedPublishedOrganization() {
     teamId,
     userId: owner.userId,
   });
+  const teamResponse = await setActiveTeam(new Headers({ cookie: owner.cookie }), teamId);
+  if (!teamResponse.ok) throw new Error(`setActiveTeam returned ${teamResponse.status}`);
+  owner.cookie = mergeResponseCookies(owner.cookie, teamResponse);
   const [profile] = await db
     .insert(schema.designerProfile)
     .values({
@@ -108,16 +113,11 @@ describe('organization retention routes', () => {
       })
       .returning();
 
-    const outstandingUpload = await request(
-      '/api/media/upload-url',
-      seeded.owner.cookie,
-      'POST',
-      {
-        projectId: draft!.id,
-        contentType: 'image/jpeg',
-        size: 1_024,
-      },
-    );
+    const outstandingUpload = await request('/api/media/upload-url', seeded.owner.cookie, 'POST', {
+      projectId: draft!.id,
+      contentType: 'image/jpeg',
+      size: 1_024,
+    });
     expect(outstandingUpload.status).toBe(201);
     const outstandingBody = (await outstandingUpload.json()) as { key: string };
     const [uploadLease] = await db
@@ -144,7 +144,7 @@ describe('organization retention routes', () => {
       contentType: 'image/jpeg',
       size: 1_024,
     });
-    expect(upload.status).toBe(409);
+    expect(upload.status).toBe(403);
     const images = await db
       .select({ id: schema.projectImage.id })
       .from(schema.projectImage)

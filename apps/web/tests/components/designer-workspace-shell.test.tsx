@@ -2,6 +2,37 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DesignerWorkspaceShell } from '../../src/components/designer-workspace-shell';
+import type { OrganizationCapabilities } from '@repo/contracts';
+
+const RESTRICTED_CAPABILITIES: OrganizationCapabilities = {
+  billing: false,
+  manageMembers: false,
+  changeMemberRoles: false,
+  transferOwnership: false,
+  writeProjects: false,
+  submitProjects: false,
+  archiveProjects: false,
+  deleteProjects: false,
+  leadScope: 'none',
+  analyticsScope: 'billing',
+  editOrganization: false,
+  manageVerification: false,
+};
+
+const FULL_CAPABILITIES: OrganizationCapabilities = {
+  billing: true,
+  manageMembers: true,
+  changeMemberRoles: true,
+  transferOwnership: true,
+  writeProjects: true,
+  submitProjects: true,
+  archiveProjects: true,
+  deleteProjects: true,
+  leadScope: 'full',
+  analyticsScope: 'full',
+  editOrganization: true,
+  manageVerification: true,
+};
 
 const mock = vi.hoisted(() => ({
   pathname: '/designer/dashboard',
@@ -61,13 +92,36 @@ vi.mock('@/components/designer-branch-selector', () => ({
 }));
 
 describe('DesignerWorkspaceShell', () => {
+  it('hides links and project creation when the active organization role lacks access', () => {
+    mock.pathname = '/designer/dashboard';
+
+    render(
+      <DesignerWorkspaceShell
+        capabilities={RESTRICTED_CAPABILITIES}
+        activeOrganizationId="org-1"
+        studioName="Studio One"
+        studioLocation="Mumbai"
+      >
+        <div>Dashboard content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Leads' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Portfolio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Verification' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Team & Roles' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Add new project' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Analytics' })).toBeInTheDocument();
+  });
   it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
     mock.pathname = '/designer/dashboard';
     mock.router.refresh.mockReset();
     const user = userEvent.setup();
     const { rerender } = render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -85,7 +139,7 @@ describe('DesignerWorkspaceShell', () => {
 
     rerender(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-2"
         studioName="Studio Two"
         studioLocation="Pune"
@@ -104,7 +158,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -124,7 +178,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -144,7 +198,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
         studioLocation="Mumbai"
@@ -196,7 +250,7 @@ describe('DesignerWorkspaceShell', () => {
 
       render(
         <DesignerWorkspaceShell
-          isOwner
+          capabilities={FULL_CAPABILITIES}
           activeOrganizationId="org-1"
           studioName="Antika Interiors"
           studioLocation="Chennai"
@@ -217,7 +271,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -236,7 +290,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -262,7 +316,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -289,7 +343,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -307,7 +361,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -327,7 +381,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -353,7 +407,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -377,7 +431,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -400,7 +454,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"
@@ -431,7 +485,7 @@ describe('DesignerWorkspaceShell', () => {
     const user = userEvent.setup();
     render(
       <DesignerWorkspaceShell
-        isOwner={false}
+        capabilities={RESTRICTED_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
         studioLocation="Chennai"

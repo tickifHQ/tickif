@@ -36,7 +36,10 @@ import {
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth, withFreshSession } from '../../lib/auth-middleware.js';
+import {
+  requireResolvedAuth as requireAuth,
+  withFreshResolvedSession as withFreshSession,
+} from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { projectsService } from './service.js';
@@ -118,10 +121,10 @@ const portfolioRoute = createRoute({
 });
 
 // Optional auth: anonymous callers may read a published project, so this route
-// cannot use `requireAuth`. It still decides draft visibility from the caller's
+// cannot use the required auth guard. It still decides draft visibility from the caller's
 // ban/role (`assertAccess` in the service), so the session must not come from the
-// ≤5-min cookie cache — `withFreshSession` refreshes it without 401ing anonymous
-// readers.
+// cookie cache. The optional resolved guard refreshes the session and repairs stale
+// organization or branch selection without rejecting anonymous readers.
 const getRoute = createRoute({
   method: 'get',
   path: '/{id}',

@@ -26,12 +26,19 @@ vi.mock('../../../src/modules/leads/service.js', () => ({
   },
 }));
 
+vi.mock('../../../src/modules/orgs/service.js', () => ({
+  orgsService: {
+    getCapabilities: vi.fn(),
+  },
+}));
+
 const { dashboardService } = await import('../../../src/modules/dashboard/service.js');
 const { dashboardRepository } = await import('../../../src/modules/dashboard/repository.js');
 const { profilesService } = await import('../../../src/modules/profiles/service.js');
 const { leadsService } = await import('../../../src/modules/leads/service.js');
+const { orgsService } = await import('../../../src/modules/orgs/service.js');
 
-const input = { userId: 'user_1', orgId: 'org_1' };
+const input = { userId: 'user_1', userRole: 'designer', orgId: 'org_1' };
 
 const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardProfileContext => ({
   profileId: '11111111-1111-4111-8111-111111111111',
@@ -42,6 +49,8 @@ const profile = (overrides: Partial<DashboardProfileContext> = {}): DashboardPro
   portfolioSlug: 'studio-noir-portfolio',
   profileStatus: 'active',
   publicLinkEnabled: true,
+  memberId: 'member_1',
+  memberRole: 'owner',
   ...overrides,
 });
 
@@ -67,6 +76,20 @@ beforeEach(() => {
   vi.mocked(dashboardRepository.countProjectsByStatus).mockResolvedValue(counts());
   vi.mocked(profilesService.getCompletion).mockResolvedValue(completion());
   vi.mocked(leadsService.countForOrganization).mockResolvedValue({ total: 0, new: 0 });
+  vi.mocked(orgsService.getCapabilities).mockResolvedValue({
+    billing: true,
+    manageMembers: true,
+    changeMemberRoles: true,
+    transferOwnership: true,
+    writeProjects: true,
+    submitProjects: true,
+    archiveProjects: true,
+    deleteProjects: true,
+    leadScope: 'full',
+    analyticsScope: 'full',
+    editOrganization: true,
+    manageVerification: true,
+  });
 });
 
 describe('dashboardService.getProfileDashboard', () => {
@@ -102,6 +125,68 @@ describe('dashboardService.getProfileDashboard', () => {
       publiclyVisible: true,
     });
     expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1');
+  });
+
+  it('returns no project or lead totals to a billing-only administrator', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ memberRole: 'billing_admin' }),
+    );
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({
+      billing: true,
+      manageMembers: false,
+      changeMemberRoles: false,
+      transferOwnership: false,
+      writeProjects: false,
+      submitProjects: false,
+      archiveProjects: false,
+      deleteProjects: false,
+      leadScope: 'none',
+      analyticsScope: 'billing',
+      editOrganization: false,
+      manageVerification: false,
+    });
+
+    const result = await dashboardService.getProfileDashboard(input);
+
+    expect(result.projects).toEqual({ total: 0, published: 0, inReview: 0, draft: 0 });
+    expect(result.leads).toEqual({ total: 0, new: 0 });
+    expect(dashboardRepository.countProjectsByStatus).not.toHaveBeenCalled();
+    expect(leadsService.countForOrganization).not.toHaveBeenCalled();
+  });
+
+  it('does not admit a platform admin through an organization membership', async () => {
+    await expect(
+      dashboardService.getProfileDashboard({ ...input, userRole: 'admin' }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(dashboardRepository.findProfileContext).not.toHaveBeenCalled();
+  });
+
+  it('limits member dashboard totals to their own projects and assigned leads', async () => {
+    vi.mocked(dashboardRepository.findProfileContext).mockResolvedValue(
+      profile({ memberId: 'member_7', memberRole: 'member' }),
+    );
+    vi.mocked(orgsService.getCapabilities).mockResolvedValue({
+      billing: false,
+      manageMembers: false,
+      changeMemberRoles: false,
+      transferOwnership: false,
+      writeProjects: true,
+      submitProjects: true,
+      archiveProjects: true,
+      deleteProjects: false,
+      leadScope: 'assigned',
+      analyticsScope: 'own',
+      editOrganization: false,
+      manageVerification: false,
+    });
+
+    await dashboardService.getProfileDashboard(input);
+
+    expect(dashboardRepository.countProjectsByStatus).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      'member_7',
+    );
+    expect(leadsService.countForOrganization).toHaveBeenCalledWith('org_1', 'team_1', ['member_7']);
   });
 
   // E-278: publiclyVisible mirrors the owner PortfolioResponse / public route rule.
@@ -160,7 +245,11 @@ describe('dashboardService.getProfileDashboard', () => {
       profile({ orgId: 'org_2' }),
     );
 
-    await dashboardService.getProfileDashboard({ userId: 'user_1', orgId: 'org_2' });
+    await dashboardService.getProfileDashboard({
+      userId: 'user_1',
+      userRole: 'designer',
+      orgId: 'org_2',
+    });
 
     expect(profilesService.getCompletion).toHaveBeenCalledWith({
       userId: 'user_1',
@@ -171,7 +260,7 @@ describe('dashboardService.getProfileDashboard', () => {
 
   it('rejects a missing active organization before querying dashboard data', async () => {
     await expect(
-      dashboardService.getProfileDashboard({ userId: 'user_1', orgId: null }),
+      dashboardService.getProfileDashboard({ userId: 'user_1', userRole: 'designer', orgId: null }),
     ).rejects.toMatchObject({ status: 422 });
     expect(dashboardRepository.findProfileContext).not.toHaveBeenCalled();
   });

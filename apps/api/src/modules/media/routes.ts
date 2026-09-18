@@ -12,7 +12,7 @@ import {
   errorResponseSchema,
 } from '@repo/contracts';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth } from '../../lib/auth-middleware.js';
+import { requireResolvedAuth as requireAuth } from '../../lib/auth-middleware.js';
 import { AppError } from '../../lib/errors.js';
 import { validationHook } from '../../lib/validation.js';
 import { mediaService } from './service.js';
@@ -26,10 +26,18 @@ function mediaApp() {
 function caller(c: Parameters<RouteHandler<RouteConfig, Env>>[0]): {
   userId: string;
   userRole: string;
+  activeOrgId: string | null;
+  activeTeamId: string | null;
 } {
   const user = c.get('user');
+  const session = c.get('session');
   if (!user) throw AppError.unauthorized();
-  return { userId: user.id, userRole: user.role ?? '' };
+  return {
+    userId: user.id,
+    userRole: user.role ?? '',
+    activeOrgId: session?.activeOrganizationId ?? null,
+    activeTeamId: session?.activeTeamId ?? null,
+  };
 }
 
 const errorJson = (description: string) => ({

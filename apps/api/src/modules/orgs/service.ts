@@ -51,6 +51,10 @@ function normalizeRole(role: string | null): OrganizationMemberRole {
   return parsed.success ? parsed.data : ORGANIZATION_MEMBER_ROLE.MEMBER;
 }
 
+function accountDisplayName(name: string, email: string): string {
+  return name.trim() || email;
+}
+
 function invitationState(status: string): OrganizationInvitationState {
   switch (status) {
     case 'pending':
@@ -99,13 +103,13 @@ async function transferResponse(
     status: request.status,
     initiator: {
       userId: initiator.id,
-      name: initiator.name,
+      name: accountDisplayName(initiator.name, initiator.email),
       email: initiator.email,
     },
     target: {
       memberId: target.id,
       userId: target.userId,
-      name: target.name,
+      name: accountDisplayName(target.name, target.email),
       email: target.email,
       role: normalizeRole(target.role),
     },
@@ -363,7 +367,7 @@ export const orgsService = {
           createdAt: branch.createdAt.toISOString(),
           members: branchMembers.map((member) => ({
             userId: member.userId,
-            name: member.name,
+            name: accountDisplayName(member.name, member.email),
             email: member.email,
             image: member.image,
             role: normalizeRole(member.role),
@@ -457,7 +461,7 @@ export const orgsService = {
       .map((member) => ({
         id: member.id,
         userId: member.userId,
-        name: member.name,
+        name: accountDisplayName(member.name, member.email),
         email: member.email,
         image: member.image,
         role: normalizeRole(member.role),

@@ -426,7 +426,7 @@ describe('orgsService', () => {
       {
         id: 'member-1',
         userId: 'user-1',
-        name: 'Asha Rao',
+        name: '   ',
         email: 'asha@example.com',
         image: null,
         role: 'owner',
@@ -488,7 +488,7 @@ describe('orgsService', () => {
         {
           id: 'member-1',
           userId: 'user-1',
-          name: 'Asha Rao',
+          name: 'asha@example.com',
           email: 'asha@example.com',
           image: null,
           role: 'owner',
