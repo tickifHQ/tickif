@@ -220,7 +220,23 @@ describe('DesignerOnboarding', () => {
     expect(await screen.findByText(/you.re set up, mahi studio/i)).toBeInTheDocument();
   });
 
-  it('keeps every company presence field optional and allows Continue with an empty step', async () => {
+  it('requires current-step input before an individual can Continue', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.type(screen.getByLabelText(/whatsapp number/i), '9123456789');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Finish later' })).toBeEnabled();
+
+    await user.type(screen.getByLabelText(/website/i), 'mahi.example');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('keeps company presence optional but requires input before Continue', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
 
@@ -229,9 +245,14 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.queryByLabelText('Required')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    const continueButton = screen.getByRole('button', { name: 'Continue' });
+    expect(continueButton).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeEnabled();
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    fireEvent.submit(continueButton.closest('form')!);
+    expect(screen.queryByLabelText(/services offered/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
     expect(screen.getByLabelText(/services offered/i)).toBeInTheDocument();
   });
 
@@ -274,7 +295,7 @@ describe('DesignerOnboarding', () => {
     expect(screen.queryByLabelText(/services offered/i)).not.toBeInTheDocument();
   });
 
-  it('keeps every company services field optional and provisions through Continue', async () => {
+  it('keeps company services optional but requires input before Continue', async () => {
     const submit = vi.fn().mockResolvedValue({
       created: true,
       data: {
@@ -298,8 +319,14 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
 
     expect(screen.queryByLabelText('Required')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeEnabled();
+
+    await user.click(screen.getByLabelText(/services offered/i));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /full home interiors/i }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() =>
@@ -307,7 +334,7 @@ describe('DesignerOnboarding', () => {
         expect.objectContaining({
           entityType: 'company',
           companyName: 'Mahi Interiors',
-          scopeIds: [],
+          scopeIds: ['22222222-2222-4222-8222-222222222222'],
           themeIds: [],
         }),
       ),
@@ -398,7 +425,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText("You're set up, Mahi Studio! 🎉")).toBeInTheDocument();
 
@@ -438,7 +465,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText("You're all set! 🎉")).toBeInTheDocument();
     expect(screen.queryByText(/there/i)).not.toBeInTheDocument();
@@ -470,7 +497,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
     await user.click(await screen.findByRole('button', { name: /add your projects/i }));
 
     expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/new');
@@ -498,7 +525,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     // Completion copy must not claim the profile is already public, and should
     // name the remaining hero requirements in user-facing language.
@@ -667,7 +694,7 @@ describe('DesignerOnboarding', () => {
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.type(screen.getByLabelText(/whatsapp number/i), '123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     await waitFor(() => {
       expect(submit).toHaveBeenCalledWith(
@@ -693,7 +720,7 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByText(/social links/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText(/Google SSO required/i)).toBeInTheDocument();
   });
@@ -891,7 +918,7 @@ describe('DesignerOnboarding — E-298 draft persistence', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Continue' })); // details -> presence
-    await user.click(await screen.findByRole('button', { name: 'Continue' })); // presence -> submit
+    await user.click(await screen.findByRole('button', { name: 'Finish later' })); // presence -> submit
 
     expect(await screen.findByText(/you're set up/i)).toBeInTheDocument();
     await waitFor(() => expect(onClearDraft).toHaveBeenCalled());

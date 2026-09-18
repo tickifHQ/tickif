@@ -56,19 +56,19 @@ test('company designer completes onboarding and can proceed to portfolio setting
     await page.getByLabel('Address', { exact: true }).fill('Indiranagar, Bengaluru');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-    // Step 3 (presence): every field is optional, so an empty step can continue
-    // without fabricating contact or social data.
+    // Step 3 (presence): every field is optional. Continue requires meaningful
+    // input, while the explicit skip path advances without fabricating data.
     await expect(page.getByLabel('Required')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
     await expect(
       page.getByRole('button', { name: 'Skip to Next step', exact: true }),
     ).toBeEnabled();
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip to Next step', exact: true }).click();
 
-    // Step 4 (services): taxonomy, founding year, and team size are optional, so
-    // the organization can be provisioned without selecting additional metadata.
+    // Step 4 (services): the same contract applies. Empty optional data uses the
+    // explicit skip action, while Continue stays disabled until something changes.
     await expect(page.getByLabel('Required')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
     await expect(
       page.getByRole('button', { name: 'Skip to Next step', exact: true }),
     ).toBeEnabled();
@@ -76,7 +76,7 @@ test('company designer completes onboarding and can proceed to portfolio setting
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
     );
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip to Next step', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
     orgId = onboarded.organization.id;
     expect(onboarded.profile.entityType).toBe('company');

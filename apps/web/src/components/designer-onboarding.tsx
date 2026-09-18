@@ -244,6 +244,12 @@ export function DesignerOnboarding({
   const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>(seedFields?.themeIds ?? []);
   const [foundedYear, setFoundedYear] = useState(seedFields?.foundedYear ?? '2021');
   const [teamSize, setTeamSize] = useState(seedFields?.teamSize ?? '2-10');
+  const [foundedYearChanged, setFoundedYearChanged] = useState(
+    () => seedFields?.foundedYear !== undefined && seedFields.foundedYear !== '2021',
+  );
+  const [teamSizeChanged, setTeamSizeChanged] = useState(
+    () => seedFields?.teamSize !== undefined && seedFields.teamSize !== '2-10',
+  );
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOptions>(emptyTaxonomyOptions);
   const [taxonomyLoading, setTaxonomyLoading] = useState(true);
   const [taxonomyError, setTaxonomyError] = useState('');
@@ -261,8 +267,27 @@ export function DesignerOnboarding({
     entityType === designerEntityType.enum.individual
       ? userName.trim().length >= 2
       : companyName.trim().length >= 2 && firmType.trim().length > 0;
-  const canSubmit =
-    hasRequiredDetails && !websiteUrlError && !googleBusinessUrlError && !submitting;
+  const hasPresenceInput = [
+    ...(entityType === designerEntityType.enum.company ? [whatsappNumber] : []),
+    websiteUrl,
+    googleBusinessUrl,
+    instagramHandle,
+    linkedinHandle,
+    youtubeHandle,
+  ].some((value) => value.trim().length > 0);
+  const hasServicesInput =
+    selectedScopeIds.length > 0 ||
+    selectedThemeIds.length > 0 ||
+    foundedYearChanged ||
+    teamSizeChanged;
+  const hasCurrentStepInput =
+    step === 'details' ||
+    (step === 'presence' && hasPresenceInput) ||
+    (step === 'services' && hasServicesInput);
+  const hasValidOptionalInputs = !websiteUrlError && !googleBusinessUrlError;
+  const canContinue =
+    hasRequiredDetails && hasCurrentStepInput && hasValidOptionalInputs && !submitting;
+  const canSkip = hasRequiredDetails && hasValidOptionalInputs && !submitting;
 
   // --- E-298: account-level draft autosave ------------------------------------
   // Snapshot the persistable state; only non-empty fields are sent so the stored
@@ -409,12 +434,20 @@ export function DesignerOnboarding({
     event.preventDefault();
     setError('');
 
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const isSkipSubmission =
+      submitter instanceof HTMLElement && submitter.dataset.onboardingIntent === 'skip';
+
     const nextWebsiteUrlError = validateWebsiteUrl(websiteUrl);
     const nextGoogleBusinessUrlError = validateGoogleBusinessUrl(googleBusinessUrl);
     setWebsiteUrlError(nextWebsiteUrlError);
     setGoogleBusinessUrlError(nextGoogleBusinessUrlError);
 
     if (nextWebsiteUrlError || nextGoogleBusinessUrlError) {
+      return;
+    }
+
+    if (submitting || (!isSkipSubmission && !hasCurrentStepInput)) {
       return;
     }
 
@@ -694,10 +727,16 @@ export function DesignerOnboarding({
             taxonomyLoading={taxonomyLoading}
             themeOptions={taxonomyOptions.theme}
             teamSize={teamSize}
-            onFoundedYearChange={setFoundedYear}
             onScopeIdsChange={setSelectedScopeIds}
             onThemeIdsChange={setSelectedThemeIds}
-            onTeamSizeChange={setTeamSize}
+            onTeamSizeChange={(value) => {
+              setTeamSize(value);
+              setTeamSizeChanged(true);
+            }}
+            onFoundedYearChange={(value) => {
+              setFoundedYear(value);
+              setFoundedYearChanged(true);
+            }}
           />
         ) : null}
 
@@ -711,7 +750,8 @@ export function DesignerOnboarding({
         <div className="grid gap-4">
           <Button
             type="submit"
-            disabled={!canSubmit}
+            data-onboarding-intent="continue"
+            disabled={!canContinue}
             className="h-9 w-full cursor-pointer gap-1 rounded-lg disabled:cursor-not-allowed"
           >
             {submitting ? (
@@ -730,13 +770,13 @@ export function DesignerOnboarding({
             <DetailsSecondaryActions />
           ) : entityType === designerEntityType.enum.company && step === 'presence' ? (
             <DetailsSecondaryActions
-              disabled={!canSubmit}
+              disabled={!canSkip}
               onSkip={() => setStep('services')}
               skipLabel="Skip to Next step"
             />
           ) : (
             <DetailsSecondaryActions
-              disabled={!canSubmit}
+              disabled={!canSkip}
               submitSkip
               skipLabel={
                 entityType === designerEntityType.enum.individual
@@ -1365,6 +1405,7 @@ function DetailsSecondaryActions({
           <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
           <button
             type={submitSkip ? 'submit' : 'button'}
+            data-onboarding-intent={submitSkip ? 'skip' : undefined}
             disabled={disabled}
             onClick={
               submitSkip
