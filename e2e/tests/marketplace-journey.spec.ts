@@ -59,7 +59,8 @@ test('designer onboarding and media processing connects to visitor onboarding an
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
     );
-    await designer.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(designer.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    await designer.getByRole('button', { name: 'Finish later', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
     orgId = onboarded.organization.id;
     profileId = onboarded.profile.id;
