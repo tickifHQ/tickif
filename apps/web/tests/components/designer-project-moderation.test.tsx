@@ -81,6 +81,49 @@ describe('DesignerProjectModeration', () => {
     }
   });
 
+  // E-270: a designer self-service event is attributed to the designer in the
+  // timeline. This does not touch the E-279 refresh behavior (below); it only
+  // asserts the rendered actor label for a designer-generated event.
+  it('attributes a designer action to the designer in the timeline', async () => {
+    const user = userEvent.setup();
+    mock.historyGet.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              action: 'withdraw',
+              fromStatus: 'submitted',
+              toStatus: 'draft',
+              actorLabel: 'Designer',
+              note: null,
+              reasonCode: null,
+              reasonCodes: [],
+              fieldDiff: null,
+              createdAt: '2026-08-03T00:00:00.000Z',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    render(
+      <DesignerProjectModeration
+        projectId="22222222-2222-4222-8222-222222222222"
+        status="draft"
+        moderationNote={null}
+        rejectionReasonCode={null}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /view moderation history/i }));
+
+    expect(await screen.findByText('Withdraw')).toBeInTheDocument();
+    expect(screen.getByText('by Designer')).toBeInTheDocument();
+    expect(screen.queryByText('by Tickif Review Team')).not.toBeInTheDocument();
+  });
+
   it('surfaces the rejected reason and still offers history', () => {
     render(
       <DesignerProjectModeration
