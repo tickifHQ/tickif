@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { config } from '@repo/config';
 import { db, eq, inArray, schema } from '@repo/db';
 import { assertTestDb, makeDesigner, makeOrganization, makeUser } from '@repo/db/testing';
+import { makePublicPortfolio } from './public-portfolio';
 
 async function cleanupReviewFixture(
   userIds: string[],
@@ -89,7 +90,10 @@ export async function createReviewParticipantFixture() {
       slug: `review-journey-studio-${suffix}`,
       displayName: 'Review Journey Studio',
       status: 'active',
+      bio: 'Review journey studio biography.',
+      logoImageId: 'e2e/public/review-journey-logo.png',
     });
+    await makePublicPortfolio({ profileId: profile.id, portfolioSlug: profile.slug });
     designerProfileId = profile.id;
     await db.insert(schema.member).values({
       id: randomUUID(),

@@ -19,13 +19,13 @@ import {
 export function DesignerOrganizationSwitcher({
   activeOrganizationId,
   studioName,
-  studioLocation,
+  secondaryLabel,
   isWorkspaceRefreshing = false,
   onSwitchSuccess,
 }: {
   activeOrganizationId: string | null;
   studioName: string;
-  studioLocation: string;
+  secondaryLabel: string;
   isWorkspaceRefreshing?: boolean;
   onSwitchSuccess?: (organizationId: string) => void;
 }) {
@@ -76,14 +76,14 @@ export function DesignerOrganizationSwitcher({
           className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Avatar className="size-10 rounded-xl">
-            <InitialsAvatar seed={studioName} fallbackSeed={studioLocation} alt="" size={40} />
+            <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
           </Avatar>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm leading-none font-medium text-foreground">
+            <span className="block truncate text-sm font-medium leading-snug text-foreground">
               {studioName}
             </span>
-            <span className="mt-1 block truncate text-xs leading-none text-muted-foreground">
-              {studioLocation}
+            <span className="mt-0.5 block truncate text-xs leading-snug text-muted-foreground">
+              {secondaryLabel}
             </span>
           </span>
           {isBusy ? (

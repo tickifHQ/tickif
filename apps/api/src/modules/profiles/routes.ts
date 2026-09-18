@@ -27,9 +27,8 @@ import {
   designerProjectsResponseSchema,
   errorResponseSchema,
 } from '@repo/contracts';
-import { setActiveOrganization, setActiveTeam } from '@repo/auth';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
-import { requireAuth, requireResolvedAuth } from '../../lib/auth-middleware.js';
+import { applyActiveContext, requireAuth, requireResolvedAuth } from '../../lib/auth-middleware.js';
 import { validationHook } from '../../lib/validation.js';
 import { dashboardService } from '../dashboard/service.js';
 import { profilesService } from './service.js';
@@ -324,28 +323,13 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
       { userId: user.id, role: user.role, status: user.status },
       input,
     );
-    const activeOrganizationResponse = await setActiveOrganization(
-      c.req.raw.headers,
-      data.organization.id,
-    );
-    if (!activeOrganizationResponse.ok) {
-      throw new Error('Failed to activate the organization after onboarding');
-    }
-    for (const cookie of activeOrganizationResponse.headers.getSetCookie()) {
-      c.header('Set-Cookie', cookie, { append: true });
-    }
-    const activeTeamResponse = await setActiveTeam(c.req.raw.headers, activeTeamId);
-    if (!activeTeamResponse.ok) {
-      throw new Error('Failed to activate the branch after onboarding');
-    }
-    for (const cookie of activeTeamResponse.headers.getSetCookie()) {
-      c.header('Set-Cookie', cookie, { append: true });
-    }
-    await orgsService.saveContextPreference(user.id, {
+    const context = {
       kind: 'organization',
       organizationId: data.organization.id,
       teamId: activeTeamId,
-    });
+    } as const;
+    await applyActiveContext(c, context);
+    await orgsService.saveContextPreference(user.id, context);
     return c.json(data, created ? 201 : 200);
   })
   .openapi(getOnboardingDraftRoute, async (c) => {

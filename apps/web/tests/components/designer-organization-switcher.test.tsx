@@ -46,13 +46,26 @@ describe('DesignerOrganizationSwitcher', () => {
     mock.router.push.mockReset();
   });
 
+  it('shows the active plan below the studio name with room for descenders', () => {
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Typography Studio"
+        secondaryLabel="Professional+ plan"
+      />,
+    );
+
+    expect(screen.getByText('Typography Studio')).toHaveClass('leading-snug');
+    expect(screen.getByText('Professional+ plan')).toHaveClass('leading-snug');
+  });
+
   it('lists organization memberships without exposing the personal workspace', async () => {
     const user = userEvent.setup();
     render(
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -71,7 +84,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -98,7 +111,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -131,7 +144,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
         onSwitchSuccess={onSwitchSuccess}
       />,
     );
@@ -148,7 +161,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
         isWorkspaceRefreshing
       />,
     );
@@ -166,7 +179,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -184,7 +197,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -201,7 +214,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        secondaryLabel="Hobby plan"
       />,
     );
 
@@ -220,7 +233,7 @@ describe('DesignerOrganizationSwitcher', () => {
         <DesignerOrganizationSwitcher
           activeOrganizationId={null}
           studioName="Asha Rao"
-          studioLocation="Mumbai"
+          secondaryLabel="Hobby plan"
         />,
       );
 
@@ -239,7 +252,7 @@ describe('DesignerOrganizationSwitcher', () => {
       <DesignerOrganizationSwitcher
         activeOrganizationId={null}
         studioName="Asha Rao"
-        studioLocation="My Tickif"
+        secondaryLabel="Hobby plan"
       />,
     );
 

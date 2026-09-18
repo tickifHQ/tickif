@@ -122,6 +122,22 @@ describe('DesignerOnboarding', () => {
     });
   });
 
+  it('marks required onboarding fields and explains the marker on hover', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    const entityMarker = screen.getByLabelText('Required');
+    expect(entityMarker.tagName).toBe('SUP');
+    expect(entityMarker).toHaveClass('cursor-default', 'text-destructive');
+
+    await user.hover(entityMarker);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Required');
+
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+
+    expect(screen.getAllByLabelText('Required')).toHaveLength(2);
+  });
+
   it('keeps the user on onboarding when the header is clicked from entity selection', async () => {
     const user = userEvent.setup();
     render(<DesignerOnboarding signedInAs="mahi@test.com" />);
@@ -162,21 +178,186 @@ describe('DesignerOnboarding', () => {
   });
 
   it.each([/just me/i, /interior company \(firm\)/i])(
-    'lets unfinished %s setup continue later without provisioning an empty workspace',
+    'does not let unfinished %s mandatory details be skipped',
     async (entity) => {
       const user = userEvent.setup();
-      const submit = vi.fn();
-      render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+      render(<DesignerOnboarding signedInAs="mahi@test.com" />);
       await user.click(screen.getByRole('button', { name: entity }));
-      await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
-      // E-298: navigation happens after the draft flush resolves.
-      await waitFor(() =>
-        expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
-      );
-      expect(submit).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: /finish later|skip to next step/i })).toBeNull();
     },
   );
+
+  it('provisions an individual workspace when Finish later is used on the optional final step', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Studio',
+          entityType: 'individual',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Studio', slug: 'mahi-studio' },
+      },
+    });
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
+
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith(
+        expect.objectContaining({ entityType: 'individual', userName: 'Mahi Studio' }),
+      ),
+    );
+    expect(mock.router.push).not.toHaveBeenCalledWith('/designer/onboarding/deferred');
+    expect(await screen.findByText(/you.re set up, mahi studio/i)).toBeInTheDocument();
+  });
+
+  it('requires current-step input before an individual can Continue', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    await user.click(screen.getByRole('button', { name: /just me/i }));
+    await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
+    await user.type(screen.getByLabelText(/whatsapp number/i), '9123456789');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Finish later' })).toBeEnabled();
+
+    await user.type(screen.getByLabelText(/website/i), 'mahi.example');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('keeps company presence optional but requires input before Continue', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    await user.type(screen.getByLabelText(/company name/i), 'Mahi Interiors');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.queryByLabelText('Required')).not.toBeInTheDocument();
+    const continueButton = screen.getByRole('button', { name: 'Continue' });
+    expect(continueButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeEnabled();
+
+    fireEvent.submit(continueButton.closest('form')!);
+    expect(screen.queryByLabelText(/services offered/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
+    expect(screen.getByLabelText(/services offered/i)).toBeInTheDocument();
+  });
+
+  it('keeps valid optional company presence values when they are provided', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    await user.type(screen.getByLabelText(/company name/i), 'Mahi Interiors');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await user.type(screen.getByLabelText(/whatsapp number/i), '9123456789');
+    await user.type(screen.getByLabelText(/website/i), 'mahi.example');
+    await user.type(screen.getByLabelText(/google business/i), 'google.com/maps/place/mahi');
+    await user.type(screen.getByLabelText('Instagram'), '@mahi');
+    await user.type(screen.getByLabelText('LinkedIn'), 'mahi-interiors');
+    await user.type(screen.getByLabelText('YouTube'), '@mahi-interiors');
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('validates optional company URLs when values are provided', async () => {
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" />);
+
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    await user.type(screen.getByLabelText(/company name/i), 'Mahi Interiors');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await user.type(screen.getByLabelText(/website/i), 'invalid');
+    await user.type(screen.getByLabelText(/google business/i), 'invalid');
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByText('Enter a valid website URL.')).toBeInTheDocument();
+    expect(screen.getByText('Enter a valid Google Business URL.')).toBeInTheDocument();
+    expect(screen.getByText('Social links')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/services offered/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps company services optional but requires input before Continue', async () => {
+    const submit = vi.fn().mockResolvedValue({
+      created: true,
+      data: {
+        profile: {
+          id: '11111111-1111-4111-8111-111111111111',
+          orgId: 'org-1',
+          displayName: 'Mahi Interiors',
+          entityType: 'company',
+          status: 'draft',
+          createdAt: '2026-06-18T00:00:00.000Z',
+        },
+        organization: { id: 'org-1', name: 'Mahi Interiors', slug: 'mahi-interiors' },
+      },
+    });
+    const user = userEvent.setup();
+    render(<DesignerOnboarding signedInAs="mahi@test.com" onSubmitOnboarding={submit} />);
+
+    await user.click(screen.getByRole('button', { name: /interior company \(firm\)/i }));
+    await user.type(screen.getByLabelText(/company name/i), 'Mahi Interiors');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
+
+    expect(screen.queryByLabelText('Required')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeEnabled();
+
+    await user.click(screen.getByLabelText(/services offered/i));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /full home interiors/i }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'company',
+          companyName: 'Mahi Interiors',
+          scopeIds: ['22222222-2222-4222-8222-222222222222'],
+          themeIds: [],
+        }),
+      ),
+    );
+    expect(await screen.findByText(/you.re set up, mahi interiors/i)).toBeInTheDocument();
+  });
+
+  it('disables Continue and Skip when a restored company draft is missing required details', async () => {
+    render(
+      <DesignerOnboarding
+        signedInAs="mahi@test.com"
+        initialDraft={{
+          step: 'presence',
+          updatedAt: '2026-02-01T00:00:00.000Z',
+          fields: { entityType: 'company' },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip to Next step' })).toBeDisabled();
+    await waitFor(() => expect(mock.taxonomyGet).toHaveBeenCalledTimes(2));
+  });
 
   it('renders generated initials avatars for individual and company details', async () => {
     const user = userEvent.setup();
@@ -244,7 +425,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText("You're set up, Mahi Studio! 🎉")).toBeInTheDocument();
 
@@ -284,7 +465,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText("You're all set! 🎉")).toBeInTheDocument();
     expect(screen.queryByText(/there/i)).not.toBeInTheDocument();
@@ -316,7 +497,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
     await user.click(await screen.findByRole('button', { name: /add your projects/i }));
 
     expect(mock.router.push).toHaveBeenCalledWith('/designer/projects/new');
@@ -344,7 +525,7 @@ describe('DesignerOnboarding', () => {
     await user.click(screen.getByRole('button', { name: /just me/i }));
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     // Completion copy must not claim the profile is already public, and should
     // name the remaining hero requirements in user-facing language.
@@ -394,7 +575,7 @@ describe('DesignerOnboarding', () => {
     await user.type(screen.getByLabelText(/company name/i), 'Antika Interiors');
     expect(screen.getByLabelText(/firm type/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Finish later' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finish later' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/address/i), '12 Studio Lane, Chennai');
 
@@ -403,7 +584,7 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByLabelText(/whatsapp number/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/google business/i)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Skip to Next step' }));
 
     expect(screen.getByLabelText(/services offered/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/design themes/i)).toBeInTheDocument();
@@ -513,7 +694,7 @@ describe('DesignerOnboarding', () => {
     await user.type(screen.getByLabelText(/display name/i), 'Mahi Studio');
     await user.type(screen.getByLabelText(/whatsapp number/i), '123');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     await waitFor(() => {
       expect(submit).toHaveBeenCalledWith(
@@ -539,7 +720,7 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByText(/social links/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Finish later' }));
 
     expect(await screen.findByText(/Google SSO required/i)).toBeInTheDocument();
   });
@@ -575,46 +756,6 @@ describe('DesignerOnboarding — E-298 draft persistence', () => {
       vi.useRealTimers();
     }
   });
-
-  it.each(['resolve', 'reject'] as const)(
-    'serializes changed drafts and waits for the latest save after an earlier save %ss',
-    async (outcome) => {
-      vi.useFakeTimers();
-      const first = deferredSave();
-      const last = deferredSave();
-      const onSaveDraft = vi.fn().mockReturnValueOnce(first.promise).mockReturnValue(last.promise);
-      const view = render(
-        <DesignerOnboarding
-          initialDraft={{ step: 'details', updatedAt: '2026-02-01T00:00:00.000Z', fields: {} }}
-          onSaveDraft={onSaveDraft}
-        />,
-      );
-      try {
-        fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'Older' } });
-        await act(() => vi.advanceTimersByTimeAsync(600));
-        expect(onSaveDraft).toHaveBeenCalledTimes(1);
-        fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'Latest' } });
-        await act(() => vi.advanceTimersByTimeAsync(600));
-        fireEvent.click(screen.getByRole('button', { name: 'Finish later' }));
-        expect(onSaveDraft).toHaveBeenCalledTimes(1);
-        expect(mock.router.push).not.toHaveBeenCalled();
-        await act(async () => {
-          if (outcome === 'resolve') first.resolve();
-          else first.reject(new Error('Save failed'));
-        });
-        expect(onSaveDraft).toHaveBeenCalledTimes(2);
-        expect(onSaveDraft).toHaveBeenLastCalledWith(
-          expect.objectContaining({ fields: expect.objectContaining({ userName: 'Latest' }) }),
-        );
-        expect(mock.router.push).not.toHaveBeenCalled();
-        await act(async () => last.resolve());
-        expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred');
-      } finally {
-        view.unmount();
-        vi.useRealTimers();
-      }
-    },
-  );
 
   beforeEach(() => {
     // reset (not just clear) so a per-test push implementation never leaks.
@@ -745,83 +886,6 @@ describe('DesignerOnboarding — E-298 draft persistence', () => {
     );
   });
 
-  it('CRITICAL: Finish later saves the LATEST value and navigates only AFTER the save resolves', async () => {
-    const order: string[] = [];
-    let resolveSave: (() => void) | undefined;
-    const onSaveDraft = vi.fn().mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSave = () => {
-            order.push('save-resolved');
-            resolve();
-          };
-        }),
-    );
-    mock.router.push.mockImplementation((path: string) => order.push(`push:${path}`));
-
-    const user = userEvent.setup();
-    render(
-      <DesignerOnboarding
-        signedInAs="mahi@test.com"
-        initialDraft={{
-          step: 'details',
-          updatedAt: '2026-02-01T00:00:00.000Z',
-          fields: { entityType: 'individual', userName: 'Mahi' },
-        }}
-        onSaveDraft={onSaveDraft}
-      />,
-    );
-
-    // Type a fresh value, then IMMEDIATELY click Finish later (debounce has not fired).
-    const name = await screen.findByLabelText(/display name/i);
-    await user.clear(name);
-    await user.type(name, 'Mahi Studio Latest');
-    await user.click(screen.getByRole('button', { name: 'Finish later' }));
-
-    // The final flush was invoked with the latest typed value...
-    await waitFor(() => expect(onSaveDraft).toHaveBeenCalled());
-    expect(onSaveDraft).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        fields: expect.objectContaining({ userName: 'Mahi Studio Latest' }),
-      }),
-    );
-    // ...and navigation has NOT happened yet because the save promise is unresolved.
-    expect(mock.router.push).not.toHaveBeenCalled();
-
-    // Resolve the save → navigation follows, strictly after the save.
-    resolveSave?.();
-    await waitFor(() =>
-      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
-    );
-    expect(order).toEqual(['save-resolved', 'push:/designer/onboarding/deferred']);
-  });
-
-  it('Finish later still navigates when the final save FAILS (never traps the user)', async () => {
-    const onSaveDraft = vi.fn().mockRejectedValue(new Error('network down'));
-    const user = userEvent.setup();
-    render(
-      <DesignerOnboarding
-        signedInAs="mahi@test.com"
-        initialDraft={{
-          step: 'details',
-          updatedAt: '2026-02-01T00:00:00.000Z',
-          fields: { entityType: 'individual', userName: 'Mahi' },
-        }}
-        onSaveDraft={onSaveDraft}
-      />,
-    );
-
-    const name = await screen.findByLabelText(/display name/i);
-    await user.type(name, ' Updated');
-    await user.click(screen.getByRole('button', { name: 'Finish later' }));
-
-    await waitFor(() =>
-      expect(mock.router.push).toHaveBeenCalledWith('/designer/onboarding/deferred'),
-    );
-    // Local React state is untouched by the failed save — the field keeps its value.
-    expect(screen.getByLabelText(/display name/i)).toHaveValue('Mahi Updated');
-  });
-
   it('clears the draft after a successful onboarding submit', async () => {
     const onClearDraft = vi.fn().mockResolvedValue(undefined);
     const submit = vi.fn().mockResolvedValue({
@@ -854,7 +918,7 @@ describe('DesignerOnboarding — E-298 draft persistence', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Continue' })); // details -> presence
-    await user.click(await screen.findByRole('button', { name: 'Continue' })); // presence -> submit
+    await user.click(await screen.findByRole('button', { name: 'Finish later' })); // presence -> submit
 
     expect(await screen.findByText(/you're set up/i)).toBeInTheDocument();
     await waitFor(() => expect(onClearDraft).toHaveBeenCalled());

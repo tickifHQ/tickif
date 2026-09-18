@@ -13,7 +13,7 @@ import { apiUrl, webUrl } from '../lib/environment';
  * agrees (unpublished stays a hard 404).
  *
  * Related, deliberately NOT re-tested here:
- * - Individual onboarding + completion + "Finish later"/deferred recovery are
+ * - Individual onboarding + completion and deferred recovery are
  *   already covered end-to-end in authentication.spec.ts.
  * - The publish-on-hero backend engine and public 404 gate are owned by the
  *   portfolio publication work; we only assert the frontend honours their state.
@@ -107,9 +107,9 @@ test.describe('E-278 portfolio publication readiness', () => {
   }) => {
     const context = await browser.newContext({ baseURL: webUrl });
     try {
-      // Draft profile missing hero fields — never publicly visible.
+      // Legacy active profile missing Hero fields must still never be publicly visible.
       const seed = await seedDesigner('incomplete', {
-        status: 'draft',
+        status: 'active',
         publicLinkEnabled: true,
         logo: false,
         bio: false,
@@ -119,12 +119,9 @@ test.describe('E-278 portfolio publication readiness', () => {
       await selectOrganization(context, seed.organization.id);
       const page = await context.newPage();
 
-      // Dashboard: no copyable public link, a readiness CTA instead.
+      // Dashboard: no copyable public link or public slug is exposed.
       await page.goto('/designer/dashboard');
       await expect(page.getByRole('button', { name: /copy link/i })).toHaveCount(0);
-      await expect(
-        page.getByRole('link', { name: /complete your portfolio/i }).first(),
-      ).toBeVisible();
       await expect(page.getByText(seed.portfolioSlug)).toHaveCount(0);
 
       // Portfolio settings: no "Open full", no "Copy link".
@@ -133,9 +130,12 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByRole('button', { name: 'Copy link' })).toHaveCount(0);
 
       // Public route: hard 404 for the unpublished slug.
-      const publicResponse = await context.request.get(`${apiUrl}/api/portfolios/${seed.portfolioSlug}`, {
-        headers,
-      });
+      const publicResponse = await context.request.get(
+        `${apiUrl}/api/portfolios/${seed.portfolioSlug}`,
+        {
+          headers,
+        },
+      );
       expect(publicResponse.status()).toBe(404);
     } finally {
       await context.close();
@@ -167,9 +167,12 @@ test.describe('E-278 portfolio publication readiness', () => {
       await expect(page.getByRole('button', { name: /copy link/i })).toHaveCount(0);
 
       // Public route still 404s because the link is disabled.
-      const publicResponse = await context.request.get(`${apiUrl}/api/portfolios/${seed.portfolioSlug}`, {
-        headers,
-      });
+      const publicResponse = await context.request.get(
+        `${apiUrl}/api/portfolios/${seed.portfolioSlug}`,
+        {
+          headers,
+        },
+      );
       expect(publicResponse.status()).toBe(404);
     } finally {
       await context.close();
@@ -211,9 +214,12 @@ test.describe('E-278 portfolio publication readiness', () => {
       expect(canonicalUrl).not.toContain('/d/your-studio');
 
       // Public route resolves (200) for the published slug.
-      const publicResponse = await context.request.get(`${apiUrl}/api/portfolios/${seed.portfolioSlug}`, {
-        headers,
-      });
+      const publicResponse = await context.request.get(
+        `${apiUrl}/api/portfolios/${seed.portfolioSlug}`,
+        {
+          headers,
+        },
+      );
       expect(publicResponse.status()).toBe(200);
 
       // The public page itself renders (not a 404).

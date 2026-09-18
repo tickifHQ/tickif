@@ -21,17 +21,17 @@ vi.mock('@/components/designer-organization-switcher', () => ({
   DesignerOrganizationSwitcher: ({
     activeOrganizationId,
     studioName,
-    studioLocation,
+    secondaryLabel,
   }: {
     activeOrganizationId: string | null;
     studioName: string;
-    studioLocation: string;
+    secondaryLabel: string;
   }) => (
     <div
       data-testid="studio-switcher"
       data-active-organization-id={activeOrganizationId}
       data-studio-name={studioName}
-      data-studio-location={studioLocation}
+      data-secondary-label={secondaryLabel}
     />
   ),
 }));
@@ -65,7 +65,7 @@ describe('DesignerSelectStudioPage', () => {
     expect(screen.getByText(/Select the studio workspace/)).toBeInTheDocument();
     expect(screen.getByTestId('studio-switcher')).toHaveAttribute('data-studio-name', 'Mahi');
     expect(screen.getByTestId('studio-switcher')).toHaveAttribute(
-      'data-studio-location',
+      'data-secondary-label',
       'Choose a studio',
     );
     expect(mock.redirect).not.toHaveBeenCalled();

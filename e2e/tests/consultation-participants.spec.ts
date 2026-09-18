@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { apiUrl, webUrl } from '../lib/environment';
 import { signInPhone as signIn } from '../lib/auth';
+import { makePublicPortfolio } from '../lib/public-portfolio';
 
 import { db, eq, inArray, schema } from '@repo/db';
 import {
@@ -50,7 +51,10 @@ test('consultation lifecycle: visitor books, studio confirms and completes, visi
       displayName: org.name,
       status: 'active',
       phone: owner.phoneNumber,
+      bio: 'Consultation journey studio biography.',
+      logoImageId: 'e2e/public/consultation-journey-logo.png',
     });
+    await makePublicPortfolio({ profileId: profile.id, portfolioSlug: profile.slug });
     cleanup.push(async () => {
       const reviews = db
         .select({ id: schema.review.id })

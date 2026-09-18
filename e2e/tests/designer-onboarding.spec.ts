@@ -9,7 +9,7 @@ import { apiUrl, webUrl } from '../lib/environment';
 /**
  * E-278: end-to-end coverage for COMPANY/organization designer onboarding.
  *
- * Individual onboarding + "Finish later"/deferred recovery are already covered
+ * Individual onboarding + deferred recovery are already covered
  * by authentication.spec.ts; this spec adds the company journey Linear E-278
  * explicitly requires. It drives the real multi-step company flow
  * (entity -> details -> presence -> services -> submit), then confirms the
@@ -52,20 +52,31 @@ test('company designer completes onboarding and can proceed to portfolio setting
     await page.getByRole('button', { name: /Interior company/i }).click();
 
     // Step 2 (details): company name is the only required field.
-    await page.getByLabel('Company name', { exact: true }).fill(`Journey Firm ${suffix}`);
+    await page.getByLabel(/^Company name/).fill(`Journey Firm ${suffix}`);
     await page.getByLabel('Address', { exact: true }).fill('Indiranagar, Bengaluru');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-    // Step 3 (presence): optional links — advance with defaults.
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    // Step 3 (presence): every field is optional. Continue requires meaningful
+    // input, while the explicit skip path advances without fabricating data.
+    await expect(page.getByLabel('Required')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Skip to Next step', exact: true }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: 'Skip to Next step', exact: true }).click();
 
-    // Step 4 (services): scope/theme/founded/team have defaults; this final
-    // Continue submits the company onboarding payload.
+    // Step 4 (services): the same contract applies. Empty optional data uses the
+    // explicit skip action, while Continue stays disabled until something changes.
+    await expect(page.getByLabel('Required')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Skip to Next step', exact: true }),
+    ).toBeEnabled();
     const onboardingResponse = page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' && response.url().endsWith('/api/profiles/me'),
     );
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Skip to Next step', exact: true }).click();
     const onboarded = onboardDesignerResponseSchema.parse(await (await onboardingResponse).json());
     orgId = onboarded.organization.id;
     expect(onboarded.profile.entityType).toBe('company');
@@ -84,6 +95,16 @@ test('company designer completes onboarding and can proceed to portfolio setting
     await page.goto('/designer/dashboard');
     await expect(page).toHaveURL(/\/designer\/dashboard$/);
     await expect(page.getByRole('heading', { name: /welcome/i })).toBeVisible();
+
+    // The onboarding response must activate both the new organization and its
+    // branch. These server-rendered pages previously failed immediately after
+    // onboarding when only one of those session values was updated.
+    await page.goto('/designer/branches');
+    await expect(page.getByRole('heading', { name: 'Branches', exact: true })).toBeVisible();
+    await expect(page.getByText(/Could not load your branches/i)).toHaveCount(0);
+    await page.goto('/designer/terms-roles');
+    await expect(page.getByRole('heading', { name: 'Team & Roles', exact: true })).toBeVisible();
+    await expect(page.getByText(/Could not load your team and roles/i)).toHaveCount(0);
 
     // The designer can proceed to Portfolio Settings to finish the public hero.
     await page.goto('/designer/portfolio');

@@ -10,6 +10,7 @@ import {
   upsertSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
+import { makePublicPortfolio } from '../lib/public-portfolio';
 
 const term = 'audit11directory';
 const documents: DesignerSearchDocument[] = [];
@@ -40,7 +41,10 @@ test.describe('public designer discovery', () => {
       slug: `audit11-${randomUUID()}`,
       status: 'active',
       entityType: 'company',
+      bio: 'Synthetic directory studio biography.',
+      logoImageId: 'e2e/public/audit11-directory-logo.png',
     });
+    await makePublicPortfolio({ profileId: profile.id, portfolioSlug: profile.slug });
     for (let index = 0; index < 26; index++) {
       const document: DesignerSearchDocument = {
         id: index === 0 ? profile.id : randomUUID(),

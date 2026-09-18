@@ -69,8 +69,18 @@ describe('POST /api/profiles/me — onboarding', () => {
     expect(body.organization.name).toBe('Onboard User');
 
     const activeCookie = mergeResponseCookies(cookie, res);
-    const session = await getSession(new Headers({ cookie: activeCookie }));
+    const session = await getSession(new Headers({ cookie: activeCookie }), {
+      disableCookieCache: true,
+    });
     expect(session?.session.activeOrganizationId).toBe(body.organization.id);
+    expect(session?.session.activeTeamId).toEqual(expect.any(String));
+
+    const [branches, teamAndRoles] = await Promise.all([
+      request('GET', '/api/orgs/branches', { cookie: activeCookie }),
+      request('GET', '/api/orgs/current', { cookie: activeCookie }),
+    ]);
+    expect(branches.status).toBe(200);
+    expect(teamAndRoles.status).toBe(200);
   });
 
   it('returns existing profile on re-submit (200 idempotent)', async () => {
@@ -390,6 +400,7 @@ describe('GET /api/profiles/me/dashboard', () => {
       // E-278: this fixture is missing hero fields (bio, logo) so the profile
       // never reaches `active` — the dashboard reports it as not publicly visible.
       publiclyVisible: false,
+      verificationStatus: null,
     });
     const shareUrl = new URL(body.shareUrl);
     expect(shareUrl.origin).toBe(new URL(config.PUBLIC_WEB_URL).origin);

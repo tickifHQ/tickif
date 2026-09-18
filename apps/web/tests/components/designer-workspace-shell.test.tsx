@@ -48,14 +48,17 @@ vi.mock('@/components/account-menu', () => ({
   AccountMenu: ({
     showLabel,
     showProfileSettings,
+    avatarSeed,
   }: {
     showLabel?: boolean;
     showProfileSettings?: boolean;
+    avatarSeed?: string;
   }) => (
     <div
       data-testid="account-menu"
       data-show-label={showLabel ? 'true' : 'false'}
       data-profile-settings={showProfileSettings ? 'true' : 'false'}
+      data-avatar-seed={avatarSeed}
     />
   ),
 }));
@@ -125,7 +128,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        planLabel="Hobby plan"
       >
         <div>Studio One dashboard</div>
       </DesignerWorkspaceShell>,
@@ -143,7 +146,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-2"
         studioName="Studio Two"
-        studioLocation="Pune"
+        planLabel="Corporate plan"
       >
         <div>Studio Two dashboard</div>
       </DesignerWorkspaceShell>,
@@ -162,7 +165,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -182,7 +185,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -202,7 +205,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -254,7 +257,7 @@ describe('DesignerWorkspaceShell', () => {
           capabilities={FULL_CAPABILITIES}
           activeOrganizationId="org-1"
           studioName="Antika Interiors"
-          studioLocation="Chennai"
+          planLabel="Hobby plan"
         >
           <div>Dashboard content</div>
         </DesignerWorkspaceShell>,
@@ -275,7 +278,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -294,7 +297,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -320,7 +323,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -331,6 +334,23 @@ describe('DesignerWorkspaceShell', () => {
     expect(header).toHaveTextContent('Profile & settings');
     expect(header.querySelector('svg.lucide-settings')).toBeInTheDocument();
     expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'true');
+  });
+
+  it('keeps the header capsule avatar tied to the signed-in account, not the active studio', () => {
+    mock.pathname = '/designer/portfolio';
+
+    render(
+      <DesignerWorkspaceShell
+        isOwner
+        activeOrganizationId="org-1"
+        studioName="Hehe Studio"
+        planLabel="Hobby plan"
+      >
+        <div>Portfolio content</div>
+      </DesignerWorkspaceShell>,
+    );
+
+    expect(screen.getByTestId('account-menu')).not.toHaveAttribute('data-avatar-seed');
   });
 
   it.each([
@@ -347,7 +367,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -365,7 +385,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -385,7 +405,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -411,7 +431,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -435,7 +455,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -458,7 +478,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Upload content</div>
       </DesignerWorkspaceShell>,
@@ -489,7 +509,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={RESTRICTED_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Antika Interiors"
-        studioLocation="Chennai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
