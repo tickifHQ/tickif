@@ -33,6 +33,13 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires the fresh Hobby usage journey independently of mandate recovery', () => {
+    const title =
+      'fresh Hobby organization shows actual seat and branch usage without a subscription';
+    expect(requiredTests).toContainEqual({ file: 'billing-management.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(/fresh Hobby/);
+  });
+
   it('requires Corporate branch management and every role navigation journey', () => {
     expect(requiredTests).toContainEqual({
       file: 'corporate-branches.spec.ts',
