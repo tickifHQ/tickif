@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AdminImageRecord,
+  AdminModerationEventRecord,
   AdminProjectRecord,
   AdminReviewCommentRecord,
 } from '../../../src/modules/admin-projects/repository.js';
@@ -171,6 +172,66 @@ describe('adminProjectsService', () => {
     });
     expect(result).toMatchObject({ authorLabel: 'Tickif Review Team', status: 'unresolved' });
     expect(result).not.toHaveProperty('authorId');
+  });
+
+  // E-270: the admin moderation detail must use the SAME masked actor-label
+  // semantics as the designer-facing history — designer self-service actions read
+  // as "Designer", reviewer verdicts stay "Tickif Review Team". Never a real id.
+  it('masks moderation history actors consistently: designer actions vs reviewer verdicts', async () => {
+    const moderationEvent = (
+      overrides: Partial<AdminModerationEventRecord> = {},
+    ): AdminModerationEventRecord => ({
+      id: '66666666-6666-4666-8666-666666666666',
+      projectId: project().id,
+      actorUserId: 'user-1',
+      action: 'submit',
+      fromStatus: 'draft',
+      toStatus: 'submitted',
+      note: null,
+      reasonCode: null,
+      reasonCodes: [],
+      fieldDiff: null,
+      createdAt: new Date('2026-08-04T08:00:00.000Z'),
+      ...overrides,
+    });
+
+    repo.findById.mockResolvedValue(project());
+    repo.listRooms.mockResolvedValue([]);
+    repo.listImages.mockResolvedValue([]);
+    repo.getReadyImageCounts.mockResolvedValue({ imageCount: 3, taggedImageCount: 3 });
+    repo.listReviewComments.mockResolvedValue([]);
+    repo.listHistory.mockResolvedValue([
+      moderationEvent({ action: 'submit', fromStatus: 'draft', toStatus: 'submitted' }),
+      moderationEvent({
+        action: 'resubmit',
+        fromStatus: 'changes_requested',
+        toStatus: 'submitted',
+      }),
+      moderationEvent({ action: 'withdraw', fromStatus: 'submitted', toStatus: 'draft' }),
+      moderationEvent({ action: 'start_review', fromStatus: 'submitted', toStatus: 'in_review' }),
+      moderationEvent({
+        action: 'request_changes',
+        fromStatus: 'in_review',
+        toStatus: 'changes_requested',
+      }),
+      moderationEvent({ action: 'reject', fromStatus: 'in_review', toStatus: 'rejected' }),
+      moderationEvent({ action: 'publish', fromStatus: 'in_review', toStatus: 'published' }),
+    ]);
+
+    const result = await adminProjectsService.getById(project().id);
+    const labelByAction = new Map(
+      result.history.map((item) => [item.action, item.actorLabel] as const),
+    );
+    expect(labelByAction.get('submit')).toBe('Designer');
+    expect(labelByAction.get('resubmit')).toBe('Designer');
+    expect(labelByAction.get('withdraw')).toBe('Designer');
+    expect(labelByAction.get('start_review')).toBe('Tickif Review Team');
+    expect(labelByAction.get('request_changes')).toBe('Tickif Review Team');
+    expect(labelByAction.get('reject')).toBe('Tickif Review Team');
+    expect(labelByAction.get('publish')).toBe('Tickif Review Team');
+    for (const item of result.history) {
+      expect(item).not.toHaveProperty('actorUserId');
+    }
   });
 
   it('lets the assigned reviewer resolve one comment after requesting changes', async () => {
