@@ -50,7 +50,7 @@ import {
   YouTubeBrandIcon,
 } from '@/components/brand-icons';
 import { CopyLinkButton } from '@/components/copy-link-button';
-import { RequiredFieldIndicator } from '@/components/required-field-indicator';
+import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { env } from '@/env';
 import {
   checkSlugAvailability,
@@ -930,24 +930,28 @@ export function DesignerPortfolioSettings() {
                           <div className="relative size-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/50">
                             {portfolio.logoUrl ? (
                               <button
-                                ref={(node) => { heroFieldRefs.current.logo = node; }}
+                                ref={(node) => {
+                                  heroFieldRefs.current.logo = node;
+                                }}
                                 type="button"
                                 onClick={handleLogoUploadClick}
                                 disabled={isUploadingLogo}
                                 className="relative block size-full disabled:opacity-50"
                                 aria-label="Replace logo"
                               >
-                              <Image
-                                src={portfolio.logoUrl}
-                                alt="Portfolio logo"
-                                fill
-                                unoptimized
-                                className="object-cover"
-                              />
+                                <Image
+                                  src={portfolio.logoUrl}
+                                  alt="Portfolio logo"
+                                  fill
+                                  unoptimized
+                                  className="object-cover"
+                                />
                               </button>
                             ) : (
                               <button
-                                ref={(node) => { heroFieldRefs.current.logo = node; }}
+                                ref={(node) => {
+                                  heroFieldRefs.current.logo = node;
+                                }}
                                 type="button"
                                 onClick={handleLogoUploadClick}
                                 disabled={isUploadingLogo}
@@ -980,7 +984,9 @@ export function DesignerPortfolioSettings() {
                           <RequiredFieldIndicator />
                         </Label>
                         <Input
-                          ref={(node) => { heroFieldRefs.current.displayName = node; }}
+                          ref={(node) => {
+                            heroFieldRefs.current.displayName = node;
+                          }}
                           value={form.displayName}
                           onChange={(e) => updateField('displayName', e.target.value)}
                           placeholder="Your studio name"
@@ -1003,7 +1009,9 @@ export function DesignerPortfolioSettings() {
                         <RequiredFieldIndicator />
                       </Label>
                       <Input
-                        ref={(node) => { heroFieldRefs.current.tagline = node; }}
+                        ref={(node) => {
+                          heroFieldRefs.current.tagline = node;
+                        }}
                         value={form.tagline}
                         onChange={(e) => updateField('tagline', e.target.value)}
                         placeholder="A short tagline for your portfolio"
@@ -1021,7 +1029,9 @@ export function DesignerPortfolioSettings() {
                         <RequiredFieldIndicator />
                       </Label>
                       <Textarea
-                        ref={(node) => { heroFieldRefs.current.bio = node; }}
+                        ref={(node) => {
+                          heroFieldRefs.current.bio = node;
+                        }}
                         value={form.bio}
                         onChange={(e) => updateField('bio', e.target.value)}
                         placeholder="Tell visitors about your design philosophy..."

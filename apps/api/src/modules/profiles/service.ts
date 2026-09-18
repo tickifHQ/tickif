@@ -569,6 +569,12 @@ export const profilesService = {
     }
     assertProfileOrganization(profile, activeOrgId);
 
+    // This editor shares the portfolio Hero bio. Clearing a saved value here
+    // must not bypass the portfolio editor's protection and unpublish the page.
+    if (input.bio !== undefined && profile.bio?.trim() && !input.bio?.trim()) {
+      throw AppError.unprocessable('Required Hero fields cannot be empty once saved');
+    }
+
     // Validate taxonomy IDs (shared helper — single round-trip, consistent reporting)
     const { cityIds, scopeIds, themeIds, ...profileFields } = input;
     const taxonomyErrors = await profilesRepository.validateAllTaxonomyIds({

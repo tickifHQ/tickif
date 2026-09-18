@@ -230,6 +230,10 @@ describe('DesignerPortfolioSettings', () => {
   });
 
   it('opens the file picker to replace an existing saved logo', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
     await renderSettings();
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const openPicker = vi.spyOn(fileInput, 'click');
@@ -241,11 +245,17 @@ describe('DesignerPortfolioSettings', () => {
   it('moves keyboard focus to the missing Hero control', async () => {
     Element.prototype.scrollIntoView = vi.fn();
     mock.fetchPortfolio.mockResolvedValueOnce({
-      ...basePortfolio, publiclyVisible: false, missingRequiredFields: ['bio'],
+      ...basePortfolio,
+      publiclyVisible: false,
+      missingRequiredFields: ['bio'],
     });
     await renderSettings();
     await userEvent.setup().click(screen.getByRole('button', { name: 'a bio' }));
-    await waitFor(() => expect(screen.getByPlaceholderText('Tell visitors about your design philosophy...')).toHaveFocus());
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText('Tell visitors about your design philosophy...'),
+      ).toHaveFocus(),
+    );
   });
 
   it('drops the visibility notice once every required field is filled', async () => {
@@ -579,7 +589,8 @@ describe('DesignerPortfolioSettings', () => {
     const logo = screen.getAllByAltText('Portfolio logo')[0];
     const removeLogo = screen.getByRole('button', { name: 'Remove logo' });
 
-    expect(logo?.parentElement).toHaveClass('overflow-hidden');
+    expect(logo?.closest('.overflow-hidden')).not.toBeNull();
+    expect(logo?.closest('.overflow-hidden')).not.toContainElement(removeLogo);
     expect(removeLogo.parentElement).not.toHaveClass('overflow-hidden');
   });
 

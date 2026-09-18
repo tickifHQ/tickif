@@ -5,10 +5,7 @@ import { DesignerWorkspaceShell } from '@/components/designer-workspace-shell';
 import { requireAuth } from '@/lib/auth-guard';
 import { ProtectedBfcacheGuard } from '@/components/protected-bfcache-guard';
 import { requireCurrentDesignerProfile } from '@/lib/designer-profile';
-import {
-  getCurrentOrgCapabilities,
-  getCurrentOrgPlanTier,
-} from '@/lib/current-org-role';
+import { getCurrentOrgCapabilities, getCurrentOrgPlanTier } from '@/lib/current-org-role';
 import { PLAN_TIER_LABELS } from '@/lib/billing-types';
 
 /** Designer workspace chrome. Requires the exact designer platform role. */

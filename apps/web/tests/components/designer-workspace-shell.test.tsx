@@ -103,7 +103,7 @@ describe('DesignerWorkspaceShell', () => {
         capabilities={RESTRICTED_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Studio One"
-        studioLocation="Mumbai"
+        planLabel="Hobby plan"
       >
         <div>Dashboard content</div>
       </DesignerWorkspaceShell>,
@@ -341,7 +341,7 @@ describe('DesignerWorkspaceShell', () => {
 
     render(
       <DesignerWorkspaceShell
-        isOwner
+        capabilities={FULL_CAPABILITIES}
         activeOrganizationId="org-1"
         studioName="Hehe Studio"
         planLabel="Hobby plan"

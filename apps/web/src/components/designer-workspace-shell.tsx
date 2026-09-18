@@ -358,11 +358,7 @@ export function DesignerWorkspaceShell({
               </Link>
             </Button>
           ) : null}
-          <AccountMenu
-            showLabel
-            showProfileSettings={capabilities.editOrganization}
-            avatarSeed={studioName}
-          />
+          <AccountMenu showLabel showProfileSettings={capabilities.editOrganization} />
         </>
       }
       busy={isWorkspaceRefreshing}

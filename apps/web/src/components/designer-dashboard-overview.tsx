@@ -249,14 +249,15 @@ export function DesignerDashboardOverview({
           description:
             'Upload your first project to Tickif to make your profile live and present it as a portfolio.',
           done: projectDone,
-          action: projectDone || !canWriteProjects ? null : (
-            <Button asChild variant="outline">
-              <Link href="/designer/projects/new">
-                <Plus className="size-4" />
-                Add new project
-              </Link>
-            </Button>
-          ),
+          action:
+            projectDone || !canWriteProjects ? null : (
+              <Button asChild variant="outline">
+                <Link href="/designer/projects/new">
+                  <Plus className="size-4" />
+                  Add new project
+                </Link>
+              </Button>
+            ),
         },
         {
           key: 'profile',
@@ -264,14 +265,15 @@ export function DesignerDashboardOverview({
           description:
             'Add your profile tags, social links, short bio, and customize your portfolio.',
           done: profileDone,
-          action: profileDone || !canEditOrganization ? null : (
-            <Button asChild variant="outline">
-              <Link href="/designer/portfolio">
-                Manage portfolio
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          ),
+          action:
+            profileDone || !canEditOrganization ? null : (
+              <Button asChild variant="outline">
+                <Link href="/designer/portfolio">
+                  Manage portfolio
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            ),
         },
       ];
   const hasTrackedSteps = trackedChecklistItems.length > 0;
@@ -359,35 +361,37 @@ export function DesignerDashboardOverview({
           workspaceKey={workspaceKey ?? portfolioUrl}
           projectDone={projectDone || !canWriteProjects}
           nextStepsDone={nextStepsDone}
-          setupCard={canWriteProjects ? (
-            <Card variant="accent" radius="2xl" className="relative overflow-visible">
-              <div className="relative px-4 pt-4 pb-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <Badge
-                      variant="outline"
-                      className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
-                    >
-                      COMPLETE SETUP
-                    </Badge>
-                    <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
-                      Add your first project
+          setupCard={
+            canWriteProjects ? (
+              <Card variant="accent" radius="2xl" className="relative overflow-visible">
+                <div className="relative px-4 pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <Badge
+                        variant="outline"
+                        className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
+                      >
+                        COMPLETE SETUP
+                      </Badge>
+                      <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
+                        Add your first project
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
+                        It goes public and gets indexed the moment your first project is approved.
+                        Usually 24–48 hours.
+                      </p>
                     </div>
-                    <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
-                      It goes public and gets indexed the moment your first project is approved.
-                      Usually 24–48 hours.
-                    </p>
                   </div>
+                  <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
+                    <Link href="/designer/projects/new">
+                      <Plus className="size-4" />
+                      Add first project
+                    </Link>
+                  </Button>
                 </div>
-                <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
-                  <Link href="/designer/projects/new">
-                    <Plus className="size-4" />
-                    Add first project
-                  </Link>
-                </Button>
-              </div>
-            </Card>
-          ) : null}
+              </Card>
+            ) : null
+          }
           nextStepsCard={
             <div>
               <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
@@ -405,7 +409,7 @@ export function DesignerDashboardOverview({
                     icon={<User className="size-4" />}
                     title="Round out your profile"
                     description="Add a bio and tags while you wait."
-                    href={canEditOrganization ? "/designer/portfolio" : undefined}
+                    href={canEditOrganization ? '/designer/portfolio' : undefined}
                   />
                 ) : null}
                 {verification ? (
@@ -413,7 +417,7 @@ export function DesignerDashboardOverview({
                     icon={<Shield className="size-4" />}
                     title={verification.title}
                     description={verification.description}
-                    href={canManageVerification ? "/designer/verification" : undefined}
+                    href={canManageVerification ? '/designer/verification' : undefined}
                   />
                 ) : null}
               </Card>
@@ -484,12 +488,14 @@ export function DesignerDashboardOverview({
                       Finish your portfolio to unlock a public link you can share anywhere.
                       We&apos;ll show it here the moment your page goes live.
                     </p>
-                    {canEditOrganization && (<Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
-                      <Link href="/designer/portfolio">
-                        Complete your portfolio
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </Button>)}
+                    {canEditOrganization && (
+                      <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
+                        <Link href="/designer/portfolio">
+                          Complete your portfolio
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </Button>
+                    )}
                   </>
                 )}
               </div>

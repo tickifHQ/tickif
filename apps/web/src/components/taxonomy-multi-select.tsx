@@ -9,7 +9,7 @@ import {
 } from '@repo/ui/components/dropdown-menu';
 import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
-import { RequiredFieldIndicator } from '@/components/required-field-indicator';
+import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 
 type TaxonomyOption = { id: string; label: string };
 
