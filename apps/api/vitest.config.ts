@@ -52,6 +52,11 @@ export default defineConfig({
             R2_ACCESS_KEY_ID: 'test-access-key',
             R2_SECRET_ACCESS_KEY: 'test-secret-key',
             R2_BUCKET: 'test-bucket',
+            // Integration tests must never inherit live delivery or billing identifiers
+            // from a developer's root .env. Keep side effects local and fixtures stable.
+            RESEND_API_KEY: '',
+            RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS: 'plan_test_professional_plus',
+            RAZORPAY_PLAN_ID_CORPORATE: 'plan_test_corporate',
           },
           globalSetup: ['./tests/global-setup.ts'],
           setupFiles: ['./tests/setup.ts'],

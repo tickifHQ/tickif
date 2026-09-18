@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import type {
   CompletionStep,
   ProfileCompletionResponse,
@@ -9,6 +8,7 @@ import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
 import { CopyLinkButton } from '@/components/copy-link-button';
+import { DashboardRightRailTransition } from '@/components/dashboard-right-rail-transition';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import {
   ArrowRight,
@@ -28,6 +28,45 @@ type OverviewChecklistItem = {
   done: boolean;
   action?: React.ReactNode;
 };
+
+type VerificationPrompt = {
+  title: string;
+  description: string;
+};
+
+function verificationPrompt(
+  status: ProfileDashboardResponse['verificationStatus'],
+): VerificationPrompt | null {
+  switch (status) {
+    case 'verified':
+      return null;
+    case 'pending':
+      return {
+        title: 'Verification in review',
+        description: 'Track the review of your submitted documents.',
+      };
+    case 'rejected':
+      return {
+        title: 'Update verification',
+        description: 'Review the requested changes and resubmit.',
+      };
+    case 'expired':
+      return {
+        title: 'Renew verification',
+        description: 'Update your documents to restore verification.',
+      };
+    case 'draft':
+      return {
+        title: 'Continue verification',
+        description: 'Finish preparing your verification application.',
+      };
+    default:
+      return {
+        title: 'Start verification',
+        description: 'Get a head start on your KYC.',
+      };
+  }
+}
 
 function ChecklistStep({ item, isLast }: { item: OverviewChecklistItem; isLast: boolean }) {
   return (
@@ -121,8 +160,10 @@ export function DesignerDashboardOverview({
   dashboard,
   completion,
   dashboardError,
+  workspaceKey,
   canWriteProjects = false,
   canEditOrganization = false,
+  canManageVerification = false,
 }: {
   studioName: string;
   studioLocation: string;
@@ -137,8 +178,10 @@ export function DesignerDashboardOverview({
   dashboard: ProfileDashboardResponse;
   completion?: ProfileCompletionResponse | null;
   dashboardError?: string | null;
+  workspaceKey?: string;
   canWriteProjects?: boolean;
   canEditOrganization?: boolean;
+  canManageVerification?: boolean;
 }) {
   const profileDone = completion
     ? completion.steps.some((step) => step.key === 'profile-completed' && step.done)
@@ -146,6 +189,8 @@ export function DesignerDashboardOverview({
   const projectDone = completion
     ? completion.steps.some((step) => step.key === 'first-project-uploaded' && step.done)
     : dashboard.projects.total > 0;
+  const verification = verificationPrompt(dashboard.verificationStatus);
+  const nextStepsDone = profileDone && verification === null;
 
   function checklistDescription(step: CompletionStep) {
     if (step.key === 'signed-in-with-google')
@@ -163,7 +208,7 @@ export function DesignerDashboardOverview({
     if (step.key === 'profile-completed' && canEditOrganization) {
       return (
         <Button asChild variant="outline">
-          <Link href="/designer/profile">
+          <Link href="/designer/portfolio">
             Manage portfolio
             <ArrowRight className="size-4" />
           </Link>
@@ -223,7 +268,7 @@ export function DesignerDashboardOverview({
           action:
             profileDone || !canEditOrganization ? null : (
               <Button asChild variant="outline">
-                <Link href="/designer/profile">
+                <Link href="/designer/portfolio">
                   Manage portfolio
                   <ArrowRight className="size-4" />
                 </Link>
@@ -312,146 +357,151 @@ export function DesignerDashboardOverview({
           </Card>
         </div>
 
-        <div className="min-w-0 space-y-5">
-          {canWriteProjects && (
-            <Card variant="accent" radius="2xl" className="relative overflow-visible">
-              <div className="relative px-4 pt-4 pb-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <Badge
-                      variant="outline"
-                      className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
-                    >
-                      COMPLETE SETUP
-                    </Badge>
-                    <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
-                      Add your first project
+        <DashboardRightRailTransition
+          workspaceKey={workspaceKey ?? portfolioUrl}
+          projectDone={projectDone || !canWriteProjects}
+          nextStepsDone={nextStepsDone}
+          setupCard={
+            canWriteProjects ? (
+              <Card variant="accent" radius="2xl" className="relative overflow-visible">
+                <div className="relative px-4 pt-4 pb-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <Badge
+                        variant="outline"
+                        className="h-5 rounded-sm border-transparent bg-primary/10 px-1.5 py-0 font-mono text-xs font-medium tracking-widest text-primary"
+                      >
+                        COMPLETE SETUP
+                      </Badge>
+                      <div className="mt-3 text-base font-semibold tracking-normal text-foreground">
+                        Add your first project
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
+                        It goes public and gets indexed the moment your first project is approved.
+                        Usually 24–48 hours.
+                      </p>
                     </div>
-                    <p className="mt-1.5 text-sm font-medium leading-5 text-gray-400">
-                      It goes public and gets indexed the moment your first project is approved.
-                      Usually 24–48 hours.
-                    </p>
                   </div>
-                  <Image
-                    src="/illustrations/onboarding-workspace-desk.svg"
-                    alt=""
-                    width={95}
-                    height={95}
-                    className="absolute -top-[4.25rem] right-3 hidden h-auto w-28 sm:block"
-                  />
+                  <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
+                    <Link href="/designer/projects/new">
+                      <Plus className="size-4" />
+                      Add first project
+                    </Link>
+                  </Button>
                 </div>
-                <Button asChild className="mt-4 w-full rounded-xl text-sm font-medium shadow-md">
-                  <Link href="/designer/projects/new">
-                    <Plus className="size-4" />
-                    Add first project
-                  </Link>
-                </Button>
+              </Card>
+            ) : null
+          }
+          nextStepsCard={
+            <div>
+              <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
+                <ShieldPlus className="size-4" />
+                WHAT HAPPENS NEXT
               </div>
-            </Card>
-          )}
-
-          <div>
-            <div className="mb-3 flex items-center gap-2 px-3 font-mono text-xs font-medium tracking-widest text-muted-foreground">
-              <ShieldPlus className="size-4" />
-              WHAT HAPPENS NEXT
+              <Card radius="2xl" className="overflow-hidden">
+                <RightRailInfoRow
+                  icon={<CalendarDays className="size-4" />}
+                  title="We review your project"
+                  description="A human check, usually within 24–48 hours."
+                />
+                {!profileDone ? (
+                  <RightRailInfoRow
+                    icon={<User className="size-4" />}
+                    title="Round out your profile"
+                    description="Add a bio and tags while you wait."
+                    href={canEditOrganization ? '/designer/portfolio' : undefined}
+                  />
+                ) : null}
+                {verification ? (
+                  <RightRailInfoRow
+                    icon={<Shield className="size-4" />}
+                    title={verification.title}
+                    description={verification.description}
+                    href={canManageVerification ? '/designer/verification' : undefined}
+                  />
+                ) : null}
+              </Card>
             </div>
-            <Card radius="2xl" className="overflow-hidden">
-              <RightRailInfoRow
-                icon={<CalendarDays className="size-4" />}
-                title="We review your project"
-                description="A human check, usually within 24–48 hours."
-              />
-              <RightRailInfoRow
-                icon={<User className="size-4" />}
-                title="Round out your profile"
-                description="Add a bio and tags while you wait."
-                href={canEditOrganization ? '/designer/profile' : undefined}
-              />
-              <RightRailInfoRow
-                icon={<Shield className="size-4" />}
-                title="Start verification"
-                description="Get a head start on your KYC."
-              />
-            </Card>
-          </div>
-
-          <Card variant="accent" radius="3xl" className="overflow-hidden">
-            <div className="px-4 pt-4">
-              <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
-                <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
-                <div className="space-y-3 px-5 py-4 text-center">
-                  <div className="mx-auto -mt-10 size-16 overflow-hidden rounded-2xl border border-border bg-primary/10 shadow-sm">
-                    <InitialsAvatar
-                      seed={studioName}
-                      fallbackSeed={studioLocation}
-                      alt={`${studioName} generated profile initials`}
-                      size={64}
-                    />
-                  </div>
-                  <div>
-                    <div className="text-lg font-medium text-foreground">{studioName}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">{studioLocation}</div>
-                  </div>
-                  {/* E-278: only reveal the public URL chip once the portfolio is
+          }
+          shareCard={
+            <Card variant="accent" radius="3xl" className="overflow-hidden">
+              <div className="px-4 pt-4">
+                <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm -rotate-2">
+                  <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
+                  <div className="space-y-3 px-5 py-4 text-center">
+                    <div className="mx-auto -mt-10 size-16 overflow-hidden rounded-2xl border border-border bg-primary/10 shadow-sm">
+                      <InitialsAvatar
+                        seed={studioName}
+                        fallbackSeed={studioLocation}
+                        alt={`${studioName} generated profile initials`}
+                        size={64}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-lg font-medium text-foreground">{studioName}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">{studioLocation}</div>
+                    </div>
+                    {/* E-278: only reveal the public URL chip once the portfolio is
                       actually live. Otherwise show a neutral "not public yet" chip
                       so no unpublished/placeholder link leaks. */}
-                  {portfolioPubliclyVisible ? (
-                    <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
-                      <Copy className="size-3.5 shrink-0" />
-                      <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
-                    </div>
-                  ) : (
-                    <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      <span className="truncate">Not public yet</span>
-                    </div>
-                  )}
+                    {portfolioPubliclyVisible ? (
+                      <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs text-primary">
+                        <Copy className="size-3.5 shrink-0" />
+                        <span className="truncate">{portfolioUrl.replace('https://', '')}</span>
+                      </div>
+                    ) : (
+                      <div className="mx-auto inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                        <span className="truncate">Not public yet</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="px-5 pt-6 pb-5">
-              <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
-                ONE LINK. EVERYWHERE.
-              </div>
-              <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
-                A portfolio worth <span className="text-primary">sharing.</span>
-              </div>
-              {/*
+              <div className="px-5 pt-6 pb-5">
+                <div className="font-mono text-xs font-medium tracking-widest text-muted-foreground">
+                  ONE LINK. EVERYWHERE.
+                </div>
+                <div className="mt-3 text-3xl font-medium tracking-tight text-foreground">
+                  A portfolio worth <span className="text-primary">sharing.</span>
+                </div>
+                {/*
                 E-278: the copyable public link is only offered once the portfolio
                 is genuinely live (backend `publiclyVisible`). Until then the card
                 explains what's left and links to Portfolio Settings — it never
                 exposes an unpublished or placeholder `/d/{slug}` URL to copy.
               */}
-              {portfolioPubliclyVisible ? (
-                <>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                    Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
-                  </p>
-                  <CopyLinkButton
-                    value={portfolioUrl}
-                    variant="fancy"
-                    size="fancy"
-                    className="mt-6 w-full cursor-pointer"
-                  />
-                </>
-              ) : (
-                <>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                    Finish your portfolio to unlock a public link you can share anywhere. We&apos;ll
-                    show it here the moment your page goes live.
-                  </p>
-                  {canEditOrganization && (
-                    <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
-                      <Link href="/designer/portfolio">
-                        Complete your portfolio
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
+                {portfolioPubliclyVisible ? (
+                  <>
+                    <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                      Send it on WhatsApp, drop it in your Instagram bio, or print it on a card.
+                    </p>
+                    <CopyLinkButton
+                      value={portfolioUrl}
+                      variant="fancy"
+                      size="fancy"
+                      className="mt-6 w-full cursor-pointer"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                      Finish your portfolio to unlock a public link you can share anywhere.
+                      We&apos;ll show it here the moment your page goes live.
+                    </p>
+                    {canEditOrganization && (
+                      <Button asChild variant="fancy" size="fancy" className="mt-6 w-full">
+                        <Link href="/designer/portfolio">
+                          Complete your portfolio
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </Card>
+          }
+        />
       </div>
     </div>
   );

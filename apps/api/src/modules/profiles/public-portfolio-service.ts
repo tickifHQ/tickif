@@ -13,6 +13,7 @@ import {
 } from './portfolio-repository.js';
 import {
   computeBadges,
+  getPortfolioPublicationState,
   presignProfileLogo,
   publicPortfolioSlug,
   publicPortfolioUrl,
@@ -27,8 +28,8 @@ import { reviewsService } from '../reviews/service.js';
  *
  * Assembles one payload from the profile, the portfolio presentation settings,
  * the Google review cache, and the designer's published projects — so the page
- * renders in a single server round-trip under one cache policy and one
- * `publicLinkEnabled` gate.
+ * renders in a single server round-trip under one cache policy and one shared
+ * publication gate.
  *
  * Everything here is anonymous-readable by definition, so the projection is
  * allow-listed field by field rather than derived from the owner response:
@@ -42,27 +43,7 @@ const INITIAL_PROJECT_LIMIT = 30;
 /** Minimum star rating a review needs when `showPositiveReviewsOnly` is on. */
 const POSITIVE_REVIEW_MIN_RATING = 4;
 
-/**
- * Section defaults for designers who have never opened the portfolio settings
- * page and so have no `designer_portfolio` row. Mirrors the column defaults in
- * `packages/db/src/schema/domain.ts` — a designer who never touched the
- * settings still gets a complete page rather than a 404.
- */
-const DEFAULT_SECTIONS: PublicPortfolioSections = {
-  hero: true,
-  trustCredentials: true,
-  featuredTestimonial: true,
-  reviews: true,
-  socialLinks: true,
-  shareBlock: true,
-  overallRating: true,
-  tickifBadge: true,
-};
-
-const DEFAULT_ACCENT_COLOR = '#FF8F73';
-
-function sectionsOf(portfolio: PortfolioRecord | null): PublicPortfolioSections {
-  if (!portfolio) return DEFAULT_SECTIONS;
+function sectionsOf(portfolio: PortfolioRecord): PublicPortfolioSections {
   return {
     hero: portfolio.showHero,
     trustCredentials: portfolio.showTrustCredentials,
@@ -122,9 +103,9 @@ export const publicPortfolioService = {
     if (!resolved) throw AppError.notFound('Portfolio not found');
 
     const { profile, orgSlug, portfolio, isKycVerified } = resolved;
-    if (profile.status !== 'active') throw AppError.notFound('Portfolio not found');
-    // Absent row means "never configured", which keeps the column default (enabled).
-    if (portfolio && !portfolio.publicLinkEnabled) throw AppError.notFound('Portfolio not found');
+    if (!portfolio || !getPortfolioPublicationState(profile, portfolio).publiclyVisible) {
+      throw AppError.notFound('Portfolio not found');
+    }
 
     const sections = sectionsOf(portfolio);
 
@@ -153,14 +134,14 @@ export const publicPortfolioService = {
     // can leak onto a public page even if the worker sweep lagged.
     const google = googleRow ? readState(googleRow) : null;
     const tickifSettings = {
-      showReviews: portfolio?.showTickifReviews ?? true,
-      showOverallRating: portfolio?.showTickifOverallRating ?? true,
-      showPositiveReviewsOnly: portfolio?.showTickifPositiveReviewsOnly ?? false,
+      showReviews: portfolio.showTickifReviews,
+      showOverallRating: portfolio.showTickifOverallRating,
+      showPositiveReviewsOnly: portfolio.showTickifPositiveReviewsOnly,
     };
     const googleSettings = {
-      showReviews: portfolio?.showGoogleReviews ?? true,
-      showOverallRating: portfolio?.showGoogleOverallRating ?? true,
-      showPositiveReviewsOnly: portfolio?.showGooglePositiveReviewsOnly ?? false,
+      showReviews: portfolio.showGoogleReviews,
+      showOverallRating: portfolio.showGoogleOverallRating,
+      showPositiveReviewsOnly: portfolio.showGooglePositiveReviewsOnly,
     };
     const tickifReviews = tickifSettings.showReviews
       ? tickif.items.filter(
@@ -179,16 +160,16 @@ export const publicPortfolioService = {
     return {
       profileId: profile.id,
       slug,
-      canonicalUrl: publicPortfolioUrl(portfolio?.portfolioSlug ?? null, orgSlug),
+      canonicalUrl: publicPortfolioUrl(portfolio.portfolioSlug, orgSlug),
       displayName: profile.displayName,
       entityType: profile.entityType,
-      tagline: portfolio?.tagline ?? null,
+      tagline: portfolio.tagline,
       bio: profile.bio,
       firmType: profile.firmType,
       foundedYear: profile.foundedYear,
       cities,
       logoUrl,
-      accentColor: portfolio?.accentColor ?? DEFAULT_ACCENT_COLOR,
+      accentColor: portfolio.accentColor,
       badges: sections.trustCredentials ? computeBadges(profile, isKycVerified) : [],
       isKycVerified,
       sections,
@@ -243,7 +224,7 @@ export const publicPortfolioService = {
         ...googleReviews.map(toPublicReview),
       ],
       projects,
-      publishedAt: portfolio?.publishedAt?.toISOString() ?? null,
+      publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     };
   },
 
@@ -260,11 +241,11 @@ export const publicPortfolioService = {
  */
 async function resolveTestimonial(
   profileId: string,
-  portfolio: PortfolioRecord | null,
+  portfolio: PortfolioRecord,
   sections: PublicPortfolioSections,
 ): Promise<PublicPortfolioTestimonial | null> {
   if (!sections.featuredTestimonial) return null;
-  if (!portfolio?.testimonialWords) return null;
+  if (!portfolio.testimonialWords) return null;
 
   const projectTitle = portfolio.testimonialProjectId
     ? await portfolioRepository.findPublishedProjectTitle(portfolio.testimonialProjectId, profileId)

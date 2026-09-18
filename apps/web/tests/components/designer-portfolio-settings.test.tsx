@@ -170,6 +170,21 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.queryByText('https://tickif.com/d/mahi-studio')).not.toBeInTheDocument();
   });
 
+  it('marks every required portfolio field and explains the marker on hover', async () => {
+    const user = userEvent.setup();
+    await renderSettings();
+
+    const markers = screen.getAllByLabelText('Required');
+    expect(markers).toHaveLength(4);
+    for (const marker of markers) {
+      expect(marker.tagName).toBe('SUP');
+      expect(marker).toHaveClass('cursor-default', 'text-destructive');
+    }
+
+    await user.hover(markers[0]!);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Required');
+  });
+
   it('updates the preview URL immediately when the user types a new slug', async () => {
     await renderSettings();
 
@@ -191,6 +206,56 @@ describe('DesignerPortfolioSettings', () => {
     const notice = await screen.findByRole('status', { name: 'Portfolio visibility' });
     expect(notice).toHaveTextContent("Your portfolio isn't public yet.");
     expect(notice).toHaveTextContent('a logo and a bio');
+    expect(notice).not.toHaveClass('border-y', 'border-b', 'border-t');
+    expect(screen.getByRole('button', { name: 'a logo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'a bio' })).toBeInTheDocument();
+    expect(notice.querySelector('svg')).toHaveClass('text-destructive');
+  });
+
+  it('smoothly scrolls to a missing Hero field from the visibility notice', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      publiclyVisible: false,
+      missingRequiredFields: ['bio'],
+    });
+    await renderSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'a bio' }));
+
+    await waitFor(() =>
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' }),
+    );
+  });
+
+  it('opens the file picker to replace an existing saved logo', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      logoUrl: 'https://cdn.tickif.test/logo.jpg',
+    });
+    await renderSettings();
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const openPicker = vi.spyOn(fileInput, 'click');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Replace logo' }));
+    expect(openPicker).toHaveBeenCalledOnce();
+    expect(mock.deleteLogo).not.toHaveBeenCalled();
+  });
+
+  it('moves keyboard focus to the missing Hero control', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      publiclyVisible: false,
+      missingRequiredFields: ['bio'],
+    });
+    await renderSettings();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'a bio' }));
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText('Tell visitors about your design philosophy...'),
+      ).toHaveFocus(),
+    );
   });
 
   it('drops the visibility notice once every required field is filled', async () => {
@@ -282,26 +347,6 @@ describe('DesignerPortfolioSettings', () => {
       expect(
         screen.getByText('Incomplete', { selector: '[data-slot="badge"]' }),
       ).toBeInTheDocument();
-    });
-
-    it('keeps showing "Live" for an already-public portfolio after a required field is cleared (review P2)', async () => {
-      // The server never demotes an active profile when a required field is later
-      // cleared (e.g. the logo is deleted), so publiclyVisible stays true while
-      // missingRequiredFields is non-empty (API test:
-      // "keeps a live portfolio live after a required field is cleared"). The
-      // badge must trust publiclyVisible and NOT mislabel this as "Incomplete".
-      mock.fetchPortfolio.mockResolvedValueOnce({
-        ...basePortfolio,
-        publicLinkEnabled: true,
-        missingRequiredFields: ['logo'],
-        publiclyVisible: true,
-      });
-      await renderSettings();
-
-      expect(screen.getByText('Live', { selector: '[data-slot="badge"]' })).toBeInTheDocument();
-      expect(
-        screen.queryByText('Incomplete', { selector: '[data-slot="badge"]' }),
-      ).not.toBeInTheDocument();
     });
   });
 
@@ -544,7 +589,8 @@ describe('DesignerPortfolioSettings', () => {
     const logo = screen.getAllByAltText('Portfolio logo')[0];
     const removeLogo = screen.getByRole('button', { name: 'Remove logo' });
 
-    expect(logo?.parentElement).toHaveClass('overflow-hidden');
+    expect(logo?.closest('.overflow-hidden')).not.toBeNull();
+    expect(logo?.closest('.overflow-hidden')).not.toContainElement(removeLogo);
     expect(removeLogo.parentElement).not.toHaveClass('overflow-hidden');
   });
 
@@ -794,34 +840,20 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
-  // [P2] Logo add/delete commits immediately via its own endpoint, so Discard
-  // cannot roll it back. Discard must reconcile the baseline to the persisted
-  // logo rather than leaving Save/Discard enabled with nothing to undo.
-  it('discard reconciles a persisted logo deletion and re-disables the controls', async () => {
+  it('keeps the saved logo and clean form state when removal is attempted', async () => {
     mock.fetchPortfolio.mockResolvedValueOnce({
       ...basePortfolio,
       logoUrl: 'https://cdn.tickif.test/logo.jpg',
+      missingRequiredFields: ['bio'],
     });
-    mock.deleteLogo.mockResolvedValue({ success: true });
-    // The delete handler refreshes the portfolio; return the logo-less state.
-    mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
     await renderSettings();
 
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Remove logo' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Remove logo' }));
 
-    // Removing the logo persists immediately and marks the form dirty.
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
-    });
-    expect(screen.getByRole('button', { name: /discard changes/i })).toBeEnabled();
-
-    await user.click(screen.getByRole('button', { name: /discard changes/i }));
-
-    // Discard accepts the already-persisted deletion instead of offering a
-    // nonfunctional undo: both controls disable, and the logo stays removed.
+    expect(screen.getByText(/upload a replacement before removing/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /discard changes/i })).toBeDisabled();
+    expect(mock.deleteLogo).not.toHaveBeenCalled();
   });
 
   it('sanitizes slug input: lowercases, strips illegal characters, collapses hyphens', async () => {
@@ -894,7 +926,7 @@ describe('DesignerPortfolioSettings', () => {
     expect(screen.getByText(/could not check slug availability/i)).toBeInTheDocument();
   });
 
-  it('saves only changed fields, nulls cleared optional text, and omits a cleared display name', async () => {
+  it('blocks saving cleared mandatory Hero fields after the portfolio is complete', async () => {
     mock.updatePortfolio.mockResolvedValue({
       ...basePortfolio,
       tagline: 'Bespoke interiors',
@@ -909,20 +941,28 @@ describe('DesignerPortfolioSettings', () => {
     await user.clear(screen.getByPlaceholderText(BIO_PLACEHOLDER));
     await user.clear(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER));
 
-    await user.click(screen.getByRole('button', { name: /save changes/i }));
-
-    await waitFor(() => {
-      expect(mock.updatePortfolio).toHaveBeenCalledTimes(1);
-    });
-    expect(mock.updatePortfolio.mock.calls[0]?.[0]).toEqual({
-      tagline: 'Bespoke interiors',
-      bio: null,
-    });
-
-    expect(await screen.findByText('Saved')).toBeInTheDocument();
-    // Form resets to the server response, so the save controls disable again.
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
-    expect(screen.getByPlaceholderText(STUDIO_NAME_PLACEHOLDER)).toHaveValue('Mahi Studio');
+    expect(screen.getByText('Studio name is required.')).toBeInTheDocument();
+    expect(screen.getByText('Bio is required.')).toBeInTheDocument();
+    expect(mock.updatePortfolio).not.toHaveBeenCalled();
+  });
+
+  it('blocks clearing a saved tagline while the portfolio is still incomplete', async () => {
+    mock.fetchPortfolio.mockResolvedValueOnce({
+      ...basePortfolio,
+      bio: null,
+      logoUrl: null,
+      missingRequiredFields: ['logo', 'bio'],
+      publiclyVisible: false,
+    });
+    await renderSettings();
+
+    await userEvent.setup().clear(screen.getByPlaceholderText(TAGLINE_PLACEHOLDER));
+
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByText('Tagline is required.')).toBeInTheDocument();
+    expect(screen.queryByText('Bio is required.')).not.toBeInTheDocument();
+    expect(mock.updatePortfolio).not.toHaveBeenCalled();
   });
 
   it('uses a published project select for the featured testimonial project', async () => {
@@ -1112,9 +1152,8 @@ describe('DesignerPortfolioSettings', () => {
     });
   });
 
-  // E-278: a logo add/replace/delete must mark the form dirty and enable
-  // "Save changes" (the logo commits via its own endpoint, so it was previously
-  // invisible to the FormState dirty check).
+  // E-278: a logo add/replace must mark the form dirty and enable "Save changes"
+  // because the logo commits via its own endpoint and is not part of FormState.
   describe('logo dirty state (E-278)', () => {
     async function uploadLogoFile() {
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -1167,23 +1206,35 @@ describe('DesignerPortfolioSettings', () => {
       );
     });
 
-    it('enables Save changes after deleting an existing logo', async () => {
+    it('requires a replacement instead of deleting a saved logo from an incomplete portfolio', async () => {
+      mock.fetchPortfolio.mockResolvedValueOnce({
+        ...basePortfolio,
+        logoUrl: 'https://storage.example.com/old-logo.jpg',
+        missingRequiredFields: ['bio'],
+      });
+
+      await renderSettings();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Remove logo' }));
+
+      expect(
+        screen.getByText(/upload a replacement before removing the logo/i),
+      ).toBeInTheDocument();
+      expect(mock.deleteLogo).not.toHaveBeenCalled();
+    });
+
+    it('requires a replacement instead of deleting a complete portfolio logo', async () => {
       mock.fetchPortfolio.mockResolvedValueOnce({
         ...basePortfolio,
         logoUrl: 'https://storage.example.com/old-logo.jpg',
       });
-      mock.fetchPortfolio.mockResolvedValueOnce({ ...basePortfolio, logoUrl: null });
-      mock.deleteLogo.mockResolvedValue(undefined);
 
       await renderSettings();
-      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Remove logo' }));
 
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: 'Remove logo' }));
-
-      await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled(),
-      );
+      expect(
+        screen.getByText(/upload a replacement before removing the logo/i),
+      ).toBeInTheDocument();
+      expect(mock.deleteLogo).not.toHaveBeenCalled();
     });
 
     it('disables Save changes after a logo change is saved', async () => {

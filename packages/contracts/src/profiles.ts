@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { designerProjectsResponseSchema } from './projects';
 import { taxonomyKindSchema } from './taxonomy';
+import { verificationEffectiveStatusSchema } from './verifications';
 
 export const designerEntityType = z
   .enum(['individual', 'company'])
@@ -64,6 +65,8 @@ export const profileDashboardResponseSchema = z
      * expose the URL when this is false.
      */
     publiclyVisible: z.boolean(),
+    /** Current organization verification state, or null before verification starts. */
+    verificationStatus: verificationEffectiveStatusSchema.nullable(),
   })
   .meta({ id: 'ProfileDashboard' });
 export type ProfileDashboardResponse = z.infer<typeof profileDashboardResponseSchema>;
@@ -98,11 +101,17 @@ export const onboardDesignerSchema = z
     address: z.string().trim().max(300).optional(),
     scopeIds: z
       .array(z.string().uuid())
-      .max(PROFILE_FOOTPRINT_LIMITS.scope, `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`)
+      .max(
+        PROFILE_FOOTPRINT_LIMITS.scope,
+        `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`,
+      )
       .default([]),
     themeIds: z
       .array(z.string().uuid())
-      .max(PROFILE_FOOTPRINT_LIMITS.theme, `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`)
+      .max(
+        PROFILE_FOOTPRINT_LIMITS.theme,
+        `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`,
+      )
       .default([]),
   })
   .refine((d) => d.entityType === designerEntityType.enum.individual || !!d.companyName, {
@@ -312,85 +321,72 @@ const sharedProfileFields = {
     .max(200, 'Use 200 characters or fewer.')
     .nullable()
     .optional(),
-  instagramHandle: z
-    .string()
-    .trim()
-    .max(60, 'Use 60 characters or fewer.')
-    .nullable()
-    .optional(),
-  linkedinHandle: z
-    .string()
-    .trim()
-    .max(60, 'Use 60 characters or fewer.')
-    .nullable()
-    .optional(),
-  youtubeHandle: z
-    .string()
-    .trim()
-    .max(60, 'Use 60 characters or fewer.')
-    .nullable()
-    .optional(),
+  instagramHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
+  linkedinHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
+  youtubeHandle: z.string().trim().max(60, 'Use 60 characters or fewer.').nullable().optional(),
 };
 
 /**
  * PATCH /api/profiles/me — partial update.
  * Taxonomy arrays use replace semantics: present → replace, absent → untouched.
  */
-export const updateProfileSchema = z.object({
-  ...sharedProfileFields,
-  entityType: designerEntityType.optional(),
-  googleBusinessUrl: z
-    .string()
-    .url('Enter a valid URL.')
-    .max(200, 'Use 200 characters or fewer.')
-    .optional()
-    .nullable(),
-  phone: z
-    .string()
-    .trim()
-    .min(7, 'Enter a valid phone number.')
-    .max(20, 'Enter a valid phone number.')
-    .optional()
-    .nullable(),
-  firmType: z
-    .string()
-    .trim()
-    .max(60, 'Use 60 characters or fewer.')
-    .optional()
-    .nullable(),
-  foundedYear: z
-    .number()
-    .int('Enter a whole year.')
-    .min(1900, 'Enter a year from 1900 onward.')
-    .max(2100, 'Enter a year no later than 2100.')
-    .optional()
-    .nullable(),
-  staffCount: profileStaffCountSchema.optional().nullable(),
-  testimonialBannerEnabled: z.boolean().optional(),
-  address: z
-    .string()
-    .trim()
-    .max(300, 'Use 300 characters or fewer.')
-    .optional()
-    .nullable(),
-  cityIds: z
-    .array(z.string().uuid())
-    .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
-    .optional(),
-  scopeIds: z
-    .array(z.string().uuid())
-    .max(PROFILE_FOOTPRINT_LIMITS.scope, `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`)
-    .optional(),
-  themeIds: z
-    .array(z.string().uuid())
-    .max(PROFILE_FOOTPRINT_LIMITS.theme, `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`)
-    .optional(),
-}).meta({ id: 'UpdateProfile' });
+export const updateProfileSchema = z
+  .object({
+    ...sharedProfileFields,
+    entityType: designerEntityType.optional(),
+    googleBusinessUrl: z
+      .string()
+      .url('Enter a valid URL.')
+      .max(200, 'Use 200 characters or fewer.')
+      .optional()
+      .nullable(),
+    phone: z
+      .string()
+      .trim()
+      .min(7, 'Enter a valid phone number.')
+      .max(20, 'Enter a valid phone number.')
+      .optional()
+      .nullable(),
+    firmType: z.string().trim().max(60, 'Use 60 characters or fewer.').optional().nullable(),
+    foundedYear: z
+      .number()
+      .int('Enter a whole year.')
+      .min(1900, 'Enter a year from 1900 onward.')
+      .max(2100, 'Enter a year no later than 2100.')
+      .optional()
+      .nullable(),
+    staffCount: profileStaffCountSchema.optional().nullable(),
+    testimonialBannerEnabled: z.boolean().optional(),
+    address: z.string().trim().max(300, 'Use 300 characters or fewer.').optional().nullable(),
+    cityIds: z
+      .array(z.string().uuid())
+      .max(PROFILE_FOOTPRINT_LIMITS.city, `Select up to ${PROFILE_FOOTPRINT_LIMITS.city} cities.`)
+      .optional(),
+    scopeIds: z
+      .array(z.string().uuid())
+      .max(
+        PROFILE_FOOTPRINT_LIMITS.scope,
+        `Select up to ${PROFILE_FOOTPRINT_LIMITS.scope} services.`,
+      )
+      .optional(),
+    themeIds: z
+      .array(z.string().uuid())
+      .max(
+        PROFILE_FOOTPRINT_LIMITS.theme,
+        `Select up to ${PROFILE_FOOTPRINT_LIMITS.theme} design themes.`,
+      )
+      .optional(),
+  })
+  .meta({ id: 'UpdateProfile' });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 // --- Portfolio (E-222) ---
 
-const portfolioSlugSchema = z.string().trim().min(3).max(60)
+const portfolioSlugSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(60)
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers, and hyphens only');
 
 export const portfolioBadgeSchema = z
@@ -485,12 +481,7 @@ export type GoogleConnectionSummary = z.infer<typeof googleConnectionSummarySche
  * `designer_profile.status` from `draft` to `active`, which is what every public
  * surface gates on (portfolio page, discovery feed, search index, bookings).
  */
-export const requiredPortfolioFieldSchema = z.enum([
-  'logo',
-  'displayName',
-  'tagline',
-  'bio',
-]);
+export const requiredPortfolioFieldSchema = z.enum(['logo', 'displayName', 'tagline', 'bio']);
 export type RequiredPortfolioField = z.infer<typeof requiredPortfolioFieldSchema>;
 
 export const portfolioReviewSourceSettingsSchema = z
@@ -500,9 +491,7 @@ export const portfolioReviewSourceSettingsSchema = z
     showPositiveReviewsOnly: z.boolean(),
   })
   .meta({ id: 'PortfolioReviewSourceSettings' });
-export type PortfolioReviewSourceSettings = z.infer<
-  typeof portfolioReviewSourceSettingsSchema
->;
+export type PortfolioReviewSourceSettings = z.infer<typeof portfolioReviewSourceSettingsSchema>;
 
 export const portfolioReviewSettingsSchema = z
   .object({
@@ -563,7 +552,10 @@ export const updatePortfolioSchema = z
   .object({
     publicLinkEnabled: z.boolean().optional(),
     portfolioSlug: portfolioSlugSchema.nullable().optional(),
-    accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color').optional(),
+    accentColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color')
+      .optional(),
     showHero: z.boolean().optional(),
     showTrustCredentials: z.boolean().optional(),
     showFeaturedTestimonial: z.boolean().optional(),
@@ -638,10 +630,7 @@ export const logoCommitRequestSchema = z
     objectKey: z
       .string()
       .max(512)
-      .regex(
-        /^originals\/logos\/[^/]+\/[^/]+$/,
-        'Must be an originals/logos/ object key',
-      ),
+      .regex(/^originals\/logos\/[^/]+\/[^/]+$/, 'Must be an originals/logos/ object key'),
   })
   .meta({ id: 'LogoCommitRequest' });
 export type LogoCommitRequest = z.infer<typeof logoCommitRequestSchema>;
@@ -785,9 +774,7 @@ export const publicPortfolioReviewVisibilitySchema = z
     }),
   })
   .meta({ id: 'PublicPortfolioReviewVisibility' });
-export type PublicPortfolioReviewVisibility = z.infer<
-  typeof publicPortfolioReviewVisibilitySchema
->;
+export type PublicPortfolioReviewVisibility = z.infer<typeof publicPortfolioReviewVisibilitySchema>;
 
 /** The designer's public links, already filtered by `sections.socialLinks`. */
 export const publicPortfolioSocialSchema = z

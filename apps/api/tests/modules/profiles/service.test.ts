@@ -12,6 +12,8 @@ vi.mock('../../../src/modules/profiles/repository.js', () => {
       hasProject: vi.fn(),
       hasContact: vi.fn(),
       getFootprint: vi.fn(),
+      validateAllTaxonomyIds: vi.fn(),
+      updateProfileAndFootprint: vi.fn(),
     },
   };
 });
@@ -329,5 +331,39 @@ describe('profilesService.getCurrentProfile', () => {
     await expect(
       profilesService.getCurrentProfile('user-1', 'org-1', 'team-2'),
     ).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('profilesService.updateProfile required Hero fields', () => {
+  beforeEach(() => {
+    vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow());
+    vi.mocked(profilesRepository.validateAllTaxonomyIds).mockResolvedValue([]);
+    vi.mocked(profilesRepository.updateProfileAndFootprint).mockResolvedValue(profileRow());
+    vi.mocked(profilesRepository.getFootprint).mockResolvedValue([]);
+  });
+
+  it.each([null, '', '   '])(
+    'rejects clearing a saved bio through the profile editor (%s)',
+    async (bio) => {
+      await expect(
+        profilesService.updateProfile('u1', 'org-1', { bio }, 'team-1'),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(profilesRepository.updateProfileAndFootprint).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows replacing a saved bio', async () => {
+    await profilesService.updateProfile('u1', 'org-1', { bio: 'A new biography' }, 'team-1');
+    expect(profilesRepository.updateProfileAndFootprint).toHaveBeenCalledWith(
+      profileRow().id,
+      { bio: 'A new biography' },
+      expect.anything(),
+    );
+  });
+
+  it('allows an unfinished profile to keep its bio empty', async () => {
+    vi.mocked(profilesRepository.findByTeamId).mockResolvedValue(profileRow({ bio: null }));
+    await profilesService.updateProfile('u1', 'org-1', { bio: null }, 'team-1');
+    expect(profilesRepository.updateProfileAndFootprint).toHaveBeenCalled();
   });
 });

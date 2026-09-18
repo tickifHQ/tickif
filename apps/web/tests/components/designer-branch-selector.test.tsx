@@ -114,6 +114,10 @@ describe('DesignerBranchSelector', () => {
       expect(within(trigger).getByText('Branch')).toBeVisible();
       expect(trigger).toHaveTextContent('Andheri');
       expect(trigger).not.toHaveTextContent(/Unlimited|branches used/);
+      expect(trigger).toHaveClass('gap-3', 'px-2', 'py-1.5');
+      expect(trigger).not.toHaveClass('border');
+      expect(trigger.querySelector('[data-slot="avatar"]')).not.toBeInTheDocument();
+      expect(trigger.querySelector('.lucide-building')).toHaveClass('size-4');
 
       await user.click(trigger);
       expect(screen.getByRole('menu')).toHaveTextContent(usage);

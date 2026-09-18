@@ -30,7 +30,6 @@ import { Input } from '@repo/ui/components/input';
 import { Label } from '@repo/ui/components/label';
 import { cn } from '@repo/ui/lib/utils';
 import { authClient } from '@/lib/auth-client';
-import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
 import { api } from '@/lib/api';
 import { handleApiResponse } from '@/lib/api-response';
 import {
@@ -41,6 +40,7 @@ import { isPublicHttpUrl, normalizeOptionalUrl } from '@/lib/url';
 import { InstagramBrandIcon, LinkedInBrandIcon, YouTubeBrandIcon } from '@/components/brand-icons';
 import { InitialsAvatar } from '@/components/initials-avatar';
 import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/phone-number-input';
+import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
 
@@ -244,6 +244,12 @@ export function DesignerOnboarding({
   const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>(seedFields?.themeIds ?? []);
   const [foundedYear, setFoundedYear] = useState(seedFields?.foundedYear ?? '2021');
   const [teamSize, setTeamSize] = useState(seedFields?.teamSize ?? '2-10');
+  const [foundedYearChanged, setFoundedYearChanged] = useState(
+    () => seedFields?.foundedYear !== undefined && seedFields.foundedYear !== '2021',
+  );
+  const [teamSizeChanged, setTeamSizeChanged] = useState(
+    () => seedFields?.teamSize !== undefined && seedFields.teamSize !== '2-10',
+  );
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyOptions>(emptyTaxonomyOptions);
   const [taxonomyLoading, setTaxonomyLoading] = useState(true);
   const [taxonomyError, setTaxonomyError] = useState('');
@@ -257,13 +263,31 @@ export function DesignerOnboarding({
   const companyHandlePlaceholder = companyName.trim()
     ? `@${companyName.trim().toLowerCase().replaceAll(/\s+/g, '')}`
     : '@yourstudio';
-  const canSubmit = useMemo(() => {
-    const hasIndividualName =
-      entityType === designerEntityType.enum.company || userName.trim().length >= 2;
-    const hasCompany =
-      entityType === designerEntityType.enum.individual || companyName.trim().length >= 2;
-    return hasIndividualName && hasCompany && !submitting;
-  }, [companyName, entityType, submitting, userName]);
+  const hasRequiredDetails =
+    entityType === designerEntityType.enum.individual
+      ? userName.trim().length >= 2
+      : companyName.trim().length >= 2 && firmType.trim().length > 0;
+  const hasPresenceInput = [
+    ...(entityType === designerEntityType.enum.company ? [whatsappNumber] : []),
+    websiteUrl,
+    googleBusinessUrl,
+    instagramHandle,
+    linkedinHandle,
+    youtubeHandle,
+  ].some((value) => value.trim().length > 0);
+  const hasServicesInput =
+    selectedScopeIds.length > 0 ||
+    selectedThemeIds.length > 0 ||
+    foundedYearChanged ||
+    teamSizeChanged;
+  const hasCurrentStepInput =
+    step === 'details' ||
+    (step === 'presence' && hasPresenceInput) ||
+    (step === 'services' && hasServicesInput);
+  const hasValidOptionalInputs = !websiteUrlError && !googleBusinessUrlError;
+  const canContinue =
+    hasRequiredDetails && hasCurrentStepInput && hasValidOptionalInputs && !submitting;
+  const canSkip = hasRequiredDetails && hasValidOptionalInputs && !submitting;
 
   // --- E-298: account-level draft autosave ------------------------------------
   // Snapshot the persistable state; only non-empty fields are sent so the stored
@@ -345,18 +369,6 @@ export function DesignerOnboarding({
     }
   }, [onSaveDraft]);
 
-  // E-298: "Finish later" leaves onboarding entirely, so flush the very latest
-  // state before navigating (the debounce may not have fired yet). This awaits
-  // the save (success OR failure) so navigation never races ahead of the PUT.
-  // The action is "leave regardless" by design — a failed save must not trap the
-  // user on the form — but it is never invoked before the save has been awaited,
-  // so we never navigate as if persistence succeeded while a PUT is still pending.
-  const handleFinishLater = useCallback(() => {
-    void flushDraft().finally(() => {
-      router.push(DESIGNER_ONBOARDING_DEFERRED_PATH);
-    });
-  }, [flushDraft, router]);
-
   // Debounced dirty autosave. Coalesces rapid edits into ~one write per pause.
   useEffect(() => {
     if (completedRef.current) return;
@@ -422,12 +434,20 @@ export function DesignerOnboarding({
     event.preventDefault();
     setError('');
 
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const isSkipSubmission =
+      submitter instanceof HTMLElement && submitter.dataset.onboardingIntent === 'skip';
+
     const nextWebsiteUrlError = validateWebsiteUrl(websiteUrl);
     const nextGoogleBusinessUrlError = validateGoogleBusinessUrl(googleBusinessUrl);
     setWebsiteUrlError(nextWebsiteUrlError);
     setGoogleBusinessUrlError(nextGoogleBusinessUrlError);
 
     if (nextWebsiteUrlError || nextGoogleBusinessUrlError) {
+      return;
+    }
+
+    if (submitting || (!isSkipSubmission && !hasCurrentStepInput)) {
       return;
     }
 
@@ -537,6 +557,7 @@ export function DesignerOnboarding({
             <fieldset className="flex flex-col">
               <legend className="text-[13px] font-medium leading-relaxed text-muted-foreground">
                 Who are you listing as?
+                <RequiredFieldIndicator />
               </legend>
               <div className="mt-3 flex flex-col gap-4">
                 {entityOptions.map((option) => (
@@ -593,9 +614,10 @@ export function DesignerOnboarding({
               <div className="grid flex-1 gap-1 self-stretch">
                 <Label
                   htmlFor={`${formId}-name`}
-                  className="text-[13px] font-medium leading-relaxed"
+                  className="gap-0 text-[13px] font-medium leading-relaxed"
                 >
                   Display name
+                  <RequiredFieldIndicator />
                 </Label>
                 <Input
                   id={`${formId}-name`}
@@ -705,10 +727,16 @@ export function DesignerOnboarding({
             taxonomyLoading={taxonomyLoading}
             themeOptions={taxonomyOptions.theme}
             teamSize={teamSize}
-            onFoundedYearChange={setFoundedYear}
             onScopeIdsChange={setSelectedScopeIds}
             onThemeIdsChange={setSelectedThemeIds}
-            onTeamSizeChange={setTeamSize}
+            onTeamSizeChange={(value) => {
+              setTeamSize(value);
+              setTeamSizeChanged(true);
+            }}
+            onFoundedYearChange={(value) => {
+              setFoundedYear(value);
+              setFoundedYearChanged(true);
+            }}
           />
         ) : null}
 
@@ -722,7 +750,8 @@ export function DesignerOnboarding({
         <div className="grid gap-4">
           <Button
             type="submit"
-            disabled={!canSubmit}
+            data-onboarding-intent="continue"
+            disabled={!canContinue}
             className="h-9 w-full cursor-pointer gap-1 rounded-lg disabled:cursor-not-allowed"
           >
             {submitting ? (
@@ -737,7 +766,25 @@ export function DesignerOnboarding({
               </>
             )}
           </Button>
-          <DetailsSecondaryActions onSkip={handleFinishLater} skipLabel="Finish later" />
+          {step === 'details' ? (
+            <DetailsSecondaryActions />
+          ) : entityType === designerEntityType.enum.company && step === 'presence' ? (
+            <DetailsSecondaryActions
+              disabled={!canSkip}
+              onSkip={() => setStep('services')}
+              skipLabel="Skip to Next step"
+            />
+          ) : (
+            <DetailsSecondaryActions
+              disabled={!canSkip}
+              submitSkip
+              skipLabel={
+                entityType === designerEntityType.enum.individual
+                  ? 'Finish later'
+                  : 'Skip to Next step'
+              }
+            />
+          )}
         </div>
       </form>
     </OnboardingShell>
@@ -838,8 +885,12 @@ function CompanyBasicsFields({
         </div>
 
         <div className="grid flex-1 gap-1 self-stretch">
-          <Label htmlFor={`${formId}-company`} className="text-[13px] font-medium leading-relaxed">
+          <Label
+            htmlFor={`${formId}-company`}
+            className="gap-0 text-[13px] font-medium leading-relaxed"
+          >
             Company name
+            <RequiredFieldIndicator />
           </Label>
           <Input
             id={`${formId}-company`}
@@ -855,6 +906,7 @@ function CompanyBasicsFields({
       <CompactSelect
         id={`${formId}-firm-type`}
         label="Firm type"
+        required
         options={firmTypeOptions}
         value={firmType}
         onValueChange={onFirmTypeChange}
@@ -923,7 +975,7 @@ function CompanyPresenceFields({
           htmlFor={`${formId}-company-whatsapp`}
           className="text-[13px] font-medium leading-relaxed"
         >
-          WhatsApp number <span className="font-normal text-muted-foreground">(Recommended)</span>
+          WhatsApp number
         </Label>
         <PhoneNumberInput
           id={`${formId}-company-whatsapp`}
@@ -1042,19 +1094,25 @@ function CompactSelect({
   labelHint,
   onValueChange,
   options,
+  required = false,
   value,
 }: {
   id: string;
   label: string;
   labelHint?: string;
+  required?: boolean;
   value: string;
   options: readonly string[];
   onValueChange: (value: string) => void;
 }) {
   return (
     <div className="grid gap-1">
-      <Label htmlFor={id} className="text-[13px] font-medium leading-relaxed">
-        {label}{' '}
+      <Label
+        htmlFor={id}
+        className={cn('text-[13px] font-medium leading-relaxed', required && 'gap-0')}
+      >
+        {label}
+        {required ? <RequiredFieldIndicator /> : null}{' '}
         {labelHint ? (
           <span className="font-normal text-muted-foreground">({labelHint})</span>
         ) : null}
@@ -1324,11 +1382,15 @@ function OnboardingSecondaryActions() {
 }
 
 function DetailsSecondaryActions({
+  disabled = false,
   onSkip,
   skipLabel = 'Skip to dashboard',
+  submitSkip = false,
 }: {
-  onSkip: () => void;
+  disabled?: boolean;
+  onSkip?: () => void;
   skipLabel?: string;
+  submitSkip?: boolean;
 }) {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
@@ -1338,14 +1400,31 @@ function DetailsSecondaryActions({
       >
         Need help? Contact support
       </a>
-      <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
-      <button
-        type="button"
-        onClick={onSkip}
-        className="cursor-pointer font-medium text-foreground hover:underline"
-      >
-        {skipLabel}
-      </button>
+      {(onSkip || submitSkip) && (
+        <>
+          <span className="size-0.5 rounded-full bg-muted-foreground" aria-hidden="true" />
+          <button
+            type={submitSkip ? 'submit' : 'button'}
+            data-onboarding-intent={submitSkip ? 'skip' : undefined}
+            disabled={disabled}
+            onClick={
+              submitSkip
+                ? undefined
+                : (event) => {
+                    // This action can reveal another step whose equivalent
+                    // button submits the form. Cancel the current click's
+                    // default action before React reconciles that new button,
+                    // otherwise browsers may submit the form immediately.
+                    event.preventDefault();
+                    onSkip?.();
+                  }
+            }
+            className="cursor-pointer font-medium text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+          >
+            {skipLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default async function DesignerSelectStudioPage() {
           <DesignerOrganizationSwitcher
             activeOrganizationId={null}
             studioName={displayName}
-            studioLocation="Choose a studio"
+            secondaryLabel="Choose a studio"
           />
         </CardContent>
       </Card>

@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { headers } from 'next/headers';
 import {
   organizationWorkspaceResponseSchema,
+  type PlanTier,
   type OrganizationCapabilities,
   type OrganizationMemberRole,
   type OrganizationWorkspaceResponse,
@@ -32,6 +33,11 @@ export async function getCurrentOrgRole(): Promise<OrganizationMemberRole | null
 /** Current org capabilities, cached with the workspace request. */
 export async function getCurrentOrgCapabilities(): Promise<OrganizationCapabilities | null> {
   return (await getCurrentOrgWorkspace())?.capabilities ?? null;
+}
+
+/** Current org plan tier, cached with the workspace request. */
+export async function getCurrentOrgPlanTier(): Promise<PlanTier | null> {
+  return (await getCurrentOrgWorkspace())?.planTier ?? null;
 }
 
 /** Billing access follows the live organization capability matrix. */

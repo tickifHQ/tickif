@@ -39,6 +39,7 @@ async function makeCompleteProject(overrides: Partial<typeof schema.project.$inf
         status: 'ready',
         themeSlugs: ['modern'],
         finishSlugs: ['veneer'],
+        sortOrder: index,
         phash: index < 2 ? '0000000000000000' : 'ffffffffffffffff',
         duplicateOfImageId: index === 1 ? images[0]!.id : null,
         duplicateDistance: index === 1 ? 0 : null,
@@ -127,13 +128,10 @@ describe('admin project moderation API', () => {
     });
     expect(created).not.toHaveProperty('authorId');
 
-    const blockedPublish = await app.request(
-      `/api/admin/projects/${review.project.id}/publish`,
-      {
-        method: 'POST',
-        headers: { cookie: admin.cookie },
-      },
-    );
+    const blockedPublish = await app.request(`/api/admin/projects/${review.project.id}/publish`, {
+      method: 'POST',
+      headers: { cookie: admin.cookie },
+    });
     expect(blockedPublish.status).toBe(409);
     expect((await blockedPublish.json()) as ErrorResponse).toMatchObject({
       error: { message: 'Resolve outstanding review comments before publishing' },
@@ -198,7 +196,6 @@ describe('admin project moderation API', () => {
       .where(eq(schema.projectReviewComment.projectId, review.project.id));
     expect(project?.status === 'published' && unresolved.length > 0).toBe(false);
   });
-
 
   it('requires admin RBAC for the moderation queue', async () => {
     const unauthenticated = await app.request('/api/admin/projects');

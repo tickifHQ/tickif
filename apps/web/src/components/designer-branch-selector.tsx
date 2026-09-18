@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Building, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import {
   organizationBranchesResponseSchema,
   type OrganizationBranchesResponse,
@@ -110,16 +110,18 @@ export function DesignerBranchSelector({ organizationId }: { organizationId: str
           aria-label="Switch branch"
           aria-busy={isBusy}
           disabled={isBusy}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <Building2 aria-hidden="true" className="size-4 shrink-0 self-start text-muted-foreground" />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-xs leading-4 text-muted-foreground">Branch</span>
+          <Building aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
             <span
-              className="truncate text-sm leading-5 font-medium text-foreground"
+              className="block truncate text-sm font-medium leading-snug text-foreground"
               title={activeBranch?.name}
             >
               {activeBranch?.name ?? 'Select branch'}
+            </span>
+            <span className="mt-0.5 block truncate text-xs leading-snug text-muted-foreground">
+              Branch
             </span>
           </span>
           {isBusy ? (

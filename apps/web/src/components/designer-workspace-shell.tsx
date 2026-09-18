@@ -203,7 +203,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
 function SidebarContent({
   activeOrganizationId,
   studioName,
-  studioLocation,
+  planLabel,
   pathname,
   isWorkspaceRefreshing,
   onSwitchSuccess,
@@ -211,7 +211,7 @@ function SidebarContent({
 }: {
   activeOrganizationId: string;
   studioName: string;
-  studioLocation: string;
+  planLabel: string;
   pathname: string;
   isWorkspaceRefreshing: boolean;
   onSwitchSuccess: (organizationId: string) => void;
@@ -262,7 +262,7 @@ function SidebarContent({
             <DesignerOrganizationSwitcher
               activeOrganizationId={activeOrganizationId}
               studioName={studioName}
-              studioLocation={studioLocation}
+              secondaryLabel={planLabel}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
             />
@@ -296,13 +296,13 @@ function WorkspaceContentSkeleton() {
 export function DesignerWorkspaceShell({
   activeOrganizationId,
   studioName,
-  studioLocation,
+  planLabel,
   capabilities,
   children,
 }: {
   activeOrganizationId: string;
   studioName: string;
-  studioLocation: string;
+  planLabel: string;
   capabilities: OrganizationCapabilities;
   children: ReactNode;
 }) {
@@ -332,7 +332,7 @@ export function DesignerWorkspaceShell({
         <SidebarContent
           activeOrganizationId={activeOrganizationId}
           studioName={studioName}
-          studioLocation={studioLocation}
+          planLabel={planLabel}
           pathname={pathname}
           isWorkspaceRefreshing={isWorkspaceRefreshing}
           onSwitchSuccess={handleSwitchSuccess}
@@ -358,11 +358,7 @@ export function DesignerWorkspaceShell({
               </Link>
             </Button>
           ) : null}
-          <AccountMenu
-            showLabel
-            showProfileSettings={capabilities.editOrganization}
-            avatarSeed={studioName}
-          />
+          <AccountMenu showLabel showProfileSettings={capabilities.editOrganization} />
         </>
       }
       busy={isWorkspaceRefreshing}

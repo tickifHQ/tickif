@@ -28,6 +28,7 @@ const emptyDashboard: ProfileDashboardResponse = {
   // a copyable/openable public link (E-278).
   shareUrl: new URL('/d/studio', env.NEXT_PUBLIC_WEB_URL).toString(),
   publiclyVisible: false,
+  verificationStatus: null,
 };
 
 async function getDashboardSummary(): Promise<DashboardResult> {
@@ -88,7 +89,9 @@ export default async function DesignerDashboardPage() {
       completion={completion.data}
       canWriteProjects={capabilities?.writeProjects ?? false}
       canEditOrganization={capabilities?.editOrganization ?? false}
+      canManageVerification={capabilities?.manageVerification ?? false}
       dashboardError={dashboard.ok ? null : dashboard.message}
+      workspaceKey={`${profile?.organization.id ?? 'unknown'}:${session.session.activeTeamId ?? 'no-branch'}`}
     />
   );
 }
