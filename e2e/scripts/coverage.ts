@@ -7,6 +7,10 @@ export const requiredTests = [
   ],
   [
     'authentication.spec.ts',
+    'visitor onboarding keeps client validation local and persists details after reload',
+  ],
+  [
+    'authentication.spec.ts',
     'email OTP creates a real session through a local Resend delivery double',
   ],
   [
