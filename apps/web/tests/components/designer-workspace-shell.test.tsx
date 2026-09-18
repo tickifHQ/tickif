@@ -114,6 +114,7 @@ describe('DesignerWorkspaceShell', () => {
     expect(screen.queryByRole('link', { name: 'Branches' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Add new project' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Analytics' })).toBeInTheDocument();
+    expect(screen.getByTestId('account-menu')).toHaveAttribute('data-profile-settings', 'false');
   });
   it('shows a workspace skeleton until the refreshed organization is rendered', async () => {
     mock.pathname = '/designer/dashboard';

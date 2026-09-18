@@ -30,9 +30,29 @@ const dashboard: ProfileDashboardResponse = {
 };
 
 describe('DesignerDashboardOverview', () => {
+  it('does not offer project creation or organization editing to a read-only teammate', () => {
+    render(
+      <DesignerDashboardOverview
+        studioName="Read-only studio"
+        studioLocation="Bengaluru"
+        portfolioUrl="https://tickif.com/d/studio"
+        dashboard={dashboard}
+        canWriteProjects={false}
+        canEditOrganization={false}
+      />,
+    );
+    expect(screen.queryAllByRole('link', { name: /add (new|first) project/i })).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link', {
+        name: /manage portfolio|complete your portfolio|round out your profile/i,
+      }),
+    ).toHaveLength(0);
+  });
   it('renders the welcome state, progress score, and onboarding checklist', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -53,6 +73,8 @@ describe('DesignerDashboardOverview', () => {
   it('links the shipped project, profile, and share actions', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -89,6 +111,8 @@ describe('DesignerDashboardOverview', () => {
   it('exposes the canonical public link and copy action only when publicly visible', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -99,12 +123,16 @@ describe('DesignerDashboardOverview', () => {
 
     expect(screen.getByText('tickif.com/d/livspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /complete your portfolio/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /complete your portfolio/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('hides the public URL and copy action, showing a readiness CTA, when not publicly visible', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -128,11 +156,17 @@ describe('DesignerDashboardOverview', () => {
   it('never surfaces a placeholder URL as a copyable link when not publicly visible', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/studio"
         portfolioPubliclyVisible={false}
-        dashboard={{ ...dashboard, shareUrl: 'https://tickif.com/d/studio', publiclyVisible: false }}
+        dashboard={{
+          ...dashboard,
+          shareUrl: 'https://tickif.com/d/studio',
+          publiclyVisible: false,
+        }}
       />,
     );
 
@@ -143,6 +177,8 @@ describe('DesignerDashboardOverview', () => {
   it('keeps verification non-interactive until that flow ships', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -157,6 +193,8 @@ describe('DesignerDashboardOverview', () => {
   it('uses the requested Lucide icons in the what happens next panel', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -175,6 +213,8 @@ describe('DesignerDashboardOverview', () => {
   it('shows setup complete once all tracked backend steps are done', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -201,6 +241,8 @@ describe('DesignerDashboardOverview', () => {
   it('uses API-provided completion steps when available', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -230,6 +272,8 @@ describe('DesignerDashboardOverview', () => {
   it('shows checklist progress instead of backend field score on the setup card', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"
@@ -266,6 +310,8 @@ describe('DesignerDashboardOverview', () => {
   it('surfaces completion loading failures without replacing them with a fake empty state', () => {
     render(
       <DesignerDashboardOverview
+        canWriteProjects
+        canEditOrganization
         studioName="Livspace"
         studioLocation="Chennai, Tamilnadu"
         portfolioUrl="https://tickif.com/d/livspace"

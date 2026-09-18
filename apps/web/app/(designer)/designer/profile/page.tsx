@@ -1,12 +1,16 @@
 import { Container } from '@/components/container';
 import { DesignerProfileEditor } from '@/components/designer-profile-editor';
+import { getCurrentOrgCapabilities } from '@/lib/current-org-role';
 import { getProfileEditorPageData } from '@/lib/profile-editor-data';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Edit profile · Tickif',
 };
 
 export default async function DesignerProfilePage() {
+  const capabilities = await getCurrentOrgCapabilities();
+  if (!capabilities?.editOrganization) redirect('/unauthorized');
   const data = await getProfileEditorPageData();
 
   return (

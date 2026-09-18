@@ -9,6 +9,7 @@ import { env } from '@/env';
 import { requireAuth } from '@/lib/auth-guard';
 import { api } from '@/lib/api';
 import { getCurrentDesignerProfile, getProfileCompletion } from '@/lib/designer-profile';
+import { getCurrentOrgCapabilities } from '@/lib/current-org-role';
 
 export const metadata = {
   title: 'Designer dashboard · Tickif',
@@ -58,16 +59,20 @@ async function getDashboardSummary(): Promise<DashboardResult> {
 }
 
 export default async function DesignerDashboardPage() {
-  const [session, profile, dashboard, completion] = await Promise.all([
+  const [session, profile, dashboard, completion, capabilities] = await Promise.all([
     requireAuth({ requiredRole: PLATFORM_ROLE.DESIGNER }),
     getCurrentDesignerProfile(),
     getDashboardSummary(),
     getProfileCompletion(),
+    getCurrentOrgCapabilities(),
   ]);
 
   const studioName = profile?.displayName.trim() || session.user.name?.trim() || 'Your studio';
-  const studioLocation = profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
-  const portfolioUrl = dashboard.ok ? dashboard.data.shareUrl : (profile?.shareUrl ?? dashboard.data.shareUrl);
+  const studioLocation =
+    profile?.address?.trim() || profile?.organization.name.trim() || 'Designer workspace';
+  const portfolioUrl = dashboard.ok
+    ? dashboard.data.shareUrl
+    : (profile?.shareUrl ?? dashboard.data.shareUrl);
   // E-278: only treat the portfolio as publicly visible when the dashboard
   // fetch succeeded and the backend says so. On a failed fetch we fall back to
   // the placeholder, which is never live — so the share card stays gated.
@@ -81,6 +86,8 @@ export default async function DesignerDashboardPage() {
       portfolioPubliclyVisible={portfolioPubliclyVisible}
       dashboard={dashboard.data}
       completion={completion.data}
+      canWriteProjects={capabilities?.writeProjects ?? false}
+      canEditOrganization={capabilities?.editOrganization ?? false}
       dashboardError={dashboard.ok ? null : dashboard.message}
     />
   );
