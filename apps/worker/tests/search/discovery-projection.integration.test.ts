@@ -4,9 +4,51 @@ import { makeDesigner, makeProject, makeProjectRoom, makeTaxonomy } from '@repo/
 import { findDesignerSearchSource, findProjectSearchSource } from '../../src/search/repository.js';
 import { mapDesignerSearchDocument, mapProjectSearchDocument } from '../../src/search/mapper.js';
 
+async function makeDiscoverableDesigner() {
+  const designer = await makeDesigner({
+    status: 'active',
+    bio: 'A complete public designer profile.',
+    logoImageId: 'originals/logos/public-studio/logo',
+  });
+  await db.insert(schema.designerPortfolio).values({
+    profileId: designer.id,
+    publicLinkEnabled: true,
+    tagline: 'Thoughtful homes for modern living',
+  });
+  return designer;
+}
+
 describe('discovery projection source', () => {
+  it('does not expose an active designer whose portfolio is not public', async () => {
+    const designer = await makeDesigner({
+      status: 'active',
+      bio: 'Private studio profile',
+      logoImageId: 'originals/logos/private-studio/logo',
+    });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: designer.id,
+      publicLinkEnabled: false,
+      tagline: 'Private by choice',
+    });
+
+    await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+
+    const incompleteDesigner = await makeDesigner({
+      status: 'active',
+      bio: null,
+      logoImageId: 'originals/logos/incomplete-studio/logo',
+    });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: incompleteDesigner.id,
+      publicLinkEnabled: true,
+      tagline: 'Still missing a bio',
+    });
+
+    await expect(findDesignerSearchSource(incompleteDesigner.id)).resolves.toBeNull();
+  });
+
   it('searches published portfolio rooms but never draft or unpublished content', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const designer = await makeDiscoverableDesigner();
     const project = await makeProject({
       designerId: designer.id,
       title: 'Public retreat',
@@ -29,7 +71,7 @@ describe('discovery projection source', () => {
     expect(document.portfolioTerms).toEqual([]);
   });
   it('projects paid coverage for both collections and removes it for a locked account', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const designer = await makeDiscoverableDesigner();
     const project = await makeProject({ designerId: designer.id, publishedAt: new Date() });
     const until = new Date('2030-01-01T00:00:00Z');
     await db.insert(schema.subscription).values({
