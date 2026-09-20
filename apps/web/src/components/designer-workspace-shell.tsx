@@ -156,6 +156,8 @@ function SidebarSection({
   items: NavItem[];
   pathname: string;
 }) {
+  if (items.length === 0) return null;
+
   return (
     <section className="space-y-2">
       <div className="text-xs leading-none font-normal text-muted-foreground uppercase">
