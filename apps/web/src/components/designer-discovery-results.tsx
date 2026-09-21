@@ -76,6 +76,12 @@ export function DesignerDiscoveryResults({
                       ? `${designer.avgRating.toFixed(1)} / 5 · ${designer.reviewCount} reviews`
                       : 'No reviews yet'}
                   </p>
+                  {designer.googleRating !== null && designer.googleRatingCount !== null ? (
+                    <p className="text-sm" aria-label="Google Business rating">
+                      Google {designer.googleRating.toFixed(1)} · {designer.googleRatingCount}{' '}
+                      {designer.googleRatingCount === 1 ? 'rating' : 'ratings'}
+                    </p>
+                  ) : null}
                   {designer.scopeSlugs.length ? (
                     <p className="text-sm text-muted-foreground">
                       {designer.scopeSlugs.map(designerFacetLabel).join(' · ')}

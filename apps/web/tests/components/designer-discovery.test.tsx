@@ -22,6 +22,8 @@ const designer: DesignerHit = {
   projectCount: 12,
   avgRating: 4.75,
   reviewCount: 8,
+  googleRating: 4.9,
+  googleRatingCount: 127,
   isKycVerified: true,
   logoUrl: null,
 };
@@ -56,6 +58,9 @@ describe('designer discovery', () => {
     );
     expect(screen.getByText('KYC verified')).toBeVisible();
     expect(screen.getByText('4.8 / 5 · 8 reviews')).toBeVisible();
+    const googleRating = screen.getByText('Google 4.9 · 127 ratings');
+    expect(googleRating).toBeVisible();
+    expect(googleRating.closest('a')).toBeNull();
     expect(screen.getByText('8 years of experience · 12 projects')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute(
       'href',
@@ -75,6 +80,8 @@ describe('designer discovery', () => {
               slug: 'new-studio',
               displayName: 'New Studio',
               reviewCount: 0,
+              googleRating: null,
+              googleRatingCount: null,
               isKycVerified: false,
             },
           ],
@@ -84,6 +91,7 @@ describe('designer discovery', () => {
     );
     expect(screen.queryByRole('link', { name: 'View Oak Studio profile' })).toBeNull();
     expect(screen.getByText('No reviews yet')).toBeVisible();
+    expect(screen.queryByText(/^Google /)).toBeNull();
     expect(screen.queryByText('KYC verified')).toBeNull();
   });
   it('provides a way back from an empty page and retains active filters', () => {

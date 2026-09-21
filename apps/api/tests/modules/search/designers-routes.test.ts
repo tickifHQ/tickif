@@ -27,6 +27,7 @@ vi.mock('../../../src/modules/search/repository.js', () => ({
   searchProjects: vi.fn(),
   multiSearch: vi.fn(),
   recentProjectsInCity: vi.fn(),
+  findFreshGoogleRatings: vi.fn(),
 }));
 
 // Mock presignDownload to avoid R2 dependency
@@ -97,6 +98,7 @@ function mockSearchDesigners(
 describe('GET /api/search/designers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(searchRepository.findFreshGoogleRatings).mockResolvedValue(new Map());
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +141,41 @@ describe('GET /api/search/designers', () => {
       const body = await json(res);
       expect(body.hits).toEqual([]);
       expect(body.estimatedTotalHits).toBe(0);
+    });
+
+    it('adds fresh Google rating aggregates without exposing review content', async () => {
+      const designer = makeDesignerDoc({ id: 'designer-google' });
+      mockSearchDesigners([designer]);
+      vi.mocked(searchRepository.findFreshGoogleRatings).mockResolvedValue(
+        new Map([['designer-google', { rating: 4.9, ratingCount: 127 }]]),
+      );
+
+      const res = await get('/api/search/designers?q=studio');
+
+      expect(res.status).toBe(200);
+      const body = await json(res);
+      expect(body.hits[0]).toMatchObject({
+        id: 'designer-google',
+        googleRating: 4.9,
+        googleRatingCount: 127,
+      });
+      expect(body.hits[0]).not.toHaveProperty('googleReviews');
+      expect(searchRepository.findFreshGoogleRatings).toHaveBeenCalledWith(['designer-google']);
+    });
+
+    it('keeps designer search available when optional Google enrichment fails', async () => {
+      mockSearchDesigners([makeDesignerDoc({ id: 'designer-google' })]);
+      vi.mocked(searchRepository.findFreshGoogleRatings).mockRejectedValue(
+        new Error('database unavailable'),
+      );
+
+      const res = await get('/api/search/designers?q=studio');
+
+      expect(res.status).toBe(200);
+      expect((await json(res)).hits[0]).toMatchObject({
+        googleRating: null,
+        googleRatingCount: null,
+      });
     });
 
     it('uses default values when no query params provided', async () => {
