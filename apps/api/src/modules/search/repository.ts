@@ -19,7 +19,7 @@ import {
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, desc, gt, isNotNull, inArray } from '@repo/db';
+import { db, schema, eq, and, or, desc, gt, isNotNull, isNull, inArray } from '@repo/db';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
@@ -244,9 +244,17 @@ export async function findFreshGoogleRatings(
       ratingCount: schema.googlePlaceCache.userRatingsTotal,
     })
     .from(schema.googlePlaceCache)
+    .leftJoin(
+      schema.designerPortfolio,
+      eq(schema.designerPortfolio.profileId, schema.googlePlaceCache.profileId),
+    )
     .where(
       and(
         inArray(schema.googlePlaceCache.profileId, [...new Set(profileIds)]),
+        or(
+          isNull(schema.designerPortfolio.profileId),
+          eq(schema.designerPortfolio.showGoogleOverallRating, true),
+        ),
         eq(schema.googlePlaceCache.status, 'connected'),
         isNotNull(schema.googlePlaceCache.rating),
         isNotNull(schema.googlePlaceCache.userRatingsTotal),

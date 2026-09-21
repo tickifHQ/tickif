@@ -9,6 +9,12 @@ describe('designer search Google rating projection', () => {
     const stale = await makeDesigner({ status: 'active' });
     const errored = await makeDesigner({ status: 'active' });
     const neverConnected = await makeDesigner({ status: 'active' });
+    const hidden = await makeDesigner({ status: 'active' });
+
+    await db.insert(schema.designerPortfolio).values({
+      profileId: hidden.id,
+      showGoogleOverallRating: false,
+    });
 
     await db.insert(schema.googlePlaceCache).values([
       {
@@ -40,6 +46,14 @@ describe('designer search Google rating projection', () => {
         placeId: 'ChIJpending',
         status: 'pending',
       },
+      {
+        profileId: hidden.id,
+        placeId: 'ChIJhidden',
+        rating: '5.0',
+        userRatingsTotal: 200,
+        status: 'connected',
+        lastFetchedAt: new Date(),
+      },
     ]);
 
     const ratings = await findFreshGoogleRatings([
@@ -47,6 +61,7 @@ describe('designer search Google rating projection', () => {
       stale.id,
       errored.id,
       neverConnected.id,
+      hidden.id,
     ]);
 
     expect(ratings).toEqual(new Map([[fresh.id, { rating: 4.9, ratingCount: 127 }]]));
