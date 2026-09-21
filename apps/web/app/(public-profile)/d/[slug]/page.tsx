@@ -55,6 +55,13 @@ export async function generateMetadata({
     `Explore verified residential interior design work by ${portfolio.displayName}${
       location ? ` in ${location}` : ''
     }.`;
+  const socialTitle = `${portfolio.displayName} — ${studioType(portfolio)}`;
+  const canonicalSlug = new URL(portfolio.canonicalUrl).pathname.replace(/^\/d\//, '');
+  const socialImageUrl = new URL(
+    `/d/${encodeURIComponent(canonicalSlug)}/social-card`,
+    portfolio.canonicalUrl,
+  ).toString();
+  const socialImageAlt = `${portfolio.displayName} interior design portfolio`;
 
   return {
     title: `${portfolio.displayName} | Tickif`,
@@ -62,13 +69,16 @@ export async function generateMetadata({
     alternates: { canonical: portfolio.canonicalUrl },
     openGraph: {
       type: 'profile',
-      title: `${portfolio.displayName} — ${studioType(portfolio)}`,
+      title: socialTitle,
       description,
       url: portfolio.canonicalUrl,
-      images: portfolio.projects.projects
-        .map((project) => project.coverImageUrl)
-        .filter((url): url is string => !!url)
-        .slice(0, 1),
+      images: [{ url: socialImageUrl, width: 1200, height: 630, alt: socialImageAlt }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: socialTitle,
+      description,
+      images: [{ url: socialImageUrl, alt: socialImageAlt }],
     },
   };
 }
