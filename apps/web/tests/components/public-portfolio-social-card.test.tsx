@@ -34,4 +34,25 @@ describe('PublicPortfolioSocialCard', () => {
     expect(screen.queryByText(/rating/)).not.toBeInTheDocument();
     expect(screen.queryByText('Verified on Tickif')).not.toBeInTheDocument();
   });
+
+  it('fits the longest accepted profile text inside the fixed social card', () => {
+    const displayName = 'N'.repeat(100);
+    const tagline = 'T'.repeat(200);
+
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={makePublicPortfolio({
+          displayName,
+          tagline,
+        })}
+      />,
+    );
+
+    const fittedName = screen.getByText(`${'N'.repeat(71)}…`);
+    const fittedTagline = screen.getByText(`${'T'.repeat(139)}…`);
+    expect(fittedName).toHaveStyle({ fontSize: '46px', overflowWrap: 'anywhere' });
+    expect(fittedTagline).toHaveStyle({ fontSize: '25px', overflowWrap: 'anywhere' });
+    expect(screen.queryByText(displayName)).not.toBeInTheDocument();
+    expect(screen.queryByText(tagline)).not.toBeInTheDocument();
+  });
 });

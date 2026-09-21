@@ -3,6 +3,8 @@ import type { PublicPortfolioResponse } from '@repo/contracts';
 import { studioLocation, studioType } from '@/lib/public-portfolio-view';
 
 const DEFAULT_ACCENT = '#ff7a59';
+const MAX_CARD_NAME_LENGTH = 72;
+const MAX_CARD_TAGLINE_LENGTH = 140;
 
 function safeAccentColor(value: string): string {
   return /^#[0-9a-f]{6}$/i.test(value) ? value : DEFAULT_ACCENT;
@@ -14,12 +16,23 @@ function ratingLabel(portfolio: PublicPortfolioResponse): string | null {
   return `${source.rating.toFixed(1)} rating · ${source.reviewCount} review${source.reviewCount === 1 ? '' : 's'}`;
 }
 
+function fitText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 /** Static, Satori-compatible markup used by the dynamic portfolio social image. */
 export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPortfolioResponse }) {
   const projects = portfolio.projects.projects;
   const location = studioLocation(portfolio, projects);
   const rating = ratingLabel(portfolio);
   const accent = safeAccentColor(portfolio.accentColor);
+  const displayName = fitText(portfolio.displayName, MAX_CARD_NAME_LENGTH);
+  const tagline = portfolio.tagline
+    ? fitText(portfolio.tagline, MAX_CARD_TAGLINE_LENGTH)
+    : null;
+  const titleFontSize = displayName.length > 60 ? 46 : displayName.length > 36 ? 56 : 68;
+  const taglineFontSize = tagline && tagline.length > 100 ? 25 : 29;
   const initials = portfolio.displayName
     .split(/\s+/)
     .filter(Boolean)
@@ -65,20 +78,29 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
           {studioType(portfolio)}
           {location ? ` · ${location}` : ''}
         </div>
-        <div style={{ display: 'flex', fontSize: 68, lineHeight: 1.05, fontWeight: 800 }}>
-          {portfolio.displayName}
+        <div
+          style={{
+            display: 'flex',
+            fontSize: titleFontSize,
+            lineHeight: 1.05,
+            fontWeight: 800,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {displayName}
         </div>
-        {portfolio.tagline ? (
+        {tagline ? (
           <div
             style={{
               display: 'flex',
               marginTop: 24,
-              fontSize: 29,
+              fontSize: taglineFontSize,
               lineHeight: 1.35,
               color: '#d1fae5',
+              overflowWrap: 'anywhere',
             }}
           >
-            {portfolio.tagline}
+            {tagline}
           </div>
         ) : null}
       </div>
