@@ -109,7 +109,11 @@ function RoomSections({ project }: { project: PublicProjectDetailResponse }) {
                 </p>
               </header>
 
-              <Carousel opts={{ align: 'start', loop: false }} className="mt-3">
+              <Carousel
+                opts={{ align: 'start', loop: false }}
+                wheelGestures={images.length > 1}
+                className="mt-3"
+              >
                 <CarouselContent className="pb-2">
                   {images.map((image) => (
                     <CarouselItem key={image.id} className="basis-auto">

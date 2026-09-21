@@ -468,6 +468,22 @@ describe('ImageDetailView', () => {
 
   // --- Finding #7: Gallery accessibility ---
 
+  it('snaps horizontal scrolling to complete gallery thumbnails', () => {
+    renderComponent();
+
+    const strip = screen.getByRole('group', { name: 'Project gallery' });
+    expect(strip).toHaveClass('snap-x', 'snap-mandatory');
+    for (const thumbnail of screen.getAllByRole('button', { name: /living room|kitchen/i })) {
+      expect(thumbnail).toHaveClass('snap-start');
+    }
+  });
+
+  it('does not show a scrollable thumbnail strip for a single image', () => {
+    renderComponent({ gallery: [gallery[0]!] });
+
+    expect(screen.queryByRole('group', { name: 'Project gallery' })).not.toBeInTheDocument();
+  });
+
   it('uses aria-current for the active gallery image (not role=tab)', () => {
     renderComponent();
 
