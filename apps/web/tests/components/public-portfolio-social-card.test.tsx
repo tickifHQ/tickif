@@ -4,6 +4,32 @@ import { PublicPortfolioSocialCard } from '@/components/public-portfolio-social-
 import { makePublicPortfolio } from '../fixtures/public-portfolio';
 
 describe('PublicPortfolioSocialCard', () => {
+  it('shows uploaded studio identity beside the name and attributes the Google rating', () => {
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={makePublicPortfolio({ logoUrl: 'https://cdn.example.test/logo.png' })}
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'Anika Spaces logo' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/logo.png',
+    );
+    expect(screen.getByRole('img', { name: 'Google' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tickif' })).toBeInTheDocument();
+  });
+
+  it('uses initials and Tickif attribution when no studio logo or Google rating exists', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={{ ...portfolio, logoUrl: null, stats: { ...portfolio.stats, google: null } }}
+      />,
+    );
+    expect(screen.getByText('AS')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tickif rating' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
+  });
+
   it('renders profile-specific identity, location, work, rating, and verification data', () => {
     render(<PublicPortfolioSocialCard portfolio={makePublicPortfolio()} />);
 
@@ -50,8 +76,16 @@ describe('PublicPortfolioSocialCard', () => {
 
     const fittedName = screen.getByText(`${'N'.repeat(71)}…`);
     const fittedTagline = screen.getByText(`${'T'.repeat(139)}…`);
-    expect(fittedName).toHaveStyle({ fontSize: '46px', overflowWrap: 'anywhere' });
-    expect(fittedTagline).toHaveStyle({ fontSize: '25px', overflowWrap: 'anywhere' });
+    expect(fittedName).toHaveStyle({
+      fontSize: '46px',
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-all',
+    });
+    expect(fittedTagline).toHaveStyle({
+      fontSize: '25px',
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-all',
+    });
     expect(screen.queryByText(displayName)).not.toBeInTheDocument();
     expect(screen.queryByText(tagline)).not.toBeInTheDocument();
   });

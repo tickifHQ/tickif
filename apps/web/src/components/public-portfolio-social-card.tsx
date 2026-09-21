@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { GoogleBrandIcon, TickifBrandIcon } from '@/components/brand-icons';
 import type { PublicPortfolioResponse } from '@repo/contracts';
 import { studioLocation, studioType } from '@/lib/public-portfolio-view';
 
@@ -28,9 +29,7 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
   const rating = ratingLabel(portfolio);
   const accent = safeAccentColor(portfolio.accentColor);
   const displayName = fitText(portfolio.displayName, MAX_CARD_NAME_LENGTH);
-  const tagline = portfolio.tagline
-    ? fitText(portfolio.tagline, MAX_CARD_TAGLINE_LENGTH)
-    : null;
+  const tagline = portfolio.tagline ? fitText(portfolio.tagline, MAX_CARD_TAGLINE_LENGTH) : null;
   const titleFontSize = displayName.length > 60 ? 46 : displayName.length > 36 ? 56 : 68;
   const taglineFontSize = tagline && tagline.length > 100 ? 25 : 29;
   const initials = portfolio.displayName
@@ -53,41 +52,59 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
 
   return (
     <div style={rootStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div
-          style={{
-            width: 58,
-            height: 58,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 18,
-            backgroundColor: accent,
-            color: '#07130f',
-            fontSize: 23,
-            fontWeight: 800,
-          }}
-        >
-          {initials || 'T'}
-        </div>
-        <div style={{ display: 'flex', fontSize: 28, fontWeight: 700 }}>tickif</div>
-      </div>
+      <TickifBrandIcon width={48} height={48} color="#f8fafc" role="img" aria-label="Tickif" />
 
       <div style={{ display: 'flex', flexDirection: 'column', maxWidth: 940 }}>
         <div style={{ display: 'flex', color: '#a7f3d0', fontSize: 24, marginBottom: 18 }}>
           {studioType(portfolio)}
           {location ? ` · ${location}` : ''}
         </div>
-        <div
-          style={{
-            display: 'flex',
-            fontSize: titleFontSize,
-            lineHeight: 1.05,
-            fontWeight: 800,
-            overflowWrap: 'anywhere',
-          }}
-        >
-          {displayName}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          {portfolio.logoUrl ? (
+            // Satori embeds the signed uploaded image into the generated PNG.
+            <img
+              src={portfolio.logoUrl}
+              alt={`${portfolio.displayName} logo`}
+              width={96}
+              height={96}
+              style={{
+                objectFit: 'contain',
+                borderRadius: 16,
+                backgroundColor: '#ffffff',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 96,
+                height: 96,
+                flexShrink: 0,
+                borderRadius: 16,
+                backgroundColor: accent,
+                color: '#07130f',
+                fontSize: 32,
+              }}
+            >
+              {initials || 'T'}
+            </div>
+          )}
+          <div
+            style={{
+              display: 'flex',
+              flex: 1,
+              fontSize: titleFontSize,
+              lineHeight: 1.05,
+              fontWeight: 800,
+              overflowWrap: 'anywhere',
+              wordBreak: 'break-all',
+            }}
+          >
+            {displayName}
+          </div>
         </div>
         {tagline ? (
           <div
@@ -98,6 +115,7 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
               lineHeight: 1.35,
               color: '#d1fae5',
               overflowWrap: 'anywhere',
+              wordBreak: 'break-all',
             }}
           >
             {tagline}
@@ -109,7 +127,31 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
         <div style={{ display: 'flex' }}>
           {portfolio.stats.projectCount} project{portfolio.stats.projectCount === 1 ? '' : 's'}
         </div>
-        {rating ? <div style={{ display: 'flex' }}>{rating}</div> : null}
+        {rating ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {portfolio.stats.google && portfolio.stats.google.reviewCount > 0 ? (
+              <GoogleBrandIcon
+                width={26}
+                height={26}
+                role="img"
+                aria-hidden={false}
+                aria-label="Google"
+              />
+            ) : (
+              <TickifBrandIcon
+                width={26}
+                height={26}
+                color="#f8fafc"
+                role="img"
+                aria-label="Tickif rating"
+              />
+            )}
+            <svg width={24} height={24} viewBox="0 0 24 24" fill="#fbbf24" aria-hidden="true">
+              <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
+            </svg>
+            <span>{rating}</span>
+          </div>
+        ) : null}
         {portfolio.isKycVerified ? <div style={{ display: 'flex' }}>Verified on Tickif</div> : null}
       </div>
     </div>
