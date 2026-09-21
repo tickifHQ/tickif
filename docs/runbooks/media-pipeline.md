@@ -72,6 +72,22 @@ pnpm --filter @repo/worker media:reprocess -- --all --confirm
 The worker must be running to consume the queued jobs. The `--confirm` requirement prevents
 an accidental full-library regeneration.
 
+Set `WATERMARK_REVISION` to the revision shipped with the code before a full backfill. A
+revision change gives regenerated objects new keys; reusing an old revision can leave the
+previous visible watermark in immutable CDN caches.
+
+### SynthID boundary
+
+SynthID is embedded by supported Google generation models when AI media is created. This
+pipeline accepts existing designer uploads and Google does not provide it as a generic
+post-processing watermark for arbitrary images, so the worker cannot add SynthID after
+upload. If Tickif later generates images through Imagen, enable `addWatermark` on that
+generation request and treat the returned image as the source for this derivative pipeline.
+The visible Tickif mark remains separate from SynthID.
+
+- [Google DeepMind: SynthID](https://deepmind.google/models/synthid/)
+- [Google Cloud: generate images with Imagen](https://cloud.google.com/vertex-ai/generative-ai/docs/image/generate-images)
+
 ## Migration 0005 — rollback / forward-fix
 
 0005 is **one-way** (`room_slug` is dropped, unrecoverable). There is no rollback.

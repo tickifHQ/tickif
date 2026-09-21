@@ -30,7 +30,7 @@ WebP and AVIF images. It checks decoded dimensions and pixel variation, and fail
 on a Fontconfig warning. Images stay in memory. The disposable Swarm image suite
 runs this probe too.
 
-The existing watermark tests cover the actual production SVG pattern and
+The existing watermark tests cover the actual production SVG mark and
 derivative pipeline. This image check covers their runtime font dependency.
 Neither check deploys staging. After the reviewed image is deployed, inspect the
 worker logs and verify a newly generated watermarked preview there. The original
