@@ -191,8 +191,21 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
   await Promise.allSettled(unusedKeys.map((key) => deleteObject(key)));
 }
 
+/**
+ * Public cover images render as full-width cards and portfolio heroes. A 320px
+ * thumbnail is visibly soft there, especially on high-density displays, so use
+ * the 1024px derivative when available while retaining legacy fallbacks.
+ */
 function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'medium') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'small') ??
     derivatives.find(
       (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
     ) ??
