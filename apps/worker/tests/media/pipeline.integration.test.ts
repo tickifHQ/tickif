@@ -100,7 +100,7 @@ describe('media pipeline (integration)', () => {
     // Every derivative object was written to R2 and is EXIF-stripped, correctly encoded.
     for (const d of row.derivatives) {
       const key = d.key;
-      expect(key).toBe(`derivatives/${projectId}/${imageId}/${d.variant}-wm-v2.${d.format}`);
+      expect(key).toBe(`derivatives/${projectId}/${imageId}/${d.variant}-wm-v3.${d.format}`);
       expect(r2.has(key)).toBe(true);
       const meta = await sharp(r2.get(key)!).metadata();
       expect(meta.exif).toBeUndefined();
@@ -131,7 +131,7 @@ describe('media pipeline (integration)', () => {
     const ready = await reload(imageId);
     const legacyDerivatives = ready.derivatives.map((derivative) => ({
       ...derivative,
-      key: derivative.key.replace('-wm-v2.', '.'),
+      key: derivative.key.replace('-wm-v3.', '.'),
     }));
     for (const derivative of legacyDerivatives) r2.set(derivative.key, Buffer.from('legacy'));
     await db
@@ -144,7 +144,7 @@ describe('media pipeline (integration)', () => {
     expect(result).toEqual({ ok: true, derivatives: 8 });
     const refreshed = await reload(imageId);
     expect(refreshed.status).toBe('ready');
-    expect(refreshed.derivatives.every((derivative) => derivative.key.includes('-wm-v2.'))).toBe(
+    expect(refreshed.derivatives.every((derivative) => derivative.key.includes('-wm-v3.'))).toBe(
       true,
     );
     expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);
