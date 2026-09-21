@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { isDesignerPersonaPath, isPublicPath, proxy } from '../proxy';
 
+const authMock = vi.hoisted(() => ({ getSessionCookie: vi.fn() }));
+
+vi.mock('better-auth/cookies', () => ({ getSessionCookie: authMock.getSessionCookie }));
+
 describe('isPublicPath', () => {
   it('allows the directory without exposing similarly prefixed workspace routes', () => {
     expect(isPublicPath('/designers')).toBe(true);
@@ -11,6 +15,7 @@ describe('isPublicPath', () => {
   });
   beforeEach(() => {
     vi.restoreAllMocks();
+    authMock.getSessionCookie.mockReturnValue(null);
   });
   it('allows the process-only container health endpoint', () => {
     expect(isPublicPath('/health')).toBe(true);
@@ -91,6 +96,54 @@ describe('isPublicPath', () => {
     const url = new URL(location);
     expect(url.searchParams.get('mode')).toBe('designer');
     expect(url.searchParams.get('callbackURL')).toBe('/designer/projects?status=submitted');
+  });
+
+  it('passes a trusted designer return path to the server auth wall when a stale cookie exists', async () => {
+    authMock.getSessionCookie.mockReturnValue('invalid.signature');
+    const request = new NextRequest(
+      'http://localhost:3000/designer/leads?status=new&page=2',
+      {
+        headers: {
+          cookie: 'better-auth.session_token=invalid.signature',
+          'x-tickif-request-path': '/attacker-controlled',
+        },
+      },
+    );
+
+    const response = await proxy(request);
+
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('x-middleware-request-x-tickif-request-path')).toBe(
+      '/designer/leads?status=new&page=2',
+    );
+  });
+
+  it.each([
+    '/designer/dashboard',
+    '/designer/projects',
+    '/designer/projects/new',
+    '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
+    '/designer/leads',
+    '/designer/consultations',
+    '/designer/reviews',
+    '/designer/analytics',
+    '/designer/profile',
+    '/designer/portfolio',
+    '/designer/verification',
+    '/designer/branches',
+    '/designer/terms-roles',
+    '/designer/plan-billing',
+    '/designer/plan-billing/subscribe',
+  ])('redirects anonymous designer workspace route %s to its exact sign-in return path', async (path) => {
+    const response = await proxy(new NextRequest(`http://localhost:3000${path}`));
+    const location = response.headers.get('location');
+
+    expect(response.status).toBe(307);
+    if (!location) throw new Error(`Expected proxy to redirect ${path} to login.`);
+    const url = new URL(location);
+    expect(url.pathname).toBe('/login');
+    expect(url.searchParams.get('mode')).toBe('designer');
+    expect(url.searchParams.get('callbackURL')).toBe(path);
   });
 
   it('does NOT apply designer persona to non-designer protected routes (E-272)', async () => {
