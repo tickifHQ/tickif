@@ -13,6 +13,8 @@ export type ProjectFeedFilters = Pick<
   | 'budgetBandSlug'
   | 'roomSlugs'
   | 'themes'
+  | 'materials'
+  | 'tags'
 >;
 
 function filterValues(value: string | string[] | undefined): string[] {
@@ -73,6 +75,33 @@ export function projectFeedFilterClauses(filters: ProjectFeedFilters = {}): SQL[
               eq(schema.projectImage.status, 'ready'),
               eq(schema.projectImage.isLive, true),
               sql`${schema.projectImage.themeSlugs} ?| ARRAY[${themeParameters}]::text[]`,
+            ),
+          ),
+      ),
+    );
+  }
+
+  const imageArrayFilters = [
+    [schema.projectImage.materialSlugs, filterValues(filters.materials)],
+    [schema.projectImage.tagSlugs, filterValues(filters.tags)],
+  ] as const;
+  for (const [column, values] of imageArrayFilters) {
+    if (values.length === 0) continue;
+    const parameters = sql.join(
+      values.map((value) => sql`${value}`),
+      sql`, `,
+    );
+    clauses.push(
+      exists(
+        db
+          .select({ id: schema.projectImage.id })
+          .from(schema.projectImage)
+          .where(
+            and(
+              eq(schema.projectImage.projectId, schema.project.id),
+              eq(schema.projectImage.status, 'ready'),
+              eq(schema.projectImage.isLive, true),
+              sql`${column} ?| ARRAY[${parameters}]::text[]`,
             ),
           ),
       ),

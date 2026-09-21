@@ -44,6 +44,12 @@ const suggestions = {
       projectCount: 4,
     },
   ],
+  filters: [
+    { kind: 'space', filterKey: 'room', slug: 'kitchen', label: 'Kitchen' },
+    { kind: 'style', filterKey: 'theme', slug: 'warm', label: 'Warm' },
+    { kind: 'material', filterKey: 'material', slug: 'wood', label: 'Wood' },
+    { kind: 'tag', filterKey: 'tag', slug: 'sunlit', label: 'Sunlit' },
+  ],
   processingTimeMs: 3,
 };
 
@@ -78,6 +84,7 @@ describe('HomeSearchBar', () => {
 
     expect(screen.getByText('Warm Kitchen')).toBeInTheDocument();
     expect(screen.getAllByText('Studio One').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Kitchen, Space' })).toBeInTheDocument();
     expect(mock.suggestGet).toHaveBeenCalledWith(
       { query: { q: 'kitchen' } },
       { init: { signal: expect.any(AbortSignal) } },
@@ -85,6 +92,20 @@ describe('HomeSearchBar', () => {
     expect(screen.getByRole('group', { name: 'Search suggestions' })).toBeInTheDocument();
     expect(input).not.toHaveAttribute('aria-autocomplete');
     expect(input).not.toHaveAttribute('aria-controls');
+  });
+
+  it('applies a matching filter entity and removes the free-text query', async () => {
+    mock.params = new URLSearchParams('q=kitchen&city=mumbai&page=3');
+    render(<HomeSearchBar initialQuery="kitchen" />);
+    const input = screen.getByRole('searchbox', { name: 'Search homes' });
+
+    fireEvent.focus(input);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen, Space' }));
+
+    expect(mock.push).toHaveBeenCalledWith('/?city=mumbai&room=kitchen');
   });
 
   it('clears stale suggestions and shows loading immediately for a changed query', async () => {
@@ -151,6 +172,7 @@ describe('HomeSearchBar', () => {
     fireEvent.click(clearButton);
 
     expect(input).toHaveValue('');
+    expect(mock.push).toHaveBeenCalledWith('/');
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
   });
 
@@ -201,18 +223,26 @@ describe('HomeSearchBar', () => {
     });
 
     const project = screen.getByRole('link', { name: /Warm Kitchen/ });
+    const filters = suggestions.filters.map((suggestion) =>
+      screen.getByRole('button', {
+        name: `${suggestion.label}, ${suggestion.kind.charAt(0).toUpperCase()}${suggestion.kind.slice(1)}`,
+      }),
+    );
     const designer = screen.getByRole('link', { name: /4 projects/ });
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     expect(project).toHaveFocus();
 
     fireEvent.keyDown(project, { key: 'ArrowDown' });
+    expect(filters[0]).toHaveFocus();
+
+    for (const filter of filters) fireEvent.keyDown(filter, { key: 'ArrowDown' });
     expect(designer).toHaveFocus();
 
     fireEvent.keyDown(designer, { key: 'ArrowUp' });
-    expect(project).toHaveFocus();
+    expect(filters.at(-1)).toHaveFocus();
 
-    fireEvent.keyDown(project, { key: 'Escape' });
+    fireEvent.keyDown(filters.at(-1)!, { key: 'Escape' });
     expect(input).toHaveFocus();
     expect(screen.queryByRole('group', { name: 'Search suggestions' })).not.toBeInTheDocument();
   });

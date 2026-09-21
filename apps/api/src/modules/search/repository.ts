@@ -19,7 +19,8 @@ import {
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, or, desc, gt, isNotNull, isNull, inArray } from '@repo/db';
+import { db, schema, eq, and, asc, desc, gt, isNotNull, isNull, inArray, or, sql } from '@repo/db';
+import { ilike } from 'drizzle-orm';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
@@ -50,6 +51,13 @@ export interface MultiSearchResult {
   projects: ProjectSearchDocument[];
   designers: DesignerSearchDocument[];
   processingTimeMs: number;
+}
+
+export interface FilterSuggestion {
+  kind: 'style' | 'space' | 'material' | 'tag';
+  filterKey: 'theme' | 'room' | 'material' | 'tag';
+  slug: string;
+  label: string;
 }
 
 export interface RecentProject {
@@ -167,10 +175,18 @@ export async function searchProjects(params: TypesenseSearchParams): Promise<Pro
   };
 
   const documents = client.collections<ProjectSearchDocument>(collectionName).documents();
+  const canUseLegacyFacetSchema = !searchParams.filter_by?.includes('tags:=');
+  const legacySearchParams = canUseLegacyFacetSchema
+    ? {
+        ...searchParams,
+        sort_by: params.sort_by || PROJECT_DEFAULT_SORT,
+        facet_by: PROJECT_FACET_FIELDS.filter((field) => field !== 'tags').join(','),
+      }
+    : { ...searchParams, sort_by: params.sort_by || PROJECT_DEFAULT_SORT };
   const result = await searchWithDiscoveryFallback(
     (query) => documents.search(query),
     searchParams,
-    { ...searchParams, sort_by: params.sort_by || PROJECT_DEFAULT_SORT },
+    legacySearchParams,
   );
 
   return {
@@ -317,6 +333,63 @@ export async function multiSearch(q: string): Promise<MultiSearchResult> {
     designers: (designerResult?.hits ?? []).map((hit) => hit.document),
     processingTimeMs,
   };
+}
+
+/** Find active taxonomy and live image tags that can be applied as discovery filters. */
+export async function findFilterSuggestions(q: string): Promise<FilterSuggestion[]> {
+  const escaped = q.replace(/[\\%_]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+  const [terms, tagResult] = await Promise.all([
+    db
+      .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug, label: schema.taxonomy.label })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.isActive, true),
+          inArray(schema.taxonomy.kind, ['theme', 'room', 'material']),
+          or(ilike(schema.taxonomy.label, pattern), ilike(schema.taxonomy.slug, pattern)),
+        ),
+      )
+      .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label))
+      .limit(12),
+    db.execute<{ slug: string }>(sql`
+      select distinct tag.slug
+      from ${schema.projectImage}
+      inner join ${schema.project}
+        on ${eq(schema.projectImage.projectId, schema.project.id)}
+      inner join ${schema.designerProfile}
+        on ${eq(schema.project.designerId, schema.designerProfile.id)}
+      cross join lateral jsonb_array_elements_text(${schema.projectImage.tagSlugs}) as tag(slug)
+      where ${schema.projectImage.status} = 'ready'
+        and ${schema.projectImage.isLive} = true
+        and ${schema.project.status} = 'published'
+        and ${schema.designerProfile.status} = 'active'
+        and tag.slug ilike ${pattern}
+      order by tag.slug
+      limit 6
+    `),
+  ]);
+
+  const kindMap = {
+    theme: { kind: 'style', filterKey: 'theme' },
+    room: { kind: 'space', filterKey: 'room' },
+    material: { kind: 'material', filterKey: 'material' },
+  } as const;
+  const taxonomySuggestions = terms.flatMap((term) => {
+    const mapped = kindMap[term.kind as keyof typeof kindMap];
+    return mapped ? [{ ...mapped, slug: term.slug, label: term.label }] : [];
+  });
+  const tagSuggestions: FilterSuggestion[] = tagResult.rows.map(({ slug }) => ({
+    kind: 'tag',
+    filterKey: 'tag',
+    slug,
+    label: slug
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' '),
+  }));
+
+  return [...taxonomySuggestions, ...tagSuggestions].slice(0, 12);
 }
 
 /**

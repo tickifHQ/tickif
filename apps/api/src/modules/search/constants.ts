@@ -24,6 +24,7 @@ export const PROJECT_FACET_FIELDS = [
   'materials',
   'finishes',
   'roomSlugs',
+  'tags',
 ] as const;
 
 /**
