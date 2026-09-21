@@ -5,7 +5,7 @@ import { generateDerivatives } from '../../src/media/derivatives.js';
 
 const wm: WatermarkConfig = {
   text: 'tickif',
-  opacity: 0.45,
+  opacity: 0.65,
   scale: 0.08,
 };
 
@@ -27,9 +27,11 @@ describe('buildWatermarkSvg', () => {
     const text = svg.toString();
     expect(text).not.toContain('<pattern');
     expect(text).not.toContain('rotate(');
+    expect(text.match(/<rect /g)?.length).toBe(1);
     expect(text.match(/<text[^>]*>tickif<\/text>/g)?.length).toBe(1);
     expect(text).toContain('text-anchor="middle"');
-    expect(text).toContain('fill-opacity="0.45"');
+    expect(text).toContain('fill-opacity="0.65"');
+    expect(text).toContain('fill-opacity="0.488"');
 
     const fontSize = Number(text.match(/font-size="([\d.]+)"/)?.[1]);
     expect(fontSize).toBeGreaterThanOrEqual(11);
