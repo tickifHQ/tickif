@@ -198,7 +198,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
       <TrustStrip />
-      <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} initialQuery={query} />
+      {isDefaultFeed ? <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} /> : null}
 
       <div className="bg-home-hero-gradient-to">
         {isDefaultFeed ? (

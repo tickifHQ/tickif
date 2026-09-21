@@ -985,26 +985,35 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
     });
 
     it('suggests matching styles, spaces, materials, and live tags', async () => {
-      await Promise.all([
+      const [theme, room, material] = await Promise.all([
         makeTaxonomy({ kind: 'theme', slug: 'bedroom-modern', label: 'Bedroom Modern' }),
         makeTaxonomy({ kind: 'room', slug: 'bedroom', label: 'Bedroom' }),
         makeTaxonomy({ kind: 'material', slug: 'bed-linen', label: 'Bed Linen' }),
       ]);
+      await makeTaxonomy({ kind: 'theme', slug: 'bedroom-unused', label: 'Bedroom Unused' });
       const designer = await activeDesigner();
       const project = await makePublishedProject(designer.id, { title: 'Tagged bedroom' });
+      await makeProjectRoom({ projectId: project.id, roomTypeId: room.id });
       await makeProjectImage({
         projectId: project.id,
         status: 'ready',
+        themeSlugs: [theme.slug],
+        materialSlugs: [material.slug],
         tagSlugs: ['bed-styling'],
       });
 
-      await expect(findFilterSuggestions('bed')).resolves.toEqual(
+      const suggestions = await findFilterSuggestions('bed');
+
+      expect(suggestions).toEqual(
         expect.arrayContaining([
           { kind: 'style', filterKey: 'theme', slug: 'bedroom-modern', label: 'Bedroom Modern' },
           { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
           { kind: 'material', filterKey: 'material', slug: 'bed-linen', label: 'Bed Linen' },
           { kind: 'tag', filterKey: 'tag', slug: 'bed-styling', label: 'Bed Styling' },
         ]),
+      );
+      expect(suggestions).not.toContainEqual(
+        expect.objectContaining({ slug: 'bedroom-unused' }),
       );
     });
 

@@ -27,6 +27,9 @@ export const PROJECT_FACET_FIELDS = [
   'tags',
 ] as const;
 
+/** Keep every currently managed discovery term available to the filter UI. */
+export const PROJECT_MAX_FACET_VALUES = 250;
+
 /**
  * Project fields to include in suggest (autocomplete) responses
  * Minimal fields for fast autocomplete results

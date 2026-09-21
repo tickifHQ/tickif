@@ -17,7 +17,7 @@ vi.mock('@repo/search', async (importOriginal) => {
   };
 });
 
-import { searchDesigners } from '../../../src/modules/search/repository.js';
+import { searchDesigners, searchProjects } from '../../../src/modules/search/repository.js';
 
 const params = {
   q: '*',
@@ -74,5 +74,32 @@ describe('search repository designer ranking compatibility', () => {
 
     await expect(searchDesigners(params)).rejects.toBe(error);
     expect(mocks.search).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('search repository project facets', () => {
+  beforeEach(() => {
+    mocks.search.mockReset();
+  });
+
+  it('requests enough facet values for the complete discovery filter vocabulary', async () => {
+    mocks.search.mockResolvedValue({
+      hits: [],
+      found: 0,
+      facet_counts: [],
+      search_time_ms: 2,
+    });
+
+    await searchProjects({
+      q: 'bed',
+      query_by: 'title',
+      facet_by: 'roomSlugs,themes,materials,tags',
+      page: 1,
+      per_page: 24,
+    });
+
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({ max_facet_values: 250 }),
+    );
   });
 });

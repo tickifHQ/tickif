@@ -20,10 +20,11 @@ import {
   type DesignerSearchDocument,
 } from '@repo/search';
 import { db, schema, eq, and, asc, desc, gt, isNotNull, isNull, inArray, or, sql } from '@repo/db';
-import { ilike } from 'drizzle-orm';
+import { exists, ilike } from 'drizzle-orm';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
+  PROJECT_MAX_FACET_VALUES,
   DESIGNER_FACET_FIELDS,
   PROJECT_SUGGEST_FIELDS,
   DESIGNER_SUGGEST_FIELDS,
@@ -169,6 +170,7 @@ export async function searchProjects(params: TypesenseSearchParams): Promise<Pro
     filter_by: params.filter_by,
     sort_by: params.sort_by || discoveryRanking(),
     facet_by: params.facet_by || PROJECT_FACET_FIELDS.join(','),
+    max_facet_values: PROJECT_MAX_FACET_VALUES,
     include_fields: params.include_fields,
     page: params.page,
     per_page: params.per_page,
@@ -339,6 +341,47 @@ export async function multiSearch(q: string): Promise<MultiSearchResult> {
 export async function findFilterSuggestions(q: string): Promise<FilterSuggestion[]> {
   const escaped = q.replace(/[\\%_]/g, '\\$&');
   const pattern = `%${escaped}%`;
+  const visibleRoom = db
+    .select({ id: schema.projectRoom.id })
+    .from(schema.projectRoom)
+    .innerJoin(schema.project, eq(schema.projectRoom.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
+        eq(schema.projectRoom.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+      ),
+    );
+  const visibleTheme = db
+    .select({ id: schema.projectImage.id })
+    .from(schema.projectImage)
+    .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectImage.status, 'ready'),
+        eq(schema.projectImage.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+        sql`${schema.projectImage.themeSlugs} ? ${schema.taxonomy.slug}`,
+      ),
+    );
+  const visibleMaterial = db
+    .select({ id: schema.projectImage.id })
+    .from(schema.projectImage)
+    .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectImage.status, 'ready'),
+        eq(schema.projectImage.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+        sql`${schema.projectImage.materialSlugs} ? ${schema.taxonomy.slug}`,
+      ),
+    );
   const [terms, tagResult] = await Promise.all([
     db
       .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug, label: schema.taxonomy.label })
@@ -348,6 +391,11 @@ export async function findFilterSuggestions(q: string): Promise<FilterSuggestion
           eq(schema.taxonomy.isActive, true),
           inArray(schema.taxonomy.kind, ['theme', 'room', 'material']),
           or(ilike(schema.taxonomy.label, pattern), ilike(schema.taxonomy.slug, pattern)),
+          or(
+            and(eq(schema.taxonomy.kind, 'room'), exists(visibleRoom)),
+            and(eq(schema.taxonomy.kind, 'theme'), exists(visibleTheme)),
+            and(eq(schema.taxonomy.kind, 'material'), exists(visibleMaterial)),
+          ),
         ),
       )
       .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label))
