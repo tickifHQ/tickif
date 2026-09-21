@@ -100,15 +100,12 @@ describe('isPublicPath', () => {
 
   it('passes a trusted designer return path to the server auth wall when a stale cookie exists', async () => {
     authMock.getSessionCookie.mockReturnValue('invalid.signature');
-    const request = new NextRequest(
-      'http://localhost:3000/designer/leads?status=new&page=2',
-      {
-        headers: {
-          cookie: 'better-auth.session_token=invalid.signature',
-          'x-tickif-request-path': '/attacker-controlled',
-        },
+    const request = new NextRequest('http://localhost:3000/designer/leads?status=new&page=2', {
+      headers: {
+        cookie: 'better-auth.session_token=invalid.signature',
+        'x-tickif-request-path': '/attacker-controlled',
       },
-    );
+    });
 
     const response = await proxy(request);
 
@@ -122,6 +119,7 @@ describe('isPublicPath', () => {
     '/designer/dashboard',
     '/designer/projects',
     '/designer/projects/new',
+    '/designer/projects/upload',
     '/designer/projects/11111111-1111-4111-8111-111111111111/edit',
     '/designer/leads',
     '/designer/consultations',
@@ -134,17 +132,24 @@ describe('isPublicPath', () => {
     '/designer/terms-roles',
     '/designer/plan-billing',
     '/designer/plan-billing/subscribe',
-  ])('redirects anonymous designer workspace route %s to its exact sign-in return path', async (path) => {
-    const response = await proxy(new NextRequest(`http://localhost:3000${path}`));
-    const location = response.headers.get('location');
+    '/designer/onboarding/deferred',
+    '/designer/select-studio',
+    '/designer/new-organization',
+    '/designer/manage-membership',
+  ])(
+    'redirects anonymous designer workspace route %s to its exact sign-in return path',
+    async (path) => {
+      const response = await proxy(new NextRequest(`http://localhost:3000${path}`));
+      const location = response.headers.get('location');
 
-    expect(response.status).toBe(307);
-    if (!location) throw new Error(`Expected proxy to redirect ${path} to login.`);
-    const url = new URL(location);
-    expect(url.pathname).toBe('/login');
-    expect(url.searchParams.get('mode')).toBe('designer');
-    expect(url.searchParams.get('callbackURL')).toBe(path);
-  });
+      expect(response.status).toBe(307);
+      if (!location) throw new Error(`Expected proxy to redirect ${path} to login.`);
+      const url = new URL(location);
+      expect(url.pathname).toBe('/login');
+      expect(url.searchParams.get('mode')).toBe('designer');
+      expect(url.searchParams.get('callbackURL')).toBe(path);
+    },
+  );
 
   it('does NOT apply designer persona to non-designer protected routes (E-272)', async () => {
     for (const path of ['/home', '/onboarding', '/dashboard', '/moderation']) {
