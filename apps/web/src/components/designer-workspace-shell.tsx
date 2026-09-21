@@ -221,7 +221,7 @@ function SidebarContent({
     <>
       <div className="px-6 py-5">
         <Link
-          href="/"
+          href="/designer/dashboard"
           className="inline-flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground"
         >
           <Image src="/icon.svg" alt="" width={20} height={20} className="size-5" aria-hidden />

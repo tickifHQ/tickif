@@ -177,7 +177,7 @@ describe('DesignerWorkspaceShell', () => {
     expect(sidebar).not.toHaveClass('border-r');
   });
 
-  it('shows the product icon beside Tickif with the standard ten-pixel gap', () => {
+  it('shows the product icon beside Tickif with the standard ten-pixel gap and links to the designer dashboard', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
@@ -194,6 +194,7 @@ describe('DesignerWorkspaceShell', () => {
     for (const brandLink of screen.getAllByRole('link', { name: 'Tickif' })) {
       expect(brandLink).toHaveClass('gap-2.5');
       expect(brandLink.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+      expect(brandLink).toHaveAttribute('href', '/designer/dashboard');
     }
   });
 
