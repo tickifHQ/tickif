@@ -154,10 +154,10 @@ export function LoginCard({
     }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
-    router.replace(
-      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH,
-    );
-  }, [success, loginMode, router, callbackPath, onSuccess]);
+    const continuePath =
+      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH;
+    window.location.href = continuePath;
+  }, [success, loginMode, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
   useEffect(() => {
