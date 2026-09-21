@@ -58,8 +58,11 @@ describe('designer discovery', () => {
     );
     expect(screen.getByText('KYC verified')).toBeVisible();
     expect(screen.getByText('4.8 / 5 · 8 reviews')).toBeVisible();
-    const googleRating = screen.getByText('Google 4.9 · 127 ratings');
+    const googleRating = screen.getByLabelText('Google Business rating');
     expect(googleRating).toBeVisible();
+    expect(googleRating).toHaveTextContent('Google 4.9 · 127 ratings');
+    expect(googleRating.querySelector('svg')).toBeInTheDocument();
+    expect(googleRating.querySelector('.fill-rating')).toBeInTheDocument();
     expect(googleRating.closest('a')).toBeNull();
     expect(screen.getByText('8 years of experience · 12 projects')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Next page' })).toHaveAttribute(

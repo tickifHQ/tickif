@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { UsersRound } from 'lucide-react';
+import { GoogleBrandIcon } from '@/components/brand-icons';
+import { Star, UsersRound } from 'lucide-react';
 import type { SearchDesignersQuery, SearchDesignersResponse } from '@repo/contracts';
 import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import { Badge } from '@repo/ui/components/badge';
@@ -41,7 +42,10 @@ export function DesignerDiscoveryResults({
               <Card className="flex h-full min-w-0 flex-col">
                 <CardHeader>
                   <Avatar className="size-14">
-                    <AvatarImage src={designer.logoUrl ?? undefined} alt="" />
+                    <AvatarImage
+                      src={designer.logoUrl ?? undefined}
+                      alt={`${designer.displayName} logo`}
+                    />
                     <AvatarFallback>
                       {designer.displayName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -71,14 +75,23 @@ export function DesignerDiscoveryResults({
                     {designer.yearsExperience} years of experience · {designer.projectCount}{' '}
                     projects
                   </p>
-                  <p className="text-sm">
+                  <p className="flex items-center gap-1.5 text-sm">
+                    {designer.reviewCount > 0 ? (
+                      <Star aria-hidden="true" className="size-4 fill-rating text-rating" />
+                    ) : null}
                     {designer.reviewCount > 0
                       ? `${designer.avgRating.toFixed(1)} / 5 · ${designer.reviewCount} reviews`
                       : 'No reviews yet'}
                   </p>
                   {designer.googleRating !== null && designer.googleRatingCount !== null ? (
-                    <p className="text-sm" aria-label="Google Business rating">
-                      Google {designer.googleRating.toFixed(1)} · {designer.googleRatingCount}{' '}
+                    <p
+                      className="flex items-center gap-1.5 text-sm"
+                      aria-label="Google Business rating"
+                    >
+                      <GoogleBrandIcon className="size-4 shrink-0" />
+                      <Star aria-hidden="true" className="size-4 fill-rating text-rating" />
+                      <span className="sr-only">Google </span>
+                      {designer.googleRating.toFixed(1)} · {designer.googleRatingCount}{' '}
                       {designer.googleRatingCount === 1 ? 'rating' : 'ratings'}
                     </p>
                   ) : null}
