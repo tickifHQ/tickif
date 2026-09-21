@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DesignerWorkspaceShell } from '../../src/components/designer-workspace-shell';
@@ -397,7 +397,7 @@ describe('DesignerWorkspaceShell', () => {
     expect(screen.getByRole('banner').querySelector('.lucide-shield')).toBeInTheDocument();
   });
 
-  it('omits the inaccessible Explore Tickif action without moving the header account menu', () => {
+  it('offers Explore Tickif to active designer workspaces without moving the header account menu', () => {
     mock.pathname = '/designer/dashboard';
 
     render(
@@ -415,7 +415,16 @@ describe('DesignerWorkspaceShell', () => {
     const accountMenu = screen.getByTestId('account-menu');
     const addProject = screen.getByRole('link', { name: /add new project/i });
 
-    expect(screen.queryByRole('link', { name: /explore tickif/i })).not.toBeInTheDocument();
+    const exploreLink = screen.getByRole('link', { name: /explore tickif/i });
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    expect(exploreLink).toHaveAttribute('href', '/');
+    expect(
+      supportLink.compareDocumentPosition(exploreLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(exploreLink.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    expect(exploreLink.querySelector('img')).toHaveClass('size-3.5');
+    expect(exploreLink.querySelector('img')?.parentElement).toHaveClass('size-4');
+    expect(exploreLink.lastElementChild).toHaveClass('lucide-external-link', 'ml-auto');
     expect(organizationSwitcher).toBeInTheDocument();
     expect(accountMenu.closest('header')).toContainElement(addProject);
     expect(
@@ -462,9 +471,19 @@ describe('DesignerWorkspaceShell', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Open navigation' }));
-    expect(screen.getByRole('dialog', { name: 'Designer navigation' })).toBeInTheDocument();
+    const navigation = screen.getByRole('dialog', { name: 'Designer navigation' });
+    expect(navigation).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /profile & settings/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /explore tickif/i })).not.toBeInTheDocument();
+    const mobileExplore = within(navigation).getByRole('link', { name: /explore tickif/i });
+    const mobileSupport = within(navigation).getByRole('link', { name: /contact support/i });
+    expect(mobileExplore).toHaveAttribute('href', '/');
+    expect(
+      mobileSupport.compareDocumentPosition(mobileExplore) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(mobileExplore.querySelector('img')).toHaveAttribute('src', '/icon.svg');
+    expect(mobileExplore.querySelector('img')).toHaveClass('size-3.5');
+    expect(mobileExplore.querySelector('img')?.parentElement).toHaveClass('size-4');
+    expect(mobileExplore.lastElementChild).toHaveClass('lucide-external-link');
 
     await user.click(screen.getByRole('button', { name: 'Close navigation' }));
     expect(screen.queryByRole('dialog', { name: 'Designer navigation' })).not.toBeInTheDocument();
