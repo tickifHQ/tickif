@@ -197,7 +197,14 @@ export function PhoneNumberInput({
   }
 
   return (
-    <div className={cn('flex', wrapperClassName)}>
+    <div
+      data-slot="phone-number-input"
+      data-invalid={ariaInvalid || undefined}
+      className={cn(
+        'flex min-w-0 overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:-outline-offset-2 focus-within:outline-2 focus-within:outline-ring data-[invalid=true]:border-destructive data-[invalid=true]:focus-within:outline-destructive',
+        wrapperClassName,
+      )}
+    >
       <DropdownMenu
         onOpenChange={(open) => {
           if (!open) setCountrySearch('');
@@ -207,7 +214,7 @@ export function PhoneNumberInput({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-2 rounded-l-md border border-r-0 border-input bg-muted px-2.5 py-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'inline-flex shrink-0 items-center gap-2 border-r border-input bg-muted px-2.5 py-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-0 focus-visible:ring-offset-0',
               countryButtonClassName,
             )}
             disabled={disabled}
@@ -279,7 +286,10 @@ export function PhoneNumberInput({
         onKeyDown={(event) => {
           if (event.key === 'Enter') onEnter?.();
         }}
-        className={cn('-ml-px rounded-l-none', inputClassName)}
+        className={cn(
+          'min-w-0 flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+          inputClassName,
+        )}
         disabled={disabled}
         autoComplete="tel-national"
       />

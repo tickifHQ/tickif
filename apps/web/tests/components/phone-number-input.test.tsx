@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {
+  PhoneNumberInput,
   countries,
   normalizePhoneInput,
   toE164PhoneNumber,
@@ -49,5 +52,59 @@ describe('phone number normalization', () => {
       country: country('United States'),
       phone: '2025550123',
     });
+  });
+});
+
+describe('PhoneNumberInput focus treatment', () => {
+  it('keeps one visible focus ring around both keyboard-focusable parts', async () => {
+    const user = userEvent.setup();
+    const india = country('India');
+
+    render(
+      <PhoneNumberInput
+        id="phone"
+        phone=""
+        selectedCountry={india}
+        onPhoneChange={() => undefined}
+        onSelectedCountryChange={() => undefined}
+      />,
+    );
+
+    const selector = screen.getByRole('button', { name: /Country code, India/ });
+    const number = screen.getByRole('textbox', { name: 'Phone number' });
+    const group = number.closest('[data-slot="phone-number-input"]');
+
+    expect(group).toHaveClass(
+      'focus-within:outline-2',
+      'focus-within:outline-ring',
+      'focus-within:-outline-offset-2',
+    );
+    expect(selector).toHaveClass('focus-visible:ring-0');
+    expect(number).toHaveClass('focus-visible:ring-0');
+
+    await user.tab();
+    expect(selector).toHaveFocus();
+    await user.tab();
+    expect(number).toHaveFocus();
+  });
+
+  it('marks the whole phone field invalid without hiding the input error state', () => {
+    render(
+      <PhoneNumberInput
+        id="invalid-phone"
+        phone="123"
+        selectedCountry={country('India')}
+        onPhoneChange={() => undefined}
+        onSelectedCountryChange={() => undefined}
+        ariaInvalid
+      />,
+    );
+
+    const number = screen.getByRole('textbox', { name: 'Phone number' });
+    expect(number).toHaveAttribute('aria-invalid', 'true');
+    expect(number.closest('[data-slot="phone-number-input"]')).toHaveAttribute(
+      'data-invalid',
+      'true',
+    );
   });
 });

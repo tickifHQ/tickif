@@ -89,6 +89,10 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   ['personal-settings.spec.ts', 'redirects an anonymous visitor to login'],
   [
+    'phone-focus-ring.spec.ts',
+    'composite fields show one visible focus indicator across login and designer workflows',
+  ],
+  [
     'project-likes.spec.ts',
     'visitor likes persist across project and portfolio views independently of bookmarks',
   ],

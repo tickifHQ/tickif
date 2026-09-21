@@ -1099,7 +1099,12 @@ function ReviewCommentsCard({ comments }: { comments: ProjectReviewComment[] }) 
                   {comment.status}
                 </span>
               </div>
-              <p className={cn(typography.bodySmall, 'whitespace-pre-wrap break-words text-foreground')}>
+              <p
+                className={cn(
+                  typography.bodySmall,
+                  'whitespace-pre-wrap break-words text-foreground',
+                )}
+              >
                 {comment.body}
               </p>
             </li>
@@ -1271,7 +1276,7 @@ function RoomCard({
                 onDropFiles(Array.from(event.dataTransfer.files));
               }}
               className={cn(
-                'relative block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-colors',
+                'relative block rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-8 text-center transition-[border-color,box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
                 room.uploading
                   ? 'cursor-not-allowed opacity-70'
                   : 'cursor-pointer hover:border-primary/50 hover:bg-primary/5',
@@ -3908,7 +3913,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
           </DialogDescription>
 
           <div className="border-b border-border/80">
-            <div className="flex h-[51px] items-center gap-2 px-3">
+            <div className="flex h-[51px] items-center gap-2 px-3 focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset">
               <Search className="size-5 text-muted-foreground" />
               <Input
                 autoFocus
@@ -3916,7 +3921,7 @@ export function DesignerProjectUpload({ initialProjectId }: { initialProjectId?:
                 onChange={(event) => setRoomSearchQuery(event.target.value)}
                 placeholder="Search room types"
                 className={cn(
-                  'h-auto border-none bg-transparent px-0 py-0 shadow-none focus-visible:ring-0',
+                  'h-auto border-none bg-transparent px-0 py-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
                   typography.control,
                 )}
               />
