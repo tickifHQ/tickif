@@ -47,12 +47,12 @@ const requiredEntries: [file: string, title: string][] = [
   ],
   [
     'designer-explore-public-ui.spec.ts',
-    'designer workspace opens discovery and empty public review sections stay hidden',
+    'designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden',
   ],
   ...(['owner', 'admin', 'billing_admin', 'member', 'viewer'] as const).map(
     (role): [string, string] => [
       'designer-explore-public-ui.spec.ts',
-      `designer ${role} can open discovery from both workspace links`,
+      `designer ${role} can explore via CTA while brand stays in workspace`,
     ],
   ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],

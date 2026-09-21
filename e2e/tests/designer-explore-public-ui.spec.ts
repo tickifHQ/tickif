@@ -7,7 +7,7 @@ import { signInPhone } from '../lib/auth';
 import { apiUrl, webUrl } from '../lib/environment';
 import { makePublicPortfolio } from '../lib/public-portfolio';
 
-test('designer workspace opens discovery and empty public review sections stay hidden', async ({
+test('designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden', async ({
   page,
   context,
 }) => {
@@ -64,9 +64,10 @@ test('designer workspace opens discovery and empty public review sections stay h
     await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
 
     await page.goto('/designer/dashboard');
-    await page.getByRole('link', { name: 'Tickif', exact: true }).click();
-    await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
+    const brand = page.getByRole('link', { name: 'Tickif', exact: true });
+    await expect(brand).toHaveAttribute('href', '/designer/dashboard');
+    await brand.click();
+    await expect(page).toHaveURL('/designer/dashboard');
 
     await page.goto(`/d/${profile.slug}`);
     await page.waitForLoadState('networkidle');
@@ -103,7 +104,7 @@ test('designer workspace opens discovery and empty public review sections stay h
 });
 
 for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as const) {
-  test(`designer ${role} can open discovery from both workspace links`, async ({
+  test(`designer ${role} can explore via CTA while brand stays in workspace`, async ({
     page,
     context,
   }) => {
@@ -173,9 +174,10 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
       await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
 
       await page.goto('/designer/dashboard');
-      await page.getByRole('link', { name: 'Tickif', exact: true }).click();
-      await expect(page).toHaveURL('/');
-      await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
+      const brand = page.getByRole('link', { name: 'Tickif', exact: true });
+      await expect(brand).toHaveAttribute('href', '/designer/dashboard');
+      await brand.click();
+      await expect(page).toHaveURL('/designer/dashboard');
 
       if (role === 'member' || role === 'viewer') {
         await page.setViewportSize({ width: 390, height: 844 });
@@ -189,12 +191,12 @@ for (const role of ['owner', 'admin', 'billing_admin', 'member', 'viewer'] as co
 
         await page.goto('/designer/dashboard');
         await page.getByRole('button', { name: 'Open navigation' }).click();
-        await page
+        const mobileBrand = page
           .getByRole('dialog', { name: 'Designer navigation' })
-          .getByRole('link', { name: 'Tickif', exact: true })
-          .click();
-        await expect(page).toHaveURL('/');
-        await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
+          .getByRole('link', { name: 'Tickif', exact: true });
+        await expect(mobileBrand).toHaveAttribute('href', '/designer/dashboard');
+        await mobileBrand.click();
+        await expect(page).toHaveURL('/designer/dashboard');
       }
     } finally {
       await assertTestDb();
