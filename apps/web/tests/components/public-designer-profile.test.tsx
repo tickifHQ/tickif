@@ -130,6 +130,25 @@ describe('PublicDesignerProfile', () => {
     mocks.session = null;
   });
 
+  it('uses the large derivative for the wide hero while keeping the card cover for previews', () => {
+    const project = {
+      ...makeProjects(1)[0]!,
+      coverImageUrl: 'https://cdn.example.test/projects/medium.webp',
+      heroImageUrl: 'https://cdn.example.test/projects/large.webp',
+    };
+    const portfolio = makePublicPortfolio({
+      projects: { projects: [project], page: 1, limit: 30, hasMore: false },
+    });
+
+    render(<PublicDesignerProfile portfolio={portfolio} />);
+
+    const projectImageUrls = screen
+      .getAllByAltText('Project 0 by Anika Spaces')
+      .map((image) => image.getAttribute('src'));
+    expect(projectImageUrls).toContain('https://cdn.example.test/projects/large.webp');
+    expect(projectImageUrls).toContain('https://cdn.example.test/projects/medium.webp');
+  });
+
   it('renders every section from the API payload', () => {
     render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
 

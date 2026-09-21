@@ -314,7 +314,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
         <figure className="flex min-h-96 flex-col bg-muted lg:col-span-5 lg:min-h-full">
           <div className="relative min-h-96 flex-1">
             <Image
-              src={view.hero.coverImageUrl}
+              src={view.hero.heroImageUrl ?? view.hero.coverImageUrl}
               alt={`${view.hero.title} by ${portfolio.displayName}`}
               fill
               priority

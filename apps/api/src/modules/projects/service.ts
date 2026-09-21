@@ -225,10 +225,25 @@ function pickGalleryDerivative(derivatives: Derivative[]): string | null {
       (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
     )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
+    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small')?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
       ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
     derivatives[0]?.key ??
+    null
+  );
+}
+
+/** Prefer the 1600px derivative for the wide portfolio hero. */
+function pickHeroDerivative(derivatives: Derivative[]): Derivative | null {
+  return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'large' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'large') ??
     null
   );
 }
@@ -245,6 +260,15 @@ async function coverImageUrl(coverImage?: {
   if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
   const preview = pickPreviewDerivative(coverImage.derivatives);
   return preview ? presignDownload({ key: preview.key }) : null;
+}
+
+async function heroImageUrl(coverImage?: {
+  status: ProjectFeedItemRecord['coverStatus'];
+  derivatives: ProjectFeedItemRecord['coverDerivatives'];
+}): Promise<string | null> {
+  if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
+  const hero = pickHeroDerivative(coverImage.derivatives);
+  return hero ? presignDownload({ key: hero.key }) : null;
 }
 
 async function toPublicGalleryImages(images: PublicProjectGalleryImageRecord[]) {
@@ -407,6 +431,7 @@ function toDesignerProjectCard(
   labels: Map<string, string>,
   localityLabels: Map<string, string>,
   coverImageUrl: string | null,
+  heroImageUrl: string | null = null,
 ): DesignerProjectCard {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
     slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
@@ -421,6 +446,7 @@ function toDesignerProjectCard(
 
   return {
     ...toFeedProject(row, labels, localityLabels, coverImageUrl),
+    heroImageUrl,
     propertyType,
     bhk,
     theme,
@@ -2090,11 +2116,15 @@ export const projectsService = {
 
     const projects: DesignerProjectCard[] = await Promise.all(
       pageRows.map(async (row) => {
-        const cover = await coverImageUrl({
+        const coverImage = {
           status: row.coverStatus,
           derivatives: row.coverDerivatives,
-        }).catch(() => null);
-        return toDesignerProjectCard(row, labels, localityLabels, cover);
+        };
+        const [cover, hero] = await Promise.all([
+          coverImageUrl(coverImage).catch(() => null),
+          heroImageUrl(coverImage).catch(() => null),
+        ]);
+        return toDesignerProjectCard(row, labels, localityLabels, cover, hero);
       }),
     );
 
