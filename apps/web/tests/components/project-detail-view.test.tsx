@@ -62,6 +62,7 @@ const designer: PublicProjectDesigner = {
   slug: 'studio-a',
   avgRating: '4.5',
   reviewCount: 10,
+  googleRating: null,
   entityType: 'company',
   logoUrl: null,
   isKycVerified: false,
@@ -154,6 +155,14 @@ describe('ImageDetailView', () => {
   });
 
   // --- Core rendering ---
+
+  it('shows connected Google rating and count in the profile card without a link', () => {
+    renderComponent({ designer: { ...designer, googleRating: { rating: 4.7, reviewCount: 58 } } });
+    const rating = screen.getByLabelText('Google rating 4.7 out of 5 from 58 ratings');
+    expect(rating).toHaveTextContent('4.7');
+    expect(rating).toHaveTextContent('58');
+    expect(rating.closest('a, button')).toBeNull();
+  });
 
   it('renders the enquiry CTA with inverted styling and callbackURL', () => {
     renderComponent();

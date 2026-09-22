@@ -248,7 +248,7 @@ const envSchema = z.object({
   WATERMARK_REVISION: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
-    .default('wm-v2'),
+    .default('wm-v3'),
 
   // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
   // Action on a duplicate: reject (status=failed) or flag for moderation.

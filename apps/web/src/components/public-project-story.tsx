@@ -20,6 +20,7 @@ import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectRoomNavigation } from '@/components/project-room-navigation';
 import { ProtectedPublicImage } from '@/components/protected-public-image';
+import { PublicGoogleRating } from '@/components/public-google-rating';
 import { feedPageHref } from '@/lib/feed-params';
 
 function initials(value: string): string {
@@ -231,6 +232,7 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
               </span>
             </p>
           ) : null}
+          {designer.googleRating ? <PublicGoogleRating {...designer.googleRating} /> : null}
         </div>
 
         <EnquiryCta

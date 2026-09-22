@@ -23,6 +23,7 @@ import { ShowcaseCard } from '@/components/showcase-card';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectLikeButton } from '@/components/project-like-button';
 import { ActionLoginDialog } from '@/components/action-login-dialog';
+import { PublicGoogleRating } from '@/components/public-google-rating';
 import { env } from '@/env';
 
 interface ImageDetailViewProps {
@@ -339,6 +340,11 @@ export function ImageDetailView({
                         {designer.projectCount} project{designer.projectCount !== 1 ? 's' : ''}
                       </p>
                     )}
+                    {designer.googleRating ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <PublicGoogleRating {...designer.googleRating} />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

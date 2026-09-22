@@ -259,6 +259,28 @@ describe('mediaService.listProjectImages', () => {
     expect(presignDownload).toHaveBeenCalledWith({ key: 'd/l.webp' });
   });
 
+  it('uses the high-density derivative for the full image viewer when available', async () => {
+    repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
+    repo.listByProject.mockResolvedValue([
+      {
+        ...row,
+        derivatives: [
+          ...row.derivatives,
+          { variant: 'xlarge', format: 'webp', key: 'd/xl.webp', width: 2560, height: 1920 },
+        ],
+      },
+    ] as never);
+
+    const result = await mediaService.listProjectImages({
+      projectId: 'p',
+      limit: 50,
+      offset: 0,
+      ...OWNER,
+    });
+    expect(result.items[0]?.previewUrl).toContain('d/t.webp');
+    expect(result.items[0]?.viewerUrl).toContain('d/xl.webp');
+  });
+
   it('403s for a non-owner who is not superadmin', async () => {
     repo.findProjectOwner.mockResolvedValue(PROJECT_OWNER);
     await expect(
