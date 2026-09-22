@@ -161,6 +161,21 @@ const requiredEntries: [file: string, title: string][] = [
     'same account resumes the draft in a FRESH browser context (account-level, not browser-local)',
   ],
   ['onboarding-resume.spec.ts', 'a refresh mid-onboarding preserves progress'],
+  ['sign-in-modal.spec.ts', 'public sign-in opens over the current page and closes back to it'],
+  ['sign-in-modal.spec.ts', 'designer sign-in opens in designer mode over the current page'],
+  [
+    'sign-in-modal.spec.ts',
+    'a protected public navigation action opens sign-in over the current page',
+  ],
+  ['sign-in-modal.spec.ts', 'a direct login visit retains its standalone fallback'],
+  [
+    'sign-in-modal.spec.ts',
+    'mobile designer directory keeps its content behind the sign-in dialog',
+  ],
+  [
+    'sign-in-modal.spec.ts',
+    'phone OTP in the dialog rejects a wrong code then completes visitor sign-in',
+  ],
 ];
 
 export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));
