@@ -223,6 +223,14 @@ room names/types. Draft and archived projects do not contribute. Publish and
 unpublish transitions refresh the designer projection. Suggestions continue to
 search profile fields only.
 
+Designer discovery requires an active profile, an enabled public portfolio link,
+and complete logo, display name, bio, and tagline fields. After deploying this
+eligibility change, run `pnpm --filter @repo/worker search:reindex` to remove legacy
+ineligible designer documents. Portfolio edits update the projection thereafter.
+Published projects retain their independent visibility rules; disabling a
+portfolio link does not unpublish its projects. Suspending a designer removes
+both the designer and their projects from discovery.
+
 The known query `bad` gets one retry as `bed` when it has zero literal matches,
 with token dropping disabled. Existing matches, filters and pagination are
 preserved. Other short queries keep ordinary Typesense rules. This narrow map

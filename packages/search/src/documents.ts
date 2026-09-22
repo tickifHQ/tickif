@@ -41,7 +41,7 @@ export type ProjectSearchDocument = {
   reviewCount: number;
 };
 
-/** Disposable Typesense projection of an active designer profile. */
+/** Disposable Typesense projection of a publicly visible designer portfolio. */
 export type DesignerSearchDocument = {
   id: string;
   slug: string | null;

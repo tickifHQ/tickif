@@ -17,6 +17,7 @@ import {
 import {
   findDesignerSearchSource,
   findProjectSearchSource,
+  hasActiveDesigner,
   listPublishedProjectIdsForDesigner,
 } from '../search/repository.js';
 import { mapDesignerSearchDocument, mapProjectSearchDocument } from '../search/mapper.js';
@@ -136,6 +137,13 @@ export async function reconcileDesigner(
   return withSearchProjectionEntityLock('designer', profileId, async () => {
     const source = await findDesignerSearchSource(profileId);
     if (!source) {
+      if (await hasActiveDesigner(profileId)) {
+        await deleteSearchDocument('designers', profileId);
+        return {
+          state: 'deleted',
+          projectsEnqueued: await fanOutDesignerProjects(profileId, updatedAtEpoch, eventId),
+        };
+      }
       await Promise.all([
         deleteSearchDocument('designers', profileId),
         deleteSearchProjectsByDesigner(profileId),

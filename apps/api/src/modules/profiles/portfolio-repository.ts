@@ -393,6 +393,14 @@ export const portfolioRepository = {
         set: { ...input, updatedAt: now },
       })
       .returning();
+    await recordSearchProjectionEvents(tx, [
+      {
+        entityKind: 'designer',
+        entityId: profileId,
+        operation: 'index',
+        sourceUpdatedAt: now,
+      },
+    ]);
     return row!;
   },
 

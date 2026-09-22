@@ -21,6 +21,7 @@ vi.mock('@repo/queue', async (importOriginal) => {
 vi.mock('../../src/search/repository.js', () => ({
   findProjectSearchSource: vi.fn(),
   findDesignerSearchSource: vi.fn(),
+  hasActiveDesigner: vi.fn(async () => false),
   listPublishedProjectIdsForDesigner: vi.fn(async () => []),
 }));
 
@@ -94,6 +95,30 @@ beforeEach(() => {
 });
 
 describe('search index processor', () => {
+  it('preserves independently published projects when an active portfolio becomes private', async () => {
+    vi.mocked(repository.findDesignerSearchSource).mockResolvedValue(null);
+    vi.mocked(repository.hasActiveDesigner).mockResolvedValueOnce(true);
+    vi.mocked(repository.listPublishedProjectIdsForDesigner).mockResolvedValueOnce(['project-1']);
+
+    await expect(
+      processSearchIndex(
+        job(JOBS.indexDesigner, {
+          profileId: 'designer-1',
+          updatedAtEpoch: 3,
+          eventId: 'private',
+        }),
+      ),
+    ).resolves.toEqual({ state: 'deleted', projectsEnqueued: 1 });
+
+    expect(search.deleteSearchDocument).toHaveBeenCalledWith('designers', 'designer-1');
+    expect(search.deleteSearchProjectsByDesigner).not.toHaveBeenCalled();
+    expect(queue.enqueueSearchProjectIndex).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      updatedAtEpoch: 3,
+      eventId: 'private-project-1',
+    });
+  });
+
   it('deletes a stale project document even when the queued operation was index', async () => {
     vi.mocked(repository.findProjectSearchSource).mockResolvedValue(null);
     const data: SearchIndexProjectJob = {
@@ -134,7 +159,9 @@ describe('search index processor', () => {
 
   it('keeps the outbox row pending when the Typesense write fails', async () => {
     vi.mocked(repository.findProjectSearchSource).mockResolvedValue(projectSource);
-    vi.mocked(search.upsertSearchDocument).mockRejectedValueOnce(new Error('Typesense unavailable'));
+    vi.mocked(search.upsertSearchDocument).mockRejectedValueOnce(
+      new Error('Typesense unavailable'),
+    );
 
     await expect(
       processSearchIndex(

@@ -486,11 +486,14 @@ describe('DesignerProjectUpload', () => {
 
       const historyOpener = screen.getByRole('button', { name: 'View moderation history' });
       expect(historyOpener).toBeEnabled();
-      expect(historyOpener.compareDocumentPosition(screen.getByText('TIPS FOR BETTER VISIBILITY')))
-        .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        historyOpener.compareDocumentPosition(screen.getByText('TIPS FOR BETTER VISIBILITY')),
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       await user.click(historyOpener);
       const historyDrawer = await screen.findByRole('dialog', { name: 'Moderation history' });
-      expect(await within(historyDrawer).findByText('No moderation actions yet.')).toBeInTheDocument();
+      expect(
+        await within(historyDrawer).findByText('No moderation actions yet.'),
+      ).toBeInTheDocument();
       expect(mock.historyGet).toHaveBeenCalledWith({
         param: { id: '11111111-1111-4111-8111-111111111111' },
       });
@@ -597,7 +600,10 @@ describe('DesignerProjectUpload', () => {
         ],
       }),
     });
-    mock.projectPatch.mockResolvedValue({ ok: true, json: async () => ({ ...draft, coverImageId: firstImage.id }) });
+    mock.projectPatch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...draft, coverImageId: firstImage.id }),
+    });
     mock.roomPatch.mockResolvedValue({ ok: true, json: async () => ({}) });
     mock.imageMetadataPatch.mockImplementation(
       async ({ param }: { param: { imageId: string } }) => ({
@@ -736,7 +742,11 @@ describe('DesignerProjectUpload', () => {
       const { project, draft } = await renderSubmittableDraft();
       mock.submitPost.mockResolvedValue({
         ok: true,
-        json: async () => ({ ...draft, status: 'submitted', submittedAt: '2026-09-07T00:00:00.000Z' }),
+        json: async () => ({
+          ...draft,
+          status: 'submitted',
+          submittedAt: '2026-09-07T00:00:00.000Z',
+        }),
       });
       render(<DesignerProjectUpload initialProjectId={project.id} />);
 
@@ -841,9 +851,9 @@ describe('DesignerProjectUpload', () => {
         () => expect(screen.queryByText('Project submitted for review.')).not.toBeInTheDocument(),
         { timeout: 5000 },
       );
-      expect(
-        screen.getByRole('status', { name: 'Submission status' }),
-      ).toHaveTextContent('Submitted for review');
+      expect(screen.getByRole('status', { name: 'Submission status' })).toHaveTextContent(
+        'Submitted for review',
+      );
     });
 
     it('represents the backend in_review status when the project is already in review', async () => {
@@ -876,9 +886,7 @@ describe('DesignerProjectUpload', () => {
       await screen.findByDisplayValue('2 BHK in Adyar');
       await user.click(screen.getByRole('button', { name: 'Preview & Submit Project' }));
 
-      await waitFor(() =>
-        expect(screen.getByText(/not ready to submit yet/i)).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByText(/not ready to submit yet/i)).toBeInTheDocument());
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(mock.submitPost).not.toHaveBeenCalled();
     });
@@ -960,6 +968,19 @@ describe('DesignerProjectUpload', () => {
     await user.click(screen.getByRole('button', { name: /step 3 project metadata/i }));
 
     expect(screen.getByDisplayValue('2 BHK in Adyar')).toBeInTheDocument();
+  });
+
+  it('eagerly loads the above-the-fold project type artwork', async () => {
+    const { container } = render(<DesignerProjectUpload />);
+
+    await screen.findByText('Upload project');
+    expect(container.querySelector('img[src*="project-type-villa.svg"]')).toHaveAttribute(
+      'loading',
+      'eager',
+    );
+    expect(
+      container.querySelector('img[src*="project-upload-why-it-matters.svg"]'),
+    ).toHaveAttribute('loading', 'eager');
   });
 
   it('associates project metadata labels with their form controls', async () => {
@@ -1846,7 +1867,9 @@ describe('DesignerProjectUpload floor area', () => {
       await renderWithReviewComments([comment()]);
 
       const card = screen.getByTestId('review-comments-card');
-      expect(within(card).getByText('The kitchen photo is blurry — please replace it.')).toBeInTheDocument();
+      expect(
+        within(card).getByText('The kitchen photo is blurry — please replace it.'),
+      ).toBeInTheDocument();
       // Reviewer identity stays masked — the only attribution is the neutral team label.
       expect(within(card).getByText('Tickif Review Team')).toBeInTheDocument();
       // The comment's own status is shown.
