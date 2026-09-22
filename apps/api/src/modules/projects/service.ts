@@ -120,6 +120,7 @@ function toResponse(
     bhkSlug: row.bhkSlug,
     sizeSqft: row.sizeSqft,
     citySlug: row.citySlug,
+    cityName: row.cityName,
     localitySlug: row.localitySlug,
     buildingName: row.buildingName,
     budgetBandSlug: row.budgetBandSlug,
@@ -357,7 +358,7 @@ function toFeedProject(
     slug: row.slug,
     title: row.title,
     studio: row.studio,
-    city: labelOf('city', row.citySlug),
+    city: row.cityName ?? labelOf('city', row.citySlug),
     locality:
       row.citySlug && row.localitySlug
         ? (localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null)
@@ -454,6 +455,7 @@ function projectSpecifications(
     scope: taxonomyValue(labels, 'scope', project.scopeSlug),
     bhk: taxonomyValue(labels, 'bhk', project.bhkSlug),
     city: taxonomyValue(labels, 'city', project.citySlug),
+    cityName: project.cityName,
     locality:
       project.localitySlug && locality ? { slug: project.localitySlug, label: locality } : null,
     budgetBand: taxonomyValue(labels, 'budget_band', project.budgetBandSlug),
@@ -503,7 +505,7 @@ function toListItemFields(
     slug: row.slug,
     title: row.title,
     propertyType: row.propertySubtypeSlug ?? row.propertyTypeSlug,
-    city: row.citySlug,
+    city: row.cityName ?? row.citySlug,
     locality: row.localitySlug,
     status: row.status,
     archiveReason: row.archiveReason,
@@ -925,6 +927,31 @@ export async function validateProjectTaxonomy(
   }
 }
 
+function normalizeCreateProjectLocation(input: CreateProjectInput): CreateProjectInput {
+  if (input.cityName !== undefined && input.cityName !== null) {
+    const normalized = { ...input };
+    delete normalized.citySlug;
+    delete normalized.localitySlug;
+    return normalized;
+  }
+  if (input.citySlug !== undefined && input.citySlug !== null) {
+    const normalized = { ...input };
+    delete normalized.cityName;
+    return normalized;
+  }
+  return input;
+}
+
+function normalizeUpdatedProjectLocation(input: UpdateProjectInput): UpdateProjectInput {
+  if (input.cityName !== undefined && input.cityName !== null) {
+    return { ...input, citySlug: null, localitySlug: null };
+  }
+  if (input.citySlug !== undefined && input.citySlug !== null) {
+    return { ...input, cityName: null };
+  }
+  return input;
+}
+
 function humanizeSlug(slug: string): string {
   return slug
     .split('-')
@@ -948,7 +975,7 @@ async function buildProjectTitle(input: CreateProjectInput): Promise<string> {
   if (explicit) return explicit;
 
   const [city, locality, propertyType, propertySubtype, bhk, budget] = await Promise.all([
-    labelFor('city', input.citySlug),
+    input.cityName?.trim() || labelFor('city', input.citySlug),
     labelFor('locality', input.localitySlug),
     labelFor('property_type', input.propertyTypeSlug),
     labelFor('property_subtype', input.propertySubtypeSlug),
@@ -1134,12 +1161,16 @@ export function buildCompleteness(
   project: Pick<
     ProjectRecord,
     'title' | 'citySlug' | 'propertyTypeSlug' | 'scopeSlug' | 'budgetBandSlug' | 'coverImageId'
-  >,
+  > & { cityName?: string | null },
   imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
   const requirements = [
     { key: 'project-name', label: 'Project name', complete: project.title.trim().length > 0 },
-    { key: 'location-city', label: 'Location city', complete: !!project.citySlug },
+    {
+      key: 'location-city',
+      label: 'Location city',
+      complete: !!(project.citySlug || project.cityName),
+    },
     { key: 'property-type', label: 'Property type', complete: !!project.propertyTypeSlug },
     { key: 'scope', label: 'Scope', complete: !!project.scopeSlug },
     { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
@@ -1288,6 +1319,7 @@ async function buildPublicProjectDetail(
     bhkSlug: project.bhkSlug,
     sizeSqft: project.sizeSqft,
     citySlug: project.citySlug,
+    cityName: project.cityName,
     localitySlug: project.localitySlug,
     buildingName: project.buildingName,
     budgetBandSlug: project.budgetBandSlug,
@@ -1568,15 +1600,16 @@ export const projectsService = {
     ) {
       throw AppError.forbidden('Organization write access required');
     }
-    await validateProjectTaxonomy(input);
+    const normalizedInput = normalizeCreateProjectLocation(input);
+    await validateProjectTaxonomy(normalizedInput);
 
     const designer = await projectsRepository.findDesignerByTeamId(activeOrgId, activeTeamId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }
 
-    const title = await buildProjectTitle(input);
-    const draftInput = { ...input, title };
+    const title = await buildProjectTitle(normalizedInput);
+    const draftInput = { ...normalizedInput, title };
 
     const row = await createDraftWithUniqueSlug(draftInput, designer.id);
     const rooms = await prefillRoomsIfEmpty(row, []);
@@ -1591,14 +1624,15 @@ export const projectsService = {
     await requireEditableProject(projectId, caller);
     const existing = await projectsRepository.findById(projectId);
     if (!existing) throw AppError.notFound('Project not found');
-    await validateProjectTaxonomy(input, existing);
+    const normalizedInput = normalizeUpdatedProjectLocation(input);
+    await validateProjectTaxonomy(normalizedInput, existing);
 
-    if (input.coverImageId) {
-      const image = await projectsRepository.findImage(projectId, input.coverImageId);
+    if (normalizedInput.coverImageId) {
+      const image = await projectsRepository.findImage(projectId, normalizedInput.coverImageId);
       if (!image) throw AppError.unprocessable('Cover image must belong to the project');
     }
 
-    const row = await projectsRepository.updateDraft(projectId, input);
+    const row = await projectsRepository.updateDraft(projectId, normalizedInput);
     if (!row) throw AppError.notFound('Project not found');
     const rooms = await prefillRoomsIfEmpty(row);
     return toDetailResponse(row, rooms);

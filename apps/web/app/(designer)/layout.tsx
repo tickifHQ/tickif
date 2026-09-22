@@ -24,6 +24,7 @@ export default async function DesignerLayout({ children }: { children: ReactNode
     <DesignerWorkspaceShell
       activeOrganizationId={profile.organization.id}
       studioName={studioName}
+      logoUrl={profile.logoUrl}
       planLabel={planLabel}
       capabilities={orgCapabilities}
     >

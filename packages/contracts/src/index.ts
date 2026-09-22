@@ -25,3 +25,4 @@ export * from './billing';
 export * from './entitlements';
 export * from './personal-account';
 export * from './health';
+export * from './admin-activity';

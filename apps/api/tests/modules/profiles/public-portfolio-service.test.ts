@@ -119,6 +119,7 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   showGoogleOverallRating: true,
   showGooglePositiveReviewsOnly: false,
   showTickifBadge: true,
+  experienceCenters: [],
   publishedAt: new Date('2026-02-01'),
   createdAt: new Date('2025-01-01'),
   updatedAt: new Date('2026-01-01'),

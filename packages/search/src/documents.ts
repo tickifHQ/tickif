@@ -8,6 +8,8 @@ export type ProjectSearchDocument = {
   designerSlug: string | null;
   designerName: string;
   citySlug: string | null;
+  /** Free-text city for projects outside the configured taxonomy. */
+  cityName?: string | null;
   localitySlug: string | null;
   propertyTypeSlug: string | null;
   propertySubtypeSlug: string | null;

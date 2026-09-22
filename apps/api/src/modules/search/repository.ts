@@ -19,7 +19,7 @@ import {
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, desc, isNotNull, inArray } from '@repo/db';
+import { db, schema, eq, and, desc, isNotNull, inArray, sql } from '@repo/db';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
@@ -37,6 +37,37 @@ export interface ProjectSearchResult {
   estimatedTotalHits: number;
   facetDistribution: Record<string, Record<string, number>>;
   processingTimeMs: number;
+}
+
+export async function insertSearchActivity(input: {
+  actorUserId: string | null;
+  endpoint: 'projects' | 'designers';
+  query: string;
+}): Promise<void> {
+  const query = input.query.trim();
+  const actorUserId = input.actorUserId;
+  if (!actorUserId || !query) return;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.searchActivity).values({ ...input, actorUserId, query });
+      await tx.execute(sql`
+        delete from ${schema.searchActivity}
+        where ${schema.searchActivity.actorUserId} = ${actorUserId}
+          and (
+            ${schema.searchActivity.createdAt} < now() - interval '180 days'
+            or ${schema.searchActivity.id} in (
+              select ${schema.searchActivity.id}
+              from ${schema.searchActivity}
+              where ${schema.searchActivity.actorUserId} = ${actorUserId}
+              order by ${schema.searchActivity.createdAt} desc, ${schema.searchActivity.id} desc
+              offset 1000
+            )
+          )
+      `);
+    });
+  } catch (error) {
+    console.error('[search] Failed to record authenticated search activity:', error);
+  }
 }
 
 export interface DesignerSearchResult {
@@ -61,6 +92,7 @@ export interface RecentProject {
   designerSlug: string | null;
   designerName: string;
   citySlug: string | null;
+  cityName: string | null;
   localitySlug: string | null;
   propertyTypeSlug: string | null;
   propertySubtypeSlug: string | null;
@@ -287,6 +319,7 @@ export async function recentProjectsInCity(
       designerSlug: schema.designerProfile.slug,
       designerName: schema.designerProfile.displayName,
       citySlug: schema.project.citySlug,
+      cityName: schema.project.cityName,
       localitySlug: schema.project.localitySlug,
       propertyTypeSlug: schema.project.propertyTypeSlug,
       propertySubtypeSlug: schema.project.propertySubtypeSlug,
@@ -419,6 +452,7 @@ export async function recentProjectsInCity(
       designerSlug: row.designerSlug,
       designerName: row.designerName,
       citySlug: row.citySlug,
+      cityName: row.cityName,
       localitySlug: row.localitySlug,
       propertyTypeSlug: row.propertyTypeSlug,
       propertySubtypeSlug: row.propertySubtypeSlug,

@@ -36,6 +36,7 @@ export const PROJECT_SUGGEST_FIELDS = [
   'title',
   'designerName',
   'citySlug',
+  'cityName',
   'coverImageKey',
 ] as const;
 

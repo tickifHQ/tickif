@@ -16,6 +16,7 @@ export type ProjectSearchSource = {
     description: string | null;
     designerId: string;
     citySlug: string | null;
+    cityName: string | null;
     localitySlug: string | null;
     propertyTypeSlug: string | null;
     propertySubtypeSlug: string | null;
@@ -109,6 +110,7 @@ export function mapProjectSearchDocument(source: ProjectSearchSource): ProjectSe
     designerSlug: source.designer.slug,
     designerName: source.designer.displayName,
     citySlug: source.project.citySlug,
+    cityName: source.project.cityName,
     localitySlug: source.project.localitySlug,
     propertyTypeSlug: source.project.propertyTypeSlug,
     propertySubtypeSlug: source.project.propertySubtypeSlug,

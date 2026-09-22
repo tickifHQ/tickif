@@ -20,6 +20,7 @@ vi.mock('@repo/storage', () => ({
   ObjectTooLargeError: class ObjectTooLargeError extends Error {},
 }));
 
+import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
 import { makeProject, makeProjectImage } from '@repo/db/testing';
 import type { MediaProcessJob } from '../../src/connection.js';
@@ -100,7 +101,9 @@ describe('media pipeline (integration)', () => {
     // Every derivative object was written to R2 and is EXIF-stripped, correctly encoded.
     for (const d of row.derivatives) {
       const key = d.key;
-      expect(key).toBe(`derivatives/${projectId}/${imageId}/${d.variant}-wm-v2.${d.format}`);
+      expect(key).toBe(
+        `derivatives/${projectId}/${imageId}/${d.variant}-${config.WATERMARK_REVISION}.${d.format}`,
+      );
       expect(r2.has(key)).toBe(true);
       const meta = await sharp(r2.get(key)!).metadata();
       expect(meta.exif).toBeUndefined();
@@ -131,7 +134,7 @@ describe('media pipeline (integration)', () => {
     const ready = await reload(imageId);
     const legacyDerivatives = ready.derivatives.map((derivative) => ({
       ...derivative,
-      key: derivative.key.replace('-wm-v2.', '.'),
+      key: derivative.key.replace(`-${config.WATERMARK_REVISION}.`, '.'),
     }));
     for (const derivative of legacyDerivatives) r2.set(derivative.key, Buffer.from('legacy'));
     await db
@@ -144,9 +147,11 @@ describe('media pipeline (integration)', () => {
     expect(result).toEqual({ ok: true, derivatives: 8 });
     const refreshed = await reload(imageId);
     expect(refreshed.status).toBe('ready');
-    expect(refreshed.derivatives.every((derivative) => derivative.key.includes('-wm-v2.'))).toBe(
-      true,
-    );
+    expect(
+      refreshed.derivatives.every((derivative) =>
+        derivative.key.includes(`-${config.WATERMARK_REVISION}.`),
+      ),
+    ).toBe(true);
     expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);
     expect(r2.has(ready.originalKey)).toBe(true);
     await expect(

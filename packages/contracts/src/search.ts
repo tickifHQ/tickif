@@ -72,6 +72,7 @@ export const projectHitSchema = z
     designerSlug: z.string().nullable(),
     designerName: z.string(),
     citySlug: z.string().nullable(),
+    cityName: z.string().nullable().optional(),
     localitySlug: z.string().nullable(),
     propertyTypeSlug: z.string().nullable(),
     propertySubtypeSlug: z.string().nullable(),
@@ -193,6 +194,7 @@ export const suggestProjectSchema = z
     title: z.string(),
     designerName: z.string(),
     citySlug: z.string().nullable(),
+    cityName: z.string().nullable().optional(),
     coverImageUrl: z.string().nullable(),
   })
   .meta({ id: 'SuggestProject' });

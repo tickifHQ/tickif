@@ -113,6 +113,7 @@ const row = (over: Partial<ProjectRecord> = {}): ProjectRecord => ({
   bhkSlug: null,
   sizeSqft: null,
   citySlug: 'mumbai',
+  cityName: null,
   localitySlug: null,
   buildingName: null,
   budgetBandSlug: null,
@@ -469,6 +470,38 @@ describe('projectsService.create', () => {
     expect(created.slug).toBe('sunlit-bandra-apartment');
   });
 
+  it('stores a custom city without a stale taxonomy city or locality', async () => {
+    vi.mocked(projectsRepository.findBySlug).mockResolvedValue(null);
+    vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
+      id: '22222222-2222-4222-8222-222222222222',
+      orgId: 'org_1',
+      teamId: 'team_1',
+    });
+    vi.mocked(projectsRepository.createDraft).mockImplementation(async (input, _designerId, slug) =>
+      row({
+        slug,
+        citySlug: input.citySlug ?? null,
+        cityName: input.cityName ?? null,
+        localitySlug: input.localitySlug ?? null,
+      }),
+    );
+
+    const created = await projectsService.create(
+      { title: 'Hill Home', citySlug: 'mumbai', localitySlug: 'bandra', cityName: 'Coonoor' },
+      caller,
+    );
+
+    expect(projectsRepository.createDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ cityName: 'Coonoor' }),
+      expect.any(String),
+      expect.any(String),
+    );
+    const draft = vi.mocked(projectsRepository.createDraft).mock.calls[0]?.[0];
+    expect(draft).not.toHaveProperty('citySlug');
+    expect(draft).not.toHaveProperty('localitySlug');
+    expect(created.cityName).toBe('Coonoor');
+  });
+
   it('appends a suffix when the slug already exists', async () => {
     vi.mocked(projectsRepository.findBySlug).mockResolvedValue(row());
     vi.mocked(projectsRepository.findDesignerByTeamId).mockResolvedValue({
@@ -681,6 +714,32 @@ describe('projectsService.update', () => {
     await expect(
       projectsService.update(row().id, { coverImageId: imageRow().id }, caller),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('clears a custom city when a taxonomy city is selected', async () => {
+    vi.mocked(projectsRepository.findOwnership).mockResolvedValue({
+      projectId: row().id,
+      designerId: row().designerId,
+      organizationId: 'org_1',
+      status: 'draft',
+      archiveReason: null,
+      ownerUserId: caller.userId,
+    });
+    vi.mocked(projectsRepository.findById).mockResolvedValue(
+      row({ status: 'draft', citySlug: null, cityName: 'Coonoor' }),
+    );
+    vi.mocked(projectsRepository.taxonomyExists).mockResolvedValue(true);
+    vi.mocked(projectsRepository.updateDraft).mockResolvedValue(
+      row({ status: 'draft', citySlug: 'chennai', cityName: null }),
+    );
+    vi.mocked(projectsRepository.listRooms).mockResolvedValue([]);
+
+    await projectsService.update(row().id, { citySlug: 'chennai' }, caller);
+
+    expect(projectsRepository.updateDraft).toHaveBeenCalledWith(
+      row().id,
+      expect.objectContaining({ citySlug: 'chennai', cityName: null }),
+    );
   });
 });
 
@@ -1253,6 +1312,7 @@ describe('projectsService.feed', () => {
     slug: 'industrial-chic-apartment',
     title: 'Industrial Chic Apartment',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: 'bandra',
     budgetBandSlug: '3-5-lakh',
     scopeSlug: 'full-home',

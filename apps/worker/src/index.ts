@@ -33,6 +33,7 @@ import { processGoogleReviewRefresh, processGoogleReviewSweep } from './jobs/goo
 import { processSearchIndex } from './jobs/search-indexer.js';
 import { dispatchSearchProjectionOutbox } from './search/outbox-dispatcher.js';
 import { probeSearchReadiness } from './search/readiness.js';
+import { purgeExpiredSearchActivity } from './search/activity-repository.js';
 import { isDatabaseReady, closeDatabase } from './health/repository.js';
 import { consumersAreReady, createWorkerReadinessProbe } from './health/readiness.js';
 import {
@@ -198,6 +199,7 @@ let draining = false;
 let dependenciesReady = false;
 let readinessPromise: Promise<void> | null = null;
 let dispatchPromise: Promise<void> | null = null;
+let searchActivityCleanupPromise: Promise<void> | null = null;
 const consumers = [
   mediaWorker,
   smsWorker,
@@ -241,10 +243,30 @@ function dispatchSearchOutbox(): Promise<void> {
   return dispatchPromise;
 }
 
+function cleanSearchActivity(): Promise<void> {
+  if (searchActivityCleanupPromise) return searchActivityCleanupPromise;
+  searchActivityCleanupPromise = purgeExpiredSearchActivity()
+    .then((deleted) => {
+      if (deleted > 0) console.log(`[worker] purged ${deleted} expired search activity rows`);
+    })
+    .catch((error) => {
+      console.error('[worker] search activity cleanup failed:', error);
+    })
+    .finally(() => {
+      searchActivityCleanupPromise = null;
+    });
+  return searchActivityCleanupPromise;
+}
+
 void refreshReadiness();
 void dispatchSearchOutbox();
+void cleanSearchActivity();
 const readinessTimer = setInterval(() => void refreshReadiness(), 10_000);
 const outboxTimer = setInterval(() => void dispatchSearchOutbox(), 2_000);
+const searchActivityCleanupTimer = setInterval(
+  () => void cleanSearchActivity(),
+  24 * 60 * 60 * 1000,
+);
 
 // Liveness = process up; readiness flips to 503 on shutdown so an orchestrator stops routing first.
 const health = createServer((req, res) => {
@@ -268,12 +290,14 @@ async function shutdown(signal: string): Promise<void> {
   draining = true;
   clearInterval(readinessTimer);
   clearInterval(outboxTimer);
+  clearInterval(searchActivityCleanupTimer);
   console.log(`[worker] ${signal} received, draining...`);
   let code = 0;
   try {
     await Promise.all([
       readinessPromise,
       dispatchPromise,
+      searchActivityCleanupPromise,
       mediaWorker.close(),
       smsWorker.close(),
       searchIndexWorker.close(),

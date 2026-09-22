@@ -16,6 +16,7 @@ describe('search projection mapper', () => {
         description: 'A warm renovation',
         designerId: 'designer-1',
         citySlug: 'mumbai',
+        cityName: null,
         localitySlug: 'bandra',
         propertyTypeSlug: 'residential',
         propertySubtypeSlug: 'apartment',
@@ -76,6 +77,7 @@ describe('search projection mapper', () => {
       designerSlug: 'studio-one',
       designerName: 'Studio One',
       citySlug: 'mumbai',
+      cityName: null,
       localitySlug: 'bandra',
       propertyTypeSlug: 'residential',
       propertySubtypeSlug: 'apartment',
@@ -110,6 +112,7 @@ describe('search projection mapper', () => {
         description: null,
         designerId: 'designer-1',
         citySlug: null,
+        cityName: 'Coonoor',
         localitySlug: null,
         propertyTypeSlug: null,
         propertySubtypeSlug: null,
@@ -134,6 +137,7 @@ describe('search projection mapper', () => {
     } satisfies ProjectSearchSource;
 
     expect(mapProjectSearchDocument(source)).toMatchObject({
+      cityName: 'Coonoor',
       coverImageKey: 'thumb.webp',
       coverImageWidth: 320,
       coverImageHeight: 240,

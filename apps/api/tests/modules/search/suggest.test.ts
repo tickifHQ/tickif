@@ -12,6 +12,7 @@ import { app } from '../../../src/app.js';
 
 // Mock the search repository to avoid requiring a live Typesense instance
 vi.mock('../../../src/modules/search/repository.js', () => ({
+  insertSearchActivity: vi.fn(),
   multiSearch: vi.fn(),
   searchProjects: vi.fn(),
   searchDesigners: vi.fn(),
@@ -191,6 +192,7 @@ describe('GET /api/search/suggest', () => {
         title: string;
         designerName: string;
         citySlug: string | null;
+        cityName: string | null;
         coverImageUrl: string | null;
       }>;
     }>(res);
@@ -204,11 +206,21 @@ describe('GET /api/search/suggest', () => {
     expect(project).toHaveProperty('title', 'Test Project Title');
     expect(project).toHaveProperty('designerName', 'Test Designer');
     expect(project).toHaveProperty('citySlug', 'mumbai');
+    expect(project).toHaveProperty('cityName', null);
     expect(project).toHaveProperty('coverImageUrl');
 
     // Ensure no extra fields are present
-    const allowedKeys = ['id', 'slug', 'title', 'designerName', 'citySlug', 'coverImageUrl'];
+    const allowedKeys = [
+      'id',
+      'slug',
+      'title',
+      'designerName',
+      'citySlug',
+      'cityName',
+      'coverImageUrl',
+    ];
     expect(Object.keys(project).sort()).toEqual(allowedKeys.sort());
+    expect(repository.insertSearchActivity).not.toHaveBeenCalled();
   });
 
   it('returns only minimal fields for designers: id, slug, displayName, citySlugs, logoUrl, projectCount', async () => {
