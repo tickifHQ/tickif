@@ -108,6 +108,21 @@ describe('HomeSearchBar', () => {
     expect(mock.push).toHaveBeenCalledWith('/?city=mumbai&room=kitchen');
   });
 
+  it('preserves all repeated and comma-separated filters when applying a suggestion', async () => {
+    mock.params = new URLSearchParams('q=kitchen&room=bedroom,living-room&room=bathroom&page=3');
+    render(<HomeSearchBar initialQuery="kitchen" basePath="/home" />);
+
+    fireEvent.focus(screen.getByRole('searchbox', { name: 'Search homes' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen, Space' }));
+
+    expect(mock.push).toHaveBeenCalledWith(
+      '/home?room=bedroom%2Cliving-room%2Cbathroom%2Ckitchen',
+    );
+  });
+
   it('clears stale suggestions and shows loading immediately for a changed query', async () => {
     render(<HomeSearchBar />);
     const input = screen.getByRole('searchbox', { name: 'Search homes' });

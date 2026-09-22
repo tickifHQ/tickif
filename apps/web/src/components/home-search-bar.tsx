@@ -11,6 +11,7 @@ import {
 } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { api } from '@/lib/api';
+import { parseFeedParams } from '@/lib/feed-params';
 
 const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
   projects: [],
@@ -149,7 +150,7 @@ export function HomeSearchBar({
     const params = new URLSearchParams(searchParams.toString());
     params.delete('q');
     params.delete('page');
-    const selected = new Set((params.get(filter.filterKey) ?? '').split(',').filter(Boolean));
+    const selected = new Set(parseFeedParams(params)[filter.filterKey]);
     selected.add(filter.slug);
     params.set(filter.filterKey, [...selected].join(','));
     setQuery('');
