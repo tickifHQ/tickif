@@ -41,7 +41,7 @@ export const adminActivityRepository = {
 
   async listUsers(query: AdminUsersQuery) {
     const pagination = page(query.page, query.limit);
-    const q = query.q ? `%${query.q.replaceAll('%', '\\%').replaceAll('_', '\\_')}%` : null;
+    const q = query.q ? `%${query.q.replace(/[\\%_]/g, '\\$&')}%` : null;
     const where = and(
       query.role ? eq(platformUser.role, query.role) : undefined,
       query.status ? eq(platformUser.status, query.status) : undefined,
@@ -103,7 +103,7 @@ export const adminActivityRepository = {
             ${viewCounts.lastActiveAt},
             ${searchCounts.lastActiveAt},
             ${enquiryCounts.lastActiveAt}
-          )`,
+          )`.mapWith(schema.searchActivity.createdAt),
         })
         .from(platformUser)
         .leftJoin(viewCounts, eq(viewCounts.actorUserId, platformUser.id))

@@ -1,11 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminActivitySummary } from '@repo/contracts';
 import { db, schema } from '@repo/db';
+import { makeUser } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
 import { createRoleSession } from '../../helpers/auth.js';
 import { insertSearchActivity } from '../../../src/modules/search/repository.js';
 
 describe('admin activity API', () => {
+  it('serializes the last activity timestamp for users with recorded searches', async () => {
+    const admin = await createRoleSession('+919800002303', 'admin');
+    const createdAt = new Date('2026-09-22T12:00:00.000Z');
+    await db.insert(schema.searchActivity).values({
+      actorUserId: admin.userId,
+      endpoint: 'projects',
+      query: 'kitchen',
+      createdAt,
+    });
+
+    const response = await app.request('/api/admin/activity/users?q=9800002303', {
+      headers: { cookie: admin.cookie },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      items: [{ id: admin.userId, searches: 1, lastActiveAt: createdAt.toISOString() }],
+    });
+  });
+
+  it('treats backslashes and wildcard characters as literal user search text', async () => {
+    const admin = await createRoleSession('+919800002304', 'admin');
+    const target = await makeUser({ name: 'Studio \\_%' });
+    await makeUser({ name: 'Studio \\A%' });
+
+    const response = await app.request(
+      `/api/admin/activity/users?q=${encodeURIComponent('Studio \\_%')}`,
+      { headers: { cookie: admin.cookie } },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ items: [{ id: target.id }], total: 1 });
+  });
+
   it('requires an admin platform role', async () => {
     const anonymous = await app.request('/api/admin/activity/summary');
     expect(anonymous.status).toBe(401);
