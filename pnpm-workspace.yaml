@@ -10,7 +10,7 @@ overrides:
   hono: ^4.13.5
   # Keep Vite's peer graph on one Node type instance. Floating peer resolution
   # produced parallel Vite trees (26.0.0 and 26.4.0) and broke CI typechecking.
-  '@types/node': 26.4.0
+  '@types/node': 26.6.1
   # Security patches for transitive advisories (pnpm audit, high severity).
   # brace-expansion DoS advisories through 5.0.8. One line for every copy —
   # eslint's minimatch@3 works fine on 5.x, so the split pins are no longer needed.
@@ -44,7 +44,7 @@ catalog:
   # Language / tooling
   typescript: ^6.0.3
   tsx: ^4.20.3
-  '@types/node': 26.4.0
+  '@types/node': 26.6.1
   eslint-config-prettier: ^10.1.8
 
   # Validation (zod v4 — required by @hono/zod-openapi v1)
@@ -73,8 +73,8 @@ catalog:
   ioredis: ^5.11.0
 
   # Storage (Cloudflare R2 via S3 API) + image processing
-  '@aws-sdk/client-s3': ^3.1130.0
-  '@aws-sdk/s3-request-presigner': ^3.1130.0
+  '@aws-sdk/client-s3': ^3.1135.0
+  '@aws-sdk/s3-request-presigner': ^3.1135.0
   sharp: ^0.35.4
 
   # Search
@@ -106,7 +106,7 @@ catalog:
   recharts: ^3.10.1
   '@dicebear/core': ^10.3.0
   '@dicebear/styles': ^10.6.0
-  libphonenumber-js: 1.13.9
+  libphonenumber-js: 1.13.13
   shadcn: ^4.12.0
   '@tailwindcss/postcss': ^4.3.3
   tailwindcss: ^4.3.3
@@ -116,7 +116,7 @@ catalog:
   # Testing
   vitest: ^4.1.11
   '@vitest/coverage-v8': ^4.1.11
-  '@testing-library/react': ^16.3.2
+  '@testing-library/react': ^16.3.3
   '@testing-library/user-event': ^14.6.7
   '@testing-library/jest-dom': ^6.9.1
   happy-dom: ^20.11.6

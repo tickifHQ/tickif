@@ -32,6 +32,7 @@ export {
   isNull,
   lt,
   lte,
+  gt,
   gte,
   desc,
   asc,

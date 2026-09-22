@@ -265,12 +265,11 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
 
 function NarrativeSection({ project }: { project: PublicProjectDetailResponse }) {
   const { narrative } = project;
+  if (!narrative) return null;
   const context = [project.specifications.bhk?.label, project.specifications.locality?.label]
     .filter(Boolean)
     .join(' in ');
-  const attribution = narrative
-    ? [narrative.author.name, context].filter(Boolean).join(', ')
-    : null;
+  const attribution = [narrative.author.name, context].filter(Boolean).join(', ');
 
   return (
     <section aria-labelledby="project-narrative-heading" className="border-t pt-12">
@@ -302,41 +301,33 @@ function NarrativeSection({ project }: { project: PublicProjectDetailResponse })
         <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
           <div className="lg:col-span-8">
             <Quote aria-hidden className="size-10 rotate-180 fill-primary text-primary" />
-            {narrative ? (
-              <>
-                <blockquote className="mt-5 max-w-2xl text-2xl leading-snug sm:text-3xl">
-                  {narrative.body}
-                </blockquote>
-                <footer className="mt-7 flex items-center gap-3">
-                  <Avatar className="size-11">
-                    {narrative.author.avatarUrl ? (
-                      <AvatarImage src={narrative.author.avatarUrl} alt="" />
-                    ) : null}
-                    <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
-                      {initials(narrative.author.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="flex items-center gap-1 text-sm font-medium">
-                      {attribution}
-                      {narrative.verifiedConsultation ? (
-                        <BadgeCheck
-                          aria-label="Verified consultation"
-                          className="size-4 fill-primary text-primary-foreground"
-                        />
-                      ) : null}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      From a homeowner · {project.designer.displayName}
-                    </p>
-                  </div>
-                </footer>
-              </>
-            ) : (
-              <p className="mt-5 max-w-2xl text-xl leading-relaxed text-muted-foreground sm:text-2xl">
-                No homeowner narrative has been published for this project yet.
-              </p>
-            )}
+            <blockquote className="mt-5 max-w-2xl text-2xl leading-snug sm:text-3xl">
+              {narrative.body}
+            </blockquote>
+            <footer className="mt-7 flex items-center gap-3">
+              <Avatar className="size-11">
+                {narrative.author.avatarUrl ? (
+                  <AvatarImage src={narrative.author.avatarUrl} alt="" />
+                ) : null}
+                <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">
+                  {initials(narrative.author.name)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="flex items-center gap-1 text-sm font-medium">
+                  {attribution}
+                  {narrative.verifiedConsultation ? (
+                    <BadgeCheck
+                      aria-label="Verified consultation"
+                      className="size-4 fill-primary text-primary-foreground"
+                    />
+                  ) : null}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  From a homeowner · {project.designer.displayName}
+                </p>
+              </div>
+            </footer>
           </div>
 
           <div className="lg:col-span-4 lg:-my-16 lg:-translate-y-8 lg:justify-self-end">

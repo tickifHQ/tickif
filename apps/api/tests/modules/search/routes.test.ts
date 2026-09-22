@@ -10,6 +10,7 @@ vi.mock('../../../src/modules/search/repository.js', () => ({
   searchDesigners: vi.fn(),
   multiSearch: vi.fn(),
   recentProjectsInCity: vi.fn(),
+  findFreshGoogleRatings: vi.fn(),
 }));
 
 // Mock storage presigning

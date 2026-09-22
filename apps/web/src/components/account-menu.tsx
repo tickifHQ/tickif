@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ACCOUNT_STATUS, PLATFORM_ROLE } from '@repo/contracts';
 import { authClient } from '@/lib/auth-client';
 import { InitialsAvatar } from '@/components/initials-avatar';
@@ -46,7 +45,6 @@ export function AccountMenu({
   showProfileSettings?: boolean;
 }) {
   const { data: session, isPending } = authClient.useSession();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (isPending) {
@@ -87,8 +85,9 @@ export function AccountMenu({
       // Keep the user moving away from protected UI even if the local sign-out call reports an error.
     } finally {
       setOpen(false);
-      router.replace('/login');
-      router.refresh();
+      // Sign-out must leave protected content entirely, never render it behind
+      // the intercepted sign-in modal.
+      window.location.replace('/login');
     }
   }
 

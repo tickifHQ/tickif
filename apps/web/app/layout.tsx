@@ -22,13 +22,16 @@ export const metadata: Metadata = {
   description: 'Discover real interior design projects across India.',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children, auth }: { children: ReactNode; auth: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          {auth}
+        </ThemeProvider>
       </body>
     </html>
   );

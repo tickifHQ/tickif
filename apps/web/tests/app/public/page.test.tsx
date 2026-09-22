@@ -125,7 +125,7 @@ describe('PublicHomePage', () => {
       PublicHomePage({ searchParams: Promise.resolve({ q: 'kitchen' }) }),
     ).rejects.toThrow('NEXT_REDIRECT:/designer/select-studio');
   });
-  it('sends designers with an active studio to their dashboard', async () => {
+  it('lets designers with an active studio explore public projects', async () => {
     mock.getServerSession.mockResolvedValue({
       user: { id: 'u1', name: 'Asha', email: 'a@x.com', role: 'designer' },
       session: {
@@ -137,9 +137,9 @@ describe('PublicHomePage', () => {
       },
     });
 
-    await expect(PublicHomePage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
-      'NEXT_REDIRECT:/designer/dashboard',
-    );
+    render(await PublicHomePage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole('heading', { name: /Inspire from homes/i })).toBeInTheDocument();
+    expect(mock.redirect).not.toHaveBeenCalled();
   });
 
   it('sends designers without an active studio to the studio selector', async () => {

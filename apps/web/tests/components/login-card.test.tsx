@@ -150,9 +150,7 @@ describe('LoginCard', () => {
     }
     await user.click(screen.getByRole('button', { name: 'Verify' }));
 
-    await waitFor(() => {
-      expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=designer&authenticated=1');
-    });
+    await waitFor(() => expect(screen.getByText('Signed in')).toBeInTheDocument());
   });
 
   it('uses a safe callback path for Google sign in', async () => {
@@ -316,9 +314,7 @@ describe('LoginCard', () => {
       await fillOtp(user, '123456');
       await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByText('Signed in')).toBeInTheDocument();
-      await waitFor(() =>
-        expect(mock.router.replace).toHaveBeenCalledWith('/login?mode=browsing&authenticated=1'),
-      );
+      expect(mock.router.replace).not.toHaveBeenCalled();
     });
 
     it('shows error on verify failure', async () => {

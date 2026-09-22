@@ -364,6 +364,13 @@ function CredentialsSection({ portfolio }: SectionProps) {
 }
 
 function PortfolioSection({ portfolio, view }: SectionProps) {
+  if (
+    portfolio.stats.projectCount === 0 &&
+    portfolio.projects.projects.length === 0 &&
+    !portfolio.projects.hasMore
+  )
+    return null;
+
   return (
     <section className="px-4 pt-12 pb-12 sm:px-6">
       <div className="mx-auto max-w-6xl">
@@ -681,6 +688,7 @@ function ReviewsSection({ portfolio }: SectionProps) {
           : null,
       ].filter((aggregate): aggregate is NonNullable<typeof aggregate> => aggregate !== null)
     : [];
+  if (reviewAggregates.length === 0 && reviews.length === 0) return null;
 
   return (
     <section className="overflow-hidden border-t border-surface-subtle-border bg-surface-subtle px-4 py-22 sm:px-6">
@@ -723,11 +731,7 @@ function ReviewsSection({ portfolio }: SectionProps) {
                 </div>
               </div>
             </div>
-          ) : (
-            <p className="self-center text-sm text-muted-foreground">
-              No reviews are available for {portfolio.displayName} yet.
-            </p>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

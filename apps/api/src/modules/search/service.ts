@@ -402,8 +402,33 @@ export async function searchDesigners(
   // Execute search
   const result = await repository.searchDesigners(searchParams);
 
-  // Map hits
-  const hits = await Promise.all(result.hits.map(mapDesignerHit));
+  // Load Google aggregates from the authoritative short-lived cache instead of
+  // denormalizing them into Typesense, where they could outlive the ToS window.
+  let googleRatings = new Map<string, repository.GoogleRatingAggregate>();
+  try {
+    googleRatings = await repository.findFreshGoogleRatings(result.hits.map((hit) => hit.id));
+  } catch {
+    // Google data is optional card enrichment. Keep the primary Typesense results
+    // available if its short-lived cache cannot be read.
+    console.warn(
+      JSON.stringify({
+        type: 'search.google_rating_enrichment_failed',
+        resultCount: result.hits.length,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+  }
+  const hits = await Promise.all(
+    result.hits.map(async (document) => {
+      const hit = await mapDesignerHit(document);
+      const google = googleRatings.get(document.id);
+      return {
+        ...hit,
+        googleRating: google?.rating ?? null,
+        googleRatingCount: google?.ratingCount ?? null,
+      };
+    }),
+  );
 
   // Log zero results if applicable
   if (result.hits.length === 0 && hasFilters(filters)) {

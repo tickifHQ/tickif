@@ -33,6 +33,15 @@ function report(
 }
 
 describe('critical E2E coverage gate', () => {
+  it('requires the designer auth-wall regression journey', () => {
+    const title =
+      'anonymous designer routes never paint protected workspace content and retain the callback';
+    expect(requiredTests).toContainEqual({ file: 'authentication.spec.ts', title });
+    expect(() => assertCompleteCoverage(report({ omittedTitle: title }))).toThrow(
+      /anonymous designer routes/,
+    );
+  });
+
   it('requires the fresh Hobby usage journey independently of mandate recovery', () => {
     const title =
       'fresh Hobby organization shows actual seat and branch usage without a subscription';

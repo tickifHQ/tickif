@@ -3,8 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { ActionLoginDialog } from '../../src/components/action-login-dialog';
 
 vi.mock('@/components/login-card', () => ({
-  LoginCard: ({ callbackPath, onClose }: { callbackPath?: string; onClose: () => void }) => (
-    <div data-testid="login-card" data-callback-path={callbackPath}>
+  LoginCard: ({
+    callbackPath,
+    initialMode,
+    onClose,
+  }: {
+    callbackPath?: string;
+    initialMode?: string;
+    onClose: () => void;
+  }) => (
+    <div data-testid="login-card" data-callback-path={callbackPath} data-initial-mode={initialMode}>
       <button type="button" onClick={onClose}>
         Close login
       </button>
@@ -47,5 +55,18 @@ describe('ActionLoginDialog', () => {
     );
 
     expect(screen.getByTestId('login-card')).not.toHaveAttribute('data-callback-path');
+  });
+
+  it('opens in designer mode when requested', () => {
+    render(
+      <ActionLoginDialog
+        open
+        onOpenChange={() => undefined}
+        loginHref="/login?mode=designer"
+        initialMode="designer"
+      />,
+    );
+
+    expect(screen.getByTestId('login-card')).toHaveAttribute('data-initial-mode', 'designer');
   });
 });
