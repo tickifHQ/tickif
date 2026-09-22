@@ -18,7 +18,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
   browser,
 }, testInfo) => {
   // This is one sequential journey across three independently authenticated participants.
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   await assertTestDb();
   const suffix = randomUUID().slice(0, 8);
   const owner = await makeUser({
@@ -118,9 +118,11 @@ test('designer onboarding and media processing connects to visitor onboarding an
           await designerContext.request.get(`${apiUrl}/api/projects/${project.id}/images`)
         ).json(),
       ).items;
+    // Three uploads now produce five sizes in two formats. On a shared CI runner,
+    // the real worker can finish just after the old 45-second polling deadline.
     await expect
       .poll(async () => (await readImages()).filter((image) => image.status === 'ready').length, {
-        timeout: 45_000,
+        timeout: 90_000,
         message: 'Real worker finishes all three uploaded originals and derivatives',
       })
       .toBe(3);
