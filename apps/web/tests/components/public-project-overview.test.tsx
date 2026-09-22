@@ -3,7 +3,9 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makePublicProject } from '../fixtures/public-project';
 
-vi.mock('@/components/project-like-button', () => ({ ProjectLikeButton: () => <button>Like</button> }));
+vi.mock('@/components/project-like-button', () => ({
+  ProjectLikeButton: () => <button>Like</button>,
+}));
 
 vi.mock('@/components/enquiry-cta', () => ({
   EnquiryCta: ({ children, loginHref }: { children: ReactNode; loginHref: string }) => (
@@ -79,6 +81,20 @@ describe('PublicProjectOverview', () => {
     render(<PublicProjectOverview project={makePublicProject()} canonicalUrl={canonicalUrl} />);
 
     expect(screen.queryByText(/verified reviews/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a connected Google rating and count without making them clickable', () => {
+    const project = makePublicProject({
+      designer: { ...makePublicProject().designer, googleRating: { rating: 4.7, reviewCount: 58 } },
+    });
+    render(<PublicProjectOverview project={project} canonicalUrl={canonicalUrl} />);
+
+    const googleRatings = screen.getAllByLabelText('Google rating 4.7 out of 5 from 58 ratings');
+    for (const googleRating of googleRatings) {
+      expect(googleRating).toHaveTextContent('4.7');
+      expect(googleRating).toHaveTextContent('58');
+      expect(googleRating.closest('a, button')).toBeNull();
+    }
   });
 
   it('omits optional sections and statistics when their source data is unavailable', () => {

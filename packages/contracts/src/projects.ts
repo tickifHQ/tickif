@@ -539,6 +539,13 @@ export const publicProjectDesignerSchema = designerSummarySchema
     yearsExperience: z.number().int().min(0),
     projectCount: z.number().int().min(0),
     footprintCities: z.array(publicTaxonomyValueSchema),
+    /** Null when Google is disconnected, stale, hidden, or has no ratings. */
+    googleRating: z
+      .object({
+        rating: z.number().min(0).max(5),
+        reviewCount: z.number().int().nonnegative(),
+      })
+      .nullable(),
   })
   .meta({ id: 'PublicProjectDesigner' });
 export type PublicProjectDesigner = z.infer<typeof publicProjectDesignerSchema>;

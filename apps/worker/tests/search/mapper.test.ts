@@ -91,10 +91,10 @@ describe('search projection mapper', () => {
       roomSlugs: ['living-room'],
       roomLabels: ['Formal lounge', 'Living room', 'Open plan', 'Warm'],
       tags: ['custom', 'sunlit'],
-      coverImageKey: 'small.webp',
+      coverImageKey: 'medium.webp',
       coverImageId: '11111111-1111-4111-8111-111111111111',
-      coverImageWidth: 640,
-      coverImageHeight: 480,
+      coverImageWidth: 1280,
+      coverImageHeight: 960,
       publishedAt: new Date('2026-07-01T00:00:00.000Z').getTime(),
       featuredAt: null,
       avgRating: 4.75,
@@ -103,7 +103,7 @@ describe('search projection mapper', () => {
     });
   });
 
-  it('uses a thumb only when a small cover derivative is unavailable', () => {
+  it('uses the largest available cover instead of stretching a thumb', () => {
     const source = {
       project: {
         id: 'project-1',
@@ -138,9 +138,9 @@ describe('search projection mapper', () => {
 
     expect(mapProjectSearchDocument(source)).toMatchObject({
       cityName: 'Coonoor',
-      coverImageKey: 'thumb.webp',
-      coverImageWidth: 320,
-      coverImageHeight: 240,
+      coverImageKey: 'large.webp',
+      coverImageWidth: 1600,
+      coverImageHeight: 1200,
     });
   });
 

@@ -87,6 +87,14 @@ function uniqueSorted(values: Iterable<string>): string[] {
 function pickCoverDerivative(derivatives: SearchImageDerivative[]): SearchImageDerivative | null {
   return (
     derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'medium') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'large' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'large') ??
+    derivatives.find(
       (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
     ) ??
     derivatives.find((derivative) => derivative.variant === 'small') ??

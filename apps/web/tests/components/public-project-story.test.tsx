@@ -12,6 +12,18 @@ vi.mock('@/components/enquiry-cta', () => ({
 const { PublicProjectStory } = await import('../../src/components/public-project-story');
 
 describe('PublicProjectStory', () => {
+  it('shows the connected Google aggregate on the narrative profile card as non-interactive text', () => {
+    const project = makePublicProject({
+      designer: { ...makePublicProject().designer, googleRating: { rating: 4.6, reviewCount: 27 } },
+    });
+    render(<PublicProjectStory project={project} />);
+
+    const googleRating = screen.getByLabelText('Google rating 4.6 out of 5 from 27 ratings');
+    expect(googleRating).toHaveTextContent('4.6');
+    expect(googleRating).toHaveTextContent('27');
+    expect(googleRating.closest('a, button')).toBeNull();
+  });
+
   it('navigates between the available room sections with the active photo count', () => {
     const project = makePublicProject();
     const kitchenId = '88888888-8888-4888-8888-888888888888';
