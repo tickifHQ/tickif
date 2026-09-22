@@ -119,6 +119,7 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
       .getByLabel('Your experience (optional)')
       .fill('Synthetic rejection branch for an incorrectly attributed project.');
     await visitor.getByRole('button', { name: 'Submit review' }).click();
+    await expect(visitor.getByRole('status')).toContainText('awaiting moderation');
     await moderator.goto('/review-moderation?status=pending');
     await moderator
       .getByRole('button', { name: 'Review feedback by Review Rejection Visitor' })

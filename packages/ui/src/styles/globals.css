@@ -55,6 +55,7 @@
   --color-success: var(--success);
   --color-success-lighter: var(--success-lighter);
   --color-success-foreground: var(--success-foreground);
+  --color-rating: var(--rating);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);

@@ -1277,7 +1277,7 @@ function SocialInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex h-8 overflow-hidden rounded-md border bg-background shadow-xs">
+    <div className="flex h-8 overflow-hidden rounded-md border bg-background shadow-xs transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
       <label
         htmlFor={id}
         className="flex w-11 shrink-0 items-center justify-center border-r bg-muted/30 text-muted-foreground"

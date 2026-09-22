@@ -19,7 +19,7 @@ import {
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, desc, isNotNull, inArray } from '@repo/db';
+import { db, schema, eq, and, or, desc, gt, isNotNull, isNull, inArray } from '@repo/db';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
@@ -75,6 +75,13 @@ export interface RecentProject {
   coverImageKey: string | null;
   publishedAt: Date;
 }
+
+export type GoogleRatingAggregate = {
+  rating: number;
+  ratingCount: number;
+};
+
+const GOOGLE_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Typesense Search Parameters
@@ -227,6 +234,50 @@ export async function searchDesigners(
     facetDistribution: extractFacetDistribution(result.facet_counts),
     processingTimeMs: result.search_time_ms ?? 0,
   };
+}
+
+/**
+ * Load card-safe Google Business aggregates for one search page in a single query.
+ * The same 30-day freshness boundary as the public portfolio read model prevents
+ * stale provider data from escaping when a worker refresh is delayed.
+ */
+export async function findFreshGoogleRatings(
+  profileIds: string[],
+): Promise<Map<string, GoogleRatingAggregate>> {
+  if (profileIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      profileId: schema.googlePlaceCache.profileId,
+      rating: schema.googlePlaceCache.rating,
+      ratingCount: schema.googlePlaceCache.userRatingsTotal,
+    })
+    .from(schema.googlePlaceCache)
+    .leftJoin(
+      schema.designerPortfolio,
+      eq(schema.designerPortfolio.profileId, schema.googlePlaceCache.profileId),
+    )
+    .where(
+      and(
+        inArray(schema.googlePlaceCache.profileId, [...new Set(profileIds)]),
+        or(
+          isNull(schema.designerPortfolio.profileId),
+          eq(schema.designerPortfolio.showGoogleOverallRating, true),
+        ),
+        eq(schema.googlePlaceCache.status, 'connected'),
+        isNotNull(schema.googlePlaceCache.rating),
+        isNotNull(schema.googlePlaceCache.userRatingsTotal),
+        isNotNull(schema.googlePlaceCache.lastFetchedAt),
+        gt(schema.googlePlaceCache.lastFetchedAt, new Date(Date.now() - GOOGLE_CACHE_MAX_AGE_MS)),
+      ),
+    );
+
+  return new Map(
+    rows.map((row) => [
+      row.profileId,
+      { rating: Number(row.rating), ratingCount: row.ratingCount! },
+    ]),
+  );
 }
 
 /**

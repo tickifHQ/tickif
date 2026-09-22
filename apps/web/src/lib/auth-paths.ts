@@ -2,6 +2,12 @@ export const ADMIN_DASHBOARD_PATH = '/dashboard';
 export const DESIGNER_AUTH_CONTINUE_PATH = '/login?mode=designer&authenticated=1';
 export const VISITOR_AUTH_CONTINUE_PATH = '/login?mode=browsing&authenticated=1';
 export const DESIGNER_ONBOARDING_DEFERRED_PATH = '/designer/onboarding/deferred';
+export const REQUEST_PATH_HEADER = 'x-tickif-request-path';
+
+export function designerLoginPath(callbackPath: string): string {
+  const params = new URLSearchParams({ mode: 'designer', callbackURL: callbackPath });
+  return `/login?${params.toString()}`;
+}
 
 export function safeCallbackPath(value: string | string[] | null | undefined): string | undefined {
   const candidate = Array.isArray(value) ? value[0] : value;

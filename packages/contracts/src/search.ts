@@ -157,6 +157,9 @@ export const designerHitSchema = z
     projectCount: z.number(),
     avgRating: z.number(),
     reviewCount: z.number(),
+    /** Fresh Google Business aggregate; null when not connected or unavailable. */
+    googleRating: z.number().min(0).max(5).nullable(),
+    googleRatingCount: z.number().int().nonnegative().nullable(),
     isKycVerified: z.boolean(),
     logoUrl: z.string().nullable(),
   })
