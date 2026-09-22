@@ -52,6 +52,9 @@ import {
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
+import { googleReviewsRepository } from '../profiles/google-repository.js';
+import { readState } from '../profiles/google-mapper.js';
+import { portfolioRepository } from '../profiles/portfolio-repository.js';
 import {
   ProjectSlugUnavailableError,
   projectsRepository,
@@ -215,9 +218,26 @@ function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   );
 }
 
+/** Public cards can exceed 320 CSS pixels, especially on high-density displays. */
+function pickPublicCardDerivative(derivatives: Derivative[]): Derivative | null {
+  for (const variant of ['medium', 'large', 'small', 'thumb']) {
+    const preferred = derivatives.find(
+      (derivative) => derivative.variant === variant && derivative.format === 'webp',
+    );
+    if (preferred) return preferred;
+    const fallback = derivatives.find((derivative) => derivative.variant === variant);
+    if (fallback) return fallback;
+  }
+  return derivatives[0] ?? null;
+}
+
 /** Pick the best derivative for fullscreen gallery display (largest available, never original). */
 function pickGalleryDerivative(derivatives: Derivative[]): string | null {
   return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'xlarge' && derivative.format === 'webp',
+    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'xlarge')?.key ??
     derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
       ?.key ??
     derivatives.find((derivative) => derivative.variant === 'large')?.key ??
@@ -225,9 +245,8 @@ function pickGalleryDerivative(derivatives: Derivative[]): string | null {
       (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
     )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
-    derivatives.find(
-      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
-    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'small')?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
       ?.key ??
@@ -253,12 +272,18 @@ function pickHeroDerivative(derivatives: Derivative[]): Derivative | null {
  * public feed. Accepts the left-join nulls the feed carries. Callers that must not fail the
  * whole response on a presign error append `.catch(() => null)`.
  */
-async function coverImageUrl(coverImage?: {
-  status: ProjectFeedItemRecord['coverStatus'];
-  derivatives: ProjectFeedItemRecord['coverDerivatives'];
-}): Promise<string | null> {
+async function coverImageUrl(
+  coverImage?: {
+    status: ProjectFeedItemRecord['coverStatus'];
+    derivatives: ProjectFeedItemRecord['coverDerivatives'];
+  },
+  purpose: 'dashboard' | 'public' = 'dashboard',
+): Promise<string | null> {
   if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
-  const preview = pickPreviewDerivative(coverImage.derivatives);
+  const preview =
+    purpose === 'public'
+      ? pickPublicCardDerivative(coverImage.derivatives)
+      : pickPreviewDerivative(coverImage.derivatives);
   return preview ? presignDownload({ key: preview.key }) : null;
 }
 
@@ -519,10 +544,13 @@ async function toRecommendationCards(
 ): Promise<DesignerProjectCard[]> {
   const cards = await Promise.all(
     rows.map(async (row) => {
-      const cover = await coverImageUrl({
-        status: row.coverStatus,
-        derivatives: row.coverDerivatives,
-      }).catch(() => null);
+      const cover = await coverImageUrl(
+        {
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        },
+        'public',
+      ).catch(() => null);
       return cover ? toDesignerProjectCard(row, labels, localityLabels, cover) : null;
     }),
   );
@@ -1234,25 +1262,43 @@ async function buildPublicProjectDetail(
   const { rooms, galleryImages: rawGalleryImages, coverImages, narrative } = snapshot;
 
   const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
-  const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
-    await Promise.all([
-      designer.logoImageId
-        ? presignDownload({ key: designer.logoImageId }).catch(() => null)
-        : Promise.resolve(null),
-      projectsRepository.countPublishedByDesigner(designer.id),
-      projectsRepository.listDesignerFootprintCities(designer.id),
-      options.includeMotifs
-        ? projectsRepository.listPublishedDesignerMotifCounts(designer.id)
-        : Promise.resolve([] as PublicProjectMotifCountRecord[]),
-      projectsRepository.listPublishedRecommendationCandidates({
-        designerId: designer.id,
-        budgetBandSlug: project.budgetBandSlug,
-        citySlug: project.citySlug,
-        sourceThemeSlugs: sourceThemes,
-        excludeProjectIds: [project.id],
-        limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-      }),
-    ]);
+  const [
+    logoUrl,
+    projectCount,
+    footprintCities,
+    motifCounts,
+    recommendationCandidates,
+    googleRow,
+    portfolio,
+  ] = await Promise.all([
+    designer.logoImageId
+      ? presignDownload({ key: designer.logoImageId }).catch(() => null)
+      : Promise.resolve(null),
+    projectsRepository.countPublishedByDesigner(designer.id),
+    projectsRepository.listDesignerFootprintCities(designer.id),
+    options.includeMotifs
+      ? projectsRepository.listPublishedDesignerMotifCounts(designer.id)
+      : Promise.resolve([] as PublicProjectMotifCountRecord[]),
+    projectsRepository.listPublishedRecommendationCandidates({
+      designerId: designer.id,
+      budgetBandSlug: project.budgetBandSlug,
+      citySlug: project.citySlug,
+      sourceThemeSlugs: sourceThemes,
+      excludeProjectIds: [project.id],
+      limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
+    }),
+    googleReviewsRepository.findByProfileId(designer.id),
+    portfolioRepository.findByProfileId(designer.id),
+  ]);
+
+  const googleSummary =
+    googleRow && portfolio?.showGoogleOverallRating ? readState(googleRow).summary : null;
+  const googleRating =
+    googleSummary?.rating != null &&
+    googleSummary.userRatingsTotal != null &&
+    googleSummary.userRatingsTotal > 0
+      ? { rating: googleSummary.rating, reviewCount: googleSummary.userRatingsTotal }
+      : null;
 
   const seenRecommendationIds = new Set([project.id]);
   const takeRecommendations = (
@@ -1308,10 +1354,13 @@ async function buildPublicProjectDetail(
   if (project.coverImageId) {
     const coverImg = coverImages.get(project.coverImageId);
     if (coverImg) {
-      resolvedCoverUrl = await coverImageUrl({
-        status: coverImg.status,
-        derivatives: coverImg.derivatives,
-      }).catch(() => null);
+      resolvedCoverUrl = await coverImageUrl(
+        {
+          status: coverImg.status,
+          derivatives: coverImg.derivatives,
+        },
+        'public',
+      ).catch(() => null);
     }
   }
 
@@ -1350,6 +1399,7 @@ async function buildPublicProjectDetail(
       slug: designer.orgSlug,
       avgRating: designer.avgRating,
       reviewCount: designer.reviewCount,
+      googleRating,
       entityType: designer.entityType,
       logoUrl,
       isKycVerified: designer.isKycVerified,
@@ -1517,10 +1567,13 @@ export const projectsService = {
 
     const projects = await Promise.all(
       pageRows.map(async (row) => {
-        const cover = await coverImageUrl({
-          status: row.coverStatus,
-          derivatives: row.coverDerivatives,
-        }).catch(() => null);
+        const cover = await coverImageUrl(
+          {
+            status: row.coverStatus,
+            derivatives: row.coverDerivatives,
+          },
+          'public',
+        ).catch(() => null);
         return toFeedProject(row, labels, localityLabels, cover);
       }),
     );
@@ -2121,7 +2174,7 @@ export const projectsService = {
           derivatives: row.coverDerivatives,
         };
         const [cover, hero] = await Promise.all([
-          coverImageUrl(coverImage).catch(() => null),
+          coverImageUrl(coverImage, 'public').catch(() => null),
           heroImageUrl(coverImage).catch(() => null),
         ]);
         return toDesignerProjectCard(row, labels, localityLabels, cover, hero);
@@ -2155,10 +2208,13 @@ export const projectsService = {
 
     const projects = await Promise.all(
       rows.map(async (row) => {
-        const cover = await coverImageUrl({
-          status: row.coverStatus,
-          derivatives: row.coverDerivatives,
-        }).catch(() => null);
+        const cover = await coverImageUrl(
+          {
+            status: row.coverStatus,
+            derivatives: row.coverDerivatives,
+          },
+          'public',
+        ).catch(() => null);
         return toFeedProject(row, labels, localityLabels, cover);
       }),
     );

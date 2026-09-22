@@ -101,7 +101,7 @@ describe('search projection mapper', () => {
     });
   });
 
-  it('uses a thumb only when medium and small cover derivatives are unavailable', () => {
+  it('uses the largest available cover instead of stretching a thumb', () => {
     const source = {
       project: {
         id: 'project-1',
@@ -134,9 +134,9 @@ describe('search projection mapper', () => {
     } satisfies ProjectSearchSource;
 
     expect(mapProjectSearchDocument(source)).toMatchObject({
-      coverImageKey: 'thumb.webp',
-      coverImageWidth: 320,
-      coverImageHeight: 240,
+      coverImageKey: 'large.webp',
+      coverImageWidth: 1600,
+      coverImageHeight: 1200,
     });
   });
 

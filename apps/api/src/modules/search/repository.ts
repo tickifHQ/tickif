@@ -119,9 +119,11 @@ function pickCoverDerivativeKey(derivatives: Derivative[] | null): string | null
       (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
     )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
-    derivatives.find(
-      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
-    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
+      ?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small' && derivative.format === 'webp')
+      ?.key ??
     derivatives.find((derivative) => derivative.variant === 'small')?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
       ?.key ??
@@ -388,10 +390,7 @@ export async function recentProjectsInCity(
         slug: schema.taxonomy.slug,
       })
       .from(schema.projectRoom)
-      .innerJoin(
-        schema.taxonomy,
-        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
-      )
+      .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
       .where(
         and(inArray(schema.projectRoom.projectId, projectIds), eq(schema.projectRoom.isLive, true)),
       ),

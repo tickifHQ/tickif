@@ -18,7 +18,7 @@ test('designer onboarding and media processing connects to visitor onboarding an
   browser,
 }, testInfo) => {
   // This is one sequential journey across three independently authenticated participants.
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   await assertTestDb();
   const suffix = randomUUID().slice(0, 8);
   const owner = await makeUser({
@@ -118,9 +118,11 @@ test('designer onboarding and media processing connects to visitor onboarding an
           await designerContext.request.get(`${apiUrl}/api/projects/${project.id}/images`)
         ).json(),
       ).items;
+    // Three uploads now produce five sizes in two formats. On a shared CI runner,
+    // the real worker can finish just after the old 45-second polling deadline.
     await expect
       .poll(async () => (await readImages()).filter((image) => image.status === 'ready').length, {
-        timeout: 45_000,
+        timeout: 90_000,
         message: 'Real worker finishes all three uploaded originals and derivatives',
       })
       .toBe(3);
@@ -273,6 +275,122 @@ test('designer onboarding and media processing connects to visitor onboarding an
     await expect(visitor).toHaveURL(/\/d\//);
     const publicProfileUrl = visitor.url();
     await visitor.goto(`/projects/${project.id}`);
+    const projectGallery = visitor.getByRole('region', { name: 'Project gallery', exact: true });
+    const activeProjectImage = projectGallery.locator('[aria-live="polite"]');
+    const activeImageCenterOffset = () =>
+      projectGallery.evaluate((gallery) => {
+        const match = gallery
+          .querySelector('[aria-live="polite"]')
+          ?.textContent?.match(/Image (\d+)/);
+        const slide = gallery.querySelectorAll('[data-slot="carousel-item"]')[
+          Number(match?.[1]) - 1
+        ];
+        const viewport = gallery.querySelector('[data-slot="carousel-content"]');
+        if (!slide || !viewport) return Number.POSITIVE_INFINITY;
+        const slideRect = slide.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
+        return Math.abs(
+          (slideRect.left + slideRect.right) / 2 - (viewportRect.left + viewportRect.right) / 2,
+        );
+      });
+    await expect(activeProjectImage).toHaveText('Image 1 of 3');
+    await projectGallery.scrollIntoViewIfNeeded();
+    const galleryBounds = await projectGallery.boundingBox();
+    if (!galleryBounds) throw new Error('Published project gallery has no visible bounds');
+    await visitor.mouse.move(
+      galleryBounds.x + galleryBounds.width / 2,
+      galleryBounds.y + galleryBounds.height / 2,
+    );
+    for (let index = 0; index < 8; index += 1) {
+      await visitor.mouse.wheel(120, 0);
+    }
+    await expect(activeProjectImage).toHaveText('Image 2 of 3');
+    await expect.poll(activeImageCenterOffset).toBeLessThan(8);
+    const scrollBeforeVerticalWheel = await visitor.evaluate(() => window.scrollY);
+    await visitor.mouse.wheel(0, 550);
+    await expect
+      .poll(() => visitor.evaluate(() => window.scrollY))
+      .toBeGreaterThan(scrollBeforeVerticalWheel);
+    await expect(activeProjectImage).toHaveText('Image 2 of 3');
+    await projectGallery.scrollIntoViewIfNeeded();
+    const returnedGalleryBounds = await projectGallery.boundingBox();
+    if (!returnedGalleryBounds) throw new Error('Published project gallery left the viewport');
+    await visitor.mouse.move(
+      returnedGalleryBounds.x + returnedGalleryBounds.width / 2,
+      returnedGalleryBounds.y + returnedGalleryBounds.height / 2,
+    );
+    for (let index = 0; index < 8; index += 1) {
+      await visitor.mouse.wheel(-120, 0);
+    }
+    await expect(activeProjectImage).toHaveText('Image 1 of 3');
+    await expect.poll(activeImageCenterOffset).toBeLessThan(8);
+    await projectGallery.getByRole('button', { name: 'Next project image' }).click();
+    await expect(activeProjectImage).toHaveText('Image 2 of 3');
+    await expect.poll(activeImageCenterOffset).toBeLessThan(8);
+    await visitor.screenshot({ path: testInfo.outputPath('project-gallery-wheel-snap.png') });
+    await visitor.setViewportSize({ width: 390, height: 844 });
+    const roomGallery = visitor
+      .getByRole('region', { name: 'Living room', exact: true })
+      .locator('[data-slot="carousel"]');
+    await roomGallery.scrollIntoViewIfNeeded();
+    const roomBounds = await roomGallery.boundingBox();
+    if (!roomBounds) throw new Error('Published room gallery has no visible bounds');
+    const roomTrack = roomGallery.locator('[data-slot="carousel-content"] > div');
+    const roomPosition = () =>
+      roomTrack.evaluate((track) => new DOMMatrixReadOnly(getComputedStyle(track).transform).m41);
+    const initialRoomPosition = await roomPosition();
+    await visitor.mouse.move(
+      roomBounds.x + roomBounds.width / 2,
+      roomBounds.y + roomBounds.height / 2,
+    );
+    for (let index = 0; index < 8; index += 1) {
+      await visitor.mouse.wheel(120, 0);
+    }
+    await expect
+      .poll(async () => Math.abs((await roomPosition()) - initialRoomPosition))
+      .toBeGreaterThan(10);
+    await expect
+      .poll(async () => {
+        const position = await roomPosition();
+        await visitor.waitForTimeout(120);
+        return Math.abs((await roomPosition()) - position);
+      })
+      .toBeLessThan(1);
+    await roomGallery.screenshot({
+      path: testInfo.outputPath('room-gallery-wheel-snap-mobile.png'),
+    });
+    const firstImageHref = await projectGallery.getByRole('link').first().getAttribute('href');
+    if (!firstImageHref) throw new Error('Published project image link is missing');
+    await visitor.goto(firstImageHref);
+    const imageStrip = visitor.getByRole('group', { name: 'Project gallery' });
+    await imageStrip.scrollIntoViewIfNeeded();
+    const stripBounds = await imageStrip.boundingBox();
+    if (!stripBounds) throw new Error('Image-detail thumbnail strip has no visible bounds');
+    const initialStripPosition = await imageStrip.evaluate((strip) => strip.scrollLeft);
+    await visitor.mouse.move(
+      stripBounds.x + stripBounds.width / 2,
+      stripBounds.y + stripBounds.height / 2,
+    );
+    await visitor.mouse.wheel(205, 0);
+    await expect
+      .poll(() => imageStrip.evaluate((strip) => strip.scrollLeft))
+      .toBeGreaterThan(initialStripPosition + 100);
+    await expect
+      .poll(() =>
+        imageStrip.evaluate((strip) => {
+          const secondThumbnail = strip.querySelectorAll('button')[1];
+          if (!secondThumbnail) return Number.POSITIVE_INFINITY;
+          return Math.abs(
+            secondThumbnail.getBoundingClientRect().left -
+              strip.getBoundingClientRect().left -
+              parseFloat(getComputedStyle(strip).paddingLeft),
+          );
+        }),
+      )
+      .toBeLessThan(3);
+    await imageStrip.screenshot({ path: testInfo.outputPath('image-strip-wheel-snap-mobile.png') });
+    await visitor.goto(`/projects/${project.id}`);
+    await visitor.setViewportSize({ width: 1280, height: 720 });
     const projectActions = visitor.getByRole('complementary', { name: `Journey Studio ${suffix}` });
     await projectActions.getByRole('button', { name: 'Like project', exact: true }).click();
     await expect(

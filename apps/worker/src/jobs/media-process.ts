@@ -57,34 +57,31 @@ async function generateAndStoreDerivatives(
   image: { id: string; projectId: string },
   original: Buffer,
 ): Promise<StoredDerivative[]> {
-  const generated = [];
+  const stored: StoredDerivative[] = [];
   for await (const derivative of eachDerivative(original, { watermark: defaultWatermarkConfig })) {
-    generated.push(derivative);
+    const key = buildDerivativeKey(
+      image.projectId,
+      image.id,
+      `${derivative.variant}-${config.WATERMARK_REVISION}`,
+      derivative.format,
+    );
+    // The high-density variant can be several MB. Persist each buffer before
+    // generating the next one so a job never retains every variant at once.
+    await putObject({
+      key,
+      body: derivative.buffer,
+      contentType: derivative.contentType,
+      cacheControl: DERIVATIVE_CACHE_CONTROL,
+    });
+    stored.push({
+      variant: derivative.variant,
+      format: derivative.format,
+      key,
+      width: derivative.width,
+      height: derivative.height,
+    });
   }
-
-  return Promise.all(
-    generated.map(async (derivative) => {
-      const key = buildDerivativeKey(
-        image.projectId,
-        image.id,
-        `${derivative.variant}-${config.WATERMARK_REVISION}`,
-        derivative.format,
-      );
-      await putObject({
-        key,
-        body: derivative.buffer,
-        contentType: derivative.contentType,
-        cacheControl: DERIVATIVE_CACHE_CONTROL,
-      });
-      return {
-        variant: derivative.variant,
-        format: derivative.format,
-        key,
-        width: derivative.width,
-        height: derivative.height,
-      };
-    }),
-  );
+  return stored;
 }
 
 /**
@@ -187,8 +184,8 @@ async function processMediaWithLease(
     );
   }
 
-  // Encoded derivatives are KB-range, so upload them in parallel instead of paying
-  // the storage round-trip latency eight times serially.
+  // Generate and persist one derivative at a time to bound memory at the
+  // high-density gallery size.
   const derivatives = await generateAndStoreDerivatives(image, original);
 
   const flipped = await markReady(imageId, {

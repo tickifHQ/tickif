@@ -3,6 +3,7 @@ import { TickifBrandLogo } from '@/components/tickif-brand-logo';
 
 const links = [
   { href: '/', label: 'Browse' },
+  { href: '/blog', label: 'Blog' },
   { href: '/', label: 'About' },
   { href: '/', label: 'Privacy' },
 ];

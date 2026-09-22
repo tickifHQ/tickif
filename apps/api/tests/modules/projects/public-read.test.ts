@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { GooglePlaceCacheRecord } from '../../../src/modules/profiles/google-repository.js';
+import type { PortfolioRecord } from '../../../src/modules/profiles/portfolio-repository.js';
 import type {
   ProjectRecord,
   ProjectFeedItemRecord,
@@ -10,6 +12,13 @@ import type {
 vi.mock('@repo/storage', () => ({
   deleteObject: vi.fn(async () => undefined),
   presignDownload: vi.fn(async ({ key }: { key: string }) => `https://signed.example/${key}`),
+}));
+
+vi.mock('../../../src/modules/profiles/google-repository.js', () => ({
+  googleReviewsRepository: { findByProfileId: vi.fn() },
+}));
+vi.mock('../../../src/modules/profiles/portfolio-repository.js', () => ({
+  portfolioRepository: { findByProfileId: vi.fn() },
 }));
 
 vi.mock('../../../src/modules/projects/repository.js', () => ({
@@ -48,6 +57,12 @@ vi.mock('../../../src/modules/projects/repository.js', () => ({
 
 const { projectsService } = await import('../../../src/modules/projects/service.js');
 const { projectsRepository } = await import('../../../src/modules/projects/repository.js');
+const { googleReviewsRepository } =
+  await import('../../../src/modules/profiles/google-repository.js');
+const { portfolioRepository } =
+  await import('../../../src/modules/profiles/portfolio-repository.js');
+
+afterEach(() => vi.useRealTimers());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -78,6 +93,8 @@ beforeEach(() => {
   vi.mocked(projectsRepository.findPublicProjectLifecycleBySlug).mockResolvedValue(null);
   vi.mocked(projectsRepository.isProjectTombstonedById).mockResolvedValue(false);
   vi.mocked(projectsRepository.isProjectTombstonedBySlug).mockResolvedValue(false);
+  vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(null);
+  vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue(null);
 });
 
 // --- Factories ---
@@ -152,6 +169,75 @@ function makeRecommendationRow(
 // =============================================================================
 
 describe('projectsService.getPublicBySlug', () => {
+  it('only projects a fresh, connected, visible Google rating and count', async () => {
+    vi.useFakeTimers().setSystemTime(new Date('2026-09-22T00:00:00Z'));
+    vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue({
+      project: makeProject({ coverImageId: null }),
+      designer: {
+        id: 'designer-1',
+        status: 'active',
+        displayName: 'Studio A',
+        orgSlug: 'studio-a',
+        avgRating: '4.5',
+        reviewCount: 10,
+        entityType: 'company',
+        logoImageId: null,
+        bio: null,
+        firmType: null,
+        foundedYear: null,
+        yearsExperience: 0,
+        isKycVerified: false,
+      },
+    });
+    vi.mocked(projectsRepository.listPublicGalleryImages).mockResolvedValue([]);
+    const connectedRow = {
+      profileId: 'designer-1',
+      placeId: 'google-place',
+      status: 'connected',
+      rating: '4.7',
+      userRatingsTotal: 58,
+      reviews: [],
+      lastFetchedAt: new Date('2026-09-20T00:00:00Z'),
+      lastAttemptAt: null,
+      lastError: null,
+      createdAt: new Date('2026-09-20T00:00:00Z'),
+      updatedAt: new Date('2026-09-20T00:00:00Z'),
+    } satisfies GooglePlaceCacheRecord;
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue(connectedRow);
+    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue({
+      showGoogleOverallRating: true,
+    } as PortfolioRecord);
+
+    expect(
+      (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,
+    ).toEqual({ rating: 4.7, reviewCount: 58 });
+
+    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue({
+      showGoogleOverallRating: false,
+    } as PortfolioRecord);
+    expect(
+      (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,
+    ).toBeNull();
+
+    vi.mocked(portfolioRepository.findByProfileId).mockResolvedValue({
+      showGoogleOverallRating: true,
+    } as PortfolioRecord);
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue({
+      ...connectedRow,
+      lastFetchedAt: new Date('2026-08-01T00:00:00Z'),
+    });
+    expect(
+      (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,
+    ).toBeNull();
+    vi.mocked(googleReviewsRepository.findByProfileId).mockResolvedValue({
+      ...connectedRow,
+      status: 'pending',
+    });
+    expect(
+      (await projectsService.getPublicBySlug('modern-apartment')).designer.googleRating,
+    ).toBeNull();
+  });
+
   it('returns 404 when slug not found (unknown slug)', async () => {
     vi.mocked(projectsRepository.findPublicProjectBySlug).mockResolvedValue(null);
 
@@ -241,6 +327,13 @@ describe('projectsService.getPublicBySlug', () => {
         roomId: '22222222-2222-4222-8222-222222222222',
         derivatives: [
           { variant: 'large', format: 'webp', key: 'deriv/large.webp', width: 1200, height: 900 },
+          {
+            variant: 'xlarge',
+            format: 'webp',
+            key: 'deriv/xlarge.webp',
+            width: 2400,
+            height: 1800,
+          },
         ],
         width: 1200,
         height: 900,
@@ -310,6 +403,13 @@ describe('projectsService.getPublicBySlug', () => {
                 width: 400,
                 height: 300,
               },
+              {
+                variant: 'medium',
+                format: 'webp',
+                key: 'deriv/cover-medium.webp',
+                width: 1024,
+                height: 768,
+              },
             ],
           },
         ],
@@ -324,13 +424,13 @@ describe('projectsService.getPublicBySlug', () => {
     expect(result.rooms[0]?.name).toBe('Living Room');
     expect(result.rooms[0]?.photoCount).toBe(1);
     expect(result.images).toHaveLength(1);
-    expect(result.images[0]?.url).toContain('signed.example');
+    expect(result.images[0]?.url).toContain('deriv/xlarge.webp');
     expect(result.images[0]).toMatchObject({
       roomId: '22222222-2222-4222-8222-222222222222',
       themes: [{ slug: 'contemporary', label: 'Contemporary' }],
       tags: [{ slug: 'warm-tones', label: 'Warm Tones' }],
     });
-    expect(result.coverImageUrl).toContain('signed.example');
+    expect(result.coverImageUrl).toContain('deriv/cover-medium.webp');
     expect(result.designer.displayName).toBe('Studio A');
     expect(result.designer.slug).toBe('studio-a');
     expect(result.designer.logoUrl).toContain('signed.example');
