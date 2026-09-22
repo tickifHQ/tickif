@@ -138,6 +138,19 @@ async function readProjectSearchSource(
   };
 }
 
+/** Projects remain public independently of the portfolio link toggle/completeness. */
+export async function hasActiveDesigner(profileId: string): Promise<boolean> {
+  const [profile] = await db
+    .select({ id: schema.designerProfile.id })
+    .from(schema.designerProfile)
+    .innerJoin(schema.organization, eq(schema.designerProfile.orgId, schema.organization.id))
+    .where(
+      and(eq(schema.designerProfile.id, profileId), eq(schema.designerProfile.status, 'active')),
+    )
+    .limit(1);
+  return Boolean(profile);
+}
+
 export async function findDesignerSearchSource(
   profileId: string,
 ): Promise<DesignerSearchSource | null> {
@@ -179,6 +192,7 @@ export async function findDesignerSearchSource(
         eq(schema.designerProfile.status, 'active'),
         eq(schema.designerPortfolio.publicLinkEnabled, true),
         isNotNull(schema.designerProfile.logoImageId),
+        sql`trim(${schema.designerProfile.logoImageId}) <> ''`,
         sql`trim(${schema.designerProfile.displayName}) <> ''`,
         isNotNull(schema.designerProfile.bio),
         sql`trim(${schema.designerProfile.bio}) <> ''`,

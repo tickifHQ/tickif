@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectRoom, makeTaxonomy } from '@repo/db/testing';
-import { findDesignerSearchSource, findProjectSearchSource } from '../../src/search/repository.js';
+import {
+  findDesignerSearchSource,
+  findProjectSearchSource,
+  hasActiveDesigner,
+} from '../../src/search/repository.js';
 import { mapDesignerSearchDocument, mapProjectSearchDocument } from '../../src/search/mapper.js';
 
 async function makeDiscoverableDesigner() {
@@ -19,6 +23,38 @@ async function makeDiscoverableDesigner() {
 }
 
 describe('discovery projection source', () => {
+  it('keeps published project eligibility independent of the public portfolio link', async () => {
+    const designer = await makeDiscoverableDesigner();
+    const project = await makeProject({ designerId: designer.id, publishedAt: new Date() });
+    await db
+      .update(schema.designerPortfolio)
+      .set({ publicLinkEnabled: false })
+      .where(eq(schema.designerPortfolio.profileId, designer.id));
+
+    await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+    await expect(hasActiveDesigner(designer.id)).resolves.toBe(true);
+    await expect(findProjectSearchSource(project.id)).resolves.not.toBeNull();
+
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'suspended' })
+      .where(eq(schema.designerProfile.id, designer.id));
+    await expect(hasActiveDesigner(designer.id)).resolves.toBe(false);
+    await expect(findProjectSearchSource(project.id)).resolves.toBeNull();
+  });
+
+  it.each(['', '   '])(
+    'does not discover a designer with a blank logo (%j)',
+    async (logoImageId) => {
+      const designer = await makeDiscoverableDesigner();
+      await db
+        .update(schema.designerProfile)
+        .set({ logoImageId })
+        .where(eq(schema.designerProfile.id, designer.id));
+      await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+    },
+  );
+
   it('does not expose an active designer whose portfolio is not public', async () => {
     const designer = await makeDesigner({
       status: 'active',
