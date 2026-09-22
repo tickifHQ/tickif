@@ -45,6 +45,16 @@ const requiredEntries: [file: string, title: string][] = [
     'designer-discovery.spec.ts',
     'is reachable on mobile and contains cards and filters without horizontal overflow',
   ],
+  [
+    'designer-explore-public-ui.spec.ts',
+    'designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden',
+  ],
+  ...(['owner', 'admin', 'billing_admin', 'member', 'viewer'] as const).map(
+    (role): [string, string] => [
+      'designer-explore-public-ui.spec.ts',
+      `designer ${role} can explore via CTA while brand stays in workspace`,
+    ],
+  ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
   ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
   [
