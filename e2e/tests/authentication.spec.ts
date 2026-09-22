@@ -7,6 +7,56 @@ import { onboardDesignerResponseSchema } from '@repo/contracts';
 import { apiUrl, webUrl } from '../lib/environment';
 import { emailCode, phoneCode, removeSyntheticUserByPhone } from '../lib/auth';
 
+test('anonymous designer routes never paint protected workspace content and retain the callback', async ({
+  page,
+  context,
+}, testInfo) => {
+  await context.clearCookies();
+  await context.addCookies([
+    {
+      name: 'better-auth.session_token',
+      value: 'invalid.signature',
+      url: webUrl,
+    },
+  ]);
+
+  async function expectDesignerAuthWall(protectedPath: string) {
+    const protectedResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().resourceType() === 'document' &&
+        url.pathname === protectedPath.split('?')[0]
+      );
+    });
+    await page.goto(protectedPath);
+    expect((await protectedResponse).status()).toBe(307);
+
+    const destination = new URL(page.url());
+    expect(destination.pathname).toBe('/login');
+    expect(destination.searchParams.get('mode')).toBe('designer');
+    expect(destination.searchParams.get('callbackURL')).toBe(protectedPath);
+  }
+
+  await expectDesignerAuthWall('/designer/leads?status=new&page=2');
+  await expect(page.getByRole('navigation', { name: 'Designer navigation' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add new project' })).toHaveCount(0);
+
+  await expectDesignerAuthWall('/designer/onboarding/deferred');
+  await expect(
+    page.getByRole('heading', { name: 'Finish setting up your designer workspace' }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Login to continue' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: "I'm a designer" })).toHaveAttribute(
+    'data-state',
+    'active',
+  );
+  await page.screenshot({
+    path: testInfo.outputPath('anonymous-designer-auth-wall.png'),
+    animations: 'disabled',
+    fullPage: true,
+  });
+});
+
 test('phone OTP creates a visitor session, completes onboarding, and opens personal settings', async ({
   page,
   context,
@@ -85,7 +135,9 @@ test('visitor onboarding keeps client validation local and persists details afte
     await page.getByLabel('Display name').fill(' A');
     await page.getByRole('checkbox', { name: 'Use phone number for WhatsApp' }).check();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await expect(page.getByText('Enter a display name between 2 and 100 characters', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Enter a display name between 2 and 100 characters', { exact: true }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/onboarding$/);
 
     await page.getByLabel('Display name').fill('Reload Visitor');

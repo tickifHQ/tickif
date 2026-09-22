@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSessionCookie } from 'better-auth/cookies';
 import { api } from '@/lib/api';
+import { REQUEST_PATH_HEADER } from '@/lib/auth-paths';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers', '/blog', '/health']);
 
@@ -93,7 +94,12 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  // Replace any client-supplied value. Protected server layouts use this trusted
+  // path to retain the exact sign-in destination when a stale cookie fails the
+  // fresh session check after the optimistic proxy gate.
+  requestHeaders.set(REQUEST_PATH_HEADER, `${pathname}${req.nextUrl.search}`);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

@@ -79,6 +79,9 @@ export function TickifReviews({
       // The mutation already committed. `reload` displays the refresh failure separately.
     }
   }
+  const hasPublishedReviews = !!page && (page.reviewCount > 0 || page.items.length > 0);
+  if (!hasPublishedReviews && !own && !canWrite && !error && !saved) return null;
+
   return (
     <section
       id="tickif-reviews"

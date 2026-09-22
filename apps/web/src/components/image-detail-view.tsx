@@ -360,9 +360,9 @@ export function ImageDetailView({
                     designerProfileId={designerProfileId}
                     loginHref={`/login?callbackURL=${encodeURIComponent(`/image/${selectedImageId}`)}`}
                     variant="inverted"
-                    className="h-9 flex-[7]"
+                    className="h-10 flex-[7] hover:-translate-y-0.5 hover:shadow-lg motion-reduce:hover:translate-y-0"
                   >
-                    <MessageSquare aria-hidden />
+                    <MessageSquare aria-hidden className="size-4" />
                     Enquire
                   </EnquiryCta>
                   {/* Finding #6: don't render dead # link */}

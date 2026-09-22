@@ -119,11 +119,12 @@ describe('PublicProjectStory', () => {
     );
   });
 
-  it('renders an honest narrative empty state when no review is published', () => {
+  it('omits the narrative section when no homeowner narrative is published', () => {
     render(<PublicProjectStory project={makePublicProject({ narrative: null })} />);
 
+    expect(screen.queryByRole('heading', { name: /their words/i })).not.toBeInTheDocument();
     expect(
-      screen.getByText('No homeowner narrative has been published for this project yet.'),
+      screen.getByRole('region', { name: 'Room-by-room project gallery' }),
     ).toBeInTheDocument();
   });
 

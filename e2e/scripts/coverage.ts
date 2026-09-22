@@ -3,6 +3,10 @@ import { z } from 'zod';
 const requiredEntries: [file: string, title: string][] = [
   [
     'authentication.spec.ts',
+    'anonymous designer routes never paint protected workspace content and retain the callback',
+  ],
+  [
+    'authentication.spec.ts',
     'phone OTP creates a visitor session, completes onboarding, and opens personal settings',
   ],
   [
@@ -45,6 +49,16 @@ const requiredEntries: [file: string, title: string][] = [
     'designer-discovery.spec.ts',
     'is reachable on mobile and contains cards and filters without horizontal overflow',
   ],
+  [
+    'designer-explore-public-ui.spec.ts',
+    'designer workspace opens discovery via Explore Tickif and empty public review sections stay hidden',
+  ],
+  ...(['owner', 'admin', 'billing_admin', 'member', 'viewer'] as const).map(
+    (role): [string, string] => [
+      'designer-explore-public-ui.spec.ts',
+      `designer ${role} can explore via CTA while brand stays in workspace`,
+    ],
+  ),
   ['homepage-feed.spec.ts', 'searches from suggestions and loads the next result page'],
   ['homepage-feed.spec.ts', 'keeps a deep-linked result page in the infinite feed model'],
   [
@@ -147,6 +161,21 @@ const requiredEntries: [file: string, title: string][] = [
     'same account resumes the draft in a FRESH browser context (account-level, not browser-local)',
   ],
   ['onboarding-resume.spec.ts', 'a refresh mid-onboarding preserves progress'],
+  ['sign-in-modal.spec.ts', 'public sign-in opens over the current page and closes back to it'],
+  ['sign-in-modal.spec.ts', 'designer sign-in opens in designer mode over the current page'],
+  [
+    'sign-in-modal.spec.ts',
+    'a protected public navigation action opens sign-in over the current page',
+  ],
+  ['sign-in-modal.spec.ts', 'a direct login visit retains its standalone fallback'],
+  [
+    'sign-in-modal.spec.ts',
+    'mobile designer directory keeps its content behind the sign-in dialog',
+  ],
+  [
+    'sign-in-modal.spec.ts',
+    'phone OTP in the dialog rejects a wrong code then completes visitor sign-in',
+  ],
 ];
 
 export const requiredTests = requiredEntries.map(([file, title]) => ({ file, title }));

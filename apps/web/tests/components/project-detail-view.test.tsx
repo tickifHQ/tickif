@@ -164,11 +164,12 @@ describe('ImageDetailView', () => {
     expect(rating.closest('a, button')).toBeNull();
   });
 
-  it('renders the enquiry CTA with inverted styling and callbackURL', () => {
+  it('renders a compact enquiry icon and visible hover feedback', () => {
     renderComponent();
 
     const enquire = screen.getByRole('button', { name: /enquire/i });
-    expect(enquire).toHaveClass('h-9', 'bg-button-inverted', 'text-button-inverted-foreground');
+    expect(enquire).toHaveClass('h-10', 'bg-button-inverted', 'hover:shadow-lg');
+    expect(enquire.querySelector('svg')).toHaveClass('size-4');
   });
 
   it('displays the real project description', () => {
