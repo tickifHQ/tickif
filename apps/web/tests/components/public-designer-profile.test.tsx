@@ -211,11 +211,40 @@ describe('PublicDesignerProfile', () => {
     expect(screen.getByTestId('review-marquee-copy')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('explains the empty state instead of an empty rail when there are no reviews', () => {
-    render(<PublicDesignerProfile portfolio={makePublicPortfolio({ reviews: [] })} />);
+  it('omits ratings and client voices when neither ratings nor reviews exist', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          reviews: [],
+          stats: { ...portfolio.stats, tickif: null, google: null },
+        }}
+      />,
+    );
 
     expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
-    expect(screen.getByText('No reviews are available for Anika Spaces yet.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('omits the selected projects section when the public portfolio has no projects', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, projectCount: 0 },
+          projects: { ...portfolio.projects, projects: [], hasMore: false },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: /Selected projects/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: portfolio.displayName, level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it('keeps Google ratings visible when Tickif has no published reviews', () => {
@@ -441,16 +470,20 @@ describe('PublicDesignerProfile', () => {
     expect(within(screen.getByTestId('visible-projects')).getAllByRole('article')).toHaveLength(6);
   });
 
-  it('tells visitors when a designer has published nothing yet', () => {
+  it('does not show an empty project gallery to visitors', () => {
+    const portfolio = makePublicPortfolio();
     render(
       <PublicDesignerProfile
-        portfolio={makePublicPortfolio({
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, projectCount: 0 },
           projects: { projects: [], page: 1, limit: 30, hasMore: false },
-        })}
+        }}
       />,
     );
 
-    expect(screen.getByText(/no published projects yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Selected projects/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no published projects yet/i)).not.toBeInTheDocument();
   });
 });
 

@@ -82,7 +82,9 @@ test.describe('public designer discovery', () => {
     page,
   }) => {
     await page.goto(`/designers?q=${term}&sort=yearsExperience%3Adesc`);
-    await expect(page.getByRole('heading', { name: 'Find your designer' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Find Designers in Your Location' }),
+    ).toBeVisible();
     await expect(page.getByRole('article')).toHaveCount(24);
     const next = page.getByRole('link', { name: 'Next page' });
     await next.focus();

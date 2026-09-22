@@ -9,11 +9,13 @@ export function ActionLoginDialog({
   onOpenChange,
   loginHref,
   title = 'Sign in to continue',
+  initialMode = 'browsing',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loginHref: string;
   title?: string;
+  initialMode?: 'browsing' | 'designer';
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -25,6 +27,7 @@ export function ActionLoginDialog({
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <LoginCard
+          initialMode={initialMode}
           callbackPath={callbackPathFromLoginHref(loginHref)}
           onClose={() => onOpenChange(false)}
         />

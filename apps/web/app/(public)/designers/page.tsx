@@ -43,7 +43,9 @@ export default async function DesignersPage({ searchParams }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 py-8 sm:px-6">
       <div>
-        <h1 className="font-display text-3xl font-medium tracking-tight">Find your designer</h1>
+        <h1 className="font-display text-3xl font-medium tracking-tight">
+          Find Designers in Your Location
+        </h1>
         <p className="mt-2 text-muted-foreground">
           Discover designers and studios for your next space.
         </p>

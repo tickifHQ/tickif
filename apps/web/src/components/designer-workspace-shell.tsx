@@ -15,6 +15,7 @@ import {
   ChartLine,
   CalendarDays,
   CreditCard,
+  ExternalLink,
   FileUser,
   Building2,
   Layers,
@@ -156,6 +157,8 @@ function SidebarSection({
   items: NavItem[];
   pathname: string;
 }) {
+  if (items.length === 0) return null;
+
   return (
     <section className="space-y-2">
       <div className="text-xs leading-none font-normal text-muted-foreground uppercase">
@@ -221,7 +224,7 @@ function SidebarContent({
     <>
       <div className="px-6 py-5">
         <Link
-          href="/"
+          href="/designer/dashboard"
           className="inline-flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-foreground"
         >
           <Image src="/icon.svg" alt="" width={20} height={20} className="size-5" aria-hidden />
@@ -255,6 +258,16 @@ function SidebarContent({
             >
               <MessageSquareMore className="size-4" />
               <span>Contact support</span>
+            </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <Image src="/icon.svg" alt="" width={14} height={14} className="size-3.5" />
+              </span>
+              <span>Explore Tickif</span>
+              <ExternalLink className="ml-auto size-4 shrink-0" aria-hidden="true" />
             </Link>
           </div>
 

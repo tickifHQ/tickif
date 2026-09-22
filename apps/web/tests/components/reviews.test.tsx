@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ParticipantReview, PublishedReviewsResponse } from '@repo/contracts';
 import { ReviewEditor } from '../../src/components/review-editor';
@@ -112,7 +112,12 @@ describe('Tickif review display', () => {
     render(
       <TickifReviews
         designerProfileId={profileId}
-        initialPage={page}
+        initialPage={{
+          ...page,
+          reviewCount: 1,
+          totalPages: 1,
+          items: [{ ...own.review, publishedAt: own.review.createdAt }],
+        }}
         initialOwn={null}
         canWrite={false}
         loginHref="/login?callbackURL=%2Fd%2Fstudio"
@@ -121,6 +126,38 @@ describe('Tickif review display', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign in to write a review' }));
     expect(screen.getByRole('dialog', { name: 'Sign in to continue' })).toBeInTheDocument();
+  });
+  it('hides empty public reviews without hiding eligible review actions or load errors', () => {
+    const empty = render(
+      <TickifReviews
+        designerProfileId={profileId}
+        initialPage={page}
+        initialOwn={null}
+        canWrite={false}
+        loginHref="/login"
+      />,
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Tickif community reviews' }),
+    ).not.toBeInTheDocument();
+    empty.unmount();
+
+    const writable = render(
+      <TickifReviews designerProfileId={profileId} initialPage={page} initialOwn={null} canWrite />,
+    );
+    expect(screen.getByRole('button', { name: 'Submit review' })).toBeInTheDocument();
+    writable.unmount();
+
+    render(
+      <TickifReviews
+        designerProfileId={profileId}
+        initialPage={null}
+        initialOwn={null}
+        canWrite={false}
+        initialError="Could not load reviews."
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load reviews.');
   });
   it('shows private pending state and respects the server edit cutoff', () => {
     const view = render(
@@ -169,7 +206,12 @@ describe('Tickif review display', () => {
     render(
       <TickifReviews
         designerProfileId={profileId}
-        initialPage={page}
+        initialPage={{
+          ...page,
+          reviewCount: 1,
+          totalPages: 1,
+          items: [{ ...own.review, publishedAt: own.review.createdAt }],
+        }}
         initialOwn={null}
         canWrite={false}
         viewerMessage="A verified phone number is required."
@@ -211,10 +253,12 @@ describe('Tickif review display', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Next reviews' }));
 
-    expect(await screen.findByText('Page 1 of 1')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain('reviewsPage=1'));
+    expect(
+      screen.queryByRole('heading', { name: 'Tickif community reviews' }),
+    ).not.toBeInTheDocument();
     expect(mock.fetchTickifReviews).toHaveBeenNthCalledWith(1, profileId, 3);
     expect(mock.fetchTickifReviews).toHaveBeenNthCalledWith(2, profileId, 1);
-    expect(window.location.search).toContain('reviewsPage=1');
   });
 });
 
