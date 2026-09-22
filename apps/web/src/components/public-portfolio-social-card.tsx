@@ -12,7 +12,11 @@ function safeAccentColor(value: string): string {
 }
 
 function ratingLabel(portfolio: PublicPortfolioResponse): string | null {
-  const source = portfolio.stats.google ?? portfolio.stats.tickif;
+  if (!portfolio.sections.overallRating) return null;
+  const source =
+    portfolio.stats.google && portfolio.stats.google.reviewCount > 0
+      ? portfolio.stats.google
+      : portfolio.stats.tickif;
   if (!source || source.reviewCount < 1) return null;
   return `${source.rating.toFixed(1)} rating · ${source.reviewCount} review${source.reviewCount === 1 ? '' : 's'}`;
 }
@@ -152,7 +156,9 @@ export function PublicPortfolioSocialCard({ portfolio }: { portfolio: PublicPort
             <span>{rating}</span>
           </div>
         ) : null}
-        {portfolio.isKycVerified ? <div style={{ display: 'flex' }}>Verified on Tickif</div> : null}
+        {portfolio.sections.tickifBadge && portfolio.isKycVerified ? (
+          <div style={{ display: 'flex' }}>Verified on Tickif</div>
+        ) : null}
       </div>
     </div>
   );

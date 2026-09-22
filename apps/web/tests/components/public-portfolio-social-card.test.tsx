@@ -4,6 +4,38 @@ import { PublicPortfolioSocialCard } from '@/components/public-portfolio-social-
 import { makePublicPortfolio } from '../fixtures/public-portfolio';
 
 describe('PublicPortfolioSocialCard', () => {
+  it('respects hidden overall rating and verification sections in shared previews', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={{
+          ...portfolio,
+          sections: { ...portfolio.sections, overallRating: false, tickifBadge: false },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/rating ·/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Verified on Tickif')).not.toBeInTheDocument();
+  });
+
+  it('falls back to Tickif reviews when Google has no reviews', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicPortfolioSocialCard
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, google: { rating: 0, reviewCount: 0 } },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('4.7 rating · 42 reviews')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tickif rating' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Google' })).not.toBeInTheDocument();
+  });
+
   it('shows uploaded studio identity beside the name and attributes the Google rating', () => {
     render(
       <PublicPortfolioSocialCard
