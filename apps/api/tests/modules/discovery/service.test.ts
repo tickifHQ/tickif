@@ -15,6 +15,8 @@ const emptyVocabulary = {
   budgetBandSlug: [] as string[],
   roomSlugs: [] as string[],
   themes: [] as string[],
+  materials: [] as string[],
+  tags: [] as string[],
 };
 
 vi.mock('../../../src/modules/discovery/repository.js', () => ({

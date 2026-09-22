@@ -119,6 +119,7 @@ function extractProjectFilters(
     materials: query.materials,
     finishes: query.finishes,
     roomSlugs: query.roomSlugs,
+    tags: query.tags,
   };
 }
 
@@ -478,7 +479,10 @@ export async function suggest(
   const startTime = Date.now();
 
   // Execute multi-search
-  const result = await repository.multiSearch(query.q);
+  const [result, filters] = await Promise.all([
+    repository.multiSearch(query.q),
+    repository.findFilterSuggestions(query.q),
+  ]);
 
   // Map results
   const [projects, designers] = await Promise.all([
@@ -495,7 +499,7 @@ export async function suggest(
     sort: 'relevance',
     page: 1,
     limit: 8, // 5 projects + 3 designers
-    resultCount: projects.length + designers.length,
+    resultCount: projects.length + designers.length + filters.length,
     processingTimeMs: Date.now() - startTime,
     fallback: 'none',
     relaxedFilters: [],
@@ -505,6 +509,7 @@ export async function suggest(
   return {
     projects,
     designers,
+    filters,
     processingTimeMs: result.processingTimeMs,
   };
 }

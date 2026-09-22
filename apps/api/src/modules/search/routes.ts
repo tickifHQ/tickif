@@ -63,11 +63,11 @@ const searchSuggestRoute = createRoute({
   method: 'get',
   path: '/suggest',
   tags: ['Search'],
-  summary: 'Blended suggest (autocomplete) for projects and designers',
+  summary: 'Blended suggest for projects, designers, and discovery filters',
   request: { query: searchSuggestQuerySchema },
   responses: {
     200: {
-      description: 'Blended suggest results with projects and designers',
+      description: 'Blended suggest results with projects, designers, and discovery filters',
       content: { 'application/json': { schema: searchSuggestResponseSchema } },
     },
     422: errorJson('Validation error'),

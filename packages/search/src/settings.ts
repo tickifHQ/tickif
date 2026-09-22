@@ -65,7 +65,7 @@ const PROJECT_COLLECTION_FIELDS = [
   { name: 'finishes', type: 'string[]', facet: true },
   { name: 'roomSlugs', type: 'string[]', facet: true },
   { name: 'roomLabels', type: 'string[]' },
-  { name: 'tags', type: 'string[]' },
+  { name: 'tags', type: 'string[]', facet: true },
   { name: 'coverImageKey', type: 'string', index: false, optional: true },
   { name: 'coverImageId', type: 'string', index: false, optional: true },
   { name: 'coverImageWidth', type: 'int32', index: false, optional: true },

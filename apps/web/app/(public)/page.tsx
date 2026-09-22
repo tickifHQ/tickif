@@ -10,6 +10,7 @@ import {
 } from '@repo/contracts';
 import { api } from '@/lib/api';
 import { HomeHero, type HomeShortcut } from '@/components/home-hero';
+import { HomeSearchBar } from '@/components/home-search-bar';
 import { TrustStrip } from '@/components/trust-strip';
 import { FeedFilters, type FeedFacetOptions } from '@/components/feed-filters';
 import { ProjectFeed } from '@/components/project-feed';
@@ -49,6 +50,7 @@ const RECENT_FEED_SECTION_ID = 'recent-projects-feed';
 async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   const entries = await Promise.all(
     FEED_FACET_DEFINITIONS.map(async (facet) => {
+      if (facet.kind === null) return [facet.key, []] as const;
       try {
         const response = await api.api.taxonomy.terms.$get(
           { query: { kind: facet.kind } },
@@ -167,11 +169,21 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
     featuredPagePromise,
   ]);
   const labelMaps = searchLabelMaps(taxonomyOptions);
+  const displayFacetOptions: FeedFacetOptions = {
+    ...taxonomyOptions,
+    tag: Object.keys(initialPage.facetDistribution.tags ?? {}).map((slug) => ({
+      slug,
+      label: slug
+        .split('-')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+    })),
+  };
   const request: HomeFeedRequest = {
     ...baseRequest,
     ...labelMaps,
   };
-  const filterSuggestions = feedFilterSuggestions(taxonomyOptions, params, {
+  const filterSuggestions = feedFilterSuggestions(displayFacetOptions, params, {
     facetDistribution: initialPage.facetDistribution,
   });
   const paginationParams = canonicalFeedParams(params, 1);
@@ -184,7 +196,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       {previousHref ? <link rel="prev" href={previousHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
       <TrustStrip />
-      <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} initialQuery={query} />
+      {isDefaultFeed ? <HomeHero shortcuts={homeShortcuts(taxonomyOptions)} /> : null}
 
       <div className="bg-home-hero-gradient-to">
         {isDefaultFeed ? (
@@ -213,7 +225,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
               <div className="mt-4">
                 <FeedFilters
-                  options={taxonomyOptions}
+                  options={displayFacetOptions}
                   facetDistribution={initialPage.facetDistribution}
                 />
               </div>
@@ -253,6 +265,9 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
           </>
         ) : (
           <section className="w-full px-5 py-6 sm:px-6" aria-labelledby="project-results">
+            <div className="mb-5 max-w-3xl">
+              <HomeSearchBar initialQuery={query} />
+            </div>
             <div>
               <h2 id="project-results" className="font-display text-3xl font-medium tracking-tight">
                 {query ? `Results for “${query}”` : 'Projects'}
@@ -266,7 +281,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
 
             <div className="mt-4">
               <FeedFilters
-                options={taxonomyOptions}
+                options={displayFacetOptions}
                 facetDistribution={initialPage.facetDistribution}
               />
             </div>

@@ -64,6 +64,11 @@ Changes to immutable collection settings require a new versioned collection,
 reindexing, and an alias swap. Bootstrap reports this as a rebuild requirement
 instead of sending an unsupported collection update.
 
+The project `tags` field is a discovery facet. Releases from before selectable
+tag filters must apply the schema update and reindex before tag filtering is
+enabled. Readers retry without the tag facet during that rollout, so existing
+project and designer search remains available while the index catches up.
+
 ### New fields need a backfill, not just a bootstrap
 
 `--apply-updates` adds a new **field** to the collection schema; it does not
