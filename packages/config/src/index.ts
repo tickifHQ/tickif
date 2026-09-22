@@ -243,7 +243,8 @@ const envSchema = z.object({
   // Bounds stay [0, 1] so envs configured under the pre-revision schema (e.g. 0.6)
   // still boot; 0.65 keeps the single small mark legible without dominating the image.
   WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.65),
-  WATERMARK_SCALE: z.coerce.number().min(0.04).max(0.2).default(0.08),
+  // Preserve the previously supported upper bound so existing environments still boot.
+  WATERMARK_SCALE: z.coerce.number().min(0.04).max(0.3).default(0.08),
   WATERMARK_REVISION: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
