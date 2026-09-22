@@ -3,6 +3,10 @@ import { z } from 'zod';
 const requiredEntries: [file: string, title: string][] = [
   [
     'authentication.spec.ts',
+    'anonymous designer routes never paint protected workspace content and retain the callback',
+  ],
+  [
+    'authentication.spec.ts',
     'phone OTP creates a visitor session, completes onboarding, and opens personal settings',
   ],
   [

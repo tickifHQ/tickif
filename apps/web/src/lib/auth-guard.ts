@@ -10,7 +10,12 @@ import {
 } from '@repo/contracts';
 import type { ActiveContext } from '@repo/contracts';
 import { env } from '@/env';
-import { DESIGNER_ONBOARDING_DEFERRED_PATH } from '@/lib/auth-paths';
+import {
+  DESIGNER_ONBOARDING_DEFERRED_PATH,
+  REQUEST_PATH_HEADER,
+  designerLoginPath,
+  safeCallbackPath,
+} from '@/lib/auth-paths';
 
 export type RequiredPlatformRole = Exclude<PlatformRole, typeof PLATFORM_ROLE.VISITOR>;
 
@@ -130,6 +135,10 @@ export async function requireAuth(options?: {
   const session = await getServerSession({ disableCookieCache: true });
 
   if (!session) {
+    const callbackPath = safeCallbackPath((await headers()).get(REQUEST_PATH_HEADER));
+    if (callbackPath === '/designer' || callbackPath?.startsWith('/designer/')) {
+      redirect(designerLoginPath(callbackPath));
+    }
     redirect('/login');
   }
 
