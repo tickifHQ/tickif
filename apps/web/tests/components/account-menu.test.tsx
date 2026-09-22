@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AccountMenu } from '../../src/components/account-menu';
@@ -10,10 +10,6 @@ const mock = vi.hoisted(() => ({
     session?: { activeOrganizationId?: string | null };
   } | null,
   isPending: false,
-  router: {
-    refresh: vi.fn(),
-    replace: vi.fn(),
-  },
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -21,10 +17,6 @@ vi.mock('@/lib/auth-client', () => ({
     useSession: () => ({ data: mock.session, isPending: mock.isPending }),
     signOut: mock.signOut,
   },
-}));
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => mock.router,
 }));
 
 describe('AccountMenu', () => {
@@ -93,8 +85,10 @@ describe('AccountMenu', () => {
     mock.session = null;
     mock.isPending = false;
     mock.signOut.mockReset();
-    mock.router.refresh.mockReset();
-    mock.router.replace.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders a skeleton when session is loading', () => {
@@ -152,6 +146,7 @@ describe('AccountMenu', () => {
   });
 
   it('calls signOut on sign-out click', async () => {
+    const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
     mock.session = {
       user: { name: 'Alice', email: null },
       session: { activeOrganizationId: null },
@@ -163,8 +158,7 @@ describe('AccountMenu', () => {
     expect(signOut.querySelector('svg')).toHaveClass('lucide-log-out');
     await user.click(signOut);
     expect(mock.signOut).toHaveBeenCalledTimes(1);
-    expect(mock.router.replace).toHaveBeenCalledWith('/login');
-    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/login');
   });
 
   it('places the designer profile link immediately before sign out and closes on selection', async () => {
@@ -224,6 +218,7 @@ describe('AccountMenu', () => {
   );
 
   it('still redirects to login even when signOut rejects', async () => {
+    const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => undefined);
     mock.session = {
       user: { name: 'Alice', email: null },
       session: { activeOrganizationId: null },
@@ -233,8 +228,7 @@ describe('AccountMenu', () => {
     render(<AccountMenu />);
     await user.click(screen.getByRole('button', { name: /open account menu for alice/i }));
     await user.click(screen.getByText('Sign out'));
-    expect(mock.router.replace).toHaveBeenCalledWith('/login');
-    expect(mock.router.refresh).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/login');
   });
 
   it('never renders a blank account label when the user name is missing', async () => {

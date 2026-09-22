@@ -143,9 +143,7 @@ export default async function HomePage({ searchParams = Promise.resolve({}) }: H
       // Deferred designer signups are pending visitors until studio creation.
       // Let them explore here without activating a visitor account.
     } else if (parsedRole.data === PLATFORM_ROLE.DESIGNER) {
-      redirect(
-        session.session.activeOrganizationId ? '/designer/dashboard' : '/designer/select-studio',
-      );
+      if (!session.session.activeOrganizationId) redirect('/designer/select-studio');
     } else {
       redirect('/dashboard');
     }

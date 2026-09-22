@@ -158,6 +158,22 @@ describe('getServerSession', () => {
     expect(mock.redirect).toHaveBeenCalledWith('/login');
   });
 
+  it('preserves the designer return path when a stale cookie resolves to no session', async () => {
+    mock.headers.mockResolvedValue({
+      get: vi.fn((name: string) => {
+        if (name === 'cookie') return 'better-auth.session_token=stale';
+        if (name === 'x-tickif-request-path') return '/designer/leads?status=new&page=2';
+        return null;
+      }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+    await expect(requireAuth()).rejects.toThrow('NEXT_REDIRECT');
+    expect(mock.redirect).toHaveBeenCalledWith(
+      '/login?mode=designer&callbackURL=%2Fdesigner%2Fleads%3Fstatus%3Dnew%26page%3D2',
+    );
+  });
+
   it('redirects to /unauthorized when role is insufficient', async () => {
     await expect(requireAuth({ requiredRole: 'superadmin' })).rejects.toThrow('NEXT_REDIRECT');
     expect(mock.redirect).toHaveBeenCalledWith('/unauthorized');

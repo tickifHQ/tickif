@@ -11,12 +11,16 @@ import { env } from '@/env';
  * Every 400px of cumulative downward scroll = 1 scroll-unit.
  * Upward scroll does NOT decrement the counter.
  * Once the limit is reached, the gate opens a dismissible sign-in dialog.
+ * Dismissing it pauses the gate for five minutes in the current tab; afterward,
+ * another full scroll threshold is required before it can open again.
  *
  * This component does NOT render on the server (hydration-safe).
  * The parent layout decides whether to mount it based on auth state.
  */
 
 const SCROLL_UNIT_PX = 400;
+const DISMISS_COOLDOWN_MS = 5 * 60_000;
+const DISMISSED_UNTIL_KEY = 'tickif:scroll-gate-dismissed-until:v1';
 
 export function ScrollGate() {
   const [gated, setGated] = useState(false);
@@ -24,10 +28,20 @@ export function ScrollGate() {
   const cumulativeRef = useRef(0);
   const lastScrollYRef = useRef(0);
   const unitsRef = useRef(0);
+  const dismissedUntilRef = useRef(0);
 
   useEffect(() => {
     setMounted(true);
     lastScrollYRef.current = window.scrollY;
+    try {
+      const storedUntil = Number(window.sessionStorage.getItem(DISMISSED_UNTIL_KEY));
+      const now = Date.now();
+      if (Number.isFinite(storedUntil) && storedUntil > now) {
+        dismissedUntilRef.current = Math.min(storedUntil, now + DISMISS_COOLDOWN_MS);
+      }
+    } catch {
+      // Storage can be unavailable; the in-memory cooldown still works.
+    }
 
     const limit = env.NEXT_PUBLIC_SCROLL_GATE_LIMIT;
     // 0 = gate disabled
@@ -37,6 +51,7 @@ export function ScrollGate() {
       const currentY = window.scrollY;
       const delta = currentY - lastScrollYRef.current;
       lastScrollYRef.current = currentY;
+      if (Date.now() < dismissedUntilRef.current) return;
 
       // Only accumulate downward scroll
       if (delta > 0) {
@@ -56,6 +71,25 @@ export function ScrollGate() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  function handleOpenChange(open: boolean) {
+    if (open) {
+      setGated(true);
+      return;
+    }
+
+    const dismissedUntil = Date.now() + DISMISS_COOLDOWN_MS;
+    dismissedUntilRef.current = dismissedUntil;
+    cumulativeRef.current = 0;
+    unitsRef.current = 0;
+    lastScrollYRef.current = window.scrollY;
+    try {
+      window.sessionStorage.setItem(DISMISSED_UNTIL_KEY, String(dismissedUntil));
+    } catch {
+      // Keep the in-memory cooldown when storage is unavailable.
+    }
+    setGated(false);
+  }
+
   // Never render on the server
   if (!mounted) return null;
   if (!gated) return null;
@@ -63,7 +97,7 @@ export function ScrollGate() {
   return (
     <ActionLoginDialog
       open={gated}
-      onOpenChange={setGated}
+      onOpenChange={handleOpenChange}
       loginHref="/login"
       title="Sign in required"
     />

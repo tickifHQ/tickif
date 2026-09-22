@@ -117,6 +117,9 @@ const REQUIRED_FIELD_LABELS: Record<RequiredPortfolioField, string> = {
   bio: 'a bio',
 };
 
+const socialInputWrapperClassName =
+  'flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm transition-[box-shadow] focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2';
+
 type TestimonialProjectOption = {
   label: string;
   value: string;
@@ -1395,7 +1398,7 @@ export function DesignerPortfolioSettings() {
                       <Label className="text-sm font-medium text-muted-foreground">
                         Social links
                       </Label>
-                      <div className="flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm">
+                      <div className={socialInputWrapperClassName}>
                         <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
                           <InstagramBrandIcon className="size-4" />
                         </span>
@@ -1403,10 +1406,10 @@ export function DesignerPortfolioSettings() {
                           value={form.instagramHandle}
                           onChange={(e) => updateField('instagramHandle', e.target.value)}
                           placeholder="Instagram handle"
-                          className="border-0 shadow-none focus-visible:ring-0"
+                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
-                      <div className="flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm">
+                      <div className={socialInputWrapperClassName}>
                         <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
                           <LinkedInBrandIcon className="size-4" />
                         </span>
@@ -1414,10 +1417,10 @@ export function DesignerPortfolioSettings() {
                           value={form.linkedinHandle}
                           onChange={(e) => updateField('linkedinHandle', e.target.value)}
                           placeholder="Linkedin handle..."
-                          className="border-0 shadow-none focus-visible:ring-0"
+                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
-                      <div className="flex items-center gap-0 overflow-hidden rounded-md border border-border shadow-sm">
+                      <div className={socialInputWrapperClassName}>
                         <span className="flex h-9 w-10 shrink-0 items-center justify-center border-r border-border bg-background">
                           <YouTubeBrandIcon className="size-4" />
                         </span>
@@ -1425,7 +1428,7 @@ export function DesignerPortfolioSettings() {
                           value={form.youtubeHandle}
                           onChange={(e) => updateField('youtubeHandle', e.target.value)}
                           placeholder="YouTube handle..."
-                          className="border-0 shadow-none focus-visible:ring-0"
+                          className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
                     </div>

@@ -154,10 +154,10 @@ export function LoginCard({
     }
     // Otherwise continue through the server-rendered login page so it resolves
     // the fresh Better Auth session and owns the platform-role redirect.
-    router.replace(
-      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH,
-    );
-  }, [success, loginMode, router, callbackPath, onSuccess]);
+    const continuePath =
+      loginMode === 'designer' ? DESIGNER_AUTH_CONTINUE_PATH : VISITOR_AUTH_CONTINUE_PATH;
+    window.location.href = continuePath;
+  }, [success, loginMode, callbackPath, onSuccess]);
 
   // Phone OTP cooldown
   useEffect(() => {
@@ -489,9 +489,6 @@ export function LoginCard({
                           onEnter={handleSendOtp}
                           placeholder="9123456789"
                           disabled={loading}
-                          wrapperClassName="items-stretch overflow-hidden rounded-md border border-input bg-background shadow-xs transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset"
-                          countryButtonClassName="rounded-none border-0 py-0"
-                          inputClassName="h-10 min-w-0 flex-1 rounded-none border-0 border-l border-input bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
 
