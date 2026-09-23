@@ -6,9 +6,9 @@ const ZERO_RESULT_QUERY_CORRECTIONS: Readonly<Record<string, string>> = {
   bad: 'bed',
 };
 
-/** Three sort keys: relevance, rating, then currently paid coverage. */
+/** Relevance and rating take precedence over the active paid tier. */
 export function discoveryRanking(now = Date.now(), ratingFirst = false): string {
-  const paid = `_eval(paidUntil:>${now}):desc`;
+  const paid = `_eval([(rankingTier:=2 && paidUntil:>${now}):2, (rankingTier:=1 && paidUntil:>${now}):1]):desc`;
   return ratingFirst
     ? `avgRating:desc,${paid},_text_match:desc`
     : `_text_match:desc,avgRating:desc,${paid}`;
@@ -17,7 +17,7 @@ export function discoveryRanking(now = Date.now(), ratingFirst = false): string 
 function missingDiscoveryField(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return (
-    /Could not find.*(?:paidUntil|portfolioTerms|tags)/i.test(error.message) ||
+    /Could not find.*(?:rankingTier|paidUntil|portfolioTerms|tags)/i.test(error.message) ||
     /400.*Error parsing eval expression in sort_by clause/.test(error.message)
   );
 }
