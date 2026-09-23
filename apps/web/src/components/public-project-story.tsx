@@ -20,6 +20,7 @@ import { TickifBrandIcon } from '@/components/brand-icons';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectRoomNavigation } from '@/components/project-room-navigation';
 import { ProtectedPublicImage } from '@/components/protected-public-image';
+import { PublicGoogleRating } from '@/components/public-google-rating';
 import { feedPageHref } from '@/lib/feed-params';
 
 function initials(value: string): string {
@@ -109,7 +110,11 @@ function RoomSections({ project }: { project: PublicProjectDetailResponse }) {
                 </p>
               </header>
 
-              <Carousel opts={{ align: 'start', loop: false }} className="mt-3">
+              <Carousel
+                opts={{ align: 'start', loop: false }}
+                wheelGestures={images.length > 1}
+                className="mt-3"
+              >
                 <CarouselContent className="pb-2">
                   {images.map((image) => (
                     <CarouselItem key={image.id} className="basis-auto">
@@ -227,6 +232,7 @@ function NarrativeDesignerCard({ project }: { project: PublicProjectDetailRespon
               </span>
             </p>
           ) : null}
+          {designer.googleRating ? <PublicGoogleRating {...designer.googleRating} /> : null}
         </div>
 
         <EnquiryCta

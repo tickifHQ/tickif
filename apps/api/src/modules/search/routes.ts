@@ -9,6 +9,7 @@ import {
   errorResponseSchema,
 } from '@repo/contracts';
 import { validationHook } from '../../lib/validation.js';
+import type { AuthVariables } from '../../lib/auth-middleware.js';
 import * as searchService from './service.js';
 
 /**
@@ -62,11 +63,11 @@ const searchSuggestRoute = createRoute({
   method: 'get',
   path: '/suggest',
   tags: ['Search'],
-  summary: 'Blended suggest (autocomplete) for projects and designers',
+  summary: 'Blended suggest for projects, designers, and discovery filters',
   request: { query: searchSuggestQuerySchema },
   responses: {
     200: {
-      description: 'Blended suggest results with projects and designers',
+      description: 'Blended suggest results with projects, designers, and discovery filters',
       content: { 'application/json': { schema: searchSuggestResponseSchema } },
     },
     422: errorJson('Validation error'),
@@ -77,10 +78,17 @@ const searchSuggestRoute = createRoute({
 // OpenAPIHono App + Route Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook })
+export const searchRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
+  defaultHook: validationHook,
+})
   .openapi(searchProjectsRoute, async (c) => {
     const query = c.req.valid('query');
     const result = await searchService.searchProjects(query);
+    await searchService.recordSearchActivity({
+      actorUserId: c.get('user')?.id ?? null,
+      endpoint: 'projects',
+      query: query.q,
+    });
 
     c.header('Cache-Control', CACHE_HEADER);
 
@@ -89,6 +97,11 @@ export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook })
   .openapi(searchDesignersRoute, async (c) => {
     const query = c.req.valid('query');
     const result = await searchService.searchDesigners(query);
+    await searchService.recordSearchActivity({
+      actorUserId: c.get('user')?.id ?? null,
+      endpoint: 'designers',
+      query: query.q,
+    });
 
     c.header('Cache-Control', CACHE_HEADER);
 

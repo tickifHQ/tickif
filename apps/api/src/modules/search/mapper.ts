@@ -34,6 +34,7 @@ export async function mapProjectHit(doc: ProjectSearchDocument): Promise<Project
     designerSlug: doc.designerSlug ?? null,
     designerName: doc.designerName,
     citySlug: doc.citySlug ?? null,
+    cityName: doc.cityName ?? null,
     localitySlug: doc.localitySlug ?? null,
     propertyTypeSlug: doc.propertyTypeSlug ?? null,
     propertySubtypeSlug: doc.propertySubtypeSlug ?? null,
@@ -68,6 +69,7 @@ export async function mapRecentProject(project: RecentProject): Promise<ProjectH
     designerSlug: project.designerSlug,
     designerName: project.designerName,
     citySlug: project.citySlug,
+    cityName: project.cityName,
     localitySlug: project.localitySlug,
     propertyTypeSlug: project.propertyTypeSlug,
     propertySubtypeSlug: project.propertySubtypeSlug,
@@ -99,6 +101,7 @@ export async function mapSuggestProject(doc: ProjectSearchDocument): Promise<Sug
     title: doc.title,
     designerName: doc.designerName,
     citySlug: doc.citySlug ?? null,
+    cityName: doc.cityName ?? null,
     coverImageUrl,
   };
 }

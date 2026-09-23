@@ -11,6 +11,8 @@ export const FEED_FILTER_KEYS = [
   'budgetBand',
   'room',
   'theme',
+  'material',
+  'tag',
 ] as const;
 
 export type FeedFilterKey = (typeof FEED_FILTER_KEYS)[number];
@@ -24,15 +26,24 @@ export type FeedFacetKey =
   | 'scopeSlug'
   | 'budgetBandSlug'
   | 'roomSlugs'
-  | 'themes';
+  | 'themes'
+  | 'materials'
+  | 'tags';
 
 type FeedTaxonomyKind =
-  'city' | 'bhk' | 'property_type' | 'scope' | 'budget_band' | 'room' | 'theme';
+  | 'city'
+  | 'bhk'
+  | 'property_type'
+  | 'scope'
+  | 'budget_band'
+  | 'room'
+  | 'theme'
+  | 'material';
 
 export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   key: FeedFilterKey;
   apiKey: FeedFacetKey;
-  kind: FeedTaxonomyKind;
+  kind: FeedTaxonomyKind | null;
   label: string;
 }> = [
   { key: 'city', apiKey: 'citySlug', kind: 'city', label: 'City' },
@@ -45,8 +56,10 @@ export const FEED_FACET_DEFINITIONS: ReadonlyArray<{
   },
   { key: 'scope', apiKey: 'scopeSlug', kind: 'scope', label: 'Scope' },
   { key: 'budgetBand', apiKey: 'budgetBandSlug', kind: 'budget_band', label: 'Budget' },
-  { key: 'room', apiKey: 'roomSlugs', kind: 'room', label: 'Room' },
-  { key: 'theme', apiKey: 'themes', kind: 'theme', label: 'Theme' },
+  { key: 'room', apiKey: 'roomSlugs', kind: 'room', label: 'Space' },
+  { key: 'theme', apiKey: 'themes', kind: 'theme', label: 'Style' },
+  { key: 'material', apiKey: 'materials', kind: 'material', label: 'Material' },
+  { key: 'tag', apiKey: 'tags', kind: null, label: 'Tag' },
 ];
 
 const FEED_FILTER_KEY_SET = new Set<string>(FEED_FILTER_KEYS);
@@ -61,6 +74,8 @@ function emptyState(): FeedFilterState {
     budgetBand: [],
     room: [],
     theme: [],
+    material: [],
+    tag: [],
   };
 }
 
@@ -124,7 +139,7 @@ export function toDiscoveryFeedFilters(state: FeedFilterState): Partial<Discover
   const filters: Partial<DiscoveryFeedQuery> = {};
 
   for (const facet of FEED_FACET_DEFINITIONS) {
-    const values = state[facet.key];
+    const values = state[facet.key] ?? [];
     if (values.length === 0) continue;
     filters[facet.apiKey] = values.length === 1 ? values[0] : values;
   }
@@ -137,7 +152,7 @@ export function toSearchProjectFilters(state: FeedFilterState): Partial<SearchPr
   const filters: Partial<SearchProjectsQuery> = {};
 
   for (const facet of FEED_FACET_DEFINITIONS) {
-    const values = state[facet.key];
+    const values = state[facet.key] ?? [];
     if (values.length === 0) continue;
     filters[facet.apiKey] = values.length === 1 ? values[0] : values;
   }

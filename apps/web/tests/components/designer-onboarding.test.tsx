@@ -108,13 +108,17 @@ describe('DesignerOnboarding', () => {
     expect(screen.getByRole('heading', { name: /set up your space/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /just me/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /interior company \(firm\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /need help\? contact support/i })).toHaveAttribute(
-      'href',
-      'mailto:support@tickif.in',
-    );
+    const supportLink = screen.getByRole('link', { name: /need help\? contact support/i });
+    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+    expect(supportLink).toHaveAttribute('target', '_blank');
+    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
     expect(container.querySelector('img[src*="onboarding-living-room.svg"]')).toHaveAttribute(
       'height',
       '189',
+    );
+    expect(container.querySelector('img[src*="onboarding-profile-chair.svg"]')).toHaveAttribute(
+      'loading',
+      'eager',
     );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     await waitFor(() => {

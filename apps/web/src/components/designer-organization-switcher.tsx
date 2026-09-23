@@ -79,15 +79,11 @@ export function DesignerOrganizationSwitcher({
         >
           <Avatar className="size-10 rounded-xl">
             {logoUrl ? (
-              <>
-                <AvatarImage src={logoUrl} alt={`${studioName} logo`} className="object-cover" />
-                <AvatarFallback className="rounded-xl p-0" delayMs={100}>
-                  <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
-                </AvatarFallback>
-              </>
-            ) : (
+              <AvatarImage src={logoUrl} alt={`${studioName} logo`} className="object-cover" />
+            ) : null}
+            <AvatarFallback asChild delayMs={100}>
               <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
-            )}
+            </AvatarFallback>
           </Avatar>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium leading-snug text-foreground">

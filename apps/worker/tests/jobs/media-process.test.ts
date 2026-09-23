@@ -11,10 +11,9 @@ vi.mock('@repo/config', () => ({
     MEDIA_MAX_IMAGE_DIMENSION: 12_000,
     WATERMARK_ENABLED: true,
     WATERMARK_TEXT: 'tickif',
-    WATERMARK_OPACITY: 0.22,
-    WATERMARK_SCALE: 0.16,
-    WATERMARK_ROTATION: -30,
-    WATERMARK_REVISION: 'wm-v2',
+    WATERMARK_OPACITY: 0.65,
+    WATERMARK_SCALE: 0.08,
+    WATERMARK_REVISION: 'wm-v4',
   },
   isProduction: false,
   isDevelopment: false,
@@ -123,8 +122,8 @@ describe('processMedia', () => {
 
     const result = await processMedia(job('img-1', 'reprocess'));
 
-    expect(result).toEqual({ ok: true, derivatives: 8 });
-    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    expect(result).toEqual({ ok: true, derivatives: 10 });
+    expect(putObjectMock).toHaveBeenCalledTimes(10);
     expect(repoMock.refreshReadyDerivatives).toHaveBeenCalledTimes(1);
     expect(repoMock.findProjectPhashes).not.toHaveBeenCalled();
     expect(repoMock.markReady).not.toHaveBeenCalled();
@@ -143,7 +142,7 @@ describe('processMedia', () => {
       skipped: 'lost-race',
     });
     // Nothing references the new revisioned objects, so every upload is cleaned up…
-    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    expect(putObjectMock).toHaveBeenCalledTimes(10);
     for (const [{ key }] of putObjectMock.mock.calls) {
       expect(deleteObjectMock).toHaveBeenCalledWith(key);
     }
@@ -153,14 +152,15 @@ describe('processMedia', () => {
   });
 
   it('warns when reprocess regenerates identical keys (WATERMARK_REVISION unchanged)', async () => {
-    const revisionedDerivatives = ['thumb', 'small', 'medium', 'large'].flatMap((variant) =>
-      (['webp', 'avif'] as const).map((format) => ({
-        variant,
-        format,
-        key: `derivatives/proj-1/img-1/${variant}-wm-v2.${format}`,
-        width: 320,
-        height: 240,
-      })),
+    const revisionedDerivatives = ['thumb', 'small', 'medium', 'large', 'xlarge'].flatMap(
+      (variant) =>
+        (['webp', 'avif'] as const).map((format) => ({
+          variant,
+          format,
+          key: `derivatives/proj-1/img-1/${variant}-wm-v4.${format}`,
+          width: 320,
+          height: 240,
+        })),
     );
     repoMock.getImageForProcessing.mockResolvedValue({
       ...processing,
@@ -171,7 +171,7 @@ describe('processMedia', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: true, derivatives: 8 });
+      expect(await processMedia(job('img-1', 'reprocess'))).toEqual({ ok: true, derivatives: 10 });
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('WATERMARK_REVISION'));
       // Same keys ⇒ in-place overwrites: nothing is stale and nothing may be deleted.
       expect(deleteObjectMock).not.toHaveBeenCalled();
@@ -214,13 +214,13 @@ describe('processMedia', () => {
 
     const result = await processMedia(job('img-1'));
 
-    expect(result).toEqual({ ok: true, derivatives: 8 });
-    expect(putObjectMock).toHaveBeenCalledTimes(8);
+    expect(result).toEqual({ ok: true, derivatives: 10 });
+    expect(putObjectMock).toHaveBeenCalledTimes(10);
     expect(repoMock.markReady).toHaveBeenCalledTimes(1);
     const [, data] = repoMock.markReady.mock.calls[0]!;
     expect(data.width).toBe(800);
     expect(data.height).toBe(600);
-    expect(data.derivatives).toHaveLength(8);
+    expect(data.derivatives).toHaveLength(10);
     expect(data.phash).toMatch(/^[0-9a-f]{16}$/);
     expect(repoMock.markFailed).not.toHaveBeenCalled();
   });
@@ -282,7 +282,7 @@ describe('processMedia', () => {
 
     const result = await processMedia(job('img-1'));
 
-    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(result).toEqual({ ok: true, derivatives: 10 });
     expect(repoMock.markReady).toHaveBeenCalledTimes(1);
     expect(repoMock.markReady).toHaveBeenCalledWith(
       'img-1',

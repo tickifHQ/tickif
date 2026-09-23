@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import sharp from 'sharp';
-import {
-  generateDerivatives,
-  MEDIA_VARIANTS,
-  MEDIA_FORMATS,
-} from '../../src/media/derivatives.js';
+import { generateDerivatives, MEDIA_VARIANTS, MEDIA_FORMATS } from '../../src/media/derivatives.js';
 
 let source: Buffer;
 let orientedSource: Buffer;
@@ -26,6 +22,16 @@ beforeAll(async () => {
 });
 
 describe('generateDerivatives', () => {
+  it('generates a high-density gallery variant without enlarging the source', async () => {
+    expect(MEDIA_VARIANTS).toContainEqual({ variant: 'xlarge', width: 2560 });
+    const [derivative] = await generateDerivatives(source, {
+      variants: [{ variant: 'xlarge', width: 2560 }],
+      formats: ['webp'],
+    });
+    expect(derivative?.width).toBe(2000);
+    expect(derivative?.height).toBe(1000);
+  });
+
   it('produces every variant × format', async () => {
     const out = await generateDerivatives(source);
     expect(out).toHaveLength(MEDIA_VARIANTS.length * MEDIA_FORMATS.length);

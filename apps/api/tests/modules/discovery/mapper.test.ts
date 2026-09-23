@@ -42,10 +42,10 @@ function searchHit(overrides: Partial<ProjectSearchDocument> = {}): ProjectSearc
     roomSlugs: [],
     roomLabels: [],
     tags: [],
-    coverImageKey: 'small.webp',
+    coverImageKey: 'medium.webp',
     coverImageId: '33333333-3333-4333-8333-333333333333',
-    coverImageWidth: 640,
-    coverImageHeight: 480,
+    coverImageWidth: 1024,
+    coverImageHeight: 768,
     publishedAt: 1,
     featuredAt: null,
     avgRating: 4.8,
@@ -70,6 +70,7 @@ function postgresRow(overrides: Partial<FeedProjectRow> = {}): FeedProjectRow {
     coverImageId: '33333333-3333-4333-8333-333333333333',
     coverStatus: 'ready',
     coverDerivatives: [
+      { key: 'medium.webp', variant: 'medium', format: 'webp', width: 1024, height: 768 },
       { key: 'small.webp', variant: 'small', format: 'webp', width: 640, height: 480 },
       { key: 'thumb.webp', variant: 'thumb', format: 'webp', width: 320, height: 240 },
     ] as Derivative[],
@@ -95,9 +96,9 @@ describe('discovery card mapper', () => {
       budget: '₹40-60 lakh',
       tags: ['3 BHK', 'Modern'],
       coverImageId: '33333333-3333-4333-8333-333333333333',
-      coverImageUrl: 'https://signed.example/small.webp',
-      imageWidth: 640,
-      imageHeight: 480,
+      coverImageUrl: 'https://signed.example/medium.webp',
+      imageWidth: 1024,
+      imageHeight: 768,
     });
   });
 
@@ -107,9 +108,9 @@ describe('discovery card mapper', () => {
       studio: 'Studio One',
       locality: 'Bandra',
       tags: ['3 BHK', 'Modern'],
-      coverImageUrl: 'https://signed.example/small.webp',
-      imageWidth: 640,
-      imageHeight: 480,
+      coverImageUrl: 'https://signed.example/medium.webp',
+      imageWidth: 1024,
+      imageHeight: 768,
     });
   });
 
@@ -135,7 +136,7 @@ describe('discovery card mapper', () => {
     expect(card.coverImageUrl).toBeNull();
   });
 
-  it('falls back from a missing small derivative to the card-sized thumb', async () => {
+  it('falls back from missing medium and small derivatives to the thumbnail', async () => {
     const card = await toDiscoveryCard(
       normalizePostgresRow(
         postgresRow({

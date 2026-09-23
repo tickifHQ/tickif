@@ -52,6 +52,9 @@ import {
 import { deleteObject, presignDownload } from '@repo/storage';
 import { AppError } from '../../lib/errors.js';
 import { orgsService } from '../orgs/service.js';
+import { googleReviewsRepository } from '../profiles/google-repository.js';
+import { readState } from '../profiles/google-mapper.js';
+import { portfolioRepository } from '../profiles/portfolio-repository.js';
 import {
   ProjectSlugUnavailableError,
   projectsRepository,
@@ -120,6 +123,7 @@ function toResponse(
     bhkSlug: row.bhkSlug,
     sizeSqft: row.sizeSqft,
     citySlug: row.citySlug,
+    cityName: row.cityName,
     localitySlug: row.localitySlug,
     buildingName: row.buildingName,
     budgetBandSlug: row.budgetBandSlug,
@@ -191,8 +195,21 @@ async function deleteImageObjects(row: ProjectImageDeletionRecord): Promise<void
   await Promise.allSettled(unusedKeys.map((key) => deleteObject(key)));
 }
 
+/**
+ * Public cover images render as full-width cards and portfolio heroes. A 320px
+ * thumbnail is visibly soft there, especially on high-density displays, so use
+ * the 1024px derivative when available while retaining legacy fallbacks.
+ */
 function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'medium') ??
+    derivatives.find(
+      (derivative) => derivative.variant === 'small' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'small') ??
     derivatives.find(
       (derivative) => derivative.variant === 'thumb' && derivative.format === 'webp',
     ) ??
@@ -202,9 +219,26 @@ function pickPreviewDerivative(derivatives: Derivative[]): Derivative | null {
   );
 }
 
+/** Public cards can exceed 320 CSS pixels, especially on high-density displays. */
+function pickPublicCardDerivative(derivatives: Derivative[]): Derivative | null {
+  for (const variant of ['medium', 'large', 'small', 'thumb']) {
+    const preferred = derivatives.find(
+      (derivative) => derivative.variant === variant && derivative.format === 'webp',
+    );
+    if (preferred) return preferred;
+    const fallback = derivatives.find((derivative) => derivative.variant === variant);
+    if (fallback) return fallback;
+  }
+  return derivatives[0] ?? null;
+}
+
 /** Pick the best derivative for fullscreen gallery display (largest available, never original). */
 function pickGalleryDerivative(derivatives: Derivative[]): string | null {
   return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'xlarge' && derivative.format === 'webp',
+    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'xlarge')?.key ??
     derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
       ?.key ??
     derivatives.find((derivative) => derivative.variant === 'large')?.key ??
@@ -212,10 +246,24 @@ function pickGalleryDerivative(derivatives: Derivative[]): string | null {
       (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
     )?.key ??
     derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small' && derivative.format === 'webp')
+      ?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small')?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
       ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
     derivatives[0]?.key ??
+    null
+  );
+}
+
+/** Prefer the 1600px derivative for the wide portfolio hero. */
+function pickHeroDerivative(derivatives: Derivative[]): Derivative | null {
+  return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'large' && derivative.format === 'webp',
+    ) ??
+    derivatives.find((derivative) => derivative.variant === 'large') ??
     null
   );
 }
@@ -225,13 +273,28 @@ function pickGalleryDerivative(derivatives: Derivative[]): string | null {
  * public feed. Accepts the left-join nulls the feed carries. Callers that must not fail the
  * whole response on a presign error append `.catch(() => null)`.
  */
-async function coverImageUrl(coverImage?: {
+async function coverImageUrl(
+  coverImage?: {
+    status: ProjectFeedItemRecord['coverStatus'];
+    derivatives: ProjectFeedItemRecord['coverDerivatives'];
+  },
+  purpose: 'dashboard' | 'public' = 'dashboard',
+): Promise<string | null> {
+  if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
+  const preview =
+    purpose === 'public'
+      ? pickPublicCardDerivative(coverImage.derivatives)
+      : pickPreviewDerivative(coverImage.derivatives);
+  return preview ? presignDownload({ key: preview.key }) : null;
+}
+
+async function heroImageUrl(coverImage?: {
   status: ProjectFeedItemRecord['coverStatus'];
   derivatives: ProjectFeedItemRecord['coverDerivatives'];
 }): Promise<string | null> {
   if (!coverImage || coverImage.status !== 'ready' || !coverImage.derivatives) return null;
-  const preview = pickPreviewDerivative(coverImage.derivatives);
-  return preview ? presignDownload({ key: preview.key }) : null;
+  const hero = pickHeroDerivative(coverImage.derivatives);
+  return hero ? presignDownload({ key: hero.key }) : null;
 }
 
 async function toPublicGalleryImages(images: PublicProjectGalleryImageRecord[]) {
@@ -357,7 +420,7 @@ function toFeedProject(
     slug: row.slug,
     title: row.title,
     studio: row.studio,
-    city: labelOf('city', row.citySlug),
+    city: row.cityName ?? labelOf('city', row.citySlug),
     locality:
       row.citySlug && row.localitySlug
         ? (localityLabels.get(`${row.citySlug}:${row.localitySlug}`) ?? null)
@@ -394,6 +457,7 @@ function toDesignerProjectCard(
   labels: Map<string, string>,
   localityLabels: Map<string, string>,
   coverImageUrl: string | null,
+  heroImageUrl: string | null = null,
 ): DesignerProjectCard {
   const labelOf = (kind: TaxonomyKind, slug: string | null): string | null =>
     slug ? (labels.get(`${kind}:${slug}`) ?? null) : null;
@@ -408,6 +472,7 @@ function toDesignerProjectCard(
 
   return {
     ...toFeedProject(row, labels, localityLabels, coverImageUrl),
+    heroImageUrl,
     propertyType,
     bhk,
     theme,
@@ -454,6 +519,7 @@ function projectSpecifications(
     scope: taxonomyValue(labels, 'scope', project.scopeSlug),
     bhk: taxonomyValue(labels, 'bhk', project.bhkSlug),
     city: taxonomyValue(labels, 'city', project.citySlug),
+    cityName: project.cityName,
     locality:
       project.localitySlug && locality ? { slug: project.localitySlug, label: locality } : null,
     budgetBand: taxonomyValue(labels, 'budget_band', project.budgetBandSlug),
@@ -480,10 +546,13 @@ async function toRecommendationCards(
 ): Promise<DesignerProjectCard[]> {
   const cards = await Promise.all(
     rows.map(async (row) => {
-      const cover = await coverImageUrl({
-        status: row.coverStatus,
-        derivatives: row.coverDerivatives,
-      }).catch(() => null);
+      const cover = await coverImageUrl(
+        {
+          status: row.coverStatus,
+          derivatives: row.coverDerivatives,
+        },
+        'public',
+      ).catch(() => null);
       return cover ? toDesignerProjectCard(row, labels, localityLabels, cover) : null;
     }),
   );
@@ -503,7 +572,7 @@ function toListItemFields(
     slug: row.slug,
     title: row.title,
     propertyType: row.propertySubtypeSlug ?? row.propertyTypeSlug,
-    city: row.citySlug,
+    city: row.cityName ?? row.citySlug,
     locality: row.localitySlug,
     status: row.status,
     archiveReason: row.archiveReason,
@@ -925,6 +994,31 @@ export async function validateProjectTaxonomy(
   }
 }
 
+function normalizeCreateProjectLocation(input: CreateProjectInput): CreateProjectInput {
+  if (input.cityName !== undefined && input.cityName !== null) {
+    const normalized = { ...input };
+    delete normalized.citySlug;
+    delete normalized.localitySlug;
+    return normalized;
+  }
+  if (input.citySlug !== undefined && input.citySlug !== null) {
+    const normalized = { ...input };
+    delete normalized.cityName;
+    return normalized;
+  }
+  return input;
+}
+
+function normalizeUpdatedProjectLocation(input: UpdateProjectInput): UpdateProjectInput {
+  if (input.cityName !== undefined && input.cityName !== null) {
+    return { ...input, citySlug: null, localitySlug: null };
+  }
+  if (input.citySlug !== undefined && input.citySlug !== null) {
+    return { ...input, cityName: null };
+  }
+  return input;
+}
+
 function humanizeSlug(slug: string): string {
   return slug
     .split('-')
@@ -948,7 +1042,7 @@ async function buildProjectTitle(input: CreateProjectInput): Promise<string> {
   if (explicit) return explicit;
 
   const [city, locality, propertyType, propertySubtype, bhk, budget] = await Promise.all([
-    labelFor('city', input.citySlug),
+    input.cityName?.trim() || labelFor('city', input.citySlug),
     labelFor('locality', input.localitySlug),
     labelFor('property_type', input.propertyTypeSlug),
     labelFor('property_subtype', input.propertySubtypeSlug),
@@ -1134,12 +1228,16 @@ export function buildCompleteness(
   project: Pick<
     ProjectRecord,
     'title' | 'citySlug' | 'propertyTypeSlug' | 'scopeSlug' | 'budgetBandSlug' | 'coverImageId'
-  >,
+  > & { cityName?: string | null },
   imageCounts: { imageCount: number; taggedImageCount: number },
 ): ProjectCompletenessResponse {
   const requirements = [
     { key: 'project-name', label: 'Project name', complete: project.title.trim().length > 0 },
-    { key: 'location-city', label: 'Location city', complete: !!project.citySlug },
+    {
+      key: 'location-city',
+      label: 'Location city',
+      complete: !!(project.citySlug || project.cityName),
+    },
     { key: 'property-type', label: 'Property type', complete: !!project.propertyTypeSlug },
     { key: 'scope', label: 'Scope', complete: !!project.scopeSlug },
     { key: 'cost-range', label: 'Cost range', complete: !!project.budgetBandSlug },
@@ -1195,25 +1293,43 @@ async function buildPublicProjectDetail(
   const { rooms, galleryImages: rawGalleryImages, coverImages, narrative } = snapshot;
 
   const sourceThemes = [...new Set(rawGalleryImages.flatMap((image) => image.themeSlugs))];
-  const [logoUrl, projectCount, footprintCities, motifCounts, recommendationCandidates] =
-    await Promise.all([
-      designer.logoImageId
-        ? presignDownload({ key: designer.logoImageId }).catch(() => null)
-        : Promise.resolve(null),
-      projectsRepository.countPublishedByDesigner(designer.id),
-      projectsRepository.listDesignerFootprintCities(designer.id),
-      options.includeMotifs
-        ? projectsRepository.listPublishedDesignerMotifCounts(designer.id)
-        : Promise.resolve([] as PublicProjectMotifCountRecord[]),
-      projectsRepository.listPublishedRecommendationCandidates({
-        designerId: designer.id,
-        budgetBandSlug: project.budgetBandSlug,
-        citySlug: project.citySlug,
-        sourceThemeSlugs: sourceThemes,
-        excludeProjectIds: [project.id],
-        limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
-      }),
-    ]);
+  const [
+    logoUrl,
+    projectCount,
+    footprintCities,
+    motifCounts,
+    recommendationCandidates,
+    googleRow,
+    portfolio,
+  ] = await Promise.all([
+    designer.logoImageId
+      ? presignDownload({ key: designer.logoImageId }).catch(() => null)
+      : Promise.resolve(null),
+    projectsRepository.countPublishedByDesigner(designer.id),
+    projectsRepository.listDesignerFootprintCities(designer.id),
+    options.includeMotifs
+      ? projectsRepository.listPublishedDesignerMotifCounts(designer.id)
+      : Promise.resolve([] as PublicProjectMotifCountRecord[]),
+    projectsRepository.listPublishedRecommendationCandidates({
+      designerId: designer.id,
+      budgetBandSlug: project.budgetBandSlug,
+      citySlug: project.citySlug,
+      sourceThemeSlugs: sourceThemes,
+      excludeProjectIds: [project.id],
+      limit: PUBLIC_RECOMMENDATION_POOL_SIZE,
+    }),
+    googleReviewsRepository.findByProfileId(designer.id),
+    portfolioRepository.findByProfileId(designer.id),
+  ]);
+
+  const googleSummary =
+    googleRow && portfolio?.showGoogleOverallRating ? readState(googleRow).summary : null;
+  const googleRating =
+    googleSummary?.rating != null &&
+    googleSummary.userRatingsTotal != null &&
+    googleSummary.userRatingsTotal > 0
+      ? { rating: googleSummary.rating, reviewCount: googleSummary.userRatingsTotal }
+      : null;
 
   const seenRecommendationIds = new Set([project.id]);
   const takeRecommendations = (
@@ -1269,10 +1385,13 @@ async function buildPublicProjectDetail(
   if (project.coverImageId) {
     const coverImg = coverImages.get(project.coverImageId);
     if (coverImg) {
-      resolvedCoverUrl = await coverImageUrl({
-        status: coverImg.status,
-        derivatives: coverImg.derivatives,
-      }).catch(() => null);
+      resolvedCoverUrl = await coverImageUrl(
+        {
+          status: coverImg.status,
+          derivatives: coverImg.derivatives,
+        },
+        'public',
+      ).catch(() => null);
     }
   }
 
@@ -1288,6 +1407,7 @@ async function buildPublicProjectDetail(
     bhkSlug: project.bhkSlug,
     sizeSqft: project.sizeSqft,
     citySlug: project.citySlug,
+    cityName: project.cityName,
     localitySlug: project.localitySlug,
     buildingName: project.buildingName,
     budgetBandSlug: project.budgetBandSlug,
@@ -1311,6 +1431,7 @@ async function buildPublicProjectDetail(
       slug: designer.orgSlug,
       avgRating: designer.avgRating,
       reviewCount: designer.reviewCount,
+      googleRating,
       entityType: designer.entityType,
       logoUrl,
       isKycVerified: designer.isKycVerified,
@@ -1478,10 +1599,13 @@ export const projectsService = {
 
     const projects = await Promise.all(
       pageRows.map(async (row) => {
-        const cover = await coverImageUrl({
-          status: row.coverStatus,
-          derivatives: row.coverDerivatives,
-        }).catch(() => null);
+        const cover = await coverImageUrl(
+          {
+            status: row.coverStatus,
+            derivatives: row.coverDerivatives,
+          },
+          'public',
+        ).catch(() => null);
         return toFeedProject(row, labels, localityLabels, cover);
       }),
     );
@@ -1568,15 +1692,16 @@ export const projectsService = {
     ) {
       throw AppError.forbidden('Organization write access required');
     }
-    await validateProjectTaxonomy(input);
+    const normalizedInput = normalizeCreateProjectLocation(input);
+    await validateProjectTaxonomy(normalizedInput);
 
     const designer = await projectsRepository.findDesignerByTeamId(activeOrgId, activeTeamId);
     if (!designer) {
       throw AppError.forbidden('Designer profile required');
     }
 
-    const title = await buildProjectTitle(input);
-    const draftInput = { ...input, title };
+    const title = await buildProjectTitle(normalizedInput);
+    const draftInput = { ...normalizedInput, title };
 
     const row = await createDraftWithUniqueSlug(draftInput, designer.id);
     const rooms = await prefillRoomsIfEmpty(row, []);
@@ -1591,14 +1716,15 @@ export const projectsService = {
     await requireEditableProject(projectId, caller);
     const existing = await projectsRepository.findById(projectId);
     if (!existing) throw AppError.notFound('Project not found');
-    await validateProjectTaxonomy(input, existing);
+    const normalizedInput = normalizeUpdatedProjectLocation(input);
+    await validateProjectTaxonomy(normalizedInput, existing);
 
-    if (input.coverImageId) {
-      const image = await projectsRepository.findImage(projectId, input.coverImageId);
+    if (normalizedInput.coverImageId) {
+      const image = await projectsRepository.findImage(projectId, normalizedInput.coverImageId);
       if (!image) throw AppError.unprocessable('Cover image must belong to the project');
     }
 
-    const row = await projectsRepository.updateDraft(projectId, input);
+    const row = await projectsRepository.updateDraft(projectId, normalizedInput);
     if (!row) throw AppError.notFound('Project not found');
     const rooms = await prefillRoomsIfEmpty(row);
     return toDetailResponse(row, rooms);
@@ -2077,11 +2203,15 @@ export const projectsService = {
 
     const projects: DesignerProjectCard[] = await Promise.all(
       pageRows.map(async (row) => {
-        const cover = await coverImageUrl({
+        const coverImage = {
           status: row.coverStatus,
           derivatives: row.coverDerivatives,
-        }).catch(() => null);
-        return toDesignerProjectCard(row, labels, localityLabels, cover);
+        };
+        const [cover, hero] = await Promise.all([
+          coverImageUrl(coverImage, 'public').catch(() => null),
+          heroImageUrl(coverImage).catch(() => null),
+        ]);
+        return toDesignerProjectCard(row, labels, localityLabels, cover, hero);
       }),
     );
 
@@ -2112,10 +2242,13 @@ export const projectsService = {
 
     const projects = await Promise.all(
       rows.map(async (row) => {
-        const cover = await coverImageUrl({
-          status: row.coverStatus,
-          derivatives: row.coverDerivatives,
-        }).catch(() => null);
+        const cover = await coverImageUrl(
+          {
+            status: row.coverStatus,
+            derivatives: row.coverDerivatives,
+          },
+          'public',
+        ).catch(() => null);
         return toFeedProject(row, labels, localityLabels, cover);
       }),
     );

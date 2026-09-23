@@ -7,6 +7,7 @@ import type { SubscriptionState, SubscriptionResponse } from '@repo/contracts';
 import { PLAN_MAP } from '@/lib/plan-config';
 import { CheckoutFlow } from './checkout-flow';
 import { api } from '@/lib/api';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { usePaymentMethod } from './use-payment-method';
 
 /**
@@ -131,6 +132,20 @@ export function SubscribePage() {
       {payment.message && (
         <p role="status" className="mt-3 text-sm">
           {payment.message}
+          {payment.supportRecommended ? (
+            <>
+              {' '}
+              <a
+                href={SUPPORT_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Contact support
+              </a>
+              .
+            </>
+          ) : null}
         </p>
       )}
 
@@ -180,7 +195,12 @@ function LifecycleNotice({ state }: { state: SubscriptionState }) {
 
   const notices: Record<
     Exclude<SubscriptionState, 'active'>,
-    { message: string; severity: 'warning' | 'error' }
+    {
+      message: string;
+      severity: 'warning' | 'error';
+      supportLabel?: 'Contact support' | 'contact support';
+      supportSuffix?: string;
+    }
   > = {
     payment_failed: {
       message:
@@ -194,13 +214,16 @@ function LifecycleNotice({ state }: { state: SubscriptionState }) {
     },
     locked: {
       message:
-        'Your subscription is suspended due to non-payment. Paid features are unavailable. Contact support or resolve the payment to reactivate.',
+        'Your subscription is suspended due to non-payment. Paid features are unavailable. Resolve the payment to reactivate, or',
       severity: 'error',
+      supportLabel: 'contact support',
+      supportSuffix: '.',
     },
     downgraded: {
-      message:
-        'Your subscription has been downgraded to Hobby. Contact support to reactivate your previous plan.',
+      message: 'Your subscription has been downgraded to Hobby.',
       severity: 'error',
+      supportLabel: 'Contact support',
+      supportSuffix: ' to reactivate your previous plan.',
     },
   };
 
@@ -216,6 +239,20 @@ function LifecycleNotice({ state }: { state: SubscriptionState }) {
   return (
     <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${borderClass} ${textClass}`}>
       {notice.message}
+      {notice.supportSuffix !== undefined ? (
+        <>
+          {' '}
+          <a
+            href={SUPPORT_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline underline-offset-2"
+          >
+            {notice.supportLabel}
+          </a>
+          {notice.supportSuffix}
+        </>
+      ) : null}
     </div>
   );
 }

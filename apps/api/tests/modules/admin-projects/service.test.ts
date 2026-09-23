@@ -78,6 +78,7 @@ function project(overrides: Partial<AdminProjectRecord> = {}): AdminProjectRecor
     bhkSlug: null,
     sizeSqft: null,
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: null,
     buildingName: null,
     budgetBandSlug: 'premium',

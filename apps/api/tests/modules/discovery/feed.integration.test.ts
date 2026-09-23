@@ -29,6 +29,7 @@ import {
   makeTaxonomy,
 } from '@repo/db/testing';
 import { app } from '../../../src/app.js';
+import { findFilterSuggestions } from '../../../src/modules/search/repository.js';
 
 const originalSearchConfigured = config.TYPESENSE_SEARCH_CONFIGURED;
 afterEach(() => {
@@ -87,7 +88,7 @@ async function makePublishedProject(
   });
 }
 
-/** Attach a ready cover image with small derivative. */
+/** Attach a ready cover image with responsive derivatives. */
 async function attachReadyCover(projectId: string) {
   const cover = await makeProjectImage({
     projectId,
@@ -95,6 +96,13 @@ async function attachReadyCover(projectId: string) {
     width: 1920,
     height: 1280,
     derivatives: [
+      {
+        variant: 'medium',
+        format: 'webp',
+        key: `derivatives/${projectId}/medium.webp`,
+        width: 1024,
+        height: 683,
+      },
       {
         variant: 'small',
         format: 'webp',
@@ -465,10 +473,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
         rating: 4.2,
         reviewCount: 7,
         coverImageId: cover.id,
-        imageWidth: 640,
-        imageHeight: 427,
+        imageWidth: 1024,
+        imageHeight: 683,
       });
-      expect(firstCard?.coverImageUrl).toContain(`derivatives/${covered.id}/small.webp`);
+      expect(firstCard?.coverImageUrl).toContain(`derivatives/${covered.id}/medium.webp`);
       expect(secondCard).toMatchObject({
         studio: 'Second Studio',
         rating: 3.5,
@@ -627,11 +635,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       });
       // Cover image should be presigned
       expect(pgProject?.coverImageUrl).toContain('X-Amz-Signature=');
-      // The card resolves small → thumb → null, and this fixture has both, so the 640px
-      // `small` derivative wins over the 320px `thumb`.
-      expect(pgProject?.coverImageUrl).toContain('small.webp');
-      expect(pgProject?.imageWidth).toBe(640);
-      expect(pgProject?.imageHeight).toBe(427);
+      // The card resolves medium → small → thumb → null, so the 1024px derivative wins.
+      expect(pgProject?.coverImageUrl).toContain('medium.webp');
+      expect(pgProject?.imageWidth).toBe(1024);
+      expect(pgProject?.imageHeight).toBe(683);
     });
 
     it('searches published projects by text with the Postgres path', async () => {
@@ -957,6 +964,83 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       expect(body.items.map((item) => item.title)).toEqual(['Warm Kitchen']);
     });
 
+    it('filters and counts live materials and tags', async () => {
+      await makeTaxonomy({ kind: 'material', slug: 'wood', label: 'Wood' });
+      await makeTaxonomy({ kind: 'material', slug: 'marble', label: 'Marble' });
+      const designer = await activeDesigner();
+      const matching = await makePublishedProject(designer.id, { title: 'Natural bedroom' });
+      await makeProjectImage({
+        projectId: matching.id,
+        status: 'ready',
+        materialSlugs: ['wood'],
+        tagSlugs: ['sunlit'],
+      });
+      const other = await makePublishedProject(designer.id, { title: 'Other bedroom' });
+      await makeProjectImage({
+        projectId: other.id,
+        status: 'ready',
+        materialSlugs: ['marble'],
+        tagSlugs: ['moody'],
+      });
+
+      const { body } = await getFeed('?materials=wood&tags=sunlit');
+
+      expect(body.items.map((item) => item.title)).toEqual(['Natural bedroom']);
+      expect(body.facetDistribution.materials).toEqual({ wood: 1, marble: 0 });
+      expect(body.facetDistribution.tags).toEqual({ sunlit: 1, moody: 0 });
+    });
+
+    it('suggests matching styles, spaces, materials, and live tags', async () => {
+      const [theme, room, material] = await Promise.all([
+        makeTaxonomy({ kind: 'theme', slug: 'bedroom-modern', label: 'Bedroom Modern' }),
+        makeTaxonomy({ kind: 'room', slug: 'bedroom', label: 'Bedroom' }),
+        makeTaxonomy({ kind: 'material', slug: 'bed-linen', label: 'Bed Linen' }),
+      ]);
+      await makeTaxonomy({ kind: 'theme', slug: 'bedroom-unused', label: 'Bedroom Unused' });
+      const designer = await activeDesigner();
+      const project = await makePublishedProject(designer.id, { title: 'Tagged bedroom' });
+      await makeProjectRoom({ projectId: project.id, roomTypeId: room.id });
+      await makeProjectImage({
+        projectId: project.id,
+        status: 'ready',
+        themeSlugs: [theme.slug],
+        materialSlugs: [material.slug],
+        tagSlugs: ['bed-styling'],
+      });
+
+      const suggestions = await findFilterSuggestions('bed');
+
+      expect(suggestions).toEqual(
+        expect.arrayContaining([
+          { kind: 'style', filterKey: 'theme', slug: 'bedroom-modern', label: 'Bedroom Modern' },
+          { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
+          { kind: 'material', filterKey: 'material', slug: 'bed-linen', label: 'Bed Linen' },
+          { kind: 'tag', filterKey: 'tag', slug: 'bed-styling', label: 'Bed Styling' },
+        ]),
+      );
+      expect(suggestions).not.toContainEqual(
+        expect.objectContaining({ slug: 'bedroom-unused' }),
+      );
+    });
+
+    it('matches discovery entity terms in the database search fallback', async () => {
+      const bedroom = await makeTaxonomy({ kind: 'room', slug: 'bedroom', label: 'Bedroom' });
+      const designer = await activeDesigner();
+      const roomMatch = await makePublishedProject(designer.id, { title: 'Project one' });
+      await makeProjectRoom({ projectId: roomMatch.id, roomTypeId: bedroom.id });
+      const imageMatch = await makePublishedProject(designer.id, { title: 'Project two' });
+      await makeProjectImage({
+        projectId: imageMatch.id,
+        status: 'ready',
+        materialSlugs: ['bed-linen'],
+      });
+      await makePublishedProject(designer.id, { title: 'Unrelated project' });
+
+      const { body } = await getFeed('?q=bed');
+
+      expect(body.items.map((item) => item.title).sort()).toEqual(['Project one', 'Project two']);
+    });
+
     it('resolves an unknown slug to an empty page rather than an error', async () => {
       const designer = await activeDesigner();
       const project = await makePublishedProject(designer.id, { title: 'Warm' });
@@ -1034,10 +1118,12 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
         'budgetBandSlug',
         'citySlug',
         'localitySlug',
+        'materials',
         'propertySubtypeSlug',
         'propertyTypeSlug',
         'roomSlugs',
         'scopeSlug',
+        'tags',
         'themes',
       ]);
       // Inactive terms are not offered by GET /api/taxonomy/terms, so they get no count.

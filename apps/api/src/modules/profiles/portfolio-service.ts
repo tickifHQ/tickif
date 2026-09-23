@@ -300,6 +300,7 @@ async function buildPortfolioResponse(
     publiclyVisible: publication.publiclyVisible,
     missingRequiredFields: publication.missingRequiredFields,
     googleConnection,
+    experienceCenters: portfolio.experienceCenters,
     publishedAt: portfolio.publishedAt?.toISOString() ?? null,
     createdAt: portfolio.createdAt.toISOString(),
     updatedAt: portfolio.updatedAt.toISOString(),
@@ -479,6 +480,8 @@ export const portfolioService = {
       }
       if (portfolioFields.showTickifBadge !== undefined)
         portfolioPatch.showTickifBadge = portfolioFields.showTickifBadge;
+      if (portfolioFields.experienceCenters !== undefined)
+        portfolioPatch.experienceCenters = portfolioFields.experienceCenters;
 
       if (Object.keys(portfolioPatch).length > 0) {
         try {

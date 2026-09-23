@@ -16,6 +16,7 @@ describe('search projection mapper', () => {
         description: 'A warm renovation',
         designerId: 'designer-1',
         citySlug: 'mumbai',
+        cityName: null,
         localitySlug: 'bandra',
         propertyTypeSlug: 'residential',
         propertySubtypeSlug: 'apartment',
@@ -36,7 +37,7 @@ describe('search projection mapper', () => {
         id: '11111111-1111-4111-8111-111111111111',
         status: 'ready',
         derivatives: [
-          { variant: 'medium', format: 'webp', key: 'medium.webp', width: 1280, height: 960 },
+          { variant: 'medium', format: 'webp', key: 'medium.webp', width: 1024, height: 768 },
           { variant: 'thumb', format: 'jpeg', key: 'thumb.jpg', width: 320, height: 240 },
           { variant: 'thumb', format: 'webp', key: 'thumb.webp', width: 320, height: 240 },
           { variant: 'small', format: 'webp', key: 'small.webp', width: 640, height: 480 },
@@ -76,6 +77,7 @@ describe('search projection mapper', () => {
       designerSlug: 'studio-one',
       designerName: 'Studio One',
       citySlug: 'mumbai',
+      cityName: null,
       localitySlug: 'bandra',
       propertyTypeSlug: 'residential',
       propertySubtypeSlug: 'apartment',
@@ -89,10 +91,10 @@ describe('search projection mapper', () => {
       roomSlugs: ['living-room'],
       roomLabels: ['Formal lounge', 'Living room', 'Open plan', 'Warm'],
       tags: ['custom', 'sunlit'],
-      coverImageKey: 'small.webp',
+      coverImageKey: 'medium.webp',
       coverImageId: '11111111-1111-4111-8111-111111111111',
-      coverImageWidth: 640,
-      coverImageHeight: 480,
+      coverImageWidth: 1024,
+      coverImageHeight: 768,
       publishedAt: new Date('2026-07-01T00:00:00.000Z').getTime(),
       featuredAt: null,
       avgRating: 4.75,
@@ -101,7 +103,7 @@ describe('search projection mapper', () => {
     });
   });
 
-  it('uses a thumb only when a small cover derivative is unavailable', () => {
+  it('uses the largest available cover instead of stretching a thumb', () => {
     const source = {
       project: {
         id: 'project-1',
@@ -110,6 +112,7 @@ describe('search projection mapper', () => {
         description: null,
         designerId: 'designer-1',
         citySlug: null,
+        cityName: 'Coonoor',
         localitySlug: null,
         propertyTypeSlug: null,
         propertySubtypeSlug: null,
@@ -134,9 +137,10 @@ describe('search projection mapper', () => {
     } satisfies ProjectSearchSource;
 
     expect(mapProjectSearchDocument(source)).toMatchObject({
-      coverImageKey: 'thumb.webp',
-      coverImageWidth: 320,
-      coverImageHeight: 240,
+      cityName: 'Coonoor',
+      coverImageKey: 'large.webp',
+      coverImageWidth: 1600,
+      coverImageHeight: 1200,
     });
   });
 

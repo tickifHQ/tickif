@@ -9,9 +9,10 @@ type PublicNavigationItem = { href: string; label: string };
 const navigationItems = [
   { href: '/', label: 'Explore' },
   { href: '/designers', label: 'Designers' },
+  { href: '/blog', label: 'Blog' },
   { href: '/enquiries', label: 'Your Enquiries' },
 ] as const satisfies ReadonlyArray<PublicNavigationItem>;
-const mobileNavigationItems = navigationItems.slice(0, 2);
+const mobileNavigationItems = navigationItems.slice(0, 3);
 
 const itemClassName =
   'rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors';

@@ -1,6 +1,6 @@
 {
-  "id": "8206e7c1-9b3c-45f1-8e9f-ea938ceb9889",
-  "prevId": "ea159e3f-da31-4769-b69a-4c2a61b90aaf",
+  "id": "0f11f890-87de-4dea-af36-287dd581cc58",
+  "prevId": "cbe1e5f6-f398-4580-a581-824b44f3f2a8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1830,6 +1830,13 @@
           "notNull": true,
           "default": true
         },
+        "experience_centers": {
+          "name": "experience_centers",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "published_at": {
           "name": "published_at",
           "type": "timestamp",
@@ -1959,18 +1966,6 @@
         "logo_image_id": {
           "name": "logo_image_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_source_image_id": {
-          "name": "logo_source_image_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_crop": {
-          "name": "logo_crop",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -3834,6 +3829,12 @@
         },
         "city_slug": {
           "name": "city_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city_name": {
+          "name": "city_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5749,6 +5750,112 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.search_activity": {
+      "name": "search_activity",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "search_activity_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "query": {
+          "name": "query",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "search_activity_actor_created_idx": {
+          "name": "search_activity_actor_created_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "search_activity_created_idx": {
+          "name": "search_activity_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "search_activity_actor_user_id_user_id_fk": {
+          "name": "search_activity_actor_user_id_user_id_fk",
+          "tableFrom": "search_activity",
+          "tableTo": "user",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

@@ -6,12 +6,13 @@ export type DerivativeFormat = 'webp' | 'avif';
 
 export type VariantSpec = { variant: string; width: number };
 
-/** Responsive sizes generated per original. Single place to tune (config-driven). */
+/** Responsive sizes generated per original. Single place to tune the variant policy. */
 export const MEDIA_VARIANTS: readonly VariantSpec[] = [
   { variant: 'thumb', width: 320 },
   { variant: 'small', width: 640 },
   { variant: 'medium', width: 1024 },
   { variant: 'large', width: 1600 },
+  { variant: 'xlarge', width: 2560 },
 ];
 
 export const MEDIA_FORMATS: readonly DerivativeFormat[] = ['webp', 'avif'];
@@ -40,7 +41,7 @@ export type GenerateOptions = {
 };
 
 function encode(pipeline: Sharp, format: DerivativeFormat): Sharp {
-  return format === 'webp' ? pipeline.webp({ quality: 82 }) : pipeline.avif({ quality: 50 });
+  return format === 'webp' ? pipeline.webp({ quality: 88 }) : pipeline.avif({ quality: 65 });
 }
 
 /**

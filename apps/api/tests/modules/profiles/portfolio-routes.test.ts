@@ -113,6 +113,7 @@ const fakePortfolioResponse: PortfolioResponse = {
     },
   },
   showTickifBadge: true,
+  experienceCenters: [],
   badges: ['verified'],
   isKycVerified: true,
   portfolioUrl: null,

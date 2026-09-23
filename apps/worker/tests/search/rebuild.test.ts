@@ -17,6 +17,7 @@ vi.mock('@repo/search', () => ({
 
 vi.mock('../../src/search/repository.js', () => ({
   findDesignerSearchSource: vi.fn(),
+  hasActiveDesigner: vi.fn(async () => false),
   findProjectSearchSource: vi.fn(),
   listActiveDesignerIds: vi.fn(async () => []),
   listPublishedProjectIdsForDesigner: vi.fn(async () => []),
@@ -42,6 +43,7 @@ const projectSource: ProjectSearchSource = {
     description: null,
     designerId: 'designer-1',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: null,
     propertyTypeSlug: null,
     propertySubtypeSlug: null,
@@ -82,6 +84,33 @@ beforeEach(() => {
 });
 
 describe('full search rebuild', () => {
+  it('preserves published projects when replaying a private portfolio change', async () => {
+    vi.mocked(repository.findDesignerSearchSource).mockResolvedValue(null);
+    vi.mocked(repository.hasActiveDesigner).mockResolvedValueOnce(true);
+    vi.mocked(repository.listPublishedProjectIdsForDesigner).mockResolvedValueOnce(['project-1']);
+    vi.mocked(outbox.listSearchProjectionEventsBetween).mockResolvedValueOnce([
+      {
+        sequence: 11n,
+        entityKind: 'designer',
+        entityId: 'designer-1',
+        operation: 'index',
+        sourceUpdatedAt: new Date(),
+      },
+    ]);
+
+    await rebuildSearchCollections(1000, 0);
+
+    expect(search.deleteSearchDocument).toHaveBeenCalledWith('designers', 'designer-1', {
+      collectionName: 'tickif_designers_v1000-0',
+    });
+    expect(search.deleteSearchProjectsByDesigner).not.toHaveBeenCalled();
+    expect(search.importSearchDocuments).toHaveBeenCalledWith(
+      'projects',
+      'tickif_projects_v1000-0',
+      [expect.objectContaining({ id: 'project-1' })],
+    );
+  });
+
   it('replays mutations behind the rebuild barrier before swapping aliases', async () => {
     await expect(rebuildSearchCollections(1000, 0)).resolves.toMatchObject({
       projects: 0,

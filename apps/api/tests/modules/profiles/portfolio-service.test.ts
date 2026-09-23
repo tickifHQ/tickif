@@ -136,6 +136,7 @@ const makePortfolio = (over: Partial<PortfolioRecord> = {}): PortfolioRecord => 
   showGoogleOverallRating: true,
   showGooglePositiveReviewsOnly: false,
   showTickifBadge: true,
+  experienceCenters: [],
   publishedAt: null,
   createdAt: new Date('2025-01-01'),
   updatedAt: new Date('2025-01-01'),
@@ -410,6 +411,32 @@ describe('portfolioService.updatePortfolio', () => {
         google: { showOverallRating: false },
       },
     });
+  });
+
+  it('replaces the validated experience-center list', async () => {
+    setupResolveProfile();
+    setupGetPortfolio();
+    const experienceCenters = [
+      {
+        name: 'Anna Nagar Studio',
+        address: '12 Second Avenue',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        mapsUrl: 'https://maps.google.com/?q=Anna+Nagar',
+      },
+    ];
+    vi.mocked(portfolioRepository.upsertInTx).mockResolvedValue(
+      makePortfolio({ experienceCenters }),
+    );
+
+    const result = await portfolioService.updatePortfolio({ experienceCenters }, caller);
+
+    expect(portfolioRepository.upsertInTx).toHaveBeenCalledWith(
+      expect.anything(),
+      'profile-1',
+      expect.objectContaining({ experienceCenters }),
+    );
+    expect(result.experienceCenters).toEqual(experienceCenters);
   });
 });
 

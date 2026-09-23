@@ -168,6 +168,15 @@ describe('DesignerVerification', () => {
     expect(screen.getByRole('button', { name: 'Submitted' })).toBeDisabled();
   });
 
+  it('links document display recovery to WhatsApp Business', () => {
+    render(<DesignerVerification initialState={pendingState({ documents: [] })} />);
+
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+    expect(supportLink).toHaveAttribute('target', '_blank');
+    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('lets the owner edit completed identity details before submission', async () => {
     const user = userEvent.setup();
     const { container } = render(<DesignerVerification initialState={draftState()} />);

@@ -282,7 +282,7 @@ export type ProfileOwnerResponse = z.infer<typeof profileOwnerResponseSchema>;
 export const currentProfileResponseSchema = profileOwnerResponseSchema
   .extend({
     /** Short-lived display URL for the active branch's saved portfolio logo. */
-    logoUrl: z.string().url().nullable(),
+    logoUrl: z.string().url().nullable().optional(),
     organization: z.object({
       id: z.string(),
       name: z.string(),
@@ -292,6 +292,27 @@ export const currentProfileResponseSchema = profileOwnerResponseSchema
   })
   .meta({ id: 'CurrentProfile' });
 export type CurrentProfileResponse = z.infer<typeof currentProfileResponseSchema>;
+
+export const experienceCenterSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    address: z.string().trim().min(1).max(300),
+    city: z.string().trim().min(1).max(100),
+    state: z.string().trim().min(1).max(100),
+    postalCode: z.string().trim().max(20).nullable().optional(),
+    phone: z.string().trim().max(20).nullable().optional(),
+    mapsUrl: z.string().url().max(500).nullable().optional(),
+  })
+  .strict()
+  .meta({ id: 'ExperienceCenter' });
+export type ExperienceCenter = z.infer<typeof experienceCenterSchema>;
+
+export const experienceCenterGroupSchema = z
+  .object({
+    state: z.string(),
+    centers: z.array(experienceCenterSchema),
+  })
+  .meta({ id: 'ExperienceCenterGroup' });
 
 /** Profile ID path parameter. */
 export const profileIdParamSchema = z.object({
@@ -578,6 +599,7 @@ export const portfolioResponseSchema = z
     missingRequiredFields: z.array(requiredPortfolioFieldSchema),
     // Null when the designer has never connected a Google Business location.
     googleConnection: googleConnectionSummarySchema.nullable(),
+    experienceCenters: z.array(experienceCenterSchema).optional(),
     publishedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -613,6 +635,7 @@ export const updatePortfolioSchema = z
       })
       .optional(),
     showTickifBadge: z.boolean().optional(),
+    experienceCenters: z.array(experienceCenterSchema).max(20).optional(),
   })
   .meta({ id: 'UpdatePortfolio' });
 export type UpdatePortfolioInput = z.infer<typeof updatePortfolioSchema>;
@@ -881,6 +904,7 @@ export const publicPortfolioResponseSchema = z
     foundedYear: z.number().int().nullable(),
     /** City footprint labels. The street address stays private. */
     cities: z.array(z.string()),
+    experienceCenterGroups: z.array(experienceCenterGroupSchema).optional(),
     logoUrl: z.string().url().nullable(),
     accentColor: z.string(),
     badges: z.array(portfolioBadgeSchema),

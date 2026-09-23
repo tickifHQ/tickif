@@ -313,6 +313,9 @@ describe('DesignerWorkspaceShell', () => {
     const supportLink = screen.getByRole('link', { name: /contact support/i });
     expect(supportLink.querySelector('svg')).toHaveClass('lucide-message-square-more');
     expect(document.querySelector('.lucide-badge-help')).not.toBeInTheDocument();
+    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+    expect(supportLink).toHaveAttribute('target', '_blank');
+    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   it('places the branch switcher above Contact support and keeps the organization switcher last', () => {

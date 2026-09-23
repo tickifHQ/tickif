@@ -12,7 +12,9 @@ import { app } from '../../../src/app.js';
 
 // Mock the search repository to avoid requiring a live Typesense instance
 vi.mock('../../../src/modules/search/repository.js', () => ({
+  insertSearchActivity: vi.fn(),
   multiSearch: vi.fn(),
+  findFilterSuggestions: vi.fn(),
   searchProjects: vi.fn(),
   searchDesigners: vi.fn(),
   recentProjectsInCity: vi.fn(),
@@ -81,6 +83,30 @@ function createMockDesignerDocument(overrides: Partial<{
 describe('GET /api/search/suggest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(repository.findFilterSuggestions).mockResolvedValue([]);
+  });
+
+  it('returns matching filter entities that can be selected by the discovery UI', async () => {
+    vi.mocked(repository.multiSearch).mockResolvedValue({
+      projects: [],
+      designers: [],
+      processingTimeMs: 2,
+    });
+    vi.mocked(repository.findFilterSuggestions).mockResolvedValue([
+      { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
+      { kind: 'material', filterKey: 'material', slug: 'wood', label: 'Wood' },
+    ]);
+
+    const res = await get('/api/search/suggest?q=bed');
+
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      filters: [
+        { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
+        { kind: 'material', filterKey: 'material', slug: 'wood', label: 'Wood' },
+      ],
+    });
+    expect(repository.findFilterSuggestions).toHaveBeenCalledWith('bed');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -192,6 +218,7 @@ describe('GET /api/search/suggest', () => {
         title: string;
         designerName: string;
         citySlug: string | null;
+        cityName: string | null;
         coverImageUrl: string | null;
       }>;
     }>(res);
@@ -205,11 +232,21 @@ describe('GET /api/search/suggest', () => {
     expect(project).toHaveProperty('title', 'Test Project Title');
     expect(project).toHaveProperty('designerName', 'Test Designer');
     expect(project).toHaveProperty('citySlug', 'mumbai');
+    expect(project).toHaveProperty('cityName', null);
     expect(project).toHaveProperty('coverImageUrl');
 
     // Ensure no extra fields are present
-    const allowedKeys = ['id', 'slug', 'title', 'designerName', 'citySlug', 'coverImageUrl'];
+    const allowedKeys = [
+      'id',
+      'slug',
+      'title',
+      'designerName',
+      'citySlug',
+      'cityName',
+      'coverImageUrl',
+    ];
     expect(Object.keys(project).sort()).toEqual(allowedKeys.sort());
+    expect(repository.insertSearchActivity).not.toHaveBeenCalled();
   });
 
   it('returns only minimal fields for designers: id, slug, displayName, citySlugs, logoUrl, projectCount', async () => {

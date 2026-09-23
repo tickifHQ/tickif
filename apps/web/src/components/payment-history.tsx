@@ -98,7 +98,7 @@ export function PaymentHistory() {
         ) : (
           <p>No payments recorded yet.</p>
         )}
-        <div className="flex gap-2">
+        <div data-testid="payment-history-controls" className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"

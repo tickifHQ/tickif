@@ -11,6 +11,7 @@ import { Button } from '@repo/ui/components/button';
 import { Skeleton } from '@repo/ui/components/skeleton';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
 import type { OrganizationCapabilities } from '@repo/contracts';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import {
   ChartLine,
   CalendarDays,
@@ -254,13 +255,15 @@ function SidebarContent({
               key={activeOrganizationId}
               organizationId={activeOrganizationId}
             />
-            <Link
-              href="mailto:support@tickif.in"
+            <a
+              href={SUPPORT_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <MessageSquareMore className="size-4" />
               <span>Contact support</span>
-            </Link>
+            </a>
             <Link
               href="/"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm leading-none font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"

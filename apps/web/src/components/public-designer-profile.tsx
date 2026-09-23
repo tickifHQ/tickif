@@ -314,7 +314,7 @@ function HeroSection({ portfolio, view }: SectionProps) {
         <figure className="flex min-h-96 flex-col bg-muted lg:col-span-5 lg:min-h-full">
           <div className="relative min-h-96 flex-1">
             <Image
-              src={view.hero.coverImageUrl}
+              src={view.hero.heroImageUrl ?? view.hero.coverImageUrl}
               alt={`${view.hero.title} by ${portfolio.displayName}`}
               fill
               priority
@@ -335,6 +335,11 @@ function HeroSection({ portfolio, view }: SectionProps) {
 }
 
 function CredentialsSection({ portfolio }: SectionProps) {
+  // No badges → hide the whole section (wrapper + heading), matching the
+  // self-guarding pattern used by Portfolio/Story/Reviews. An empty credentials
+  // header reads as broken.
+  if (portfolio.badges.length === 0) return null;
+
   return (
     <section className="border-b bg-muted/30 px-4 py-16 sm:px-6">
       <div className="mx-auto max-w-6xl">

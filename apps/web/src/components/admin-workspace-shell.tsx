@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { ComponentType, ReactNode } from 'react';
 import { AccountMenu } from '@/components/account-menu';
 import { WorkspaceShellFrame } from '@/components/workspace-shell-frame';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 import { LayoutDashboard, MessageSquareMore, ShieldUser, SquareChartGantt } from 'lucide-react';
 
 type AdminNavItem = {
@@ -66,13 +67,15 @@ function AdminSidebar({ pathname }: { pathname: string }) {
             })}
           </nav>
         </section>
-        <Link
-          href="mailto:support@tickif.in"
+        <a
+          href={SUPPORT_WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium leading-none text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <MessageSquareMore className="size-4" aria-hidden="true" />
           <span>Contact support</span>
-        </Link>
+        </a>
       </div>
     </>
   );

@@ -384,8 +384,10 @@ describe('HomePage', () => {
 
     expect(searchCall).toBeDefined();
     expect(screen.getByRole('heading', { name: 'Results for “warm kitchen”' })).toBeInTheDocument();
+    expect(screen.getAllByRole('search')).toHaveLength(1);
+    expect(screen.queryByText(/Inspire from/)).not.toBeInTheDocument();
+    // E-303: the discovery card shows the budget pill (not tags) in its hover UI.
     expect(within(screen.getByRole('article')).getByText('₹15–35L')).toBeInTheDocument();
-    expect(within(screen.getByRole('article')).getByText('3 BHK')).toBeInTheDocument();
   });
 
   it('starts the search request before taxonomy responses finish', async () => {

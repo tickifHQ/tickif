@@ -50,6 +50,7 @@ export const createProjectSchema = z
     bhkSlug: taxonomySlug.optional(),
     sizeSqft: z.number().int().positive().max(100_000).optional(),
     citySlug: taxonomySlug.optional(),
+    cityName: z.string().trim().min(2).max(100).optional(),
     localitySlug: taxonomySlug.optional(),
     buildingName: z.string().trim().min(1).max(160).optional(),
     budgetBandSlug: taxonomySlug.optional(),
@@ -70,6 +71,7 @@ export const updateProjectSchema = z
     bhkSlug: taxonomySlug.nullable().optional(),
     sizeSqft: z.number().int().positive().max(100_000).nullable().optional(),
     citySlug: taxonomySlug.nullable().optional(),
+    cityName: z.string().trim().min(2).max(100).nullable().optional(),
     localitySlug: taxonomySlug.nullable().optional(),
     buildingName: z.string().trim().min(1).max(160).nullable().optional(),
     budgetBandSlug: taxonomySlug.nullable().optional(),
@@ -187,6 +189,7 @@ export const projectResponseSchema = z
     bhkSlug: z.string().nullable(),
     sizeSqft: z.number().int().nullable(),
     citySlug: z.string().nullable(),
+    cityName: z.string().nullable().optional(),
     localitySlug: z.string().nullable(),
     buildingName: z.string().nullable(),
     budgetBandSlug: z.string().nullable(),
@@ -536,6 +539,13 @@ export const publicProjectDesignerSchema = designerSummarySchema
     yearsExperience: z.number().int().min(0),
     projectCount: z.number().int().min(0),
     footprintCities: z.array(publicTaxonomyValueSchema),
+    /** Null when Google is disconnected, stale, hidden, or has no ratings. */
+    googleRating: z
+      .object({
+        rating: z.number().min(0).max(5),
+        reviewCount: z.number().int().nonnegative(),
+      })
+      .nullable(),
   })
   .meta({ id: 'PublicProjectDesigner' });
 export type PublicProjectDesigner = z.infer<typeof publicProjectDesignerSchema>;
@@ -576,6 +586,7 @@ export const publicProjectSpecificationsSchema = z
     scope: publicTaxonomyValueSchema.nullable(),
     bhk: publicTaxonomyValueSchema.nullable(),
     city: publicTaxonomyValueSchema.nullable(),
+    cityName: z.string().nullable().optional(),
     locality: publicTaxonomyValueSchema.nullable(),
     budgetBand: publicTaxonomyValueSchema.nullable(),
   })
@@ -632,6 +643,8 @@ export type DesignerProjectsQuery = z.infer<typeof designerProjectsQuerySchema>;
  */
 export const designerProjectCardSchema = feedProjectSchema
   .extend({
+    /** Large derivative reserved for the wide portfolio hero. */
+    heroImageUrl: z.url().nullable().optional(),
     /** e.g. "4 BHK · Apartment" — composed from the bhk + property subtype labels. */
     propertyType: z.string().nullable(),
     /** BHK label used independently in design-led recommendation cards. */

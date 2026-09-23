@@ -8,6 +8,8 @@ export type ProjectSearchDocument = {
   designerSlug: string | null;
   designerName: string;
   citySlug: string | null;
+  /** Free-text city for projects outside the configured taxonomy. */
+  cityName?: string | null;
   localitySlug: string | null;
   propertyTypeSlug: string | null;
   propertySubtypeSlug: string | null;
@@ -39,7 +41,7 @@ export type ProjectSearchDocument = {
   reviewCount: number;
 };
 
-/** Disposable Typesense projection of an active designer profile. */
+/** Disposable Typesense projection of a publicly visible designer portfolio. */
 export type DesignerSearchDocument = {
   id: string;
   slug: string | null;

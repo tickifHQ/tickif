@@ -47,7 +47,7 @@ function pickPreviewDerivative(row: ProjectImageListItem): string | null {
 }
 
 function pickViewerDerivative(row: ProjectImageListItem): string | null {
-  return pickDerivativeKey(row, ['large', 'medium', 'small']) ?? null;
+  return pickDerivativeKey(row, ['xlarge', 'large', 'medium', 'small']) ?? null;
 }
 
 async function toImageDto(row: ProjectImageListItem): Promise<ProjectImageDto> {

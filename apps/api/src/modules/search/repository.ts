@@ -19,10 +19,12 @@ import {
   type ProjectSearchDocument,
   type DesignerSearchDocument,
 } from '@repo/search';
-import { db, schema, eq, and, or, desc, gt, isNotNull, isNull, inArray } from '@repo/db';
+import { db, schema, eq, and, asc, desc, gt, isNotNull, isNull, inArray, or, sql } from '@repo/db';
+import { exists, ilike } from 'drizzle-orm';
 import type { Derivative } from '@repo/contracts';
 import {
   PROJECT_FACET_FIELDS,
+  PROJECT_MAX_FACET_VALUES,
   DESIGNER_FACET_FIELDS,
   PROJECT_SUGGEST_FIELDS,
   DESIGNER_SUGGEST_FIELDS,
@@ -39,6 +41,37 @@ export interface ProjectSearchResult {
   processingTimeMs: number;
 }
 
+export async function insertSearchActivity(input: {
+  actorUserId: string | null;
+  endpoint: 'projects' | 'designers';
+  query: string;
+}): Promise<void> {
+  const query = input.query.trim();
+  const actorUserId = input.actorUserId;
+  if (!actorUserId || !query) return;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.searchActivity).values({ ...input, actorUserId, query });
+      await tx.execute(sql`
+        delete from ${schema.searchActivity}
+        where ${schema.searchActivity.actorUserId} = ${actorUserId}
+          and (
+            ${schema.searchActivity.createdAt} < now() - interval '180 days'
+            or ${schema.searchActivity.id} in (
+              select ${schema.searchActivity.id}
+              from ${schema.searchActivity}
+              where ${schema.searchActivity.actorUserId} = ${actorUserId}
+              order by ${schema.searchActivity.createdAt} desc, ${schema.searchActivity.id} desc
+              offset 1000
+            )
+          )
+      `);
+    });
+  } catch (error) {
+    console.error('[search] Failed to record authenticated search activity:', error);
+  }
+}
+
 export interface DesignerSearchResult {
   hits: DesignerSearchDocument[];
   estimatedTotalHits: number;
@@ -52,6 +85,13 @@ export interface MultiSearchResult {
   processingTimeMs: number;
 }
 
+export interface FilterSuggestion {
+  kind: 'style' | 'space' | 'material' | 'tag';
+  filterKey: 'theme' | 'room' | 'material' | 'tag';
+  slug: string;
+  label: string;
+}
+
 export interface RecentProject {
   id: string;
   slug: string;
@@ -61,6 +101,7 @@ export interface RecentProject {
   designerSlug: string | null;
   designerName: string;
   citySlug: string | null;
+  cityName: string | null;
   localitySlug: string | null;
   propertyTypeSlug: string | null;
   propertySubtypeSlug: string | null;
@@ -110,10 +151,21 @@ export interface TypesenseSearchParams {
  * means a fallback hit and an indexed hit render the same image. The worker helper is
  * not importable from apps/api, so the policy is duplicated rather than shared —
  * change both together.
+ * Medium avoids stretching a 320px thumbnail across high-density discovery cards.
  */
 function pickCoverDerivativeKey(derivatives: Derivative[] | null): string | null {
   if (!derivatives) return null;
   return (
+    derivatives.find(
+      (derivative) => derivative.variant === 'medium' && derivative.format === 'webp',
+    )?.key ??
+    derivatives.find((derivative) => derivative.variant === 'medium')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large' && derivative.format === 'webp')
+      ?.key ??
+    derivatives.find((derivative) => derivative.variant === 'large')?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small' && derivative.format === 'webp')
+      ?.key ??
+    derivatives.find((derivative) => derivative.variant === 'small')?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb' && derivative.format === 'webp')
       ?.key ??
     derivatives.find((derivative) => derivative.variant === 'thumb')?.key ??
@@ -161,16 +213,25 @@ export async function searchProjects(params: TypesenseSearchParams): Promise<Pro
     filter_by: params.filter_by,
     sort_by: params.sort_by || discoveryRanking(),
     facet_by: params.facet_by || PROJECT_FACET_FIELDS.join(','),
+    max_facet_values: PROJECT_MAX_FACET_VALUES,
     include_fields: params.include_fields,
     page: params.page,
     per_page: params.per_page,
   };
 
   const documents = client.collections<ProjectSearchDocument>(collectionName).documents();
+  const canUseLegacyFacetSchema = !searchParams.filter_by?.includes('tags:=');
+  const legacySearchParams = canUseLegacyFacetSchema
+    ? {
+        ...searchParams,
+        sort_by: params.sort_by || PROJECT_DEFAULT_SORT,
+        facet_by: PROJECT_FACET_FIELDS.filter((field) => field !== 'tags').join(','),
+      }
+    : { ...searchParams, sort_by: params.sort_by || PROJECT_DEFAULT_SORT };
   const result = await searchWithDiscoveryFallback(
     (query) => documents.search(query),
     searchParams,
-    { ...searchParams, sort_by: params.sort_by || PROJECT_DEFAULT_SORT },
+    legacySearchParams,
   );
 
   return {
@@ -319,6 +380,109 @@ export async function multiSearch(q: string): Promise<MultiSearchResult> {
   };
 }
 
+/** Find active taxonomy and live image tags that can be applied as discovery filters. */
+export async function findFilterSuggestions(q: string): Promise<FilterSuggestion[]> {
+  const escaped = q.replace(/[\\%_]/g, '\\$&');
+  const pattern = `%${escaped}%`;
+  const visibleRoom = db
+    .select({ id: schema.projectRoom.id })
+    .from(schema.projectRoom)
+    .innerJoin(schema.project, eq(schema.projectRoom.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
+        eq(schema.projectRoom.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+      ),
+    );
+  const visibleTheme = db
+    .select({ id: schema.projectImage.id })
+    .from(schema.projectImage)
+    .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectImage.status, 'ready'),
+        eq(schema.projectImage.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+        sql`${schema.projectImage.themeSlugs} ? ${schema.taxonomy.slug}`,
+      ),
+    );
+  const visibleMaterial = db
+    .select({ id: schema.projectImage.id })
+    .from(schema.projectImage)
+    .innerJoin(schema.project, eq(schema.projectImage.projectId, schema.project.id))
+    .innerJoin(schema.designerProfile, eq(schema.project.designerId, schema.designerProfile.id))
+    .where(
+      and(
+        eq(schema.projectImage.status, 'ready'),
+        eq(schema.projectImage.isLive, true),
+        eq(schema.project.status, 'published'),
+        eq(schema.designerProfile.status, 'active'),
+        sql`${schema.projectImage.materialSlugs} ? ${schema.taxonomy.slug}`,
+      ),
+    );
+  const [terms, tagResult] = await Promise.all([
+    db
+      .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug, label: schema.taxonomy.label })
+      .from(schema.taxonomy)
+      .where(
+        and(
+          eq(schema.taxonomy.isActive, true),
+          inArray(schema.taxonomy.kind, ['theme', 'room', 'material']),
+          or(ilike(schema.taxonomy.label, pattern), ilike(schema.taxonomy.slug, pattern)),
+          or(
+            and(eq(schema.taxonomy.kind, 'room'), exists(visibleRoom)),
+            and(eq(schema.taxonomy.kind, 'theme'), exists(visibleTheme)),
+            and(eq(schema.taxonomy.kind, 'material'), exists(visibleMaterial)),
+          ),
+        ),
+      )
+      .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label))
+      .limit(12),
+    db.execute<{ slug: string }>(sql`
+      select distinct tag.slug
+      from ${schema.projectImage}
+      inner join ${schema.project}
+        on ${eq(schema.projectImage.projectId, schema.project.id)}
+      inner join ${schema.designerProfile}
+        on ${eq(schema.project.designerId, schema.designerProfile.id)}
+      cross join lateral jsonb_array_elements_text(${schema.projectImage.tagSlugs}) as tag(slug)
+      where ${schema.projectImage.status} = 'ready'
+        and ${schema.projectImage.isLive} = true
+        and ${schema.project.status} = 'published'
+        and ${schema.designerProfile.status} = 'active'
+        and tag.slug ilike ${pattern}
+      order by tag.slug
+      limit 6
+    `),
+  ]);
+
+  const kindMap = {
+    theme: { kind: 'style', filterKey: 'theme' },
+    room: { kind: 'space', filterKey: 'room' },
+    material: { kind: 'material', filterKey: 'material' },
+  } as const;
+  const taxonomySuggestions = terms.flatMap((term) => {
+    const mapped = kindMap[term.kind as keyof typeof kindMap];
+    return mapped ? [{ ...mapped, slug: term.slug, label: term.label }] : [];
+  });
+  const tagSuggestions: FilterSuggestion[] = tagResult.rows.map(({ slug }) => ({
+    kind: 'tag',
+    filterKey: 'tag',
+    slug,
+    label: slug
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' '),
+  }));
+
+  return [...taxonomySuggestions, ...tagSuggestions].slice(0, 12);
+}
+
 /**
  * Postgres fallback query for recent published projects in a city.
  * Used when Typesense returns zero results after exhausting the fallback ladder.
@@ -338,6 +502,7 @@ export async function recentProjectsInCity(
       designerSlug: schema.designerProfile.slug,
       designerName: schema.designerProfile.displayName,
       citySlug: schema.project.citySlug,
+      cityName: schema.project.cityName,
       localitySlug: schema.project.localitySlug,
       propertyTypeSlug: schema.project.propertyTypeSlug,
       propertySubtypeSlug: schema.project.propertySubtypeSlug,
@@ -379,10 +544,7 @@ export async function recentProjectsInCity(
         slug: schema.taxonomy.slug,
       })
       .from(schema.projectRoom)
-      .innerJoin(
-        schema.taxonomy,
-        eq(schema.projectRoom.roomTypeId, schema.taxonomy.id),
-      )
+      .innerJoin(schema.taxonomy, eq(schema.projectRoom.roomTypeId, schema.taxonomy.id))
       .where(
         and(inArray(schema.projectRoom.projectId, projectIds), eq(schema.projectRoom.isLive, true)),
       ),
@@ -470,6 +632,7 @@ export async function recentProjectsInCity(
       designerSlug: row.designerSlug,
       designerName: row.designerName,
       citySlug: row.citySlug,
+      cityName: row.cityName,
       localitySlug: row.localitySlug,
       propertyTypeSlug: row.propertyTypeSlug,
       propertySubtypeSlug: row.propertySubtypeSlug,

@@ -75,9 +75,11 @@ describe('ShowcaseCard', () => {
       '640',
     );
     expect(screen.getByText('₹15–35L')).toBeInTheDocument();
-    expect(screen.getByText('Studio B')).toBeInTheDocument();
-    expect(screen.getByText('2 BHK')).toBeInTheDocument();
-    expect(screen.getByText('4.8')).toBeInTheDocument();
+    // E-303: hover metadata shows location only — studio, tags and rating are dropped.
+    expect(screen.getByText('Pune')).toBeInTheDocument();
+    expect(screen.queryByText('Studio B')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 BHK')).not.toBeInTheDocument();
+    expect(screen.queryByText('4.8')).not.toBeInTheDocument();
   });
 
   it('enforces the allocator fallback ratio when source dimensions are unavailable', () => {
@@ -110,14 +112,15 @@ describe('ShowcaseCard', () => {
     expect(container.querySelector('[aria-label="Share"]')).not.toBeInTheDocument();
   });
 
-  it('uses compact responsive typography and hides secondary tags on shallow masonry cards', () => {
+  it('keeps the hover title on one line with compact typography and omits tags (E-303)', () => {
     render(<ShowcaseCard project={{ ...feedProject, imageWidth: 800, imageHeight: 420 }} />);
 
-    expect(screen.getByRole('heading', { name: feedProject.title })).toHaveClass(
-      'text-sm',
-      'line-clamp-2',
-    );
-    expect(screen.getByText('3 BHK').parentElement).toHaveClass('hidden');
+    // Single-line, truncated (ellipsis) title at the smaller hover size — never wraps.
+    const heading = screen.getByRole('heading', { name: feedProject.title });
+    expect(heading).toHaveClass('truncate', 'text-xs');
+    expect(heading).not.toHaveClass('line-clamp-2');
+    // Tags are no longer rendered in the hover state.
+    expect(screen.queryByText('3 BHK')).not.toBeInTheDocument();
   });
 });
 

@@ -69,6 +69,7 @@ const fakePortfolio: PublicPortfolioResponse = {
   firmType: 'Interior Design Studio',
   foundedYear: 2019,
   cities: ['Chennai'],
+  experienceCenterGroups: [],
   logoUrl: null,
   accentColor: '#FF8F73',
   badges: ['verified'],

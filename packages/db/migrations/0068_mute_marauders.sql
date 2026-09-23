@@ -1,1 +1,0 @@
-ALTER TABLE "designer_profile" ADD COLUMN "logo_crop" jsonb;

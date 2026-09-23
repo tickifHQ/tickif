@@ -104,6 +104,7 @@ export function makePublicProject(
       slug: 'anika-spaces',
       avgRating: '4.8',
       reviewCount: 36,
+      googleRating: null,
       entityType: 'company',
       logoUrl: null,
       isKycVerified: false,

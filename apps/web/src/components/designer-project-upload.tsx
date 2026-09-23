@@ -896,6 +896,7 @@ function ProjectTypeCard({
           alt=""
           width={option.imageWidth}
           height={option.imageHeight}
+          loading="eager"
           className="h-auto max-h-[50px] w-auto"
         />
       </div>
@@ -1135,6 +1136,7 @@ function WhyItMattersCard() {
               alt=""
               width={255}
               height={140}
+              loading="eager"
               className="h-auto w-full"
             />
           </div>

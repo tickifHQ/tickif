@@ -31,6 +31,7 @@ import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import type { SubscriptionResponse } from '@repo/contracts';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -106,9 +107,12 @@ function CurrentPlanCard({
 
   return (
     <Card radius="2xl">
-      <div className="flex flex-col gap-5 p-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-stretch gap-5">
-          <span className="flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-primary/10 text-primary sm:w-36">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-8">
+        <div
+          data-testid="current-plan-identity"
+          className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-stretch sm:gap-5"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:h-auto sm:w-36 sm:self-stretch sm:rounded-2xl">
             <Crown className="size-9" />
           </span>
           <div className="min-w-0 flex-1">
@@ -702,7 +706,7 @@ function HelpCard() {
           Our support team is here to help you with any billing queries.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-4 w-full">
-          <a href="mailto:support@tickif.in">
+          <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
             <Receipt className="size-4" />
             Contact Support
           </a>
@@ -798,7 +802,23 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
       {(payment.message || refreshError) && (
         <Alert className="mt-6">
           <AlertDescription>
-            <p>{payment.message ?? refreshError}</p>
+            <p>
+              {payment.message ?? refreshError}
+              {payment.supportRecommended ? (
+                <>
+                  {' '}
+                  <a
+                    href={SUPPORT_WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    Contact support
+                  </a>
+                  .
+                </>
+              ) : null}
+            </p>
             <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
               Refresh billing
             </Button>
