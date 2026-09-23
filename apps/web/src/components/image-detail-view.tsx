@@ -23,6 +23,7 @@ import { ShowcaseCard } from '@/components/showcase-card';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { ProjectLikeButton } from '@/components/project-like-button';
 import { ActionLoginDialog } from '@/components/action-login-dialog';
+import { PublicGoogleRating } from '@/components/public-google-rating';
 import { env } from '@/env';
 
 interface ImageDetailViewProps {
@@ -339,6 +340,11 @@ export function ImageDetailView({
                         {designer.projectCount} project{designer.projectCount !== 1 ? 's' : ''}
                       </p>
                     )}
+                    {designer.googleRating ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        <PublicGoogleRating {...designer.googleRating} />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -434,7 +440,7 @@ export function ImageDetailView({
         {/* Finding #7: Gallery strip — use aria-current instead of incomplete tab pattern */}
         {gallery.length > 1 ? (
           <div
-            className="mt-6 flex gap-3 overflow-x-auto p-1 pb-2 scrollbar-none"
+            className="mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto p-1 pb-2 scrollbar-none"
             role="group"
             aria-label="Project gallery"
           >
@@ -444,7 +450,7 @@ export function ImageDetailView({
                 type="button"
                 aria-current={index === activeImageIndex ? 'true' : undefined}
                 onClick={() => selectImage(image)}
-                className={`relative shrink-0 overflow-hidden rounded-2xl transition-all ${
+                className={`relative shrink-0 snap-start overflow-hidden rounded-2xl transition-all ${
                   index === activeImageIndex
                     ? 'ring-2 ring-primary ring-offset-2'
                     : 'opacity-80 hover:opacity-100'

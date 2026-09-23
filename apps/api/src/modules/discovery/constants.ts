@@ -15,6 +15,8 @@ export const DISCOVERY_FILTER_FIELDS = [
   'budgetBandSlug',
   'roomSlugs',
   'themes',
+  'materials',
+  'tags',
 ] as const;
 
 export type DiscoveryFilterField = (typeof DISCOVERY_FILTER_FIELDS)[number];
@@ -36,8 +38,9 @@ export const DISCOVERY_FACET_TAXONOMY_KINDS = {
   budgetBandSlug: 'budget_band',
   roomSlugs: 'room',
   themes: 'theme',
+  materials: 'material',
 } as const satisfies Record<
-  DiscoveryFilterField,
+  Exclude<DiscoveryFilterField, 'tags'>,
   (typeof schema.taxonomyKindEnum.enumValues)[number]
 >;
 

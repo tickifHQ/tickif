@@ -1612,7 +1612,7 @@ export function DesignerPortfolioSettings() {
       {/* Footer */}
       <div
         data-testid="portfolio-action-bar"
-        className="sticky bottom-6 z-10 mx-6 mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-6 py-4 shadow-md"
+        className="z-10 mx-4 mb-4 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 shadow-md sm:sticky sm:bottom-6 sm:mx-6 sm:mb-6 sm:flex-row sm:items-center sm:px-6 sm:py-4"
       >
         <div className="flex items-center gap-3">
           <button

@@ -565,7 +565,7 @@ describe('DesignerPortfolioSettings', () => {
     });
   });
 
-  it('keeps the sticky action bar inset from the viewport bottom', async () => {
+  it('only makes the action bar sticky when the viewport has room for it', async () => {
     await renderSettings();
 
     const discardButton = screen.getByRole('button', { name: 'Discard changes' });
@@ -575,8 +575,8 @@ describe('DesignerPortfolioSettings', () => {
     expect(discardButton).not.toHaveClass('text-muted-foreground');
     // Disabled state keeps a visible affordance instead of looking clickable.
     expect(discardButton).toHaveClass('disabled:opacity-50');
-    expect(actionBar).toHaveClass('bottom-6');
-    expect(actionBar).not.toHaveClass('bottom-0');
+    expect(actionBar).toHaveClass('sm:sticky', 'sm:bottom-6');
+    expect(actionBar).not.toHaveClass('sticky', 'bottom-6', 'bottom-0');
   });
 
   it('keeps the remove-logo control outside the clipped image layer', async () => {

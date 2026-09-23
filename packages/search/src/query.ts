@@ -17,7 +17,7 @@ export function discoveryRanking(now = Date.now(), ratingFirst = false): string 
 function missingDiscoveryField(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return (
-    /Could not find.*(?:paidUntil|portfolioTerms)/i.test(error.message) ||
+    /Could not find.*(?:paidUntil|portfolioTerms|tags)/i.test(error.message) ||
     /400.*Error parsing eval expression in sort_by clause/.test(error.message)
   );
 }
@@ -35,7 +35,10 @@ export async function searchWithDiscoveryFallback<T extends { found?: number }>(
   } catch (error) {
     if (
       !missingDiscoveryField(error) ||
-      (params.sort_by === legacy.sort_by && params.query_by === legacy.query_by)
+      (params.sort_by === legacy.sort_by &&
+        params.query_by === legacy.query_by &&
+        params.facet_by === legacy.facet_by &&
+        params.filter_by === legacy.filter_by)
     )
       throw error;
     effective = legacy;

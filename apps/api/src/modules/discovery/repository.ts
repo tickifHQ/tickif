@@ -167,6 +167,29 @@ function feedTextMatch(q: string) {
     ilike(schema.project.title, pattern),
     ilike(schema.project.description, pattern),
     ilike(schema.designerProfile.displayName, pattern),
+    sql`exists (
+      select 1
+      from ${schema.projectRoom}
+      inner join ${schema.taxonomy}
+        on ${eq(schema.projectRoom.roomTypeId, schema.taxonomy.id)}
+      where ${schema.projectRoom.projectId} = ${schema.project.id}
+        and ${schema.projectRoom.isLive} = true
+        and ${schema.taxonomy.kind} = 'room'
+        and (${schema.taxonomy.label} ilike ${pattern} or ${schema.taxonomy.slug} ilike ${pattern})
+    )`,
+    sql`exists (
+      select 1
+      from ${schema.projectImage}
+      where ${schema.projectImage.projectId} = ${schema.project.id}
+        and ${schema.projectImage.status} = 'ready'
+        and ${schema.projectImage.isLive} = true
+        and (
+          exists (select 1 from jsonb_array_elements_text(${schema.projectImage.themeSlugs}) term(value) where term.value ilike ${pattern})
+          or exists (select 1 from jsonb_array_elements_text(${schema.projectImage.materialSlugs}) term(value) where term.value ilike ${pattern})
+          or exists (select 1 from jsonb_array_elements_text(${schema.projectImage.finishSlugs}) term(value) where term.value ilike ${pattern})
+          or exists (select 1 from jsonb_array_elements_text(${schema.projectImage.tagSlugs}) term(value) where term.value ilike ${pattern})
+        )
+    )`,
   );
 }
 
@@ -202,10 +225,17 @@ export const discoveryRepository = {
       per_page: params.perPage,
       include_fields: TYPESENSE_INCLUDE_FIELDS,
     };
+    const canUseLegacyFacetSchema = !params.filterBy.includes('tags:=');
+    const legacyQuery = canUseLegacyFacetSchema
+      ? {
+          ...query,
+          facet_by: DISCOVERY_FILTER_FIELDS.filter((field) => field !== 'tags').join(','),
+        }
+      : query;
     const result = await searchWithDiscoveryFallback(
       (request) => documents.search(request),
       { ...query, sort_by: params.q ? discoveryRanking() : sortBy },
-      query,
+      legacyQuery,
     );
 
     return {
@@ -306,16 +336,32 @@ export const discoveryRepository = {
    * one entry — exactly how `project.locality_slug` and the Typesense facet treat them.
    */
   async listFacetVocabulary(): Promise<FacetVocabulary> {
-    const rows = await db
-      .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug })
-      .from(schema.taxonomy)
-      .where(
-        and(
-          eq(schema.taxonomy.isActive, true),
-          inArray(schema.taxonomy.kind, FACET_TAXONOMY_KINDS),
-        ),
-      )
-      .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label));
+    const [rows, tagResult] = await Promise.all([
+      db
+        .select({ kind: schema.taxonomy.kind, slug: schema.taxonomy.slug })
+        .from(schema.taxonomy)
+        .where(
+          and(
+            eq(schema.taxonomy.isActive, true),
+            inArray(schema.taxonomy.kind, FACET_TAXONOMY_KINDS),
+          ),
+        )
+        .orderBy(asc(schema.taxonomy.sortOrder), asc(schema.taxonomy.label)),
+      db.execute<{ slug: string }>(sql`
+        select distinct tag.slug
+        from ${schema.projectImage}
+        inner join ${schema.project}
+          on ${eq(schema.projectImage.projectId, schema.project.id)}
+        inner join ${schema.designerProfile}
+          on ${eq(schema.project.designerId, schema.designerProfile.id)}
+        cross join lateral jsonb_array_elements_text(${schema.projectImage.tagSlugs}) as tag(slug)
+        where ${schema.projectImage.status} = 'ready'
+          and ${schema.projectImage.isLive} = true
+          and ${schema.project.status} = 'published'
+          and ${schema.designerProfile.status} = 'active'
+        order by tag.slug
+      `),
+    ]);
 
     const slugsByField = new Map<DiscoveryFilterField, Set<string>>();
     for (const row of rows) {
@@ -328,6 +374,7 @@ export const discoveryRepository = {
 
     const vocabulary = emptyFacetVocabulary();
     for (const [field, slugs] of slugsByField) vocabulary[field] = [...slugs];
+    vocabulary.tags = tagResult.rows.map(({ slug }) => slug);
     return vocabulary;
   },
 
@@ -396,6 +443,22 @@ export const discoveryRepository = {
           and ${schema.projectImage.isLive} = true
         cross join lateral jsonb_array_elements_text(${schema.projectImage.themeSlugs}) as theme(slug)
         group by theme.slug
+      union all
+      select 'materials', material.slug, count(distinct visible.id)::int
+        from visible
+        inner join ${schema.projectImage} on ${schema.projectImage.projectId} = visible.id
+          and ${schema.projectImage.status} = 'ready'
+          and ${schema.projectImage.isLive} = true
+        cross join lateral jsonb_array_elements_text(${schema.projectImage.materialSlugs}) as material(slug)
+        group by material.slug
+      union all
+      select 'tags', tag.slug, count(distinct visible.id)::int
+        from visible
+        inner join ${schema.projectImage} on ${schema.projectImage.projectId} = visible.id
+          and ${schema.projectImage.status} = 'ready'
+          and ${schema.projectImage.isLive} = true
+        cross join lateral jsonb_array_elements_text(${schema.projectImage.tagSlugs}) as tag(slug)
+        group by tag.slug
     `);
 
     const distribution: FacetDistribution = {};

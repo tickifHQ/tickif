@@ -1,12 +1,90 @@
 import { describe, expect, it } from 'vitest';
 import { db, eq, schema } from '@repo/db';
 import { makeDesigner, makeProject, makeProjectRoom, makeTaxonomy } from '@repo/db/testing';
-import { findDesignerSearchSource, findProjectSearchSource } from '../../src/search/repository.js';
+import {
+  findDesignerSearchSource,
+  findProjectSearchSource,
+  hasActiveDesigner,
+} from '../../src/search/repository.js';
 import { mapDesignerSearchDocument, mapProjectSearchDocument } from '../../src/search/mapper.js';
 
+async function makeDiscoverableDesigner() {
+  const designer = await makeDesigner({
+    status: 'active',
+    bio: 'A complete public designer profile.',
+    logoImageId: 'originals/logos/public-studio/logo',
+  });
+  await db.insert(schema.designerPortfolio).values({
+    profileId: designer.id,
+    publicLinkEnabled: true,
+    tagline: 'Thoughtful homes for modern living',
+  });
+  return designer;
+}
+
 describe('discovery projection source', () => {
+  it('keeps published project eligibility independent of the public portfolio link', async () => {
+    const designer = await makeDiscoverableDesigner();
+    const project = await makeProject({ designerId: designer.id, publishedAt: new Date() });
+    await db
+      .update(schema.designerPortfolio)
+      .set({ publicLinkEnabled: false })
+      .where(eq(schema.designerPortfolio.profileId, designer.id));
+
+    await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+    await expect(hasActiveDesigner(designer.id)).resolves.toBe(true);
+    await expect(findProjectSearchSource(project.id)).resolves.not.toBeNull();
+
+    await db
+      .update(schema.designerProfile)
+      .set({ status: 'suspended' })
+      .where(eq(schema.designerProfile.id, designer.id));
+    await expect(hasActiveDesigner(designer.id)).resolves.toBe(false);
+    await expect(findProjectSearchSource(project.id)).resolves.toBeNull();
+  });
+
+  it.each(['', '   '])(
+    'does not discover a designer with a blank logo (%j)',
+    async (logoImageId) => {
+      const designer = await makeDiscoverableDesigner();
+      await db
+        .update(schema.designerProfile)
+        .set({ logoImageId })
+        .where(eq(schema.designerProfile.id, designer.id));
+      await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+    },
+  );
+
+  it('does not expose an active designer whose portfolio is not public', async () => {
+    const designer = await makeDesigner({
+      status: 'active',
+      bio: 'Private studio profile',
+      logoImageId: 'originals/logos/private-studio/logo',
+    });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: designer.id,
+      publicLinkEnabled: false,
+      tagline: 'Private by choice',
+    });
+
+    await expect(findDesignerSearchSource(designer.id)).resolves.toBeNull();
+
+    const incompleteDesigner = await makeDesigner({
+      status: 'active',
+      bio: null,
+      logoImageId: 'originals/logos/incomplete-studio/logo',
+    });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: incompleteDesigner.id,
+      publicLinkEnabled: true,
+      tagline: 'Still missing a bio',
+    });
+
+    await expect(findDesignerSearchSource(incompleteDesigner.id)).resolves.toBeNull();
+  });
+
   it('searches published portfolio rooms but never draft or unpublished content', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const designer = await makeDiscoverableDesigner();
     const project = await makeProject({
       designerId: designer.id,
       title: 'Public retreat',
@@ -29,7 +107,7 @@ describe('discovery projection source', () => {
     expect(document.portfolioTerms).toEqual([]);
   });
   it('projects paid coverage for both collections and removes it for a locked account', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const designer = await makeDiscoverableDesigner();
     const project = await makeProject({ designerId: designer.id, publishedAt: new Date() });
     const until = new Date('2030-01-01T00:00:00Z');
     await db.insert(schema.subscription).values({

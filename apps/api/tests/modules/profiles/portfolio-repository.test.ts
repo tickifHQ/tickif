@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PortfolioRecord } from '../../../src/modules/profiles/portfolio-repository.js';
 
+vi.mock('../../../src/modules/search-index/repository.js', () => ({
+  recordSearchProjectionEvents: vi.fn(),
+}));
+
 // Mock the database layer
 vi.mock('@repo/db', () => {
   const mockChain = () => {
@@ -56,9 +60,10 @@ vi.mock('@repo/db', () => {
 });
 
 // Import AFTER mock registration
-const { portfolioRepository } = await import(
-  '../../../src/modules/profiles/portfolio-repository.js'
-);
+const { portfolioRepository } =
+  await import('../../../src/modules/profiles/portfolio-repository.js');
+const { recordSearchProjectionEvents } =
+  await import('../../../src/modules/search-index/repository.js');
 const { db } = await import('@repo/db');
 
 const mockPortfolioRow = (overrides: Partial<PortfolioRecord> = {}): PortfolioRecord => ({
@@ -96,11 +101,42 @@ const mockPortfolioRow = (overrides: Partial<PortfolioRecord> = {}): PortfolioRe
 beforeEach(() => vi.clearAllMocks());
 
 describe('portfolioRepository', () => {
+  describe('upsertInTx', () => {
+    it('enqueues a designer reindex when public portfolio settings change', async () => {
+      const row = mockPortfolioRow({ publicLinkEnabled: false });
+      vi.mocked(
+        db
+          .insert(undefined as never)
+          .values(undefined as never)
+          .onConflictDoUpdate(undefined as never).returning as ReturnType<typeof vi.fn>,
+      ).mockResolvedValueOnce([row]);
+
+      await portfolioRepository.upsertInTx(db as never, 'profile-1', {
+        publicLinkEnabled: false,
+      });
+
+      expect(recordSearchProjectionEvents).toHaveBeenCalledWith(
+        db,
+        expect.arrayContaining([
+          expect.objectContaining({
+            entityKind: 'designer',
+            entityId: 'profile-1',
+            operation: 'index',
+          }),
+        ]),
+      );
+    });
+  });
+
   describe('findByProfileId', () => {
     it('returns the portfolio record when found', async () => {
       const row = mockPortfolioRow();
-      vi.mocked(db.select().from(undefined as never).where(undefined as never).limit as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce([row]);
+      vi.mocked(
+        db
+          .select()
+          .from(undefined as never)
+          .where(undefined as never).limit as ReturnType<typeof vi.fn>,
+      ).mockResolvedValueOnce([row]);
 
       const result = await portfolioRepository.findByProfileId('profile-1');
       expect(result).toEqual(row);
@@ -115,8 +151,12 @@ describe('portfolioRepository', () => {
   describe('findBySlug', () => {
     it('returns the portfolio record when slug matches', async () => {
       const row = mockPortfolioRow({ portfolioSlug: 'my-studio' });
-      vi.mocked(db.select().from(undefined as never).where(undefined as never).limit as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce([row]);
+      vi.mocked(
+        db
+          .select()
+          .from(undefined as never)
+          .where(undefined as never).limit as ReturnType<typeof vi.fn>,
+      ).mockResolvedValueOnce([row]);
 
       const result = await portfolioRepository.findBySlug('my-studio');
       expect(result).toEqual(row);
@@ -132,7 +172,9 @@ describe('portfolioRepository', () => {
     it('inserts with defaults and returns the new record', async () => {
       const newRow = mockPortfolioRow({ profileId: 'profile-2' });
       vi.mocked(
-        db.insert(undefined as never).values(undefined as never).returning as ReturnType<typeof vi.fn>,
+        db.insert(undefined as never).values(undefined as never).returning as ReturnType<
+          typeof vi.fn
+        >,
       ).mockResolvedValueOnce([newRow]);
 
       const result = await portfolioRepository.create('profile-2');
@@ -141,7 +183,9 @@ describe('portfolioRepository', () => {
 
     it('throws when insert returns no row', async () => {
       vi.mocked(
-        db.insert(undefined as never).values(undefined as never).returning as ReturnType<typeof vi.fn>,
+        db.insert(undefined as never).values(undefined as never).returning as ReturnType<
+          typeof vi.fn
+        >,
       ).mockResolvedValueOnce([]);
 
       await expect(portfolioRepository.create('profile-3')).rejects.toThrow(
@@ -158,8 +202,19 @@ describe('portfolioRepository', () => {
 
     it('returns false for all known reserved slugs', async () => {
       const reservedList = [
-        'admin', 'api', 'login', 'designer', 'dashboard', 'auth', 'help',
-        'support', 'pricing', 'projects', 'settings', 'profile', 'portfolio',
+        'admin',
+        'api',
+        'login',
+        'designer',
+        'dashboard',
+        'auth',
+        'help',
+        'support',
+        'pricing',
+        'projects',
+        'settings',
+        'profile',
+        'portfolio',
       ];
       for (const slug of reservedList) {
         const result = await portfolioRepository.isSlugAvailable(slug);
@@ -174,8 +229,12 @@ describe('portfolioRepository', () => {
     });
 
     it('returns false when slug is taken by another profile (DB returns a row)', async () => {
-      vi.mocked(db.select().from(undefined as never).where(undefined as never).limit as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce([{ id: 'other-portfolio' }]);
+      vi.mocked(
+        db
+          .select()
+          .from(undefined as never)
+          .where(undefined as never).limit as ReturnType<typeof vi.fn>,
+      ).mockResolvedValueOnce([{ id: 'other-portfolio' }]);
 
       const result = await portfolioRepository.isSlugAvailable('taken-slug');
       expect(result).toBe(false);
@@ -192,9 +251,10 @@ describe('portfolioRepository', () => {
     // so a slug free in the portfolio table can still be another org's live public URL.
     it('returns false when the slug is another organization’s slug', async () => {
       const limit = vi.mocked(
-        db.select().from(undefined as never).where(undefined as never).limit as ReturnType<
-          typeof vi.fn
-        >,
+        db
+          .select()
+          .from(undefined as never)
+          .where(undefined as never).limit as ReturnType<typeof vi.fn>,
       );
       limit
         .mockResolvedValueOnce([]) // no portfolio holds it
@@ -206,9 +266,10 @@ describe('portfolioRepository', () => {
 
     it('checks both namespaces before reporting a slug free', async () => {
       const limit = vi.mocked(
-        db.select().from(undefined as never).where(undefined as never).limit as ReturnType<
-          typeof vi.fn
-        >,
+        db
+          .select()
+          .from(undefined as never)
+          .where(undefined as never).limit as ReturnType<typeof vi.fn>,
       );
       limit.mockClear();
 

@@ -2,8 +2,9 @@
 
 import useEmblaCarousel from 'embla-carousel-react';
 import type { UseEmblaCarouselType } from 'embla-carousel-react';
+import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ComponentProps, KeyboardEvent } from 'react';
 import { cn } from '../lib/utils';
 import { Button } from './button';
@@ -16,6 +17,7 @@ type CarouselPlugin = UseCarouselParameters[1];
 type CarouselProps = {
   opts?: CarouselOptions;
   plugins?: CarouselPlugin;
+  wheelGestures?: boolean;
   orientation?: 'horizontal' | 'vertical';
   setApi?: (api: CarouselApi) => void;
 };
@@ -46,16 +48,25 @@ export function Carousel({
   opts,
   setApi,
   plugins,
+  wheelGestures = false,
   className,
   children,
   ...props
 }: ComponentProps<'div'> & CarouselProps) {
+  const wheelPlugin = useMemo(
+    () => (wheelGestures && orientation === 'horizontal' ? WheelGesturesPlugin() : null),
+    [orientation, wheelGestures],
+  );
+  const carouselPlugins = useMemo(
+    () => (wheelPlugin ? [...(plugins ?? []), wheelPlugin] : plugins),
+    [plugins, wheelPlugin],
+  );
   const [carouselRef, api] = useEmblaCarousel(
     {
       ...opts,
       axis: orientation === 'horizontal' ? 'x' : 'y',
     },
-    plugins,
+    carouselPlugins,
   );
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);

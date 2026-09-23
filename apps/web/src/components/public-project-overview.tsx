@@ -7,6 +7,7 @@ import { Separator } from '@repo/ui/components/separator';
 import { cn } from '@repo/ui/lib/utils';
 import { ArrowLeft, CalendarDays, MessageSquare, Star, UserRound } from 'lucide-react';
 import { TickifBrandIcon } from '@/components/brand-icons';
+import { PublicGoogleRating } from '@/components/public-google-rating';
 import { EnquiryCta } from '@/components/enquiry-cta';
 import { BookingCta } from '@/components/booking-cta';
 import { ProjectActions } from '@/components/project-actions';
@@ -172,6 +173,7 @@ function DesignerCard({
                 </span>
               </p>
             ) : null}
+            {designer.googleRating ? <PublicGoogleRating {...designer.googleRating} /> : null}
           </CardContent>
           <Separator />
           <div className="flex h-9 items-center justify-between px-5 text-2xs uppercase tracking-wider text-muted-foreground">

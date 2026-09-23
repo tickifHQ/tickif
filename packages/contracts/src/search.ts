@@ -51,6 +51,7 @@ export const searchProjectsQuerySchema = z
     materials: multiValueFacet.optional(),
     finishes: multiValueFacet.optional(),
     roomSlugs: multiValueFacet.optional(),
+    tags: multiValueFacet.optional(),
     sort: projectSortOption.default('relevance'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(48).default(24),
@@ -213,10 +214,21 @@ export const suggestDesignerSchema = z
   .meta({ id: 'SuggestDesigner' });
 export type SuggestDesigner = z.infer<typeof suggestDesignerSchema>;
 
+export const suggestFilterSchema = z
+  .object({
+    kind: z.enum(['style', 'space', 'material', 'tag']),
+    filterKey: z.enum(['theme', 'room', 'material', 'tag']),
+    slug: facetValue,
+    label: z.string().trim().min(1).max(120),
+  })
+  .meta({ id: 'SuggestFilter' });
+export type SuggestFilter = z.infer<typeof suggestFilterSchema>;
+
 export const searchSuggestResponseSchema = z
   .object({
     projects: z.array(suggestProjectSchema),
     designers: z.array(suggestDesignerSchema),
+    filters: z.array(suggestFilterSchema).default([]),
     processingTimeMs: z.number(),
   })
   .meta({ id: 'SearchSuggestResponse' });

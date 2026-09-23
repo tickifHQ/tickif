@@ -34,6 +34,8 @@ export const discoveryFeedQuerySchema = z
     budgetBandSlug: taxonomySlugOrArray.optional(),
     roomSlugs: taxonomySlugOrArray.optional(),
     themes: taxonomySlugOrArray.optional(),
+    materials: taxonomySlugOrArray.optional(),
+    tags: taxonomySlugOrArray.optional(),
   })
   .refine((data) => data.page * data.limit <= 1000, {
     message: 'Maximum pagination window exceeded (page × limit must be ≤ 1000)',

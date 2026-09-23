@@ -159,6 +159,32 @@ describe('FeedFilters', () => {
     expect(suggestions.map((button) => button.textContent)).toEqual(['Pune', 'Mumbai']);
   });
 
+  it('shows live material and tag options with their matching counts', async () => {
+    render(
+      <FeedFilters
+        options={{
+          material: [{ slug: 'wood', label: 'Wood' }],
+          tag: [{ slug: 'sunlit', label: 'Sunlit' }],
+        }}
+        facetDistribution={{ materials: { wood: 6 }, tags: { sunlit: 3 } }}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Filters' }), { button: 0 });
+    fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Material' }), {
+      pointerType: 'mouse',
+    });
+    expect(await screen.findByRole('menuitemcheckbox', { name: /Wood/ })).toHaveTextContent('6');
+
+    fireEvent.pointerMove(screen.getByRole('menuitem', { name: 'Tag' }), {
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /Sunlit/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Apply/ }));
+
+    expect(mock.push).toHaveBeenCalledWith('/?tag=sunlit');
+  });
+
   it('marks All active by default and clears every selected filter', () => {
     mock.params = new URLSearchParams('city=mumbai&theme=warm');
     render(

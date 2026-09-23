@@ -279,7 +279,7 @@ export function ProjectFeed(props: ProjectFeedProps) {
   const feedKey = JSON.stringify([
     props.request.query,
     props.request.sort ?? 'recent',
-    ...FEED_FILTER_KEYS.map((key) => [...props.request.filters[key]].sort()),
+    ...FEED_FILTER_KEYS.map((key) => [...(props.request.filters[key] ?? [])].sort()),
     initialFeedKey(props.initialPage),
   ]);
   return <ProjectFeedResults key={feedKey} {...props} />;
@@ -327,7 +327,8 @@ function ProjectFeedResults({
         ? relaxedFilterMessage(initialPage.relaxedFilters)
         : '';
   const hasActiveCriteria =
-    request.query.length > 0 || FEED_FILTER_KEYS.some((key) => request.filters[key].length > 0);
+    request.query.length > 0 ||
+    FEED_FILTER_KEYS.some((key) => (request.filters[key] ?? []).length > 0);
 
   const loadNextPage = useCallback(async () => {
     if (!canLoadMore || loadingRef.current) return;

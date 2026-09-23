@@ -31,7 +31,7 @@ export function denseFacetDistribution(
       const fieldCounts = counts[field] ?? {};
       return [
         field,
-        Object.fromEntries(vocabulary[field].map((slug) => [slug, fieldCounts[slug] ?? 0])),
+        Object.fromEntries((vocabulary[field] ?? []).map((slug) => [slug, fieldCounts[slug] ?? 0])),
       ];
     }),
   );
@@ -49,5 +49,7 @@ export function emptyFacetVocabulary(): FacetVocabulary {
     budgetBandSlug: [],
     roomSlugs: [],
     themes: [],
+    materials: [],
+    tags: [],
   };
 }
