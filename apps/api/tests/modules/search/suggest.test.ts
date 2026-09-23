@@ -13,6 +13,7 @@ import { app } from '../../../src/app.js';
 // Mock the search repository to avoid requiring a live Typesense instance
 vi.mock('../../../src/modules/search/repository.js', () => ({
   multiSearch: vi.fn(),
+  findFilterSuggestions: vi.fn(),
   searchProjects: vi.fn(),
   searchDesigners: vi.fn(),
   recentProjectsInCity: vi.fn(),
@@ -81,6 +82,30 @@ function createMockDesignerDocument(overrides: Partial<{
 describe('GET /api/search/suggest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(repository.findFilterSuggestions).mockResolvedValue([]);
+  });
+
+  it('returns matching filter entities that can be selected by the discovery UI', async () => {
+    vi.mocked(repository.multiSearch).mockResolvedValue({
+      projects: [],
+      designers: [],
+      processingTimeMs: 2,
+    });
+    vi.mocked(repository.findFilterSuggestions).mockResolvedValue([
+      { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
+      { kind: 'material', filterKey: 'material', slug: 'wood', label: 'Wood' },
+    ]);
+
+    const res = await get('/api/search/suggest?q=bed');
+
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      filters: [
+        { kind: 'space', filterKey: 'room', slug: 'bedroom', label: 'Bedroom' },
+        { kind: 'material', filterKey: 'material', slug: 'wood', label: 'Wood' },
+      ],
+    });
+    expect(repository.findFilterSuggestions).toHaveBeenCalledWith('bed');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

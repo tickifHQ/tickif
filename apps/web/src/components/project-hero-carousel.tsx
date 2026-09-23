@@ -61,6 +61,7 @@ export function ProjectHeroCarousel({
     <Carousel
       aria-label="Project gallery"
       opts={{ align: 'center', loop: hasMultipleImages }}
+      wheelGestures={hasMultipleImages}
       setApi={setApi}
       className="group overflow-hidden"
     >

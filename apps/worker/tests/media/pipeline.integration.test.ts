@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import type { Job } from 'bullmq';
 import sharp from 'sharp';
+import { config } from '@repo/config';
 
 const r2 = new Map<string, Buffer>();
 vi.mock('@repo/storage', () => ({
@@ -78,19 +79,21 @@ describe('media pipeline (integration)', () => {
     const { projectId, imageId } = await seedProcessing(representative);
 
     const result = await processMedia(job(imageId));
-    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(result).toEqual({ ok: true, derivatives: 10 });
 
     const row = await reload(imageId);
     expect(row.status).toBe('ready');
     expect(row.width).toBe(1600);
     expect(row.height).toBe(1200);
     expect(row.phash).toMatch(/^[0-9a-f]{16}$/);
-    expect(row.derivatives).toHaveLength(8);
+    expect(row.derivatives).toHaveLength(10);
     expect(row.derivatives.map((d) => d.format).sort()).toEqual([
       'avif',
       'avif',
       'avif',
       'avif',
+      'avif',
+      'webp',
       'webp',
       'webp',
       'webp',
@@ -100,7 +103,9 @@ describe('media pipeline (integration)', () => {
     // Every derivative object was written to R2 and is EXIF-stripped, correctly encoded.
     for (const d of row.derivatives) {
       const key = d.key;
-      expect(key).toBe(`derivatives/${projectId}/${imageId}/${d.variant}-wm-v2.${d.format}`);
+      expect(key).toBe(
+        `derivatives/${projectId}/${imageId}/${d.variant}-${config.WATERMARK_REVISION}.${d.format}`,
+      );
       expect(r2.has(key)).toBe(true);
       const meta = await sharp(r2.get(key)!).metadata();
       expect(meta.exif).toBeUndefined();
@@ -112,7 +117,7 @@ describe('media pipeline (integration)', () => {
     const { imageId } = await seedProcessing(large);
 
     const result = await processMedia(job(imageId));
-    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(result).toEqual({ ok: true, derivatives: 10 });
 
     const row = await reload(imageId);
     expect(row.status).toBe('ready');
@@ -131,7 +136,7 @@ describe('media pipeline (integration)', () => {
     const ready = await reload(imageId);
     const legacyDerivatives = ready.derivatives.map((derivative) => ({
       ...derivative,
-      key: derivative.key.replace('-wm-v2.', '.'),
+      key: derivative.key.replace(`-${config.WATERMARK_REVISION}.`, '.'),
     }));
     for (const derivative of legacyDerivatives) r2.set(derivative.key, Buffer.from('legacy'));
     await db
@@ -141,12 +146,14 @@ describe('media pipeline (integration)', () => {
 
     const result = await processMedia(job(imageId, 'reprocess'));
 
-    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(result).toEqual({ ok: true, derivatives: 10 });
     const refreshed = await reload(imageId);
     expect(refreshed.status).toBe('ready');
-    expect(refreshed.derivatives.every((derivative) => derivative.key.includes('-wm-v2.'))).toBe(
-      true,
-    );
+    expect(
+      refreshed.derivatives.every((derivative) =>
+        derivative.key.includes(`-${config.WATERMARK_REVISION}.`),
+      ),
+    ).toBe(true);
     expect(legacyDerivatives.every((derivative) => !r2.has(derivative.key))).toBe(true);
     expect(r2.has(ready.originalKey)).toBe(true);
     await expect(
@@ -246,7 +253,7 @@ describe('media pipeline (integration)', () => {
     r2.set(originalKey, representative);
 
     const result = await processMedia(job(image.id));
-    expect(result).toEqual({ ok: true, derivatives: 8 });
+    expect(result).toEqual({ ok: true, derivatives: 10 });
     expect(await reload(image.id).then((r) => r.status)).toBe('ready');
   });
 

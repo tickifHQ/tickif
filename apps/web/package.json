@@ -15,12 +15,13 @@
   "dependencies": {
     "@dicebear/core": "catalog:",
     "@dicebear/styles": "catalog:",
-    "@repo/contracts": "workspace:*",
     "@repo/auth": "workspace:*",
+    "@repo/contracts": "workspace:*",
     "@repo/ui": "workspace:*",
     "@t3-oss/env-nextjs": "catalog:",
     "better-auth": "catalog:",
     "country-codes-flags-phone-codes": "^1.1.1",
+    "gray-matter": "^4.0.3",
     "hono": "catalog:",
     "libphonenumber-js": "catalog:",
     "lucide-react": "catalog:",
@@ -28,6 +29,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-is": "catalog:",
+    "react-markdown": "^10.1.0",
     "recharts": "catalog:",
     "zod": "catalog:"
   },

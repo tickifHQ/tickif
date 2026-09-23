@@ -3,12 +3,13 @@ import { getSessionCookie } from 'better-auth/cookies';
 import { api } from '@/lib/api';
 import { REQUEST_PATH_HEADER } from '@/lib/auth-paths';
 
-const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers', '/health']);
+const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers', '/blog', '/health']);
 
 /**
  * Route trees anonymous visitors may enter.
  *
- * `/d/` is the designer portfolio; `/projects/` is the public project detail
+ * `/blog/` serves published Markdown articles; `/d/` is the designer portfolio;
+ * `/projects/` is the public project detail
  * route it links to; `/image/` is the public image detail route. Gating these
  * sends visitors to a login wall mid-browse. These routes read published-only API projections
  * (`projectsService.gallery` and the portfolio read 404 anything unpublished),
@@ -17,7 +18,7 @@ const PUBLIC_PATHS = new Set(['/', '/login', '/design-system', '/designers', '/h
  * Trailing slashes are deliberate: they keep `/designer/...` from matching `/d/`
  * and any future `/projectsomething` from matching `/projects/`.
  */
-const PUBLIC_PATH_PREFIXES = ['/d/', '/projects/', '/image/'] as const;
+const PUBLIC_PATH_PREFIXES = ['/blog/', '/d/', '/projects/', '/image/'] as const;
 
 export function isPublicPath(pathname: string): boolean {
   const normalizedPathname =

@@ -64,6 +64,11 @@ Changes to immutable collection settings require a new versioned collection,
 reindexing, and an alias swap. Bootstrap reports this as a rebuild requirement
 instead of sending an unsupported collection update.
 
+The project `tags` field is a discovery facet. Releases from before selectable
+tag filters must apply the schema update and reindex before tag filtering is
+enabled. Readers retry without the tag facet during that rollout, so existing
+project and designer search remains available while the index catches up.
+
 ### New fields need a backfill, not just a bootstrap
 
 `--apply-updates` adds a new **field** to the collection schema; it does not
@@ -217,6 +222,14 @@ Designer `portfolioTerms` contains published project titles, descriptions and
 room names/types. Draft and archived projects do not contribute. Publish and
 unpublish transitions refresh the designer projection. Suggestions continue to
 search profile fields only.
+
+Designer discovery requires an active profile, an enabled public portfolio link,
+and complete logo, display name, bio, and tagline fields. After deploying this
+eligibility change, run `pnpm --filter @repo/worker search:reindex` to remove legacy
+ineligible designer documents. Portfolio edits update the projection thereafter.
+Published projects retain their independent visibility rules; disabling a
+portfolio link does not unpublish its projects. Suspending a designer removes
+both the designer and their projects from discovery.
 
 The known query `bad` gets one retry as `bed` when it has zero literal matches,
 with token dropping disabled. Existing matches, filters and pagination are

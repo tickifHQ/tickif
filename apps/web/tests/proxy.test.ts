@@ -21,6 +21,15 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/health')).toBe(true);
   });
 
+  it('allows anonymous blog reading without opening similarly prefixed routes', async () => {
+    for (const path of ['/blog', '/blog/', '/blog/preparing-for-a-designer-conversation']) {
+      expect(isPublicPath(path)).toBe(true);
+      const response = await proxy(new NextRequest(`http://localhost:3000${path}`));
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+    }
+    expect(isPublicPath('/blog-private')).toBe(false);
+  });
+
   it('allows public designer profile routes', () => {
     expect(isPublicPath('/d/anika-spaces')).toBe(true);
   });

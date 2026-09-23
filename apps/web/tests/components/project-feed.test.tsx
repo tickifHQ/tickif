@@ -22,8 +22,10 @@ const filters: FeedFilterState = {
   propertyType: [],
   scope: [],
   budgetBand: [],
-  room: [],
-  theme: [],
+      room: [],
+      theme: [],
+      material: [],
+      tag: [],
 };
 
 function card(id: string, title: string): DiscoveryCard {

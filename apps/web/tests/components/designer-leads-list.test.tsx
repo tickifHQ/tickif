@@ -97,6 +97,13 @@ describe('DesignerLeadsList', () => {
     expect(screen.queryByText(/backend is not available/i)).not.toBeInTheDocument();
   });
 
+  it('keeps every lead status reachable on narrow screens', () => {
+    render(<DesignerLeadsList leads={leads} activeStatus="all" />);
+
+    const tabStrip = screen.getByRole('link', { name: /^all$/i }).parentElement;
+    expect(tabStrip).toHaveClass('max-w-full', 'overflow-x-auto');
+  });
+
   it('shows an empty state for an empty API page', () => {
     render(
       <DesignerLeadsList
@@ -128,7 +135,9 @@ describe('DesignerLeadsList', () => {
     render(<DesignerLeadsList leads={leads} selectedLead={selectedLead} activeStatus="all" />);
 
     expect(screen.getByRole('dialog', { name: /lead details/i })).toBeInTheDocument();
-    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue(
+      'Needs a modular kitchen quote.',
+    );
     expect(screen.getByLabelText('Homeowner message')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Your notes')).toHaveValue('Follow up after the budget review.');
     expect(screen.getByLabelText('Your notes')).not.toHaveAttribute('readonly');
@@ -158,7 +167,9 @@ describe('DesignerLeadsList', () => {
     });
     expect(mock.refresh).toHaveBeenCalledOnce();
     rerender(<DesignerLeadsList leads={leads} selectedLead={refreshedLead} activeStatus="all" />);
-    expect(screen.getByLabelText('Homeowner message')).toHaveValue('Needs a modular kitchen quote.');
+    expect(screen.getByLabelText('Homeowner message')).toHaveValue(
+      'Needs a modular kitchen quote.',
+    );
     expect(screen.getByLabelText('Your notes')).toHaveValue('Call after the budget review.');
   });
 

@@ -9,6 +9,7 @@ import './src/env';
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
+  outputFileTracingIncludes: { '/blog/**': ['./content/blog/**/*.md'] },
   // Transpile workspace packages consumed directly as TS source.
   transpilePackages: ['@repo/contracts', '@repo/ui'],
   images: {
