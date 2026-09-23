@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import type { FeedProject } from '@repo/contracts';
-import { cn } from '@repo/ui/lib/utils';
 import { formatCompactBudgetLabel } from '../lib/format-budget-label';
 
 const FALLBACK_WIDTH = 480;
@@ -20,17 +19,14 @@ export function ShowcaseCard({
   project: FeedProject;
   priority?: boolean;
 }) {
-  const { imageWidth, imageHeight, tags } = project;
+  const { imageWidth, imageHeight } = project;
   const hasImageDimensions =
     imageWidth !== null && imageWidth > 0 && imageHeight !== null && imageHeight > 0;
   const placeholderWidth = hasImageDimensions ? imageWidth : FALLBACK_WIDTH;
   const placeholderHeight = hasImageDimensions ? imageHeight : FALLBACK_HEIGHT;
   const href = project.coverImageId ? `/image/${project.coverImageId}` : `/projects/${project.id}`;
   const location = [project.locality, project.city].filter(Boolean).join(', ') || null;
-  // Search-sourced cards have no aggregate rating, so 0 reviews means "no score yet".
-  const rating = project.reviewCount > 0 ? project.rating.toFixed(1) : null;
   const budgetLabel = project.budget ? formatCompactBudgetLabel(project.budget) : null;
-  const isShallowCard = placeholderHeight / placeholderWidth < 0.75;
 
   return (
     <article className="group @container relative mb-4 break-inside-avoid overflow-hidden rounded-xl bg-muted">
@@ -71,42 +67,12 @@ export function ShowcaseCard({
         ) : null}
 
         <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-b from-transparent via-transparent to-foreground/80 p-3 opacity-100 transition-opacity @min-[14rem]:p-4 sm:opacity-0 sm:group-hover:opacity-100">
-          <h3 className="line-clamp-2 font-display text-sm leading-tight tracking-tight text-background @min-[14rem]:text-lg">
+          <h3 className="truncate font-display text-xs leading-tight tracking-tight text-background @min-[14rem]:text-sm">
             {project.title}
           </h3>
-          <div className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-background/90 @min-[14rem]:text-xs">
-            <span className="truncate">{project.studio}</span>
-            {location ? (
-              <>
-                <span className="text-background/50">·</span>
-                <span className="truncate">{location}</span>
-              </>
-            ) : null}
-            {rating ? (
-              <span className="shrink-0 whitespace-nowrap">
-                <span className="text-background/50">·</span>{' '}
-                <span aria-hidden className="text-primary">
-                  ★
-                </span>{' '}
-                {rating}
-              </span>
-            ) : null}
-          </div>
-          {tags.length > 0 ? (
-            <div
-              className={cn(
-                'mt-2 hidden flex-wrap gap-1 @min-[14rem]:flex',
-                isShallowCard && '@min-[14rem]:hidden',
-              )}
-            >
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-background/20 px-2 py-0.5 text-2xs font-medium tracking-wide text-background backdrop-blur-sm"
-                >
-                  {tag}
-                </span>
-              ))}
+          {location ? (
+            <div className="mt-0.5 flex min-w-0 items-center text-2xs text-background/90 @min-[14rem]:text-xs">
+              <span className="truncate">{location}</span>
             </div>
           ) : null}
         </div>
