@@ -72,14 +72,14 @@ describe('feed-page-helpers', () => {
         href: '/?city=mumbai&theme=modern',
         label: 'Modern',
         facet: 'theme',
-        facetLabel: 'Theme',
+        facetLabel: 'Style',
         resultCount: 9,
       },
       {
         href: '/?city=mumbai&room=living-room',
         label: 'Living Room',
         facet: 'room',
-        facetLabel: 'Room',
+        facetLabel: 'Space',
         resultCount: 5,
       },
       {
