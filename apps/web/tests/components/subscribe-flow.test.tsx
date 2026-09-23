@@ -311,7 +311,7 @@ describe('E-120: PlanSelection lifecycle', () => {
     render(
       <PlanSelection currentTier="hobby" lifecycleState="downgraded" onSelectPlan={vi.fn()} />,
     );
-    expect(screen.getByText(/downgraded/i)).toBeInTheDocument();
+    expect(screen.getByText(/You are now on the free plan/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upgrade to corporate/i })).toBeEnabled();
   });
 
@@ -458,6 +458,6 @@ describe('E-120: ReviewPayStep', () => {
     // Hobby should never reach ReviewPayStep, but defensively verify
     render(<ReviewPayStep targetTier="hobby" onPay={vi.fn()} onBack={vi.fn()} />);
     // The estimated total for ₹0 would be ₹0 — no payment action misleading
-    expect(screen.getByText('Proceed to Checkout')).toBeInTheDocument();
+    expect(screen.getByText('Continue to payment')).toBeInTheDocument();
   });
 });

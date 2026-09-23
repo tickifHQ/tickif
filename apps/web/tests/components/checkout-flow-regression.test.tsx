@@ -106,7 +106,7 @@ describe('billing preview checkout regressions', () => {
     });
     render(<CheckoutFlow {...base} cancellationScheduled />);
     await screen.findByText(/current subscription ends/i);
-    expect(screen.queryByRole('button', { name: 'Proceed to Checkout' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue to payment' })).not.toBeInTheDocument();
   });
   it('requires renewed review after stale preview without resubmitting', async () => {
     mocks.subscribe.mockResolvedValue({
@@ -114,11 +114,11 @@ describe('billing preview checkout regressions', () => {
       json: async () => ({ error: { code: 'preview_stale', message: 'Changed' } }),
     });
     render(<CheckoutFlow {...base} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Proceed to Checkout' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
     expect(await screen.findByText(/review.*again/i)).toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole('button', { name: 'Retry Corporate' }));
-    expect(await screen.findByRole('button', { name: 'Proceed to Checkout' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Continue to payment' })).toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
   });
   it('discloses cancellation before saving a durable recovery target', async () => {
@@ -133,7 +133,7 @@ describe('billing preview checkout regressions', () => {
     mocks.getRecovery.mockResolvedValue({ ok: true, json: async () => ({ recovery: null }) });
     render(<CheckoutFlow {...base} currentTier="professional_plus" />);
     expect(
-      await screen.findByRole('button', { name: 'Schedule cancellation and save target' }),
+      await screen.findByRole('button', { name: 'Cancel & save plan' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Confirming schedules cancellation/)).toBeInTheDocument();
     expect(mocks.saveRecovery).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe('billing preview checkout regressions', () => {
     render(<CheckoutFlow {...base} currentTier="professional_plus" />);
     await screen.findByRole('heading', { name: 'Upgrade to Corporate' });
     expect(
-      screen.queryByRole('button', { name: 'Schedule cancellation and save target' }),
+      screen.queryByRole('button', { name: 'Cancel & save plan' }),
     ).not.toBeInTheDocument();
   });
   it('retains the selected target when Razorpay is dismissed', async () => {
@@ -168,7 +168,7 @@ describe('billing preview checkout regressions', () => {
       onDismiss(),
     );
     render(<CheckoutFlow {...base} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Proceed to Checkout' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue to payment' }));
     expect(await screen.findByRole('button', { name: 'Retry Corporate' })).toBeInTheDocument();
     expect(mocks.subscribe).toHaveBeenCalledWith({
       json: expect.objectContaining({ targetTier: 'corporate', previewToken: 'signed-preview' }),

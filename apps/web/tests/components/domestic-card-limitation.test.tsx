@@ -86,9 +86,7 @@ describe('E-289: preflight payment-method limitations', () => {
     expect(
       await screen.findByText(/Your payment method does not support this plan change/),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Schedule cancellation and save target' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel & save plan' })).toBeInTheDocument();
     expect(mocks.changePlan).not.toHaveBeenCalled();
     expect(mocks.saveRecovery).not.toHaveBeenCalled();
     expect(mocks.checkout).not.toHaveBeenCalled();
@@ -105,12 +103,8 @@ describe('E-289: preflight payment-method limitations', () => {
   });
   it('uses the signed durable recovery request and preserves the selected target', async () => {
     renderUpgrade();
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Schedule cancellation and save target' }),
-    );
-    expect(
-      await screen.findByRole('heading', { name: 'Recovery target saved' }),
-    ).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel & save plan' }));
+    expect(await screen.findByRole('heading', { name: 'Plan saved' })).toBeInTheDocument();
     expect(mocks.saveRecovery).toHaveBeenCalledWith({
       json: {
         targetTier: 'corporate',
@@ -155,12 +149,8 @@ describe('E-289: preflight payment-method limitations', () => {
       }),
     );
     renderUpgrade();
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Schedule cancellation and save target' }),
-    );
-    expect(
-      await screen.findByText(/provider has not yet confirmed cancellation/),
-    ).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel & save plan' }));
+    expect(await screen.findByText(/Cancellation is still being confirmed/)).toBeInTheDocument();
     expect(screen.queryByText(/Cancellation is scheduled/)).not.toBeInTheDocument();
     expect(mocks.checkout).not.toHaveBeenCalled();
   });

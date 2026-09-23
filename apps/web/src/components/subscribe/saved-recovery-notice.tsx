@@ -8,6 +8,16 @@ import { PLAN_MAP } from '@/lib/plan-config';
 import { api } from '@/lib/api';
 import { reasonLabel } from './billing-reason';
 
+const savedPlanStatus: Record<BillingRecovery['status'], string> = {
+  requested: 'Confirming cancellation',
+  waiting_for_expiry: 'Waiting for your current plan to end',
+  eligible: 'Ready to purchase',
+  checkout_pending: 'Checkout in progress',
+  completed: 'Plan activated',
+  dismissed: 'Selection removed',
+  superseded: 'Selection replaced',
+};
+
 export function PendingBillingNotice({
   context,
   onReview,
@@ -26,7 +36,7 @@ export function PendingBillingNotice({
       <AlertDescription>
         {pendingOperation && (
           <p>
-            {PLAN_MAP[pendingOperation.targetTier].label}: the provider outcome is being reconciled.
+            {PLAN_MAP[pendingOperation.targetTier].label}: we are checking your billing change.
             Refresh status before trying again.
           </p>
         )}
@@ -86,26 +96,25 @@ export function SavedRecoveryNotice({
   const terminal = ['completed', 'dismissed', 'superseded'].includes(recovery.status);
   return (
     <Alert className="mt-4">
-      <AlertTitle>Saved recovery: {PLAN_MAP[recovery.targetTier].label}</AlertTitle>
+      <AlertTitle>Saved plan: {PLAN_MAP[recovery.targetTier].label}</AlertTitle>
       <AlertDescription>
-        <p>Status: {recovery.status.replaceAll('_', ' ')}.</p>
+        <p>{savedPlanStatus[recovery.status]}.</p>
         {!terminal && (
           <p>
             {recovery.eligibleAt
-              ? `Eligibility will be verified after ${new Date(recovery.eligibleAt).toLocaleDateString('en-IN')}.`
-              : 'The next eligible date is not yet confirmed.'}{' '}
-            Checkout always requires your confirmation.
+              ? `You can continue after ${new Date(recovery.eligibleAt).toLocaleDateString('en-IN')}, once your previous subscription has ended.`
+              : 'Your previous subscription’s end date is not yet confirmed.'}{' '}
+            You will need to confirm a new purchase. Nothing is purchased automatically.
           </p>
         )}
         {recovery.reason && <p>{reasonLabel(recovery.reason)}</p>}
         {!terminal && (
           <>
             <Button variant="outline" disabled={busy} onClick={() => onReview(recovery.targetTier)}>
-              Review saved recovery
+              Review plan
             </Button>
             <p>
-              Dismissing this saved target does not undo an existing cancellation or scheduled plan
-              change.
+              Removing this selection does not undo a scheduled cancellation or plan change.
             </p>
             <Button
               variant="ghost"
@@ -119,19 +128,19 @@ export function SavedRecoveryNotice({
                   });
                   if (!response.ok)
                     throw new Error(
-                      'The recovery changed or could not be dismissed. Refresh billing and review it again.',
+                      'Unable to remove this selection. Refresh billing and try again.',
                     );
                   await onDismissed();
                 } catch (failure) {
                   setError(
-                    failure instanceof Error ? failure.message : 'Unable to dismiss recovery.',
+                    failure instanceof Error ? failure.message : 'Unable to remove this selection.',
                   );
                 } finally {
                   setBusy(false);
                 }
               }}
             >
-              Dismiss saved target
+              Remove saved plan
             </Button>
           </>
         )}

@@ -69,7 +69,7 @@ export function PlanSelection({
         <Alert>
           <AlertDescription>
             {lifecycleReason ??
-              'Your subscription was downgraded. Select a paid plan to review your recovery options.'}
+              'You are now on the free plan. Choose a paid plan to get started again.'}
           </AlertDescription>
         </Alert>
       ) : null}

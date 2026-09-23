@@ -55,4 +55,6 @@ Final workspace checks also pass: `pnpm typecheck`, `pnpm lint`, and `pnpm test`
 
 This expansion found and fixed two application defects: Subscribe unmounted checkout during background refresh, and eligible recovery-target replacement rejected the intentionally cleared local provider ID after cancellation. Both have focused unit regressions as well as passing E2E coverage.
 
+UI review follow-up, 24 September 2026: pricing-card actions now share grid rows, and the desktop comparison cases check that all three buttons have matching top and bottom edges within one pixel. The assertion reproduced the original 40-pixel offset before the fix. Mobile cards remain stacked. Billing messages now refer to selected or saved plans instead of targets, and describe pending changes without internal status names. The 29 affected comparison, checkout, plan-matrix and same-cycle E2E cases pass with the updated wording; the 73 focused component assertions also pass.
+
 See [staging validation](./billing-staging-smoke.md) for the separate merchant Test Mode checks required before rollout.

@@ -222,6 +222,26 @@ for (const [tier, label] of [
             fullPage: true,
           });
           if (width >= 768) {
+            const buttons = page
+              .getByRole('region', { name: 'Choose your plan', exact: true })
+              .locator('[data-slot="card-footer"] button');
+            await expect(buttons).toHaveCount(3);
+            const bounds = await buttons.evaluateAll((elements) =>
+              elements.map((element) => {
+                const { top, bottom } = element.getBoundingClientRect();
+                return { top, bottom };
+              }),
+            );
+            for (const edge of ['top', 'bottom'] as const) {
+              const positions = bounds.map((bound) => bound[edge]);
+              expect(Math.max(...positions) - Math.min(...positions)).toBeLessThanOrEqual(1);
+            }
+            await page
+              .getByRole('region', { name: 'Choose your plan', exact: true })
+              .locator(':scope > .grid')
+              .screenshot({
+                path: testInfo.outputPath(`${tier}-${path.split('/').at(-1)}-aligned-actions.png`),
+              });
             await page
               .getByRole('table', { name: 'Compare plan features' })
               .scrollIntoViewIfNeeded();
@@ -266,7 +286,7 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await upgrade.focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Retry Corporate', exact: true })).toBeVisible();
     expect(targets).toEqual(['corporate']);
     const created = await owner.subscription();
@@ -275,9 +295,9 @@ test('direct Corporate checkout survives provider dismissal and reload, then act
     await page.reload();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     expect(targets).toEqual(['corporate']);
-    await expect(page.getByText('Selected target', { exact: true })).toBeVisible();
+    await expect(page.getByText('Selected plan', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Continue Corporate', exact: true }).click();
-    await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Retry Corporate', exact: true })).toBeVisible();
     expect(targets).toEqual(['corporate', 'corporate']);
     expect((await owner.subscription())?.razorpaySubscriptionId).toBe(
@@ -359,8 +379,8 @@ test('paid recovery preserves the accepted downgrade across session loss and can
     await expect(
       page.getByRole('heading', { name: 'Downgrade to Professional+', exact: true }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Save recovery target', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Recovery target saved' })).toBeVisible();
+    await page.getByRole('button', { name: 'Save plan', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Plan saved' })).toBeVisible();
     await context.clearCookies();
     await page.evaluate(() => sessionStorage.clear());
     await signInPhone(context, owner.user.phoneNumber);
@@ -397,9 +417,9 @@ test('paid recovery preserves the accepted downgrade across session loss and can
     await expect(
       page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Review saved recovery', exact: true }).click();
+    await page.getByRole('button', { name: 'Review plan', exact: true }).click();
     expect(replacementRequests).toBe(0);
-    await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Retry Professional+', exact: true }),
     ).toBeVisible();

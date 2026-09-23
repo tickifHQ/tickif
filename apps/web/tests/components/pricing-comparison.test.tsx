@@ -60,7 +60,7 @@ describe('billing pricing comparison', () => {
       />,
     );
     expect(screen.getByRole('button', { name: /Hobby is your current plan/ })).toBeDisabled();
-    expect(screen.getByText('Selected target')).toBeInTheDocument();
+    expect(screen.getByText('Selected plan')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
     expect(onSelectPlan).toHaveBeenCalledWith('corporate');
   });

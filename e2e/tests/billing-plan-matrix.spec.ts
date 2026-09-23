@@ -139,7 +139,7 @@ for (const entry of entryPoints) {
           await expect(page.getByRole('heading', { name: label, exact: true })).toBeVisible();
 
           if (current.tier === 'hobby') {
-            await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+            await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
             await expect(
               page.getByRole('button', { name: `Retry ${target.label}`, exact: true }),
             ).toBeVisible();
@@ -152,7 +152,7 @@ for (const entry of entryPoints) {
           } else {
             const recovery = target.tier !== 'hobby';
             const cta = recovery
-              ? 'Schedule cancellation and save target'
+              ? 'Cancel & save plan'
               : 'Schedule cancellation';
             if (recovery) {
               await expect(
@@ -165,7 +165,7 @@ for (const entry of entryPoints) {
             await page.getByRole('button', { name: cta, exact: true }).click();
             await expect(
               page.getByRole('heading', {
-                name: recovery ? 'Recovery target saved' : 'Plan change scheduled',
+                name: recovery ? 'Plan saved' : 'Plan change scheduled',
                 exact: true,
               }),
             ).toBeVisible();
@@ -221,10 +221,10 @@ for (const entry of entryPoints) {
             ).toBeVisible();
             if (recovery) {
               await page
-                .getByRole('button', { name: 'Review saved recovery', exact: true })
+                .getByRole('button', { name: 'Review plan', exact: true })
                 .click();
               expect(mutations).toHaveLength(1);
-              await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+              await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
               await expect(
                 page.getByRole('button', { name: `Retry ${target.label}`, exact: true }),
               ).toBeVisible();

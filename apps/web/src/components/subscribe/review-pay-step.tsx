@@ -74,7 +74,7 @@ export function ReviewPayStep({ targetTier, onPay, onBack, isLoading }: ReviewPa
 
       {/* Checkout handoff */}
       <Button className="w-full" size="lg" onClick={onPay} disabled={isLoading}>
-        {isLoading ? 'Setting up checkout...' : 'Proceed to Checkout'}
+        {isLoading ? 'Setting up checkout...' : 'Continue to payment'}
         {!isLoading && <ArrowRight className="size-4" />}
       </Button>
 

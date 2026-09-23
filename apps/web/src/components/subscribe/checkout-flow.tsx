@@ -120,9 +120,9 @@ function ScopedCheckoutFlow({
       if (parsed.data.action === 'recover') {
         const recoveryResponse = await api.api.billing.recovery.$get();
         if (!recoveryResponse.ok)
-          throw new Error('Unable to load the saved recovery target. Retry before continuing.');
+          throw new Error('Unable to load your saved plan. Please try again.');
         const saved = billingRecoveryResponseSchema.safeParse(await recoveryResponse.json());
-        if (!saved.success) throw new Error('Unable to verify the saved recovery target.');
+        if (!saved.success) throw new Error('Unable to check your saved plan. Please try again.');
         if (!mounted.current || request !== sequence.current) return;
         setRecovery(saved.data.recovery);
       }
@@ -212,7 +212,7 @@ function ScopedCheckoutFlow({
         const data = parsedCheckout.data;
         if (data.outcome === 'reconciliation_pending' || data.outcome === 'failed') {
           setMessage(
-            'Checkout is awaiting reconciliation. Refresh billing status before retrying.',
+            'We are checking your checkout. Refresh billing before trying again.',
           );
           setStep('pending');
           return;
@@ -276,7 +276,7 @@ function ScopedCheckoutFlow({
         if (!mounted.current) return;
         if (!parsedOutcome.success) {
           setMessage(
-            'The provider outcome could not be confirmed. Refresh billing status before retrying.',
+            'We could not confirm this change. Refresh billing before trying again.',
           );
           setStep('pending');
           return;
@@ -352,8 +352,8 @@ function ScopedCheckoutFlow({
             {(step === 'loading' || step === 'processing') && (
               <p role="status">
                 {step === 'loading'
-                  ? 'Checking billing eligibility…'
-                  : 'Submitting billing request…'}
+                  ? 'Checking your plan…'
+                  : 'Updating your billing…'}
               </p>
             )}
             {step === 'review' && preview && (
@@ -366,20 +366,21 @@ function ScopedCheckoutFlow({
                   <dt>Effective date</dt>
                   <dd>
                     {preview.timing === 'now'
-                      ? 'After provider confirmation'
+                      ? 'Once confirmed'
                       : dateLabel(preview.effectiveAt)}
                   </dd>
                   <dt>Next renewal</dt>
                   <dd>{dateLabel(preview.nextRenewalAt)}</dd>
-                  <dt>Recurring amount</dt>
+                  <dt>Monthly price</dt>
                   <dd>{money(preview.recurringAmount, preview.currency)}</dd>
                   <dt>
                     {preview.adjustmentDirection === 'refund'
-                      ? 'Refund adjustment'
-                      : 'Charge adjustment'}
+                      ? 'Refund'
+                      : 'Additional charge'}
                   </dt>
                   <dd>
-                    {money(preview.adjustmentAmount, preview.currency)} ({preview.amountCertainty})
+                    {money(preview.adjustmentAmount, preview.currency)}
+                    {preview.amountCertainty === 'estimated' ? ' (estimate)' : ''}
                   </dd>
                 </dl>
                 {preview.action === 'subscribe' && (
@@ -400,26 +401,26 @@ function ScopedCheckoutFlow({
                   <p className="text-sm">
                     Confirming schedules cancellation of your current paid subscription at the end
                     of its billing period and saves {label} for a future checkout. Your current
-                    access is preserved until the provider confirms the transition. No replacement
+                    access continues until your subscription ends. No replacement
                     subscription is purchased now.
                   </p>
                 )}
                 {recovery && preview.action === 'recover' && (
                   <p className="text-sm">
-                    Saved target: {PLAN_MAP[recovery.targetTier].label}. Saving this selection
-                    explicitly replaces that recovery target.
+                    Previously selected: {PLAN_MAP[recovery.targetTier].label}. This will be replaced
+                    with {label}.
                   </p>
                 )}
                 {preview.confirmationAllowed && (
                   <Button onClick={() => void confirm()}>
                     {preview.action === 'subscribe'
-                      ? 'Proceed to Checkout'
+                      ? 'Continue to payment'
                       : preview.action === 'cancel'
                         ? 'Schedule cancellation'
                         : preview.action === 'recover'
                           ? preview.reason === 'cancellation_scheduled'
-                            ? 'Save recovery target'
-                            : 'Schedule cancellation and save target'
+                            ? 'Save plan'
+                            : 'Cancel & save plan'
                           : 'Confirm plan change'}
                   </Button>
                 )}
@@ -435,14 +436,14 @@ function ScopedCheckoutFlow({
             )}
             {step === 'recovery' && (
               <div className="flex flex-col gap-4" role="status">
-                <h2 className="text-lg font-semibold">Recovery target saved</h2>
+                <h2 className="text-lg font-semibold">Plan saved</h2>
                 <p>
                   {label} selected.{' '}
                   {recovery?.status === 'waiting_for_expiry'
                     ? `Cancellation is scheduled; current access remains until ${dateLabel(recovery.eligibleAt)}. Continue to ${label} checkout after the current subscription ends.`
                     : recovery?.status === 'eligible'
                       ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
-                      : 'The provider has not yet confirmed cancellation. Refresh billing status before taking another action.'}
+                      : 'Cancellation is still being confirmed. Refresh billing before continuing.'}
                 </p>
                 <p>
                   No replacement purchase will start automatically. Unused value does not
@@ -476,7 +477,7 @@ function ScopedCheckoutFlow({
                 <p>
                   {label} remains selected.{' '}
                   {message ||
-                    'The provider has not confirmed this change yet. Your access will update only after confirmation.'}
+                    'This change is still being confirmed. Your access will update once confirmed.'}
                 </p>
                 <Button
                   onClick={() => {

@@ -76,7 +76,7 @@ for (const scenario of [
           .getByRole('region', { name: 'Choose your plan', exact: true })
           .getByRole('button', { name: `Upgrade to ${scenario.initialLabel}`, exact: true })
           .click();
-        await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+        await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
         await expect(
           page.getByRole('button', { name: `Retry ${scenario.initialLabel}`, exact: true }),
         ).toBeVisible();
@@ -121,10 +121,10 @@ for (const scenario of [
             .getByRole('button', { name: targetAction, exact: true })
             .click();
           await page
-            .getByRole('button', { name: 'Schedule cancellation and save target', exact: true })
+            .getByRole('button', { name: 'Cancel & save plan', exact: true })
             .click();
           await expect(
-            page.getByRole('heading', { name: 'Recovery target saved', exact: true }),
+            page.getByRole('heading', { name: 'Plan saved', exact: true }),
           ).toBeVisible();
         } else {
           await page.getByRole('button', { name: 'Switch to Hobby', exact: true }).click();
@@ -137,9 +137,9 @@ for (const scenario of [
             .getByRole('region', { name: 'Choose your plan', exact: true })
             .getByRole('button', { name: targetAction, exact: true })
             .click();
-          await page.getByRole('button', { name: 'Save recovery target', exact: true }).click();
+          await page.getByRole('button', { name: 'Save plan', exact: true }).click();
           await expect(
-            page.getByRole('heading', { name: 'Recovery target saved', exact: true }),
+            page.getByRole('heading', { name: 'Plan saved', exact: true }),
           ).toBeVisible();
         }
         await page.getByRole('button', { name: 'Done', exact: true }).click();
@@ -169,7 +169,7 @@ for (const scenario of [
           }),
         ).toBeDisabled();
         await expect(
-          page.getByRole('button', { name: 'Review saved recovery', exact: true }),
+          page.getByRole('button', { name: 'Review plan', exact: true }),
         ).toBeVisible();
         const [saved] = await db
           .select()
@@ -181,10 +181,10 @@ for (const scenario of [
           status: 'waiting_for_expiry',
         });
         expect(saved?.eligibleAt?.getTime()).toBe(cycleEnd * 1000);
-        await page.getByRole('button', { name: 'Review saved recovery', exact: true }).click();
-        await page.getByRole('button', { name: 'Save recovery target', exact: true }).click();
+        await page.getByRole('button', { name: 'Review plan', exact: true }).click();
+        await page.getByRole('button', { name: 'Save plan', exact: true }).click();
         await expect(
-          page.getByRole('heading', { name: 'Recovery target saved', exact: true }),
+          page.getByRole('heading', { name: 'Plan saved', exact: true }),
         ).toBeVisible();
         expect(await providerMutationCount(context, `/subscriptions/${sourceId}/cancel`)).toBe(1);
         expect(await providerMutationCount(context, '/subscriptions')).toBe(createsBefore + 1);
@@ -205,8 +205,8 @@ for (const scenario of [
           page.getByRole('button', { name: 'Hobby is your current plan', exact: true }),
         ).toBeVisible();
         expect(await providerMutationCount(context, '/subscriptions')).toBe(createsBefore + 1);
-        await page.getByRole('button', { name: 'Review saved recovery', exact: true }).click();
-        await page.getByRole('button', { name: 'Proceed to Checkout', exact: true }).click();
+        await page.getByRole('button', { name: 'Review plan', exact: true }).click();
+        await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
         await expect(
           page.getByRole('button', { name: `Retry ${scenario.targetLabel}`, exact: true }),
         ).toBeVisible();

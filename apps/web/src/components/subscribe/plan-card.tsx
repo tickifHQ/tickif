@@ -46,7 +46,7 @@ export function PlanCard({
   return (
     <Card
       variant={isSelected && !isCurrent ? 'accent' : 'ghost'}
-      className="flex min-w-0 flex-col rounded-none shadow-none"
+      className="flex min-w-0 flex-col rounded-none shadow-none md:row-span-4 md:grid md:grid-rows-subgrid"
     >
       <CardHeader className="gap-4">
         <div className="flex min-h-7 flex-wrap items-center gap-2">
@@ -54,7 +54,7 @@ export function PlanCard({
             <h3>{plan.label}</h3>
           </CardTitle>
           {isCurrent ? <Badge variant="secondary">Current plan</Badge> : null}
-          {isSelected && !isCurrent ? <Badge variant="outline">Selected target</Badge> : null}
+          {isSelected && !isCurrent ? <Badge variant="outline">Selected plan</Badge> : null}
         </div>
         <div className="flex flex-wrap items-baseline gap-1">
           <span className="text-3xl font-semibold tracking-tight">
@@ -74,7 +74,7 @@ export function PlanCard({
           ))}
         </ul>
       </CardContent>
-      <CardFooter className="flex-col items-stretch gap-3">
+      <CardFooter className="flex-col items-stretch gap-3 md:row-span-2 md:grid md:grid-rows-subgrid">
         <Button
           variant={isSelected && !isCurrent ? 'default' : 'outline'}
           className="h-auto min-h-10 w-full whitespace-normal"
