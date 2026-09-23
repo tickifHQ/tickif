@@ -120,6 +120,12 @@ describe('DesignerPlanBilling', () => {
       expect(supportLinks[1]).toHaveAttribute('href', 'https://wa.me/919994645911');
     });
 
+    it('stacks the current-plan identity on narrow screens', () => {
+      render(<DesignerPlanBilling billing={makeBilling()} />);
+
+      expect(screen.getByTestId('current-plan-identity')).toHaveClass('flex-col', 'sm:flex-row');
+    });
+
     it('shows renewal date for active paid plans', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByText(/renews on/)).toBeInTheDocument();

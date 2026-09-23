@@ -1351,6 +1351,7 @@ function EntityChoiceCard({
         alt=""
         width={220}
         height={170}
+        loading="eager"
         className={cn(
           'pointer-events-none absolute bottom-[-3px] h-auto',
           illustrationClassName,

@@ -40,6 +40,7 @@ const TAXONOMY_REVALIDATE_SECONDS = 60 * 60 * 24 * 7;
 async function fetchTaxonomyOptions(): Promise<FeedFacetOptions> {
   const entries = await Promise.all(
     FEED_FACET_DEFINITIONS.map(async (facet) => {
+      if (facet.kind === null) return [facet.key, []] as const;
       try {
         const response = await api.api.taxonomy.terms.$get(
           { query: { kind: facet.kind } },
@@ -90,11 +91,21 @@ export default async function PersonalHomePage({
     fetchFeedSafely(baseRequest, page),
   ]);
   const firstName = session?.user.name?.trim().split(/\s+/)[0];
+  const displayFacetOptions: FeedFacetOptions = {
+    ...taxonomyOptions,
+    tag: Object.keys(initialPage.facetDistribution.tags ?? {}).map((slug) => ({
+      slug,
+      label: slug
+        .split('-')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+    })),
+  };
   const request: HomeFeedRequest = {
     ...baseRequest,
     ...searchLabelMaps(taxonomyOptions),
   };
-  const filterSuggestions = feedFilterSuggestions(taxonomyOptions, params, {
+  const filterSuggestions = feedFilterSuggestions(displayFacetOptions, params, {
     base: '/home',
     facetDistribution: initialPage.facetDistribution,
   });
@@ -125,7 +136,7 @@ export default async function PersonalHomePage({
           <HomeSearchBar initialQuery={query} basePath="/home" />
           <div className="mt-5">
             <FeedFilters
-              options={taxonomyOptions}
+              options={displayFacetOptions}
               facetDistribution={initialPage.facetDistribution}
             />
           </div>

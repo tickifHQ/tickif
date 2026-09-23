@@ -107,9 +107,12 @@ function CurrentPlanCard({
 
   return (
     <Card radius="2xl">
-      <div className="flex flex-col gap-5 p-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-stretch gap-5">
-          <span className="flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-primary/10 text-primary sm:w-36">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-8">
+        <div
+          data-testid="current-plan-identity"
+          className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-stretch sm:gap-5"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:h-auto sm:w-36 sm:self-stretch sm:rounded-2xl">
             <Crown className="size-9" />
           </span>
           <div className="min-w-0 flex-1">

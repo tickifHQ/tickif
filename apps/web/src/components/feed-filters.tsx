@@ -55,6 +55,8 @@ function emptyFilterState(): FeedFilterState {
     budgetBand: [],
     room: [],
     theme: [],
+    material: [],
+    tag: [],
   };
 }
 

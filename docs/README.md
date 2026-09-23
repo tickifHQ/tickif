@@ -3,19 +3,20 @@
 Onboarding and reference docs for the Tickif platform. Start at the top and
 work down; the first two get you running, the rest are reference.
 
-| Doc | Read it when |
-| --- | --- |
-| [getting-started.md](./getting-started.md) | Day one. Get the stack running locally. |
-| [architecture.md](./architecture.md) | You want the mental model — monorepo layout, the modular monolith, the layering rule. |
-| [adding-a-module.md](./adding-a-module.md) | You're about to build a new domain (leads, media, search…). The most-used guide. |
-| [database-and-migrations.md](./database-and-migrations.md) | You're changing the schema or running migrations. |
-| [runbooks/admin-access.md](./runbooks/admin-access.md) | You're bootstrapping or recovering privileged platform access. |
-| [runbooks/search.md](./runbooks/search.md) | You're provisioning Typesense credentials, bootstrapping collections, or diagnosing degraded search. |
-| [auth.md](./auth.md) | You're protecting a route, working on login, or touching RBAC. |
-| [branches.md](./branches.md) | You're working on Corporate branches, active-team context, or branch freeze/restore. |
-| [testing.md](./testing.md) | You're writing tests or practicing TDD (you should be). |
-| [conventions.md](./conventions.md) | Anytime — coding standards, env config, shared contracts. |
-| [troubleshooting.md](./troubleshooting.md) | Something broke, or you hit a pnpm/build oddity. |
+| Doc                                                        | Read it when                                                                                         |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [getting-started.md](./getting-started.md)                 | Day one. Get the stack running locally.                                                              |
+| [architecture.md](./architecture.md)                       | You want the mental model — monorepo layout, the modular monolith, the layering rule.                |
+| [adding-a-module.md](./adding-a-module.md)                 | You're about to build a new domain (leads, media, search…). The most-used guide.                     |
+| [database-and-migrations.md](./database-and-migrations.md) | You're changing the schema or running migrations.                                                    |
+| [runbooks/admin-access.md](./runbooks/admin-access.md)     | You're bootstrapping or recovering privileged platform access.                                       |
+| [runbooks/search.md](./runbooks/search.md)                 | You're provisioning Typesense credentials, bootstrapping collections, or diagnosing degraded search. |
+| [media-quality.md](./media-quality.md)                     | You're checking public image sharpness or reprocessing existing derivatives.                         |
+| [auth.md](./auth.md)                                       | You're protecting a route, working on login, or touching RBAC.                                       |
+| [branches.md](./branches.md)                               | You're working on Corporate branches, active-team context, or branch freeze/restore.                 |
+| [testing.md](./testing.md)                                 | You're writing tests or practicing TDD (you should be).                                              |
+| [conventions.md](./conventions.md)                         | Anytime — coding standards, env config, shared contracts.                                            |
+| [troubleshooting.md](./troubleshooting.md)                 | Something broke, or you hit a pnpm/build oddity.                                                     |
 
 ## TL;DR
 

@@ -116,6 +116,10 @@ describe('DesignerOnboarding', () => {
       'height',
       '189',
     );
+    expect(container.querySelector('img[src*="onboarding-profile-chair.svg"]')).toHaveAttribute(
+      'loading',
+      'eager',
+    );
     expect(screen.queryByLabelText(/display name/i)).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mock.taxonomyGet).toHaveBeenCalledTimes(2);

@@ -62,6 +62,7 @@ const designer: PublicProjectDesigner = {
   slug: 'studio-a',
   avgRating: '4.5',
   reviewCount: 10,
+  googleRating: null,
   entityType: 'company',
   logoUrl: null,
   isKycVerified: false,
@@ -154,6 +155,14 @@ describe('ImageDetailView', () => {
   });
 
   // --- Core rendering ---
+
+  it('shows connected Google rating and count in the profile card without a link', () => {
+    renderComponent({ designer: { ...designer, googleRating: { rating: 4.7, reviewCount: 58 } } });
+    const rating = screen.getByLabelText('Google rating 4.7 out of 5 from 58 ratings');
+    expect(rating).toHaveTextContent('4.7');
+    expect(rating).toHaveTextContent('58');
+    expect(rating.closest('a, button')).toBeNull();
+  });
 
   it('renders a compact enquiry icon and visible hover feedback', () => {
     renderComponent();
@@ -468,6 +477,22 @@ describe('ImageDetailView', () => {
   });
 
   // --- Finding #7: Gallery accessibility ---
+
+  it('snaps horizontal scrolling to complete gallery thumbnails', () => {
+    renderComponent();
+
+    const strip = screen.getByRole('group', { name: 'Project gallery' });
+    expect(strip).toHaveClass('snap-x', 'snap-mandatory');
+    for (const thumbnail of screen.getAllByRole('button', { name: /living room|kitchen/i })) {
+      expect(thumbnail).toHaveClass('snap-start');
+    }
+  });
+
+  it('does not show a scrollable thumbnail strip for a single image', () => {
+    renderComponent({ gallery: [gallery[0]!] });
+
+    expect(screen.queryByRole('group', { name: 'Project gallery' })).not.toBeInTheDocument();
+  });
 
   it('uses aria-current for the active gallery image (not role=tab)', () => {
     renderComponent();

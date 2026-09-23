@@ -5,7 +5,16 @@ import { findDesignerSearchSource, findProjectSearchSource } from '../../src/sea
 
 describe('live project search projection', () => {
   it('omits pending scalar changes, rooms and image taxonomy from indexing and rebuild sources', async () => {
-    const designer = await makeDesigner({ status: 'active' });
+    const designer = await makeDesigner({
+      status: 'active',
+      bio: 'A complete public designer profile.',
+      logoImageId: 'originals/logos/versioned-studio/logo',
+    });
+    await db.insert(schema.designerPortfolio).values({
+      profileId: designer.id,
+      publicLinkEnabled: true,
+      tagline: 'Approved work only',
+    });
     const project = await makeProject({
       designerId: designer.id,
       status: 'published',

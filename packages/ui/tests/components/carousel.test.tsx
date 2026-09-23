@@ -113,4 +113,27 @@ describe('Carousel', () => {
     expect(eventResult).toBe(true);
     expect(carouselMocks.scrollNext).not.toHaveBeenCalled();
   });
+
+  it('opts image carousels into wheel gestures without replacing existing plugins', () => {
+    const existingPlugin = {
+      name: 'existing',
+      options: { active: true, breakpoints: {} },
+      init: vi.fn(),
+      destroy: vi.fn(),
+    };
+
+    render(
+      <Carousel aria-label="Project images" wheelGestures plugins={[existingPlugin]}>
+        <CarouselContent>
+          <CarouselItem>Living room</CarouselItem>
+          <CarouselItem>Dining area</CarouselItem>
+        </CarouselContent>
+      </Carousel>,
+    );
+
+    expect(carouselMocks.useEmblaCarousel).toHaveBeenCalledWith(
+      expect.objectContaining({ axis: 'x' }),
+      expect.arrayContaining([existingPlugin, expect.objectContaining({ name: 'wheelGestures' })]),
+    );
+  });
 });
