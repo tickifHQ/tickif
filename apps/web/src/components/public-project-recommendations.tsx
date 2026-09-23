@@ -52,7 +52,11 @@ function RecommendationGroup({
         ) : null}
       </header>
 
-      <Carousel opts={{ align: 'start', loop: false }} className="mt-3.5">
+      <Carousel
+        opts={{ align: 'start', loop: false }}
+        wheelGestures={projects.length > 1}
+        className="mt-3.5"
+      >
         <CarouselContent className="pb-2">
           {projects.map((recommendedProject) => (
             <CarouselItem key={recommendedProject.id} className="basis-auto">
