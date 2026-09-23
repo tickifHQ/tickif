@@ -28,9 +28,8 @@ vi.mock('@/components/public-designer-profile', () => ({
   ),
 }));
 
-const { default: PublicDesignerProfilePage, generateMetadata } = await import(
-  '../../../app/(public-profile)/d/[slug]/page'
-);
+const { default: PublicDesignerProfilePage, generateMetadata } =
+  await import('../../../app/(public-profile)/d/[slug]/page');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -102,14 +101,41 @@ describe('/d/[slug] metadata', () => {
     );
   });
 
-  it('uses the newest project cover as the social share image', async () => {
+  it('uses the generated portfolio card as the social share image', async () => {
     mock.fetchPublicPortfolio.mockResolvedValue(makePublicPortfolio());
 
     const metadata = await generateMetadata({
       params: Promise.resolve({ slug: 'anika-spaces' }),
     });
 
-    expect(metadata.openGraph?.images).toEqual(['https://cdn.example.test/projects/adyar.jpg']);
+    expect(metadata.openGraph?.images).toEqual([
+      {
+        url: 'http://localhost:3000/d/anika-spaces/social-card',
+        width: 1200,
+        height: 630,
+        alt: 'Anika Spaces interior design portfolio',
+      },
+    ]);
+  });
+
+  it('publishes matching Twitter card metadata for the designer profile', async () => {
+    mock.fetchPublicPortfolio.mockResolvedValue(makePublicPortfolio());
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: 'anika-spaces' }),
+    });
+
+    expect(metadata.twitter).toEqual({
+      card: 'summary_large_image',
+      title: 'Anika Spaces — Interior Design Studio',
+      description: 'Quiet, light-filled homes with timeless materials.',
+      images: [
+        {
+          url: 'http://localhost:3000/d/anika-spaces/social-card',
+          alt: 'Anika Spaces interior design portfolio',
+        },
+      ],
+    });
   });
 
   it('404s from generateMetadata so the response status is a real 404', async () => {
@@ -118,9 +144,9 @@ describe('/d/[slug] metadata', () => {
     // rather than a soft 404 on a flushed 200 shell.
     mock.fetchPublicPortfolio.mockResolvedValue(null);
 
-    await expect(
-      generateMetadata({ params: Promise.resolve({ slug: 'nobody' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(generateMetadata({ params: Promise.resolve({ slug: 'nobody' }) })).rejects.toThrow(
+      'NEXT_NOT_FOUND',
+    );
   });
 
   it('redirects from generateMetadata for a non-canonical slug', async () => {
