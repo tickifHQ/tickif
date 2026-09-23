@@ -68,9 +68,7 @@ vi.mock('@repo/config', () => ({
 }));
 
 // Import AFTER mock registration
-const { portfolioService } = await import(
-  '../../../src/modules/profiles/portfolio-service.js'
-);
+const { portfolioService } = await import('../../../src/modules/profiles/portfolio-service.js');
 const { getSession } = await import('@repo/auth');
 const { app } = await import('../../../src/app.js');
 
@@ -91,6 +89,8 @@ const fakePortfolioResponse: PortfolioResponse = {
   displayName: 'Test Studio',
   bio: 'We design things',
   logoUrl: null,
+  logoSourceUrl: null,
+  logoCrop: null,
   websiteUrl: null,
   instagramHandle: null,
   linkedinHandle: null,
@@ -386,15 +386,30 @@ describe('POST /me/portfolio/logo/commit', () => {
     mockAuthed();
     vi.mocked(portfolioService.commitLogoUpload).mockResolvedValue({
       logoUrl: 'https://r2.example.com/presigned-download',
+      logoSourceUrl: 'https://r2.example.com/presigned-source',
+      logoCrop: { x: 10, y: 20, width: 50, height: 50 },
     });
 
     const res = await request('POST', '/me/portfolio/logo/commit', {
-      body: { objectKey: 'originals/logos/profile-1/uuid-123' },
+      body: {
+        objectKey: 'originals/logos/profile-1/uuid-123',
+        logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+      },
     });
 
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.logoUrl).toBe('https://r2.example.com/presigned-download');
+    expect(body.logoSourceUrl).toBe('https://r2.example.com/presigned-source');
+    expect(body.logoCrop).toEqual({ x: 10, y: 20, width: 50, height: 50 });
+    expect(portfolioService.commitLogoUpload).toHaveBeenCalledWith(
+      {
+        objectKey: 'originals/logos/profile-1/uuid-123',
+        sourceObjectKey: undefined,
+        logoCrop: { x: 10, y: 20, width: 50, height: 50 },
+      },
+      expect.any(Object),
+    );
   });
 
   it('returns 401 without authentication', async () => {

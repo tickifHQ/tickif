@@ -206,6 +206,7 @@ function WorkspaceHeaderTitle({ pathname }: { pathname: string }) {
 function SidebarContent({
   activeOrganizationId,
   studioName,
+  logoUrl,
   planLabel,
   pathname,
   isWorkspaceRefreshing,
@@ -214,6 +215,7 @@ function SidebarContent({
 }: {
   activeOrganizationId: string;
   studioName: string;
+  logoUrl?: string | null;
   planLabel: string;
   pathname: string;
   isWorkspaceRefreshing: boolean;
@@ -275,6 +277,7 @@ function SidebarContent({
             <DesignerOrganizationSwitcher
               activeOrganizationId={activeOrganizationId}
               studioName={studioName}
+              logoUrl={logoUrl}
               secondaryLabel={planLabel}
               isWorkspaceRefreshing={isWorkspaceRefreshing}
               onSwitchSuccess={onSwitchSuccess}
@@ -309,12 +312,14 @@ function WorkspaceContentSkeleton() {
 export function DesignerWorkspaceShell({
   activeOrganizationId,
   studioName,
+  logoUrl,
   planLabel,
   capabilities,
   children,
 }: {
   activeOrganizationId: string;
   studioName: string;
+  logoUrl?: string | null;
   planLabel: string;
   capabilities: OrganizationCapabilities;
   children: ReactNode;
@@ -345,6 +350,7 @@ export function DesignerWorkspaceShell({
         <SidebarContent
           activeOrganizationId={activeOrganizationId}
           studioName={studioName}
+          logoUrl={logoUrl}
           planLabel={planLabel}
           pathname={pathname}
           isWorkspaceRefreshing={isWorkspaceRefreshing}

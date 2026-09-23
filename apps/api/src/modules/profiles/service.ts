@@ -28,6 +28,7 @@ import {
   type DesignerProfileRecord,
 } from './repository.js';
 import { orgsService } from '../orgs/service.js';
+import { presignProfileLogo } from './portfolio-service.js';
 
 /**
  * Profile completion use-cases. Business logic lives here — no Hono, no Drizzle.
@@ -439,7 +440,10 @@ export const profilesService = {
 
     const { profile, org } = current;
     assertProfileOrganization(profile, activeOrgId);
-    const footprint = await profilesRepository.getFootprint(profile.id);
+    const [footprint, logoUrl] = await Promise.all([
+      profilesRepository.getFootprint(profile.id),
+      presignProfileLogo(profile),
+    ]);
 
     return {
       id: profile.id,
@@ -448,6 +452,7 @@ export const profilesService = {
       entityType: profile.entityType,
       bio: profile.bio,
       logoImageId: profile.logoImageId,
+      logoUrl,
       status: profile.status,
       yearsExperience: profile.yearsExperience,
       projectCount: profile.projectCount,

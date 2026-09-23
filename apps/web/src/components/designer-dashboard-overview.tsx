@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import type {
   CompletionStep,
   ProfileCompletionResponse,
@@ -155,6 +156,7 @@ function RightRailInfoRow({
 export function DesignerDashboardOverview({
   studioName,
   studioLocation,
+  logoUrl,
   portfolioUrl,
   portfolioPubliclyVisible = false,
   dashboard,
@@ -167,6 +169,7 @@ export function DesignerDashboardOverview({
 }: {
   studioName: string;
   studioLocation: string;
+  logoUrl?: string | null;
   portfolioUrl: string;
   /**
    * E-278: whether `/d/{slug}` serves the portfolio right now (backend
@@ -430,12 +433,23 @@ export function DesignerDashboardOverview({
                   <div className="h-32 bg-[linear-gradient(135deg,var(--muted),var(--background))]" />
                   <div className="space-y-3 px-5 py-4 text-center">
                     <div className="mx-auto -mt-10 size-16 overflow-hidden rounded-2xl border border-border bg-primary/10 shadow-sm">
-                      <InitialsAvatar
-                        seed={studioName}
-                        fallbackSeed={studioLocation}
-                        alt={`${studioName} generated profile initials`}
-                        size={64}
-                      />
+                      {logoUrl ? (
+                        <Image
+                          src={logoUrl}
+                          alt={`${studioName} logo`}
+                          width={64}
+                          height={64}
+                          unoptimized
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <InitialsAvatar
+                          seed={studioName}
+                          fallbackSeed={studioLocation}
+                          alt={`${studioName} generated profile initials`}
+                          size={64}
+                        />
+                      )}
                     </div>
                     <div>
                       <div className="text-lg font-medium text-foreground">{studioName}</div>

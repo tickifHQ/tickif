@@ -625,9 +625,9 @@ export const profilesRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
     async (c) => {
       const user = c.get('user')!;
       const session = c.get('session');
-      const { objectKey } = c.req.valid('json');
+      const { objectKey, sourceObjectKey, logoCrop } = c.req.valid('json');
       const result = await portfolioService.commitLogoUpload(
-        { objectKey },
+        { objectKey, sourceObjectKey, logoCrop },
         {
           userId: user.id,
           activeOrgId: session?.activeOrganizationId ?? null,

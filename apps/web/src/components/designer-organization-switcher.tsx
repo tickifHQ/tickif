@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { InitialsAvatar } from '@/components/initials-avatar';
-import { Avatar } from '@repo/ui/components/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@repo/ui/components/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,12 +19,14 @@ import {
 export function DesignerOrganizationSwitcher({
   activeOrganizationId,
   studioName,
+  logoUrl,
   secondaryLabel,
   isWorkspaceRefreshing = false,
   onSwitchSuccess,
 }: {
   activeOrganizationId: string | null;
   studioName: string;
+  logoUrl?: string | null;
   secondaryLabel: string;
   isWorkspaceRefreshing?: boolean;
   onSwitchSuccess?: (organizationId: string) => void;
@@ -76,7 +78,16 @@ export function DesignerOrganizationSwitcher({
           className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Avatar className="size-10 rounded-xl">
-            <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
+            {logoUrl ? (
+              <>
+                <AvatarImage src={logoUrl} alt={`${studioName} logo`} className="object-cover" />
+                <AvatarFallback className="rounded-xl p-0" delayMs={100}>
+                  <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
+                </AvatarFallback>
+              </>
+            ) : (
+              <InitialsAvatar seed={studioName} fallbackSeed="Studio" alt="" size={40} />
+            )}
           </Avatar>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium leading-snug text-foreground">

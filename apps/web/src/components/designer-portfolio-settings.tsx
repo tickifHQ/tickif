@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
@@ -13,14 +14,17 @@ import {
   ImagePlus,
   LayoutList,
   Loader2,
+  Pencil,
   RefreshCw,
   Star,
+  Upload,
   X,
 } from 'lucide-react';
 import {
   PORTFOLIO_BADGE_ORDER,
   PORTFOLIO_BADGE_PRESENTATION,
   type GoogleReviewsResponse,
+  type LogoCropArea,
   type PortfolioProjectItem,
   type PortfolioResponse,
   type RequiredPortfolioField,
@@ -30,6 +34,14 @@ import { AnimatedCollapsibleContent } from '@repo/ui/components/animated-collaps
 import { Badge } from '@repo/ui/components/badge';
 import { Button } from '@repo/ui/components/button';
 import { Card } from '@repo/ui/components/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@repo/ui/components/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +55,7 @@ import { Textarea } from '@repo/ui/components/textarea';
 import { TipCallout } from '@repo/ui/components/tip-callout';
 import { cn } from '@repo/ui/lib/utils';
 import { DesignerPortfolioLoading } from '@/components/designer-page-loading';
+import { LogoCropDialog } from '@/components/logo-crop-dialog';
 import {
   GoogleBrandIcon,
   InstagramBrandIcon,
@@ -52,6 +65,7 @@ import {
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { env } from '@/env';
+import { cropImageToFile } from '@/lib/crop-image';
 import {
   checkSlugAvailability,
   connectGoogleReviews,
@@ -103,6 +117,16 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const portfolioWebUrl = new URL(env.NEXT_PUBLIC_WEB_URL);
 const PORTFOLIO_URL_BASE = portfolioWebUrl.host;
+const ALLOWED_LOGO_SOURCE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+const MAX_LOGO_SOURCE_BYTES = 10_000_000;
+
+type LogoCropSource = {
+  source: string;
+  fileName: string;
+  revokeOnRelease: boolean;
+  originalFile?: File;
+  initialCrop: LogoCropArea | null;
+};
 
 /** Toggleable page sections (Hero has no visibility toggle in the design). */
 type ToggleableSectionKey = 'trust' | 'testimonial' | 'reviews' | 'socialLinks' | 'shareBlock';
@@ -241,6 +265,7 @@ function getClearedSavedHeroFields(current: FormState, saved: FormState) {
 // ---------------------------------------------------------------------------
 
 export function DesignerPortfolioSettings() {
+  const router = useRouter();
   // Data states
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -270,6 +295,8 @@ export function DesignerPortfolioSettings() {
   // Logo
   const [isUploadingLogo, startLogoUploadTransition] = useTransition();
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoManagerOpen, setLogoManagerOpen] = useState(false);
+  const [logoCropSource, setLogoCropSource] = useState<LogoCropSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const heroFieldRefs = useRef<Partial<Record<RequiredPortfolioField, HTMLElement | null>>>({});
 
@@ -532,6 +559,12 @@ export function DesignerPortfolioSettings() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (logoCropSource?.revokeOnRelease) URL.revokeObjectURL(logoCropSource.source);
+    };
+  }, [logoCropSource]);
+
   // -------------------------------------------------------------------------
   // Save
   // -------------------------------------------------------------------------
@@ -606,6 +639,11 @@ export function DesignerPortfolioSettings() {
   // -------------------------------------------------------------------------
 
   function handleLogoUploadClick() {
+    setLogoError(null);
+    if (portfolio?.logoUrl) {
+      setLogoManagerOpen(true);
+      return;
+    }
     fileInputRef.current?.click();
   }
 
@@ -616,20 +654,89 @@ export function DesignerPortfolioSettings() {
     // Reset input so the same file can be re-selected
     event.target.value = '';
 
+    setLogoError(null);
+    if (!ALLOWED_LOGO_SOURCE_TYPES.has(file.type)) {
+      setLogoError('Choose a JPEG, PNG, WebP, or AVIF image.');
+      return;
+    }
+    if (file.size > MAX_LOGO_SOURCE_BYTES) {
+      setLogoError('Choose an image smaller than 10 MB.');
+      return;
+    }
+
+    const source = URL.createObjectURL(file);
+    setLogoCropSource({
+      source,
+      fileName: file.name,
+      revokeOnRelease: true,
+      originalFile: file,
+      initialCrop: null,
+    });
+    setLogoManagerOpen(false);
+  }
+
+  function handleEditExistingLogo() {
+    if (!portfolio?.logoUrl) return;
+    setLogoError(null);
+    setLogoCropSource({
+      source: portfolio.logoSourceUrl ?? portfolio.logoUrl,
+      fileName: 'studio-logo.webp',
+      revokeOnRelease: false,
+      initialCrop: portfolio.logoCrop,
+    });
+    setLogoManagerOpen(false);
+  }
+
+  function handleChooseAnotherLogo() {
+    fileInputRef.current?.click();
+  }
+
+  function handleCropDialogOpenChange(open: boolean) {
+    if (!open) {
+      setLogoCropSource(null);
+      setLogoError(null);
+    }
+  }
+
+  function handleCroppedLogoSave({
+    pixels,
+    percentages,
+  }: {
+    pixels: Parameters<typeof cropImageToFile>[1];
+    percentages: LogoCropArea;
+  }) {
+    if (!logoCropSource) return;
+
     startLogoUploadTransition(async () => {
       setLogoError(null);
       try {
-        const result = await uploadLogo(file);
-        // Refresh portfolio to get new logoUrl and all server-derived fields
+        const croppedFile = await cropImageToFile(
+          logoCropSource.source,
+          pixels,
+          logoCropSource.fileName,
+        );
+        const result = await uploadLogo(croppedFile, logoCropSource.originalFile, percentages);
+        // Refresh portfolio to get the canonical signed URL and all server-derived fields.
         try {
           const refreshed = await fetchPortfolio();
           setPortfolio(refreshed);
         } catch {
-          setPortfolio((prev) => (prev ? { ...prev, logoUrl: result.logoUrl } : prev));
+          setPortfolio((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  logoUrl: result.logoUrl,
+                  logoSourceUrl: result.logoSourceUrl,
+                  logoCrop: result.logoCrop,
+                }
+              : prev,
+          );
           setLogoError(
             "Logo updated successfully. We couldn't refresh your portfolio status — please refresh the page to see the latest publish status.",
           );
         }
+        setLogoCropSource(null);
+        router.refresh();
       } catch (err) {
         setLogoError(err instanceof Error ? err.message : 'Could not upload logo.');
       }
@@ -940,7 +1047,7 @@ export function DesignerPortfolioSettings() {
                                 onClick={handleLogoUploadClick}
                                 disabled={isUploadingLogo}
                                 className="relative block size-full disabled:opacity-50"
-                                aria-label="Replace logo"
+                                aria-label="Edit logo"
                               >
                                 <Image
                                   src={portfolio.logoUrl}
@@ -1645,6 +1752,51 @@ export function DesignerPortfolioSettings() {
           Save changes
         </Button>
       </div>
+
+      <Dialog open={logoManagerOpen} onOpenChange={setLogoManagerOpen}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-border px-5 py-4 pr-14 text-left sm:px-6">
+            <DialogTitle>Studio logo</DialogTitle>
+            <DialogDescription>
+              Review your saved logo, refine its crop, or choose a replacement.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-5 p-6 sm:p-8">
+            <div className="relative aspect-square w-full max-w-64 overflow-hidden rounded-xl border border-border bg-muted">
+              {portfolio.logoUrl ? (
+                <Image
+                  src={portfolio.logoUrl}
+                  alt={`${form.displayName || 'Studio'} logo`}
+                  fill
+                  unoptimized
+                  className="object-cover"
+                />
+              ) : null}
+            </div>
+          </div>
+          <DialogFooter className="border-t border-border px-5 py-4 sm:px-6">
+            <Button type="button" variant="outline" onClick={handleChooseAnotherLogo}>
+              <Upload className="size-4" aria-hidden />
+              Choose another logo
+            </Button>
+            <Button type="button" onClick={handleEditExistingLogo}>
+              <Pencil className="size-4" aria-hidden />
+              Edit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <LogoCropDialog
+        open={logoCropSource !== null}
+        imageSource={logoCropSource?.source ?? null}
+        initialCrop={logoCropSource?.initialCrop ?? null}
+        isSaving={isUploadingLogo}
+        error={logoError}
+        onOpenChange={handleCropDialogOpenChange}
+        onChooseAnother={handleChooseAnotherLogo}
+        onSave={handleCroppedLogoSave}
+      />
 
       {/* Hidden file input for logo upload */}
       <input

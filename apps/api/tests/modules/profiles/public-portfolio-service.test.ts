@@ -71,6 +71,8 @@ const makeProfile = (over: Partial<DesignerProfileRecord> = {}): DesignerProfile
   displayName: 'Test Studio',
   bio: 'We design beautiful spaces',
   logoImageId: 'originals/logos/profile-1/abc',
+  logoSourceImageId: null,
+  logoCrop: null,
   status: 'active',
   yearsExperience: 6,
   projectCount: 12,

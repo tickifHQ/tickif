@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ComponentProps, ReactNode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DesignerOrganizationSwitcher } from '../../src/components/designer-organization-switcher';
@@ -36,6 +37,12 @@ vi.mock('@/components/initials-avatar', () => ({
   InitialsAvatar: () => <div>Avatar</div>,
 }));
 
+vi.mock('@repo/ui/components/avatar', () => ({
+  Avatar: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  AvatarImage: (props: ComponentProps<'img'>) => <img {...props} />,
+  AvatarFallback: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+
 describe('DesignerOrganizationSwitcher', () => {
   beforeEach(() => {
     mock.isPending = false;
@@ -57,6 +64,22 @@ describe('DesignerOrganizationSwitcher', () => {
 
     expect(screen.getByText('Typography Studio')).toHaveClass('leading-snug');
     expect(screen.getByText('Professional+ plan')).toHaveClass('leading-snug');
+  });
+
+  it('shows the saved portfolio logo for the active studio', () => {
+    render(
+      <DesignerOrganizationSwitcher
+        activeOrganizationId="org-1"
+        studioName="Typography Studio"
+        secondaryLabel="Professional+ plan"
+        logoUrl="https://storage.example.com/typography-studio.webp"
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: 'Typography Studio logo' })).toHaveAttribute(
+      'src',
+      'https://storage.example.com/typography-studio.webp',
+    );
   });
 
   it('lists organization memberships without exposing the personal workspace', async () => {

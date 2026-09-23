@@ -34,6 +34,7 @@ import {
   MODERATION_REASON_CODE_VALUES,
   type OnboardingStep,
   type OnboardingDraftFields,
+  type LogoCropArea,
 } from '@repo/contracts';
 import { user, organization, member, team } from './auth.js';
 
@@ -315,6 +316,12 @@ export const designerProfile = pgTable(
     slug: text('slug').notNull().unique(),
     bio: text('bio'),
     logoImageId: text('logo_image_id'), // R2 media key (FK deferred to media epic)
+    // Untouched upload retained privately so a saved logo can be cropped again
+    // without losing pixels outside the previous crop.
+    logoSourceImageId: text('logo_source_image_id'),
+    // Percentage crop against logoSourceImageId, retained so reopening the
+    // editor restores the exact saved framing on any viewport size.
+    logoCrop: jsonb('logo_crop').$type<LogoCropArea>(),
     status: profileStatusEnum('status').notNull().default('draft'),
     // Proof/reputation counters (owned by their respective services)
     yearsExperience: integer('years_experience').default(0).notNull(),

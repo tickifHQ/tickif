@@ -71,6 +71,7 @@ const profile: CurrentProfileResponse = {
   entityType: 'company',
   bio: 'Warm, practical homes.',
   logoImageId: null,
+  logoUrl: null,
   status: 'active',
   yearsExperience: 5,
   projectCount: 8,
@@ -106,7 +107,7 @@ const completion: ProfileCompletionResponse = {
 };
 
 function ownerProfile(overrides: Partial<ProfileOwnerResponse> = {}): ProfileOwnerResponse {
-  const { organization: _organization, shareUrl: _shareUrl, ...owner } = profile;
+  const { organization: _organization, shareUrl: _shareUrl, logoUrl: _logoUrl, ...owner } = profile;
   return { ...owner, ...overrides };
 }
 

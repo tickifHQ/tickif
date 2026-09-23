@@ -4,6 +4,7 @@ import type {
   RequiredPortfolioField,
   UpdatePortfolioInput,
   SlugAvailabilityResponse,
+  LogoCropArea,
 } from '@repo/contracts';
 import { ORGANIZATION_CAPABILITY } from '@repo/contracts';
 import { presignUpload, objectExists, presignDownload, deleteObject } from '@repo/storage';
@@ -34,7 +35,8 @@ export type Caller = {
 
 const ALLOWED_LOGO_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 
-const MAX_LOGO_BYTES = 5_000_000;
+const MAX_DISPLAY_LOGO_BYTES = 5_000_000;
+const MAX_SOURCE_LOGO_BYTES = 10_000_000;
 
 // Badge thresholds
 const BADGE_NEW_DAYS = 90;
@@ -111,6 +113,17 @@ export async function presignProfileLogo(profile: DesignerProfileRecord): Promis
   const expectedPrefix = `originals/logos/${profile.id}/`;
   if (!profile.logoImageId || !profile.logoImageId.startsWith(expectedPrefix)) return null;
   return presignDownload({ key: profile.logoImageId });
+}
+
+/** Presign the private untouched source used only by the owner-side crop editor. */
+export async function presignProfileLogoSource(
+  profile: DesignerProfileRecord,
+): Promise<string | null> {
+  const expectedPrefix = `originals/logos/${profile.id}/`;
+  if (!profile.logoSourceImageId || !profile.logoSourceImageId.startsWith(expectedPrefix)) {
+    return null;
+  }
+  return presignDownload({ key: profile.logoSourceImageId });
 }
 
 export function computeBadges(
@@ -227,8 +240,9 @@ async function buildPortfolioResponse(
   portfolio: PortfolioRecord,
 ): Promise<PortfolioResponse> {
   // Independent reads — one round-trip's worth of latency, not three.
-  const [logoUrl, googleRow, isKycVerified] = await Promise.all([
+  const [logoUrl, logoSourceUrl, googleRow, isKycVerified] = await Promise.all([
     presignProfileLogo(profile),
+    presignProfileLogoSource(profile),
     // Lightweight Google connection snapshot so the settings page renders the
     // real connection state (badge + rating) without a second request.
     googleReviewsRepository.findByProfileId(profile.id),
@@ -255,6 +269,8 @@ async function buildPortfolioResponse(
     displayName: profile.displayName,
     bio: profile.bio,
     logoUrl,
+    logoSourceUrl,
+    logoCrop: profile.logoCrop,
     websiteUrl: profile.websiteUrl,
     instagramHandle: profile.instagramHandle,
     linkedinHandle: profile.linkedinHandle,
@@ -518,7 +534,7 @@ export const portfolioService = {
 
   /** Mint a presigned upload URL for a logo image. */
   async createLogoUploadUrl(
-    input: { contentType: string; contentLength: number },
+    input: { contentType: string; contentLength: number; variant?: 'display' | 'source' },
     caller: Caller,
   ): Promise<{ uploadUrl: string; key: string }> {
     const profile = await resolveProfile(caller);
@@ -528,7 +544,8 @@ export const portfolioService = {
       throw AppError.unprocessable('Unsupported content type for logo upload');
     }
 
-    if (input.contentLength > MAX_LOGO_BYTES) {
+    const sizeLimit = input.variant === 'source' ? MAX_SOURCE_LOGO_BYTES : MAX_DISPLAY_LOGO_BYTES;
+    if (input.contentLength > sizeLimit) {
       throw AppError.unprocessable('Declared size exceeds the logo size limit');
     }
 
@@ -556,9 +573,13 @@ export const portfolioService = {
 
   /** Confirm a logo was uploaded and persist the association. */
   async commitLogoUpload(
-    input: { objectKey: string },
+    input: { objectKey: string; sourceObjectKey?: string; logoCrop?: LogoCropArea },
     caller: Caller,
-  ): Promise<{ logoUrl: string }> {
+  ): Promise<{
+    logoUrl: string;
+    logoSourceUrl: string | null;
+    logoCrop: LogoCropArea | null;
+  }> {
     const profile = await resolveProfile(caller);
 
     // Validate that the key belongs to this profile (prevent cross-profile attachment)
@@ -566,32 +587,51 @@ export const portfolioService = {
     if (!input.objectKey.startsWith(expectedPrefix)) {
       throw AppError.forbidden('Object key does not belong to this profile');
     }
+    if (input.sourceObjectKey && !input.sourceObjectKey.startsWith(expectedPrefix)) {
+      throw AppError.forbidden('Source object key does not belong to this profile');
+    }
 
-    const exists = await objectExists(input.objectKey);
-    if (!exists) {
+    const [displayExists, sourceExists] = await Promise.all([
+      objectExists(input.objectKey),
+      input.sourceObjectKey ? objectExists(input.sourceObjectKey) : Promise.resolve(true),
+    ]);
+    if (!displayExists) {
       throw AppError.badRequest('No uploaded object found for this image');
+    }
+    if (!sourceExists) {
+      throw AppError.badRequest('No uploaded object found for the source image');
     }
 
     // Compare-and-set: atomically swap logoImageId only if current value matches what we read
     const previousKey = profile.logoImageId;
+    const previousSourceKey = profile.logoSourceImageId;
+    const nextLogoCrop = input.logoCrop ?? null;
+    let nextSourceKey = input.sourceObjectKey ?? previousSourceKey;
     const updated = await portfolioRepository.setLogoIfMatch(
       profile.id,
       previousKey,
       input.objectKey,
+      nextSourceKey,
+      nextLogoCrop,
     );
     if (!updated) {
       // Concurrent modification — retry CAS once with fresh state
       const freshProfile = await resolveProfile(caller);
+      nextSourceKey = input.sourceObjectKey ?? freshProfile.logoSourceImageId;
       const retried = await portfolioRepository.setLogoIfMatch(
         freshProfile.id,
         freshProfile.logoImageId,
         input.objectKey,
+        nextSourceKey,
+        nextLogoCrop,
       );
       if (!retried) {
         throw AppError.conflict('Logo was modified concurrently, please retry');
       }
     }
     profile.logoImageId = input.objectKey;
+    profile.logoSourceImageId = nextSourceKey;
+    profile.logoCrop = nextLogoCrop;
 
     // The logo is a required field, so this upload may be what takes the
     // portfolio live. Kept out of the CAS transaction: a failure here must not
@@ -612,6 +652,19 @@ export const portfolioService = {
         console.error('[commitLogoUpload] Failed to delete previous logo:', err);
       }
     }
+    if (
+      input.sourceObjectKey &&
+      previousSourceKey &&
+      previousSourceKey !== input.sourceObjectKey &&
+      previousSourceKey !== previousKey &&
+      previousSourceKey.startsWith(expectedPrefix)
+    ) {
+      try {
+        await deleteObject(previousSourceKey);
+      } catch (err) {
+        console.error('[commitLogoUpload] Failed to delete previous logo source:', err);
+      }
+    }
 
     emitAuditEvent({
       userId: caller.userId,
@@ -621,9 +674,12 @@ export const portfolioService = {
       resourceId: profile.id,
     });
 
-    const logoUrl = await presignDownload({ key: input.objectKey });
+    const [logoUrl, logoSourceUrl] = await Promise.all([
+      presignDownload({ key: input.objectKey }),
+      nextSourceKey ? presignDownload({ key: nextSourceKey }) : Promise.resolve(null),
+    ]);
 
-    return { logoUrl };
+    return { logoUrl, logoSourceUrl, logoCrop: nextLogoCrop };
   },
 
   /** Delete the current logo from storage and clear the DB association. */
