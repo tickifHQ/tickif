@@ -7,12 +7,14 @@ import type { BillingState } from '../../src/lib/billing-types';
 const apiMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   getSubscription: vi.fn(),
+  paymentMethod: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
   api: {
     api: {
       billing: {
+        'payment-method': { $post: apiMocks.paymentMethod },
         subscription: {
           refresh: { $get: apiMocks.refresh },
           $get: apiMocks.getSubscription,
@@ -83,6 +85,7 @@ describe('DesignerPlanBilling', () => {
   beforeEach(() => {
     apiMocks.refresh.mockReset().mockResolvedValue(new Response(null, { status: 200 }));
     apiMocks.getSubscription.mockReset().mockResolvedValue(new Response(null, { status: 503 }));
+    apiMocks.paymentMethod.mockReset().mockResolvedValue(new Response(null, { status: 409 }));
   });
 
   describe('active state', () => {
@@ -90,6 +93,31 @@ describe('DesignerPlanBilling', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByText('Professional+')).toBeInTheDocument();
       expect(screen.getByText('Current Plan')).toBeInTheDocument();
+    });
+
+    it('opens billing support through the WhatsApp Business number', () => {
+      render(<DesignerPlanBilling billing={makeBilling()} />);
+
+      const supportLink = screen.getByRole('link', { name: /contact support/i });
+      expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+      expect(supportLink).toHaveAttribute('target', '_blank');
+      expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('links payment recovery failures to WhatsApp Business', async () => {
+      const user = userEvent.setup();
+      render(
+        <DesignerPlanBilling
+          billing={makeBilling({ lifecycle: 'payment_failed', razorpayStatus: 'halted' })}
+        />,
+      );
+
+      await user.click(screen.getAllByRole('button', { name: 'Update Payment Method' })[0]!);
+
+      const supportLinks = await screen.findAllByRole('link', { name: /contact support/i });
+      expect(supportLinks).toHaveLength(2);
+      expect(supportLinks[0]).toHaveAttribute('href', 'https://wa.me/919994645911');
+      expect(supportLinks[1]).toHaveAttribute('href', 'https://wa.me/919994645911');
     });
 
     it('stacks the current-plan identity on narrow screens', () => {

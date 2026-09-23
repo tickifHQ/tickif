@@ -31,6 +31,7 @@ import { PaymentHistory } from '@/components/payment-history';
 import { usePaymentMethod } from '@/components/subscribe/use-payment-method';
 import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import type { SubscriptionResponse } from '@repo/contracts';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 interface DesignerPlanBillingProps {
   billing: BillingState;
@@ -705,7 +706,7 @@ function HelpCard() {
           Our support team is here to help you with any billing queries.
         </p>
         <Button asChild variant="outline" size="sm" className="mt-4 w-full">
-          <a href="mailto:support@tickif.in">
+          <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
             <Receipt className="size-4" />
             Contact Support
           </a>
@@ -801,7 +802,23 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
       {(payment.message || refreshError) && (
         <Alert className="mt-6">
           <AlertDescription>
-            <p>{payment.message ?? refreshError}</p>
+            <p>
+              {payment.message ?? refreshError}
+              {payment.supportRecommended ? (
+                <>
+                  {' '}
+                  <a
+                    href={SUPPORT_WHATSAPP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    Contact support
+                  </a>
+                  .
+                </>
+              ) : null}
+            </p>
             <Button variant="outline" size="sm" onClick={() => void refreshBilling()}>
               Refresh billing
             </Button>

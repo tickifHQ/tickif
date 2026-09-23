@@ -59,6 +59,10 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     expect(await explore.evaluate((link) => link.previousElementSibling?.textContent?.trim())).toBe(
       'Contact support',
     );
+    const support = explore.locator('xpath=preceding-sibling::a[1]');
+    await expect(support).toHaveAttribute('href', 'https://wa.me/919994645911');
+    await expect(support).toHaveAttribute('target', '_blank');
+    await expect(support).toHaveAttribute('rel', 'noopener noreferrer');
     await explore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();
@@ -92,6 +96,10 @@ test('designer workspace opens discovery via Explore Tickif and empty public rev
     expect(
       await mobileExplore.evaluate((link) => link.previousElementSibling?.textContent?.trim()),
     ).toBe('Contact support');
+    const mobileSupport = mobileExplore.locator('xpath=preceding-sibling::a[1]');
+    await expect(mobileSupport).toHaveAttribute('href', 'https://wa.me/919994645911');
+    await expect(mobileSupport).toHaveAttribute('target', '_blank');
+    await expect(mobileSupport).toHaveAttribute('rel', 'noopener noreferrer');
     await mobileExplore.click();
     await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: /Inspire from homes/i })).toBeVisible();

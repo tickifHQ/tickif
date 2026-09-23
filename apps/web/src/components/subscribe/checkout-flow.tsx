@@ -14,6 +14,7 @@ import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 // ─── State Machine ───────────────────────────────────────────────────────────
 
@@ -122,7 +123,16 @@ export function CheckoutFlow({
           <div className="flex flex-col items-center py-12 text-center">
             <p className="text-lg font-semibold text-foreground">Unable to load plan information</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Your current subscription could not be identified. Please contact support.
+              Your current subscription could not be identified. Please{' '}
+              <a
+                href={SUPPORT_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                contact support
+              </a>
+              .
             </p>
           </div>
         </DialogContent>

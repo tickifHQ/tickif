@@ -43,6 +43,7 @@ import { PhoneNumberInput, countries, toE164PhoneNumber } from '@/components/pho
 import { RequiredFieldIndicator } from '@repo/ui/components/required-field-indicator';
 import { TaxonomyMultiSelect } from '@/components/taxonomy-multi-select';
 import { PROFILE_TAXONOMY_KIND, type ProfileTaxonomyKind } from '@/lib/profile-editor-types';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 type EntityType = OnboardDesignerInput['entityType'];
 
@@ -1365,7 +1366,9 @@ function OnboardingSecondaryActions() {
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
       <a
-        href="mailto:support@tickif.in"
+        href={SUPPORT_WHATSAPP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
         className="cursor-pointer font-medium text-foreground hover:underline"
       >
         Need help? Contact support
@@ -1396,7 +1399,9 @@ function DetailsSecondaryActions({
   return (
     <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
       <a
-        href="mailto:support@tickif.in"
+        href={SUPPORT_WHATSAPP_URL}
+        target="_blank"
+        rel="noopener noreferrer"
         className="cursor-pointer font-medium text-foreground hover:underline"
       >
         Need help? Contact support
