@@ -2,7 +2,6 @@
 
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { upsertVisitorProfileSchema, visitorProfileResponseSchema } from '@repo/contracts';
@@ -14,6 +13,7 @@ import { InitialsAvatar } from '@/components/initials-avatar';
 import { api } from '@/lib/api';
 import { readApiErrorMessage } from '@/lib/api-response';
 import { authClient } from '@/lib/auth-client';
+import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
 type VisitorOnboardingFormProps = {
   displayName: string;
@@ -216,12 +216,14 @@ export function VisitorOnboardingForm({
           </Button>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <span>Need help?</span>
-            <Link
-              href="mailto:support@tickif.in"
+            <a
+              href={SUPPORT_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="font-medium text-foreground underline-offset-2 hover:underline"
             >
               Contact support
-            </Link>
+            </a>
           </div>
         </div>
       </form>

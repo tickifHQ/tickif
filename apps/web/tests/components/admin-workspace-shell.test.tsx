@@ -46,6 +46,11 @@ describe('AdminWorkspaceShell', () => {
     expect(screen.getByText('Dashboard content')).toBeInTheDocument();
     expect(screen.getByText('Admin User')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Explore Tickif/i })).not.toBeInTheDocument();
+
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+    expect(supportLink).toHaveAttribute('target', '_blank');
+    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   it('exposes the same mobile navigation pattern as the designer workspace', () => {

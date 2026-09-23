@@ -32,6 +32,7 @@ function Harness() {
         Update Payment Method
       </button>
       <p>{payment.message}</p>
+      {payment.supportRecommended ? <span>Support recommended</span> : null}
     </>
   );
 }
@@ -94,6 +95,7 @@ describe('real payment controls', () => {
     await userEvent.click(screen.getByRole('button'));
     await waitFor(() => expect(mocks.change).toHaveBeenCalledTimes(1));
     expect(screen.getByText(/Billing status updates after Razorpay confirms/)).toBeInTheDocument();
+    expect(screen.getByText('Support recommended')).toBeInTheDocument();
   });
   it('shows provider/script failures and permits a retry', async () => {
     mocks.checkout.mockRejectedValue(new Error('Failed to load Razorpay Checkout'));
@@ -102,6 +104,16 @@ describe('real payment controls', () => {
     expect(await screen.findByText('Failed to load Razorpay Checkout')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeEnabled();
   });
+  it('recommends support when payment recovery is unavailable', async () => {
+    mocks.method.mockResolvedValue(new Response(null, { status: 409 }));
+    render(<Harness />);
+
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(await screen.findByText('Support recommended')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeEnabled();
+  });
+
   it('wraps the payment controls on narrow screens', async () => {
     mocks.history.mockResolvedValue(Response.json({ items: [], nextOffset: null }));
     render(<PaymentHistory />);

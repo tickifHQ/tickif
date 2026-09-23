@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { PlanTier } from '@repo/contracts';
 import {
   PLANS,
   PLAN_MAP,
@@ -221,7 +222,7 @@ import { PlanSelection } from '../../src/components/subscribe/plan-selection';
 import { UpgradeConfirmationStep } from '../../src/components/subscribe/upgrade-confirmation-step';
 import { DowngradeConfirmationStep } from '../../src/components/subscribe/downgrade-confirmation-step';
 import { ReviewPayStep } from '../../src/components/subscribe/review-pay-step';
-import { SuccessStep } from '../../src/components/subscribe/checkout-flow';
+import { CheckoutFlow, SuccessStep } from '../../src/components/subscribe/checkout-flow';
 
 describe('E-120: PlanCard', () => {
   it('Hobby card never shows "Free"', () => {
@@ -246,6 +247,26 @@ describe('E-120: PlanCard', () => {
     render(<PlanCard plan={PLAN_MAP.corporate} isCurrent={false} isLocked={false} onSelect={onSelect} />);
     await user.click(screen.getByRole('button', { name: /select corporate/i }));
     expect(onSelect).toHaveBeenCalledWith('corporate');
+  });
+});
+
+describe('E-120: CheckoutFlow support', () => {
+  it('links invalid subscription recovery to WhatsApp Business', () => {
+    render(
+      <CheckoutFlow
+        open
+        onOpenChange={vi.fn()}
+        currentTier={'invalid' as PlanTier}
+        lifecycleState="active"
+        cancellationScheduled={false}
+        currentPeriodEnd={null}
+      />,
+    );
+
+    const supportLink = screen.getByRole('link', { name: /contact support/i });
+    expect(supportLink).toHaveAttribute('href', 'https://wa.me/919994645911');
+    expect(supportLink).toHaveAttribute('target', '_blank');
+    expect(supportLink).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });
 

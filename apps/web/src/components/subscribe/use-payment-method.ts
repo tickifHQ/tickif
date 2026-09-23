@@ -9,6 +9,7 @@ import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [supportRecommended, setSupportRecommended] = useState(false);
   const inFlight = useRef(false);
   function finish() {
     inFlight.current = false;
@@ -19,12 +20,15 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
     inFlight.current = true;
     setBusy(true);
     setMessage(null);
+    setSupportRecommended(false);
     try {
       const response = await api.api.billing['payment-method'].$post({});
-      if (!response.ok)
+      if (!response.ok) {
+        setSupportRecommended(true);
         throw new Error(
-          'Unable to open payment recovery. Refresh billing and retry, or contact support if your subscription has ended.',
+          'Unable to open payment recovery. Refresh billing and retry. If your subscription has ended,',
         );
+      }
       const data = await response.json();
       await openRazorpayCheckout({
         keyId: data.razorpayKeyId,
@@ -33,6 +37,7 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
         prefill: data.prefill,
         changePaymentMethod: true,
         onDismiss: () => {
+          setSupportRecommended(false);
           setMessage(
             'Payment update closed. Your subscription has not been changed by this checkout.',
           );
@@ -49,11 +54,13 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
             });
             if (!verified.ok)
               throw new Error('Payment verification failed. Refresh billing before trying again.');
+            setSupportRecommended(true);
             setMessage(
-              'Payment method verified. Billing status updates after Razorpay confirms it. Any older unpaid invoices may still require help from support.',
+              'Payment method verified. Billing status updates after Razorpay confirms it. For help with older unpaid invoices,',
             );
             await onChange();
           } catch (error) {
+            setSupportRecommended(false);
             setMessage(error instanceof Error ? error.message : 'Unable to verify payment.');
           } finally {
             finish();
@@ -68,6 +75,7 @@ export function usePaymentMethod(tier: PlanTier, onChange: () => Promise<void>) 
   return {
     busy,
     message,
+    supportRecommended,
     open: () => {
       void open();
     },
