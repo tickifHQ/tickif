@@ -158,10 +158,12 @@ describe('buildDiscoveryFilter', () => {
         scopeSlug: 'full-home',
         bhkSlug: '3-bhk',
         budgetBandSlug: '20-40-lakh',
+        materials: 'wood',
+        tags: 'sunlit',
       });
 
       expect(result).toBe(
-        'citySlug:=[mumbai] && localitySlug:=[bandra] && propertyTypeSlug:=[residential] && propertySubtypeSlug:=[apartment] && scopeSlug:=[full-home] && bhkSlug:=[3-bhk] && budgetBandSlug:=[20-40-lakh]',
+        'citySlug:=[mumbai] && localitySlug:=[bandra] && propertyTypeSlug:=[residential] && propertySubtypeSlug:=[apartment] && scopeSlug:=[full-home] && bhkSlug:=[3-bhk] && budgetBandSlug:=[20-40-lakh] && materials:=[wood] && tags:=[sunlit]',
       );
     });
   });

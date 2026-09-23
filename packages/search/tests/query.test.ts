@@ -43,6 +43,19 @@ describe('bounded discovery query recovery', () => {
     await searchWithDiscoveryFallback(search, query, legacy);
     expect(search.mock.calls[2]?.[0]).toMatchObject({ sort_by: legacy.sort_by, q: 'bed' });
   });
+  it('retries without a newly faceted tag field during index rollout', async () => {
+    const current = { ...query, facet_by: 'themes,tags' };
+    const beforeTagFacets = { ...legacy, facet_by: 'themes' };
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Could not find a field named `tags` in the schema.'))
+      .mockResolvedValueOnce({ found: 1 });
+
+    await expect(searchWithDiscoveryFallback(search, current, beforeTagFacets)).resolves.toEqual({
+      found: 1,
+    });
+    expect(search).toHaveBeenLastCalledWith(beforeTagFacets);
+  });
   it.each(['constructor', '__proto__', ' CONSTRUCTOR ', ' __PROTO__ '])(
     'preserves the empty result for inherited property name %s',
     async (q) => {

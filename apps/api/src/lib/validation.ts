@@ -8,8 +8,8 @@ export function flattenIssues(issues: ReadonlyArray<ZodIssueLike>): Array<{ path
 }
 
 /**
- * Shared OpenAPIHono defaultHook. Mounted sub-apps don't inherit the base hook,
- * so every OpenAPIHono instance must pass this to keep one 422 envelope.
+ * Shared OpenAPIHono defaultHook. Mounted sub-apps inherit the base hook unless
+ * they declare their own; standalone apps can pass this for the same 422 envelope.
  */
 export function validationHook(
   result: { success: true } | { success: false; error: { issues: ReadonlyArray<ZodIssueLike> } },

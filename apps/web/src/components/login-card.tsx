@@ -378,7 +378,9 @@ export function LoginCard({
           <div className="flex flex-col gap-5">
             <div className="flex w-fit items-center gap-1.5 rounded bg-success/10 px-2 py-0.5">
               <Users className="size-3.5 text-success" aria-hidden="true" />
-              <span className="text-xs font-medium text-success">Trusted by 5000+ homeowners</span>
+              <span className="text-xs font-medium text-success">
+                Trusted by 12,400+ verified homes
+              </span>
             </div>
             <div className="flex flex-col gap-2">
               <h2 className="font-display text-3xl text-white">Welcome to Tickif</h2>
@@ -413,9 +415,9 @@ export function LoginCard({
               ))}
             </div>
             <div>
-              <p className="text-xs font-medium text-white">12,400+ homeowners</p>
+              <p className="text-xs font-medium text-white">12,400+ verified homes</p>
               <p className="inline-flex items-center gap-1.5 text-[11px] text-white/60">
-                trust Tickif
+                on Tickif
                 <span className="inline-flex items-center gap-1">
                   <Star className="size-3 text-warning" fill="currentColor" aria-hidden="true" />
                   4.9 (1.5k)

@@ -102,6 +102,12 @@ describe('real payment controls', () => {
     expect(await screen.findByText('Failed to load Razorpay Checkout')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeEnabled();
   });
+  it('wraps the payment controls on narrow screens', async () => {
+    mocks.history.mockResolvedValue(Response.json({ items: [], nextOffset: null }));
+    render(<PaymentHistory />);
+
+    expect(await screen.findByTestId('payment-history-controls')).toHaveClass('flex-wrap');
+  });
   it('renders paise as rupees and follows history pagination', async () => {
     mocks.history
       .mockResolvedValueOnce(

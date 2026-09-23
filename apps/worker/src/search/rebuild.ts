@@ -14,6 +14,7 @@ import {
 import {
   findDesignerSearchSource,
   findProjectSearchSource,
+  hasActiveDesigner,
   listActiveDesignerIds,
   listPublishedProjectIdsForDesigner,
   listSearchableProjectIds,
@@ -83,30 +84,30 @@ async function reconcileDesignerCandidate(
     await upsertSearchDocument('designers', mapDesignerSearchDocument(source), {
       collectionName: targets.designers,
     });
-    let afterId: string | null = null;
-    while (true) {
-      const ids = await listPublishedProjectIdsForDesigner(profileId, afterId, REBUILD_BATCH_SIZE);
-      const projects = await Promise.all(ids.map((id) => findProjectSearchSource(id)));
-      const documents = projects
-        .filter((project) => project !== null)
-        .map(mapProjectSearchDocument);
-      if (documents.length > 0) {
-        await importSearchDocuments('projects', targets.projects, documents);
-      }
-      if (ids.length === 0 || ids.length < REBUILD_BATCH_SIZE) break;
-      afterId = ids.at(-1)!;
+  } else {
+    await deleteSearchDocument('designers', profileId, {
+      collectionName: targets.designers,
+    });
+    if (!(await hasActiveDesigner(profileId))) {
+      await deleteSearchProjectsByDesigner(profileId, {
+        collectionName: targets.projects,
+      });
+      return;
     }
-    return;
   }
 
-  await Promise.all([
-    deleteSearchDocument('designers', profileId, {
-      collectionName: targets.designers,
-    }),
-    deleteSearchProjectsByDesigner(profileId, {
-      collectionName: targets.projects,
-    }),
-  ]);
+  // Portfolio visibility does not change independently published project eligibility.
+  let afterId: string | null = null;
+  while (true) {
+    const ids = await listPublishedProjectIdsForDesigner(profileId, afterId, REBUILD_BATCH_SIZE);
+    const projects = await Promise.all(ids.map((id) => findProjectSearchSource(id)));
+    const documents = projects.filter((project) => project !== null).map(mapProjectSearchDocument);
+    if (documents.length > 0) {
+      await importSearchDocuments('projects', targets.projects, documents);
+    }
+    if (ids.length === 0 || ids.length < REBUILD_BATCH_SIZE) break;
+    afterId = ids.at(-1)!;
+  }
 }
 
 async function replayEvent(

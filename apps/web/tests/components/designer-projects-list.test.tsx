@@ -111,6 +111,13 @@ describe('DesignerProjectsList', () => {
     );
   });
 
+  it('keeps every project status reachable on narrow screens', () => {
+    render(<DesignerProjectsList projects={projects} activeStatus="all" />);
+
+    const tabStrip = screen.getByRole('link', { name: /all 2/i }).parentElement;
+    expect(tabStrip).toHaveClass('max-w-full', 'overflow-x-auto');
+  });
+
   it('renders a distinct chip for every moderation status', () => {
     const statuses = [
       'draft',

@@ -92,6 +92,12 @@ describe('DesignerPlanBilling', () => {
       expect(screen.getByText('Current Plan')).toBeInTheDocument();
     });
 
+    it('stacks the current-plan identity on narrow screens', () => {
+      render(<DesignerPlanBilling billing={makeBilling()} />);
+
+      expect(screen.getByTestId('current-plan-identity')).toHaveClass('flex-col', 'sm:flex-row');
+    });
+
     it('shows renewal date for active paid plans', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
       expect(screen.getByText(/renews on/)).toBeInTheDocument();
@@ -196,7 +202,9 @@ describe('DesignerPlanBilling', () => {
   describe('grace state', () => {
     it('shows Payment Due badge', () => {
       render(
-        <DesignerPlanBilling billing={makeBilling({ lifecycle: 'grace', graceDaysRemaining: 5 })} />,
+        <DesignerPlanBilling
+          billing={makeBilling({ lifecycle: 'grace', graceDaysRemaining: 5 })}
+        />,
       );
       expect(screen.getByText('Payment Due')).toBeInTheDocument();
     });

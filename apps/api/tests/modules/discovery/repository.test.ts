@@ -201,7 +201,7 @@ describe('discoveryRepository.searchFeed', () => {
         /^_text_match:desc,avgRating:desc,_eval\(paidUntil:>\d+\):desc$/,
       ),
       facet_by:
-        'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes',
+        'citySlug,localitySlug,propertyTypeSlug,propertySubtypeSlug,scopeSlug,bhkSlug,budgetBandSlug,roomSlugs,themes,materials,tags',
       max_facet_values: 250,
       page: 2,
       per_page: 12,

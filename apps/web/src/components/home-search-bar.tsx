@@ -11,10 +11,12 @@ import {
 } from '@repo/contracts';
 import { Button } from '@repo/ui/components/button';
 import { api } from '@/lib/api';
+import { parseFeedParams } from '@/lib/feed-params';
 
 const EMPTY_SUGGESTIONS: SearchSuggestResponse = {
   projects: [],
   designers: [],
+  filters: [],
   processingTimeMs: 0,
 };
 const RECENT_SEARCHES_STORAGE_KEY = 'tickif.homeSearchRecents.v1';
@@ -70,7 +72,8 @@ export function HomeSearchBar({
   const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const trimmedQuery = query.trim();
-  const hasSuggestions = suggestions.projects.length + suggestions.designers.length > 0;
+  const hasSuggestions =
+    suggestions.projects.length + suggestions.designers.length + suggestions.filters.length > 0;
   const showRecentSearches = isFocused && trimmedQuery.length === 0 && recentSearches.length > 0;
   const showSearchSuggestions = isFocused && trimmedQuery.length > 0;
   const showDropdown = showRecentSearches || showSearchSuggestions;
@@ -141,6 +144,19 @@ export function HomeSearchBar({
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     runSearch(query);
+  }
+
+  function applyFilter(filter: SearchSuggestResponse['filters'][number]) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('q');
+    params.delete('page');
+    const selected = new Set(parseFeedParams(params)[filter.filterKey]);
+    selected.add(filter.slug);
+    params.set(filter.filterKey, [...selected].join(','));
+    setQuery('');
+    setSuggestions(EMPTY_SUGGESTIONS);
+    setIsFocused(false);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   /**
@@ -241,6 +257,7 @@ export function HomeSearchBar({
               setQuery('');
               setSuggestions(EMPTY_SUGGESTIONS);
               setIsLoading(false);
+              runSearch('');
             }}
           >
             <X className="size-3.5" aria-hidden />
@@ -329,6 +346,34 @@ export function HomeSearchBar({
                   </span>
                 </Link>
               ))}
+            </section>
+          ) : null}
+
+          {!showRecentSearches && suggestions.filters.length > 0 ? (
+            <section aria-labelledby={`${listboxId}-filters`}>
+              <p
+                id={`${listboxId}-filters`}
+                className="px-2 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                Filters
+              </p>
+              <div className="grid gap-1 sm:grid-cols-2">
+                {suggestions.filters.map((filter) => (
+                  <button
+                    key={`${filter.filterKey}-${filter.slug}`}
+                    type="button"
+                    data-suggestion-item
+                    aria-label={`${filter.label}, ${filter.kind.charAt(0).toUpperCase()}${filter.kind.slice(1)}`}
+                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent"
+                    onClick={() => applyFilter(filter)}
+                  >
+                    <span className="truncate font-medium">{filter.label}</span>
+                    <span className="shrink-0 text-xs capitalize text-muted-foreground">
+                      {filter.kind}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </section>
           ) : null}
 

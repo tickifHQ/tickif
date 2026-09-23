@@ -118,7 +118,7 @@ export function DesignerListControls<TValue extends string>({
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="inline-flex w-fit items-center gap-0.5 rounded-lg bg-muted p-1">
+      <div className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-muted p-1 scrollbar-none">
         {tabs.map((tab) => {
           const active = tab.value === activeTab;
           return (

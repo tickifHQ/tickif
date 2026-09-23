@@ -50,13 +50,20 @@ describe('billing management routes', () => {
 
   it('rejects invalid payment pagination before reading history', async () => {
     mockAuthed();
-    expect(
-      (
-        await app.request('/api/billing/payments?offset=-1&limit=500', {
-          headers: { cookie: 'better-auth.session_token=mock-token' },
-        })
-      ).status,
-    ).toBe(400);
+    const response = await app.request('/api/billing/payments?offset=-1&limit=500', {
+      headers: { cookie: 'better-auth.session_token=mock-token' },
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'validation_error',
+        message: 'Request validation failed',
+        details: expect.arrayContaining([
+          expect.objectContaining({ path: 'offset' }),
+          expect.objectContaining({ path: 'limit' }),
+        ]),
+      },
+    });
     expect(subscribeService.payments).not.toHaveBeenCalled();
   });
 
