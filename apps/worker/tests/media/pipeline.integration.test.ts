@@ -21,7 +21,6 @@ vi.mock('@repo/storage', () => ({
   ObjectTooLargeError: class ObjectTooLargeError extends Error {},
 }));
 
-import { config } from '@repo/config';
 import { db, schema, eq } from '@repo/db';
 import { makeProject, makeProjectImage } from '@repo/db/testing';
 import type { MediaProcessJob } from '../../src/connection.js';
