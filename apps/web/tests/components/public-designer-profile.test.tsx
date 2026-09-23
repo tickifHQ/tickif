@@ -564,3 +564,86 @@ describe('PublicDesignerProfile — bio is not duplicated across sections (E-212
     expect(screen.getAllByText(bio).length).toBeLessThanOrEqual(2);
   });
 });
+
+/**
+ * E-304: profile sections must not render their wrapper/heading when they have
+ * no meaningful data. Each affected section self-guards (early return null),
+ * matching the established Portfolio/Story/Reviews pattern.
+ */
+describe('PublicDesignerProfile — hides empty sections (E-304)', () => {
+  it('renders every affected section heading when the data is populated', () => {
+    // Baseline: the default fixture has badges, a testimonial, projects and reviews.
+    render(<PublicDesignerProfile portfolio={makePublicPortfolio()} />);
+
+    expect(screen.getByRole('heading', { name: 'Verified on Tickif' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Selected projects/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /their words/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'What it’s like to work with us.' }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the Credentials section (wrapper + heading) when there are no badges, even with the section enabled', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          badges: [],
+          sections: { ...portfolio.sections, trustCredentials: true },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: 'Verified on Tickif' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Earned through real work')).not.toBeInTheDocument();
+  });
+
+  it('hides the Story section (wrapper + heading) when there is no testimonial, even with the section enabled', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          testimonial: null,
+          sections: { ...portfolio.sections, featuredTestimonial: true },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: /their words/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the Reviews section heading when there are neither ratings nor reviews', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          reviews: [],
+          stats: { ...portfolio.stats, tickif: null, google: null },
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('heading', { name: 'What it’s like to work with us.' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('review-marquee')).not.toBeInTheDocument();
+  });
+
+  it('hides the Portfolio section heading when there are no published projects', () => {
+    const portfolio = makePublicPortfolio();
+    render(
+      <PublicDesignerProfile
+        portfolio={{
+          ...portfolio,
+          stats: { ...portfolio.stats, projectCount: 0 },
+          projects: { ...portfolio.projects, projects: [], hasMore: false },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: /Selected projects/i })).not.toBeInTheDocument();
+  });
+});
