@@ -34,7 +34,12 @@ describe('LoginCard', () => {
 
   it('renders trusted-by badge, welcome title, and phone input', () => {
     render(<LoginCard />);
-    expect(screen.getByText('Trusted by 5000+ homeowners')).toBeInTheDocument();
+    // E-305: login uses the canonical "12,400+ verified homes" stat (matches the
+    // homepage TrustStrip), not the old conflicting "5000+ homeowners".
+    expect(screen.getByText('Trusted by 12,400+ verified homes')).toBeInTheDocument();
+    expect(screen.getByText('12,400+ verified homes')).toBeInTheDocument();
+    expect(screen.queryByText(/5000\+/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/homeowners/)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Welcome to Tickif' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /phone/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Get OTP' })).toHaveClass(
