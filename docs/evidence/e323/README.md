@@ -18,10 +18,10 @@ These are synthetic test organizations and controlled Razorpay HTTP/Checkout fix
 
 | Asset | Duration | Verified journey |
 | --- | --- | --- |
-| [Corporate checkout, dismissal, resume and activation](./corporate-checkout-dismiss-resume-activate.webm) | 4.72 s | Hobby → Corporate directly; provider dismissal preserves the target; reload does not submit automatically; explicit resume reuses the existing checkout; signed provider activation updates the current marker. |
-| [Corporate → Professional+ recovery](./corporate-to-professional-recovery.webm) | 7.88 s | Hobby checkout first activates Corporate. Professional+ selection explicitly schedules cancellation and saves recovery. Repeat purchases during the paid cycle are rejected. After fixture-confirmed termination, an explicit replacement checkout activates Professional+; a stale old-subscription event cannot restore Corporate. |
+| [Corporate checkout, dismissal, resume and activation](./corporate-checkout-dismiss-resume-activate.mp4) | 4.72 s | Hobby → Corporate directly; provider dismissal preserves the target; reload does not submit automatically; explicit resume reuses the existing checkout; signed provider activation updates the current marker. |
+| [Corporate → Professional+ recovery](./corporate-to-professional-recovery.mp4) | 7.88 s | Hobby checkout first activates Corporate. Professional+ selection explicitly schedules cancellation and saves recovery. Repeat purchases during the paid cycle are rejected. After fixture-confirmed termination, an explicit replacement checkout activates Professional+; a stale old-subscription event cannot restore Corporate. |
 
-The videos are the original Playwright WebM recordings, without edited or generated frames. They run at actual automated-test speed; pause to inspect intermediate review states. The first three PNGs are direct Playwright screenshots; the two recovery PNGs are extracted frames from the original recording.
+The MP4 videos were transcoded from the original Playwright WebM recordings to H.264/yuv420p with fast-start metadata for browser playback. No frames were fabricated, cut or reordered, and playback remains at actual automated-test speed. Both formats contain the same frame counts and durations: 118 frames / 4.72 s and 197 frames / 7.88 s, at 25 fps and 1280 × 900. Pause to inspect intermediate review states. The original [checkout WebM](./corporate-checkout-dismiss-resume-activate.webm) and [recovery WebM](./corporate-to-professional-recovery.webm) remain available for provenance. The first three PNGs are direct Playwright screenshots; the two recovery PNGs are extracted frames from the original recording.
 
 ## Source tests
 
