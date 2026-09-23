@@ -2,9 +2,13 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { createRoute } from '@hono/zod-openapi';
 import {
   billingPlanRequestSchema,
+  billingMutationRequestSchema,
+  billingSelectionContextSchema,
+  billingChangePreviewSchema,
+  billingSubscribeOutcomeSchema,
+  billingCancelOutcomeSchema,
+  billingMutationOutcomeSchema,
   billingCheckoutResponseSchema,
-  billingPlanResponseSchema,
-  billingCancelResponseSchema,
   billingVerifyRequestSchema,
   billingVerifyResponseSchema,
   billingRefreshResponseSchema,
@@ -15,6 +19,8 @@ import { config } from '@repo/config';
 import { requireAuth } from '../../lib/auth-middleware.js';
 import type { AuthVariables } from '../../lib/auth-middleware.js';
 import { subscribeService } from './subscribe-service.js';
+import { billingSelectionService } from './selection-service.js';
+import { billingMutationService } from './mutation-service.js';
 
 // ─── Route Definitions ───────────────────────────────────────────────────────
 
@@ -31,7 +37,7 @@ const subscribeRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: billingPlanRequestSchema,
+          schema: billingMutationRequestSchema,
         },
       },
     },
@@ -41,7 +47,7 @@ const subscribeRoute = createRoute({
       description: 'Subscription created',
       content: {
         'application/json': {
-          schema: billingCheckoutResponseSchema,
+          schema: billingSubscribeOutcomeSchema,
         },
       },
     },
@@ -66,7 +72,7 @@ const changePlanRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: billingPlanRequestSchema,
+          schema: billingMutationRequestSchema,
         },
       },
     },
@@ -76,7 +82,7 @@ const changePlanRoute = createRoute({
       description: 'Plan changed',
       content: {
         'application/json': {
-          schema: billingPlanResponseSchema,
+          schema: billingMutationOutcomeSchema,
         },
       },
     },
@@ -93,6 +99,7 @@ const changePlanRoute = createRoute({
 });
 
 const cancelRoute = createRoute({
+  request: { body: { content: { 'application/json': { schema: billingMutationRequestSchema } } } },
   method: 'post',
   path: '/cancel',
   tags: ['Billing'],
@@ -108,7 +115,7 @@ const cancelRoute = createRoute({
       description: 'Cancellation scheduled or already scheduled',
       content: {
         'application/json': {
-          schema: billingCancelResponseSchema,
+          schema: billingCancelOutcomeSchema,
         },
       },
     },
@@ -216,9 +223,59 @@ const paymentsRoute = createRoute({
   },
 });
 
+const selectionContextRoute = createRoute({
+  method: 'get',
+  path: '/selection-context',
+  tags: ['Billing'],
+  middleware: [requireAuth] as const,
+  security: [{ cookieAuth: [] }],
+  responses: {
+    200: {
+      description: 'Billing selection eligibility',
+      content: { 'application/json': { schema: billingSelectionContextSchema } },
+    },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
+  },
+});
+const changePreviewRoute = createRoute({
+  method: 'post',
+  path: '/change-preview',
+  tags: ['Billing'],
+  middleware: [requireAuth] as const,
+  security: [{ cookieAuth: [] }],
+  request: { body: { content: { 'application/json': { schema: billingPlanRequestSchema } } } },
+  responses: {
+    200: {
+      description: 'Review before confirming',
+      content: { 'application/json': { schema: billingChangePreviewSchema } },
+    },
+    401: { description: 'Unauthorized' },
+    403: { description: 'Billing access required' },
+  },
+});
+
 // ─── Route Handlers ──────────────────────────────────────────────────────────
 
 export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
+  .openapi(selectionContextRoute, async (c) =>
+    c.json(
+      await billingSelectionService.context({
+        userId: c.get('user')!.id,
+        activeOrgId: c.get('session')!.activeOrganizationId ?? null,
+      }),
+      200,
+    ),
+  )
+  .openapi(changePreviewRoute, async (c) =>
+    c.json(
+      await billingSelectionService.preview(
+        { userId: c.get('user')!.id, activeOrgId: c.get('session')!.activeOrganizationId ?? null },
+        c.req.valid('json'),
+      ),
+      200,
+    ),
+  )
   .openapi(paymentMethodRoute, async (c) => {
     const user = c.get('user')!;
     const session = c.get('session')!;
@@ -253,11 +310,12 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
   .openapi(subscribeRoute, async (c) => {
     const user = c.get('user');
     const session = c.get('session');
-    const { targetTier } = c.req.valid('json');
+    const params = c.req.valid('json');
 
-    const result = await subscribeService.createSubscription(
+    const result = await billingMutationService.execute(
       { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
-      { targetTier },
+      params,
+      'subscribe',
     );
 
     // Filter out placeholder values from phone-OTP signup:
@@ -269,7 +327,7 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
     const name = rawName?.startsWith('+') ? null : rawName;
 
     return c.json(
-      {
+      billingSubscribeOutcomeSchema.parse({
         ...result,
         razorpayKeyId: config.RAZORPAY_KEY_ID ?? '',
         prefill: {
@@ -277,32 +335,37 @@ export const subscribeRoutes = new OpenAPIHono<{ Variables: AuthVariables }>()
           email,
           contact: (user as { phoneNumber?: string }).phoneNumber ?? null,
         },
-      },
+      }),
       200,
     );
   })
   .openapi(changePlanRoute, async (c) => {
     const user = c.get('user');
     const session = c.get('session');
-    const { targetTier } = c.req.valid('json');
+    const params = c.req.valid('json');
 
-    const result = await subscribeService.changePlan(
+    const result = await billingMutationService.execute(
       { userId: user!.id, activeOrgId: session!.activeOrganizationId ?? null },
-      { targetTier },
+      params,
+      'change_plan',
     );
 
-    return c.json(result, 200);
+    return c.json(billingMutationOutcomeSchema.parse(result), 200);
   })
   .openapi(cancelRoute, async (c) => {
     const user = c.get('user');
     const session = c.get('session');
 
-    const result = await subscribeService.cancelSubscription({
-      userId: user!.id,
-      activeOrgId: session!.activeOrganizationId ?? null,
-    });
+    const result = await billingMutationService.execute(
+      {
+        userId: user!.id,
+        activeOrgId: session!.activeOrganizationId ?? null,
+      },
+      c.req.valid('json'),
+      'cancel',
+    );
 
-    return c.json(result, 200);
+    return c.json(billingCancelOutcomeSchema.parse(result), 200);
   })
   .openapi(verifyPaymentRoute, async (c) => {
     const user = c.get('user');

@@ -45,6 +45,10 @@ export function testEnv() {
     // real emails using the developer's .env or mounted secret file.
     RESEND_API_KEY: '',
     RESEND_API_KEY_FILE: '',
+    // Billing integration fixtures must never inherit merchant credentials.
+    RAZORPAY_KEY_ID: '',
+    RAZORPAY_KEY_SECRET: '',
+    RAZORPAY_KEY_SECRET_FILE: '',
     // Test runners must not inherit the staging email-forwarding mode after
     // the email credentials above are deliberately cleared.
     PHONE_OTP_DELIVERY: 'sms',

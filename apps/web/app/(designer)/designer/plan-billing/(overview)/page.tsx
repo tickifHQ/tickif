@@ -18,7 +18,7 @@ const BillingDevSwitcher =
       );
 
 export default async function DesignerPlanBillingPage() {
-  await requireAuth({ requiredRole: 'designer' });
+  const session = await requireAuth({ requiredRole: 'designer' });
 
   const orgCapabilities = await getCurrentOrgCapabilities();
   if (!hasBillingAccess(orgCapabilities)) {
@@ -30,7 +30,11 @@ export default async function DesignerPlanBillingPage() {
 
   return (
     <>
-      <DesignerPlanBilling billing={billing} />
+      <DesignerPlanBilling
+        billing={billing}
+        userId={session.user.id}
+        organizationId={session.session.activeOrganizationId}
+      />
       {process.env.NODE_ENV !== 'production' && <BillingDevSwitcher initialBilling={billing} />}
     </>
   );

@@ -2,6 +2,7 @@ import type { PlanTier } from '@repo/contracts';
 import { api } from '@/lib/api';
 
 interface ActivationPollingOptions {
+  isCurrent?: () => boolean;
   maxAttempts?: number;
   intervalMs?: number;
 }
@@ -17,8 +18,10 @@ export async function waitForSubscriptionActivation(
   const { maxAttempts = 15, intervalMs = 2000 } = options;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (options.isCurrent && !options.isCurrent()) return false;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
 
+    if (options.isCurrent && !options.isCurrent()) return false;
     try {
       await api.api.billing.subscription.refresh.$get().catch(() => {});
 

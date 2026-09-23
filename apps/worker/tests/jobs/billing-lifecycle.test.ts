@@ -9,6 +9,7 @@ const repository = vi.hoisted(() => ({
 const cache = vi.hoisted(() => ({ invalidateEntitlementCache: vi.fn() }));
 const sharedDb = vi.hoisted(() => ({ sweepOrgExpirations: vi.fn() }));
 const retention = vi.hoisted(() => ({ processOrganizationRetentionSweep: vi.fn() }));
+const recovery = vi.hoisted(() => ({ processBillingRecoverySweep: vi.fn() }));
 
 vi.mock('@repo/config', () => ({
   config: {
@@ -20,12 +21,14 @@ vi.mock('@repo/db', () => ({ sweepOrgExpirations: sharedDb.sweepOrgExpirations }
 vi.mock('../../src/billing-lifecycle/repository.js', () => repository);
 vi.mock('../../src/billing-lifecycle/cache.js', () => cache);
 vi.mock('../../src/jobs/organization-retention.js', () => retention);
+vi.mock('../../src/billing-lifecycle/recovery.js', () => recovery);
 
 const { processBillingLifecycleSweep } = await import('../../src/jobs/billing-lifecycle.js');
 
 describe('processBillingLifecycleSweep failure reporting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    recovery.processBillingRecoverySweep.mockResolvedValue({ reconciled: 0, failed: 0 });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -67,6 +70,8 @@ describe('processBillingLifecycleSweep failure reporting', () => {
       organizationsArchived: 0,
       organizationsPurged: 0,
       organizationRetentionFailures: 1,
+      recoveryReconciled: 0,
+      recoveryFailures: 0,
     });
     expect(repository.transitionGraceToLocked).toHaveBeenCalledTimes(2);
     expect(repository.transitionLockedToDowngraded).toHaveBeenCalledTimes(2);

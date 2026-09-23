@@ -1,38 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@repo/ui/components/dialog';
 import { Button } from '@repo/ui/components/button';
-import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { BILLING_ERROR_CODE, type PlanTier, type SubscriptionState } from '@repo/contracts';
-import { isUpgrade, isDowngrade, isValidTier, PLAN_MAP } from '@/lib/plan-config';
+import type {
+  BillingChangePreview,
+  BillingRecovery,
+  PlanTier,
+  SubscriptionState,
+} from '@repo/contracts';
+import {
+  billingChangePreviewSchema,
+  billingRecoveryResponseSchema,
+  billingMutationOutcomeSchema,
+  billingSubscribeOutcomeSchema,
+} from '@repo/contracts';
+import { isUpgrade, isValidTier, PLAN_MAP } from '@/lib/plan-config';
 import { PlanSelection } from './plan-selection';
-import { UpgradeConfirmationStep } from './upgrade-confirmation-step';
-import { DowngradeConfirmationStep } from './downgrade-confirmation-step';
-import { ReviewPayStep } from './review-pay-step';
-import { ReactivateStep } from './reactivate-step';
 import { api } from '@/lib/api';
 import { openRazorpayCheckout } from '@/lib/razorpay-checkout';
 import { waitForSubscriptionActivation } from '@/lib/subscription-activation';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
-
-// ─── State Machine ───────────────────────────────────────────────────────────
-
-type FlowStep =
-  | { step: 'select' }
-  | { step: 'reactivate'; targetTier: PlanTier }
-  | { step: 'confirm-upgrade'; targetTier: PlanTier }
-  | { step: 'confirm-downgrade'; targetTier: PlanTier }
-  | { step: 'review'; targetTier: PlanTier }
-  | { step: 'processing' }
-  | { step: 'pending'; targetTier: PlanTier }
-  | { step: 'activating'; targetTier: PlanTier }
-  | { step: 'upi-limitation'; targetTier: PlanTier }
-  | { step: 'domestic-card-limitation'; targetTier: PlanTier }
-  | { step: 'cancellation-scheduled'; periodEnd: string | null }
-  | { step: 'success'; targetTier: PlanTier; kind: 'upgrade' | 'downgrade' | 'activated' }
-  | { step: 'error'; message: string }
-  | { step: 'cancelled' };
+import { reasonLabel } from './billing-reason';
 
 interface CheckoutFlowProps {
   open: boolean;
@@ -43,766 +32,502 @@ interface CheckoutFlowProps {
   currentPeriodEnd: string | null;
   restoreTier?: PlanTier | null;
   initialTargetTier?: PlanTier | null;
+  onTargetChange?: (tier: PlanTier | null) => void;
+  scopeKey?: string;
   onSubscriptionChange?: () => void;
 }
 
-function initialFlowStep(
-  lifecycleState: SubscriptionState,
-  currentTier: PlanTier,
-  restoreTier: PlanTier | null,
-  initialTargetTier: PlanTier | null,
-): FlowStep {
-  if (lifecycleState === 'locked') {
-    return { step: 'reactivate', targetTier: currentTier };
-  }
-  if (lifecycleState === 'downgraded' && restoreTier && restoreTier !== 'hobby') {
-    return { step: 'confirm-upgrade', targetTier: restoreTier };
-  }
-  if (initialTargetTier && initialTargetTier !== currentTier) {
-    return { step: 'confirm-upgrade', targetTier: initialTargetTier };
-  }
-  return { step: 'select' };
-}
+type Step =
+  | 'select'
+  | 'loading'
+  | 'review'
+  | 'processing'
+  | 'pending'
+  | 'error'
+  | 'scheduled'
+  | 'activated'
+  | 'recovery';
 
-/**
- * E-120 Subscribe / Upgrade flow dialog.
- *
- * Multi-step state machine:
- * - Upgrade:    select → confirm-upgrade → review → processing → pending → success
- * - Downgrade:  select → confirm-downgrade → pending → success
- *
- * Integration:
- * - Current plan from E-119 (GET /api/billing/subscription)
- * - Checkout via E-116 (POST /api/billing/subscribe → Razorpay shortUrl)
- * - Activation via E-117 webhook (authoritative — never fakes completion)
- *
- * The processing step calls the real API; the pending step shows while
- * waiting for Razorpay redirect / webhook confirmation.
- */
-export function CheckoutFlow({
+function dateLabel(value: string | null) {
+  if (!value) return 'Not yet confirmed';
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(value));
+}
+function money(value: number | null, currency: string | null) {
+  if (value === null || !currency) return 'Not yet confirmed';
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(value / 100);
+}
+/** Every entry point obtains the same server preview; only explicit confirmation mutates billing. */
+export function CheckoutFlow(props: CheckoutFlowProps) {
+  return <ScopedCheckoutFlow key={props.scopeKey} {...props} />;
+}
+function ScopedCheckoutFlow({
   open,
   onOpenChange,
   currentTier,
   lifecycleState,
-  cancellationScheduled,
-  currentPeriodEnd,
   restoreTier = null,
   initialTargetTier = null,
+  onTargetChange,
   onSubscriptionChange,
 }: CheckoutFlowProps) {
-  const [flowStep, setFlowStep] = useState<FlowStep>({ step: 'select' });
-  const [isApiLoading, setIsApiLoading] = useState(false);
-
-  // Reset or initialize from the current lifecycle when the dialog opens.
+  const [target, setTarget] = useState<PlanTier | null>(initialTargetTier);
+  const [step, setStep] = useState<Step>('select');
+  const [preview, setPreview] = useState<BillingChangePreview | null>(null);
+  const [recovery, setRecovery] = useState<BillingRecovery | null>(null);
+  const [message, setMessage] = useState('');
+  const [effectiveAt, setEffectiveAt] = useState<string | null>(null);
+  const operationId = useRef<string | null>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  const sequence = useRef(0);
+  const externalCheckout = useRef(false);
+  const previousInput = useRef<{ open: boolean; target: PlanTier | null }>({
+    open: false,
+    target: null,
+  });
   useEffect(() => {
-    if (!open) {
-      setFlowStep({ step: 'select' });
-      setIsApiLoading(false);
-      return;
-    }
-    setFlowStep((currentStep) =>
-      currentStep.step === 'select'
-        ? initialFlowStep(lifecycleState, currentTier, restoreTier, initialTargetTier)
-        : currentStep,
-    );
-  }, [currentTier, initialTargetTier, lifecycleState, open, restoreTier]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      sequence.current += 1;
+    };
+  }, []);
 
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      onOpenChange(nextOpen);
-    },
-    [onOpenChange],
-  );
-
-  // Guard: invalid currentTier
-  if (!isValidTier(currentTier)) {
-    return (
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogTitle className="sr-only">Plan subscription</DialogTitle>
-          <div className="flex flex-col items-center py-12 text-center">
-            <p className="text-lg font-semibold text-foreground">Unable to load plan information</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your current subscription could not be identified. Please{' '}
-              <a
-                href={SUPPORT_WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-foreground underline underline-offset-2"
-              >
-                contact support
-              </a>
-              .
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  function handleSelectPlan(targetTier: PlanTier) {
-    if (targetTier === currentTier) return;
-
-    // If cancellation is already scheduled, don't let the user start any plan change.
-    // Show the cancellation-scheduled modal immediately with the end date.
-    if (cancellationScheduled) {
-      setFlowStep({ step: 'cancellation-scheduled', periodEnd: currentPeriodEnd });
-      return;
-    }
-
-    if (isUpgrade(currentTier, targetTier)) {
-      setFlowStep({ step: 'confirm-upgrade', targetTier });
-    } else if (isDowngrade(currentTier, targetTier)) {
-      setFlowStep({ step: 'confirm-downgrade', targetTier });
-    }
-  }
-
-  function handleUpgradeConfirm(targetTier: PlanTier) {
-    setFlowStep({ step: 'review', targetTier });
-  }
-
-  async function handleDowngradeConfirm(targetTier: PlanTier) {
-    if (targetTier === 'hobby') {
-      // Paid → Hobby cancellation: call the real cancel endpoint.
-      // E-115 cancels at cycle end via Razorpay; E-117 confirms via webhook.
-      setIsApiLoading(true);
-      setFlowStep({ step: 'processing' });
-      try {
-        const response = await api.api.billing.cancel.$post({});
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => null);
-          const message =
-            (error as { error?: { message?: string } })?.error?.message ??
-            `Cancellation failed (${response.status})`;
-          setFlowStep({ step: 'error', message });
-        } else {
-          const data = await response.json();
-          if (data.alreadyCancelled) {
-            // Already scheduled — show the status modal, don't claim we just cancelled.
-            setFlowStep({
-              step: 'cancellation-scheduled',
-              periodEnd: data.currentPeriodEnd ?? null,
-            });
-          } else {
-            // Cancellation scheduled — subscription stays active until period ends.
-            setFlowStep({
-              step: 'cancellation-scheduled',
-              periodEnd: data.currentPeriodEnd ?? null,
-            });
-          }
-        }
-      } catch (err) {
-        setFlowStep({
-          step: 'error',
-          message: err instanceof Error ? err.message : 'An unexpected error occurred',
-        });
-      } finally {
-        setIsApiLoading(false);
-      }
-    } else {
-      // Paid → paid downgrade (e.g., Corporate → Professional+)
-      setIsApiLoading(true);
-      setFlowStep({ step: 'processing' });
-      try {
-        const response = await api.api.billing['change-plan'].$post({
-          json: { targetTier },
-        });
-        if (!response.ok) {
-          const error = await response.json().catch(() => null);
-          const message =
-            (error as { error?: { message?: string } })?.error?.message ??
-            `Plan change failed (${response.status})`;
-          setFlowStep({ step: 'error', message });
-        } else {
-          setFlowStep({ step: 'success', targetTier, kind: 'downgrade' });
-        }
-      } catch (err) {
-        setFlowStep({
-          step: 'error',
-          message: err instanceof Error ? err.message : 'An unexpected error occurred',
-        });
-      } finally {
-        setIsApiLoading(false);
-      }
-    }
-  }
-
-  async function handlePay(targetTier: PlanTier) {
-    setIsApiLoading(true);
-    setFlowStep({ step: 'processing' });
-
+  const review = useCallback(async (tier: PlanTier) => {
+    const request = ++sequence.current;
+    setTarget(tier);
+    setStep('loading');
+    setPreview(null);
+    setMessage('');
+    operationId.current = null;
     try {
-      // Hobby → paid: create a new Razorpay subscription via /subscribe.
-      // Paid → paid: change the existing subscription via /change-plan.
-      const isNewSubscription =
-        currentTier === 'hobby' || lifecycleState === 'locked' || lifecycleState === 'downgraded';
+      const response = await api.api.billing['change-preview'].$post({
+        json: { targetTier: tier },
+      });
+      if (!mounted.current || request !== sequence.current) return;
+      if (!response.ok)
+        throw new Error('Unable to verify this plan change. Refresh billing and retry.');
+      const parsed = billingChangePreviewSchema.safeParse(await response.json());
+      if (!parsed.success || parsed.data.targetTier !== tier)
+        throw new Error('Unable to verify the selected plan.');
+      if (!mounted.current || request !== sequence.current) return;
+      setPreview(parsed.data);
+      if (parsed.data.action === 'recover') {
+        const recoveryResponse = await api.api.billing.recovery.$get();
+        if (!recoveryResponse.ok)
+          throw new Error('Unable to load the saved recovery target. Retry before continuing.');
+        const saved = billingRecoveryResponseSchema.safeParse(await recoveryResponse.json());
+        if (!saved.success) throw new Error('Unable to verify the saved recovery target.');
+        if (!mounted.current || request !== sequence.current) return;
+        setRecovery(saved.data.recovery);
+      }
+      setStep('review');
+    } catch (error) {
+      if (mounted.current && request === sequence.current) {
+        setMessage(error instanceof Error ? error.message : 'Unable to load billing.');
+        setStep('error');
+      }
+    }
+  }, []);
 
-      if (isNewSubscription) {
-        const response = await api.api.billing.subscribe.$post({
-          json: { targetTier },
+  useEffect(() => {
+    const needsReview =
+      open &&
+      (!previousInput.current.open ||
+        (initialTargetTier !== null && previousInput.current.target !== initialTargetTier));
+    previousInput.current = { open, target: initialTargetTier };
+    if (!needsReview || externalCheckout.current || !isValidTier(currentTier)) return;
+    const tier = initialTargetTier ?? (lifecycleState === 'downgraded' ? restoreTier : null);
+    if (tier) void review(tier);
+    else setStep('select');
+    // A fresh explicit opening always revalidates; server subscription refresh must not resubmit.
+  }, [open, initialTargetTier, currentTier, lifecycleState, restoreTier, review]);
+
+  function choose(tier: PlanTier) {
+    onTargetChange?.(tier);
+    void review(tier);
+  }
+  async function failResponse(response: { json: () => Promise<unknown> }) {
+    const data = await response.json().catch(() => null);
+    const error = data && typeof data === 'object' && 'error' in data ? data.error : null;
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+    if (code === 'preview_stale' || code === 'recovery_revision_conflict') {
+      operationId.current = null;
+      throw new Error('Billing details changed. Review the selected plan again before confirming.');
+    }
+    throw new Error(
+      error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : 'Unable to complete the request. Refresh billing before retrying.',
+    );
+  }
+  async function confirm() {
+    if (!preview || !target || inFlight.current || !preview.confirmationAllowed) return;
+    if (Date.parse(preview.expiresAt) <= Date.now()) {
+      setMessage('Billing details expired. Review the selected plan again before confirming.');
+      setStep('error');
+      return;
+    }
+    inFlight.current = true;
+    operationId.current ??= crypto.randomUUID();
+    const json = {
+      targetTier: target,
+      previewToken: preview.previewToken,
+      operationId: operationId.current,
+    };
+    setStep('processing');
+    let acknowledged = false;
+    try {
+      if (preview.action === 'recover') {
+        const response = await api.api.billing.recovery.$post({
+          json: { ...json, expectedRevision: recovery?.revision ?? null },
         });
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => null);
-          const message =
-            (error as { error?: { message?: string } })?.error?.message ??
-            `Subscription failed (${response.status})`;
-          setFlowStep({ step: 'error', message });
-          setIsApiLoading(false);
+        acknowledged = true;
+        if (!response.ok) await failResponse(response);
+        const data = billingRecoveryResponseSchema.safeParse(await response.json());
+        if (!data.success)
+          throw new Error('Recovery status could not be confirmed. Refresh billing.');
+        if (!mounted.current) return;
+        setRecovery(data.data.recovery);
+        setStep('recovery');
+        onSubscriptionChange?.();
+      } else if (preview.action === 'subscribe') {
+        const response = await api.api.billing.subscribe.$post({ json });
+        acknowledged = true;
+        if (!response.ok) await failResponse(response);
+        const parsedCheckout = billingSubscribeOutcomeSchema.safeParse(await response.json());
+        if (!mounted.current) return;
+        if (!parsedCheckout.success || parsedCheckout.data.targetTier !== target) {
+          setMessage(
+            'Checkout details could not be verified. Refresh billing status before retrying.',
+          );
+          setStep('pending');
           return;
         }
-
-        const data = await response.json();
-
-        // Close our Dialog before opening Razorpay Checkout.
-        // The Radix Dialog overlay would block clicks on the Razorpay iframe.
+        const data = parsedCheckout.data;
+        if (data.outcome === 'reconciliation_pending' || data.outcome === 'failed') {
+          setMessage(
+            'Checkout is awaiting reconciliation. Refresh billing status before retrying.',
+          );
+          setStep('pending');
+          return;
+        }
+        onSubscriptionChange?.();
+        externalCheckout.current = true;
         onOpenChange(false);
-
-        // Open Razorpay Checkout JS modal on the page.
         await openRazorpayCheckout({
           keyId: data.razorpayKeyId,
           subscriptionId: data.razorpaySubscriptionId,
-          targetTier,
+          targetTier: target,
           prefill: data.prefill,
-          onSuccess: async (paymentData) => {
-            // Verify the payment signature server-side
+          onDismiss: () => {
+            if (!mounted.current) return;
+            externalCheckout.current = false;
+            setMessage(`Checkout closed. ${PLAN_MAP[target].label} is still selected.`);
+            setStep('error');
+            onOpenChange(true);
+          },
+          onSuccess: async (payment) => {
+            if (!mounted.current) return;
+            onOpenChange(true);
+            setStep('pending');
             try {
-              const verifyResponse = await api.api.billing['verify-payment'].$post({
+              const response = await api.api.billing['verify-payment'].$post({
                 json: {
-                  razorpayPaymentId: paymentData.razorpay_payment_id,
-                  razorpaySubscriptionId: paymentData.razorpay_subscription_id,
-                  razorpaySignature: paymentData.razorpay_signature,
+                  razorpayPaymentId: payment.razorpay_payment_id,
+                  razorpaySubscriptionId: payment.razorpay_subscription_id,
+                  razorpaySignature: payment.razorpay_signature,
                 },
               });
-
-              if (!verifyResponse.ok) {
-                // Reopen dialog with error
-                onOpenChange(true);
-                setFlowStep({ step: 'error', message: 'Payment verification failed' });
-                return;
+              if (!response.ok)
+                throw new Error(
+                  'Payment verification is pending. Refresh billing before another attempt.',
+                );
+              if (!mounted.current) return;
+              const activated = await waitForSubscriptionActivation(target, {
+                isCurrent: () => mounted.current,
+              });
+              if (!mounted.current) return;
+              setStep(activated ? 'activated' : 'pending');
+              onSubscriptionChange?.();
+            } catch (error) {
+              if (mounted.current) {
+                setMessage(error instanceof Error ? error.message : 'Payment status is pending.');
+                setStep('pending');
               }
-
-              // Verification successful — reopen dialog with activating state and poll.
-              onOpenChange(true);
-              setFlowStep({ step: 'activating', targetTier });
-              const activated = await waitForSubscriptionActivation(targetTier);
-              if (activated) {
-                setFlowStep({ step: 'success', targetTier, kind: 'activated' });
-                onSubscriptionChange?.();
-              } else {
-                setFlowStep({
-                  step: 'error',
-                  message:
-                    'Payment was verified, but subscription activation is still pending. Refresh or try again shortly.',
-                });
-              }
-            } catch {
-              onOpenChange(true);
-              setFlowStep({ step: 'error', message: 'Payment verification failed' });
+            } finally {
+              externalCheckout.current = false;
             }
           },
-          onDismiss: () => {
-            // User closed Razorpay checkout — return to Plan & Billing cleanly
-            setFlowStep({ step: 'select' });
-            setIsApiLoading(false);
-          },
         });
       } else {
-        // Paid → paid change-plan (e.g., Professional+ → Corporate or Corporate → Professional+)
-        const response = await api.api.billing['change-plan'].$post({
-          json: { targetTier },
-        });
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => null);
-          const errorCode = (error as { error?: { code?: string } })?.error?.code ?? '';
-          const rawMessage = (error as { error?: { message?: string } })?.error?.message ?? '';
-          // E-289: domestic-card mandates cannot change plans in place. The API
-          // classifies this to a stable machine-readable code — match on the
-          // code, never the provider description → show the deferred-cancel flow.
-          if (errorCode === BILLING_ERROR_CODE.PAYMENT_MODE_CHANGE_UNSUPPORTED) {
-            setFlowStep({ step: 'domestic-card-limitation', targetTier });
-            setIsApiLoading(false);
-            return;
-          }
-          // Detect Razorpay UPI limitation → show cancel-and-resubscribe flow
-          const isUpiLimitation = rawMessage.toLowerCase().includes('payment mode is upi');
-          if (isUpiLimitation) {
-            setFlowStep({ step: 'upi-limitation', targetTier });
-            setIsApiLoading(false);
-            return;
-          }
-          setFlowStep({
-            step: 'error',
-            message: rawMessage || `Plan change failed (${response.status})`,
-          });
-          setIsApiLoading(false);
+        const response =
+          preview.action === 'cancel'
+            ? await api.api.billing.cancel.$post({ json })
+            : await api.api.billing['change-plan'].$post({ json });
+        acknowledged = true;
+        if (!response.ok) await failResponse(response);
+        const parsedOutcome = billingMutationOutcomeSchema.safeParse(await response.json());
+        if (!mounted.current) return;
+        if (!parsedOutcome.success) {
+          setMessage(
+            'The provider outcome could not be confirmed. Refresh billing status before retrying.',
+          );
+          setStep('pending');
           return;
         }
-
-        // Change-plan is deferred to cycle end — show success acknowledgment.
-        setFlowStep({ step: 'success', targetTier, kind: 'upgrade' });
-        setIsApiLoading(false);
+        const data = parsedOutcome.data;
+        setEffectiveAt(data.effectiveAt);
+        setStep(
+          data.outcome === 'activated'
+            ? 'activated'
+            : data.outcome === 'scheduled'
+              ? 'scheduled'
+              : data.outcome === 'failed'
+                ? 'error'
+                : 'pending',
+        );
+        if (data.outcome === 'failed')
+          setMessage('The plan change failed. Refresh billing to verify your current access.');
+        onSubscriptionChange?.();
       }
-    } catch (err) {
-      onOpenChange(true);
-      setFlowStep({
-        step: 'error',
-        message: err instanceof Error ? err.message : 'An unexpected error occurred',
-      });
+    } catch (error) {
+      if (mounted.current) {
+        externalCheckout.current = false;
+        onOpenChange(true);
+        setMessage(error instanceof Error ? error.message : 'Unable to complete billing request.');
+        setStep(acknowledged ? 'error' : 'pending');
+      }
     } finally {
-      setIsApiLoading(false);
+      inFlight.current = false;
     }
   }
-
-  // Schedules cancellation of the current subscription at cycle end via the
-  // existing /cancel endpoint (cancelAtCycleEnd). Shared by the UPI and E-289
-  // domestic-card limitation flows — both need the same deferred-cancel
-  // semantics: the current plan stays active until the period ends, then the
-  // webhook lifecycle transitions the org to Hobby.
-  async function handleScheduleCancellation() {
-    setIsApiLoading(true);
-    setFlowStep({ step: 'processing' });
-    try {
-      const response = await api.api.billing.cancel.$post({});
-      if (!response.ok) {
-        const error = await response.json().catch(() => null);
-        const message =
-          (error as { error?: { message?: string } })?.error?.message ??
-          `Cancellation failed (${response.status})`;
-        setFlowStep({ step: 'error', message });
-      } else {
-        const data = await response.json();
-        setFlowStep({ step: 'cancellation-scheduled', periodEnd: data.currentPeriodEnd ?? null });
-      }
-    } catch (err) {
-      setFlowStep({
-        step: 'error',
-        message: err instanceof Error ? err.message : 'Cancellation failed',
-      });
-    } finally {
-      setIsApiLoading(false);
-    }
-  }
-
-  function handleBack() {
-    if (flowStep.step === 'confirm-upgrade' || flowStep.step === 'confirm-downgrade') {
-      setFlowStep({ step: 'select' });
-    } else if (flowStep.step === 'review') {
-      const { targetTier } = flowStep;
-      if (lifecycleState === 'locked') {
-        setFlowStep({ step: 'reactivate', targetTier });
-      } else {
-        setFlowStep({ step: 'confirm-upgrade', targetTier });
-      }
-    }
-  }
-
-  function handleDone() {
-    handleOpenChange(false);
-    onSubscriptionChange?.();
-  }
-
-  const isBlocking =
-    flowStep.step === 'processing' || flowStep.step === 'pending' || flowStep.step === 'activating';
-  const isWide = flowStep.step === 'select';
-
+  const label = target ? PLAN_MAP[target].label : '';
+  const blocking = step === 'processing';
+  const title =
+    target === 'hobby'
+      ? 'Switch to Hobby'
+      : target === currentTier && preview?.action === 'subscribe'
+        ? `Subscribe to ${label}`
+        : target && isUpgrade(currentTier, target)
+          ? `Upgrade to ${label}`
+          : `Downgrade to ${label}`;
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!blocking) onOpenChange(value);
+      }}
+    >
       <DialogContent
-        className={isWide ? 'sm:max-w-3xl' : 'sm:max-w-lg'}
-        showCloseButton={!isBlocking}
-        onInteractOutside={isBlocking ? (e) => e.preventDefault() : undefined}
-        onEscapeKeyDown={isBlocking ? (e) => e.preventDefault() : undefined}
+        className={step === 'select' ? 'sm:max-w-5xl' : 'sm:max-w-lg'}
+        showCloseButton={!blocking}
+        onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
+        onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
       >
         <DialogTitle className="sr-only">Plan subscription</DialogTitle>
-
-        {flowStep.step === 'select' && (
-          <PlanSelection
-            currentTier={currentTier}
-            lifecycleState={lifecycleState}
-            onSelectPlan={handleSelectPlan}
-          />
+        {!isValidTier(currentTier) ? (
+          <p>
+            Unable to load plan information. Please{' '}
+            <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+              contact support
+            </a>
+            .
+          </p>
+        ) : (
+          <>
+            {step === 'select' && (
+              <PlanSelection
+                currentTier={currentTier}
+                lifecycleState={lifecycleState}
+                selectedTier={target}
+                onSelectPlan={choose}
+              />
+            )}
+            {(step === 'loading' || step === 'processing') && (
+              <p role="status">
+                {step === 'loading'
+                  ? 'Checking billing eligibility…'
+                  : 'Submitting billing request…'}
+              </p>
+            )}
+            {step === 'review' && preview && (
+              <div className="flex flex-col gap-4">
+                <h2 className="text-xl font-semibold">{title}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Selected plan: {label}. Current plan: {PLAN_MAP[preview.currentTier].label}.
+                </p>
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  <dt>Effective date</dt>
+                  <dd>
+                    {preview.timing === 'now'
+                      ? 'After provider confirmation'
+                      : dateLabel(preview.effectiveAt)}
+                  </dd>
+                  <dt>Next renewal</dt>
+                  <dd>{dateLabel(preview.nextRenewalAt)}</dd>
+                  <dt>Recurring amount</dt>
+                  <dd>{money(preview.recurringAmount, preview.currency)}</dd>
+                  <dt>
+                    {preview.adjustmentDirection === 'refund'
+                      ? 'Refund adjustment'
+                      : 'Charge adjustment'}
+                  </dt>
+                  <dd>
+                    {money(preview.adjustmentAmount, preview.currency)} ({preview.amountCertainty})
+                  </dd>
+                </dl>
+                {preview.action === 'subscribe' && (
+                  <p className="text-sm text-muted-foreground">
+                    Review the final recurring amount and payment authorization in Razorpay
+                    Checkout. Monthly display pricing is not today’s charge.
+                  </p>
+                )}
+                {(preview.reason ||
+                  preview.action === 'recover' ||
+                  preview.action === 'blocked') && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {reasonLabel(preview.reason)} Next eligible date:{' '}
+                    {dateLabel(preview.nextEligibleAt)}.
+                  </p>
+                )}
+                {preview.action === 'recover' && preview.reason !== 'cancellation_scheduled' && (
+                  <p className="text-sm">
+                    Confirming schedules cancellation of your current paid subscription at the end
+                    of its billing period and saves {label} for a future checkout. Your current
+                    access is preserved until the provider confirms the transition. No replacement
+                    subscription is purchased now.
+                  </p>
+                )}
+                {recovery && preview.action === 'recover' && (
+                  <p className="text-sm">
+                    Saved target: {PLAN_MAP[recovery.targetTier].label}. Saving this selection
+                    explicitly replaces that recovery target.
+                  </p>
+                )}
+                {preview.confirmationAllowed && (
+                  <Button onClick={() => void confirm()}>
+                    {preview.action === 'subscribe'
+                      ? 'Proceed to Checkout'
+                      : preview.action === 'cancel'
+                        ? 'Schedule cancellation'
+                        : preview.action === 'recover'
+                          ? preview.reason === 'cancellation_scheduled'
+                            ? 'Save recovery target'
+                            : 'Schedule cancellation and save target'
+                          : 'Confirm plan change'}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStep('select');
+                  }}
+                >
+                  Choose another plan
+                </Button>
+              </div>
+            )}
+            {step === 'recovery' && (
+              <div className="flex flex-col gap-4" role="status">
+                <h2 className="text-lg font-semibold">Recovery target saved</h2>
+                <p>
+                  {label} selected.{' '}
+                  {recovery?.status === 'waiting_for_expiry'
+                    ? `Cancellation is scheduled; current access remains until ${dateLabel(recovery.eligibleAt)}. Continue to ${label} checkout after the current subscription ends.`
+                    : recovery?.status === 'eligible'
+                      ? 'The previous subscription has ended. Review your selected plan to continue checkout.'
+                      : 'The provider has not yet confirmed cancellation. Refresh billing status before taking another action.'}
+                </p>
+                <p>
+                  No replacement purchase will start automatically. Unused value does not
+                  automatically transfer to a new subscription.
+                </p>
+                <Button
+                  onClick={() => {
+                    onSubscriptionChange?.();
+                    onOpenChange(false);
+                  }}
+                >
+                  Refresh billing status
+                </Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Done
+                </Button>
+              </div>
+            )}
+            {step === 'error' && (
+              <div className="flex flex-col gap-4">
+                <p role="alert">{message}</p>
+                {target && <Button onClick={() => void review(target)}>Retry {label}</Button>}
+                <Button variant="outline" onClick={() => setStep('select')}>
+                  Choose another plan
+                </Button>
+              </div>
+            )}
+            {step === 'pending' && (
+              <div className="flex flex-col gap-4" role="status">
+                <h2 className="text-lg font-semibold">Confirmation pending</h2>
+                <p>
+                  {label} remains selected.{' '}
+                  {message ||
+                    'The provider has not confirmed this change yet. Your access will update only after confirmation.'}
+                </p>
+                <Button
+                  onClick={() => {
+                    onSubscriptionChange?.();
+                    onOpenChange(false);
+                  }}
+                >
+                  Refresh billing status
+                </Button>
+              </div>
+            )}
+            {(step === 'scheduled' || step === 'activated') && target && (
+              <SuccessStep
+                targetTier={target}
+                kind={step === 'activated' ? 'activated' : 'downgrade'}
+                effectiveAt={effectiveAt}
+                onDone={() => {
+                  onOpenChange(false);
+                  onSubscriptionChange?.();
+                }}
+              />
+            )}
+          </>
         )}
-
-        {flowStep.step === 'reactivate' && (
-          <ReactivateStep
-            currentTier={flowStep.targetTier}
-            onConfirm={() => setFlowStep({ step: 'review', targetTier: flowStep.targetTier })}
-          />
-        )}
-
-        {flowStep.step === 'confirm-upgrade' && (
-          <UpgradeConfirmationStep
-            currentTier={currentTier}
-            targetTier={flowStep.targetTier}
-            onConfirm={() => handleUpgradeConfirm(flowStep.targetTier)}
-            onBack={handleBack}
-          />
-        )}
-
-        {flowStep.step === 'confirm-downgrade' && (
-          <DowngradeConfirmationStep
-            currentTier={currentTier}
-            targetTier={flowStep.targetTier}
-            onConfirm={() => handleDowngradeConfirm(flowStep.targetTier)}
-            onBack={handleBack}
-          />
-        )}
-
-        {flowStep.step === 'review' && (
-          <ReviewPayStep
-            targetTier={flowStep.targetTier}
-            onPay={() => handlePay(flowStep.targetTier)}
-            onBack={handleBack}
-            isLoading={isApiLoading}
-          />
-        )}
-
-        {flowStep.step === 'processing' && <ProcessingStep />}
-
-        {flowStep.step === 'pending' && <PendingStep />}
-
-        {flowStep.step === 'activating' && <ActivatingStep />}
-
-        {flowStep.step === 'upi-limitation' && (
-          <UpiLimitationStep
-            currentTier={currentTier}
-            targetTier={flowStep.targetTier}
-            onCancel={handleScheduleCancellation}
-            onClose={() => handleOpenChange(false)}
-            isLoading={isApiLoading}
-          />
-        )}
-
-        {flowStep.step === 'domestic-card-limitation' && (
-          <DomesticCardLimitationStep
-            currentTier={currentTier}
-            targetTier={flowStep.targetTier}
-            onCancel={handleScheduleCancellation}
-            onClose={() => handleOpenChange(false)}
-            isLoading={isApiLoading}
-          />
-        )}
-
-        {flowStep.step === 'cancellation-scheduled' && (
-          <CancellationScheduledStep
-            currentTier={currentTier}
-            periodEnd={flowStep.periodEnd}
-            onDone={() => {
-              handleOpenChange(false);
-              onSubscriptionChange?.();
-            }}
-          />
-        )}
-
-        {flowStep.step === 'success' && (
-          <SuccessStep targetTier={flowStep.targetTier} kind={flowStep.kind} onDone={handleDone} />
-        )}
-
-        {flowStep.step === 'error' && (
-          <ErrorStep
-            message={flowStep.message}
-            onRetry={() => setFlowStep({ step: 'select' })}
-            onClose={() => handleOpenChange(false)}
-          />
-        )}
-
-        {flowStep.step === 'cancelled' && <CancelledStep onClose={() => handleOpenChange(false)} />}
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ─── Terminal Step Components ─────────────────────────────────────────────────
-
-function ProcessingStep() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex flex-col items-center justify-center py-12 text-center"
-    >
-      <div className="relative flex size-20 items-center justify-center">
-        <div className="absolute inset-0 animate-spin rounded-full border-4 border-muted border-t-primary" />
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-      <h2 className="mt-6 text-lg font-semibold text-foreground">
-        Setting up your subscription...
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">Please don&rsquo;t close this window.</p>
-    </div>
-  );
-}
-
-function PendingStep() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex flex-col items-center justify-center py-12 text-center"
-    >
-      <Clock className="size-10 text-primary" />
-      <h2 className="mt-4 text-lg font-semibold text-foreground">Redirecting to payment...</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        You&rsquo;re being redirected to Razorpay to complete payment. Once confirmed, your
-        subscription will activate automatically.
-      </p>
-    </div>
   );
 }
 
 export function SuccessStep({
   targetTier,
   kind,
+  effectiveAt = null,
   onDone,
 }: {
   targetTier: PlanTier;
   kind: 'upgrade' | 'downgrade' | 'activated';
+  effectiveAt?: string | null;
   onDone: () => void;
 }) {
-  const plan = PLAN_MAP[targetTier];
-
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex flex-col items-center justify-center py-12 text-center"
-    >
-      <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
-        <CheckCircle2 className="size-8 text-primary" />
-      </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">
+    <div role="status" className="flex flex-col gap-4 py-8 text-center">
+      <h2 className="text-lg font-semibold">
         {kind === 'activated' ? 'Plan activated' : 'Plan change scheduled'}
       </h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        {kind === 'activated' ? (
-          <>
-            Your <strong>{plan.label}</strong> plan is now active.
-          </>
-        ) : (
-          <>
-            Your plan will change to <strong>{plan.label}</strong> at the end of your current
-            billing period. Your data and resources remain preserved.
-          </>
-        )}
+      <p>
+        {kind === 'activated'
+          ? `Your ${PLAN_MAP[targetTier].label} plan is now active.`
+          : `Your plan will change to ${PLAN_MAP[targetTier].label} at the end of your current billing period. Effective date: ${dateLabel(effectiveAt)}. Your current access remains until the confirmed transition.`}
       </p>
-      <Button className="mt-6" onClick={onDone}>
-        Done
-      </Button>
-    </div>
-  );
-}
-
-function ErrorStep({
-  message,
-  onRetry,
-  onClose,
-}: {
-  message: string;
-  onRetry: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
-        <AlertCircle className="size-8 text-destructive" />
-      </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">Something went wrong</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">{message}</p>
-      <div className="mt-6 flex gap-3">
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
-        <Button onClick={onRetry}>Try Again</Button>
-      </div>
-    </div>
-  );
-}
-
-function CancelledStep({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <p className="text-lg font-semibold text-foreground">Checkout cancelled</p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        No changes were made to your subscription.
-      </p>
-      <Button className="mt-6" variant="outline" onClick={onClose}>
-        Close
-      </Button>
-    </div>
-  );
-}
-
-function ActivatingStep() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex flex-col items-center justify-center py-12 text-center"
-    >
-      <Loader2 className="size-10 animate-spin text-primary" />
-      <h2 className="mt-4 text-lg font-semibold text-foreground">
-        Activating your subscription...
-      </h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Payment confirmed. We&rsquo;re activating your plan — this usually takes a few seconds.
-      </p>
-    </div>
-  );
-}
-
-// ─── Razorpay Checkout JS ────────────────────────────────────────────────────
-
-// ─── UPI Limitation Flow ─────────────────────────────────────────────────────
-
-function UpiLimitationStep({
-  currentTier,
-  targetTier,
-  onCancel,
-  onClose,
-  isLoading,
-}: {
-  currentTier: PlanTier;
-  targetTier: PlanTier;
-  onCancel: () => void;
-  onClose: () => void;
-  isLoading?: boolean;
-}) {
-  const current = PLAN_MAP[currentTier];
-  const target = PLAN_MAP[targetTier];
-
-  return (
-    <div className="flex flex-col items-center py-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
-        <AlertCircle className="size-8 text-yellow-600" />
-      </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">Plan change unavailable</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your current {current?.label} subscription uses UPI, which does not support plan changes. To
-        switch to {target?.label}, cancel your current subscription and subscribe again on the new
-        plan.
-      </p>
-      <p className="mt-3 max-w-sm text-xs text-muted-foreground">
-        Your {current?.label} access will remain active until the end of your current billing period
-        after cancellation. You can pay with any supported method (card, UPI, etc.) when you
-        resubscribe.
-      </p>
-      <div className="mt-6 flex gap-3">
-        <Button variant="outline" onClick={onClose} disabled={isLoading}>
-          Not Now
-        </Button>
-        <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
-          {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Domestic-Card Limitation Flow (E-289) ───────────────────────────────────
-
-/**
- * Shown when the API returns `payment_mode_change_unsupported`: the current
- * paid subscription was authorized with a domestic card, which Razorpay does
- * not allow to change plans in place. Mirrors the UPI limitation pattern and
- * uses the same deferred-cancel semantics.
- *
- * The copy MUST NOT imply the subscription was already cancelled, that the user
- * has moved to the target plan, or that the switch is instant. It offers to
- * SCHEDULE cancellation; the current plan stays active until the cycle ends,
- * after which the user can subscribe to the target plan via the normal flow.
- */
-function DomesticCardLimitationStep({
-  currentTier,
-  targetTier,
-  onCancel,
-  onClose,
-  isLoading,
-}: {
-  currentTier: PlanTier;
-  targetTier: PlanTier;
-  onCancel: () => void;
-  onClose: () => void;
-  isLoading?: boolean;
-}) {
-  const current = PLAN_MAP[currentTier];
-  const target = PLAN_MAP[targetTier];
-
-  return (
-    <div className="flex flex-col items-center py-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-yellow-100">
-        <AlertCircle className="size-8 text-yellow-600" />
-      </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">Plan change unavailable</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your {current?.label} subscription was set up with a payment method whose subscription
-        cannot be changed directly to {target?.label}. To switch, cancel your current subscription
-        and subscribe to {target?.label} once the current period ends.
-      </p>
-      <p className="mt-3 max-w-sm text-xs text-muted-foreground">
-        If you continue, your {current?.label} access stays active until the end of your current
-        billing period — nothing is cancelled immediately and you are not moved to {target?.label}{' '}
-        yet. After the period ends, you can subscribe to {target?.label} using the normal flow and
-        pay with any supported method.
-      </p>
-      <div className="mt-6 flex gap-3">
-        <Button variant="outline" onClick={onClose} disabled={isLoading}>
-          Not Now
-        </Button>
-        <Button variant="destructive" onClick={onCancel} disabled={isLoading}>
-          {isLoading ? 'Scheduling...' : 'Schedule Cancellation'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function CancellationScheduledStep({
-  currentTier,
-  periodEnd,
-  onDone,
-}: {
-  currentTier: PlanTier;
-  periodEnd: string | null;
-  onDone: () => void;
-}) {
-  const current = PLAN_MAP[currentTier];
-
-  const formattedEnd = (() => {
-    if (!periodEnd) return null;
-    try {
-      const d = new Date(periodEnd);
-      if (Number.isNaN(d.getTime())) return null;
-      return new Intl.DateTimeFormat('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'Asia/Kolkata',
-      }).format(d);
-    } catch {
-      return null;
-    }
-  })();
-
-  return (
-    <div role="status" aria-live="polite" className="flex flex-col items-center py-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-primary/10">
-        <CheckCircle2 className="size-8 text-primary" />
-      </div>
-      <h2 className="mt-5 text-lg font-semibold text-foreground">Cancellation scheduled</h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-        Your {current?.label} subscription will remain active
-        {formattedEnd ? ` until ${formattedEnd}` : ' until the end of your current billing period'}.
-        After that, your account will automatically move to the Hobby plan.
-      </p>
-      <p className="mt-2 max-w-sm text-xs text-muted-foreground">
-        You can subscribe again on a new plan at any time after the current period ends.
-      </p>
-      <Button className="mt-6" onClick={onDone}>
-        Done
-      </Button>
+      <Button onClick={onDone}>Done</Button>
     </div>
   );
 }

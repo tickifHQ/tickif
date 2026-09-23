@@ -6,7 +6,7 @@ The deterministic suite verifies local PostgreSQL concurrency, authorization, ca
 
 1. Configure the staging secret store with `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and both paid `RAZORPAY_PLAN_ID_*` values. Use plans from the same Test Mode account. Configure the public API webhook URL `/api/billing/webhook` and the supported subscription/payment events in the Razorpay dashboard.
 2. Sign in as the synthetic studio owner. Open Plan & Billing, upgrade Hobby to Professional+, complete the official Test Mode Checkout, and wait for the signed webhook or reconciliation. Confirm the plan stays Hobby if Checkout is dismissed or payment fails. Confirm that retrying the same uncompleted checkout uses the same subscription ID.
-3. On a paid plan, choose a different paid plan and confirm the cycle-end change. The current plan must remain unchanged until Razorpay advances to the new plan. Schedule Hobby cancellation and confirm the paid plan stays available to the end date; repeated cancellation must remain idempotent.
+3. On a paid plan, review the selected target, provider capability, effective date and adjustment certainty before confirming. Unsupported or unverified mandates must offer explicit deferred recovery, not claim a direct plan change. Verify that accepting recovery explicitly schedules cancellation and saves the target, retains paid access until verified expiry, and requires fresh confirmation for replacement checkout. Schedule Hobby cancellation and confirm the paid plan stays available to the end date; repeated cancellation must remain idempotent.
 4. For an active or pending subscription, choose Update Payment Method. Confirm Razorpay opens against the existing subscription ID with `subscription_card_change`. Complete the Test Mode authorization and check the updated status after refresh. Repeated callbacks must not downgrade a webhook-confirmed active status to authenticated.
 5. For a halted subscription, use the same recovery control. Confirm it updates the existing mandate. Historical unpaid invoices can still require support intervention: do not represent updating the mandate as paying every old invoice. Test card/UPI/eMandate behavior supported by this account; the hosted payment-failure email link offers the provider's supported method-switching choices.
 6. Verify recorded payments, paise-to-rupee conversion and pagination. The history contains signed-webhook transactions, including failures, and may lag until webhook delivery. It does not fabricate invoices, tax amounts, card details or a payment receipt.
@@ -17,11 +17,31 @@ Sources: [Razorpay payment retries and card changes](https://razorpay.com/docs/p
 
 The development-only `subscribe-demo` route remains inaccessible in production; all production billing actions use `CheckoutFlow` or the existing-subscription payment recovery flow.
 
+## E-323 / E-343 / E-344 deployment checks
+
+Apply migration `0069_lethal_chamber.sql` before deploying the billing API and worker. Enable `subscription.updated` in the staging webhook configuration and verify delivery, duplicate handling and delayed-event reconciliation. This implementation has not changed the merchant dashboard configuration.
+
+Deployment order:
+
+1. Back up the target database and apply the generated migration with `pnpm db:migrate` using the target environment's secret-managed connection. Confirm both billing tables, foreign keys and partial unique indexes exist. No destructive backfill or new environment variable is required.
+2. Verify the existing Razorpay key pair, webhook secret and distinct paid plan IDs belong to the intended account and mode. Verify both plan entities are monthly, interval 1 and INR, and their amounts match the intended pricing. Test Mode credentials must never be substituted for production credentials.
+3. Drain old billing writers and deploy API, web and worker as one coordinated release. Avoid old and new billing mutation handlers running concurrently: old handlers do not participate in the new durable-operation protocol. Existing browser tabs must refresh before starting another billing action because mutation bodies now require a signed preview and operation ID. API replicas must share the existing `BETTER_AUTH_SECRET` used to validate previews.
+4. Once the new API is healthy, add `subscription.updated` to the existing Razorpay webhook subscription without removing its six existing events. Verify signed Test Mode delivery, duplicate delivery and delayed-event reconciliation. Ensure the worker can read Razorpay and PostgreSQL and its billing lifecycle sweep is running; on-visit reconciliation also updates recovery.
+5. Run the staging checklist above, including fresh checkout, cancellation, same-cycle repeat attempts, expiry recovery and payment-method recovery. Keep direct paid-plan updates disabled until the capability and charge-authorization gate is satisfied. Monitor pending operations and failed recovery sweeps; an uncertain create with no known provider subscription ID requires support reconciliation, not a blind retry.
+
+If rollback is needed, preserve the additive billing tables and accepted intents. Reconcile in-flight provider operations and prevent old billing writers from bypassing outstanding reservations before reverting application versions; simply dropping the new tables is not a safe rollback.
+
+Immediate paid upgrades remain a release blocker: the available provider contract does not establish an enforceable maximum adjustment charge or sufficient mandate eligibility evidence. Do not enable direct updates or close E-344/E-323 until Test Mode evidence proves the reviewed amount cannot be exceeded and the mandate supports the operation. Deferred recovery requires explicit cancellation consent and a separately confirmed replacement checkout after provider-verified termination.
+
+The automated provider double verifies application behavior, not Razorpay settlement, proration or mandate support. Before rollout, exercise supported and unsupported mandates, cancellation timeouts, repeated requests, stale previews and replacement activation in Test Mode. Verify migration rollback/recovery procedures without deleting saved recovery intents.
+
+The connected Razorpay MCP exposes payment/order/refund/settlement reads, but no subscription, plan, preview or subscription-update tools. It cannot establish the missing subscription capability or charge-bound guarantees. Use an explicitly configured Test Mode integration for those checks.
+
 ## E-291: verified staging payment history
 
 The active Test Mode webhook `TZcMan7wCDwJ2S` targets
 `https://staging.tickif.com/api/billing/webhook`. Readback confirmed these six
-events, matching `RAZORPAY_EVENT` in `packages/contracts/src/billing.ts`:
+events, matching the supported event list at the time of that verification:
 
 - `subscription.activated`
 - `subscription.charged`

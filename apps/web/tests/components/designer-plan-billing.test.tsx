@@ -5,6 +5,7 @@ import { resolveEntitlements } from '@repo/contracts';
 import type { BillingState } from '../../src/lib/billing-types';
 
 const apiMocks = vi.hoisted(() => ({
+  selection: vi.fn(),
   refresh: vi.fn(),
   getSubscription: vi.fn(),
   paymentMethod: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     api: {
       billing: {
+        'selection-context': { $get: apiMocks.selection },
         'payment-method': { $post: apiMocks.paymentMethod },
         subscription: {
           refresh: { $get: apiMocks.refresh },
@@ -22,6 +24,17 @@ vi.mock('@/lib/api', () => ({
       },
     },
   },
+}));
+
+vi.mock('@/components/subscribe/checkout-flow', () => ({
+  reasonLabel: (reason: string) => reason,
+  CheckoutFlow: ({
+    open,
+    initialTargetTier,
+  }: {
+    open: boolean;
+    initialTargetTier: string | null;
+  }) => (open ? <div role="dialog">{initialTargetTier}</div> : null),
 }));
 
 import { DesignerPlanBilling } from '../../src/components/designer-plan-billing';
@@ -83,6 +96,24 @@ describe('BillingAccessDenied', () => {
 
 describe('DesignerPlanBilling', () => {
   beforeEach(() => {
+    apiMocks.selection.mockResolvedValue(
+      Response.json({
+        organizationId: 'org-a',
+        currentTier: 'hobby',
+        sourceSubscriptionId: null,
+        providerState: 'known',
+        unfinishedCheckout: null,
+        recovery: null,
+        pendingOperation: null,
+        scheduledChange: null,
+        actions: ['hobby', 'professional_plus', 'corporate'].map((targetTier) => ({
+          targetTier,
+          action: 'subscribe',
+          reason: null,
+          effectiveAt: null,
+        })),
+      }),
+    );
     apiMocks.refresh.mockReset().mockResolvedValue(new Response(null, { status: 200 }));
     apiMocks.getSubscription.mockReset().mockResolvedValue(new Response(null, { status: 503 }));
     apiMocks.paymentMethod.mockReset().mockResolvedValue(new Response(null, { status: 409 }));
@@ -91,7 +122,7 @@ describe('DesignerPlanBilling', () => {
   describe('active state', () => {
     it('renders the current plan name and price', () => {
       render(<DesignerPlanBilling billing={makeBilling()} />);
-      expect(screen.getByText('Professional+')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Professional+', level: 2 })).toBeInTheDocument();
       expect(screen.getByText('Current Plan')).toBeInTheDocument();
     });
 
@@ -170,11 +201,14 @@ describe('DesignerPlanBilling', () => {
       expect(screen.getByText('Billing Summary')).toBeInTheDocument();
     });
 
-    it('opens the subscribe dialog from Upgrade Now', async () => {
+    it('opens the subscribe dialog from the visible Corporate action', async () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={makeBilling({ tier: 'hobby', billing: null })} />);
-      await user.click(screen.getAllByRole('button', { name: 'Upgrade Now' })[0]!);
-      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Upgrade to Corporate' })).toBeEnabled(),
+      );
+      await user.click(screen.getByRole('button', { name: 'Upgrade to Corporate' }));
+      expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
     });
   });
 
@@ -221,9 +255,7 @@ describe('DesignerPlanBilling', () => {
       const cta = screen.getByRole('button', { name: 'Reactivate Subscription' });
       expect(cta).toBeEnabled();
       await user.click(cta);
-      expect(screen.getByRole('heading', { name: 'Reactivate Subscription' })).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'Proceed to Checkout' }));
-      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toHaveTextContent('professional_plus');
     });
   });
 
@@ -252,7 +284,7 @@ describe('DesignerPlanBilling', () => {
 
     it('shows Hobby as the current plan with the pre-lapse tier', () => {
       render(<DesignerPlanBilling billing={downgradedBilling} />);
-      expect(screen.getByText('Hobby')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Hobby', level: 2 })).toBeInTheDocument();
       expect(screen.getByText(/from Corporate/)).toBeInTheDocument();
     });
 
@@ -272,9 +304,7 @@ describe('DesignerPlanBilling', () => {
       const user = userEvent.setup();
       render(<DesignerPlanBilling billing={downgradedBilling} />);
       await user.click(screen.getAllByRole('button', { name: 'Upgrade to Restore' })[0]!);
-      expect(screen.getByRole('heading', { name: 'Confirm Upgrade' })).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'Proceed to Payment Review' }));
-      expect(screen.getByRole('heading', { name: 'Review Order' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toHaveTextContent('corporate');
     });
   });
 
@@ -318,7 +348,9 @@ describe('DesignerPlanBilling', () => {
 
     render(<DesignerPlanBilling billing={makeBilling()} />);
 
-    await waitFor(() => expect(screen.getByText('Corporate')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Corporate', level: 2 })).toBeInTheDocument(),
+    );
     expect(screen.getByText('7 active seats')).toBeInTheDocument();
     expect(screen.getByText('5 active branches')).toBeInTheDocument();
     expect(screen.getAllByText('₹7,999').length).toBeGreaterThan(0);

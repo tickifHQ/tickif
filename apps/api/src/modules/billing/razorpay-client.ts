@@ -1,5 +1,12 @@
 import { config } from '@repo/config';
-import type { PlanTier } from '@repo/contracts';
+import {
+  razorpayPlanSchema,
+  razorpaySubscriptionSchema,
+  type PlanTier,
+  type RazorpayPlan,
+  type RazorpaySubscription,
+} from '@repo/contracts';
+export type { RazorpayPlan, RazorpaySubscription } from '@repo/contracts';
 import { AppError } from '../../lib/errors.js';
 
 /**
@@ -93,33 +100,6 @@ export function resolveRazorpayPlanId(tier: Exclude<PlanTier, 'hobby'>): string 
 
 // ─── API Types ───────────────────────────────────────────────────────────────
 
-export type RazorpayPlan = {
-  id: string;
-  entity: 'plan';
-  interval: number;
-  period: string;
-  item: { id: string; name: string; amount: number; currency: string };
-  created_at: number;
-};
-
-export type RazorpaySubscription = {
-  id: string;
-  entity: 'subscription';
-  plan_id: string;
-  status: string;
-  current_start: number | null;
-  current_end: number | null;
-  short_url: string | null;
-  notes?: Record<string, string>;
-  /** True when Razorpay will cancel the subscription after the current cycle. */
-  cancel_at_cycle_end?: boolean;
-  /** Unix timestamp when cancellation was scheduled (cancel_at_cycle_end). Null if not cancelled. */
-  cancelled_at?: number | null;
-  /** Unix timestamp when subscription ended. Null if still active/scheduled. */
-  ended_at?: number | null;
-  created_at: number;
-};
-
 export type RazorpayInvoice = {
   id: string;
   entity: 'invoice';
@@ -131,6 +111,8 @@ export type RazorpayError = {
 };
 
 type RazorpayOperation =
+  | 'fetchPlan'
+  | 'fetchScheduledChanges'
   | 'createPlan'
   | 'createSubscription'
   | 'updateSubscription'
@@ -199,6 +181,21 @@ async function requestRazorpay<T>(
     );
   }
 
+  const responseSchema =
+    operation === 'fetchPlan' || operation === 'createPlan'
+      ? razorpayPlanSchema
+      : operation === 'fetchInvoice'
+        ? null
+        : razorpaySubscriptionSchema;
+  if (responseSchema) {
+    const parsed = responseSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw AppError.badGateway(`Razorpay ${operation} failed: invalid provider response`, {
+        source: 'razorpay',
+      });
+    }
+    return parsed.data as T;
+  }
   return payload as T;
 }
 
@@ -230,6 +227,36 @@ export function isDomesticCardPlanChangeRejection(
 }
 
 // ─── API Operations ──────────────────────────────────────────────────────────
+
+/** A missing or ambiguous configured mapping must never grant a paid tier. */
+export function resolveTierFromRazorpayPlanId(planId: string): Exclude<PlanTier, 'hobby'> | null {
+  const matches = (['professional_plus', 'corporate'] as const).filter(
+    (tier) => resolveRazorpayPlanId(tier) === planId,
+  );
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+export async function fetchPlan(planId: string): Promise<RazorpayPlan> {
+  const plan = await requestRazorpay<RazorpayPlan>(
+    'fetchPlan',
+    `/plans/${encodeURIComponent(planId)}`,
+    { method: 'GET' },
+  );
+  if (plan.id !== planId) throw AppError.badGateway('Razorpay returned a different plan');
+  return plan;
+}
+
+/** Pending plan data is distinct from the live subscription's current plan. */
+export async function fetchScheduledChanges(subscriptionId: string): Promise<RazorpaySubscription> {
+  const subscription = await requestRazorpay<RazorpaySubscription>(
+    'fetchScheduledChanges',
+    `/subscriptions/${encodeURIComponent(subscriptionId)}/retrieve_scheduled_changes`,
+    { method: 'GET' },
+  );
+  if (subscription.id !== subscriptionId)
+    throw AppError.badGateway('Razorpay returned a different subscription');
+  return subscription;
+}
 
 /**
  * Create a Razorpay plan (idempotent by checking existing plans).
@@ -336,11 +363,14 @@ export async function cancelSubscription(params: {
  * Used for reconciliation when webhooks may have been missed.
  */
 export async function fetchSubscription(subscriptionId: string): Promise<RazorpaySubscription> {
-  return requestRazorpay<RazorpaySubscription>(
+  const subscription = await requestRazorpay<RazorpaySubscription>(
     'fetchSubscription',
     `/subscriptions/${encodeURIComponent(subscriptionId)}`,
     { method: 'GET' },
   );
+  if (subscription.id !== subscriptionId)
+    throw AppError.badGateway('Razorpay returned a different subscription');
+  return subscription;
 }
 
 /** Fetch an invoice so payment webhooks can be correlated to a subscription. */

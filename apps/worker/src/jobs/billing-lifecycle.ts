@@ -8,6 +8,7 @@ import {
 } from '../billing-lifecycle/repository.js';
 import { invalidateEntitlementCache } from '../billing-lifecycle/cache.js';
 import { processOrganizationRetentionSweep } from './organization-retention.js';
+import { processBillingRecoverySweep } from '../billing-lifecycle/recovery.js';
 
 /** Cap the fan-out of one sweep tick so a backlog can't run unbounded. */
 const SWEEP_BATCH_SIZE = 200;
@@ -23,6 +24,8 @@ export type BillingLifecycleSweepResult = {
   organizationsArchived: number;
   organizationsPurged: number;
   organizationRetentionFailures: number;
+  recoveryReconciled: number;
+  recoveryFailures: number;
 };
 
 /**
@@ -105,6 +108,14 @@ export async function processBillingLifecycleSweep(
     console.error('[worker] organization-retention sweep failed:', error);
   }
 
+  let recovery = { reconciled: 0, failed: 0 };
+  try {
+    recovery = await processBillingRecoverySweep(now);
+  } catch {
+    recovery.failed += 1;
+    console.error('[worker] billing recovery sweep failed');
+  }
+
   return {
     lockedFromGrace,
     downgradedFromLocked,
@@ -116,5 +127,7 @@ export async function processBillingLifecycleSweep(
     organizationsArchived: retention.archived,
     organizationsPurged: retention.purged,
     organizationRetentionFailures: retention.failed,
+    recoveryReconciled: recovery.reconciled,
+    recoveryFailures: recovery.failed,
   };
 }

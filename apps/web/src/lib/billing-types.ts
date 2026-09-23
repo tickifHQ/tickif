@@ -1,4 +1,5 @@
 import type { PlanTier, SubscriptionState } from '@repo/contracts';
+import { PLAN_MAP } from './plan-config';
 
 export type { PlanTier };
 export type BillingLifecycleState = SubscriptionState;
@@ -7,9 +8,9 @@ export type BillingLifecycleState = SubscriptionState;
  * Display labels for plan tiers. Keep in sync with spec §1 names.
  */
 export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
-  hobby: 'Hobby',
-  professional_plus: 'Professional+',
-  corporate: 'Corporate',
+  hobby: PLAN_MAP.hobby.label,
+  professional_plus: PLAN_MAP.professional_plus.label,
+  corporate: PLAN_MAP.corporate.label,
 };
 
 /**
@@ -23,9 +24,9 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
  * today. (E-239 is the plan-lapse lifecycle engine and does NOT provide totals.)
  */
 export const PLAN_TIER_PRICES: Record<PlanTier, number> = {
-  hobby: 0,
-  professional_plus: 2999,
-  corporate: 7999,
+  hobby: PLAN_MAP.hobby.price,
+  professional_plus: PLAN_MAP.professional_plus.price,
+  corporate: PLAN_MAP.corporate.price,
 };
 
 export type UsageMetric = {

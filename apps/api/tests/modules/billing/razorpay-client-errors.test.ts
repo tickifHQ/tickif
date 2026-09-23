@@ -7,11 +7,67 @@ vi.mock('@repo/config', () => ({
   },
 }));
 
-const { fetchSubscription, updateSubscription, isDomesticCardPlanChangeRejection } = await import(
-  '../../../src/modules/billing/razorpay-client.js'
-);
+const {
+  fetchSubscription,
+  fetchPlan,
+  fetchScheduledChanges,
+  updateSubscription,
+  isDomesticCardPlanChangeRejection,
+} = await import('../../../src/modules/billing/razorpay-client.js');
 
 describe('billing / razorpay-client failures', () => {
+  it('rejects malformed successful responses instead of trusting casts', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ id: 'sub_missing_plan' })));
+    await expect(fetchSubscription('sub_missing_plan')).rejects.toMatchObject({
+      code: 'upstream_error',
+    });
+  });
+
+  it('rejects a fractional plan amount and a different plan identity', async () => {
+    const plan = {
+      id: 'plan_other',
+      entity: 'plan',
+      interval: 1,
+      period: 'monthly',
+      item: { id: 'item_one', name: 'Plan', amount: 299900, currency: 'INR' },
+      created_at: 1,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(plan)));
+    await expect(fetchPlan('plan_expected')).rejects.toMatchObject({ code: 'upstream_error' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json({ ...plan, item: { ...plan.item, amount: 1.5 } })),
+    );
+    await expect(fetchPlan('plan_other')).rejects.toMatchObject({ code: 'upstream_error' });
+  });
+
+  it('reads scheduled target separately and normalizes cancellation without treating zero as true', async () => {
+    const subscription = {
+      id: 'sub_scheduled',
+      entity: 'subscription',
+      plan_id: 'plan_next',
+      status: 'active',
+      current_start: 1,
+      current_end: 2,
+      short_url: null,
+      created_at: 1,
+      cancel_at_cycle_end: 0,
+      notes: [],
+      has_scheduled_changes: true,
+      change_scheduled_at: 2,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(subscription));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await fetchScheduledChanges('sub_scheduled')).toMatchObject({
+      plan_id: 'plan_next',
+      cancel_at_cycle_end: false,
+      notes: {},
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.razorpay.com/v1/subscriptions/sub_scheduled/retrieve_scheduled_changes',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });

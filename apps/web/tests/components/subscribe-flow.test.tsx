@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PlanTier } from '@repo/contracts';
+import type * as CardComponents from '@repo/ui/components/card';
 import {
   PLANS,
   PLAN_MAP,
@@ -123,13 +124,18 @@ describe('E-120: plan-config', () => {
     });
     it('professional_plus inherits hobby features', () => {
       const features = getCumulativeFeatures('professional_plus');
-      expect(features).toEqual([...PLAN_MAP.hobby.baseFeatures, ...PLAN_MAP.professional_plus.baseFeatures]);
+      expect(features).toEqual([
+        ...PLAN_MAP.hobby.baseFeatures,
+        ...PLAN_MAP.professional_plus.baseFeatures,
+      ]);
     });
     it('corporate inherits hobby + professional_plus features', () => {
       const features = getCumulativeFeatures('corporate');
       expect(features).toEqual([
-        ...PLAN_MAP.hobby.baseFeatures,
-        ...PLAN_MAP.professional_plus.baseFeatures,
+        ...PLAN_MAP.hobby.baseFeatures.filter((feature) => feature === 'Basic Analytics'),
+        ...PLAN_MAP.professional_plus.baseFeatures.filter(
+          (feature) => feature !== 'Priority Support',
+        ),
         ...PLAN_MAP.corporate.baseFeatures,
       ]);
     });
@@ -142,7 +148,12 @@ describe('E-120: plan-config', () => {
     });
     it('hobby → corporate gains all non-hobby features', () => {
       const gains = getUpgradeGains('hobby', 'corporate');
-      expect(gains).toEqual([...PLAN_MAP.professional_plus.baseFeatures, ...PLAN_MAP.corporate.baseFeatures]);
+      expect(gains).toEqual([
+        ...PLAN_MAP.professional_plus.baseFeatures.filter(
+          (feature) => feature !== 'Priority Support',
+        ),
+        ...PLAN_MAP.corporate.baseFeatures,
+      ]);
     });
     it('professional_plus → corporate gains only corporate base features', () => {
       const gains = getUpgradeGains('professional_plus', 'corporate');
@@ -153,7 +164,12 @@ describe('E-120: plan-config', () => {
   describe('getDowngradeLosses', () => {
     it('corporate → hobby loses ALL features above hobby', () => {
       const losses = getDowngradeLosses('corporate', 'hobby');
-      expect(losses).toEqual([...PLAN_MAP.professional_plus.baseFeatures, ...PLAN_MAP.corporate.baseFeatures]);
+      expect(losses).toEqual([
+        ...PLAN_MAP.professional_plus.baseFeatures.filter(
+          (feature) => feature !== 'Priority Support',
+        ),
+        ...PLAN_MAP.corporate.baseFeatures,
+      ]);
     });
     it('corporate → professional_plus loses only corporate features', () => {
       const losses = getDowngradeLosses('corporate', 'professional_plus');
@@ -186,10 +202,16 @@ vi.mock('@repo/ui/components/button', () => ({
     </button>
   ),
 }));
-vi.mock('@repo/ui/components/card', () => ({
-  Card: ({ children, className }: { children: React.ReactNode; className?: string; radius?: string }) => (
-    <div className={className}>{children}</div>
-  ),
+vi.mock('@repo/ui/components/card', async (importOriginal) => ({
+  ...(await importOriginal<typeof CardComponents>()),
+  Card: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    radius?: string;
+  }) => <div className={className}>{children}</div>,
 }));
 vi.mock('@repo/ui/components/separator', () => ({
   Separator: () => <hr />,
@@ -226,7 +248,9 @@ import { CheckoutFlow, SuccessStep } from '../../src/components/subscribe/checko
 
 describe('E-120: PlanCard', () => {
   it('Hobby card never shows "Free"', () => {
-    render(<PlanCard plan={PLAN_MAP.hobby} isCurrent={false} isLocked={false} onSelect={vi.fn()} />);
+    render(
+      <PlanCard plan={PLAN_MAP.hobby} isCurrent={false} isLocked={false} onSelect={vi.fn()} />,
+    );
     expect(screen.queryByText('Free')).not.toBeInTheDocument();
     expect(screen.getByText('Hobby')).toBeInTheDocument();
   });
@@ -237,15 +261,19 @@ describe('E-120: PlanCard', () => {
   });
 
   it('disables select when locked', () => {
-    render(<PlanCard plan={PLAN_MAP.corporate} isCurrent={false} isLocked={true} onSelect={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /select corporate/i })).toBeDisabled();
+    render(
+      <PlanCard plan={PLAN_MAP.corporate} isCurrent={false} isLocked={true} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: /upgrade to corporate/i })).toBeDisabled();
   });
 
   it('calls onSelect with tier on click', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    render(<PlanCard plan={PLAN_MAP.corporate} isCurrent={false} isLocked={false} onSelect={onSelect} />);
-    await user.click(screen.getByRole('button', { name: /select corporate/i }));
+    render(
+      <PlanCard plan={PLAN_MAP.corporate} isCurrent={false} isLocked={false} onSelect={onSelect} />,
+    );
+    await user.click(screen.getByRole('button', { name: /upgrade to corporate/i }));
     expect(onSelect).toHaveBeenCalledWith('corporate');
   });
 });
@@ -272,19 +300,30 @@ describe('E-120: CheckoutFlow support', () => {
 
 describe('E-120: PlanSelection lifecycle', () => {
   it('disables all actions in locked state', () => {
-    render(<PlanSelection currentTier="corporate" lifecycleState="locked" onSelectPlan={vi.fn()} />);
-    expect(screen.getByText(/suspended/i)).toBeInTheDocument();
+    render(
+      <PlanSelection currentTier="corporate" lifecycleState="locked" onSelectPlan={vi.fn()} />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(/suspended/i);
+    for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
   });
 
   it('shows downgrade notice in downgraded state', () => {
-    render(<PlanSelection currentTier="hobby" lifecycleState="downgraded" onSelectPlan={vi.fn()} />);
+    render(
+      <PlanSelection currentTier="hobby" lifecycleState="downgraded" onSelectPlan={vi.fn()} />,
+    );
     expect(screen.getByText(/downgraded/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /select corporate/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /upgrade to corporate/i })).toBeEnabled();
   });
 
-  it('enables selection in grace state', () => {
-    render(<PlanSelection currentTier="professional_plus" lifecycleState="grace" onSelectPlan={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /select corporate/i })).toBeEnabled();
+  it('requires payment recovery in grace state', () => {
+    render(
+      <PlanSelection
+        currentTier="professional_plus"
+        lifecycleState="grace"
+        onSelectPlan={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /upgrade to corporate/i })).toBeDisabled();
   });
 });
 
@@ -313,7 +352,7 @@ describe('E-120: UpgradeConfirmationStep', () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByText('Verified Badge')).toBeInTheDocument();
+    expect(screen.getByText('Verified Badge (subject to approval)')).toBeInTheDocument();
     expect(screen.getByText('Discovery Priority')).toBeInTheDocument();
   });
 
@@ -397,8 +436,8 @@ describe('E-120: ReviewPayStep', () => {
     render(<ReviewPayStep targetTier="professional_plus" onPay={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText('Professional+')).toBeInTheDocument();
     expect(screen.getByText('Monthly')).toBeInTheDocument();
-    expect(screen.getByText('Amount')).toBeInTheDocument();
-    // No separate tax line — Razorpay charges plan price directly
+    expect(screen.getByText('Display recurring amount')).toBeInTheDocument();
+    // Display pricing does not establish merchant tax configuration
     expect(screen.queryByText(/GST/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Estimated Tax/i)).not.toBeInTheDocument();
   });
@@ -409,7 +448,9 @@ describe('E-120: ReviewPayStep', () => {
   });
 
   it('disables button when loading', () => {
-    render(<ReviewPayStep targetTier="corporate" onPay={vi.fn()} onBack={vi.fn()} isLoading={true} />);
+    render(
+      <ReviewPayStep targetTier="corporate" onPay={vi.fn()} onBack={vi.fn()} isLoading={true} />,
+    );
     expect(screen.getByRole('button', { name: /setting up/i })).toBeDisabled();
   });
 

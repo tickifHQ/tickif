@@ -4,6 +4,13 @@ import { db, schema } from '@repo/db';
 import { makeSubscription, makeTeam, makeUser } from '@repo/db/testing';
 import { RAZORPAY_EVENT } from '@repo/contracts';
 
+const { mockFetchSubscription } = vi.hoisted(() => ({ mockFetchSubscription: vi.fn() }));
+vi.mock('../../../src/modules/billing/razorpay-client.js', async (importOriginal) => ({
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  ...(await importOriginal<typeof import('../../../src/modules/billing/razorpay-client.js')>()),
+  fetchSubscription: mockFetchSubscription,
+}));
+
 // Mock @repo/config to provide Razorpay plan IDs for the plan_id reverse-lookup tests.
 // Use synthetic values even when the developer has provider credentials in .env.
 vi.mock('@repo/config', async (importOriginal) => {
@@ -89,6 +96,14 @@ function makeSubscriptionPayload(
         entity: {
           id: subscriptionId,
           status: extra?.status ?? 'active',
+          ...(extra?.notes?.tier
+            ? {
+                plan_id:
+                  extra.notes.tier === 'corporate'
+                    ? 'plan_test_corporate'
+                    : 'plan_test_professional_plus',
+              }
+            : {}),
           notes: extra?.notes ?? {},
           current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
         },
@@ -228,7 +243,7 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.preLapseTier).toBeNull();
     });
 
-    it('activates Corporate tier from notes', async () => {
+    it('activates Corporate tier from the configured plan', async () => {
       const sub = await makeSubscription({
         planTier: 'hobby',
         subscriptionState: 'active',
@@ -473,6 +488,12 @@ describe('E-117: webhook event processing', () => {
     });
 
     it('applies scheduled paid-to-paid plan change from plan_id on cycle-end charge', async () => {
+      mockFetchSubscription.mockResolvedValue({
+        id: 'sub_charged_plan_change',
+        status: 'active',
+        plan_id: 'plan_test_corporate',
+        has_scheduled_changes: false,
+      });
       const sub = await makeSubscription({
         planTier: 'professional_plus',
         subscriptionState: 'active',
@@ -522,7 +543,7 @@ describe('E-117: webhook event processing', () => {
       expect(updated!.planTier).toBe('corporate');
     });
 
-    it('infers scheduled plan change from payment amount when plan_id is missing', async () => {
+    it('does not infer scheduled plan change from payment amount when plan_id is missing', async () => {
       const sub = await makeSubscription({
         planTier: 'professional_plus',
         subscriptionState: 'active',
@@ -542,7 +563,7 @@ describe('E-117: webhook event processing', () => {
         .select()
         .from(schema.subscription)
         .where(eq(schema.subscription.id, sub.id));
-      expect(updated!.planTier).toBe('corporate');
+      expect(updated!.planTier).toBe('professional_plus');
     });
 
     it('reactivates from grace — restores preLapseTier and clears lapse fields', async () => {

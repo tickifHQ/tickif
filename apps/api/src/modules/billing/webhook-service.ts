@@ -1,7 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db, schema } from '@repo/db';
-import { config } from '@repo/config';
 import {
   RAZORPAY_EVENT,
   SUBSCRIPTION_STATE,
@@ -13,8 +12,12 @@ import {
 import { recordSearchProjectionEvents } from '../search-index/repository.js';
 import { orgsService } from '../orgs/service.js';
 import { invalidateEntitlementCache } from '../../lib/redis.js';
-import { recordFailedPayment } from './webhook-repository.js';
-import { fetchInvoice } from './razorpay-client.js';
+import { recordFailedPayment, reconcileUpdatedSubscription } from './webhook-repository.js';
+import {
+  fetchInvoice,
+  fetchSubscription,
+  resolveTierFromRazorpayPlanId,
+} from './razorpay-client.js';
 
 /**
  * E-117 Razorpay Webhook Service.
@@ -100,6 +103,16 @@ export async function processWebhookEvent(
   let result: WebhookResult;
 
   switch (event) {
+    case RAZORPAY_EVENT.SUBSCRIPTION_UPDATED:
+      result = await reconcileUpdatedSubscription(
+        subscription.id,
+        razorpaySubscriptionId,
+        async () => {
+          const live = await fetchSubscription(razorpaySubscriptionId);
+          return { ...live, tier: resolveTierFromRazorpayPlanId(live.plan_id) };
+        },
+      );
+      break;
     case RAZORPAY_EVENT.SUBSCRIPTION_ACTIVATED:
       result = await handleActivated(subscription, payload, razorpaySubscriptionId);
       break;
@@ -144,7 +157,7 @@ export async function processWebhookEvent(
 /**
  * subscription.activated — Razorpay confirms the subscription is live.
  * This is the authoritative activation signal (E-116 checkout → E-117 activation).
- * Upgrades planTier to the target tier stored in Razorpay notes or subscription plan.
+ * Upgrades planTier only from the configured subscription plan mapping.
  */
 async function handleActivated(
   subscription: SubscriptionRecord,
@@ -153,26 +166,20 @@ async function handleActivated(
 ): Promise<WebhookResult> {
   const razorpayStatus = extractRazorpayStatus(payload) ?? 'active';
 
-  // Determine the target tier. During E-116 checkout, planTier stays 'hobby' until
-  // activation is confirmed. The target tier comes from the Razorpay subscription's
-  // current plan_id (authoritative — updated by change-plan PATCH), falling back to
-  // notes.tier (set at creation, may be stale after plan changes).
-  //
-  // Priority: plan_id config lookup (authoritative) → notes.tier (fallback) → payment amount → reject
-  const targetTier =
-    inferTierFromPlanId(payload) ?? extractTargetTier(payload) ?? inferTierFromPlan(payload);
+  // Notes remain stale after plan changes; prorated payment amounts cannot identify a tier.
+  const payloadTier = inferTierFromPlanId(payload);
 
-  if (!targetTier) {
+  if (!payloadTier) {
     // Cannot determine the paid tier — refuse to activate blindly.
     // This prevents an accidentally staying on hobby or wrong tier assignment.
     return {
       outcome: 'ignored',
-      reason:
-        'Cannot determine target tier from activation payload (no notes.tier, plan_id, or payment amount)',
+      reason: 'Cannot determine target tier from configured plan mapping',
     };
   }
 
   return db.transaction(async (tx) => {
+    let targetTier = payloadTier;
     const [current] = await tx
       .select()
       .from(schema.subscription)
@@ -189,6 +196,15 @@ async function handleActivated(
     }
 
     const currentState = current.subscriptionState as SubscriptionState;
+    if (current.planTier !== 'hobby' && targetTier !== current.planTier) {
+      const live = await fetchSubscription(razorpaySubscriptionId);
+      const liveTier =
+        live.status === 'active' && !live.has_scheduled_changes
+          ? resolveTierFromRazorpayPlanId(live.plan_id)
+          : null;
+      if (!liveTier) return { outcome: 'ignored', reason: 'Live plan change is not confirmed' };
+      targetTier = liveTier;
+    }
     // A downgraded organization must explicitly start a replacement checkout.
     // The subscribe flow replaces the old halted ID and records created/authenticated;
     // a delayed charge for the old halted subscription must remain ignored.
@@ -241,7 +257,7 @@ async function handleActivated(
  * 1. Normal renewal (already active, same plan) — record payment, extend period
  * 2. Scheduled paid↔paid plan change — Razorpay does not send subscription.activated
  *    for an already-active sub; the charge that starts the new cycle is the signal.
- *    Apply plan_id (authoritative) or payment amount; never notes.tier (stale after
+ *    Apply configured plan_id only; never notes.tier (stale after
  *    change-plan PATCH).
  * 3. Reactivation from grace/locked — restore pre-lapse tier, then apply (1)/(2)
  *
@@ -348,13 +364,17 @@ async function handleCharged(
       updates.preLapseTier = null;
     }
 
-    // Do not use notes.tier — change-plan updates plan_id, not notes.
-    // Amount fallback is only for already-active cycle-end charges. On
-    // reactivation, restore preLapseTier unless plan_id explicitly differs
-    // (a missing/default payment amount must not clobber the restored tier).
-    const chargedTier = isReactivation
-      ? inferTierFromPlanId(payload)
-      : (inferTierFromPlanId(payload) ?? inferTierFromPlan(payload));
+    // A delayed same-cycle adjustment may contain the previous plan. Check live
+    // state under the lock before a paid tier transition, including downgrades.
+    let chargedTier = inferTierFromPlanId(payload);
+    if (chargedTier && current.planTier !== 'hobby' && chargedTier !== current.planTier) {
+      const live = await fetchSubscription(razorpaySubscriptionId);
+      chargedTier =
+        live.status === 'active' && !live.has_scheduled_changes
+          ? resolveTierFromRazorpayPlanId(live.plan_id)
+          : null;
+      if (!chargedTier) return { outcome: 'processed' as const };
+    }
     const currentTier = (updates.planTier ?? current.planTier) as PlanTier;
     if (chargedTier && chargedTier !== currentTier) {
       updates.planTier = chargedTier;
@@ -663,20 +683,6 @@ function extractCurrentPeriodEnd(payload: Record<string, unknown>): Date | null 
 }
 
 /**
- * Extract target tier from Razorpay subscription notes.
- * E-115's createSubscription stores { tier: 'professional_plus' } in notes.
- */
-function extractTargetTier(payload: Record<string, unknown>): PlanTier | null {
-  const notes = (
-    payload as { payload?: { subscription?: { entity?: { notes?: Record<string, string> } } } }
-  )?.payload?.subscription?.entity?.notes;
-  if (notes?.tier && ['professional_plus', 'corporate'].includes(notes.tier)) {
-    return notes.tier as PlanTier;
-  }
-  return null;
-}
-
-/**
  * Infer tier from the Razorpay plan_id using our server-side configuration.
  * This is more reliable than notes when Razorpay echoes the plan_id in the payload.
  */
@@ -685,20 +691,5 @@ function inferTierFromPlanId(payload: Record<string, unknown>): PlanTier | null 
     ?.payload?.subscription?.entity?.plan_id;
   if (!planId) return null;
 
-  // Reverse-lookup: which tier has this plan_id in our config?
-  if (planId === config.RAZORPAY_PLAN_ID_PROFESSIONAL_PLUS) return 'professional_plus';
-  if (planId === config.RAZORPAY_PLAN_ID_CORPORATE) return 'corporate';
-  return null;
-}
-
-/**
- * Infer tier from the plan amount when notes are not available.
- * Professional+ = 299900 paise, Corporate = 799900 paise.
- */
-function inferTierFromPlan(payload: Record<string, unknown>): PlanTier | null {
-  // Try payment amount as a fallback
-  const amount = extractAmount(payload);
-  if (amount === 299900) return 'professional_plus';
-  if (amount === 799900) return 'corporate';
-  return null;
+  return resolveTierFromRazorpayPlanId(planId);
 }

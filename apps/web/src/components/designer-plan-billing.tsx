@@ -25,6 +25,16 @@ import { PLAN_TIER_LABELS, PLAN_TIER_PRICES } from '@/lib/billing-types';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { BillingStatusBanner } from '@/components/billing-status-banner';
 import { CheckoutFlow } from '@/components/subscribe/checkout-flow';
+import {
+  SavedRecoveryNotice,
+  PendingBillingNotice,
+} from '@/components/subscribe/saved-recovery-notice';
+import { PlanSelection } from '@/components/subscribe/plan-selection';
+import {
+  usePlanSelection,
+  type BillingSelectionScope,
+} from '@/components/subscribe/use-plan-selection';
+import { useSelectionContext } from '@/components/subscribe/use-selection-context';
 import { api } from '@/lib/api';
 import { mapSubscriptionToBillingState } from '@/lib/billing-state';
 import { PaymentHistory } from '@/components/payment-history';
@@ -33,7 +43,7 @@ import { Alert, AlertDescription } from '@repo/ui/components/alert';
 import type { SubscriptionResponse } from '@repo/contracts';
 import { SUPPORT_WHATSAPP_URL } from '@/lib/support';
 
-interface DesignerPlanBillingProps {
+interface DesignerPlanBillingProps extends BillingSelectionScope {
   billing: BillingState;
 }
 
@@ -369,96 +379,6 @@ function BillingSummary({
   );
 }
 
-// ─── Upgrade Card (sidebar) ──────────────────────────────────────────────────
-
-function UpgradeCard({
-  billing,
-  onSubscribe,
-}: {
-  billing: BillingState;
-  onSubscribe: (targetTier?: PlanTier) => void;
-}) {
-  if (billing.tier === 'corporate') return null;
-  // Upgrade offers only while active. Locked/downgraded use restore CTAs;
-  // grace/payment_failed must pay the current plan, not switch.
-  if (billing.lifecycle !== 'active') return null;
-
-  const cards: {
-    tier: PlanTier;
-    label: string;
-    price: number;
-    description: string;
-    benefits: string[];
-  }[] = [];
-
-  if (billing.tier === 'hobby') {
-    cards.push({
-      tier: 'professional_plus',
-      label: 'Professional+',
-      price: PLAN_TIER_PRICES.professional_plus,
-      description: 'Stand out with a verified badge and get discovered faster by homeowners.',
-      benefits: ['Verified-business badge', 'Search & discovery ranking priority'],
-    });
-    cards.push({
-      tier: 'corporate',
-      label: 'Corporate',
-      price: PLAN_TIER_PRICES.corporate,
-      description:
-        'Unlock unlimited team collaboration, branches, and advanced organization features.',
-      benefits: [
-        'Unlimited team members',
-        'Unlimited branches',
-        'Branch dashboards & analytics',
-        'Full 5-role RBAC',
-        'Top-of-directory placement',
-      ],
-    });
-  } else {
-    cards.push({
-      tier: 'corporate',
-      label: 'Corporate',
-      price: PLAN_TIER_PRICES.corporate,
-      description:
-        'Unlock unlimited team collaboration, branches, and advanced organization features.',
-      benefits: [
-        'Unlimited team members',
-        'Unlimited branches',
-        'Branch dashboards & analytics',
-        'Full 5-role RBAC',
-        'Top-of-directory placement',
-      ],
-    });
-  }
-
-  return (
-    <>
-      {cards.map((card) => (
-        <Card key={card.tier} variant="accent" radius="2xl">
-          <div className="p-5">
-            <h2 className="text-base font-semibold text-foreground">Upgrade to {card.label}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              ₹{card.price.toLocaleString('en-IN')} / month
-            </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{card.description}</p>
-            <ul className="mt-4 space-y-2">
-              {card.benefits.map((benefit) => (
-                <li key={benefit} className="flex items-center gap-2 text-sm text-foreground">
-                  <Check className="size-4 shrink-0 text-primary" />
-                  {benefit}
-                </li>
-              ))}
-            </ul>
-            <Button className="mt-5 w-full" onClick={() => onSubscribe(card.tier)}>
-              Upgrade Now
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        </Card>
-      ))}
-    </>
-  );
-}
-
 // ─── Frozen Resources (Downgraded) ───────────────────────────────────────────
 
 function FrozenResourcesCard({
@@ -718,10 +638,28 @@ function HelpCard() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBillingProps) {
+export function DesignerPlanBilling(props: DesignerPlanBillingProps) {
+  return (
+    <ScopedDesignerPlanBilling
+      key={JSON.stringify([props.userId, props.organizationId])}
+      {...props}
+    />
+  );
+}
+
+function ScopedDesignerPlanBilling({
+  billing: initialBilling,
+  userId,
+  organizationId,
+}: DesignerPlanBillingProps) {
   const [billing, setBilling] = useState(initialBilling);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [initialTargetTier, setInitialTargetTier] = useState<PlanTier | null>(null);
+  const { selectedTier, setSelectedTier } = usePlanSelection({
+    userId,
+    organizationId,
+    currentTier: billing.tier,
+  });
+  const selection = useSelectionContext(organizationId);
   const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Shared refresh: reconcile with Razorpay, then re-fetch billing state.
@@ -761,15 +699,22 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
           : billing.lifecycle === 'locked'
             ? billing.tier
             : null;
-      setInitialTargetTier(tier ?? recoveryTier);
+      setSelectedTier(tier ?? selectedTier ?? recoveryTier);
       setSubscribeOpen(true);
     },
-    [billing.lifecycle, billing.preLapseTier, billing.tier, billing.razorpayStatus, payment],
+    [
+      billing.lifecycle,
+      billing.preLapseTier,
+      billing.tier,
+      billing.razorpayStatus,
+      payment,
+      selectedTier,
+      setSelectedTier,
+    ],
   );
 
   const handleSubscribeOpenChange = useCallback((next: boolean) => {
     setSubscribeOpen(next);
-    if (!next) setInitialTargetTier(null);
   }, []);
 
   const showPaymentDueCard =
@@ -825,6 +770,41 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
           </AlertDescription>
         </Alert>
       )}
+
+      <PendingBillingNotice
+        context={selection.context}
+        onReview={openSubscribe}
+        onRefresh={selection.refreshContext}
+      />
+      <SavedRecoveryNotice
+        onDismissed={selection.refreshContext}
+        recovery={selection.context?.recovery}
+        onReview={openSubscribe}
+      />
+
+      <section className="mt-8" aria-label="Compare plans">
+        <PlanSelection
+          currentTier={billing.tier}
+          lifecycleState={billing.lifecycle}
+          selectedTier={selectedTier}
+          actions={selection.actions}
+          onSelectPlan={openSubscribe}
+        />
+        {selectedTier && !selection.actions[selectedTier]?.disabled && (
+          <Button variant="outline" className="mt-4" onClick={() => openSubscribe(selectedTier)}>
+            Continue {PLAN_TIER_LABELS[selectedTier]}
+          </Button>
+        )}
+        {selection.error && (
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => void selection.refreshContext()}
+          >
+            Refresh available plans
+          </Button>
+        )}
+      </section>
 
       {/* Main content */}
       <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -892,12 +872,12 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
             </Card>
           )}
 
-          <UpgradeCard billing={billing} onSubscribe={openSubscribe} />
           <HelpCard />
         </aside>
       </div>
 
       <CheckoutFlow
+        scopeKey={JSON.stringify([userId, organizationId])}
         open={subscribeOpen}
         onOpenChange={handleSubscribeOpenChange}
         currentTier={billing.tier}
@@ -905,8 +885,11 @@ export function DesignerPlanBilling({ billing: initialBilling }: DesignerPlanBil
         cancellationScheduled={billing.cancellationScheduled}
         currentPeriodEnd={billing.renewalDate}
         restoreTier={billing.preLapseTier}
-        initialTargetTier={initialTargetTier}
-        onSubscriptionChange={refreshBilling}
+        initialTargetTier={selectedTier}
+        onTargetChange={setSelectedTier}
+        onSubscriptionChange={async () => {
+          await Promise.all([refreshBilling(), selection.refreshContext()]);
+        }}
       />
     </div>
   );
