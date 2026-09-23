@@ -33,7 +33,17 @@ docker network create backup-fixture
 docker run -d --name backup-fixture-postgres --network backup-fixture \
   -e POSTGRES_PASSWORD=fixture-password -e POSTGRES_DB=fixture \
   postgres:16-bookworm@sha256:bb3e1a57e5407e0a5280b4211980a5e537f4abd234a87014ac979849a78dd825
-for ((i=0;i<60;i++)); do docker exec backup-fixture-postgres pg_isready -U postgres && break; sleep 1; done
+# The image's initialization server accepts Unix-socket connections before it
+# shuts down and starts the real server. Wait for TCP to avoid that false ready.
+postgres_ready=false
+for ((i=0;i<60;i++)); do
+  if docker exec backup-fixture-postgres pg_isready -h 127.0.0.1 -U postgres -d fixture; then
+    postgres_ready=true
+    break
+  fi
+  sleep 1
+done
+"$postgres_ready" || { echo 'Backup fixture PostgreSQL did not become ready' >&2; exit 1; }
 docker exec backup-fixture-postgres psql -U postgres -d fixture -c "CREATE TABLE proof (value text PRIMARY KEY); INSERT INTO proof VALUES ('original'); CREATE TABLE migration_journal (version int); INSERT INTO migration_journal VALUES (1);"
 run_job() {
   docker run --rm --network backup-fixture -v "$fixture:/fixture" -v "$fixture/secrets:/run/secrets:ro" \

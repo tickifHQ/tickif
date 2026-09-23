@@ -393,6 +393,7 @@ export const project = pgTable(
     bhkSlug: text('bhk_slug'),
     sizeSqft: integer('size_sqft'),
     citySlug: text('city_slug'),
+    cityName: text('city_name'),
     localitySlug: text('locality_slug'),
     buildingName: text('building_name'),
     budgetBandSlug: text('budget_band_slug'),
@@ -522,6 +523,24 @@ export const interactionEvent = pgTable(
     index('interaction_event_project_created_idx').on(t.projectId, t.createdAt),
     index('interaction_event_profile_created_idx').on(t.designerProfileId, t.createdAt),
     index('interaction_event_created_idx').on(t.createdAt),
+  ],
+);
+
+/** Authenticated search history used by platform support and product analytics. */
+export const searchActivity = pgTable(
+  'search_activity',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+    actorUserId: text('actor_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').$type<'projects' | 'designers'>().notNull(),
+    query: text('query').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('search_activity_actor_created_idx').on(t.actorUserId, t.createdAt),
+    index('search_activity_created_idx').on(t.createdAt),
   ],
 );
 
@@ -1331,6 +1350,20 @@ export const designerPortfolio = pgTable(
 
     // Share block
     showTickifBadge: boolean('show_tickif_badge').default(true).notNull(),
+    experienceCenters: jsonb('experience_centers')
+      .$type<
+        Array<{
+          name: string;
+          address: string;
+          city: string;
+          state: string;
+          postalCode?: string | null;
+          phone?: string | null;
+          mapsUrl?: string | null;
+        }>
+      >()
+      .default([])
+      .notNull(),
 
     // Timestamps
     publishedAt: timestamp('published_at'),

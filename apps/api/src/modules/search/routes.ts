@@ -9,6 +9,7 @@ import {
   errorResponseSchema,
 } from '@repo/contracts';
 import { validationHook } from '../../lib/validation.js';
+import type { AuthVariables } from '../../lib/auth-middleware.js';
 import * as searchService from './service.js';
 
 /**
@@ -77,10 +78,17 @@ const searchSuggestRoute = createRoute({
 // OpenAPIHono App + Route Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook })
+export const searchRoutes = new OpenAPIHono<{ Variables: AuthVariables }>({
+  defaultHook: validationHook,
+})
   .openapi(searchProjectsRoute, async (c) => {
     const query = c.req.valid('query');
     const result = await searchService.searchProjects(query);
+    await searchService.recordSearchActivity({
+      actorUserId: c.get('user')?.id ?? null,
+      endpoint: 'projects',
+      query: query.q,
+    });
 
     c.header('Cache-Control', CACHE_HEADER);
 
@@ -89,6 +97,11 @@ export const searchRoutes = new OpenAPIHono({ defaultHook: validationHook })
   .openapi(searchDesignersRoute, async (c) => {
     const query = c.req.valid('query');
     const result = await searchService.searchDesigners(query);
+    await searchService.recordSearchActivity({
+      actorUserId: c.get('user')?.id ?? null,
+      endpoint: 'designers',
+      query: query.q,
+    });
 
     c.header('Cache-Control', CACHE_HEADER);
 

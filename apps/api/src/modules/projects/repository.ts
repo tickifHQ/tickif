@@ -164,6 +164,7 @@ export type ProjectListItemRecord = Pick<
   | 'propertyTypeSlug'
   | 'propertySubtypeSlug'
   | 'citySlug'
+  | 'cityName'
   | 'localitySlug'
   | 'status'
   | 'archiveReason'
@@ -190,6 +191,7 @@ export type ProjectFeedItemRecord = {
   slug: string;
   title: string;
   citySlug: string | null;
+  cityName: string | null;
   localitySlug: string | null;
   budgetBandSlug: string | null;
   scopeSlug: string | null;
@@ -356,6 +358,7 @@ function feedProjectColumns<TAlias extends string>(
     slug: schema.project.slug,
     title: schema.project.title,
     citySlug: schema.project.citySlug,
+    cityName: schema.project.cityName,
     localitySlug: schema.project.localitySlug,
     budgetBandSlug: schema.project.budgetBandSlug,
     scopeSlug: schema.project.scopeSlug,
@@ -514,6 +517,7 @@ export const projectsRepository = {
           propertyTypeSlug: schema.project.propertyTypeSlug,
           propertySubtypeSlug: schema.project.propertySubtypeSlug,
           citySlug: schema.project.citySlug,
+          cityName: schema.project.cityName,
           localitySlug: schema.project.localitySlug,
           status: schema.project.status,
           archiveReason: schema.project.archiveReason,
@@ -798,6 +802,7 @@ export const projectsRepository = {
         bhkSlug: input.bhkSlug ?? null,
         sizeSqft: input.sizeSqft ?? null,
         citySlug: input.citySlug ?? null,
+        cityName: input.cityName ?? null,
         localitySlug: input.localitySlug ?? null,
         buildingName: input.buildingName ?? null,
         budgetBandSlug: input.budgetBandSlug ?? null,
@@ -843,6 +848,7 @@ export const projectsRepository = {
           bhkSlug: source.bhkSlug,
           sizeSqft: source.sizeSqft,
           citySlug: source.citySlug,
+          cityName: source.cityName,
           localitySlug: source.localitySlug,
           buildingName: source.buildingName,
           budgetBandSlug: source.budgetBandSlug,

@@ -5,6 +5,7 @@ import { app } from '../../../src/app.js';
 
 // Mock the repository layer to avoid Typesense dependency
 vi.mock('../../../src/modules/search/repository.js', () => ({
+  insertSearchActivity: vi.fn(),
   searchProjects: vi.fn(),
   searchDesigners: vi.fn(),
   multiSearch: vi.fn(),
@@ -44,6 +45,7 @@ function mockProjectDocument(
     designerSlug: 'test-studio',
     designerName: 'Test Studio',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: 'bandra',
     propertyTypeSlug: 'residential',
     propertySubtypeSlug: 'apartment',
@@ -183,6 +185,7 @@ describe('GET /api/search', () => {
         description: null,
         designerSlug: null,
         citySlug: null,
+        cityName: null,
         localitySlug: null,
         propertyTypeSlug: null,
         propertySubtypeSlug: null,
@@ -557,6 +560,7 @@ describe('GET /api/search - Postgres Fallback', () => {
         designerSlug: 'test-studio',
         designerName: 'Test Studio',
         citySlug: 'mumbai',
+        cityName: null,
         localitySlug: null,
         propertyTypeSlug: 'residential',
         propertySubtypeSlug: 'apartment',
@@ -619,6 +623,7 @@ describe('GET /api/search - Postgres Fallback', () => {
         designerSlug: null,
         designerName: 'Studio',
         citySlug: 'mumbai',
+        cityName: null,
         localitySlug: null,
         propertyTypeSlug: null,
         propertySubtypeSlug: null,
@@ -654,6 +659,7 @@ describe('GET /api/search - Postgres Fallback', () => {
         designerSlug: null,
         designerName: 'Studio',
         citySlug: 'mumbai',
+        cityName: null,
         localitySlug: null,
         propertyTypeSlug: null,
         propertySubtypeSlug: null,

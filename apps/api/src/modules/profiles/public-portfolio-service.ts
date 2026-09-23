@@ -90,6 +90,23 @@ function relativeReviewTime(value: string): string {
   return `${elapsedYears} year${elapsedYears === 1 ? '' : 's'} ago`;
 }
 
+function groupExperienceCenters(
+  centers: PortfolioRecord['experienceCenters'],
+): Array<{ state: string; centers: PortfolioRecord['experienceCenters'] }> {
+  const byState = new Map<string, PortfolioRecord['experienceCenters']>();
+  for (const center of centers) {
+    const stateCenters = byState.get(center.state) ?? [];
+    stateCenters.push(center);
+    byState.set(center.state, stateCenters);
+  }
+  return [...byState.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([state, stateCenters]) => ({
+      state,
+      centers: [...stateCenters].sort((left, right) => left.city.localeCompare(right.city)),
+    }));
+}
+
 export const publicPortfolioService = {
   /**
    * GET /api/portfolios/{slug} — the public portfolio page payload.
@@ -168,6 +185,7 @@ export const publicPortfolioService = {
       firmType: profile.firmType,
       foundedYear: profile.foundedYear,
       cities,
+      experienceCenterGroups: groupExperienceCenters(portfolio.experienceCenters),
       logoUrl,
       accentColor: portfolio.accentColor,
       badges: sections.trustCredentials ? computeBadges(profile, isKycVerified) : [],

@@ -57,6 +57,7 @@ async function readProjectSearchSource(
         description: schema.project.description,
         designerId: schema.project.designerId,
         citySlug: schema.project.citySlug,
+        cityName: schema.project.cityName,
         localitySlug: schema.project.localitySlug,
         propertyTypeSlug: schema.project.propertyTypeSlug,
         propertySubtypeSlug: schema.project.propertySubtypeSlug,

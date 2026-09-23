@@ -43,6 +43,7 @@ const projectSource: ProjectSearchSource = {
     description: null,
     designerId: 'designer-1',
     citySlug: 'mumbai',
+    cityName: null,
     localitySlug: null,
     propertyTypeSlug: null,
     propertySubtypeSlug: null,

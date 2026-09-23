@@ -166,6 +166,14 @@ function toLoggableFilters(
 // Service Methods
 // ─────────────────────────────────────────────────────────────────────────────
 
+export async function recordSearchActivity(input: {
+  actorUserId: string | null;
+  endpoint: 'projects' | 'designers';
+  query: string;
+}): Promise<void> {
+  await repository.insertSearchActivity(input);
+}
+
 /**
  * Search projects with fallback ladder logic.
  *

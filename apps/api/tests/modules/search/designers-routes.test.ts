@@ -23,6 +23,7 @@ import { app } from '../../../src/app.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 vi.mock('../../../src/modules/search/repository.js', () => ({
+  insertSearchActivity: vi.fn(),
   searchDesigners: vi.fn(),
   searchProjects: vi.fn(),
   multiSearch: vi.fn(),

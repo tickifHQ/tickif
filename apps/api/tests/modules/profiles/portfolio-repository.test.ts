@@ -92,6 +92,7 @@ const mockPortfolioRow = (overrides: Partial<PortfolioRecord> = {}): PortfolioRe
   showGoogleOverallRating: true,
   showGooglePositiveReviewsOnly: false,
   showTickifBadge: true,
+  experienceCenters: [],
   publishedAt: null,
   createdAt: new Date('2025-01-01'),
   updatedAt: new Date('2025-01-01'),

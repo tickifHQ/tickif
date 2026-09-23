@@ -35,6 +35,7 @@ import {
   organizationRetentionRoutes,
 } from './modules/organization-retention/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
+import { adminActivityRoutes } from './modules/admin-activity/routes.js';
 
 // Prod: only the configured trusted origins. Dev: also allow the local web app.
 const corsOrigins = isProduction
@@ -78,6 +79,7 @@ base.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Tickif API' }));
 // Domain modules. `app` is the chained (fully-typed) value — exported so both
 // the server and the web app's `hc<AppType>` client see every route.
 export const app = base
+  .route('/api/admin/activity', adminActivityRoutes)
   .route('/api/admin/organizations', adminOrganizationRetentionRoutes)
   .route('/', healthRoutes)
   .route('/api/admin/verifications', adminVerificationsRoutes)

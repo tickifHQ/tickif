@@ -49,6 +49,7 @@ describe('search collection configuration', () => {
     expect(PROJECT_SEARCH_SETTINGS.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'citySlug', facet: true }),
+        expect.objectContaining({ name: 'cityName', type: 'string', optional: true }),
         expect.objectContaining({ name: 'budgetBandSlug', facet: true }),
         expect.objectContaining({ name: 'themes', facet: true }),
       ]),
