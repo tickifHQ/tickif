@@ -241,14 +241,14 @@ const envSchema = z.object({
   WATERMARK_ENABLED: z.stringbool().optional().default(true),
   WATERMARK_TEXT: z.string().trim().min(1).default('tickif'),
   // Bounds stay [0, 1] so envs configured under the pre-revision schema (e.g. 0.6)
-  // still boot; 0.22 is the recommended restrained default.
-  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.22),
-  WATERMARK_SCALE: z.coerce.number().min(0.08).max(0.3).default(0.16),
-  WATERMARK_ROTATION: z.coerce.number().min(-60).max(60).default(-30),
+  // still boot; 0.65 keeps the single small mark legible without dominating the image.
+  WATERMARK_OPACITY: z.coerce.number().min(0).max(1).default(0.65),
+  // Preserve the previously supported upper bound so existing environments still boot.
+  WATERMARK_SCALE: z.coerce.number().min(0.04).max(0.3).default(0.08),
   WATERMARK_REVISION: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
-    .default('wm-v3'),
+    .default('wm-v4'),
 
   // Perceptual-hash dedup (E-110). Near-duplicate if Hamming distance ≤ threshold.
   // Action on a duplicate: reject (status=failed) or flag for moderation.

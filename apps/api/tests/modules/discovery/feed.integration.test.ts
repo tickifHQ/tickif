@@ -88,7 +88,7 @@ async function makePublishedProject(
   });
 }
 
-/** Attach a ready cover image with small derivative. */
+/** Attach a ready cover image with responsive derivatives. */
 async function attachReadyCover(projectId: string) {
   const cover = await makeProjectImage({
     projectId,
@@ -96,6 +96,13 @@ async function attachReadyCover(projectId: string) {
     width: 1920,
     height: 1280,
     derivatives: [
+      {
+        variant: 'medium',
+        format: 'webp',
+        key: `derivatives/${projectId}/medium.webp`,
+        width: 1024,
+        height: 683,
+      },
       {
         variant: 'small',
         format: 'webp',
@@ -466,10 +473,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
         rating: 4.2,
         reviewCount: 7,
         coverImageId: cover.id,
-        imageWidth: 640,
-        imageHeight: 427,
+        imageWidth: 1024,
+        imageHeight: 683,
       });
-      expect(firstCard?.coverImageUrl).toContain(`derivatives/${covered.id}/small.webp`);
+      expect(firstCard?.coverImageUrl).toContain(`derivatives/${covered.id}/medium.webp`);
       expect(secondCard).toMatchObject({
         studio: 'Second Studio',
         rating: 3.5,
@@ -628,11 +635,10 @@ describe('GET /api/discovery/feed - Integration Tests', () => {
       });
       // Cover image should be presigned
       expect(pgProject?.coverImageUrl).toContain('X-Amz-Signature=');
-      // The card resolves small → thumb → null, and this fixture has both, so the 640px
-      // `small` derivative wins over the 320px `thumb`.
-      expect(pgProject?.coverImageUrl).toContain('small.webp');
-      expect(pgProject?.imageWidth).toBe(640);
-      expect(pgProject?.imageHeight).toBe(427);
+      // The card resolves medium → small → thumb → null, so the 1024px derivative wins.
+      expect(pgProject?.coverImageUrl).toContain('medium.webp');
+      expect(pgProject?.imageWidth).toBe(1024);
+      expect(pgProject?.imageHeight).toBe(683);
     });
 
     it('searches published projects by text with the Postgres path', async () => {

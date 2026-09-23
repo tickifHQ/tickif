@@ -14,7 +14,7 @@ for reprocessing. The source original must still exist for that operation.
 Before reprocessing existing images in an environment:
 
 1. Deploy the new worker and API together.
-2. Set `WATERMARK_REVISION` to a new value, such as `wm-v3`, in that environment.
+2. Set `WATERMARK_REVISION` to the revision shipped with the code (`wm-v4`) in that environment.
    This prevents immutable caches from continuing to serve old encoded bytes.
 3. Queue ready images in a controlled batch using
    `pnpm --filter @repo/worker media:reprocess -- <image-id>`, or use
