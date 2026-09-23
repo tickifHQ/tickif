@@ -22,8 +22,8 @@ catalogs:
       specifier: ^10.6.0
       version: 10.6.0
     '@hono/node-server':
-      specifier: ^2.0.5
-      version: 2.0.5
+      specifier: ^2.0.10
+      version: 2.1.1
     '@hono/zod-openapi':
       specifier: ^1.6.3
       version: 1.6.3
@@ -229,7 +229,7 @@ importers:
         version: 7.29.7
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.5(hono@4.13.5)
+        version: 2.1.1(hono@4.13.5)
       '@hono/zod-openapi':
         specifier: 'catalog:'
         version: 1.6.3(hono@4.13.5)(zod@4.6.2)
@@ -1593,8 +1593,8 @@ packages:
     peerDependencies:
       hono: ^4.13.5
 
-  '@hono/node-server@2.0.5':
-    resolution: {integrity: sha512-yQFvDmyDo3y6rEOJZDUYPJ49DIKTPpIk4kGvm40xx4Ejne0Pu9a1+exxPN+C1UppWK/WGZX9F++/Xs231tE86g==}
+  '@hono/node-server@2.1.1':
+    resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4.13.5
@@ -7192,7 +7192,7 @@ snapshots:
     dependencies:
       hono: 4.13.5
 
-  '@hono/node-server@2.0.5(hono@4.13.5)':
+  '@hono/node-server@2.1.1(hono@4.13.5)':
     dependencies:
       hono: 4.13.5
 
