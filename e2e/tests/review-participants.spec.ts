@@ -66,7 +66,9 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
       .getByLabel('Dispute reason')
       .fill('The project handover details need verification.');
     await designer.getByRole('button', { name: 'Submit dispute' }).click();
-    await expect(designer.getByText('disputed', { exact: true }).last()).toBeVisible();
+    await expect(
+      designer.getByRole('article').getByText('disputed', { exact: true }),
+    ).toBeVisible();
     await moderator.goto('/review-moderation?status=disputed');
     await moderator
       .getByRole('button', { name: 'Review feedback by Review Journey Visitor' })
@@ -97,6 +99,9 @@ test('review lifecycle: visitor edits, admin rejects and publishes, designer dis
       .getByLabel('Dispute reason')
       .fill('New evidence shows this review references a different project.');
     await designer.getByRole('button', { name: 'Submit dispute' }).click();
+    await expect(
+      designer.getByRole('article').getByText('disputed', { exact: true }),
+    ).toBeVisible();
     await moderator.goto('/review-moderation?status=disputed');
     await moderator
       .getByRole('button', { name: 'Review feedback by Review Journey Visitor' })
